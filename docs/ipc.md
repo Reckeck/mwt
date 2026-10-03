@@ -14,6 +14,7 @@ Frontend парсит код и показывает локализованно�
 | Событие | Payload | Когда |
 |---|---|---|
 | `prices-updated` | `RefreshResult` | после `refresh_all` |
+| `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
 
 ## Команды
 
@@ -51,6 +52,7 @@ Frontend парсит код и показывает локализованно�
 | `open_explorer` | `url` | `()` (default browser) |
 | `set_tx_prices` | `SetTxPricesInput { transaction_id, price_usd?, fx_override? }` | `()` |
 | `get_cached_price` | `AssetPriceInput { symbol, chain?, contract? }` | `CachedPrice { price_usd, ts }` |
+| `get_candles` | `GetCandlesInput { symbol, interval_min, limit≤1000 }` | `GetCandlesOutput { candles: Vec<CandlePoint { ts, open, high, low, close, volume }> }` (Binance klines, **без vault**) |
 
 ### portfolio
 | `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store }` |
@@ -65,7 +67,7 @@ Frontend парсит код и показывает локализованно�
 
 ### settings
 | `get_settings` | — | `Settings` |
-| `update_settings` | `UpdateSettingsInput` | `Settings` |
+| `update_settings` | `UpdateSettingsInput` | `Settings` (в т.ч. `bybit_import_interval_sec`: `0` — выкл, иначе клампится в 60..86400) |
 
 ### sim (Strategy Lab)
 | `save_strategy` | `SaveStrategyInput { strategy }` | `Strategy` |
@@ -73,13 +75,32 @@ Frontend парсит код и показывает локализованно�
 | `delete_strategy` | `id` | `()` |
 | `list_runs` | — | `Vec<SimRun>` |
 | `run_strategy` | `RunStrategyInput { strategy_id, granularity_min, candles }` | `SimRun` |
+| `get_run_candles` | `GetRunCandlesInput { run_id }` | `GetRunCandlesOutput { candles: Vec<CandlePoint> }` (синтетика — воспроизводится по `candle_params` (seed), реал — рефетч из Binance за диапазон прогна) |
+| `get_gbm_paths` | `GbmPathsInput { run_id, paths≤20, horizon≤500 }` | `GbmPathsOutput { paths: Vec<Vec<GbmPathPoint { ts, price }>> }` (driftless GBM фан-чарт от `finished_at`; σ — из `candle_params` или realised vol на реальных свечах) |
 
 ### exchange (только чтение)
 | `inspect_tx` | `InspectTxInput { tx_hash, network? }` | `InspectTxResult { fetched, info?, hints[], notice? }` |
-| `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit? }` | `BybitExecutionsResult { executions[], notice? }` |
-| `exchange_key_status` | — | `ExchangeKeyStatus { configured, hint? }` |
-| `set_exchange_key` | `SetExchangeKeyInput { api_key, api_secret }` | `ExchangeKeyStatus` |
-| `clear_exchange_key` | — | `ExchangeKeyStatus` |
+| `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit?, store_id? }` | `BybitExecutionsResult { executions[], notice? }` |
+| `exchange_key_status` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyStatus { configured, hint? }` |
+| `set_exchange_key` | `SetExchangeKeyInput { store_id, api_key, api_secret }` | `ExchangeKeyStatus` |
+| `clear_exchange_key` | `ClearExchangeKeyInput { store_id }` | `ExchangeKeyStatus` |
+
+### Bybit import — staging (D2.4)
+| `import_bybit_history` | `ImportBybitHistoryInput { store_id, category?, limit? }` | `ImportBybitHistoryOutput { staged, notice? }` — скачивает сделки и **кладёт их в staging**, операции не создаёт |
+| `list_pending_imports` | — | `ListPendingImportsOutput { imports: Vec<PendingImport> }` (новые сверху) |
+| `confirm_pending_imports` | `ConfirmPendingImportsInput { exec_ids }` (пусто = все) | `ConfirmPendingImportsOutput { confirmed }` — превращает staging в сделки (2 ноги, как `add_trade`) |
+| `discard_pending_imports` | `DiscardPendingImportsInput { exec_ids }` (пусто = все) | `DiscardPendingImportsOutput { discarded }` |
+
+Инварианты блока:
+- **Ни одна команда не создаёт операции сама.** Только `confirm_pending_imports`;
+  фоновый опрос (`bybit_import_interval_sec`, `0` = выкл) кладёт сделки в
+  `pending_imports` и шлёт событие — пользователь решает сам.
+- Дедупликация по `execId` (`PendingImport.exec_id`), поэтому повторный импорт
+  и перезапуски фонового опроса не создают дублей.
+- Мусорные сделки (нет `execId`, нечитаемые количество/цена, нулевое
+  количество) отбрасываются на границе и в staging не попадают.
+- `notice` — код причины: `no_key` | `unreachable` | `rate_limited` |
+  `forbidden_region`. Ошибок на сетевых сбоях этот блок не бросает.
 
 Команды этого блока **не бросают ошибок** для сетевых сбоев: вместо этого
 возвращают пустой список и `notice`. Форма сделки остаётся ровно такой, какой
@@ -88,6 +109,8 @@ Frontend парсит код и показывает локализованно�
 - `notice` для `inspect_tx`: `empty` | `unavailable` | `choose_network`.
 - `notice` для `bybit_executions`: `no_key` | `unreachable` | `rate_limited` |
   `forbidden_region`.
+- `store_id` в `bybit_executions` опционален: если не указан — подъём по предкам
+  к узлу-бирже (Phase N).
 - Секрет API никогда не возвращается наружу: `ExchangeKeyStatus` содержит только
   маску вида `abcd…wxyz`.
 

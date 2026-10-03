@@ -115,26 +115,36 @@
 ### Calculator DTO
 - `CalcInput { mode: "converter"|"position", amount, price_in?, price_out?, target_price?, stop_price?, fee_pct? }`
 - `CalcResult { gross_in, fee, spent, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct }` — все `Amount` (string).
-## Ключи бирж (VaultDoc.bybit)
 
-Опциональное поле `bybit: Option<ExchangeKeys>` в `VaultDoc`. Появилось в
-схеме версии **2**; в `VaultDoc` идёт последним полем и помечено
-`#[serde(default)]`, поэтому vault версии 1 открывается без миграции данных —
-просто `bybit = None`.
+## Ключи бирж (VaultDoc.exchanges)
+
+В `VaultDoc` добавлено поле `exchanges: Exchanges` (схема версии **1**, формат
+сброшен с v2 на v1 — обратная совместимость не сохраняется).
 
 ```rust
 pub struct ExchangeKeys {
+    pub store_id: String,  // ID кошелька (узла-биржи), которому принадлежит ключ
     pub api_key: String,
     pub api_secret: String,
 }
+
+pub struct Exchanges {
+    #[serde(default)]
+    pub bybit: Vec<ExchangeKeys>,  // ключи Bybit — по одному на узел-биржу
+}
 ```
+
+- Ключи хранятся **на уровне узла-биржи** (кошелька с `kind = exchange`).
+- Множество аккаунтов одной биржи = несколько узлов-бирж (каждый со своими ключами).
+- Дочерние счета (при вложенности) ключей не имеют — подъём по предкам к узлу-биржи.
+- Валидация при сохранении: узел должен существовать и иметь `kind == exchange`.
 
 Гарантии безопасности:
 
-- Пишется только внутрь зашифрованного контейнера, как и остальной документ.
+- Пишутся только внутрь зашифрованного контейнера, как и остальной документ.
 - `Debug` реализован вручную и печатает `api_key` как маску, а `api_secret` как
   `<redacted>` — ключ не может утечь через логи или `assert_eq!`-вывод.
-- `Drop` зануляет оба поля через `zeroize`.
+- `Drop` зануляет все поля через `zeroize`.
 - `#[ts(skip)]` — тип не попадает в сгенерированные TS-типы, наружу он не
   выходит никогда.
 - Клиент (`crates/core/src/exchange/bybit.rs`) содержит **только** `GET`
@@ -142,5 +152,4 @@ pub struct ExchangeKeys {
   ордеров нет, поэтому даже утёкший ключ не позволит двигать средства.
 
 Версии: `VAULT_CONTAINER_VERSION = 1` (формат контейнера не менялся),
-`VAULT_FORMAT_VERSION = 2` (схема документа). Миграция v1→v2 — в
-`crates/core/src/storage/mod.rs`, покрыта тестами для JSON и bincode.
+`VAULT_FORMAT_VERSION = 1` (схема документа — сброс с v2 на v1, миграций нет).
