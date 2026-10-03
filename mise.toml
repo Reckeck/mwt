@@ -1,0 +1,23 @@
+# Project-local toolchain & tasks (mise). See AGENTS.md -> "Команды".
+# Usage: mise install && mise run dev
+
+[tools]
+node = "26.8.1"
+pnpm = "10"
+rust = "1.98.1"
+
+[env]
+RUST_LOG = "info"
+CARGO_TARGET_DIR = ".rust-target"
+
+[tasks]
+"setup" = "mise dependencies"
+"dependencies" = { description = "Install all deps (pnpm + cargo)", run = "pnpm install && cargo fetch" }
+"dev" = { description = "Run Tauri dev (frontend + core)", run = "pnpm tauri dev" }
+"dev:ui" = { description = "Run Vite frontend standalone", run = "pnpm dev" }
+"test" = { description = "Rust workspace tests", run = "cargo test --workspace" }
+"typecheck" = { description = "Vue TS strict typecheck", run = "pnpm exec vue-tsc --noEmit" }
+"lint" = { description = "ESLint frontend", run = "pnpm exec eslint ." }
+"gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
+"check" = { description = "Lint + typecheck + tests", run = "pnpm exec eslint . && pnpm exec vue-tsc --noEmit && cargo test --workspace" }
+"build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }
