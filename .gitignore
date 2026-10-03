@@ -1,0 +1,29 @@
+# Rust
+target/
+.rust-target/
+**/target/
+
+# Node / frontend
+node_modules/
+dist/
+src-tauri/target/
+*.local
+
+# Tauri
+src-tauri/gen/schemas/
+
+# Env
+.env
+.env.local
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+*.log
+
+# Local vaults & data backups (never commit real data)
+data/
+*.wallet
+*.wallet.bak
