@@ -7,7 +7,7 @@
 
 use reqwest::Client;
 
-use super::{EquityPoint, Rule, SimRun, SimTrade, Strategy};
+use super::{EquityPoint, Rule, SimRun, SimSignal, SimTrade, Strategy};
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::vault::now_iso;
@@ -20,6 +20,9 @@ pub struct Candle {
     pub high: f64,
     pub low: f64,
     pub close: f64,
+    /// Base-asset volume for the interval; synthetic candles use a
+    /// plausible random value so the volume pane is not empty.
+    pub volume: f64,
 }
 
 pub fn interval_str(min: u32) -> &'static str {
@@ -65,6 +68,73 @@ pub async fn fetch_candles(
         .json()
         .await
         .map_err(|e| Error::Network(e.to_string()))?;
+    let out = parse_klines(&rows);
+    if out.is_empty() {
+        return Err(Error::Pricing("no candles returned".into()));
+    }
+    Ok(out)
+}
+
+/// Fetch candles opening in `[start_ms, end_ms]` from Binance, paginating
+/// with `startTime` (the API caps one page at 1000 rows). Hard-capped at
+/// 5000 rows so a huge range cannot turn into an unbounded download.
+pub async fn fetch_candles_between(
+    symbol: &str,
+    interval_min: u32,
+    start_ms: u64,
+    end_ms: u64,
+    client: &Client,
+) -> Result<Vec<Candle>> {
+    if start_ms >= end_ms {
+        return Ok(Vec::new());
+    }
+    let pair = format!("{symbol}USDT");
+    let url = "https://api.binance.com/api/v3/klines";
+    let interval = interval_str(interval_min);
+    let mut cursor = start_ms;
+    let mut out: Vec<Candle> = Vec::new();
+    while cursor < end_ms && out.len() < 5000 {
+        let resp = client
+            .get(url)
+            .query(&[
+                ("symbol", pair.as_str()),
+                ("interval", interval),
+                ("startTime", &cursor.to_string()),
+                ("endTime", &end_ms.to_string()),
+                ("limit", "1000"),
+            ])
+            .send()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!(
+                "binance klines http {}",
+                resp.status()
+            )));
+        }
+        let rows: Vec<Vec<serde_json::Value>> = resp
+            .json()
+            .await
+            .map_err(|e| Error::Network(e.to_string()))?;
+        if rows.is_empty() {
+            break;
+        }
+        let last_open = rows
+            .last()
+            .and_then(|r| r.first())
+            .and_then(|v| v.as_u64())
+            .unwrap_or(cursor);
+        out.extend(parse_klines(&rows));
+        if rows.len() < 1000 {
+            break;
+        }
+        cursor = last_open + 1;
+    }
+    out.dedup_by(|a, b| a.ts == b.ts);
+    Ok(out)
+}
+
+fn parse_klines(rows: &[Vec<serde_json::Value>]) -> Vec<Candle> {
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         if r.len() < 6 {
@@ -77,15 +147,20 @@ pub async fn fetch_candles(
             high: r[2].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0),
             low: r[3].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0),
             close: r[4].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0),
+            volume: r[5].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0),
         });
     }
-    if out.is_empty() {
-        return Err(Error::Pricing("no candles returned".into()));
-    }
-    Ok(out)
+    out
 }
 
-fn iso_from_millis(ms: u64) -> String {
+/// RFC3339 → unix ms; `None` on unparsable input.
+pub fn rfc3339_to_millis(ts: &str) -> Option<u64> {
+    use time::format_description::well_known::Rfc3339;
+    let dt = time::OffsetDateTime::parse(ts, &Rfc3339).ok()?;
+    Some((dt.unix_timestamp_nanos() / 1_000_000) as u64)
+}
+
+pub fn iso_from_millis(ms: u64) -> String {
     use time::format_description::well_known::Rfc3339;
     let secs = (ms / 1000) as i64;
     let nanos = ((ms % 1000) * 1_000_000) as u32;
@@ -97,45 +172,117 @@ fn iso_from_millis(ms: u64) -> String {
 
 /// Standard normal via Box-Muller (no extra dependency).
 fn standard_normal() -> f64 {
+    standard_normal_with(&mut rand::thread_rng())
+}
+
+/// Box-Muller draw from an explicit RNG — the seeded path for replays.
+fn standard_normal_with(rng: &mut impl rand::Rng) -> f64 {
     loop {
-        let u1 = rand::random::<f64>();
-        let u2 = rand::random::<f64>();
+        let u1: f64 = rng.sample(rand::distributions::Standard);
+        let u2: f64 = rng.sample(rand::distributions::Standard);
         if u1 > 1e-12 {
             return (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
         }
     }
 }
 
-/// Synthesize `n` candles with GBM (for offline tests).
+fn unit_with(rng: &mut impl rand::Rng) -> f64 {
+    rng.sample(rand::distributions::Standard)
+}
+
+/// Fixed epoch for synthetic series: 2026-01-01T00:00:00Z. A deterministic
+/// base keeps timestamps reproducible, so replayed candles line up with the
+/// trades/signals stored in the run.
+const SYNTHETIC_BASE_MS: u64 = 1_767_225_600_000;
+
+/// Synthesize `n` candles with seeded GBM (offline, reproducible).
+#[allow(clippy::too_many_arguments)]
 pub fn synthetic_candles(
     symbol: &str,
     n: usize,
     start_price: f64,
     annual_vol: f64,
     candles_per_year: f64,
+    step_min: u32,
+    seed: u64,
 ) -> Vec<Candle> {
+    use rand::SeedableRng;
     let dt = 1.0 / candles_per_year;
     let drift = 0.06;
     let mut price = start_price;
     let mut out = Vec::with_capacity(n);
-    let base = time::OffsetDateTime::now_utc() - time::Duration::minutes(n as i64 * 60);
+    let step_min = step_min.max(1) as u64;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let _ = symbol;
     for i in 0..n {
-        let z = standard_normal();
+        let z = standard_normal_with(&mut rng);
         price *= ((drift - 0.5 * annual_vol * annual_vol) * dt + annual_vol * z * dt.sqrt()).exp();
         let open = price;
-        let intraday = standard_normal();
+        let intraday = standard_normal_with(&mut rng);
         let close = (price * (1.0 + intraday * 0.004 * dt.sqrt())).max(open * 0.5);
-        let high = open.max(close) + rand::random::<f64>() * 0.002 * price;
-        let low = (open.min(close) - rand::random::<f64>() * 0.002 * price).max(price * 0.01);
-        let ts = (base + time::Duration::minutes(i as i64 * 60)).to_string();
+        let high = open.max(close) + unit_with(&mut rng) * 0.002 * price;
+        let low = (open.min(close) - unit_with(&mut rng) * 0.002 * price).max(price * 0.01);
+        let ts = iso_from_millis(SYNTHETIC_BASE_MS + i as u64 * step_min * 60_000);
         out.push(Candle {
             ts,
             open,
             high,
             low,
             close,
+            volume: 100.0 + unit_with(&mut rng) * 900.0,
         });
+    }
+    out
+}
+
+/// Regenerate the exact synthetic series of a run from its stored params.
+pub fn synthetic_from_params(symbol: &str, p: &crate::sim::CandleParams) -> Vec<Candle> {
+    let cpy = p.candles_per_year.to_f64().max(1.0);
+    let step_min = ((365.0 * 24.0 * 60.0) / cpy).round().max(1.0) as u32;
+    synthetic_candles(
+        symbol,
+        p.n as usize,
+        p.start_price.to_f64(),
+        p.annual_vol.to_f64(),
+        cpy,
+        step_min,
+        p.seed,
+    )
+}
+
+/// Per-candle sigma from realized log returns (sample stdev, no drift).
+/// `0.0` when the series is too short to measure anything.
+pub fn realized_sigma(candles: &[Candle]) -> f64 {
+    if candles.len() < 3 {
+        return 0.0;
+    }
+    let rets: Vec<f64> = candles
+        .windows(2)
+        .map(|w| (w[1].close / w[0].close).ln())
+        .filter(|r| r.is_finite())
+        .collect();
+    if rets.len() < 2 {
+        return 0.0;
+    }
+    let mean = rets.iter().sum::<f64>() / rets.len() as f64;
+    let var = rets.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (rets.len() - 1) as f64;
+    var.sqrt()
+}
+
+/// `count` driftless GBM forward paths of `steps` candles from `start`.
+/// Each inner vec starts with `start` and has `steps + 1` points.
+pub fn gbm_paths(start: f64, sigma: f64, steps: usize, count: usize) -> Vec<Vec<f64>> {
+    let mut out = Vec::with_capacity(count);
+    for _ in 0..count {
+        let mut price = start;
+        let mut path = Vec::with_capacity(steps + 1);
+        path.push(start);
+        for _ in 0..steps {
+            let z = standard_normal();
+            price *= (-0.5 * sigma * sigma + sigma * z).exp();
+            path.push(price);
+        }
+        out.push(path);
     }
     out
 }
@@ -240,19 +387,33 @@ fn eval_rule(r: &Rule, cur: f64, prev: f64) -> bool {
     }
 }
 
-fn all_rules(rules: &[Rule], series: &[f64], i: usize) -> bool {
-    if rules.is_empty() {
-        return false;
+fn describe_rule(r: &Rule, series: &[f64], i: usize) -> String {
+    let s = series_for(&r.indicator, series);
+    match s.get(i).copied().flatten() {
+        Some(v) => format!("{}({v:.4}) {} {}", r.indicator, r.op, r.value),
+        None => format!("{} {} {}", r.indicator, r.op, r.value),
     }
-    rules.iter().all(|r| {
+}
+
+/// All rules matched at bar `i` → joined descriptions; otherwise `None`.
+/// Unknown indicators degrade to `series_for`'s fallback (close series) —
+/// a typo must never panic (see the sim-strategy skill).
+fn rules_detail(rules: &[Rule], series: &[f64], i: usize) -> Option<String> {
+    if rules.is_empty() {
+        return None;
+    }
+    let next = i.saturating_sub(1);
+    let mut details = Vec::with_capacity(rules.len());
+    for r in rules {
         let s = series_for(&r.indicator, series);
-        let next = if i > 0 { i - 1 } else { 0 };
-        match (s.get(i), s.get(next)) {
-            (Some(Some(cur)), Some(Some(prev))) => eval_rule(r, *cur, *prev),
-            (Some(Some(cur)), None) => eval_rule(r, *cur, *cur),
-            _ => false,
+        let cur = s.get(i).copied().flatten()?;
+        let prev = s.get(next).copied().flatten()?;
+        if !eval_rule(r, cur, prev) {
+            return None;
         }
-    })
+        details.push(describe_rule(r, series, i));
+    }
+    Some(details.join(" & "))
 }
 
 // -- runner -------------------------------------------------------------------
@@ -269,6 +430,7 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
     let mut max_equity = f64::MIN;
     let mut max_dd = 0.0f64;
     let mut open_price: Option<f64> = None;
+    let mut signals: Vec<SimSignal> = Vec::new();
 
     for (i, c) in candles.iter().enumerate() {
         let equity = cash_f + qty * c.close;
@@ -281,22 +443,43 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
         let in_position = qty > 1e-12;
 
         if in_position {
-            let should_exit = all_rules(&strategy.exit_rules, &closes, i);
-            let sl_tp = open_price
-                .map(|entry| {
-                    let pct = (c.close - entry) / entry;
-                    let sl = strategy
-                        .stop_loss_pct
-                        .map(|s| pct <= -(s.to_f64() / 100.0))
-                        .unwrap_or(false);
-                    let tp = strategy
-                        .take_profit_pct
-                        .map(|s| pct >= s.to_f64() / 100.0)
-                        .unwrap_or(false);
-                    sl || tp
-                })
-                .unwrap_or(false);
-            if should_exit || sl_tp {
+            let exit_detail = rules_detail(&strategy.exit_rules, &closes, i);
+            let sl_tp: Option<(&str, String)> = open_price.and_then(|entry| {
+                let pct = (c.close - entry) / entry;
+                let sl = strategy
+                    .stop_loss_pct
+                    .map(|s| pct <= -(s.to_f64() / 100.0))
+                    .unwrap_or(false);
+                let tp = strategy
+                    .take_profit_pct
+                    .map(|s| pct >= s.to_f64() / 100.0)
+                    .unwrap_or(false);
+                let detail = format!(
+                    "entry {entry:.4} → close {:.4} ({:.2}%)",
+                    c.close,
+                    pct * 100.0
+                );
+                if sl {
+                    Some(("stop_loss", detail))
+                } else if tp {
+                    Some(("take_profit", detail))
+                } else {
+                    None
+                }
+            });
+            // SL/TP are checked first: a candle can trip both conditions.
+            if sl_tp.is_some() || exit_detail.is_some() {
+                let (reason, detail) = match sl_tp {
+                    Some((reason, detail)) => (reason, detail),
+                    None => ("rules", exit_detail.unwrap_or_default()),
+                };
+                signals.push(SimSignal {
+                    ts: c.ts.clone(),
+                    side: "exit".into(),
+                    reason: reason.into(),
+                    detail,
+                    price: Amount::from_f64(c.close),
+                });
                 sell_at(
                     c,
                     &mut cash_f,
@@ -310,7 +493,7 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
             }
         }
 
-        if !in_position && all_rules(&strategy.entry_rules, &closes, i) {
+        if !in_position && let Some(detail) = rules_detail(&strategy.entry_rules, &closes, i) {
             let invest_pct = strategy.position_size_pct.to_f64().clamp(0.0, 1.0);
             let invest = cash_f * invest_pct;
             let fee = invest * 0.001;
@@ -327,6 +510,13 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
                     qty: Amount::from_f64(q),
                     value: Amount::from_f64(invest),
                     fee: Amount::from_f64(fee),
+                });
+                signals.push(SimSignal {
+                    ts: c.ts.clone(),
+                    side: "entry".into(),
+                    reason: "rules".into(),
+                    detail,
+                    price: Amount::from_f64(c.close),
                 });
             }
         }
@@ -346,6 +536,13 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
             qty: Amount::from_f64(qty),
             value: Amount::from_f64(value),
             fee: Amount::ZERO,
+        });
+        signals.push(SimSignal {
+            ts: c.ts.clone(),
+            side: "exit".into(),
+            reason: "liquidation".into(),
+            detail: format!("end of run, close {:.4}", c.close),
+            price: Amount::from_f64(c.close),
         });
     }
 
@@ -382,6 +579,9 @@ pub fn run_on_candles(strategy: &Strategy, candles: &[Candle]) -> SimRun {
         equity_curve,
         trades,
         synthetic: strategy.source != crate::sim::DataSource::Real,
+        signals,
+        candle_params: None,
+        granularity_min: 60,
     }
 }
 
@@ -431,6 +631,7 @@ mod tests {
                 high: *c * 1.01,
                 low: *c * 0.99,
                 close: *c,
+                volume: 1000.0,
             })
             .collect()
     }
@@ -465,8 +666,85 @@ mod tests {
 
     #[test]
     fn synthetic_generates_candles() {
-        let cs = synthetic_candles("ETH", 100, 3000.0, 0.7, 365.0 * 24.0);
+        let cs = synthetic_candles("ETH", 100, 3000.0, 0.7, 365.0 * 24.0, 60, 42);
         assert_eq!(cs.len(), 100);
         assert!(cs.iter().all(|c| c.close > 0.0));
+    }
+
+    #[test]
+    fn synthetic_is_reproducible_for_the_same_seed() {
+        let a = synthetic_candles("ETH", 50, 3000.0, 0.7, 365.0 * 24.0, 60, 7);
+        let b = synthetic_candles("ETH", 50, 3000.0, 0.7, 365.0 * 24.0, 60, 7);
+        let c = synthetic_candles("ETH", 50, 3000.0, 0.7, 365.0 * 24.0, 60, 8);
+        assert_eq!(a, b);
+        assert!(a.iter().zip(&c).any(|(x, y)| x.close != y.close));
+        // deterministic epoch, not `now_utc` — signals must line up on replay
+        assert!(a[0].ts.starts_with("2026-01-01T00:00:00"));
+    }
+
+    #[test]
+    fn synthetic_from_params_round_trips() {
+        let params = crate::sim::CandleParams {
+            seed: 42,
+            n: 30,
+            start_price: Amount::parse("100").unwrap(),
+            annual_vol: Amount::parse("0.8").unwrap(),
+            candles_per_year: Amount::parse("8760").unwrap(),
+        };
+        let a = synthetic_from_params("BTC", &params);
+        let b = synthetic_from_params("BTC", &params);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 30);
+        // 8760 candles/year → 60-minute step
+        assert!(a[1].ts.contains("01:00:00"));
+    }
+
+    #[test]
+    fn run_records_signals_with_reasons() {
+        let s = Strategy {
+            name: "trend".into(),
+            initial_capital: Amount::parse("1000").unwrap(),
+            position_size_pct: Amount::parse("1").unwrap(),
+            take_profit_pct: Some(Amount::parse("5").unwrap()),
+            entry_rules: vec![Rule {
+                indicator: "close".into(),
+                field: "close".into(),
+                op: "gt".into(),
+                value: Amount::parse("0").unwrap(),
+            }],
+            ..Default::default()
+        };
+        // rising series → entry then take-profit exit
+        let closes: Vec<f64> = (0..60).map(|i| 10.0 + i as f64).collect();
+        let run = run_on_candles(&s, &candles_from(&closes));
+        assert!(run.trades.iter().any(|t| t.side == "buy"));
+        assert!(
+            run.signals
+                .iter()
+                .any(|sig| sig.side == "entry" && sig.reason == "rules")
+        );
+        assert!(
+            run.signals
+                .iter()
+                .any(|sig| sig.side == "exit" && sig.reason == "take_profit")
+        );
+        let entry = run.signals.iter().find(|sig| sig.side == "entry").unwrap();
+        assert!(entry.detail.contains("close("));
+        assert!(entry.detail.contains(" gt "));
+    }
+
+    #[test]
+    fn realized_sigma_and_gbm_paths() {
+        let cs = synthetic_candles("ETH", 200, 3000.0, 0.7, 365.0 * 24.0, 60, 42);
+        let sigma = realized_sigma(&cs);
+        assert!(sigma > 0.0 && sigma < 0.2);
+        assert_eq!(realized_sigma(&cs[..2]), 0.0);
+        let paths = gbm_paths(100.0, sigma, 10, 5);
+        assert_eq!(paths.len(), 5);
+        assert!(
+            paths
+                .iter()
+                .all(|p| p.len() == 11 && (p[0] - 100.0).abs() < 1e-9)
+        );
     }
 }

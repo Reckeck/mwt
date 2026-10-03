@@ -25,6 +25,31 @@ pub enum Locale {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct DashboardWidgetCfg {
+    pub id: String,
+    pub visible: bool,
+    pub order: u32,
+}
+
+impl Default for DashboardWidgetCfg {
+    fn default() -> Self {
+        Self {
+            id: "total".into(),
+            visible: true,
+            order: 0,
+        }
+    }
+}
+
+fn default_fx_interval() -> u32 {
+    300
+}
+
+fn default_minimize_to_tray() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct Settings {
     /// ISO currency code used as the portfolio base (e.g. `usd`, `rub`, `eur`).
     pub base_currency: String,
@@ -32,6 +57,22 @@ pub struct Settings {
     pub locale: Locale,
     /// Decimal places used to render balances.
     pub display_decimals: u32,
+    /// Список валют для быстрого отображения (ISO 4217)
+    #[serde(default)]
+    pub favorite_currencies: Vec<String>,
+    #[serde(default)]
+    pub dashboard_widgets: Vec<DashboardWidgetCfg>,
+    #[serde(default = "default_fx_interval")]
+    pub fx_refresh_interval_sec: u32,
+    #[serde(default = "default_minimize_to_tray")]
+    pub minimize_to_tray: bool,
+    /// Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
+    #[serde(default = "default_bybit_import_interval")]
+    pub bybit_import_interval_sec: u32,
+}
+
+fn default_bybit_import_interval() -> u32 {
+    900
 }
 
 impl Default for Settings {
@@ -41,6 +82,11 @@ impl Default for Settings {
             theme: Theme::Auto,
             locale: Locale::Auto,
             display_decimals: 8,
+            favorite_currencies: vec![],
+            dashboard_widgets: vec![],
+            fx_refresh_interval_sec: 300,
+            minimize_to_tray: true,
+            bybit_import_interval_sec: 900,
         }
     }
 }
@@ -82,6 +128,7 @@ pub struct SimState {
 ///   TypeScript bindings entirely.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExchangeKeys {
+    pub store_id: String,
     pub api_key: String,
     pub api_secret: String,
 }
@@ -102,6 +149,7 @@ impl ExchangeKeys {
 impl std::fmt::Debug for ExchangeKeys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExchangeKeys")
+            .field("store_id", &self.store_id)
             .field("api_key", &self.hint())
             .field("api_secret", &"<redacted>")
             .finish()
@@ -111,9 +159,108 @@ impl std::fmt::Debug for ExchangeKeys {
 impl Drop for ExchangeKeys {
     fn drop(&mut self) {
         use zeroize::Zeroize;
+        self.store_id.zeroize();
         self.api_key.zeroize();
         self.api_secret.zeroize();
     }
+}
+
+/// A staged Bybit fill awaiting user confirmation before becoming a trade.
+///
+/// Fills land here first and never touch `transactions` until the user
+/// confirms them, so a background import can never silently rewrite history.
+/// Deduplication key is Bybit's `execId`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct PendingImport {
+    /// Bybit's execution ID (`execId`) — the deduplication key.
+    pub exec_id: String,
+    /// Store the fill belongs to.
+    pub store_id: String,
+    /// Product category: `spot` | `linear` | `inverse`.
+    pub category: String,
+    /// Pair symbol as Bybit reports it (e.g. `BTCUSDT`).
+    pub symbol: String,
+    /// `"buy"` or `"sell"`.
+    pub side: String,
+    /// Asset received.
+    pub asset_bought: String,
+    pub qty_bought: Amount,
+    /// Asset given up.
+    pub asset_sold: String,
+    pub qty_sold: Amount,
+    /// Fill price of one unit of the base asset.
+    pub price: Amount,
+    pub fee: Amount,
+    /// Fee denom; empty when Bybit reported none.
+    pub fee_asset: String,
+    /// ISO-8601 UTC.
+    pub occurred_at: String,
+    /// Provenance note shown in the staging UI.
+    pub comment: String,
+}
+
+impl PendingImport {
+    /// Shape a Bybit fill for staging. Returns `None` for fills we cannot make
+    /// sense of (no execution id, or an unparseable quantity/price) — a garbled
+    /// fill must never reach the user's transactions.
+    pub fn from_execution(
+        store_id: &str,
+        category: &str,
+        exec: &crate::exchange::Execution,
+    ) -> Option<Self> {
+        let exec_id = exec.exec_id.trim();
+        if exec_id.is_empty() {
+            return None;
+        }
+        let p = exec.to_prefill();
+        // Both legs must be fully known: a trade with an unknown quote leg
+        // cannot be turned into balanced holdings.
+        let asset_bought = nonempty(p.asset_bought?);
+        let asset_sold = nonempty(p.asset_sold?);
+        let qty_bought = Amount::parse(&nonempty(p.qty_bought?)).ok()?;
+        let qty_sold = Amount::parse(&nonempty(p.qty_sold?)).ok()?;
+        let price = Amount::parse(&nonempty(p.price?)).ok()?;
+        if !qty_bought.is_positive() || !qty_sold.is_positive() || !price.is_positive() {
+            return None;
+        }
+        Some(Self {
+            exec_id: exec_id.to_string(),
+            store_id: store_id.to_string(),
+            category: category.to_string(),
+            symbol: nonempty(p.symbol),
+            side: nonempty(p.side),
+            asset_bought,
+            qty_bought,
+            asset_sold,
+            qty_sold,
+            price,
+            fee: p
+                .fee
+                .as_deref()
+                .and_then(|f| Amount::parse(f).ok())
+                .unwrap_or(Amount::ZERO),
+            fee_asset: p.fee_asset.map(nonempty).unwrap_or_default(),
+            occurred_at: nonempty(p.occurred_at.unwrap_or_default()),
+            comment: p.comment.unwrap_or_default(),
+        })
+    }
+
+    /// Assets referenced by this fill, for the staging UI summary.
+    pub fn symbols(&self) -> [String; 2] {
+        [self.asset_sold.clone(), self.asset_bought.clone()]
+    }
+}
+
+fn nonempty(s: String) -> String {
+    s.trim().to_string()
+}
+
+/// Exchange credentials grouped by exchange name.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Exchanges {
+    #[serde(default)]
+    pub bybit: Vec<ExchangeKeys>,
 }
 
 /// Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
@@ -131,14 +278,13 @@ pub struct VaultDoc {
     pub fx_cache: Vec<FxPoint>,
     #[ts(flatten)]
     pub sim: SimState,
-    /// Exchange credentials, added in payload v2.
-    ///
-    /// MUST stay the last field: `storage::decode` relies on every v2 field
-    /// being appended after the frozen v1 prefix so that a v1 snapshot still
-    /// decodes field-for-field.
+    /// Exchange credentials, added in payload v1.
     #[serde(default)]
     #[ts(skip)]
-    pub bybit: Option<ExchangeKeys>,
+    pub exchanges: Exchanges,
+    /// Staged Bybit fills awaiting user confirmation (D2.4).
+    #[serde(default)]
+    pub pending_imports: Vec<PendingImport>,
 }
 
 impl Default for VaultDoc {
@@ -162,7 +308,8 @@ impl Default for VaultDoc {
             price_cache: Vec::new(),
             fx_cache: Vec::new(),
             sim: SimState::default(),
-            bybit: None,
+            exchanges: Exchanges::default(),
+            pending_imports: Vec::new(),
         }
     }
 }
@@ -197,75 +344,6 @@ pub fn iso_to_millis(iso: &str) -> i64 {
     time::OffsetDateTime::parse(iso, &Rfc3339)
         .map(|d| (d.unix_timestamp_nanos() / 1_000_000) as i64)
         .unwrap_or(0)
-}
-
-// ---------------------------------------------------------------------------
-// Frozen v1 shapes
-//
-// These exist ONLY to read payload-v1 snapshots. They must never be extended,
-// reordered or removed without a matching bump of `VAULT_FORMAT_VERSION`.
-//
-// The bincode encoding is positional, so a v1 payload decodes into these types
-// byte-for-byte. `VaultDocV1`'s field list must stay an exact prefix of
-// `VaultDoc`'s — that is precisely what lets `storage::decode` read a v2
-// payload as `VaultDocV1` and notice the leftover bytes.
-// ---------------------------------------------------------------------------
-
-/// Frozen v1 shape of [`Settings`].
-#[derive(Serialize, Deserialize)]
-pub struct SettingsV1 {
-    pub base_currency: String,
-    pub theme: Theme,
-    pub locale: Locale,
-    pub display_decimals: u32,
-}
-
-/// Frozen v1 shape of [`VaultDoc`].
-///
-/// `Serialize` exists purely so tests can synthesise genuine legacy payloads;
-/// nothing in production ever writes one.
-#[derive(Serialize, Deserialize)]
-pub struct VaultDocV1 {
-    pub version: u32,
-    pub id: String,
-    pub created_at: String,
-    pub settings: SettingsV1,
-    pub stores: Vec<Store>,
-    pub holdings: Vec<Holding>,
-    pub transactions: Vec<Transaction>,
-    pub categories: Vec<String>,
-    pub price_cache: Vec<PricePoint>,
-    pub fx_cache: Vec<FxPoint>,
-    pub sim: SimState,
-}
-
-impl VaultDocV1 {
-    /// Lift a v1 document to the current schema.
-    ///
-    /// v1 -> v2 only appended an optional field, so there is nothing to
-    /// restructure: every v1 value carries over untouched and `bybit` starts
-    /// out absent.
-    pub fn upgrade(self) -> VaultDoc {
-        VaultDoc {
-            version: crate::VAULT_FORMAT_VERSION,
-            id: self.id,
-            created_at: self.created_at,
-            settings: Settings {
-                base_currency: self.settings.base_currency,
-                theme: self.settings.theme,
-                locale: self.settings.locale,
-                display_decimals: self.settings.display_decimals,
-            },
-            stores: self.stores,
-            holdings: self.holdings,
-            transactions: self.transactions,
-            categories: self.categories,
-            price_cache: self.price_cache,
-            fx_cache: self.fx_cache,
-            sim: self.sim,
-            bybit: None,
-        }
-    }
 }
 
 /// Unix timestamp (seconds) to ISO-8601 (RFC3339) UTC.

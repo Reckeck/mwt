@@ -58,6 +58,8 @@ pub struct CreateStoreInput {
     pub kind: StoreKind,
     pub color: String,
     pub note: String,
+    #[serde(default)]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -66,6 +68,8 @@ pub struct UpdateStoreInput {
     pub name: String,
     pub color: String,
     pub note: String,
+    #[serde(default)]
+    pub parent_id: Option<String>,
 }
 
 // -- transactions ------------------------------------------------------------
@@ -178,6 +182,12 @@ pub struct UpdateSettingsInput {
     pub theme: Option<Theme>,
     pub locale: Option<Locale>,
     pub display_decimals: Option<u32>,
+    pub favorite_currencies: Option<Vec<String>>,
+    pub dashboard_widgets: Option<Vec<crate::model::vault::DashboardWidgetCfg>>,
+    pub fx_refresh_interval_sec: Option<u32>,
+    pub minimize_to_tray: Option<bool>,
+    /// Background Bybit poll interval; `0` disables it (D2.4).
+    pub bybit_import_interval_sec: Option<u32>,
 }
 
 // -- sim ---------------------------------------------------------------------
@@ -196,6 +206,46 @@ pub struct RunStrategyInput {
     pub candles: u32,
     /// candle granularity in minutes (e.g. 60 = 1h candles).
     pub granularity_min: u32,
+}
+
+// -- run replay (D2.2) -------------------------------------------------------
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GetRunCandlesInput {
+    pub run_id: String,
+}
+
+/// Candles of a finished run: synthetic runs are regenerated from
+/// `candle_params` (deterministic seed), real runs are re-fetched from
+/// Binance for the run's time range.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GetRunCandlesOutput {
+    pub candles: Vec<CandlePoint>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GbmPathsInput {
+    pub run_id: String,
+    /// number of fan lines (clamped server-side).
+    pub paths: u32,
+    /// steps into the future (clamped server-side).
+    pub horizon: u32,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GbmPathPoint {
+    pub ts: String,
+    pub price: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GbmPathsOutput {
+    pub paths: Vec<Vec<GbmPathPoint>>,
 }
 
 pub use crate::model::vault::{FxPoint, PricePoint};
@@ -290,6 +340,7 @@ pub struct BybitExecutionsInput {
     pub category: Category,
     pub symbol: Option<String>,
     pub limit: Option<u32>,
+    pub store_id: Option<String>,
 }
 
 /// Whether a key is stored. The secret is never part of this response.
@@ -301,11 +352,133 @@ pub struct ExchangeKeyStatus {
     pub hint: Option<String>,
 }
 
-/// Stores a read-only key. Both fields are written to the encrypted vault and
-/// are never echoed back to the frontend.
+/// Input to query key status for a specific store.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ExchangeKeyStatusInput {
+    pub store_id: String,
+}
+
+/// Stores a read-only key for a specific store. Both fields are written to the
+/// encrypted vault and are never echoed back to the frontend.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub struct SetExchangeKeyInput {
+    pub store_id: String,
     pub api_key: String,
     pub api_secret: String,
+}
+
+/// Input to clear a key for a specific store.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ClearExchangeKeyInput {
+    pub store_id: String,
+}
+
+// -- bybit import (D2.4) -----------------------------------------------------
+
+/// Fetch every Bybit fill for a store and stage it for user confirmation.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ImportBybitHistoryInput {
+    pub store_id: String,
+    /// Safety cap on fetched fills (default 1000, max 10000). The import always
+    /// sweeps every category the key has access to.
+    pub limit: Option<u32>,
+}
+
+/// How many fills this run newly staged (already-known ids are skipped).
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ImportBybitHistoryOutput {
+    pub staged: u32,
+    /// Machine code: `no_key` | `unreachable` | `rate_limited` |
+    /// `forbidden_region`.
+    pub notice: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ListPendingImportsOutput {
+    pub imports: Vec<crate::model::vault::PendingImport>,
+}
+
+/// Turn staged fills into real trades (two legs each, like `add_trade`).
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ConfirmPendingImportsInput {
+    /// Empty = confirm everything currently staged.
+    pub exec_ids: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ConfirmPendingImportsOutput {
+    pub confirmed: u32,
+}
+
+/// Drop staged fills without creating transactions.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct DiscardPendingImportsInput {
+    /// Empty = discard everything currently staged.
+    pub exec_ids: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct DiscardPendingImportsOutput {
+    pub discarded: u32,
+}
+
+/// A recently opened vault file.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct RecentVault {
+    pub path: String,
+    pub last_opened: String,
+    pub exists: bool,
+}
+
+/// Input to select or pick a vault file.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct SelectVaultInput {
+    pub path: String,
+}
+
+/// Output of the dev dump vault command (DEV only).
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct DevDumpVaultOutput {
+    pub json: String,
+}
+
+// -- market data (candles) --------------------------------------------------
+
+/// Single OHLCV candle point for charting.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct CandlePoint {
+    pub ts: String,
+    pub open: String,
+    pub high: String,
+    pub low: String,
+    pub close: String,
+    pub volume: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GetCandlesInput {
+    pub symbol: String,
+    pub interval_min: u32,
+    pub limit: u32,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct GetCandlesOutput {
+    pub candles: Vec<CandlePoint>,
 }

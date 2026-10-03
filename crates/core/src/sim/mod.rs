@@ -98,6 +98,47 @@ pub struct SimRun {
     pub equity_curve: Vec<EquityPoint>,
     pub trades: Vec<SimTrade>,
     pub synthetic: bool,
+    /// Rule/SL/TP signals that fired during the replay, with the reason.
+    /// Added in payload v3; empty for runs created before the migration.
+    #[serde(default)]
+    pub signals: Vec<SimSignal>,
+    /// GBM parameters of the synthetic candle stream — the replay key:
+    /// the same seed reproduces the same candles (and therefore markers).
+    /// `None` for real Binance data.
+    #[serde(default)]
+    pub candle_params: Option<CandleParams>,
+    /// Granularity of the replayed candles in minutes (chart range fetch).
+    #[serde(default = "default_granularity_min")]
+    pub granularity_min: u32,
+}
+
+fn default_granularity_min() -> u32 {
+    60
+}
+
+/// A fired trading signal: what happened, when, and why in rule terms.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct SimSignal {
+    pub ts: String,
+    /// `"entry"` or `"exit"`.
+    pub side: String,
+    /// `"rules"` | `"stop_loss"` | `"take_profit"` | `"liquidation"`.
+    pub reason: String,
+    /// Human-readable matched rule(s), e.g. `sma20(25.31) gt 25.00`.
+    /// Backend-generated data, shown as-is.
+    pub detail: String,
+    pub price: Amount,
+}
+
+/// Seeded GBM parameters of a synthetic candle stream.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CandleParams {
+    pub seed: u64,
+    pub n: u32,
+    pub start_price: Amount,
+    pub annual_vol: Amount,
+    pub candles_per_year: Amount,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
