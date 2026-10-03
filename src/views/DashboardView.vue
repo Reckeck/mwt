@@ -10,9 +10,11 @@ import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import { formatMoney, formatPct } from '@/lib/format'
 import { call } from '@/lib/ipc'
+import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
+const settingsStore = useSettingsStore()
 
 const summary = useQuery({
   queryKey: ['summary'],
@@ -31,12 +33,37 @@ function pctWidth(v: string | number | null | undefined): string {
   const n = typeof v === 'string' ? Number(v) : v ?? 0
   return `${Math.min(100, Math.max(0, n)).toFixed(1)}%`
 }
+
+// Dashboard widget definitions matching backend
+const widgetDefs = [
+  { id: 'total', defaultOrder: 0 },
+  { id: 'assets', defaultOrder: 1 },
+  { id: 'fx', defaultOrder: 2 },
+  { id: 'byChain', defaultOrder: 3 },
+  { id: 'byStore', defaultOrder: 4 },
+] as const
+
+const visibleWidgets = computed(() => {
+  const widgets = settingsStore.settings?.dashboard_widgets ?? []
+  return widgetDefs
+    .map((def) => {
+      const existing = widgets.find((w) => w.id === def.id)
+      return {
+        id: def.id,
+        visible: existing?.visible ?? true,
+        order: existing?.order ?? def.defaultOrder,
+      }
+    })
+    .filter((w) => w.visible)
+    .sort((a, b) => a.order - b.order)
+})
 </script>
 
 <template>
-  <div class="grid gap-6">
+  <div class="grid gap-6 @container">
+    <!-- Top row widgets (total, assets, fx) - 3 columns on lg, 2 on sm -->
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
-      <Card>
+      <Card v-if="visibleWidgets.some(w => w.id === 'total')" class="@lg:col-span-1">
         <template #header>
           <p class="text-sm text-muted-foreground">{{ t('store.total') }}</p>
         </template>
@@ -50,7 +77,7 @@ function pctWidth(v: string | number | null | undefined): string {
         </div>
       </Card>
 
-      <Card>
+      <Card v-if="visibleWidgets.some(w => w.id === 'assets')" class="@lg:col-span-1">
         <template #header>
           <p class="text-sm text-muted-foreground">Assets</p>
         </template>
@@ -61,7 +88,7 @@ function pctWidth(v: string | number | null | undefined): string {
         </div>
       </Card>
 
-      <Card>
+      <Card v-if="visibleWidgets.some(w => w.id === 'fx')" class="@lg:col-span-1">
         <template #header>
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">{{ t('store.fxRate') }}</p>
@@ -79,8 +106,9 @@ function pctWidth(v: string | number | null | undefined): string {
       </Card>
     </div>
 
+    <!-- Bottom row widgets (byChain, byStore) - 2 columns on sm -->
     <div class="grid gap-4 @sm:grid-cols-2">
-      <Card>
+      <Card v-if="visibleWidgets.some(w => w.id === 'byChain')">
         <template #header>
           <p class="font-medium">{{ t('store.byChain') }}</p>
         </template>
@@ -106,7 +134,7 @@ function pctWidth(v: string | number | null | undefined): string {
         </div>
       </Card>
 
-      <Card>
+      <Card v-if="visibleWidgets.some(w => w.id === 'byStore')">
         <template #header>
           <p class="font-medium">{{ t('store.byStore') }}</p>
         </template>
@@ -132,6 +160,11 @@ function pctWidth(v: string | number | null | undefined): string {
           </p>
         </div>
       </Card>
+    </div>
+
+    <!-- Empty state when no widgets are visible -->
+    <div v-if="!visibleWidgets.length" class="text-center py-12 text-sm text-muted-foreground">
+      {{ t('store.empty') }}
     </div>
   </div>
 </template>

@@ -12,6 +12,7 @@ import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
 import { call } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
+import { getStoreIcon } from '@/lib/store-icons'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -57,8 +58,8 @@ const remove = useMutation({
 </script>
 
 <template>
-  <div class="grid gap-6">
-    <div class="flex items-center justify-between gap-3">
+  <div class="grid gap-6 @container">
+    <div class="flex items-center justify-between gap-4">
       <p class="text-sm text-muted-foreground">{{ t('stores.title') }}</p>
       <Button @click="createDialogOpen = true">
         <Plus class="size-4" />
@@ -69,9 +70,18 @@ const remove = useMutation({
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
       <Card v-for="s in stores.data.value ?? []" :key="s.id" :class="cn(s.archived && 'opacity-60')">
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <span class="inline-block size-3 rounded-full" :style="{ backgroundColor: s.color }" />
+              <span
+                class="flex size-6 shrink-0 items-center justify-center rounded-md border"
+                :style="{
+                  backgroundColor: s.color + '1A',
+                  color: s.color,
+                  borderColor: s.color + '33',
+                }"
+              >
+                <component :is="getStoreIcon(s.kind)" class="size-3.5" />
+              </span>
               <p class="font-medium">{{ s.name }}</p>
             </div>
             <div class="flex items-center gap-1">
@@ -79,7 +89,7 @@ const remove = useMutation({
             </div>
           </div>
         </template>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-2">
           <p class="text-sm text-muted-foreground">{{ s.note || '—' }}</p>
           <div class="flex gap-1">
             <Button variant="ghost" size="icon" :title="s.archived ? t('stores.unarchive') : t('stores.archive')" @click="toggleArchive.mutate(s)">

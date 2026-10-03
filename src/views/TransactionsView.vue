@@ -46,8 +46,8 @@ async function remove(id: string) {
 </script>
 
 <template>
-  <div class="grid gap-4">
-    <div class="flex items-center justify-between">
+  <div class="grid gap-6 @container">
+    <div class="flex items-center justify-between gap-4">
       <select
         v-model="storeFilter"
         class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
