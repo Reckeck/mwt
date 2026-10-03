@@ -1,6 +1,9 @@
 use tauri::{AppHandle, Emitter, State};
 
-use trade_core::ipc_contract::{AssetPriceInput, CachedPrice, RefreshResult, SetTxPricesInput};
+use trade_core::ipc_contract::{
+    AssetPriceInput, CachedPrice, CandlePoint, GetCandlesInput, GetCandlesOutput, RefreshResult,
+    SetTxPricesInput,
+};
 use trade_core::model::store::AssetRef;
 use trade_core::pricing::AssetSearchHit;
 
@@ -126,4 +129,38 @@ pub async fn set_tx_prices(
     let v = g.as_mut().unwrap();
     v.set_prices(&input.transaction_id, input.price_usd, input.fx_override)
         .map_err(crate::commands::err_to_string)
+}
+
+/// Fetch OHLCV candles from Binance public API for charting.
+/// No vault access required — pure public data.
+#[tauri::command]
+pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, String> {
+    use reqwest::Client;
+    use trade_core::sim::engine::fetch_candles;
+
+    let symbol = input.symbol.trim().to_uppercase();
+    if symbol.is_empty() {
+        return Ok(GetCandlesOutput { candles: vec![] });
+    }
+    let limit = input.limit.clamp(1, 1000);
+    let interval_min = input.interval_min;
+
+    let client = Client::new();
+    let candles = fetch_candles(&symbol, interval_min, limit, &client)
+        .await
+        .map_err(crate::commands::err_to_string)?;
+
+    let candles = candles
+        .into_iter()
+        .map(|c| CandlePoint {
+            ts: c.ts,
+            open: c.open.to_string(),
+            high: c.high.to_string(),
+            low: c.low.to_string(),
+            close: c.close.to_string(),
+            volume: c.volume.to_string(),
+        })
+        .collect();
+
+    Ok(GetCandlesOutput { candles })
 }

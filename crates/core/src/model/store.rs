@@ -29,6 +29,9 @@ pub struct Store {
     pub archived: bool,
     /// Free-form description shown in the UI.
     pub note: String,
+    /// Optional parent store ID for nesting (free tree, any depth).
+    #[serde(default)]
+    pub parent_id: Option<String>,
 }
 
 impl Store {
@@ -40,7 +43,13 @@ impl Store {
             color: color.to_string(),
             archived: false,
             note: String::new(),
+            parent_id: None,
         }
+    }
+
+    pub fn with_parent(mut self, parent_id: String) -> Self {
+        self.parent_id = Some(parent_id);
+        self
     }
 }
 
