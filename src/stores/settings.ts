@@ -22,5 +22,9 @@ function patchToInput(patch: Partial<Settings>) {
     theme: patch.theme ?? null,
     locale: patch.locale ?? null,
     display_decimals: patch.display_decimals ?? null,
+    favorite_currencies: patch.favorite_currencies ?? null,
+    dashboard_widgets: patch.dashboard_widgets ?? null,
+    fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
+    minimize_to_tray: patch.minimize_to_tray ?? null,
   }
 }
