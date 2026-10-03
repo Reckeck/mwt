@@ -19,8 +19,14 @@ pub async fn create_store(
 ) -> Result<Store, String> {
     let mut g = require_vault(&state).map_err(err_to_string)?;
     let v = g.as_mut().unwrap();
-    v.create_store(&input.name, input.kind, &input.color, &input.note)
-        .map_err(err_to_string)
+    v.create_store(
+        &input.name,
+        input.kind,
+        &input.color,
+        &input.note,
+        input.parent_id,
+    )
+    .map_err(err_to_string)
 }
 
 #[tauri::command]
@@ -30,8 +36,14 @@ pub async fn update_store(
 ) -> Result<Store, String> {
     let mut g = require_vault(&state).map_err(err_to_string)?;
     let v = g.as_mut().unwrap();
-    v.update_store(&input.id, &input.name, &input.color, &input.note)
-        .map_err(err_to_string)
+    v.update_store(
+        &input.id,
+        &input.name,
+        &input.color,
+        &input.note,
+        input.parent_id,
+    )
+    .map_err(err_to_string)
 }
 
 #[tauri::command]

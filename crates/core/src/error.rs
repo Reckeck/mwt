@@ -33,6 +33,12 @@ pub enum Error {
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("tx hash malformed: {0}")]
+    TxHashMalformed(String),
+
+    #[error("tx hash network mismatch: {0}")]
+    TxHashNetworkMismatch(String),
+
     #[error("pricing: {0}")]
     Pricing(String),
 
@@ -60,6 +66,8 @@ impl Error {
             Error::Io(_) => "IO",
             Error::Network(_) => "NETWORK",
             Error::InvalidInput(_) => "INVALID_INPUT",
+            Error::TxHashMalformed(_) => "TX_HASH_MALFORMED",
+            Error::TxHashNetworkMismatch(_) => "TX_HASH_NETWORK_MISMATCH",
             Error::Pricing(_) => "PRICING",
             Error::Missing(_) => "MISSING",
             Error::Archived(_) => "ARCHIVED",

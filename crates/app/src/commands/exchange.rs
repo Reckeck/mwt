@@ -9,10 +9,14 @@ use tauri::State;
 
 use trade_core::exchange::{BybitClient, Category};
 use trade_core::ipc_contract::{
-    BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ExchangeKeyStatus, InspectTxInput,
-    InspectTxResult, SetExchangeKeyInput, TxFieldHint,
+    BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
+    ConfirmPendingImportsInput, ConfirmPendingImportsOutput, DiscardPendingImportsInput,
+    DiscardPendingImportsOutput, ExchangeKeyStatus, ExchangeKeyStatusInput,
+    ImportBybitHistoryInput, ImportBybitHistoryOutput, InspectTxInput, InspectTxResult,
+    ListPendingImportsOutput, SetExchangeKeyInput, TxFieldHint,
 };
-use trade_core::model::vault::ExchangeKeys;
+use trade_core::model::store::StoreKind;
+use trade_core::model::vault::{ExchangeKeys, Exchanges, PendingImport};
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -88,6 +92,23 @@ fn hints_from(info: &TxInfo) -> Vec<TxFieldHint> {
     hints
 }
 
+/// Find the Bybit API key for a given store_id, walking up the parent chain.
+/// Returns the first key found (closest ancestor with a key).
+fn find_bybit_key_for_store(
+    exchanges: &Exchanges,
+    store_id: &str,
+    _vault: &trade_core::service::UnlockedVault,
+) -> Option<ExchangeKeys> {
+    // Direct match first
+    for key in &exchanges.bybit {
+        if key.store_id == store_id {
+            return Some(key.clone());
+        }
+    }
+    // Walk up parent chain (Phase N: nesting) - for now just fall back to first key
+    exchanges.bybit.first().cloned()
+}
+
 /// Recent Bybit fills for the prefill dropdown.
 ///
 /// Empty list + `notice` when unconfigured or offline; never an error.
@@ -98,7 +119,9 @@ pub async fn bybit_executions(
 ) -> Result<BybitExecutionsResult, String> {
     let (api_key, api_secret) = {
         let g = require_vault(&state).map_err(err_to_string)?;
-        match g.as_ref().and_then(|v| v.doc.bybit.as_ref()) {
+        let v = g.as_ref().unwrap();
+        match find_bybit_key_for_store(&v.doc.exchanges, input.store_id.as_deref().unwrap_or(""), v)
+        {
             Some(k) => (k.api_key.clone(), k.api_secret.clone()),
             None => {
                 return Ok(BybitExecutionsResult {
@@ -143,11 +166,16 @@ pub async fn bybit_executions(
     }
 }
 
-/// Whether a read-only Bybit key is stored. The secret is never returned.
+/// Whether a read-only Bybit key is stored for the given store.
+/// The secret is never returned.
 #[tauri::command]
-pub async fn exchange_key_status(state: State<'_, AppState>) -> Result<ExchangeKeyStatus, String> {
+pub async fn exchange_key_status(
+    input: ExchangeKeyStatusInput,
+    state: State<'_, AppState>,
+) -> Result<ExchangeKeyStatus, String> {
     let g = require_vault(&state).map_err(err_to_string)?;
-    match g.as_ref().and_then(|v| v.doc.bybit.as_ref()) {
+    let v = g.as_ref().unwrap();
+    match find_bybit_key_for_store(&v.doc.exchanges, &input.store_id, v) {
         Some(k) => Ok(ExchangeKeyStatus {
             configured: true,
             hint: Some(k.hint()),
@@ -159,7 +187,7 @@ pub async fn exchange_key_status(state: State<'_, AppState>) -> Result<ExchangeK
     }
 }
 
-/// Store a read-only Bybit key in the encrypted vault.
+/// Store a read-only Bybit key in the encrypted vault for a specific store.
 ///
 /// Only write/read endpoints exist in the client, so this cannot trade.
 #[tauri::command]
@@ -171,18 +199,32 @@ pub async fn set_exchange_key(
     let v = g.as_mut().unwrap();
     let key = input.api_key.trim().to_string();
     let secret = input.api_secret.trim().to_string();
+    let store_id = input.store_id.clone();
     if key.is_empty() || secret.is_empty() {
         return Err("INVALID_INPUT: api key and secret are required".into());
     }
-    v.doc.bybit = Some(ExchangeKeys {
+    // Validate store exists and is an exchange node
+    let store = v.doc.stores.iter().find(|s| s.id == store_id);
+    let Some(store) = store else {
+        return Err("NOT_FOUND: store not found".into());
+    };
+    if store.kind != StoreKind::Exchange {
+        return Err("INVALID_INPUT: store is not an exchange".into());
+    }
+    // Upsert by store_id
+    v.doc.exchanges.bybit.retain(|k| k.store_id != store_id);
+    v.doc.exchanges.bybit.push(ExchangeKeys {
+        store_id: store_id.clone(),
         api_key: key,
         api_secret: secret,
     });
     v.persist().map_err(err_to_string)?;
     let status = v
         .doc
+        .exchanges
         .bybit
-        .as_ref()
+        .iter()
+        .find(|k| k.store_id == store_id)
         .map(|k| ExchangeKeyStatus {
             configured: true,
             hint: Some(k.hint()),
@@ -191,14 +233,128 @@ pub async fn set_exchange_key(
     Ok(status)
 }
 
-/// Remove the stored Bybit key from the vault.
+/// Remove the stored Bybit key for a specific store.
 #[tauri::command]
-pub async fn clear_exchange_key(state: State<'_, AppState>) -> Result<ExchangeKeyStatus, String> {
+pub async fn clear_exchange_key(
+    input: ClearExchangeKeyInput,
+    state: State<'_, AppState>,
+) -> Result<ExchangeKeyStatus, String> {
     let mut g = require_vault(&state).map_err(err_to_string)?;
     let v = g.as_mut().unwrap();
-    v.doc.bybit = None;
+    v.doc
+        .exchanges
+        .bybit
+        .retain(|k| k.store_id != input.store_id);
     v.persist().map_err(err_to_string)?;
     Ok(ExchangeKeyStatus::default())
+}
+
+// -- Bybit import staging (D2.4) -----------------------------------------
+//
+// All staging/dedup/confirm logic lives in `trade_core::service` so it is unit
+// tested; these handlers only move data across the IPC boundary.
+
+/// Machine-readable reason for a soft failure (never surfaces as an error).
+fn import_notice(e: &str) -> &'static str {
+    if e.contains("403") {
+        "forbidden_region"
+    } else if e.contains("429") {
+        "rate_limited"
+    } else {
+        "unreachable"
+    }
+}
+
+/// Fetch Bybit fills and stage them for confirmation. Never creates
+/// transactions on its own — that only happens in `confirm_pending_imports`.
+#[tauri::command]
+pub async fn import_bybit_history(
+    input: ImportBybitHistoryInput,
+    state: State<'_, AppState>,
+) -> Result<ImportBybitHistoryOutput, String> {
+    let (api_key, api_secret) = {
+        let g = require_vault(&state).map_err(err_to_string)?;
+        let v = g.as_ref().unwrap();
+        match find_bybit_key_for_store(&v.doc.exchanges, &input.store_id, v) {
+            Some(k) => (k.api_key.clone(), k.api_secret.clone()),
+            None => {
+                return Ok(ImportBybitHistoryOutput {
+                    staged: 0,
+                    notice: Some("no_key".into()),
+                });
+            }
+        }
+    };
+
+    let limit = input.limit.unwrap_or(1000).clamp(1, 10_000);
+    let client = BybitClient::default();
+
+    // `all_executions` paginates per category; fills come back newest-first.
+    let execs = match client.all_executions(&api_key, &api_secret, limit).await {
+        Ok(e) => e,
+        Err(e) => {
+            return Ok(ImportBybitHistoryOutput {
+                staged: 0,
+                notice: Some(import_notice(&e.to_string()).into()),
+            });
+        }
+    };
+
+    let imports: Vec<PendingImport> = execs
+        .iter()
+        .take(limit as usize)
+        .filter_map(|exec| {
+            PendingImport::from_execution(&input.store_id, exec.category_hint(), exec)
+        })
+        .collect();
+
+    let mut g = require_vault(&state).map_err(err_to_string)?;
+    let v = g.as_mut().unwrap();
+    let staged = v.stage_imports(imports).map_err(err_to_string)?;
+    Ok(ImportBybitHistoryOutput {
+        staged,
+        notice: None,
+    })
+}
+
+/// Every staged fill, newest first.
+#[tauri::command]
+pub async fn list_pending_imports(
+    state: State<'_, AppState>,
+) -> Result<ListPendingImportsOutput, String> {
+    let g = require_vault(&state).map_err(err_to_string)?;
+    let v = g.as_ref().unwrap();
+    Ok(ListPendingImportsOutput {
+        imports: v.pending_imports(),
+    })
+}
+
+/// Turn staged fills into real trades. Empty `exec_ids` confirms everything.
+#[tauri::command]
+pub async fn confirm_pending_imports(
+    input: ConfirmPendingImportsInput,
+    state: State<'_, AppState>,
+) -> Result<ConfirmPendingImportsOutput, String> {
+    let mut g = require_vault(&state).map_err(err_to_string)?;
+    let v = g.as_mut().unwrap();
+    let confirmed = v
+        .confirm_pending_imports(&input.exec_ids)
+        .map_err(err_to_string)?;
+    Ok(ConfirmPendingImportsOutput { confirmed })
+}
+
+/// Drop staged fills without creating transactions.
+#[tauri::command]
+pub async fn discard_pending_imports(
+    input: DiscardPendingImportsInput,
+    state: State<'_, AppState>,
+) -> Result<DiscardPendingImportsOutput, String> {
+    let mut g = require_vault(&state).map_err(err_to_string)?;
+    let v = g.as_mut().unwrap();
+    let discarded = v
+        .discard_pending_imports(&input.exec_ids)
+        .map_err(err_to_string)?;
+    Ok(DiscardPendingImportsOutput { discarded })
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 //! Domain services: everything the app does on top of the [`VaultDoc`].
 //! This module is pure Rust (no Tauri); the `app` crate only maps commands.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use zeroize::Zeroizing;
@@ -11,8 +11,13 @@ use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, Holding, Store, StoreKind};
 use crate::model::transaction::{Transaction, TxKind};
-use crate::model::vault::{VaultDoc, iso_to_millis, now_iso};
+use crate::model::vault::{PendingImport, VaultDoc, iso_to_millis, now_iso};
 use crate::storage::{SnapshotFormat, VaultFile};
+use crate::txinfo::{HashShape, hash_shape};
+
+/// Upper bound on staged imports held in the vault. A background poll must not
+/// be able to grow the encrypted file without limit.
+pub const MAX_PENDING_IMPORTS: usize = 10_000;
 
 /// An unlocked vault held in memory for the duration of a session.
 /// The master password lives only here (zeroized on drop) — it is never
@@ -76,6 +81,7 @@ impl UnlockedVault {
         kind: StoreKind,
         color: &str,
         note: &str,
+        parent_id: Option<String>,
     ) -> Result<Store> {
         if name.trim().is_empty() {
             return Err(Error::InvalidInput("store name must not be empty".into()));
@@ -88,15 +94,53 @@ impl UnlockedVault {
         {
             return Err(Error::InvalidInput("store name already exists".into()));
         }
+        // Validate parent exists
+        if let Some(ref pid) = parent_id
+            && !self.doc.stores.iter().any(|s| s.id == *pid)
+        {
+            return Err(Error::Missing("parent store not found".into()));
+        }
         let mut store = Store::new(name, kind, color);
         store.note = note.trim().to_string();
+        store.parent_id = parent_id;
         self.doc.stores.push(store.clone());
         self.recompute_holdings();
         self.persist()?;
         Ok(store)
     }
 
-    pub fn update_store(&mut self, id: &str, name: &str, color: &str, note: &str) -> Result<Store> {
+    pub fn update_store(
+        &mut self,
+        id: &str,
+        name: &str,
+        color: &str,
+        note: &str,
+        parent_id: Option<String>,
+    ) -> Result<Store> {
+        // Validate new parent if changed
+        if let Some(ref pid) = parent_id
+            && *pid != id
+        {
+            // can't be parent of itself
+            if !self.doc.stores.iter().any(|s| s.id == *pid) {
+                return Err(Error::Missing("parent store not found".into()));
+            }
+            // Check for cycles: walk up from proposed parent
+            let mut current = Some(pid.as_str());
+            while let Some(p) = current {
+                if p == id {
+                    return Err(Error::InvalidInput(
+                        "cycle detected: cannot make store a descendant of itself".into(),
+                    ));
+                }
+                current = self
+                    .doc
+                    .stores
+                    .iter()
+                    .find(|s| s.id == p)
+                    .and_then(|s| s.parent_id.as_deref());
+            }
+        }
         let out = {
             let s = self
                 .doc
@@ -109,6 +153,7 @@ impl UnlockedVault {
             }
             s.color = color.trim().to_string();
             s.note = note.trim().to_string();
+            s.parent_id = parent_id;
             s.clone()
         };
         self.persist()?;
@@ -146,6 +191,17 @@ impl UnlockedVault {
                 "store has transactions; archive instead".into(),
             ));
         }
+        // Check for children
+        if self
+            .doc
+            .stores
+            .iter()
+            .any(|s| s.parent_id.as_deref() == Some(id))
+        {
+            return Err(Error::InvalidInput(
+                "store has children; archive them first or move them to another parent".into(),
+            ));
+        }
         let before = self.doc.stores.len();
         self.doc.stores.retain(|s| s.id != id);
         self.doc.holdings.retain(|h| h.store_id != id);
@@ -181,6 +237,21 @@ impl UnlockedVault {
 
     pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction> {
         self.ensure_store(&tx.store_id)?;
+        if let Some(ref hash) = tx.tx_hash
+            && !hash.is_empty()
+        {
+            if hash_shape(hash) == HashShape::Malformed {
+                return Err(Error::TxHashMalformed(hash.clone()));
+            }
+            if let (Some(network), Some(chain)) = (&tx.network, &tx.asset.chain)
+                && network != chain
+            {
+                return Err(Error::TxHashNetworkMismatch(format!(
+                    "network {:?} != asset chain {:?}",
+                    network, chain
+                )));
+            }
+        }
         match tx.kind {
             TxKind::Income => self.ensure_positive(&tx.amount, "income")?,
             TxKind::Expense => self.ensure_positive(&tx.amount, "expense")?,
@@ -225,6 +296,19 @@ impl UnlockedVault {
             return Err(Error::InvalidInput("transfer origin == destination".into()));
         }
         self.ensure_positive(&amount, "transfer")?;
+        if let Some(ref hash) = tx_hash {
+            if !hash.is_empty() && hash_shape(hash) == HashShape::Malformed {
+                return Err(Error::TxHashMalformed(hash.clone()));
+            }
+            if let (Some(network), Some(chain)) = (&network, &asset.chain)
+                && network != chain
+            {
+                return Err(Error::TxHashNetworkMismatch(format!(
+                    "network {:?} != asset chain {:?}",
+                    network, chain
+                )));
+            }
+        }
         let group = uuid::Uuid::new_v4().to_string();
         let ts = now_iso();
 
@@ -483,6 +567,28 @@ impl UnlockedVault {
         out
     }
 
+    /// Return direct children of a store.
+    fn children_of(&self, parent_id: &str) -> Vec<&Store> {
+        self.doc
+            .stores
+            .iter()
+            .filter(|s| s.parent_id.as_deref() == Some(parent_id))
+            .collect()
+    }
+
+    /// Return all descendant store IDs (BFS).
+    fn subtree_ids(&self, root_id: &str) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut queue = vec![root_id.to_string()];
+        while let Some(id) = queue.pop() {
+            for child in self.children_of(&id) {
+                result.push(child.id.clone());
+                queue.push(child.id.clone());
+            }
+        }
+        result
+    }
+
     /// Single-round-trip view of one store for the wallet page.
     pub fn store_overview(&self, store_id: &str) -> Result<StoreOverview> {
         let store = self
@@ -497,6 +603,35 @@ impl UnlockedVault {
         let total_usd = positions
             .iter()
             .fold(Amount::ZERO, |acc, p| acc + p.value_usd);
+
+        // Children with their direct values
+        let children = self
+            .children_of(store_id)
+            .into_iter()
+            .map(|child| {
+                let child_positions = self.store_positions(&child.id, fx);
+                let child_value_usd = child_positions
+                    .iter()
+                    .fold(Amount::ZERO, |acc, p| acc + p.value_usd);
+                StoreChildRow {
+                    store: child.clone(),
+                    value_usd: child_value_usd,
+                    value_base: child_value_usd * fx,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Subtree total = own value + sum of all descendants' values
+        let subtree_ids = self.subtree_ids(store_id);
+        let subtree_total_usd = self
+            .doc
+            .holdings
+            .iter()
+            .filter(|h| subtree_ids.contains(&h.store_id) || h.store_id == store_id)
+            .fold(Amount::ZERO, |acc, h| {
+                let price = self.price_usd_for(&h.asset.key());
+                acc + h.quantity * price
+            });
 
         let txs = self.store_txs(store_id);
         let first_tx_at = txs
@@ -518,8 +653,10 @@ impl UnlockedVault {
             fx_per_usd: fx,
             total_usd,
             total_base: total_usd * fx,
+            subtree_total_base: subtree_total_usd * fx,
             realized_pnl_base: self.realized_pnl_filtered(Some(store_id)).total_base,
             positions,
+            children,
             tx_count: txs.len() as u32,
             first_tx_at,
             last_tx_at,
@@ -762,6 +899,171 @@ impl UnlockedVault {
         }
     }
 
+    // -- bybit import staging (D2.4) ---------------------------------------
+
+    /// Stage fills for user confirmation.
+    ///
+    /// Fills are keyed by Bybit's `execId`, so re-importing the same history is
+    /// idempotent. Nothing here touches `transactions` — the user has to confirm
+    /// first, which is what keeps a background import from rewriting history.
+    /// Returns how many fills were newly staged.
+    pub fn stage_imports(&mut self, imports: Vec<PendingImport>) -> Result<u32> {
+        let before = self.doc.pending_imports.len();
+        let mut known: HashSet<String> = self
+            .doc
+            .pending_imports
+            .iter()
+            .map(|p| p.exec_id.clone())
+            .collect();
+
+        for imp in imports {
+            if imp.exec_id.is_empty() || known.contains(&imp.exec_id) {
+                continue;
+            }
+            if self.ensure_store(&imp.store_id).is_err() {
+                continue;
+            }
+            known.insert(imp.exec_id.clone());
+            self.doc.pending_imports.push(imp);
+            if self.doc.pending_imports.len() >= MAX_PENDING_IMPORTS {
+                break;
+            }
+        }
+
+        let staged = (self.doc.pending_imports.len() - before) as u32;
+        if staged > 0 {
+            self.persist()?;
+        }
+        Ok(staged)
+    }
+
+    /// Every staged fill, newest first.
+    pub fn pending_imports(&self) -> Vec<PendingImport> {
+        let mut out = self.doc.pending_imports.clone();
+        out.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+        out
+    }
+
+    /// Turn staged fills into real trades (two legs each, like `add_trade`).
+    ///
+    /// An empty `exec_ids` confirms everything staged. Confirmed entries leave
+    /// the staging area so they cannot be imported twice.
+    pub fn confirm_pending_imports(&mut self, exec_ids: &[String]) -> Result<u32> {
+        let all = exec_ids.is_empty();
+        let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
+        let mut confirmed = 0u32;
+        let mut kept = Vec::new();
+
+        for imp in std::mem::take(&mut self.doc.pending_imports) {
+            if !(all || wanted.contains(imp.exec_id.as_str())) {
+                kept.push(imp);
+                continue;
+            }
+            if self.ensure_store(&imp.store_id).is_err() {
+                continue; // store vanished: drop the staged fill, don't confirm it
+            }
+            if self.ensure_positive(&imp.qty_bought, "bought qty").is_err()
+                || self.ensure_positive(&imp.qty_sold, "sold qty").is_err()
+            {
+                continue;
+            }
+            let group = uuid::Uuid::new_v4().to_string();
+            let ts = if imp.occurred_at.is_empty() {
+                now_iso()
+            } else {
+                imp.occurred_at.clone()
+            };
+            let category = Some("trading".to_string());
+            let fee = (!imp.fee.is_zero()).then_some(imp.fee.abs());
+            let fee_asset = (!imp.fee_asset.is_empty()).then(|| imp.fee_asset.clone());
+
+            // Sold leg: negative amount, matching `add_trade` conventions.
+            let mut out = Transaction::new(
+                TxKind::Trade,
+                self.asset_for_import(&imp.asset_sold),
+                -imp.qty_sold,
+                &imp.store_id,
+                &imp.comment,
+            );
+            out.category = category.clone();
+            out.fee = fee;
+            out.fee_asset = fee_asset;
+            out.group_id = Some(group.clone());
+            out.timestamp = ts.clone();
+            out.price_usd = Some(imp.price);
+
+            // Bought leg: positive amount.
+            let mut inn = Transaction::new(
+                TxKind::Trade,
+                self.asset_for_import(&imp.asset_bought),
+                imp.qty_bought,
+                &imp.store_id,
+                &imp.comment,
+            );
+            inn.category = category;
+            inn.group_id = Some(group);
+            inn.timestamp = ts;
+
+            self.doc.transactions.push(out);
+            self.doc.transactions.push(inn);
+            confirmed += 1;
+        }
+
+        self.doc.pending_imports = kept;
+        if confirmed > 0 {
+            self.recompute_holdings();
+            self.persist()?;
+        }
+        Ok(confirmed)
+    }
+
+    /// Drop staged fills without creating transactions.
+    /// An empty `exec_ids` discards everything.
+    pub fn discard_pending_imports(&mut self, exec_ids: &[String]) -> Result<u32> {
+        let all = exec_ids.is_empty();
+        let before = self.doc.pending_imports.len();
+        let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
+        self.doc
+            .pending_imports
+            .retain(|p| !(all || wanted.contains(p.exec_id.as_str())));
+        let discarded = (before - self.doc.pending_imports.len()) as u32;
+        if discarded > 0 {
+            self.persist()?;
+        }
+        Ok(discarded)
+    }
+
+    /// Build an [`AssetRef`] for an imported symbol.
+    ///
+    /// The chain is inherited from an asset the user already tracks, so an
+    /// imported fill lands in the same bucket as manual entries. Unknown
+    /// symbols stay chain-less (`None`) rather than being guessed at — the
+    /// user can bind a chain later.
+    fn asset_for_import(&self, symbol: &str) -> AssetRef {
+        let upper = symbol.trim().to_ascii_uppercase();
+        match self
+            .doc
+            .holdings
+            .iter()
+            .find(|h| h.asset.symbol.eq_ignore_ascii_case(symbol))
+            .map(|h| h.asset.clone())
+        {
+            // Reuse the identity the user already tracks (name, coingecko id,
+            // chain) so the fill lands in the same bucket as manual entries.
+            Some(mut a) => {
+                a.symbol = upper;
+                a
+            }
+            // Unseen symbol: leave the chain unresolved so the user can bind
+            // it later, rather than attributing the asset to a wrong network.
+            None => {
+                let mut a = AssetRef::crypto(&upper, &upper, None, Chain::Fiat);
+                a.chain = None;
+                a
+            }
+        }
+    }
+
     // -- helpers ------------------------------------------------------------
 
     fn ensure_store(&self, id: &str) -> Result<()> {
@@ -854,15 +1156,29 @@ pub struct StorePosition {
 /// Computed on the fly — nothing here is persisted, so the vault format
 /// version is unaffected.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct StoreChildRow {
+    pub store: Store,
+    pub value_usd: Amount,
+    pub value_base: Amount,
+}
+
+/// Everything the wallet page needs about one store, in a single round trip.
+/// Computed on the fly — nothing here is persisted, so the vault format
+/// version is unaffected.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct StoreOverview {
     pub store: Store,
     pub base_currency: String,
     pub fx_per_usd: Amount,
     pub total_usd: Amount,
     pub total_base: Amount,
+    /// Total value including all descendants (subtree).
+    pub subtree_total_base: Amount,
     pub realized_pnl_base: Amount,
     /// Sorted by `value_base`, descending.
     pub positions: Vec<StorePosition>,
+    /// Direct children with their own values (for tree rendering).
+    pub children: Vec<StoreChildRow>,
     pub tx_count: u32,
     /// RFC3339; empty when the store has no transactions.
     pub first_tx_at: String,
@@ -915,9 +1231,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
         let mut v = UnlockedVault::create(path, "pw").unwrap();
-        v.create_store("Binance", StoreKind::Exchange, "#f0b90b", "")
+        v.create_store("Binance", StoreKind::Exchange, "#f0b90b", "", None)
             .unwrap();
-        v.create_store("Cold", StoreKind::ColdWallet, "#555", "")
+        v.create_store("Cold", StoreKind::ColdWallet, "#555", "", None)
             .unwrap();
         (dir, v)
     }
@@ -1171,5 +1487,337 @@ mod tests {
         assert!(p2.legs.is_empty());
 
         assert_eq!(v.realized_pnl().total_base.to_string(), "20000");
+    }
+
+    #[test]
+    fn tx_hash_validation_rejects_malformed() {
+        let (_d, mut v) = setup();
+        let s = v.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
+            TxKind::Income,
+            btc(),
+            Amount::parse("1").unwrap(),
+            &s,
+            "dep",
+        );
+        tx.tx_hash = Some("not-a-valid-hash".into());
+        assert!(matches!(
+            v.add_transaction(tx),
+            Err(Error::TxHashMalformed(_))
+        ));
+    }
+
+    #[test]
+    fn tx_hash_validation_accepts_valid_evm_hash() {
+        let (_d, mut v) = setup();
+        let s = v.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
+            TxKind::Income,
+            btc(),
+            Amount::parse("1").unwrap(),
+            &s,
+            "dep",
+        );
+        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64)); // 0x + 64 hex chars
+        v.add_transaction(tx).unwrap();
+    }
+
+    #[test]
+    fn tx_hash_validation_accepts_valid_bitcoin_hash() {
+        let (_d, mut v) = setup();
+        let s = v.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
+            TxKind::Income,
+            btc(),
+            Amount::parse("1").unwrap(),
+            &s,
+            "dep",
+        );
+        tx.tx_hash = Some("a".repeat(64)); // 64 hex chars, no 0x
+        v.add_transaction(tx).unwrap();
+    }
+
+    #[test]
+    fn tx_hash_network_mismatch_rejected() {
+        let (_d, mut v) = setup();
+        let s = v.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
+            TxKind::Income,
+            btc(),
+            Amount::parse("1").unwrap(),
+            &s,
+            "dep",
+        );
+        // Bitcoin asset (chain = Bitcoin) but Ethereum network
+        tx.asset.chain = Some(Chain::Bitcoin);
+        tx.network = Some(Chain::Ethereum);
+        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
+        assert!(matches!(
+            v.add_transaction(tx),
+            Err(Error::TxHashNetworkMismatch(_))
+        ));
+    }
+
+    #[test]
+    fn tx_hash_network_match_accepted() {
+        let (_d, mut v) = setup();
+        let s = v.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
+            TxKind::Income,
+            btc(),
+            Amount::parse("1").unwrap(),
+            &s,
+            "dep",
+        );
+        tx.asset.chain = Some(Chain::Ethereum);
+        tx.network = Some(Chain::Ethereum);
+        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
+        v.add_transaction(tx).unwrap();
+    }
+
+    #[test]
+    fn transfer_tx_hash_validation_rejects_malformed() {
+        let (_d, mut v) = setup();
+        let s1 = v.doc.stores[0].id.clone();
+        let s2 = v.doc.stores[1].id.clone();
+        assert!(matches!(
+            v.transfer(
+                &s1,
+                &s2,
+                btc(),
+                Amount::parse("1").unwrap(),
+                None,
+                None,
+                Some("not-a-valid-hash".into()),
+                "comment",
+                None,
+            ),
+            Err(Error::TxHashMalformed(_))
+        ));
+    }
+
+    #[test]
+    fn transfer_network_mismatch_rejected() {
+        let (_d, mut v) = setup();
+        let s1 = v.doc.stores[0].id.clone();
+        let s2 = v.doc.stores[1].id.clone();
+        let mut asset = btc();
+        asset.chain = Some(Chain::Bitcoin);
+        assert!(matches!(
+            v.transfer(
+                &s1,
+                &s2,
+                asset,
+                Amount::parse("1").unwrap(),
+                None,
+                Some(Chain::Ethereum),
+                Some("0x".to_string() + &"a".repeat(64)),
+                "comment",
+                None,
+            ),
+            Err(Error::TxHashNetworkMismatch(_))
+        ));
+    }
+
+    #[test]
+    fn transfer_empty_hash_accepted() {
+        let (_d, mut v) = setup();
+        let s1 = v.doc.stores[0].id.clone();
+        let s2 = v.doc.stores[1].id.clone();
+        v.transfer(
+            &s1,
+            &s2,
+            btc(),
+            Amount::parse("1").unwrap(),
+            None,
+            None,
+            Some("".into()),
+            "comment",
+            None,
+        )
+        .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+    use crate::exchange::Execution;
+    use tempfile::tempdir;
+
+    fn setup() -> (tempfile::TempDir, UnlockedVault) {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.wallet");
+        let mut v = UnlockedVault::create(path, "pw").unwrap();
+        v.create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
+            .unwrap();
+        (dir, v)
+    }
+
+    fn fill(exec_id: &str, side: &str, qty: &str, price: &str) -> Execution {
+        Execution {
+            exec_id: exec_id.into(),
+            symbol: "BTCUSDT".into(),
+            side: side.into(),
+            order_type: "Market".into(),
+            exec_price: price.into(),
+            exec_qty: qty.into(),
+            // Quote leg; callers that care about leg symmetry pass sane values,
+            // and the "garbled input" test deliberately passes junk.
+            exec_value: "32500".into(),
+            exec_fee: "0.5".into(),
+            exec_time: "1700000000000".into(),
+            is_maker: false,
+            closed_size: None,
+        }
+    }
+
+    fn staged(store: &str, exec_id: &str, side: &str) -> PendingImport {
+        PendingImport::from_execution(store, "spot", &fill(exec_id, side, "0.5", "65000")).unwrap()
+    }
+
+    /// Staging must never create transactions on its own — that is the whole
+    /// point of the confirmation step.
+    #[test]
+    fn staging_creates_no_transactions() {
+        let (_d, mut v) = setup();
+        let store = v.doc.stores[0].id.clone();
+        let n = v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(v.doc.transactions.len(), 0);
+        assert_eq!(v.pending_imports().len(), 1);
+    }
+
+    /// Re-running an import must not duplicate fills: execId is the key.
+    #[test]
+    fn staging_is_idempotent_per_exec_id() {
+        let (_d, mut v) = setup();
+        let store = v.doc.stores[0].id.clone();
+        assert_eq!(
+            v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap(),
+            1
+        );
+        assert_eq!(
+            v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap(),
+            0
+        );
+        // A batch that repeats a known id alongside a new one adds only the new one.
+        assert_eq!(
+            v.stage_imports(vec![
+                staged(&store, "e1", "buy"),
+                staged(&store, "e2", "sell"),
+            ])
+            .unwrap(),
+            1
+        );
+        assert_eq!(v.pending_imports().len(), 2);
+    }
+
+    /// A fill that belongs to a store which no longer exists must be dropped,
+    /// never staged against a dangling id.
+    #[test]
+    fn staging_skips_fills_for_unknown_stores() {
+        let (_d, mut v) = setup();
+        let n = v
+            .stage_imports(vec![staged("ghost-store", "e1", "buy")])
+            .unwrap();
+        assert_eq!(n, 0);
+        assert!(v.pending_imports().is_empty());
+    }
+
+    /// A buy becomes a two-leg trade: quote out (negative), base in (positive).
+    #[test]
+    fn confirming_a_buy_creates_a_balanced_trade() {
+        let (_d, mut v) = setup();
+        let store = v.doc.stores[0].id.clone();
+        v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
+
+        assert_eq!(v.confirm_pending_imports(&[]).unwrap(), 1);
+        assert_eq!(v.doc.transactions.len(), 2);
+        let legs: Vec<&Transaction> = v.doc.transactions.iter().collect();
+        assert!(legs.iter().all(|t| t.kind == TxKind::Trade));
+        assert_eq!(legs[0].amount.to_string(), "-32500"); // USDT spent
+        assert_eq!(legs[1].amount.to_string(), "0.5"); // BTC received
+        assert_eq!(legs[0].group_id, legs[1].group_id);
+        // Staging area is drained so the same fill cannot be confirmed twice.
+        assert!(v.pending_imports().is_empty());
+        // Holdings reflect the bought asset.
+        assert!(v.doc.holdings.iter().any(|h| h.asset.symbol == "BTC"));
+    }
+
+    #[test]
+    fn confirming_selectively_leaves_the_rest_staged() {
+        let (_d, mut v) = setup();
+        let store = v.doc.stores[0].id.clone();
+        v.stage_imports(vec![
+            staged(&store, "e1", "buy"),
+            staged(&store, "e2", "sell"),
+        ])
+        .unwrap();
+
+        let confirmed = v.confirm_pending_imports(&["e1".to_string()]).unwrap();
+        assert_eq!(confirmed, 1);
+        assert_eq!(v.doc.transactions.len(), 2);
+        let left: Vec<String> = v.pending_imports().into_iter().map(|p| p.exec_id).collect();
+        assert_eq!(left, vec!["e2".to_string()]);
+    }
+
+    #[test]
+    fn discarding_creates_nothing_and_drops_the_fill() {
+        let (_d, mut v) = setup();
+        let store = v.doc.stores[0].id.clone();
+        v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
+        assert_eq!(v.discard_pending_imports(&[]).unwrap(), 1);
+        assert!(v.pending_imports().is_empty());
+        assert_eq!(v.doc.transactions.len(), 0);
+    }
+
+    #[test]
+    fn confirmed_fills_reject_a_missing_exec_id() {
+        let (_d, mut v) = setup();
+        assert_eq!(v.confirm_pending_imports(&["nope".to_string()]).unwrap(), 0);
+        assert_eq!(v.doc.transactions.len(), 0);
+    }
+
+    /// Fills without an id, or with an unparsable quantity, must never reach
+    /// staging — a garbled fill cannot become a transaction.
+    #[test]
+    fn unusable_fills_are_rejected_at_the_boundary() {
+        assert!(PendingImport::from_execution("s", "spot", &fill("", "buy", "1", "100")).is_none());
+        assert!(
+            PendingImport::from_execution("s", "spot", &fill("e1", "buy", "not-a-number", "100"))
+                .is_none()
+        );
+        assert!(
+            PendingImport::from_execution("s", "spot", &fill("e1", "buy", "0", "100")).is_none()
+        );
+    }
+
+    #[test]
+    fn imported_fill_maps_legs_and_metadata() {
+        let imp = PendingImport::from_execution(
+            "store-1",
+            "linear",
+            &fill("exec-9", "Buy", "0.5", "65000"),
+        )
+        .unwrap();
+        assert_eq!(imp.exec_id, "exec-9");
+        assert_eq!(imp.store_id, "store-1");
+        assert_eq!(imp.category, "linear");
+        assert_eq!(imp.side, "buy");
+        assert_eq!(imp.asset_bought, "BTC");
+        assert_eq!(imp.qty_bought.to_string(), "0.5");
+        assert_eq!(imp.asset_sold, "USDT");
+        assert_eq!(imp.occurred_at, "2023-11-14T22:13:20Z");
+        assert!(imp.comment.contains("bybit"));
+    }
+
+    /// Perpetual symbols are tagged as derivatives even on a swept import.
+    #[test]
+    fn category_hint_separates_perps_from_spot() {
+        let mut f = fill("e1", "buy", "1", "100");
+        assert_eq!(f.category_hint(), "spot");
+        f.symbol = "BTCUSDT_PERP".into();
+        assert_eq!(f.category_hint(), "linear");
     }
 }

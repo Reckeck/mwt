@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, UnlockInput, VaultInfo, VaultStatus,
@@ -39,29 +39,53 @@ pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, Str
 #[tauri::command]
 pub async fn create_vault(
     input: CreateVaultInput,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
     let path = std::path::PathBuf::from(&input.path);
     if input.password.is_empty() {
         return Err("INVALID_INPUT: password must not be empty".into());
     }
-    let vault =
-        UnlockedVault::create(path, &input.password).map_err(crate::commands::err_to_string)?;
+    let vault = UnlockedVault::create(path.clone(), &input.password)
+        .map_err(crate::commands::err_to_string)?;
     let info = info_of(&vault);
-    *state.vault.lock().map_err(|_| "lock".to_string())? = Some(vault);
+    *state
+        .vault
+        .lock()
+        .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))? =
+        Some(vault);
+    // Update vault_path and record in recents
+    *state
+        .vault_path
+        .lock()
+        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
+        path.clone();
+    crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
 }
 
 #[tauri::command]
 pub async fn unlock_vault(
     input: UnlockInput,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
     let path = std::path::PathBuf::from(&input.path);
-    let vault =
-        UnlockedVault::open(path, &input.password).map_err(crate::commands::err_to_string)?;
+    let vault = UnlockedVault::open(path.clone(), &input.password)
+        .map_err(crate::commands::err_to_string)?;
     let info = info_of(&vault);
-    *state.vault.lock().map_err(|_| "lock".to_string())? = Some(vault);
+    *state
+        .vault
+        .lock()
+        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
+        Some(vault);
+    // Update vault_path and record in recents
+    *state
+        .vault_path
+        .lock()
+        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
+        path.clone();
+    crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
 }
 

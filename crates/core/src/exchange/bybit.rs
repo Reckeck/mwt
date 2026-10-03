@@ -27,6 +27,13 @@ const TESTNET: &str = "https://api-testnet.bybit.com";
 /// Bybit rejects requests whose timestamp drifts outside this window.
 const RECV_WINDOW_MS: u64 = 5_000;
 
+/// `/v5/execution/list` refuses `startTime`/`endTime` windows wider than 7 days.
+const IMPORT_WINDOW_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// Upper bound on history requests per category, so a full-history import
+/// cannot fan out into hundreds of calls against the user's rate limit.
+const MAX_IMPORT_PAGES: usize = 12;
+
 /// Product type. Bybit requires this on most private endpoints.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -62,6 +69,8 @@ pub struct Execution {
     pub exec_time: String,
     pub is_maker: bool,
     pub closed_size: Option<String>,
+    /// Bybit's unique execution ID (execId) for deduplication.
+    pub exec_id: String,
 }
 
 impl Execution {
@@ -90,6 +99,17 @@ impl Execution {
         self.closed_size
             .as_ref()
             .is_some_and(|s| !s.is_empty() && s != "0")
+    }
+
+    /// Best-effort product category from the symbol, for imports that sweep
+    /// every category in one pass and therefore cannot tag fills as they fetch.
+    /// Bybit names perpetual futures `…PERP`, so that suffix is the only signal.
+    pub fn category_hint(&self) -> &'static str {
+        if self.symbol.to_ascii_uppercase().ends_with("PERP") {
+            "linear"
+        } else {
+            "spot"
+        }
     }
 }
 
@@ -192,7 +212,7 @@ struct ApiEnvelope<T> {
     result: Option<T>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct ExecutionPage {
     #[serde(default)]
     list: Vec<ApiExecution>,
@@ -200,7 +220,7 @@ struct ExecutionPage {
 
 /// Bybit's execution objects are camelCase (`execPrice`, `isMaker`,
 /// `closedSize`), so map them explicitly instead of relying on field spelling.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ApiExecution {
     #[serde(default)]
@@ -223,6 +243,9 @@ struct ApiExecution {
     is_maker: bool,
     #[serde(default)]
     closed_size: Option<String>,
+    /// Bybit's unique execution ID.
+    #[serde(default)]
+    exec_id: String,
 }
 
 impl From<ApiExecution> for Execution {
@@ -238,6 +261,7 @@ impl From<ApiExecution> for Execution {
             exec_time: a.exec_time,
             is_maker: a.is_maker,
             closed_size: a.closed_size,
+            exec_id: a.exec_id,
         }
     }
 }
@@ -365,10 +389,97 @@ impl BybitClient {
             .map(|p| p.list.into_iter().map(Execution::from).collect())
             .unwrap_or_default())
     }
+
+    /// Fetch ALL executions across every category, for a full-history import.
+    ///
+    /// `/v5/execution/list` has no cursor: it pages with `startTime`/`endTime`
+    /// and rejects windows wider than 7 days. So for each category we walk
+    /// backwards in fixed 7-day windows from now until we have enough fills, a
+    /// window comes back empty, or the page budget runs out. Returns fills
+    /// newest-first.
+    pub async fn all_executions(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        max_total: u32,
+    ) -> Result<Vec<Execution>> {
+        if api_key.is_empty() || api_secret.is_empty() || max_total == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut all: Vec<Execution> = Vec::new();
+        for category in [Category::Spot, Category::Linear, Category::Inverse] {
+            if all.len() as u32 >= max_total {
+                break;
+            }
+            let mut window_end = Self::now_millis();
+
+            for _ in 0..MAX_IMPORT_PAGES {
+                if all.len() as u32 >= max_total {
+                    break;
+                }
+                let window_start = window_end.saturating_sub(IMPORT_WINDOW_MS);
+                let limit = (max_total - all.len() as u32).clamp(1, 100);
+                let query = format!(
+                    "category={}&startTime={window_start}&endTime={window_end}&limit={limit}",
+                    category.as_str()
+                );
+
+                let headers = Self::signed_headers(
+                    api_key,
+                    api_secret,
+                    RECV_WINDOW_MS,
+                    Self::now_millis(),
+                    &query,
+                )?;
+
+                let url = format!("{}/v5/execution/list?{query}", self.base_url);
+                let resp = self
+                    .client
+                    .get(&url)
+                    .headers(headers)
+                    .send()
+                    .await
+                    .map_err(|e| Error::Network(e.to_string()))?;
+
+                let envelope: ApiEnvelope<ExecutionPage> = resp
+                    .json()
+                    .await
+                    .map_err(|e| Error::Network(e.to_string()))?;
+                if envelope.retcode != 0 {
+                    // No permission for this category (common for inverse on a
+                    // spot-only key): skip it, keep sweeping the others.
+                    break;
+                }
+                let rows = envelope.result.map(|p| p.list).unwrap_or_default();
+                all.extend(rows.into_iter().map(Execution::from));
+
+                if window_start == 0 {
+                    break; // walked back to the epoch
+                }
+                window_end = window_start - 1;
+            }
+        }
+
+        // Sort newest-first (by exec_time desc)
+        all.sort_by(|a, b| b.exec_time.cmp(&a.exec_time));
+        all.truncate(max_total as usize);
+        Ok(all)
+    }
 }
 
 fn header(v: &str) -> Result<HeaderValue> {
     HeaderValue::from_str(v).map_err(|_| Error::InvalidInput("invalid header value".into()))
+}
+
+impl BybitClient {
+    /// Milliseconds since the Unix epoch, for signing and query windows.
+    fn now_millis() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or_default()
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -396,6 +507,7 @@ mod tests {
             exec_time: "1700000000000".into(),
             is_maker: false,
             closed_size: None,
+            exec_id: "exec-1".into(),
         }
     }
 
