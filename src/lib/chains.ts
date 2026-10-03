@@ -1,0 +1,50 @@
+/** Network constants for the UI. Mirrors `Chain`/`ChainInfo` in `model/chain.rs`,
+ * which deliberately stay on the Rust side (CoinGecko ids, explorer templates). */
+export const CHAINS: Chain[] = [
+  'bitcoin',
+  'ethereum',
+  'bsc',
+  'solana',
+  'polygon',
+  'arbitrum',
+  'optimism',
+  'avalanche',
+  'base',
+  'tron',
+  'litecoin',
+  'dogecoin',
+  'cardano',
+  'xrp',
+  'polkadot',
+  'cosmos',
+  'near',
+  'ton',
+  'algorand',
+  'fiat',
+]
+
+/** Short human labels; the full ones are too wide for a select. */
+export const CHAIN_LABELS: Record<Chain, string> = {
+  bitcoin: 'Bitcoin',
+  ethereum: 'Ethereum',
+  bsc: 'BNB Chain',
+  solana: 'Solana',
+  polygon: 'Polygon',
+  arbitrum: 'Arbitrum',
+  optimism: 'Optimism',
+  avalanche: 'Avalanche',
+  base: 'Base',
+  tron: 'Tron',
+  litecoin: 'Litecoin',
+  dogecoin: 'Dogecoin',
+  cardano: 'Cardano',
+  xrp: 'XRP',
+  polkadot: 'Polkadot',
+  cosmos: 'Cosmos',
+  near: 'NEAR',
+  ton: 'TON',
+  algorand: 'Algorand',
+  fiat: 'Fiat',
+}
+
+export const CRYPTO_CHAINS = CHAINS.filter((c) => c !== 'fiat')
