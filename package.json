@@ -14,9 +14,12 @@
   "dependencies": {
     "@tanstack/vue-query": "^5.104.0",
     "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.8.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "echarts": "^5.6.0",
+    "lightweight-charts": "^5.2.1",
+    "lightweight-charts-drawing": "^0.4.0",
     "lucide-vue-next": "^0.468.0",
     "pinia": "^4.0.3",
     "reka-ui": "^2.10.5",

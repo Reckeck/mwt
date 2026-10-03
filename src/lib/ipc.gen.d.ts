@@ -40,7 +40,7 @@ type BybitExecution = { symbol: string, side: string, order_type: string, exec_p
  */
 prefill: TradePrefill, };
 
-type BybitExecutionsInput = { category: Category, symbol: string | null, limit: number | null, };
+type BybitExecutionsInput = { category: Category, symbol: string | null, limit: number | null, store_id: string | null, };
 
 /**
  * Never fails: an unconfigured or unreachable key yields an empty list.
@@ -143,6 +143,16 @@ risk: Amount,
 risk_pct: Amount, };
 
 /**
+ * Seeded GBM parameters of a synthetic candle stream.
+ */
+type CandleParams = { seed: bigint, n: number, start_price: Amount, annual_vol: Amount, candles_per_year: Amount, };
+
+/**
+ * Single OHLCV candle point for charting.
+ */
+type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
+
+/**
  * Product type. Bybit requires this on most private endpoints.
  */
 type Category = "spot" | "linear" | "inverse";
@@ -157,15 +167,49 @@ type Chain = "bitcoin" | "ethereum" | "bsc" | "solana" | "polygon" | "arbitrum" 
 
 type ChangePasswordInput = { current_password: string, new_password: string, };
 
-type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, };
+/**
+ * Input to clear a key for a specific store.
+ */
+type ClearExchangeKeyInput = { store_id: string, };
+
+/**
+ * Turn staged fills into real trades (two legs each, like `add_trade`).
+ */
+type ConfirmPendingImportsInput = { 
+/**
+ * Empty = confirm everything currently staged.
+ */
+exec_ids: Array<string>, };
+
+type ConfirmPendingImportsOutput = { confirmed: number, };
+
+type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, parent_id: string | null, };
 
 type CreateVaultInput = { path: string, password: string, };
+
+type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
 /**
  * A price feed for simulation: real historical candles (Binance/CoinGecko)
  * or synthetic (GBM) when offline.
  */
 type DataSource = "real" | "synthetic";
+
+/**
+ * Output of the dev dump vault command (DEV only).
+ */
+type DevDumpVaultOutput = { json: string, };
+
+/**
+ * Drop staged fills without creating transactions.
+ */
+type DiscardPendingImportsInput = { 
+/**
+ * Empty = discard everything currently staged.
+ */
+exec_ids: Array<string>, };
+
+type DiscardPendingImportsOutput = { discarded: number, };
 
 type EquityPoint = { ts: string, equity: Amount, value: Amount, };
 
@@ -183,6 +227,33 @@ hint: string | null, };
  */
 type FxPoint = { currency: string, per_usd: Amount, ts: string, source: string, };
 
+type GbmPathPoint = { ts: string, price: string, };
+
+type GbmPathsInput = { run_id: string, 
+/**
+ * number of fan lines (clamped server-side).
+ */
+paths: number, 
+/**
+ * steps into the future (clamped server-side).
+ */
+horizon: number, };
+
+type GbmPathsOutput = { paths: Array<Array<GbmPathPoint>>, };
+
+type GetCandlesInput = { symbol: string, interval_min: number, limit: number, };
+
+type GetCandlesOutput = { candles: Array<CandlePoint>, };
+
+type GetRunCandlesInput = { run_id: string, };
+
+/**
+ * Candles of a finished run: synthetic runs are regenerated from
+ * `candle_params` (deterministic seed), real runs are re-fetched from
+ * Binance for the run's time range.
+ */
+type GetRunCandlesOutput = { candles: Array<CandlePoint>, };
+
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
 /**
@@ -193,6 +264,26 @@ type Holding = { id: string, store_id: string, asset: AssetRef, quantity: Amount
  * Optional manual average cost basis per unit (in base currency).
  */
 avg_cost: Amount | null, };
+
+/**
+ * Fetch every Bybit fill for a store and stage it for user confirmation.
+ */
+type ImportBybitHistoryInput = { store_id: string, 
+/**
+ * Safety cap on fetched fills (default 1000, max 10000). The import always
+ * sweeps every category the key has access to.
+ */
+limit: number | null, };
+
+/**
+ * How many fills this run newly staged (already-known ids are skipped).
+ */
+type ImportBybitHistoryOutput = { staged: number, 
+/**
+ * Machine code: `no_key` | `unreachable` | `rate_limited` |
+ * `forbidden_region`.
+ */
+notice: string | null, };
 
 /**
  * Chain the user picked when the hash alone was ambiguous. Without it the
@@ -218,9 +309,64 @@ fetched: boolean, info: TxInfo | null, hints: Array<TxFieldHint>,
  */
 notice: string | null, };
 
+type ListPendingImportsOutput = { imports: Array<PendingImport>, };
+
 type Locale = "auto" | "en" | "ru";
 
 type NamedValue = { label: string, value_usd: Amount, value_base: Amount, pct: number, };
+
+/**
+ * A staged Bybit fill awaiting user confirmation before becoming a trade.
+ *
+ * Fills land here first and never touch `transactions` until the user
+ * confirms them, so a background import can never silently rewrite history.
+ * Deduplication key is Bybit's `execId`.
+ */
+type PendingImport = { 
+/**
+ * Bybit's execution ID (`execId`) — the deduplication key.
+ */
+exec_id: string, 
+/**
+ * Store the fill belongs to.
+ */
+store_id: string, 
+/**
+ * Product category: `spot` | `linear` | `inverse`.
+ */
+category: string, 
+/**
+ * Pair symbol as Bybit reports it (e.g. `BTCUSDT`).
+ */
+symbol: string, 
+/**
+ * `"buy"` or `"sell"`.
+ */
+side: string, 
+/**
+ * Asset received.
+ */
+asset_bought: string, qty_bought: Amount, 
+/**
+ * Asset given up.
+ */
+asset_sold: string, qty_sold: Amount, 
+/**
+ * Fill price of one unit of the base asset.
+ */
+price: Amount, fee: Amount, 
+/**
+ * Fee denom; empty when Bybit reported none.
+ */
+fee_asset: string, 
+/**
+ * ISO-8601 UTC.
+ */
+occurred_at: string, 
+/**
+ * Provenance note shown in the staging UI.
+ */
+comment: string, };
 
 type PnlLeg = { ts: string, store_id: string, asset_key: string, 
 /**
@@ -245,6 +391,11 @@ ts: string, source: string, };
 
 type RealizedPnl = { total_base: Amount, legs: Array<PnlLeg>, };
 
+/**
+ * A recently opened vault file.
+ */
+type RecentVault = { path: string, last_opened: string, exists: boolean, };
+
 type RefreshResult = { prices: number, fx: number, updated_at: string, };
 
 /**
@@ -265,10 +416,15 @@ granularity_min: number, };
 type SaveStrategyInput = { strategy: Strategy, };
 
 /**
- * Stores a read-only key. Both fields are written to the encrypted vault and
- * are never echoed back to the frontend.
+ * Input to select or pick a vault file.
  */
-type SetExchangeKeyInput = { api_key: string, api_secret: string, };
+type SelectVaultInput = { path: string, };
+
+/**
+ * Stores a read-only key for a specific store. Both fields are written to the
+ * encrypted vault and are never echoed back to the frontend.
+ */
+type SetExchangeKeyInput = { store_id: string, api_key: string, api_secret: string, };
 
 type SetTxPricesInput = { transaction_id: string, price_usd: Amount | null, fx_override: Amount | null, };
 
@@ -280,12 +436,53 @@ base_currency: string, theme: Theme, locale: Locale,
 /**
  * Decimal places used to render balances.
  */
-display_decimals: number, };
+display_decimals: number, 
+/**
+ * Список валют для быстрого отображения (ISO 4217)
+ */
+favorite_currencies: Array<string>, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refresh_interval_sec: number, minimize_to_tray: boolean, 
+/**
+ * Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
+ */
+bybit_import_interval_sec: number, };
 
 /**
  * Result of running a strategy over a price stream.
  */
-type SimRun = { id: string, strategy_id: string, started_at: string, finished_at: string, initial_capital: Amount, final_equity: Amount, total_return_pct: Amount, max_drawdown_pct: Amount, win_rate_pct: Amount, total_trades: number, equity_curve: Array<EquityPoint>, trades: Array<SimTrade>, synthetic: boolean, };
+type SimRun = { id: string, strategy_id: string, started_at: string, finished_at: string, initial_capital: Amount, final_equity: Amount, total_return_pct: Amount, max_drawdown_pct: Amount, win_rate_pct: Amount, total_trades: number, equity_curve: Array<EquityPoint>, trades: Array<SimTrade>, synthetic: boolean, 
+/**
+ * Rule/SL/TP signals that fired during the replay, with the reason.
+ * Added in payload v3; empty for runs created before the migration.
+ */
+signals: Array<SimSignal>, 
+/**
+ * GBM parameters of the synthetic candle stream — the replay key:
+ * the same seed reproduces the same candles (and therefore markers).
+ * `None` for real Binance data.
+ */
+candle_params: CandleParams | null, 
+/**
+ * Granularity of the replayed candles in minutes (chart range fetch).
+ */
+granularity_min: number, };
+
+/**
+ * A fired trading signal: what happened, when, and why in rule terms.
+ */
+type SimSignal = { ts: string, 
+/**
+ * `"entry"` or `"exit"`.
+ */
+side: string, 
+/**
+ * `"rules"` | `"stop_loss"` | `"take_profit"` | `"liquidation"`.
+ */
+reason: string, 
+/**
+ * Human-readable matched rule(s), e.g. `sma20(25.31) gt 25.00`.
+ * Backend-generated data, shown as-is.
+ */
+detail: string, price: Amount, };
 
 /**
  * One executed paper trade inside a run.
@@ -304,7 +501,18 @@ color: string, archived: boolean,
 /**
  * Free-form description shown in the UI.
  */
-note: string, };
+note: string, 
+/**
+ * Optional parent store ID for nesting (free tree, any depth).
+ */
+parent_id: string | null, };
+
+/**
+ * Everything the wallet page needs about one store, in a single round trip.
+ * Computed on the fly — nothing here is persisted, so the vault format
+ * version is unaffected.
+ */
+type StoreChildRow = { store: Store, value_usd: Amount, value_base: Amount, };
 
 /**
  * What kind of container a store represents.
@@ -316,11 +524,19 @@ type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "
  * Computed on the fly — nothing here is persisted, so the vault format
  * version is unaffected.
  */
-type StoreOverview = { store: Store, base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, realized_pnl_base: Amount, 
+type StoreOverview = { store: Store, base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, 
+/**
+ * Total value including all descendants (subtree).
+ */
+subtree_total_base: Amount, realized_pnl_base: Amount, 
 /**
  * Sorted by `value_base`, descending.
  */
-positions: Array<StorePosition>, tx_count: number, 
+positions: Array<StorePosition>, 
+/**
+ * Direct children with their own values (for tree rendering).
+ */
+children: Array<StoreChildRow>, tx_count: number, 
 /**
  * RFC3339; empty when the store has no transactions.
  */
@@ -465,14 +681,22 @@ type UnlockInput = { path: string, password: string, };
 
 type UpdateCommentInput = { transaction_id: string, comment: string, };
 
-type UpdateSettingsInput = { base_currency: string | null, theme: Theme | null, locale: Locale | null, display_decimals: number | null, };
+type UpdateSettingsInput = { base_currency: string | null, theme: Theme | null, locale: Locale | null, display_decimals: number | null, favorite_currencies: Array<string> | null, dashboard_widgets: Array<DashboardWidgetCfg> | null, fx_refresh_interval_sec: number | null, minimize_to_tray: boolean | null, 
+/**
+ * Background Bybit poll interval; `0` disables it (D2.4).
+ */
+bybit_import_interval_sec: number | null, };
 
-type UpdateStoreInput = { id: string, name: string, color: string, note: string, };
+type UpdateStoreInput = { id: string, name: string, color: string, note: string, parent_id: string | null, };
 
 /**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
  */
-type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<string>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, strategies: Array<Strategy>, runs: Array<SimRun>, };
+type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<string>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, 
+/**
+ * Staged Bybit fills awaiting user confirmation (D2.4).
+ */
+pending_imports: Array<PendingImport>, strategies: Array<Strategy>, runs: Array<SimRun>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

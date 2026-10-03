@@ -18,6 +18,7 @@ export const router = createRouter({
         { path: 'stores/:id', name: 'wallet', component: () => import('@/views/WalletView.vue'), meta: { i18n: 'nav.wallets' } },
         { path: 'transactions', name: 'transactions', component: () => import('@/views/TransactionsView.vue'), meta: { i18n: 'nav.transactions' } },
         { path: 'charts', name: 'charts', component: () => import('@/views/ChartsView.vue'), meta: { i18n: 'nav.charts' } },
+        { path: 'trading', name: 'trading', component: () => import('@/views/TradingView.vue'), meta: { i18n: 'nav.trading' } },
         { path: 'strategy-lab', name: 'strategy-lab', component: () => import('@/views/StrategyLabView.vue'), meta: { i18n: 'nav.strategyLab' } },
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { i18n: 'nav.settings' } },
       ],

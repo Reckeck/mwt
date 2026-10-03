@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import {
+  CandlestickChart,
   ChartArea,
   FlaskConical,
   LayoutDashboard,
@@ -12,13 +13,15 @@ import {
   Menu,
   ScrollText,
   Settings,
-  Wallet,
+  WifiOff,
 } from 'lucide-vue-next'
 
 import Button from '@/components/ui/button.vue'
 import SidebarWallets from '@/components/SidebarWallets.vue'
-import { call } from '@/lib/ipc'
+import Tooltip from '@/components/ui/tooltip.vue'
+import { call, onEvent } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
+import { formatMoney } from '@/lib/format'
 import { useSettingsStore } from '@/stores/settings'
 import { useVaultStore } from '@/stores/vault'
 import { useTheme } from '@/theme'
@@ -42,11 +45,41 @@ const storesQuery = useQuery({
   queryFn: () => call<Store[]>('list_stores'),
 })
 
+const summary = useQuery({
+  queryKey: ['summary'],
+  queryFn: () => call<PortfolioSummary>('get_summary'),
+  staleTime: 60_000,
+})
+
+const favoriteCurrencies = computed(() => settingsStore.settings?.favorite_currencies ?? [])
+
+const isOnline = ref(true)
+
+// D2.4: the background poller never writes transactions, it only stages fills.
+// Surface that so the user knows there is something to confirm.
+const queryClient = useQueryClient()
+const pendingNotice = ref<number | null>(null)
+void onEvent<{ staged: number }>('bybit-import-pending', (p) => {
+  queryClient.invalidateQueries({ queryKey: ['pending-imports'] })
+  pendingNotice.value = p.staged
+  setTimeout(() => (pendingNotice.value = null), 8000)
+})
+
+onMounted(() => {
+  isOnline.value = navigator.onLine
+  window.addEventListener('online', () => (isOnline.value = true))
+  window.addEventListener('offline', () => (isOnline.value = false))
+})
+onUnmounted(() => {
+  window.removeEventListener('online', () => (isOnline.value = true))
+  window.removeEventListener('offline', () => (isOnline.value = false))
+})
+
 const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
-  { name: 'stores', icon: Wallet, key: 'nav.stores' },
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions' },
   { name: 'charts', icon: ChartArea, key: 'nav.charts' },
+  { name: 'trading', icon: CandlestickChart, key: 'nav.trading' },
   { name: 'strategy-lab', icon: FlaskConical, key: 'nav.strategyLab' },
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
@@ -93,7 +126,7 @@ async function lock() {
         <span v-if="showLabels" class="truncate text-sm font-semibold">{{ t('app.title') }}</span>
       </div>
 
-      <nav class="space-y-1 p-3 pb-1">
+      <nav class="space-y-1 p-2 pb-1">
         <RouterLink
           v-for="item in navItems"
           :key="item.name"
@@ -142,11 +175,60 @@ async function lock() {
           <Menu class="size-5" />
         </button>
         <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{{ pageTitle }}</h1>
-        <div v-if="sidebar !== 'compact'" class="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-          <span v-if="settingsStore.settings">
-            {{ settingsStore.settings.base_currency.toUpperCase() }}
-            · {{ t('settings.theme.' + settingsStore.settings.theme) }}
-          </span>
+        <div v-if="sidebar !== 'compact'" class="flex shrink-0 items-center gap-4 text-sm text-muted-foreground">
+          <div v-if="settingsStore.settings" class="flex items-center gap-3">
+            <Tooltip side="bottom" :side-offset="6">
+              <template #trigger>
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-accent cursor-pointer transition-colors">
+                  <WifiOff v-if="!isOnline" class="size-3.5 text-destructive" />
+                  <span class="flex items-center gap-1">
+                    <span
+                      v-for="curr in favoriteCurrencies"
+                      :key="curr"
+                      class="px-1.5 py-0.5 text-xs font-medium bg-accent rounded text-accent-foreground"
+                    >
+                      {{ curr }}
+                    </span>
+                    <span v-if="!favoriteCurrencies.length" class="px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {{ t('settings.favoriteCurrenciesHint') }}
+                    </span>
+                  </span>
+                </div>
+              </template>
+              <div class="min-w-[160px] space-y-1">
+                <div v-if="!isOnline" class="px-2 py-1 text-center text-xs text-destructive bg-destructive/10 rounded">
+                  <WifiOff class="size-3 inline mr-1" /> {{ t('app.offline') }}
+                </div>
+                <div
+                  v-if="pendingNotice"
+                  class="px-2 py-1 text-center text-xs text-primary bg-primary/10 rounded"
+                >
+                  {{ t('import.pendingEvent') }} ({{ pendingNotice }})
+                </div>
+                <div v-if="summary.data.value && favoriteCurrencies.length">
+                  <div v-for="curr in favoriteCurrencies" :key="curr" class="px-2 py-1 text-xs flex justify-between">
+                    <span class="font-medium">{{ curr }}</span>
+                    <span class="tabular-nums text-muted-foreground">
+                      {{
+                        curr.toLowerCase() === summary.data.value?.base_currency?.toLowerCase()
+                          ? formatMoney(summary.data.value.total_base, { currency: curr, decimals: 2 })
+                          : curr.toLowerCase() === 'usd'
+                            ? formatMoney(summary.data.value.total_usd, { currency: 'usd', decimals: 2 })
+                            : formatMoney(summary.data.value.total_usd, { currency: curr, decimals: 2 }) + ' (est.)'
+                      }}
+                    </span>
+                  </div>
+                </div>
+                <div v-else-if="!favoriteCurrencies.length" class="px-2 py-1 text-center text-xs text-muted-foreground">
+                  {{ t('settings.favoriteCurrencyAdd') }}
+                </div>
+              </div>
+            </Tooltip>
+            <span class="hidden md:inline-flex items-center gap-1.5 px-2 py-1 text-muted-foreground">
+              {{ settingsStore.settings.base_currency.toUpperCase() }}
+              · {{ t('settings.theme.' + settingsStore.settings.theme) }}
+            </span>
+          </div>
         </div>
       </header>
 

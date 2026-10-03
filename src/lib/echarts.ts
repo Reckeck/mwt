@@ -1,11 +1,12 @@
 import { use } from 'echarts/core'
 import type { ComposeOption } from 'echarts/core'
-import { LineChart, PieChart } from 'echarts/charts'
+import { LineChart, PieChart, CandlestickChart, ScatterChart } from 'echarts/charts'
 import {
   GridComponent,
   LegendComponent,
   TitleComponent,
   TooltipComponent,
+  DataZoomComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { provide, type InjectionKey } from 'vue'
@@ -14,19 +15,25 @@ import VChart from 'vue-echarts'
 export type ChartOption = ComposeOption<
   | import('echarts/charts').LineSeriesOption
   | import('echarts/charts').PieSeriesOption
+  | import('echarts/charts').CandlestickSeriesOption
+  | import('echarts/charts').ScatterSeriesOption
   | import('echarts/components').GridComponentOption
   | import('echarts/components').LegendComponentOption
   | import('echarts/components').TitleComponentOption
   | import('echarts/components').TooltipComponentOption
+  | import('echarts/components').DataZoomComponentOption
 >
 
 use([
   LineChart,
   PieChart,
+  CandlestickChart,
+  ScatterChart,
   GridComponent,
   LegendComponent,
   TitleComponent,
   TooltipComponent,
+  DataZoomComponent,
   CanvasRenderer,
 ])
 
