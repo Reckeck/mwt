@@ -61,7 +61,7 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockStores)
     case 'create_store': {
       const input = body as CreateStoreInput
-      const store = { id: crypto.randomUUID(), name: input.name, kind: input.kind, color: input.color, note: input.note, archived: false }
+      const store = { id: crypto.randomUUID(), name: input.name, kind: input.kind, color: input.color, note: input.note, archived: false, parent_id: input.parent_id ?? null }
       mockStores.push(store)
       mockTransactions.push(...defaultTxs(input.kind, input.name, store.id))
       return resolve(store)
@@ -166,6 +166,29 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
           ? { executions: mockExecutions, notice: null }
           : { executions: [], notice: 'no_key' },
       )
+    // --- bybit import staging (D2.4) ---
+    case 'import_bybit_history':
+      return resolve(
+        mockKeyStatus.configured
+          ? { staged: mockPendingImports().length, notice: null }
+          : { staged: 0, notice: 'no_key' },
+      )
+    case 'list_pending_imports':
+      return resolve({ imports: mockPendingImports() })
+    case 'confirm_pending_imports': {
+      const input = body as ConfirmPendingImportsInput
+      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((i) => i.exec_id)
+      const staged = mockPendingImports()
+      mockPendingStore = staged.filter((i) => !ids.includes(i.exec_id))
+      return resolve({ confirmed: staged.length - mockPendingStore.length })
+    }
+    case 'discard_pending_imports': {
+      const input = body as DiscardPendingImportsInput
+      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((i) => i.exec_id)
+      const staged = mockPendingImports()
+      mockPendingStore = staged.filter((i) => !ids.includes(i.exec_id))
+      return resolve({ discarded: staged.length - mockPendingStore.length })
+    }
     case 'list_strategies':
       return resolve([])
     case 'save_strategy':
@@ -177,6 +200,10 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'run_strategy': {
       const input = body as RunStrategyInput
       return resolve(mockRun(input.strategy_id))
+    }
+    case 'get_candles': {
+      const input = body as GetCandlesInput
+      return resolve(mockCandles(input))
     }
     default:
       return resolve({})
@@ -212,6 +239,32 @@ const mockExecutions: BybitExecution[] = [
   },
 ]
 
+/** Staged fills for the browser mock of the D2.4 import flow. */
+let mockPendingStore: PendingImport[] = []
+const mockKeyStatusStoreId = 'mock-store-bybit'
+
+function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImport[] {
+  if (mockPendingStore.length) return mockPendingStore
+  const now = Date.now()
+  mockPendingStore = ['a1', 'a2'].map((suffix, i) => ({
+    exec_id: `mock-exec-${suffix}`,
+    store_id: storeId,
+    category: 'spot',
+    symbol: 'BTCUSDT',
+    side: i === 0 ? 'buy' : 'sell',
+    asset_bought: 'BTC',
+    qty_bought: i === 0 ? '0.02' : '0',
+    asset_sold: 'USDT',
+    qty_sold: i === 0 ? '1285.01' : '1300',
+    price: '64250.5',
+    fee: '0.642505',
+    fee_asset: 'USDT',
+    occurred_at: new Date(now - i * 86_400_000).toISOString(),
+    comment: `bybit spot ${i === 0 ? 'buy' : 'sell'} · mock`,
+  }))
+  return mockPendingStore
+}
+
 let mockStatus: VaultStatus = {
   path: '/tmp/mock/vault.wallet',
   exists: false,
@@ -233,6 +286,11 @@ const mockSettings: Settings = {
   theme: 'dark',
   locale: 'auto',
   display_decimals: 8,
+  favorite_currencies: [],
+  dashboard_widgets: [],
+  fx_refresh_interval_sec: 300,
+  minimize_to_tray: true,
+  bybit_import_interval_sec: 900,
 }
 
 function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transaction[] {
@@ -263,8 +321,8 @@ function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transactio
 }
 
 const mockStores: Store[] = [
-  { id: crypto.randomUUID(), name: 'Binance', kind: 'exchange', color: '#f0b90b', archived: false, note: 'Фьючи' },
-  { id: crypto.randomUUID(), name: 'Ledger', kind: 'cold_wallet', color: '#3b82f6', archived: false, note: '' },
+  { id: crypto.randomUUID(), name: 'Binance', kind: 'exchange', color: '#f0b90b', archived: false, note: 'Фьючи', parent_id: null },
+  { id: crypto.randomUUID(), name: 'Ledger', kind: 'cold_wallet', color: '#3b82f6', archived: false, note: '', parent_id: null },
 ]
 
 const mockTransactions: Transaction[] = mockStores.flatMap((s) => defaultTxs(s.kind, s.name, s.id))
@@ -412,8 +470,10 @@ function mockOverview(storeId: string): StoreOverview {
     fx_per_usd: '1',
     total_usd: String(total_usd),
     total_base: String(total_usd),
+    subtree_total_base: String(total_usd),
     realized_pnl_base: '0',
     positions,
+    children: [],
     tx_count: txs.length,
     first_tx_at: txs.length ? txs[txs.length - 1].timestamp : '',
     last_tx_at: txs.length ? txs[0].timestamp : '',
@@ -517,7 +577,37 @@ function mockRun(strategyId: string): SimRun {
     equity_curve: Array.from({ length: 80 }, (_, i) => eq(i, 1000 + i * 3 + Math.sin(i / 9) * 40)),
     trades: [],
     synthetic: true,
+    signals: [],
+    candle_params: null,
+    granularity_min: 60,
   }
+}
+
+function mockCandles(i: GetCandlesInput): GetCandlesOutput {
+  const limit = Math.min(Math.max(i.limit || 300, 1), 1000)
+  const stepMs = (i.interval_min || 60) * 60_000
+  const now = Math.floor(Date.now() / stepMs) * stepMs
+  const basePrice = 60000 + (i.symbol.length * 1500) % 30000
+  let price = basePrice
+  const candles: CandlePoint[] = []
+  for (let k = limit - 1; k >= 0; k--) {
+    const drift = Math.sin(k / 17) * 0.004 + Math.cos(k / 6) * 0.002
+    const open = price
+    const close = open * (1 + drift)
+    const high = Math.max(open, close) * (1 + 0.002 * ((k * 7) % 5))
+    const low = Math.min(open, close) * (1 - 0.002 * ((k * 3) % 5))
+    const volume = String(50 + ((k * 37) % 200))
+    candles.push({
+      ts: new Date(now - k * stepMs).toISOString(),
+      open: open.toFixed(2),
+      high: high.toFixed(2),
+      low: low.toFixed(2),
+      close: close.toFixed(2),
+      volume,
+    })
+    price = close
+  }
+  return { candles }
 }
 
 function resolve<T>(v: T): Promise<T> {

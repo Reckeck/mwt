@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Play, Plus, Save, Trash2 } from 'lucide-vue-next'
+import { Play, Plus, Save, Trash2, Eye, EyeOff } from 'lucide-vue-next'
 
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
+import Select from '@/components/ui/select.vue'
 import { Chart, type ChartOption } from '@/lib/echarts'
 import { call } from '@/lib/ipc'
 import { useTheme } from '@/theme'
@@ -55,27 +56,29 @@ const ops = [
 
 const axisColor = computed(() => (resolved.value === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)'))
 
-const equityOption = computed<ChartOption>(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis' },
-  grid: { left: 48, right: 16, top: 16, bottom: 28, containLabel: true },
-  xAxis: { type: 'time', axisLabel: { color: axisColor.value }, axisLine: { lineStyle: { color: axisColor.value } } },
-  yAxis: {
-    type: 'value',
-    scale: true,
-    axisLabel: { color: axisColor.value },
-    splitLine: { lineStyle: { color: axisColor.value, opacity: 0.12 } },
-  },
-  series: [
-    {
-      type: 'line',
-      showSymbol: false,
-      smooth: true,
-      name: 'equity',
-      data: (runs.data.value?.[0]?.equity_curve ?? []).map((p) => [p.ts, Number(p.equity)]),
-    },
-  ],
-}))
+// Selected run for detail view
+const selectedRunId = ref<string>('')
+watch(runs.data, () => {
+  if (!selectedRunId.value && runs.data.value?.length) {
+    selectedRunId.value = runs.data.value[0].id
+  }
+})
+const selectedRun = computed(() => runs.data.value?.find((r) => r.id === selectedRunId.value) ?? null)
+
+// Candles query for selected run
+const { data: runCandles, isLoading: candlesLoading, refetch: refetchCandles } = useQuery({
+  queryKey: ['run-candles', selectedRunId],
+  queryFn: () => call<GetRunCandlesOutput>('get_run_candles', { input: { run_id: selectedRunId.value! } }),
+  enabled: !!selectedRunId.value,
+})
+
+// GBM paths query for fan chart
+const showFan = ref(false)
+const { data: gbmData, refetch: refetchGbm } = useQuery({
+  queryKey: ['gbm', selectedRunId, showFan],
+  queryFn: () => call<GbmPathsOutput>('get_gbm_paths', { input: { run_id: selectedRunId.value!, paths: 20, horizon: 100 } }),
+  enabled: showFan.value && !!selectedRunId.value,
+})
 
 function addRule(group: Group) {
   editing[group].push(blankRule())
@@ -127,6 +130,167 @@ async function runStrategy() {
   })
   await runs.refetch()
 }
+
+async function onRunChange(runId: string) {
+  selectedRunId.value = runId
+  await refetchCandles()
+  if (showFan.value) await refetchGbm()
+}
+
+// Equity curve chart
+const equityOption = computed<ChartOption>(() => {
+  const curve = selectedRun.value?.equity_curve ?? []
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis' },
+    grid: { left: 48, right: 16, top: 16, bottom: 28, containLabel: true },
+    xAxis: { type: 'time', axisLabel: { color: axisColor.value }, axisLine: { lineStyle: { color: axisColor.value } } },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: { color: axisColor.value },
+      splitLine: { lineStyle: { color: axisColor.value, opacity: 0.12 } },
+    },
+    series: [
+      {
+        type: 'line',
+        showSymbol: false,
+        smooth: true,
+        name: 'equity',
+        data: curve.map((p) => [p.ts, Number(p.equity)]),
+      },
+    ],
+  }
+})
+
+// Candlestick chart with trades, signals, and GBM fan
+const candleOption = computed<ChartOption>(() => {
+  const candles = runCandles.value?.candles ?? []
+  if (!candles.length) return {}
+
+  const run = selectedRun.value
+  const trades = run?.trades ?? []
+  const signals = run?.signals ?? []
+
+  const ohlc = candles.map((c: CandlePoint) => [c.ts, Number(c.open), Number(c.close), Number(c.low), Number(c.high)])
+
+  // Trade markers: buy/sell
+  const buyMarkers = trades
+    .filter((t) => t.side === 'buy')
+    .map((t) => ({ ts: t.ts, price: Number(t.price), type: 'buy' as const }))
+  const sellMarkers = trades
+    .filter((t) => t.side === 'sell')
+    .map((t) => ({ ts: t.ts, price: Number(t.price), type: 'sell' as const }))
+
+  // Signal markers: entry/exit with detail
+  const entrySignals = signals
+    .filter((s) => s.side === 'entry')
+    .map((s) => ({ ts: s.ts, price: Number(s.price), detail: s.detail, reason: s.reason }))
+  const exitSignals = signals
+    .filter((s) => s.side === 'exit')
+    .map((s) => ({ ts: s.ts, price: Number(s.price), detail: s.detail, reason: s.reason }))
+
+  // GBM fan paths
+  const fanPaths = gbmData.value?.paths ?? []
+
+  const series: ChartOption['series'] = [
+    {
+      type: 'candlestick',
+      name: 'OHLC',
+      data: ohlc,
+      itemStyle: {
+        color: '#22c55e',
+        color0: '#ef4444',
+        borderColor: '#22c55e',
+        borderColor0: '#ef4444',
+      },
+    },
+  ]
+
+  // Volume as separate y-axis or bar - skip for simplicity, use candles only
+  // Add trade markers as scatter
+  if (buyMarkers.length) {
+    series.push({
+      type: 'scatter',
+      name: t('sim.buy'),
+      symbol: 'triangle',
+      symbolSize: 10,
+      symbolRotate: 90,
+      itemStyle: { color: '#22c55e' },
+      data: buyMarkers.map((m) => ({ value: [m.ts, m.price], itemStyle: { color: '#22c55e' } })),
+      tooltip: { formatter: (p: unknown) => `${t('sim.buy')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { value?: (string | number)[] })?.value?.[1] },
+    })
+  }
+  if (sellMarkers.length) {
+    series.push({
+      type: 'scatter',
+      name: t('sim.sell'),
+      symbol: 'triangle',
+      symbolSize: 10,
+      symbolRotate: -90,
+      itemStyle: { color: '#ef4444' },
+      data: sellMarkers.map((m) => ({ value: [m.ts, m.price], itemStyle: { color: '#ef4444' } })),
+      tooltip: { formatter: (p: unknown) => `${t('sim.sell')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { value?: (string | number)[] })?.value?.[1] },
+    })
+  }
+  // Signal markers
+  if (entrySignals.length) {
+    series.push({
+      type: 'scatter',
+      name: t('sim.signal.entry'),
+      symbol: 'pin',
+      symbolSize: 8,
+      symbolOffset: [0, '-50%'],
+      itemStyle: { color: '#3b82f6' },
+      data: entrySignals.map((s) => ({ value: [s.ts, s.price], detail: s.detail, reason: s.reason })),
+      tooltip: { formatter: (p: unknown) => `${t('sim.signal.entry')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { data?: { reason: string; detail: string } })?.data?.reason + `: ` + (p as { data?: { reason: string; detail: string } })?.data?.detail },
+    })
+  }
+  if (exitSignals.length) {
+    series.push({
+      type: 'scatter',
+      name: t('sim.signal.exit'),
+      symbol: 'pin',
+      symbolSize: 8,
+      symbolOffset: [0, '-50%'],
+      itemStyle: { color: '#f97316' },
+      data: exitSignals.map((s) => ({ value: [s.ts, s.price], detail: s.detail, reason: s.reason })),
+      tooltip: { formatter: (p: unknown) => `${t('sim.signal.exit')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { data?: { reason: string; detail: string } })?.data?.reason + `: ` + (p as { data?: { reason: string; detail: string } })?.data?.detail },
+    })
+  }
+  // GBM fan paths as low-opacity lines
+  if (fanPaths.length) {
+    fanPaths.forEach((path: GbmPathPoint[], idx: number) => {
+      series.push({
+        type: 'line',
+        name: `${t('sim.fanPath')} ${idx + 1}`,
+        showSymbol: false,
+        lineStyle: { width: 1, opacity: 0.15, color: '#888' },
+        data: path.map((p: GbmPathPoint) => [p.ts, Number(p.price)]),
+        tooltip: { show: false },
+      })
+    })
+  }
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: { left: 48, right: 16, top: 16, bottom: 28, containLabel: true },
+    xAxis: { type: 'time', axisLabel: { color: axisColor.value }, axisLine: { lineStyle: { color: axisColor.value } } },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: { color: axisColor.value },
+      splitLine: { lineStyle: { color: axisColor.value, opacity: 0.12 } },
+    },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 0, height: 16 }],
+    series,
+    legend: { top: 0, textStyle: { color: axisColor.value } },
+  }
+})
+
+const formatSignalSide = (side: string) => t(`sim.signal.side.${side}`)
+const formatSignalReason = (reason: string) => t(`sim.signal.reason.${reason}`)
 </script>
 
 <template>
@@ -220,25 +384,86 @@ async function runStrategy() {
         </template>
 
         <div v-if="(runs.data.value ?? []).length">
-          <Chart :option="equityOption" autoresize class="h-72 w-full" />
+          <div class="mb-4">
+            <Label class="block text-sm mb-1">{{ t('sim.selectRun') }}</Label>
+            <Select v-model="selectedRunId" @update:model-value="onRunChange($event)">
+              <option v-for="r in runs.data.value" :key="r.id" :value="r.id">
+                {{ r.strategy_id.slice(0, 8) }} · {{ r.started_at }} · {{ r.total_trades }} trades
+              </option>
+            </Select>
+          </div>
 
-          <div class="mt-4 grid grid-cols-2 gap-2 text-sm @sm:grid-cols-4">
-            <div class="rounded-md bg-muted p-3">
-              <p class="text-xs text-muted-foreground">{{ t('sim.finalEquity') }}</p>
-              <p class="font-semibold tabular-nums">{{ runs.data.value?.[0]?.final_equity }}</p>
+          <div class="space-y-4">
+            <Card>
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <p class="font-medium">{{ t('sim.candleChart') }}</p>
+                  <div class="flex items-center gap-2">
+                    <Button variant="outline" size="sm" @click="showFan = !showFan">
+                      <Eye v-if="!showFan" class="size-3" />
+                      <EyeOff v-else class="size-3" />
+                      {{ showFan ? t('sim.hideFan') : t('sim.showFan') }}
+                    </Button>
+                  </div>
+                </div>
+              </template>
+              <div v-if="candlesLoading" class="py-10 text-center text-sm text-muted-foreground">{{ t('sim.loading') }}</div>
+              <Chart v-else :option="candleOption" autoresize class="h-96 w-full" />
+            </Card>
+
+            <Card>
+              <template #header>
+                <p class="font-medium">{{ t('sim.equityCurve') }}</p>
+              </template>
+              <Chart :option="equityOption" autoresize class="h-72 w-full" />
+            </Card>
+
+            <div class="mt-4 grid grid-cols-2 gap-4 text-sm @sm:grid-cols-4">
+              <div class="rounded-md bg-muted p-4">
+                <p class="text-xs text-muted-foreground">{{ t('sim.finalEquity') }}</p>
+                <p class="font-semibold tabular-nums">{{ selectedRun?.final_equity }}</p>
+              </div>
+              <div class="rounded-md bg-muted p-4">
+                <p class="text-xs text-muted-foreground">{{ t('sim.return') }}</p>
+                <p class="font-semibold tabular-nums">{{ selectedRun?.total_return_pct }}%</p>
+              </div>
+              <div class="rounded-md bg-muted p-4">
+                <p class="text-xs text-muted-foreground">{{ t('sim.maxDd') }}</p>
+                <p class="font-semibold tabular-nums">{{ selectedRun?.max_drawdown_pct }}%</p>
+              </div>
+              <div class="rounded-md bg-muted p-4">
+                <p class="text-xs text-muted-foreground">{{ t('sim.trades') }}</p>
+                <p class="font-semibold tabular-nums">{{ selectedRun?.total_trades }}</p>
+              </div>
             </div>
-            <div class="rounded-md bg-muted p-3">
-              <p class="text-xs text-muted-foreground">{{ t('sim.return') }}</p>
-              <p class="font-semibold tabular-nums">{{ runs.data.value?.[0]?.total_return_pct }}%</p>
-            </div>
-            <div class="rounded-md bg-muted p-3">
-              <p class="text-xs text-muted-foreground">{{ t('sim.maxDd') }}</p>
-              <p class="font-semibold tabular-nums">{{ runs.data.value?.[0]?.max_drawdown_pct }}%</p>
-            </div>
-            <div class="rounded-md bg-muted p-3">
-              <p class="text-xs text-muted-foreground">{{ t('sim.trades') }}</p>
-              <p class="font-semibold tabular-nums">{{ runs.data.value?.[0]?.total_trades }}</p>
-            </div>
+
+            <Card v-if="selectedRun?.signals?.length">
+              <template #header>
+                <p class="font-medium">{{ t('sim.signals') }} ({{ selectedRun.signals.length }})</p>
+              </template>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-border">
+                      <th class="text-left py-2 px-3">{{ t('sim.signal.ts') }}</th>
+                      <th class="text-center py-2 px-3">{{ t('sim.signal.side') }}</th>
+                      <th class="text-left py-2 px-3">{{ t('sim.signal.reason') }}</th>
+                      <th class="text-left py-2 px-3">{{ t('sim.signal.detail') }}</th>
+                      <th class="text-right py-2 px-3">{{ t('sim.signal.price') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border">
+                    <tr v-for="s in selectedRun.signals" :key="s.ts" class="hover:bg-muted/50">
+                      <td class="py-2 px-3 font-mono">{{ s.ts }}</td>
+                      <td class="py-2 px-3 text-center capitalize">{{ formatSignalSide(s.side) }}</td>
+                      <td class="py-2 px-3 capitalize">{{ formatSignalReason(s.reason) }}</td>
+                      <td class="py-2 px-3 max-w-xs truncate">{{ s.detail }}</td>
+                      <td class="py-2 px-3 text-right font-mono tabular-nums">{{ Number(s.price).toFixed(4) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         </div>
         <p v-else class="py-10 text-center text-sm text-muted-foreground">{{ t('sim.empty') }}</p>
@@ -249,7 +474,7 @@ async function runStrategy() {
           <p class="font-medium">{{ t('nav.strategyLab') }}</p>
         </template>
         <div class="divide-y divide-border">
-          <div v-for="s in strategies.data.value ?? []" :key="s.id" class="flex items-center justify-between py-2">
+          <div v-for="s in strategies.data.value ?? []" :key="s.id" class="flex items-center justify-between py-3">
             <div>
               <p class="font-medium">{{ s.name }}</p>
               <p class="text-xs text-muted-foreground">{{ s.symbol }} · {{ s.source }}</p>

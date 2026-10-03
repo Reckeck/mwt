@@ -3,7 +3,19 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Archive, ArchiveRestore, Calculator, MoreVertical, Plus, RefreshCw, Trash2, X } from 'lucide-vue-next'
+import {
+  Archive,
+  ArchiveRestore,
+  Calculator,
+  Check,
+  Download,
+  Key,
+  MoreVertical,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from 'lucide-vue-next'
 
 import AddTransactionForm from '@/components/wallet/AddTransactionForm.vue'
 import WalletCalculator from '@/components/wallet/WalletCalculator.vue'
@@ -12,13 +24,17 @@ import WalletHistory from '@/components/wallet/WalletHistory.vue'
 import WalletPositions from '@/components/wallet/WalletPositions.vue'
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
+import Card from '@/components/ui/card.vue'
 import Dialog from '@/components/ui/dialog.vue'
 import DropdownMenu from '@/components/ui/dropdown-menu.vue'
 import DropdownMenuItem from '@/components/ui/dropdown-menu-item.vue'
+import Input from '@/components/ui/input.vue'
+import Label from '@/components/ui/label.vue'
 import Tabs from '@/components/ui/tabs.vue'
 import { formatDate, formatMoney } from '@/lib/format'
-import { call, type AppError } from '@/lib/ipc'
+import { call, parseError, type AppError } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
+import { getStoreIcon } from '@/lib/store-icons'
 import { useSettingsStore } from '@/stores/settings'
 
 const route = useRoute()
@@ -64,13 +80,18 @@ function pnlTone(v: string): string {
 }
 
 /* --- modal + tab state --- */
-const txDialogOpen = ref(false)
-const calcDialogOpen = ref(false)
+const dialogOpen = ref(false)
+const dialogTab = ref<'transaction' | 'calculator'>('transaction')
 const tab = ref('positions')
 
 const tabs = computed(() => [
   { value: 'positions', label: t('pos.title') },
   { value: 'history', label: t('hist.title') },
+])
+
+const dialogTabs = computed(() => [
+  { value: 'transaction', label: t('wallet.operation') },
+  { value: 'calculator', label: t('wallet.plan') },
 ])
 
 const stats = computed(() => [
@@ -134,11 +155,123 @@ const destroy = useMutation({
   },
 })
 
-/** Calculator "create transaction" hand-off: prefill first, then reveal the form. */
+/* --- Bybit API key management (only for exchange nodes) --- */
+const isExchangeNode = computed(() => store.value?.kind === 'exchange')
+const bybitKey = ref('')
+const bybitSecret = ref('')
+const bybitError = ref<string | null>(null)
+const bybitBusy = ref(false)
+const bybitSaved = ref(false)
+
+const keyStatus = useQuery({
+  queryKey: ['bybit-key-status', storeId.value],
+  queryFn: () => call<ExchangeKeyStatus>('exchange_key_status', { storeId: storeId.value }),
+  enabled: isExchangeNode,
+})
+
+const bybitHasKey = computed(() => keyStatus.data.value?.configured === true)
+const bybitHint = computed(() => keyStatus.data.value?.hint ?? '')
+
+async function saveBybitKey() {
+  bybitError.value = null
+  bybitSaved.value = false
+  bybitBusy.value = true
+  try {
+    await call('set_exchange_key', {
+      input: { store_id: storeId.value, api_key: bybitKey.value, api_secret: bybitSecret.value },
+    })
+    bybitKey.value = ''
+    bybitSecret.value = ''
+    bybitSaved.value = true
+    await keyStatus.refetch()
+  } catch (e) {
+    bybitError.value = parseError(e).message
+  } finally {
+    bybitBusy.value = false
+  }
+}
+
+async function removeBybitKey() {
+  bybitError.value = null
+  bybitBusy.value = true
+  try {
+    await call('clear_exchange_key', { storeId: storeId.value })
+    bybitSaved.value = false
+    await keyStatus.refetch()
+  } catch (e) {
+    bybitError.value = parseError(e).message
+  } finally {
+    bybitBusy.value = false
+  }
+}
+
+// -- D2.4: Bybit import staging -----------------------------------------
+// Fills are staged in the vault and only become transactions when the user
+// confirms them, so an import can never silently rewrite history.
+const importBusy = ref(false)
+const importNotice = ref<string | null>(null)
+const importNoticeText = computed(() =>
+  importNotice.value ? t(`import.notice.${importNotice.value}`) : null,
+)
+
+const pending = useQuery({
+  queryKey: ['pending-imports'],
+  queryFn: () => call<ListPendingImportsOutput>('list_pending_imports'),
+})
+
+const pendingCount = computed(() => pending.data.value?.imports.length ?? 0)
+
+async function loadHistory() {
+  importBusy.value = true
+  importNotice.value = null
+  try {
+    const res = await call<ImportBybitHistoryOutput>('import_bybit_history', {
+      input: { store_id: storeId.value },
+    })
+    importNotice.value = res.notice ?? null
+    await pending.refetch()
+  } catch {
+    importNotice.value = 'unreachable'
+  } finally {
+    importBusy.value = false
+  }
+}
+
+async function confirmImports(execIds: string[]) {
+  importBusy.value = true
+  try {
+    await call('confirm_pending_imports', { input: { exec_ids: execIds } })
+    await pending.refetch()
+    // Confirmed fills became trades, so every derived view is stale.
+    const staleKeys: ReadonlyArray<readonly unknown[]> = [
+      ['transactions'],
+      ['store', storeId.value],
+      ['store-pnl', storeId.value],
+      ['summary'],
+      ['history'],
+    ]
+    await Promise.all(
+      staleKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    )
+  } finally {
+    importBusy.value = false
+  }
+}
+
+async function discardImports(execIds: string[]) {
+  importBusy.value = true
+  try {
+    await call('discard_pending_imports', { input: { exec_ids: execIds } })
+    await pending.refetch()
+  } finally {
+    importBusy.value = false
+  }
+}
+
+/** Calculator "create transaction" hand-off: prefill first, then switch to transaction tab. */
 function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }) {
-  calcDialogOpen.value = false
   formRef.value?.prefill(payload)
-  txDialogOpen.value = true
+  dialogTab.value = 'transaction'
 }
 </script>
 
@@ -159,16 +292,22 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
     </Button>
   </div>
 
-  <div v-else class="grid gap-5">
+  <div v-else class="grid gap-6">
     <!-- Sticky header: identity, totals and every page action in one bar. -->
     <div
       class="sticky top-0 z-20 -mx-4 -mt-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6"
     >
       <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
         <span
-          class="size-3 shrink-0 rounded-full ring-2 ring-background"
-          :style="{ backgroundColor: store.color }"
-        />
+          class="flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ring-background"
+          :style="{
+            backgroundColor: store.color + '1A',
+            color: store.color,
+            borderColor: store.color + '33',
+          }"
+        >
+          <component :is="getStoreIcon(store.kind)" class="size-4" />
+        </span>
 
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
@@ -187,12 +326,12 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
         </div>
 
         <div class="flex shrink-0 items-center gap-1">
-          <Button size="sm" :disabled="isArchived" @click="txDialogOpen = true">
+          <Button size="sm" :disabled="isArchived" @click="dialogTab = 'transaction'; dialogOpen = true">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>
 
-          <Button variant="outline" size="icon" :title="t('calc.title')" @click="calcDialogOpen = true">
+          <Button variant="outline" size="icon" :title="t('calc.title')" @click="dialogTab = 'calculator'; dialogOpen = true">
             <Calculator class="size-4" />
           </Button>
 
@@ -232,21 +371,145 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
       </p>
     </div>
 
-    <!-- One compact strip instead of four stacked cards. -->
-    <div class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
-      <div v-for="s in stats" :key="s.key" class="bg-card p-3">
+    <!-- Stats strip -->
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <Card v-for="s in stats" :key="s.key" class="p-4">
         <p class="truncate text-xs text-muted-foreground">{{ s.label }}</p>
-        <p class="mt-0.5 truncate text-lg font-bold tabular-nums" :class="s.tone">{{ s.value }}</p>
+        <p class="mt-1 truncate text-lg font-bold tabular-nums" :class="s.tone">{{ s.value }}</p>
         <p class="truncate text-xs text-muted-foreground">{{ s.hint }}</p>
-      </div>
+      </Card>
     </div>
+
+    <!-- Bybit API key section (only for exchange nodes) -->
+    <Card v-if="isExchangeNode" class="mt-4">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <Key class="size-4 text-primary" />
+          <p class="font-medium">{{ t('wallet.bybit.title') }}</p>
+        </div>
+      </template>
+      <div class="grid gap-3">
+        <p class="text-sm text-muted-foreground">{{ t('wallet.bybit.hint') }}</p>
+
+        <div v-if="bybitHasKey" class="flex items-center gap-2">
+          <Badge variant="secondary">{{ bybitHint }}</Badge>
+          <Button variant="ghost" :disabled="bybitBusy" @click="removeBybitKey">
+            {{ t('wallet.bybit.remove') }}
+          </Button>
+        </div>
+
+        <template v-else>
+          <div class="grid gap-1.5">
+            <Label for="bk">{{ t('wallet.bybit.apiKey') }}</Label>
+            <Input id="bk" v-model="bybitKey" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="grid gap-1.5">
+            <Label for="bs">{{ t('wallet.bybit.apiSecret') }}</Label>
+            <Input
+              id="bs"
+              v-model="bybitSecret"
+              type="password"
+              autocomplete="new-password"
+              spellcheck="false"
+            />
+          </div>
+          <div class="flex items-center gap-3">
+            <Button :disabled="bybitBusy || !bybitKey || !bybitSecret" @click="saveBybitKey">
+              {{ t('wallet.bybit.save') }}
+            </Button>
+            <Badge v-if="bybitSaved" variant="default">✓</Badge>
+          </div>
+        </template>
+
+        <p v-if="bybitError" class="text-xs text-destructive">{{ bybitError }}</p>
+
+        <!-- D2.4: import history into a staging area, confirmed explicitly -->
+        <div v-if="bybitHasKey" class="grid gap-3 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-sm font-medium">
+              {{ t('import.title') }}
+              <Badge v-if="pendingCount" variant="secondary">{{ pendingCount }}</Badge>
+            </p>
+            <div class="flex gap-2">
+              <Button variant="outline" size="sm" :disabled="importBusy" @click="loadHistory">
+                <Download class="size-4" />
+                {{ t('import.load') }}
+              </Button>
+              <Button
+                v-if="pendingCount"
+                size="sm"
+                :disabled="importBusy"
+                @click="confirmImports([])"
+              >
+                <Check class="size-4" />
+                {{ t('import.confirmAll') }}
+              </Button>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('import.hint') }}</p>
+          <p v-if="importNoticeText" class="text-xs text-destructive">{{ importNoticeText }}</p>
+
+          <div v-if="pendingCount" class="max-h-72 overflow-auto rounded-md border border-border">
+            <table class="w-full text-sm">
+              <thead class="sticky top-0 bg-muted">
+                <tr>
+                  <th class="px-2 py-1.5 text-left font-medium">{{ t('import.date') }}</th>
+                  <th class="px-2 py-1.5 text-left font-medium">{{ t('import.pair') }}</th>
+                  <th class="px-2 py-1.5 text-left font-medium">{{ t('import.side') }}</th>
+                  <th class="px-2 py-1.5 text-right font-medium">{{ t('import.qty') }}</th>
+                  <th class="px-2 py-1.5 text-right font-medium">{{ t('import.price') }}</th>
+                  <th class="px-2 py-1.5" />
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                <tr v-for="imp in pending.data.value?.imports ?? []" :key="imp.exec_id">
+                  <td class="px-2 py-1.5 font-mono text-xs">{{ imp.occurred_at.slice(0, 10) }}</td>
+                  <td class="px-2 py-1.5">{{ imp.symbol }}</td>
+                  <td class="px-2 py-1.5">
+                    <Badge :variant="imp.side === 'buy' ? 'default' : 'secondary'">
+                      {{ imp.side === 'buy' ? t('import.buy') : t('import.sell') }}
+                    </Badge>
+                  </td>
+                  <td class="px-2 py-1.5 text-right tabular-nums">
+                    {{ imp.side === 'buy' ? imp.qty_bought : imp.qty_sold }}
+                  </td>
+                  <td class="px-2 py-1.5 text-right tabular-nums">{{ imp.price }}</td>
+                  <td class="px-2 py-1.5 text-right">
+                    <div class="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        :title="t('import.confirmOne')"
+                        :disabled="importBusy"
+                        @click="confirmImports([imp.exec_id])"
+                      >
+                        <Check class="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        :title="t('import.discardOne')"
+                        :disabled="importBusy"
+                        @click="discardImports([imp.exec_id])"
+                      >
+                        <X class="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </Card>
 
     <WalletChart :store-id="storeId" :base-currency="base" />
 
     <div v-if="positions.length === 0" class="rounded-xl border border-dashed border-border p-8 text-center">
       <p class="text-sm font-medium">{{ t('wallet.empty') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">{{ t('wallet.emptyHint') }}</p>
-      <Button class="mt-4" :disabled="isArchived" @click="txDialogOpen = true">
+      <Button class="mt-4" :disabled="isArchived" @click="dialogTab = 'transaction'; dialogOpen = true">
         <Plus class="size-4" />
         {{ t('wallet.addOperation') }}
       </Button>
@@ -261,30 +524,22 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
       </template>
     </Tabs>
 
-    <!-- Transaction form -->
-    <Dialog
-      v-model:open="txDialogOpen"
-      :title="t('wallet.operation')"
-      size="lg"
-    >
+    <!-- Unified dialog with tabs for Transaction form and Calculator -->
+    <Dialog v-model:open="dialogOpen" :title="dialogTab === 'transaction' ? t('wallet.operation') : t('wallet.plan')" size="lg">
       <template #close>
-        <Button variant="ghost" size="icon" @click="txDialogOpen = false">
+        <Button variant="ghost" size="icon" @click="dialogOpen = false">
           <X class="size-4" />
           <span class="sr-only">{{ t('actions.close') }}</span>
         </Button>
       </template>
-      <AddTransactionForm ref="formRef" :store-id="storeId" :disabled="isArchived" />
-    </Dialog>
-
-    <!-- Calculator -->
-    <Dialog v-model:open="calcDialogOpen" :title="t('wallet.plan')" size="lg">
-      <template #close>
-        <Button variant="ghost" size="icon" @click="calcDialogOpen = false">
-          <X class="size-4" />
-          <span class="sr-only">{{ t('actions.close') }}</span>
-        </Button>
-      </template>
-      <WalletCalculator :base-currency="base" @apply="onApplyPlan" />
+      <Tabs v-model="dialogTab" :tabs="dialogTabs" class="w-full">
+        <template #transaction>
+          <AddTransactionForm ref="formRef" :store-id="storeId" :disabled="isArchived" />
+        </template>
+        <template #calculator>
+          <WalletCalculator :base-currency="base" @apply="onApplyPlan" />
+        </template>
+      </Tabs>
     </Dialog>
   </div>
 </template>
