@@ -72,7 +72,7 @@ const pieOption = computed<ChartOption>(() => ({
 </script>
 
 <template>
-  <div class="grid gap-4 @md:grid-cols-2">
+  <div class="grid gap-6 @container @md:grid-cols-2">
     <Card>
       <template #header>
         <p class="font-medium">{{ t('charts.title') }}</p>
