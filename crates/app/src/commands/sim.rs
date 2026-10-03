@@ -1,8 +1,11 @@
 use reqwest::Client;
 use tauri::State;
 
-use trade_core::ipc_contract::{RunStrategyInput, SaveStrategyInput};
-use trade_core::sim::engine::{fetch_candles, run_on_candles, synthetic_candles};
+use trade_core::ipc_contract::{
+    CandlePoint, GbmPathPoint, GbmPathsInput, GbmPathsOutput, GetRunCandlesInput,
+    GetRunCandlesOutput, RunStrategyInput, SaveStrategyInput,
+};
+use trade_core::sim::engine::{fetch_candles, fetch_candles_between, run_on_candles};
 use trade_core::sim::{DataSource, SimRun, Strategy};
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -68,7 +71,7 @@ pub async fn run_strategy(
             .ok_or_else(|| "MISSING: strategy".to_string())?
     };
 
-    let candles = match strategy.source {
+    let (candles, candle_params, granularity) = match strategy.source {
         DataSource::Real => {
             let client = Client::builder()
                 .timeout(std::time::Duration::from_secs(20))
@@ -79,22 +82,34 @@ pub async fn run_strategy(
             } else {
                 strategy.symbol.to_uppercase()
             };
-            fetch_candles(
-                &symbol,
-                input.granularity_min.max(1),
-                input.candles.clamp(50, 5000),
-                &client,
-            )
-            .await
-            .map_err(crate::commands::err_to_string)?
+            let granularity = input.granularity_min.max(1);
+            let candles =
+                fetch_candles(&symbol, granularity, input.candles.clamp(50, 5000), &client)
+                    .await
+                    .map_err(crate::commands::err_to_string)?;
+            (candles, None, granularity)
         }
         DataSource::Synthetic => {
-            let n = input.candles.max(50) as usize;
-            synthetic_candles(&strategy.symbol, n, 100.0, 0.8, 365.0 * 24.0)
+            let n = input.candles.clamp(50, 20_000);
+            let granularity = input.granularity_min.max(1);
+            let params = trade_core::sim::CandleParams {
+                seed: uuid::Uuid::new_v4().as_u128() as u64,
+                n,
+                start_price: trade_core::Amount::parse("100").unwrap(),
+                annual_vol: trade_core::Amount::parse("0.8").unwrap(),
+                candles_per_year: trade_core::Amount::from_f64(
+                    365.0 * 24.0 * 60.0 / granularity as f64,
+                ),
+            };
+            let candles = trade_core::sim::engine::synthetic_from_params(&strategy.symbol, &params);
+            (candles, Some(params), granularity)
         }
     };
 
-    let run = run_on_candles(&strategy, &candles);
+    let mut run = run_on_candles(&strategy, &candles);
+    // replay metadata: lets get_run_candles/get_gbm_paths rebuild this exact series
+    run.granularity_min = granularity;
+    run.candle_params = candle_params;
     let mut g = require_vault(&state).map_err(err_to_string)?;
     let v = g.as_mut().unwrap();
     v.doc.sim.runs.insert(0, run.clone());
@@ -103,4 +118,165 @@ pub async fn run_strategy(
     }
     v.persist().map_err(crate::commands::err_to_string)?;
     Ok(run)
+}
+
+// -- run replay (D2.2) -------------------------------------------------------
+
+fn candle_point(c: trade_core::sim::engine::Candle) -> CandlePoint {
+    CandlePoint {
+        ts: c.ts,
+        open: c.open.to_string(),
+        high: c.high.to_string(),
+        low: c.low.to_string(),
+        close: c.close.to_string(),
+        volume: c.volume.to_string(),
+    }
+}
+
+/// Clone a run and its strategy out of the vault — the guard must not live
+/// across `.await` (non-`Send` future, see AGENTS.md rule 3).
+fn load_run(state: &State<'_, AppState>, run_id: &str) -> Result<(Strategy, SimRun), String> {
+    let g = require_vault(state).map_err(err_to_string)?;
+    let doc = &g.as_ref().unwrap().doc;
+    let run = doc
+        .sim
+        .runs
+        .iter()
+        .find(|r| r.id == run_id)
+        .cloned()
+        .ok_or_else(|| "MISSING: run".to_string())?;
+    let strategy = doc
+        .sim
+        .strategies
+        .iter()
+        .find(|s| s.id == run.strategy_id)
+        .cloned()
+        .ok_or_else(|| "MISSING: strategy".to_string())?;
+    Ok((strategy, run))
+}
+
+fn replay_client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+fn run_range(run: &SimRun) -> Result<(u64, u64), String> {
+    let start = trade_core::sim::engine::rfc3339_to_millis(&run.started_at)
+        .ok_or_else(|| "UNSUPPORTED: bad run timestamp".to_string())?;
+    let end = trade_core::sim::engine::rfc3339_to_millis(&run.finished_at)
+        .ok_or_else(|| "UNSUPPORTED: bad run timestamp".to_string())?;
+    Ok((start, end.max(start + 1)))
+}
+
+fn run_symbol(strategy: &Strategy) -> String {
+    if strategy.symbol.trim().is_empty() {
+        "BTC".into()
+    } else {
+        strategy.symbol.trim().to_uppercase()
+    }
+}
+
+fn granularity_of(run: &SimRun) -> u32 {
+    if run.granularity_min == 0 {
+        60
+    } else {
+        run.granularity_min
+    }
+}
+
+#[tauri::command]
+pub async fn get_run_candles(
+    input: GetRunCandlesInput,
+    state: State<'_, AppState>,
+) -> Result<GetRunCandlesOutput, String> {
+    let (strategy, run) = load_run(&state, &input.run_id)?;
+    let granularity = granularity_of(&run);
+
+    let candles = match (&run.candle_params, run.synthetic) {
+        // synthetic: regenerate the exact stored series from its seed
+        (Some(params), _) => {
+            trade_core::sim::engine::synthetic_from_params(&strategy.symbol, params)
+        }
+        // real: re-fetch the run's historical range from Binance
+        (None, false) => {
+            let client = replay_client()?;
+            let (start, end) = run_range(&run)?;
+            fetch_candles_between(&run_symbol(&strategy), granularity, start, end, &client)
+                .await
+                .map_err(crate::commands::err_to_string)?
+        }
+        // pre-v3 synthetic run has no replay key — cannot rebuild candles
+        (None, true) => {
+            return Err("UNSUPPORTED: run has no candle seed (pre-v3)".into());
+        }
+    };
+
+    Ok(GetRunCandlesOutput {
+        candles: candles.into_iter().map(candle_point).collect(),
+    })
+}
+
+#[tauri::command]
+pub async fn get_gbm_paths(
+    input: GbmPathsInput,
+    state: State<'_, AppState>,
+) -> Result<GbmPathsOutput, String> {
+    let (strategy, run) = load_run(&state, &input.run_id)?;
+    let granularity = granularity_of(&run);
+    let path_count = input.paths.clamp(1, 20) as usize;
+    let horizon = input.horizon.clamp(1, 500) as usize;
+
+    let (start, sigma) = match (&run.candle_params, run.synthetic) {
+        (Some(params), _) => {
+            // synthetic: sigma from the GBM params themselves
+            let candles = trade_core::sim::engine::synthetic_from_params(&strategy.symbol, params);
+            let start = candles
+                .last()
+                .map(|c| c.close)
+                .unwrap_or(params.start_price.to_f64());
+            let cpy = params.candles_per_year.to_f64().max(1.0);
+            (start, params.annual_vol.to_f64() / cpy.sqrt())
+        }
+        (None, false) => {
+            // real: measure realized volatility on the run's range
+            let client = replay_client()?;
+            let (from, to) = run_range(&run)?;
+            let candles =
+                fetch_candles_between(&run_symbol(&strategy), granularity, from, to, &client)
+                    .await
+                    .map_err(crate::commands::err_to_string)?;
+            let sigma = trade_core::sim::engine::realized_sigma(&candles);
+            if sigma <= 0.0 {
+                return Err("UNSUPPORTED: not enough candles to estimate volatility".into());
+            }
+            let start = candles
+                .last()
+                .map(|c| c.close)
+                .ok_or_else(|| "MISSING: run candles".to_string())?;
+            (start, sigma)
+        }
+        (None, true) => {
+            return Err("UNSUPPORTED: run has no candle seed (pre-v3)".into());
+        }
+    };
+
+    let base_ms = trade_core::sim::engine::rfc3339_to_millis(&run.finished_at)
+        .ok_or_else(|| "UNSUPPORTED: bad run timestamp".to_string())?;
+    let step_ms = granularity as u64 * 60_000;
+    let raw = trade_core::sim::engine::gbm_paths(start, sigma, horizon, path_count);
+    let paths = raw
+        .into_iter()
+        .map(|path| {
+            path.into_iter()
+                .enumerate()
+                .map(|(i, price)| GbmPathPoint {
+                    ts: trade_core::sim::engine::iso_from_millis(base_ms + i as u64 * step_ms),
+                    price: price.to_string(),
+                })
+                .collect()
+        })
+        .collect();
+    Ok(GbmPathsOutput { paths })
 }
