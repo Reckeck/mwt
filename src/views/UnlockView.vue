@@ -3,12 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { LockKeyhole, ShieldCheck } from 'lucide-vue-next'
+import { LockKeyhole, ShieldCheck, FolderOpen, X, ChevronRight } from 'lucide-vue-next'
 
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
+import { parseError } from '@/lib/ipc'
 import { useVaultStore } from '@/stores/vault'
 
 const { t } = useI18n()
@@ -20,6 +21,9 @@ const passwordRepeat = ref('')
 const error = ref<string | null>(null)
 const busy = ref(false)
 
+const manualPath = ref('')
+const showPathInput = ref(false)
+
 const creating = computed(() => vault.status?.exists !== true)
 
 onMounted(async () => {
@@ -30,6 +34,7 @@ onMounted(async () => {
       /* keep create mode when offline/mock */
     }
   }
+  await vault.loadRecents()
 })
 
 async function submit() {
@@ -61,12 +66,53 @@ async function submit() {
     if (maybe.code === 'ALREADY_EXISTS') {
       await vault.refreshStatus().catch(() => {})
       error.value = t('auth.alreadyExists')
+    } else if (maybe.code === 'UNSUPPORTED') {
+      error.value = t('auth.unsupported')
     } else {
       error.value = maybe.code === 'SECRET' ? t('auth.wrongPassword') : maybe.message ?? String(e)
     }
   } finally {
     busy.value = false
   }
+}
+
+async function selectRecent(path: string) {
+  await vault.selectVault(path)
+  showPathInput.value = false
+  manualPath.value = ''
+}
+
+async function useOtherPath() {
+  showPathInput.value = true
+  manualPath.value = vault.status?.path || ''
+  error.value = null
+}
+
+async function browsePath() {
+  try {
+    const result = await vault.pickVaultFile(!vault.status?.exists)
+    if (result?.path) {
+      manualPath.value = result.path
+      // Refresh status to get exists flag
+      await vault.refreshStatus()
+    }
+  } catch (e) {
+    error.value = parseError(e).message
+  }
+}
+
+async function confirmPath() {
+  if (!manualPath.value.trim()) {
+    error.value = t('auth.pathRequired')
+    return
+  }
+  await vault.selectVault(manualPath.value)
+  showPathInput.value = false
+  manualPath.value = ''
+}
+
+async function forgetRecent(path: string) {
+  await vault.forgetRecent(path)
 }
 </script>
 
@@ -85,6 +131,71 @@ async function submit() {
       </template>
 
       <form class="grid gap-4" @submit.prevent="submit">
+        <!-- Step 1: Choose vault (recents or custom path) -->
+        <div v-if="!showPathInput" class="grid gap-3">
+          <div v-if="vault.recents.length > 0" class="grid gap-2">
+            <p class="text-xs font-medium text-muted-foreground">{{ t('auth.recentVaults') }}</p>
+            <div class="grid gap-1.5 max-h-40 overflow-y-auto">
+              <Button
+                v-for="r in vault.recents"
+                :key="r.path"
+                variant="outline"
+                class="justify-start gap-2 text-left"
+                :class="{ 'bg-destructive/10 text-destructive': !r.exists }"
+                @click="selectRecent(r.path)"
+              >
+                <ChevronRight class="size-4 shrink-0" />
+                <div class="flex-1 min-w-0">
+                  <p class="truncate font-medium">{{ r.path.split('/').pop() || r.path }}</p>
+                  <p class="truncate text-xs text-muted-foreground">{{ r.path }}</p>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span v-if="r.exists" class="text-xs text-emerald-600">{{ t('auth.exists') }}</span>
+                  <span v-else class="text-xs text-destructive">{{ t('auth.missing') }}</span>
+                  <Button variant="ghost" size="icon" @click.stop="forgetRecent(r.path)">
+                    <X class="size-3.5" />
+                  </Button>
+                </div>
+              </Button>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            class="justify-start gap-2"
+            @click="useOtherPath"
+          >
+            <FolderOpen class="size-4" />
+            {{ t('auth.otherPath') }}
+          </Button>
+        </div>
+
+        <!-- Step 2: Custom path input -->
+        <div v-else class="grid gap-3">
+          <div class="grid gap-1.5">
+            <Label for="vault-path">{{ t('auth.vaultPath') }}</Label>
+            <div class="flex gap-1.5">
+              <Input
+                id="vault-path"
+                v-model="manualPath"
+                placeholder="Выберите или введите путь к vault"
+                @keydown.enter="confirmPath"
+              />
+              <Button variant="outline" type="button" @click="browsePath">
+                <FolderOpen class="size-4" />
+              </Button>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            class="justify-start"
+            @click="showPathInput = false"
+          >
+            <ChevronRight class="size-4 mr-1" />
+            {{ t('auth.backToRecents') }}
+          </Button>
+        </div>
+
         <div class="grid gap-1.5">
           <Label for="pw">{{ t('auth.password') }}</Label>
           <Input id="pw" v-model="password" type="password" autocomplete="current-password" autofocus />

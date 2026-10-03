@@ -8,6 +8,7 @@ interface VaultState {
   locked: boolean
   error: string | null
   busy: boolean
+  recents: RecentVault[]
 }
 
 const empty = (): VaultState => ({
@@ -16,6 +17,7 @@ const empty = (): VaultState => ({
   locked: true,
   error: null,
   busy: false,
+  recents: [],
 })
 
 export const useVaultStore = defineStore('vault', {
@@ -24,6 +26,21 @@ export const useVaultStore = defineStore('vault', {
     async refreshStatus() {
       this.status = await call<VaultStatus>('vault_status')
       this.locked = this.status?.unlocked !== true
+    },
+    async loadRecents() {
+      this.recents = await call<RecentVault[]>('recent_vaults')
+    },
+    async selectVault(path: string) {
+      const status = await call<VaultStatus>('select_vault', { path })
+      this.status = status
+      this.locked = status.unlocked !== true
+    },
+    async forgetRecent(path: string) {
+      await call('forget_recent_vault', { path })
+      this.recents = this.recents.filter((r: RecentVault) => r.path !== path)
+    },
+    async pickVaultFile(save: boolean) {
+      return await call<{ path: string } | null>('pick_vault_file', { save })
     },
     async unlock(password: string) {
       this.busy = true
