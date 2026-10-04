@@ -17,7 +17,9 @@ CARGO_TARGET_DIR = ".rust-target"
 "dev:ui" = { description = "Run Vite frontend standalone", run = "pnpm dev" }
 "test" = { description = "Rust workspace tests", run = "cargo test --workspace" }
 "typecheck" = { description = "Vue TS strict typecheck", run = "pnpm exec vue-tsc --noEmit" }
-"lint" = { description = "ESLint frontend", run = "pnpm exec eslint ." }
+"lint" = { description = "Biome lint + format check (frontend)", run = "pnpm exec biome check ." }
+"format" = { description = "Biome autofix (lint + format)", run = "pnpm exec biome check --write ." }
+"clippy" = { description = "Clippy lints (deny warnings)", run = "cargo clippy --workspace --all-targets -- -D warnings" }
 "gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
-"check" = { description = "Lint + typecheck + tests", run = "pnpm exec eslint . && pnpm exec vue-tsc --noEmit && cargo test --workspace" }
+"check" = { description = "Lint + typecheck + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }

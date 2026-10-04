@@ -148,7 +148,7 @@ ECharts подключён через `vue-echarts`; нужные модули �
 ## Проверки
 
 ```bash
-mise run lint          # eslint: vue/recommended + @typescript-eslint
+mise run lint          # biome check: линт + формат (biome.json)
 mise run typecheck     # vue-tsc --noEmit, strict
 pnpm dev               # быстрый визуальный контроль в браузере (мок IPC)
 mise run dev           # полный Tauri-цикл
@@ -157,5 +157,11 @@ mise run check         # всё вместе перед коммитом
 
 `mise run typecheck` ловит несоответствие между тем, что сгенерил Rust, и тем,
 что ждёт фронт, — не откладывай его.
+
+`mise run lint` (Biome) запрещает **однобуквенные имена**: у переменных и
+параметров минимум 2 символа (`style/useNamingConvention`, regex `t|.{2,}`).
+Исключение одно — `t` из `const { t } = useI18n()`. В Rust то же правило
+держит `clippy::min_ident_chars` (`clippy.toml`), так что `i`/`j`/`x` запрещены
+и там; неиспользуемую переменную помечай `_`-префиксом.
 
 Коммит (см. скилл `jj-workflow`) — **только по явной просьбе пользователя**.
