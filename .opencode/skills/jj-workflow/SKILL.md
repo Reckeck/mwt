@@ -35,12 +35,12 @@ description: >
 
 ```bash
 cargo fmt
-mise run check      # eslint . && vue-tsc --noEmit && cargo test --workspace
+mise run check      # biome check . && vue-tsc --noEmit && clippy && cargo test --workspace
 ```
 
-`mise run check` — это **полный** гейт: ESLint + строгий typecheck фронтенда +
-все тесты воркспейса. Гейт зелёный → можно коммитить. Не зелёный → коммит
-запрещён: сначала чини причину.
+`mise run check` — это **полный** гейт: Biome (линт + формат) + строгий typecheck
+фронтенда + clippy `-D warnings` + все тесты воркспейса. Гейт зелёный → можно
+коммитить. Не зелёный → коммит запрещён: сначала чини причину.
 
 Локальный срез, если правка заведомо узкая (быстрее, но не заменяет финальный `check`):
 

@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 description = "TradeApp core: domain model, encrypted vault, pricing, strategy simulator (no Tauri deps)"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

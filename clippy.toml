@@ -1,0 +1,8 @@
+# Clippy configuration for the workspace.
+#
+# `min_ident_chars` rejects identifiers shorter than the threshold; the allow
+# list below is intentionally empty — single-letter names are rejected even in
+# loops (`i`, `j`) and coordinates (`x`, `y`). Use a leading underscore to mark
+# a binding as deliberately unused instead (`for _item in items`).
+min-ident-chars-threshold = 1
+allowed-idents-below-min-chars = []

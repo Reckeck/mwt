@@ -11,9 +11,11 @@
 |---|---|
 | `mise run test` | `cargo test --workspace` |
 | `mise run typecheck` | `vue-tsc --noEmit` |
-| `mise run lint` | `pnpm exec eslint .` |
+| `mise run lint` | `pnpm exec biome check .` (линт + формат, Biome) |
+| `mise run format` | `pnpm exec biome check --write .` — автофикс Biome |
+| `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
 | `mise run gen-types` | пересоздать `src/lib/ipc.gen.d.ts` из Rust (ts-rs) |
-| `mise run check` | lint + typecheck + tests |
+| `mise run check` | lint + typecheck + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
@@ -85,8 +87,19 @@ docs/                 # architecture, data-model, ipc, security, roadmap
 
 - Код на английском; комменты обязательными не делаем, но где нужен контекст —
   пишем.
-- Форматирование: `cargo fmt`. Линт: `cargo clippy --workspace -- -D warnings`
-  (профильный, в CI-стиле).
+- Форматирование и линтRust: `cargo fmt` + `mise run clippy`
+  (`cargo clippy --workspace --all-targets -- -D warnings`, профильный, в CI-стиле).
+- Форматирование и линт фронтенда: Biome (`biome.json`) — `mise run lint`
+  проверяет, `mise run format` чинит. Настройки под текущий стиль кода:
+  одинарные кавычки, без точек с запятой, 2 пробела, ширина 120.
+  ESLint в проекте больше нет.
+- **Никаких однобуквенных имён.** Rust: линт `clippy::min_ident_chars`
+  (порог 1, список исключений пустой — `clippy.toml` + `[workspace.lints]`),
+  так что `i`, `j`, `x` тоже запрещены; неиспользуемую переменную
+  помечай `_`-префиксом. Фронтенд: `style/useNamingConvention` в `biome.json`
+  требует минимум 2 символа (regex `t|.{2,}`) у переменных и параметров;
+  единственное исключение — `t` из `const { t } = useI18n()` (деструктуризация
+  правилом и так не проверяется, а имя `t` разрешено явно).
 - Никаких секретов в репозитории; `.gitignore` игнорит `data/`, `*.wallet`,
   `.rust-target/`, `node_modules/`, `dist/`, `src-tauri/target/`.
 - Никаких секретов в репозитории; `.gitignore` игнорит `data/`, `*.wallet`,
@@ -101,7 +114,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap
 
 ```bash
 cargo fmt             # сначала форматирование, потом проверки
-mise run check        # eslint + vue-tsc --noEmit + cargo test --workspace
+mise run check        # biome check + vue-tsc --noEmit + clippy + cargo test --workspace
 ```
 
 Гейт зелёный → коммитим. Не зелёный → коммит запрещён, сначала чини.
@@ -112,7 +125,7 @@ mise run check        # eslint + vue-tsc --noEmit + cargo test --workspace
 | Изменения | Команда |
 |---|---|
 | `src/**` (фронтенд) | `mise run lint && mise run typecheck` |
-| `crates/core/**`, `crates/app/**` | `mise run test` |
+| `crates/core/**`, `crates/app/**` | `mise run test && mise run clippy` |
 | DTO, модели, `ipc_contract.rs` | `mise run test && mise run gen-types` — обязательно диффай `src/lib/ipc.gen.d.ts`, он должен измениться |
 | финальный, перед коммитом | `mise run check` |
 
@@ -186,7 +199,7 @@ jj config path --repo     # ~/.config/jj/repos/<hash>/config.toml
 ## Definition of Done
 
 - [ ] `cargo fmt` выполнен, диффа от автоформатирования нет
-- [ ] `mise run check` — зелёные (eslint + vue-tsc + `cargo test --workspace`)
+- [ ] `mise run check` — зелёные (biome + vue-tsc + clippy + `cargo test --workspace`)
 - [ ] `mise run gen-types` — `src/lib/ipc.gen.d.ts` актуален (если менялись DTO)
 - [ ] Новые DTO в `ipc_contract.rs` покрыты ts-rs и командой в `crates/app`
 - [ ] Команда зарегистрирована в `generate_handler!` и в таблице `docs/ipc.md`

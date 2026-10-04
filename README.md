@@ -45,7 +45,7 @@ mise run setup        # pnpm install && cargo fetch
 mise run dev          # Tauri dev-сборка (frontend + core)
 mise run test         # cargo test --workspace
 mise run typecheck    # vue-tsc
-mise run lint         # eslint
+mise run lint         # biome (линт + формат)
 mise run gen-types    # пересоздать src/lib/ipc.gen.d.ts из Rust (ts-rs)
 mise run check        # всё вышеперечисленное
 mise run build        # release-бандл (deb/rpm/AppImage)
