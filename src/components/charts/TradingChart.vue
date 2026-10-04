@@ -120,17 +120,17 @@ function cssVar(name: string, fallback: string): string {
   return probe.fillStyle === '#010203' ? fallback : probe.fillStyle
 }
 
-function alpha(color: string, a: number): string {
+function alpha(color: string, opacity: number): string {
   if (color.startsWith('#')) {
     const hex = color.slice(1)
-    const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex
-    const n = parseInt(full, 16)
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+    const full = hex.length === 3 ? hex.split('').map((char) => char + char).join('') : hex
+    const rgb = parseInt(full, 16)
+    return `rgba(${(rgb >> 16) & 255}, ${(rgb >> 8) & 255}, ${rgb & 255}, ${opacity})`
   }
-  const m = color.match(/rgba?\(([^)]+)\)/)
-  if (m) {
-    const parts = m[1].split(/[,\s/]+/).filter(Boolean).map(Number)
-    return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${a})`
+  const match = color.match(/rgba?\(([^)]+)\)/)
+  if (match) {
+    const parts = match[1].split(/[,\s/]+/).filter(Boolean).map(Number)
+    return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${opacity})`
   }
   return color
 }
@@ -167,14 +167,14 @@ function updateWatermark() {
   })
 }
 
-function priceFormatFor(p: number) {
-  if (p >= 1000) return { type: 'price' as const, precision: 2, minMove: 0.01 }
-  if (p >= 1) return { type: 'price' as const, precision: 4, minMove: 0.0001 }
+function priceFormatFor(price: number) {
+  if (price >= 1000) return { type: 'price' as const, precision: 2, minMove: 0.01 }
+  if (price >= 1) return { type: 'price' as const, precision: 4, minMove: 0.0001 }
   return { type: 'price' as const, precision: 8, minMove: 1e-8 }
 }
 
-function fmt(n: number): string {
-  return n.toFixed(precision)
+function fmt(value: number): string {
+  return value.toFixed(precision)
 }
 
 // --- indicators -------------------------------------------------------------
@@ -182,31 +182,31 @@ function fmt(n: number): string {
 function smaArr(values: number[], period: number): (number | null)[] {
   const out: (number | null)[] = []
   let sum = 0
-  for (let i = 0; i < values.length; i++) {
-    sum += values[i]
-    if (i >= period) sum -= values[i - period]
-    out.push(i >= period - 1 ? sum / period : null)
+  for (let index = 0; index < values.length; index++) {
+    sum += values[index]
+    if (index >= period) sum -= values[index - period]
+    out.push(index >= period - 1 ? sum / period : null)
   }
   return out
 }
 
 function emaArr(values: number[], period: number): (number | null)[] {
   const out: (number | null)[] = []
-  const k = 2 / (period + 1)
+  const multiplier = 2 / (period + 1)
   let prev: number | null = null
-  for (let i = 0; i < values.length; i++) {
-    if (i < period - 1) {
+  for (let index = 0; index < values.length; index++) {
+    if (index < period - 1) {
       out.push(null)
       continue
     }
     if (prev === null) {
       let seed = 0
-      for (let j = i - period + 1; j <= i; j++) seed += values[j]
+      for (let from = index - period + 1; from <= index; from++) seed += values[from]
       prev = seed / period
       out.push(prev)
       continue
     }
-    prev = values[i] * k + prev * (1 - k)
+    prev = values[index] * multiplier + prev * (1 - multiplier)
     out.push(prev)
   }
   return out
@@ -217,27 +217,29 @@ function rsiArr(values: number[], period: number): (number | null)[] {
   if (values.length <= period) return out
   let gain = 0
   let loss = 0
-  for (let i = 1; i <= period; i++) {
-    const d = values[i] - values[i - 1]
-    if (d >= 0) gain += d
-    else loss -= d
+  for (let index = 1; index <= period; index++) {
+    const delta = values[index] - values[index - 1]
+    if (delta >= 0) gain += delta
+    else loss -= delta
   }
-  let ag = gain / period
-  let al = loss / period
-  const toRsi = () => (al === 0 ? 100 : 100 - 100 / (1 + ag / al))
+  let avgGain = gain / period
+  let avgLoss = loss / period
+  const toRsi = () => (avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
   out[period] = toRsi()
-  for (let i = period + 1; i < values.length; i++) {
-    const d = values[i] - values[i - 1]
-    ag = (ag * (period - 1) + Math.max(d, 0)) / period
-    al = (al * (period - 1) + Math.max(-d, 0)) / period
-    out[i] = toRsi()
+  for (let index = period + 1; index < values.length; index++) {
+    const delta = values[index] - values[index - 1]
+    avgGain = (avgGain * (period - 1) + Math.max(delta, 0)) / period
+    avgLoss = (avgLoss * (period - 1) + Math.max(-delta, 0)) / period
+    out[index] = toRsi()
   }
   return out
 }
 
 function lineData(values: (number | null)[]): { time: UTCTimestamp; value?: number }[] {
-  return bars.map((b, i) =>
-    values[i] === null || values[i] === undefined ? { time: b.time } : { time: b.time, value: values[i] as number },
+  return bars.map((bar, index) =>
+    values[index] === null || values[index] === undefined
+      ? { time: bar.time }
+      : { time: bar.time, value: values[index] as number },
   )
 }
 
@@ -247,7 +249,7 @@ function toggleIndicator(key: IndicatorKey) {
 
 function syncIndicators() {
   if (!bars.length) return
-  const closes = bars.map((b) => b.close)
+  const closes = bars.map((bar) => bar.close)
   if (smaLine) smaLine.setData(lineData(smaArr(closes, 20)))
   if (emaLine) emaLine.setData(lineData(emaArr(closes, 50)))
   if (rsiLine) rsiLine.setData(lineData(rsiArr(closes, 14)))
@@ -330,10 +332,10 @@ function setData(fit: boolean) {
   candles.applyOptions({ priceFormat: priceFormatFor(last.close) })
   candles.setData(bars)
   volume.setData(
-    bars.map((b) => ({
-      time: b.time,
-      value: b.volume,
-      color: b.close >= b.open ? 'rgba(38,166,154,0.55)' : 'rgba(239,83,80,0.55)',
+    bars.map((bar) => ({
+      time: bar.time,
+      value: bar.volume,
+      color: bar.close >= bar.open ? 'rgba(38,166,154,0.55)' : 'rgba(239,83,80,0.55)',
     })),
   )
   syncIndicators()
@@ -349,20 +351,20 @@ async function load() {
       input: { symbol: props.symbol, interval_min: tf.value, limit: props.limit },
     })
     if (!mounted) return
-    bars = out.candles.map((c) => ({
-      time: (Math.floor(Date.parse(c.ts) / 1000)) as UTCTimestamp,
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-      volume: Number(c.volume),
+    bars = out.candles.map((candle) => ({
+      time: (Math.floor(Date.parse(candle.ts) / 1000)) as UTCTimestamp,
+      open: Number(candle.open),
+      high: Number(candle.high),
+      low: Number(candle.low),
+      close: Number(candle.close),
+      volume: Number(candle.volume),
     }))
     setData(true)
-  } catch (e) {
+  } catch (err) {
     if (!mounted) return
     bars = []
     setData(false)
-    error.value = parseError(e)
+    error.value = parseError(err)
   } finally {
     if (mounted) loading.value = false
   }
@@ -370,19 +372,19 @@ async function load() {
 
 // --- legend -----------------------------------------------------------------
 
-function showBar(b: BarData<UTCTimestamp> & { volume?: number }) {
+function showBar(bar: BarData<UTCTimestamp> & { volume?: number }) {
   legend.value = {
-    time: new Date(Number(b.time) * 1000).toLocaleString(undefined, {
+    time: new Date(Number(bar.time) * 1000).toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }),
-    o: b.open,
-    h: b.high,
-    l: b.low,
-    c: b.close,
-    v: b.volume ?? 0,
+    o: bar.open,
+    h: bar.high,
+    l: bar.low,
+    c: bar.close,
+    v: bar.volume ?? 0,
   }
 }
 
@@ -437,17 +439,17 @@ function connectStream() {
       const msg = JSON.parse(String(ev.data)) as {
         k?: { t: number; o: string; h: string; l: string; c: string; v: string }
       }
-      const k = msg.k
-      if (!k) return
+      const ticker = msg.k
+      if (!ticker) return
       stream.value = 'live'
-      const time = (Math.floor(k.t / 1000)) as UTCTimestamp
+      const time = (Math.floor(ticker.t / 1000)) as UTCTimestamp
       const bar = {
         time,
-        open: Number(k.o),
-        high: Number(k.h),
-        low: Number(k.l),
-        close: Number(k.c),
-        volume: Number(k.v),
+        open: Number(ticker.o),
+        high: Number(ticker.h),
+        low: Number(ticker.l),
+        close: Number(ticker.c),
+        volume: Number(ticker.v),
       }
       const last = bars[bars.length - 1]
       if (!last || time > last.time) bars.push(bar)
@@ -490,13 +492,13 @@ function initDrawings() {
   if (!chart || !candles) return
   drawings = new DrawingManager(chart, candles, { magnet: magnet.value ? 'weak' : 'off' })
   drawings.setInterval(tfLabel(tf.value))
-  drawings.on('add', (d) => {
-    undoStack.value.push(d.id)
+  drawings.on('add', (drawing) => {
+    undoStack.value.push(drawing.id)
     drawingCount.value = drawings?.drawings().length ?? 0
     persist(drawKey.value)
   })
-  drawings.on('remove', (d) => {
-    undoStack.value = undoStack.value.filter((id) => id !== d.id)
+  drawings.on('remove', (drawing) => {
+    undoStack.value = undoStack.value.filter((id) => id !== drawing.id)
     drawingCount.value = drawings?.drawings().length ?? 0
     persist(drawKey.value)
   })
@@ -568,8 +570,10 @@ onMounted(() => {
     vertAlign: 'center',
   })
   chart.subscribeCrosshairMove((param) => {
-    const d = param.seriesData.get(candles!) as (BarData<UTCTimestamp> & { volume?: number }) | undefined
-    if (d && param.time !== undefined) showBar(d)
+    const bar = (candles ? param.seriesData.get(candles) : undefined) as
+      | (BarData<UTCTimestamp> & { volume?: number })
+      | undefined
+    if (bar && param.time !== undefined) showBar(bar)
     else if (bars.length) showBar(bars[bars.length - 1])
   })
   applyTheme()
@@ -624,15 +628,15 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
   <div class="flex h-full min-h-0 flex-col gap-3">
     <div class="flex flex-wrap items-center gap-1">
       <Button
-        v-for="m in TIMEFRAMES"
-        :key="m"
+        v-for="frame in TIMEFRAMES"
+        :key="frame"
         variant="ghost"
         size="sm"
         class="px-2 tabular-nums"
-        :class="tf === m && 'bg-accent text-accent-foreground'"
-        @click="tf = m"
+        :class="tf === frame && 'bg-accent text-accent-foreground'"
+        @click="tf = frame"
       >
-        {{ tfLabel(m) }}
+        {{ tfLabel(frame) }}
       </Button>
 
       <div class="mx-2 h-5 w-px bg-border" />

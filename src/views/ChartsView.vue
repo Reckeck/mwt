@@ -44,7 +44,7 @@ const lineOption = computed<ChartOption>(() => ({
       type: 'line',
       smooth: true,
       showSymbol: false,
-      data: (history.data.value ?? []).map((p) => [Number(p.ts_ms), Number(p.value_base)]),
+      data: (history.data.value ?? []).map((point) => [Number(point.ts_ms), Number(point.value_base)]),
       areaStyle: { opacity: 0.12 },
     },
   ],

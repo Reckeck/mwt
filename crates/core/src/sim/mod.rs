@@ -135,7 +135,9 @@ pub struct SimSignal {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct CandleParams {
     pub seed: u64,
-    pub n: u32,
+    /// Number of candles to generate. Kept as `n` on the wire for compatibility.
+    #[serde(rename = "n")]
+    pub count: u32,
     pub start_price: Amount,
     pub annual_vol: Amount,
     pub candles_per_year: Amount,

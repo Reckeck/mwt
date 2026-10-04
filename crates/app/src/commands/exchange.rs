@@ -71,10 +71,10 @@ pub async fn inspect_tx(input: InspectTxInput) -> Result<InspectTxResult, String
 fn hints_from(info: &TxInfo) -> Vec<TxFieldHint> {
     let mut hints = Vec::new();
     let mut push = |field: &str, value: Option<String>| {
-        if let Some(v) = value.filter(|v| !v.trim().is_empty()) {
+        if let Some(filled) = value.filter(|text| !text.trim().is_empty()) {
             hints.push(TxFieldHint {
                 field: field.to_string(),
-                value: v,
+                value: filled,
             });
         }
     };
@@ -118,11 +118,14 @@ pub async fn bybit_executions(
     state: State<'_, AppState>,
 ) -> Result<BybitExecutionsResult, String> {
     let (api_key, api_secret) = {
-        let g = require_vault(&state).map_err(err_to_string)?;
-        let v = g.as_ref().unwrap();
-        match find_bybit_key_for_store(&v.doc.exchanges, input.store_id.as_deref().unwrap_or(""), v)
-        {
-            Some(k) => (k.api_key.clone(), k.api_secret.clone()),
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_ref().unwrap();
+        match find_bybit_key_for_store(
+            &vault.doc.exchanges,
+            input.store_id.as_deref().unwrap_or(""),
+            vault,
+        ) {
+            Some(entry) => (entry.api_key.clone(), entry.api_secret.clone()),
             None => {
                 return Ok(BybitExecutionsResult {
                     executions: Vec::new(),
@@ -149,11 +152,11 @@ pub async fn bybit_executions(
             executions: execs.into_iter().map(BybitExecution::from).collect(),
             notice: None,
         }),
-        Err(e) => {
+        Err(err) => {
             // Surface a hint, but never block the form.
-            let notice = if e.to_string().contains("403") {
+            let notice = if err.to_string().contains("403") {
                 Some("forbidden_region".into())
-            } else if e.to_string().contains("429") {
+            } else if err.to_string().contains("429") {
                 Some("rate_limited".into())
             } else {
                 Some("unreachable".into())
@@ -173,12 +176,12 @@ pub async fn exchange_key_status(
     input: ExchangeKeyStatusInput,
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
-    let g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_ref().unwrap();
-    match find_bybit_key_for_store(&v.doc.exchanges, &input.store_id, v) {
-        Some(k) => Ok(ExchangeKeyStatus {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
+    match find_bybit_key_for_store(&vault.doc.exchanges, &input.store_id, vault) {
+        Some(entry) => Ok(ExchangeKeyStatus {
             configured: true,
-            hint: Some(k.hint()),
+            hint: Some(entry.hint()),
         }),
         None => Ok(ExchangeKeyStatus {
             configured: false,
@@ -195,8 +198,8 @@ pub async fn set_exchange_key(
     input: SetExchangeKeyInput,
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
     let key = input.api_key.trim().to_string();
     let secret = input.api_secret.trim().to_string();
     let store_id = input.store_id.clone();
@@ -204,7 +207,11 @@ pub async fn set_exchange_key(
         return Err("INVALID_INPUT: api key and secret are required".into());
     }
     // Validate store exists and is an exchange node
-    let store = v.doc.stores.iter().find(|s| s.id == store_id);
+    let store = vault
+        .doc
+        .stores
+        .iter()
+        .find(|candidate| candidate.id == store_id);
     let Some(store) = store else {
         return Err("NOT_FOUND: store not found".into());
     };
@@ -212,22 +219,26 @@ pub async fn set_exchange_key(
         return Err("INVALID_INPUT: store is not an exchange".into());
     }
     // Upsert by store_id
-    v.doc.exchanges.bybit.retain(|k| k.store_id != store_id);
-    v.doc.exchanges.bybit.push(ExchangeKeys {
+    vault
+        .doc
+        .exchanges
+        .bybit
+        .retain(|entry| entry.store_id != store_id);
+    vault.doc.exchanges.bybit.push(ExchangeKeys {
         store_id: store_id.clone(),
         api_key: key,
         api_secret: secret,
     });
-    v.persist().map_err(err_to_string)?;
-    let status = v
+    vault.persist().map_err(err_to_string)?;
+    let status = vault
         .doc
         .exchanges
         .bybit
         .iter()
-        .find(|k| k.store_id == store_id)
-        .map(|k| ExchangeKeyStatus {
+        .find(|entry| entry.store_id == store_id)
+        .map(|entry| ExchangeKeyStatus {
             configured: true,
-            hint: Some(k.hint()),
+            hint: Some(entry.hint()),
         })
         .unwrap_or_default();
     Ok(status)
@@ -239,13 +250,14 @@ pub async fn clear_exchange_key(
     input: ClearExchangeKeyInput,
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    v.doc
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault
+        .doc
         .exchanges
         .bybit
-        .retain(|k| k.store_id != input.store_id);
-    v.persist().map_err(err_to_string)?;
+        .retain(|entry| entry.store_id != input.store_id);
+    vault.persist().map_err(err_to_string)?;
     Ok(ExchangeKeyStatus::default())
 }
 
@@ -255,10 +267,10 @@ pub async fn clear_exchange_key(
 // tested; these handlers only move data across the IPC boundary.
 
 /// Machine-readable reason for a soft failure (never surfaces as an error).
-fn import_notice(e: &str) -> &'static str {
-    if e.contains("403") {
+fn import_notice(message: &str) -> &'static str {
+    if message.contains("403") {
         "forbidden_region"
-    } else if e.contains("429") {
+    } else if message.contains("429") {
         "rate_limited"
     } else {
         "unreachable"
@@ -273,10 +285,10 @@ pub async fn import_bybit_history(
     state: State<'_, AppState>,
 ) -> Result<ImportBybitHistoryOutput, String> {
     let (api_key, api_secret) = {
-        let g = require_vault(&state).map_err(err_to_string)?;
-        let v = g.as_ref().unwrap();
-        match find_bybit_key_for_store(&v.doc.exchanges, &input.store_id, v) {
-            Some(k) => (k.api_key.clone(), k.api_secret.clone()),
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_ref().unwrap();
+        match find_bybit_key_for_store(&vault.doc.exchanges, &input.store_id, vault) {
+            Some(entry) => (entry.api_key.clone(), entry.api_secret.clone()),
             None => {
                 return Ok(ImportBybitHistoryOutput {
                     staged: 0,
@@ -291,11 +303,11 @@ pub async fn import_bybit_history(
 
     // `all_executions` paginates per category; fills come back newest-first.
     let execs = match client.all_executions(&api_key, &api_secret, limit).await {
-        Ok(e) => e,
-        Err(e) => {
+        Ok(fills) => fills,
+        Err(err) => {
             return Ok(ImportBybitHistoryOutput {
                 staged: 0,
-                notice: Some(import_notice(&e.to_string()).into()),
+                notice: Some(import_notice(&err.to_string()).into()),
             });
         }
     };
@@ -308,9 +320,9 @@ pub async fn import_bybit_history(
         })
         .collect();
 
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    let staged = v.stage_imports(imports).map_err(err_to_string)?;
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    let staged = vault.stage_imports(imports).map_err(err_to_string)?;
     Ok(ImportBybitHistoryOutput {
         staged,
         notice: None,
@@ -322,10 +334,10 @@ pub async fn import_bybit_history(
 pub async fn list_pending_imports(
     state: State<'_, AppState>,
 ) -> Result<ListPendingImportsOutput, String> {
-    let g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_ref().unwrap();
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
     Ok(ListPendingImportsOutput {
-        imports: v.pending_imports(),
+        imports: vault.pending_imports(),
     })
 }
 
@@ -335,9 +347,9 @@ pub async fn confirm_pending_imports(
     input: ConfirmPendingImportsInput,
     state: State<'_, AppState>,
 ) -> Result<ConfirmPendingImportsOutput, String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    let confirmed = v
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    let confirmed = vault
         .confirm_pending_imports(&input.exec_ids)
         .map_err(err_to_string)?;
     Ok(ConfirmPendingImportsOutput { confirmed })
@@ -349,9 +361,9 @@ pub async fn discard_pending_imports(
     input: DiscardPendingImportsInput,
     state: State<'_, AppState>,
 ) -> Result<DiscardPendingImportsOutput, String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    let discarded = v
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    let discarded = vault
         .discard_pending_imports(&input.exec_ids)
         .map_err(err_to_string)?;
     Ok(DiscardPendingImportsOutput { discarded })
@@ -381,7 +393,7 @@ mod tests {
     #[test]
     fn hints_only_include_fields_that_have_values() {
         let hints = hints_from(&info_with_amounts());
-        let fields: Vec<&str> = hints.iter().map(|h| h.field.as_str()).collect();
+        let fields: Vec<&str> = hints.iter().map(|hint| hint.field.as_str()).collect();
         assert!(fields.contains(&"occurredAt"));
         assert!(fields.contains(&"qtyBought"));
         assert!(fields.contains(&"qtySold"));
@@ -397,7 +409,7 @@ mod tests {
         let mut info = info_with_amounts();
         info.occurred_at = Some("   ".into());
         let hints = hints_from(&info);
-        assert!(!hints.iter().any(|h| h.field == "occurredAt"));
+        assert!(!hints.iter().any(|hint| hint.field == "occurredAt"));
     }
 
     /// An offline-only classification yields no field hints at all, so the

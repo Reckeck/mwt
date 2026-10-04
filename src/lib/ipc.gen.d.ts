@@ -145,7 +145,11 @@ risk_pct: Amount, };
 /**
  * Seeded GBM parameters of a synthetic candle stream.
  */
-type CandleParams = { seed: bigint, n: number, start_price: Amount, annual_vol: Amount, candles_per_year: Amount, };
+type CandleParams = { seed: bigint, 
+/**
+ * Number of candles to generate. Kept as `n` on the wire for compatibility.
+ */
+n: number, start_price: Amount, annual_vol: Amount, candles_per_year: Amount, };
 
 /**
  * Single OHLCV candle point for charting.

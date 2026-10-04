@@ -1,13 +1,7 @@
 import { use } from 'echarts/core'
 import type { ComposeOption } from 'echarts/core'
 import { LineChart, PieChart, CandlestickChart, ScatterChart } from 'echarts/charts'
-import {
-  GridComponent,
-  LegendComponent,
-  TitleComponent,
-  TooltipComponent,
-  DataZoomComponent,
-} from 'echarts/components'
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent, DataZoomComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { provide, type InjectionKey } from 'vue'
 import VChart from 'vue-echarts'

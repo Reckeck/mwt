@@ -44,7 +44,7 @@ const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outli
   paper_trade: 'outline',
 }
 
-const storeName = (id: string) => stores.data.value?.find((s) => s.id === id)?.name ?? id
+const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
 
 /** Counterparty of a transfer leg, for a quick "Binance → Ledger" read. */
 const counterparty = (tx: Transaction): string => {
@@ -54,15 +54,15 @@ const counterparty = (tx: Transaction): string => {
 }
 
 const rows = computed(() => {
-  const q = search.value.trim().toLowerCase()
+  const needle = search.value.trim().toLowerCase()
   return (txs.data.value ?? []).filter((tx) => {
     if (kindFilter.value && tx.kind !== kindFilter.value) return false
-    if (!q) return true
+    if (!needle) return true
     return (
-      tx.asset.symbol.toLowerCase().includes(q) ||
-      tx.comment.toLowerCase().includes(q) ||
-      (tx.category ?? '').toLowerCase().includes(q) ||
-      (tx.tx_hash ?? '').toLowerCase().includes(q)
+      tx.asset.symbol.toLowerCase().includes(needle) ||
+      tx.comment.toLowerCase().includes(needle) ||
+      (tx.category ?? '').toLowerCase().includes(needle) ||
+      (tx.tx_hash ?? '').toLowerCase().includes(needle)
     )
   })
 })
@@ -136,7 +136,7 @@ function explorerUrl(tx: Transaction): string | null {
         <div class="flex flex-wrap items-center gap-2">
           <Select v-model="kindFilter" class="h-8 w-40 text-xs">
             <option value="">{{ t('hist.allKinds') }}</option>
-            <option v-for="k in kinds" :key="k" :value="k">{{ t(`tx.kind.${k}`) }}</option>
+            <option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`tx.kind.${kind}`) }}</option>
           </Select>
           <Input v-model="search" class="h-8 w-48 text-xs" :placeholder="t('hist.search')" />
         </div>

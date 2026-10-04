@@ -90,13 +90,13 @@ impl UnlockedVault {
             .doc
             .stores
             .iter()
-            .any(|s| s.name.eq_ignore_ascii_case(name.trim()))
+            .any(|store| store.name.eq_ignore_ascii_case(name.trim()))
         {
             return Err(Error::InvalidInput("store name already exists".into()));
         }
         // Validate parent exists
         if let Some(ref pid) = parent_id
-            && !self.doc.stores.iter().any(|s| s.id == *pid)
+            && !self.doc.stores.iter().any(|store| store.id == *pid)
         {
             return Err(Error::Missing("parent store not found".into()));
         }
@@ -122,39 +122,39 @@ impl UnlockedVault {
             && *pid != id
         {
             // can't be parent of itself
-            if !self.doc.stores.iter().any(|s| s.id == *pid) {
+            if !self.doc.stores.iter().any(|store| store.id == *pid) {
                 return Err(Error::Missing("parent store not found".into()));
             }
             // Check for cycles: walk up from proposed parent
-            let mut current = Some(pid.as_str());
-            while let Some(p) = current {
-                if p == id {
+            let mut ancestor = Some(pid.as_str());
+            while let Some(current) = ancestor {
+                if current == id {
                     return Err(Error::InvalidInput(
                         "cycle detected: cannot make store a descendant of itself".into(),
                     ));
                 }
-                current = self
+                ancestor = self
                     .doc
                     .stores
                     .iter()
-                    .find(|s| s.id == p)
-                    .and_then(|s| s.parent_id.as_deref());
+                    .find(|store| store.id == current)
+                    .and_then(|store| store.parent_id.as_deref());
             }
         }
         let out = {
-            let s = self
+            let store = self
                 .doc
                 .stores
                 .iter_mut()
-                .find(|s| s.id == id)
+                .find(|store| store.id == id)
                 .ok_or_else(|| Error::Missing("store".into()))?;
             if !name.trim().is_empty() {
-                s.name = name.trim().to_string();
+                store.name = name.trim().to_string();
             }
-            s.color = color.trim().to_string();
-            s.note = note.trim().to_string();
-            s.parent_id = parent_id;
-            s.clone()
+            store.color = color.trim().to_string();
+            store.note = note.trim().to_string();
+            store.parent_id = parent_id;
+            store.clone()
         };
         self.persist()?;
         Ok(out)
@@ -162,16 +162,16 @@ impl UnlockedVault {
 
     pub fn archive_store(&mut self, id: &str, archived: bool) -> Result<()> {
         let found = {
-            let s = self
+            let store = self
                 .doc
                 .stores
                 .iter_mut()
-                .find(|s| s.id == id)
+                .find(|store| store.id == id)
                 .ok_or_else(|| Error::Missing("store".into()))?;
-            if archived && s.archived {
+            if archived && store.archived {
                 return Err(Error::InvalidInput("already archived".into()));
             }
-            s.archived = archived;
+            store.archived = archived;
             true
         };
         if found {
@@ -185,7 +185,7 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter()
-            .any(|t| t.store_id == id || t.to_store_id.as_deref() == Some(id))
+            .any(|tx| tx.store_id == id || tx.to_store_id.as_deref() == Some(id))
         {
             return Err(Error::InvalidInput(
                 "store has transactions; archive instead".into(),
@@ -196,15 +196,15 @@ impl UnlockedVault {
             .doc
             .stores
             .iter()
-            .any(|s| s.parent_id.as_deref() == Some(id))
+            .any(|store| store.parent_id.as_deref() == Some(id))
         {
             return Err(Error::InvalidInput(
                 "store has children; archive them first or move them to another parent".into(),
             ));
         }
         let before = self.doc.stores.len();
-        self.doc.stores.retain(|s| s.id != id);
-        self.doc.holdings.retain(|h| h.store_id != id);
+        self.doc.stores.retain(|store| store.id != id);
+        self.doc.holdings.retain(|holding| holding.store_id != id);
         if self.doc.stores.len() == before {
             return Err(Error::Missing("store".into()));
         }
@@ -226,12 +226,14 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter()
-            .filter(|t| {
-                store_id.is_none_or(|s| t.store_id == s || t.to_store_id.as_deref() == Some(s))
+            .filter(|tx| {
+                store_id.is_none_or(|filter| {
+                    tx.store_id == filter || tx.to_store_id.as_deref() == Some(filter)
+                })
             })
             .cloned()
             .collect();
-        out.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        out.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
         out
     }
 
@@ -317,7 +319,7 @@ impl UnlockedVault {
         out.network = network;
         out.tx_hash = tx_hash.clone();
         out.category = category.clone();
-        out.fee = fee.map(|f| f.abs());
+        out.fee = fee.map(|fee| fee.abs());
         out.group_id = Some(group.clone());
         out.timestamp = ts.clone();
 
@@ -357,7 +359,7 @@ impl UnlockedVault {
 
         let mut out = Transaction::new(TxKind::Trade, sell, -sell_qty, store_id, comment);
         out.category = category.clone();
-        out.fee = fee.map(|f| f.abs());
+        out.fee = fee.map(|fee| fee.abs());
         out.group_id = Some(group.clone());
         out.timestamp = ts.clone();
 
@@ -377,7 +379,7 @@ impl UnlockedVault {
         let before = self.doc.transactions.len();
         self.doc
             .transactions
-            .retain(|t| t.id != id && t.group_id.as_deref() != Some(id));
+            .retain(|tx| tx.id != id && tx.group_id.as_deref() != Some(id));
         if self.doc.transactions.len() == before {
             return Err(Error::Missing("transaction".into()));
         }
@@ -391,7 +393,7 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter_mut()
-            .find(|t| t.id == id)
+            .find(|tx| tx.id == id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
         tx.comment = comment.trim().to_string();
         let out = tx.clone();
@@ -409,7 +411,7 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter_mut()
-            .find(|t| t.id == tx_id)
+            .find(|tx| tx.id == tx_id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
         tx.price_usd = price_usd;
         tx.fx_override = fx_override;
@@ -420,15 +422,20 @@ impl UnlockedVault {
     // -- categories ---------------------------------------------------------
 
     pub fn add_category(&mut self, category: &str) -> Result<String> {
-        let c = category.trim().to_lowercase();
-        if c.is_empty() {
+        let normalized = category.trim().to_lowercase();
+        if normalized.is_empty() {
             return Err(Error::InvalidInput("empty category".into()));
         }
-        if !self.doc.categories.iter().any(|x| x == &c) {
-            self.doc.categories.push(c.clone());
+        if !self
+            .doc
+            .categories
+            .iter()
+            .any(|existing| existing == &normalized)
+        {
+            self.doc.categories.push(normalized.clone());
             self.persist()?;
         }
-        Ok(c)
+        Ok(normalized)
     }
 
     // -- holdings recomputation ---------------------------------------------
@@ -443,7 +450,7 @@ impl UnlockedVault {
         }
 
         let mut txs: Vec<Transaction> = self.doc.transactions.clone();
-        txs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
 
         for tx in &txs {
             let key = (tx.store_id.clone(), tx.asset.key());
@@ -475,14 +482,14 @@ impl UnlockedVault {
 
         self.doc.holdings = qty
             .into_iter()
-            .filter(|(_, q)| !q.is_zero())
+            .filter(|(_, quantity)| !quantity.is_zero())
             .map(|((store_id, asset_key), quantity)| {
                 let asset = self
                     .doc
                     .transactions
                     .iter()
-                    .find(|t| t.store_id == store_id && t.asset.key() == asset_key)
-                    .map(|t| t.asset.clone())
+                    .find(|tx| tx.store_id == store_id && tx.asset.key() == asset_key)
+                    .map(|tx| tx.asset.clone())
                     .unwrap_or_else(|| AssetRef::fiat("UNKNOWN", "Unknown"));
                 let avg_cost = cost.get(&(store_id.clone(), asset_key.clone())).copied();
                 Holding {
@@ -510,8 +517,8 @@ impl UnlockedVault {
             .doc
             .fx_cache
             .iter()
-            .find(|p| p.currency == base)
-            .map(|p| p.per_usd)
+            .find(|point| point.currency == base)
+            .map(|point| point.per_usd)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
         (base, fx)
     }
@@ -521,9 +528,9 @@ impl UnlockedVault {
         self.doc
             .price_cache
             .iter()
-            .filter(|p| p.asset_key == asset_key)
-            .max_by(|a, b| a.ts.cmp(&b.ts))
-            .map(|p| p.value_usd)
+            .filter(|point| point.asset_key == asset_key)
+            .max_by(|left, right| left.ts.cmp(&right.ts))
+            .map(|point| point.value_usd)
             .unwrap_or(Amount::ZERO)
     }
 
@@ -532,7 +539,7 @@ impl UnlockedVault {
         self.doc
             .transactions
             .iter()
-            .filter(|t| t.store_id == store_id || t.to_store_id.as_deref() == Some(store_id))
+            .filter(|tx| tx.store_id == store_id || tx.to_store_id.as_deref() == Some(store_id))
             .cloned()
             .collect()
     }
@@ -543,19 +550,19 @@ impl UnlockedVault {
             .doc
             .holdings
             .iter()
-            .filter(|h| h.store_id == store_id)
-            .map(|h| {
-                let price_usd = self.price_usd_for(&h.asset.key());
-                let value_usd = h.quantity * price_usd;
+            .filter(|holding| holding.store_id == store_id)
+            .map(|holding| {
+                let price_usd = self.price_usd_for(&holding.asset.key());
+                let value_usd = holding.quantity * price_usd;
                 let price_base = price_usd * fx;
-                let unrealized_base = match h.avg_cost {
-                    Some(cost) => (price_base - cost) * h.quantity.abs(),
+                let unrealized_base = match holding.avg_cost {
+                    Some(cost) => (price_base - cost) * holding.quantity.abs(),
                     None => Amount::ZERO,
                 };
                 StorePosition {
-                    asset: h.asset.clone(),
-                    quantity: h.quantity,
-                    avg_cost: h.avg_cost,
+                    asset: holding.asset.clone(),
+                    quantity: holding.quantity,
+                    avg_cost: holding.avg_cost,
                     price_usd,
                     value_usd,
                     value_base: value_usd * fx,
@@ -563,7 +570,7 @@ impl UnlockedVault {
                 }
             })
             .collect();
-        out.sort_by_key(|t| std::cmp::Reverse(t.value_base));
+        out.sort_by_key(|position| std::cmp::Reverse(position.value_base));
         out
     }
 
@@ -572,7 +579,7 @@ impl UnlockedVault {
         self.doc
             .stores
             .iter()
-            .filter(|s| s.parent_id.as_deref() == Some(parent_id))
+            .filter(|child| child.parent_id.as_deref() == Some(parent_id))
             .collect()
     }
 
@@ -595,14 +602,14 @@ impl UnlockedVault {
             .doc
             .stores
             .iter()
-            .find(|s| s.id == store_id)
+            .find(|store| store.id == store_id)
             .cloned()
             .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
         let (base, fx) = self.base_and_fx();
         let positions = self.store_positions(store_id, fx);
         let total_usd = positions
             .iter()
-            .fold(Amount::ZERO, |acc, p| acc + p.value_usd);
+            .fold(Amount::ZERO, |acc, point| acc + point.value_usd);
 
         // Children with their direct values
         let children = self
@@ -612,7 +619,7 @@ impl UnlockedVault {
                 let child_positions = self.store_positions(&child.id, fx);
                 let child_value_usd = child_positions
                     .iter()
-                    .fold(Amount::ZERO, |acc, p| acc + p.value_usd);
+                    .fold(Amount::ZERO, |acc, point| acc + point.value_usd);
                 StoreChildRow {
                     store: child.clone(),
                     value_usd: child_value_usd,
@@ -627,22 +634,24 @@ impl UnlockedVault {
             .doc
             .holdings
             .iter()
-            .filter(|h| subtree_ids.contains(&h.store_id) || h.store_id == store_id)
-            .fold(Amount::ZERO, |acc, h| {
-                let price = self.price_usd_for(&h.asset.key());
-                acc + h.quantity * price
+            .filter(|holding| {
+                subtree_ids.contains(&holding.store_id) || holding.store_id == store_id
+            })
+            .fold(Amount::ZERO, |acc, holding| {
+                let price = self.price_usd_for(&holding.asset.key());
+                acc + holding.quantity * price
             });
 
         let txs = self.store_txs(store_id);
         let first_tx_at = txs
             .iter()
-            .map(|t| t.timestamp.as_str())
+            .map(|tx| tx.timestamp.as_str())
             .min()
             .unwrap_or("")
             .to_string();
         let last_tx_at = txs
             .iter()
-            .map(|t| t.timestamp.as_str())
+            .map(|tx| tx.timestamp.as_str())
             .max()
             .unwrap_or("")
             .to_string();
@@ -680,41 +689,41 @@ impl UnlockedVault {
         let mut by_chain: HashMap<String, Amount> = HashMap::new();
         let mut by_store: HashMap<String, Amount> = HashMap::new();
 
-        for h in &self.doc.holdings {
-            let price = self.price_usd_for(&h.asset.key());
-            let value_usd = h.quantity * price;
-            let asset_key = h.asset.key();
+        for holding in &self.doc.holdings {
+            let price = self.price_usd_for(&holding.asset.key());
+            let value_usd = holding.quantity * price;
+            let asset_key = holding.asset.key();
 
             let st = by_asset
                 .entry(asset_key.clone())
                 .or_insert_with(|| AssetStat {
-                    asset: h.asset.clone(),
+                    asset: holding.asset.clone(),
                     quantity: Amount::ZERO,
                     price_usd: price,
                     value_usd: Amount::ZERO,
                 });
-            st.quantity += h.quantity;
+            st.quantity += holding.quantity;
             st.price_usd = price;
             st.value_usd += value_usd;
 
-            let chain_key = h
+            let chain_key = holding
                 .asset
                 .chain
-                .map(|c| c.label().to_string())
+                .map(|chain| chain.label().to_string())
                 .unwrap_or_else(|| "Other".into());
             *by_chain.entry(chain_key).or_default() += value_usd;
-            *by_store.entry(h.store_id.clone()).or_default() += value_usd;
+            *by_store.entry(holding.store_id.clone()).or_default() += value_usd;
             total_usd += value_usd;
         }
 
         let total_base = total_usd * fx;
         let mut stats: Vec<AssetStat> = by_asset.into_values().collect();
-        stats.sort_by_key(|s| std::cmp::Reverse(s.value_usd));
-        let pct = |v: Amount| {
+        stats.sort_by_key(|stat| std::cmp::Reverse(stat.value_usd));
+        let pct = |value: Amount| {
             if total_usd == Amount::ZERO {
                 0.0
             } else {
-                (v / total_usd).to_f64() * 100.0
+                (value / total_usd).to_f64() * 100.0
             }
         };
 
@@ -726,29 +735,29 @@ impl UnlockedVault {
             assets: stats,
             by_chain: by_chain
                 .into_iter()
-                .map(|(k, v)| NamedValue {
-                    label: k,
-                    value_usd: v,
-                    value_base: v * fx,
-                    pct: pct(v),
+                .map(|(key, value)| NamedValue {
+                    label: key,
+                    value_usd: value,
+                    value_base: value * fx,
+                    pct: pct(value),
                 })
                 .collect(),
             by_store: by_store
                 .into_iter()
-                .map(|(k, v)| {
+                .map(|(key, value)| {
                     let name = self
                         .doc
                         .stores
                         .iter()
-                        .find(|s| s.id == k)
-                        .map(|s| s.name.clone())
-                        .unwrap_or(k.clone());
+                        .find(|stat| stat.id == key)
+                        .map(|stat| stat.name.clone())
+                        .unwrap_or(key.clone());
                     StoreValue {
-                        store_id: k,
+                        store_id: key,
                         name,
-                        value_usd: v,
-                        value_base: v * fx,
-                        pct: pct(v),
+                        value_usd: value,
+                        value_base: value * fx,
+                        pct: pct(value),
                     }
                 })
                 .collect(),
@@ -773,21 +782,21 @@ impl UnlockedVault {
             .doc
             .fx_cache
             .iter()
-            .find(|p| p.currency == base)
-            .map(|p| p.per_usd)
+            .find(|point| point.currency == base)
+            .map(|point| point.per_usd)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
 
         let source: Vec<Transaction> = match store_id {
             Some(id) => self.store_txs(id),
             None => self.doc.transactions.clone(),
         };
-        let mut events: Vec<String> = source.iter().map(|t| t.timestamp.clone()).collect();
+        let mut events: Vec<String> = source.iter().map(|tx| tx.timestamp.clone()).collect();
         events.push(now_iso());
         events.sort();
         events.dedup();
 
         let mut txs = source;
-        txs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
         let mut idx = 0usize;
 
         // (asset_key -> running qty)
@@ -801,35 +810,37 @@ impl UnlockedVault {
                 idx += 1;
             }
             let mut value_usd = Amount::ZERO;
-            for h in &self.doc.holdings {
-                // a per-store series must not be valued against the other
+            for holding in &self.doc.holdings {
+                // left per-store series must not be valued against the other
                 // stores' positions
-                if store_id.is_some_and(|id| h.store_id != id) {
+                if store_id.is_some_and(|id| holding.store_id != id) {
                     continue;
                 }
-                let akey = h.asset.key();
-                let q = qty.get(&akey).copied().unwrap_or(Amount::ZERO);
+                let akey = holding.asset.key();
+                let quantity = qty.get(&akey).copied().unwrap_or(Amount::ZERO);
                 let price = self
                     .doc
                     .price_cache
                     .iter()
-                    .filter(|p| p.asset_key == akey && p.ts <= *ev)
-                    .max_by(|a, b| a.ts.cmp(&b.ts))
-                    .map(|p| p.value_usd)
+                    .filter(|point| point.asset_key == akey && point.ts <= *ev)
+                    .max_by(|left, right| left.ts.cmp(&right.ts))
+                    .map(|point| point.value_usd)
                     .or_else(|| {
                         // no live quote yet: fall back to the latest recorded
                         // transaction price for this asset (e.g. the last buy)
                         self.doc
                             .transactions
                             .iter()
-                            .filter(|t| {
-                                t.asset.key() == akey && t.timestamp <= *ev && t.price_usd.is_some()
+                            .filter(|tx| {
+                                tx.asset.key() == akey
+                                    && tx.timestamp <= *ev
+                                    && tx.price_usd.is_some()
                             })
-                            .max_by(|a, b| a.timestamp.cmp(&b.timestamp))
-                            .and_then(|t| t.price_usd)
+                            .max_by(|left, right| left.timestamp.cmp(&right.timestamp))
+                            .and_then(|tx| tx.price_usd)
                     });
-                if let Some(p) = price {
-                    value_usd += q * p;
+                if let Some(point) = price {
+                    value_usd += quantity * point;
                 }
             }
             out.push(HistoryPoint {
@@ -854,7 +865,7 @@ impl UnlockedVault {
             Some(id) => self.store_txs(id),
             None => self.doc.transactions.clone(),
         };
-        txs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
         // avg cost tracking per (store, asset)
         let mut cost: HashMap<(String, String), Amount> = HashMap::new();
         let mut qty: HashMap<(String, String), Amount> = HashMap::new();
@@ -913,7 +924,7 @@ impl UnlockedVault {
             .doc
             .pending_imports
             .iter()
-            .map(|p| p.exec_id.clone())
+            .map(|pending| pending.exec_id.clone())
             .collect();
 
         for imp in imports {
@@ -940,7 +951,7 @@ impl UnlockedVault {
     /// Every staged fill, newest first.
     pub fn pending_imports(&self) -> Vec<PendingImport> {
         let mut out = self.doc.pending_imports.clone();
-        out.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+        out.sort_by(|left, right| right.occurred_at.cmp(&left.occurred_at));
         out
     }
 
@@ -1025,7 +1036,7 @@ impl UnlockedVault {
         let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
         self.doc
             .pending_imports
-            .retain(|p| !(all || wanted.contains(p.exec_id.as_str())));
+            .retain(|pending| !(all || wanted.contains(pending.exec_id.as_str())));
         let discarded = (before - self.doc.pending_imports.len()) as u32;
         if discarded > 0 {
             self.persist()?;
@@ -1045,21 +1056,21 @@ impl UnlockedVault {
             .doc
             .holdings
             .iter()
-            .find(|h| h.asset.symbol.eq_ignore_ascii_case(symbol))
-            .map(|h| h.asset.clone())
+            .find(|holding| holding.asset.symbol.eq_ignore_ascii_case(symbol))
+            .map(|holding| holding.asset.clone())
         {
             // Reuse the identity the user already tracks (name, coingecko id,
             // chain) so the fill lands in the same bucket as manual entries.
-            Some(mut a) => {
-                a.symbol = upper;
-                a
+            Some(mut asset) => {
+                asset.symbol = upper;
+                asset
             }
             // Unseen symbol: leave the chain unresolved so the user can bind
-            // it later, rather than attributing the asset to a wrong network.
+            // it later, rather than attributing the asset to asset wrong network.
             None => {
-                let mut a = AssetRef::crypto(&upper, &upper, None, Chain::Fiat);
-                a.chain = None;
-                a
+                let mut asset = AssetRef::crypto(&upper, &upper, None, Chain::Fiat);
+                asset.chain = None;
+                asset
             }
         }
     }
@@ -1067,15 +1078,15 @@ impl UnlockedVault {
     // -- helpers ------------------------------------------------------------
 
     fn ensure_store(&self, id: &str) -> Result<()> {
-        match self.doc.stores.iter().find(|s| s.id == id) {
-            Some(s) if s.archived => Err(Error::Archived(id.into())),
+        match self.doc.stores.iter().find(|store| store.id == id) {
+            Some(store) if store.archived => Err(Error::Archived(id.into())),
             Some(_) => Ok(()),
             None => Err(Error::Missing(format!("store {id}"))),
         }
     }
 
-    fn ensure_positive(&self, a: &Amount, what: &str) -> Result<()> {
-        if a.is_negative() || a.is_zero() {
+    fn ensure_positive(&self, amount: &Amount, what: &str) -> Result<()> {
+        if amount.is_negative() || amount.is_zero() {
             return Err(Error::InvalidInput(format!(
                 "{what} amount must be positive"
             )));
@@ -1095,8 +1106,8 @@ fn signed_delta(tx: &Transaction) -> Amount {
 
 /// Price of one unit of the tx asset in the given base currency at tx time.
 fn tx_price_in_base(tx: &Transaction, base: &str) -> Amount {
-    if let Some(p) = tx.price_base {
-        return p;
+    if let Some(price_base) = tx.price_base {
+        return price_base;
     }
     match (tx.price_usd, tx.fx_override) {
         (Some(usd), Some(fx)) => usd * fx,
@@ -1230,12 +1241,14 @@ mod tests {
     fn setup() -> (tempfile::TempDir, UnlockedVault) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
-        let mut v = UnlockedVault::create(path, "pw").unwrap();
-        v.create_store("Binance", StoreKind::Exchange, "#f0b90b", "", None)
+        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        vault
+            .create_store("Binance", StoreKind::Exchange, "#f0b90b", "", None)
             .unwrap();
-        v.create_store("Cold", StoreKind::ColdWallet, "#555", "", None)
+        vault
+            .create_store("Cold", StoreKind::ColdWallet, "#555", "", None)
             .unwrap();
-        (dir, v)
+        (dir, vault)
     }
 
     fn btc() -> AssetRef {
@@ -1248,8 +1261,8 @@ mod tests {
 
     #[test]
     fn holdings_are_derived_from_transactions() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
 
         let mut t1 = Transaction::new(
             TxKind::Income,
@@ -1260,7 +1273,7 @@ mod tests {
         );
         t1.timestamp = "2026-01-01T00:00:00Z".into();
         t1.price_usd = Some(Amount::parse("50000").unwrap());
-        v.add_transaction(t1.clone()).unwrap();
+        vault.add_transaction(t1.clone()).unwrap();
 
         let mut t2 = Transaction::new(
             TxKind::Expense,
@@ -1271,29 +1284,29 @@ mod tests {
         );
         t2.timestamp = "2026-01-02T00:00:00Z".into();
         t2.price_usd = Some(Amount::parse("60000").unwrap());
-        v.add_transaction(t2.clone()).unwrap();
+        vault.add_transaction(t2.clone()).unwrap();
 
-        assert_eq!(v.doc.holdings.len(), 1);
-        assert_eq!(v.doc.holdings[0].quantity.to_string(), "0.6");
-        assert_eq!(v.doc.holdings[0].avg_cost.unwrap().to_string(), "50000");
+        assert_eq!(vault.doc.holdings.len(), 1);
+        assert_eq!(vault.doc.holdings[0].quantity.to_string(), "0.6");
+        assert_eq!(vault.doc.holdings[0].avg_cost.unwrap().to_string(), "50000");
     }
 
     #[test]
     fn transfer_moves_quantities_between_stores() {
-        let (_d, mut v) = setup();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
-        let mut t = Transaction::new(
+        let (_dir, mut vault) = setup();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
+        let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
             &s1,
             "deposit",
         );
-        t.price_usd = Some(Amount::parse("50000").unwrap());
-        v.add_transaction(t).unwrap();
+        tx.price_usd = Some(Amount::parse("50000").unwrap());
+        vault.add_transaction(tx).unwrap();
 
-        let (out, inn) = v
+        let (out, inn) = vault
             .transfer(
                 &s1,
                 &s2,
@@ -1309,70 +1322,81 @@ mod tests {
         assert!(out.explorer_url().unwrap().contains("abc123"));
         assert_eq!(inn.group_id, out.group_id);
 
-        let h1 = v.doc.holdings.iter().find(|h| h.store_id == s1).unwrap();
-        let h2 = v.doc.holdings.iter().find(|h| h.store_id == s2).unwrap();
+        let h1 = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == s1)
+            .unwrap();
+        let h2 = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == s2)
+            .unwrap();
         assert_eq!(h1.quantity.to_string(), "0.7");
         assert_eq!(h2.quantity.to_string(), "0.3");
     }
 
     #[test]
     fn trade_tracks_both_legs() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        v.add_trade(
-            &store,
-            btc(),
-            Amount::parse("1").unwrap(),
-            usd(),
-            Amount::parse("50000").unwrap(),
-            None,
-            "sold btc",
-            None,
-        )
-        .unwrap();
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .add_trade(
+                &store,
+                btc(),
+                Amount::parse("1").unwrap(),
+                usd(),
+                Amount::parse("50000").unwrap(),
+                None,
+                "sold btc",
+                None,
+            )
+            .unwrap();
 
-        assert_eq!(v.doc.transactions.len(), 2);
-        let usd_hold = v
+        assert_eq!(vault.doc.transactions.len(), 2);
+        let usd_hold = vault
             .doc
             .holdings
             .iter()
-            .find(|h| h.asset.symbol == "USD")
+            .find(|holding| holding.asset.symbol == "USD")
             .unwrap();
         assert_eq!(usd_hold.quantity.to_string(), "50000");
     }
 
     #[test]
     fn summary_and_history() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        let mut t = Transaction::new(
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("2").unwrap(),
             &store,
             "dep",
         );
-        t.timestamp = "2026-01-01T00:00:00Z".into();
-        t.price_usd = Some(Amount::parse("50000").unwrap());
-        v.add_transaction(t).unwrap();
-        v.doc.price_cache.push(crate::model::vault::PricePoint {
+        tx.timestamp = "2026-01-01T00:00:00Z".into();
+        tx.price_usd = Some(Amount::parse("50000").unwrap());
+        vault.add_transaction(tx).unwrap();
+        vault.doc.price_cache.push(crate::model::vault::PricePoint {
             asset_key: btc().key(),
             value_usd: Amount::parse("70000").unwrap(),
             ts: "2026-01-02T00:00:00Z".into(),
             source: "test".into(),
         });
-        v.doc.fx_cache.push(crate::model::vault::FxPoint {
+        vault.doc.fx_cache.push(crate::model::vault::FxPoint {
             currency: "usd".into(),
             per_usd: Amount::parse("1").unwrap(),
             ts: "2026-01-02T00:00:00Z".into(),
             source: "test".into(),
         });
 
-        let s = v.portfolio_summary();
-        assert_eq!(s.assets.len(), 1);
-        assert_eq!(s.total_usd.to_string(), "140000");
+        let summary = vault.portfolio_summary();
+        assert_eq!(summary.assets.len(), 1);
+        assert_eq!(summary.total_usd.to_string(), "140000");
 
-        let hist = v.history_series("usd");
+        let hist = vault.history_series("usd");
         assert!(hist.len() >= 2);
         assert_eq!(hist[0].value_usd.to_string(), "100000");
         assert_eq!(hist.last().unwrap().value_usd.to_string(), "140000");
@@ -1386,44 +1410,44 @@ mod tests {
     /// Two stores, same asset in both, plus a cached price — the shape every
     /// per-store method has to slice correctly.
     fn two_stores_with_quotes() -> (tempfile::TempDir, UnlockedVault) {
-        let (d, mut v) = setup();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
+        let (dir, mut vault) = setup();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
 
         for (store, qty) in [(&s1, "1"), (&s2, "3")] {
-            let mut t = Transaction::new(
+            let mut tx = Transaction::new(
                 TxKind::Income,
                 btc(),
                 Amount::parse(qty).unwrap(),
                 store,
                 "dep",
             );
-            t.timestamp = "2026-01-01T00:00:00Z".into();
-            t.price_usd = Some(Amount::parse("50000").unwrap());
-            v.add_transaction(t).unwrap();
+            tx.timestamp = "2026-01-01T00:00:00Z".into();
+            tx.price_usd = Some(Amount::parse("50000").unwrap());
+            vault.add_transaction(tx).unwrap();
         }
-        v.doc.price_cache.push(crate::model::vault::PricePoint {
+        vault.doc.price_cache.push(crate::model::vault::PricePoint {
             asset_key: btc().key(),
             value_usd: Amount::parse("70000").unwrap(),
             ts: "2026-01-02T00:00:00Z".into(),
             source: "test".into(),
         });
-        v.doc.fx_cache.push(crate::model::vault::FxPoint {
+        vault.doc.fx_cache.push(crate::model::vault::FxPoint {
             currency: "usd".into(),
             per_usd: Amount::parse("1").unwrap(),
             ts: "2026-01-02T00:00:00Z".into(),
             source: "test".into(),
         });
-        (d, v)
+        (dir, vault)
     }
 
     #[test]
     fn store_overview_matches_global_slice() {
-        let (_d, v) = two_stores_with_quotes();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
+        let (_dir, vault) = two_stores_with_quotes();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
 
-        let o1 = v.store_overview(&s1).unwrap();
+        let o1 = vault.store_overview(&s1).unwrap();
         assert_eq!(o1.store.name, "Binance");
         assert_eq!(o1.positions.len(), 1);
         assert_eq!(o1.positions[0].quantity.to_string(), "1");
@@ -1434,37 +1458,40 @@ mod tests {
         assert_eq!(o1.tx_count, 1);
         assert_eq!(o1.first_tx_at, "2026-01-01T00:00:00Z");
 
-        let o2 = v.store_overview(&s2).unwrap();
+        let o2 = vault.store_overview(&s2).unwrap();
         assert_eq!(o2.total_usd.to_string(), "210000");
 
         // the two per-store totals add up to the global one
         assert_eq!((o1.total_usd + o2.total_usd).to_string(), "280000");
-        assert_eq!(v.portfolio_summary().total_usd.to_string(), "280000");
+        assert_eq!(vault.portfolio_summary().total_usd.to_string(), "280000");
 
-        assert!(matches!(v.store_overview("nope"), Err(Error::Missing(_))));
+        assert!(matches!(
+            vault.store_overview("nope"),
+            Err(Error::Missing(_))
+        ));
     }
 
     #[test]
     fn store_history_isolates_store() {
-        let (_d, v) = two_stores_with_quotes();
-        let s2 = v.doc.stores[1].id.clone();
+        let (_dir, vault) = two_stores_with_quotes();
+        let s2 = vault.doc.stores[1].id.clone();
 
-        let hist = v.store_history(&s2, "usd");
+        let hist = vault.store_history(&s2, "usd");
         assert!(hist.len() >= 2);
         assert_eq!(hist[0].value_usd.to_string(), "150000"); // 3 BTC at 50k
         assert_eq!(hist.last().unwrap().value_usd.to_string(), "210000"); // at 70k
 
         // both stores share the event timestamps, so the axis is identical
-        assert_eq!(hist.len(), v.history_series("usd").len());
+        assert_eq!(hist.len(), vault.history_series("usd").len());
     }
 
     #[test]
     fn store_pnl_filters_by_store() {
-        let (_d, mut v) = two_stores_with_quotes();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
+        let (_dir, mut vault) = two_stores_with_quotes();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
 
-        // sell all of store1's BTC at 70k (bought at 50k) -> +20k
+        // sell all of store1'source_id BTC at 70k (bought at 50k) -> +20k
         let mut sell = Transaction::new(
             TxKind::Expense,
             btc(),
@@ -1474,78 +1501,78 @@ mod tests {
         );
         sell.timestamp = "2026-01-03T00:00:00Z".into();
         sell.price_usd = Some(Amount::parse("70000").unwrap());
-        v.add_transaction(sell).unwrap();
+        vault.add_transaction(sell).unwrap();
 
-        let p1 = v.store_pnl(&s1);
+        let p1 = vault.store_pnl(&s1);
         assert_eq!(p1.total_base.to_string(), "20000");
         assert_eq!(p1.legs.len(), 1);
         assert_eq!(p1.legs[0].store_id, s1);
         assert_eq!(p1.legs[0].quantity.to_string(), "1");
 
-        let p2 = v.store_pnl(&s2);
+        let p2 = vault.store_pnl(&s2);
         assert_eq!(p2.total_base.to_string(), "0");
         assert!(p2.legs.is_empty());
 
-        assert_eq!(v.realized_pnl().total_base.to_string(), "20000");
+        assert_eq!(vault.realized_pnl().total_base.to_string(), "20000");
     }
 
     #[test]
     fn tx_hash_validation_rejects_malformed() {
-        let (_d, mut v) = setup();
-        let s = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store_id = vault.doc.stores[0].id.clone();
         let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
-            &s,
+            &store_id,
             "dep",
         );
-        tx.tx_hash = Some("not-a-valid-hash".into());
+        tx.tx_hash = Some("not-asset-valid-hash".into());
         assert!(matches!(
-            v.add_transaction(tx),
+            vault.add_transaction(tx),
             Err(Error::TxHashMalformed(_))
         ));
     }
 
     #[test]
     fn tx_hash_validation_accepts_valid_evm_hash() {
-        let (_d, mut v) = setup();
-        let s = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store_id = vault.doc.stores[0].id.clone();
         let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
-            &s,
+            &store_id,
             "dep",
         );
         tx.tx_hash = Some("0x".to_string() + &"a".repeat(64)); // 0x + 64 hex chars
-        v.add_transaction(tx).unwrap();
+        vault.add_transaction(tx).unwrap();
     }
 
     #[test]
     fn tx_hash_validation_accepts_valid_bitcoin_hash() {
-        let (_d, mut v) = setup();
-        let s = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store_id = vault.doc.stores[0].id.clone();
         let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
-            &s,
+            &store_id,
             "dep",
         );
         tx.tx_hash = Some("a".repeat(64)); // 64 hex chars, no 0x
-        v.add_transaction(tx).unwrap();
+        vault.add_transaction(tx).unwrap();
     }
 
     #[test]
     fn tx_hash_network_mismatch_rejected() {
-        let (_d, mut v) = setup();
-        let s = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store_id = vault.doc.stores[0].id.clone();
         let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
-            &s,
+            &store_id,
             "dep",
         );
         // Bitcoin asset (chain = Bitcoin) but Ethereum network
@@ -1553,42 +1580,42 @@ mod tests {
         tx.network = Some(Chain::Ethereum);
         tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
         assert!(matches!(
-            v.add_transaction(tx),
+            vault.add_transaction(tx),
             Err(Error::TxHashNetworkMismatch(_))
         ));
     }
 
     #[test]
     fn tx_hash_network_match_accepted() {
-        let (_d, mut v) = setup();
-        let s = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store_id = vault.doc.stores[0].id.clone();
         let mut tx = Transaction::new(
             TxKind::Income,
             btc(),
             Amount::parse("1").unwrap(),
-            &s,
+            &store_id,
             "dep",
         );
         tx.asset.chain = Some(Chain::Ethereum);
         tx.network = Some(Chain::Ethereum);
         tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
-        v.add_transaction(tx).unwrap();
+        vault.add_transaction(tx).unwrap();
     }
 
     #[test]
     fn transfer_tx_hash_validation_rejects_malformed() {
-        let (_d, mut v) = setup();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
+        let (_dir, mut vault) = setup();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
         assert!(matches!(
-            v.transfer(
+            vault.transfer(
                 &s1,
                 &s2,
                 btc(),
                 Amount::parse("1").unwrap(),
                 None,
                 None,
-                Some("not-a-valid-hash".into()),
+                Some("not-asset-valid-hash".into()),
                 "comment",
                 None,
             ),
@@ -1598,13 +1625,13 @@ mod tests {
 
     #[test]
     fn transfer_network_mismatch_rejected() {
-        let (_d, mut v) = setup();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
+        let (_dir, mut vault) = setup();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
         let mut asset = btc();
         asset.chain = Some(Chain::Bitcoin);
         assert!(matches!(
-            v.transfer(
+            vault.transfer(
                 &s1,
                 &s2,
                 asset,
@@ -1621,21 +1648,22 @@ mod tests {
 
     #[test]
     fn transfer_empty_hash_accepted() {
-        let (_d, mut v) = setup();
-        let s1 = v.doc.stores[0].id.clone();
-        let s2 = v.doc.stores[1].id.clone();
-        v.transfer(
-            &s1,
-            &s2,
-            btc(),
-            Amount::parse("1").unwrap(),
-            None,
-            None,
-            Some("".into()),
-            "comment",
-            None,
-        )
-        .unwrap();
+        let (_dir, mut vault) = setup();
+        let s1 = vault.doc.stores[0].id.clone();
+        let s2 = vault.doc.stores[1].id.clone();
+        vault
+            .transfer(
+                &s1,
+                &s2,
+                btc(),
+                Amount::parse("1").unwrap(),
+                None,
+                None,
+                Some("".into()),
+                "comment",
+                None,
+            )
+            .unwrap();
     }
 }
 
@@ -1648,10 +1676,11 @@ mod import_tests {
     fn setup() -> (tempfile::TempDir, UnlockedVault) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
-        let mut v = UnlockedVault::create(path, "pw").unwrap();
-        v.create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
+        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        vault
+            .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
             .unwrap();
-        (dir, v)
+        (dir, vault)
     }
 
     fn fill(exec_id: &str, side: &str, qty: &str, price: &str) -> Execution {
@@ -1680,103 +1709,130 @@ mod import_tests {
     /// point of the confirmation step.
     #[test]
     fn staging_creates_no_transactions() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        let n = v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
-        assert_eq!(n, 1);
-        assert_eq!(v.doc.transactions.len(), 0);
-        assert_eq!(v.pending_imports().len(), 1);
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let count = vault
+            .stage_imports(vec![staged(&store, "e1", "buy")])
+            .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(vault.doc.transactions.len(), 0);
+        assert_eq!(vault.pending_imports().len(), 1);
     }
 
     /// Re-running an import must not duplicate fills: execId is the key.
     #[test]
     fn staging_is_idempotent_per_exec_id() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
         assert_eq!(
-            v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap(),
+            vault
+                .stage_imports(vec![staged(&store, "e1", "buy")])
+                .unwrap(),
             1
         );
         assert_eq!(
-            v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap(),
+            vault
+                .stage_imports(vec![staged(&store, "e1", "buy")])
+                .unwrap(),
             0
         );
-        // A batch that repeats a known id alongside a new one adds only the new one.
+        // A batch that repeats asset known id alongside asset new one adds only the new one.
         assert_eq!(
-            v.stage_imports(vec![
-                staged(&store, "e1", "buy"),
-                staged(&store, "e2", "sell"),
-            ])
-            .unwrap(),
+            vault
+                .stage_imports(vec![
+                    staged(&store, "e1", "buy"),
+                    staged(&store, "e2", "sell"),
+                ])
+                .unwrap(),
             1
         );
-        assert_eq!(v.pending_imports().len(), 2);
+        assert_eq!(vault.pending_imports().len(), 2);
     }
 
     /// A fill that belongs to a store which no longer exists must be dropped,
     /// never staged against a dangling id.
     #[test]
     fn staging_skips_fills_for_unknown_stores() {
-        let (_d, mut v) = setup();
-        let n = v
+        let (_dir, mut vault) = setup();
+        let count = vault
             .stage_imports(vec![staged("ghost-store", "e1", "buy")])
             .unwrap();
-        assert_eq!(n, 0);
-        assert!(v.pending_imports().is_empty());
+        assert_eq!(count, 0);
+        assert!(vault.pending_imports().is_empty());
     }
 
     /// A buy becomes a two-leg trade: quote out (negative), base in (positive).
     #[test]
     fn confirming_a_buy_creates_a_balanced_trade() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .stage_imports(vec![staged(&store, "e1", "buy")])
+            .unwrap();
 
-        assert_eq!(v.confirm_pending_imports(&[]).unwrap(), 1);
-        assert_eq!(v.doc.transactions.len(), 2);
-        let legs: Vec<&Transaction> = v.doc.transactions.iter().collect();
-        assert!(legs.iter().all(|t| t.kind == TxKind::Trade));
+        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 1);
+        assert_eq!(vault.doc.transactions.len(), 2);
+        let legs: Vec<&Transaction> = vault.doc.transactions.iter().collect();
+        assert!(legs.iter().all(|tx| tx.kind == TxKind::Trade));
         assert_eq!(legs[0].amount.to_string(), "-32500"); // USDT spent
         assert_eq!(legs[1].amount.to_string(), "0.5"); // BTC received
         assert_eq!(legs[0].group_id, legs[1].group_id);
         // Staging area is drained so the same fill cannot be confirmed twice.
-        assert!(v.pending_imports().is_empty());
+        assert!(vault.pending_imports().is_empty());
         // Holdings reflect the bought asset.
-        assert!(v.doc.holdings.iter().any(|h| h.asset.symbol == "BTC"));
+        assert!(
+            vault
+                .doc
+                .holdings
+                .iter()
+                .any(|holding| holding.asset.symbol == "BTC")
+        );
     }
 
     #[test]
     fn confirming_selectively_leaves_the_rest_staged() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        v.stage_imports(vec![
-            staged(&store, "e1", "buy"),
-            staged(&store, "e2", "sell"),
-        ])
-        .unwrap();
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .stage_imports(vec![
+                staged(&store, "e1", "buy"),
+                staged(&store, "e2", "sell"),
+            ])
+            .unwrap();
 
-        let confirmed = v.confirm_pending_imports(&["e1".to_string()]).unwrap();
+        let confirmed = vault.confirm_pending_imports(&["e1".to_string()]).unwrap();
         assert_eq!(confirmed, 1);
-        assert_eq!(v.doc.transactions.len(), 2);
-        let left: Vec<String> = v.pending_imports().into_iter().map(|p| p.exec_id).collect();
+        assert_eq!(vault.doc.transactions.len(), 2);
+        let left: Vec<String> = vault
+            .pending_imports()
+            .into_iter()
+            .map(|pending| pending.exec_id)
+            .collect();
         assert_eq!(left, vec!["e2".to_string()]);
     }
 
     #[test]
     fn discarding_creates_nothing_and_drops_the_fill() {
-        let (_d, mut v) = setup();
-        let store = v.doc.stores[0].id.clone();
-        v.stage_imports(vec![staged(&store, "e1", "buy")]).unwrap();
-        assert_eq!(v.discard_pending_imports(&[]).unwrap(), 1);
-        assert!(v.pending_imports().is_empty());
-        assert_eq!(v.doc.transactions.len(), 0);
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .stage_imports(vec![staged(&store, "e1", "buy")])
+            .unwrap();
+        assert_eq!(vault.discard_pending_imports(&[]).unwrap(), 1);
+        assert!(vault.pending_imports().is_empty());
+        assert_eq!(vault.doc.transactions.len(), 0);
     }
 
     #[test]
     fn confirmed_fills_reject_a_missing_exec_id() {
-        let (_d, mut v) = setup();
-        assert_eq!(v.confirm_pending_imports(&["nope".to_string()]).unwrap(), 0);
-        assert_eq!(v.doc.transactions.len(), 0);
+        let (_dir, mut vault) = setup();
+        assert_eq!(
+            vault
+                .confirm_pending_imports(&["nope".to_string()])
+                .unwrap(),
+            0
+        );
+        assert_eq!(vault.doc.transactions.len(), 0);
     }
 
     /// Fills without an id, or with an unparsable quantity, must never reach
@@ -1815,9 +1871,9 @@ mod import_tests {
     /// Perpetual symbols are tagged as derivatives even on a swept import.
     #[test]
     fn category_hint_separates_perps_from_spot() {
-        let mut f = fill("e1", "buy", "1", "100");
-        assert_eq!(f.category_hint(), "spot");
-        f.symbol = "BTCUSDT_PERP".into();
-        assert_eq!(f.category_hint(), "linear");
+        let mut execution = fill("e1", "buy", "1", "100");
+        assert_eq!(execution.category_hint(), "spot");
+        execution.symbol = "BTCUSDT_PERP".into();
+        assert_eq!(execution.category_hint(), "linear");
     }
 }

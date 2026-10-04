@@ -50,32 +50,32 @@ impl VaultHeader {
     }
 
     pub fn bytes(&self) -> Vec<u8> {
-        let mut b = Vec::with_capacity(Self::LEN);
-        b.extend_from_slice(&self.version.to_le_bytes());
-        b.push(self.kdf_id);
-        b.extend_from_slice(&self.kdf_mem_kib.to_le_bytes());
-        b.extend_from_slice(&self.kdf_iters.to_le_bytes());
-        b.push(self.kdf_par);
-        b.extend_from_slice(&self.salt);
-        b.extend_from_slice(&self.nonce);
-        b.push(self.payload_fmt);
-        b
+        let mut bytes = Vec::with_capacity(Self::LEN);
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+        bytes.push(self.kdf_id);
+        bytes.extend_from_slice(&self.kdf_mem_kib.to_le_bytes());
+        bytes.extend_from_slice(&self.kdf_iters.to_le_bytes());
+        bytes.push(self.kdf_par);
+        bytes.extend_from_slice(&self.salt);
+        bytes.extend_from_slice(&self.nonce);
+        bytes.push(self.payload_fmt);
+        bytes
     }
 
-    pub fn from_bytes(b: &[u8]) -> Result<Self> {
-        if b.len() < Self::LEN {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < Self::LEN {
             return Err(Error::Unsupported);
         }
-        let version = u32::from_le_bytes(b[0..4].try_into().unwrap());
-        let kdf_id = b[4];
-        let kdf_mem_kib = u32::from_le_bytes(b[5..9].try_into().unwrap());
-        let kdf_iters = u32::from_le_bytes(b[9..13].try_into().unwrap());
-        let kdf_par = b[13];
+        let version = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let kdf_id = bytes[4];
+        let kdf_mem_kib = u32::from_le_bytes(bytes[5..9].try_into().unwrap());
+        let kdf_iters = u32::from_le_bytes(bytes[9..13].try_into().unwrap());
+        let kdf_par = bytes[13];
         let mut salt = [0u8; SALT_LEN];
-        salt.copy_from_slice(&b[14..14 + SALT_LEN]);
+        salt.copy_from_slice(&bytes[14..14 + SALT_LEN]);
         let mut nonce = [0u8; NONCE_LEN];
-        nonce.copy_from_slice(&b[30..30 + NONCE_LEN]);
-        let payload_fmt = b[54];
+        nonce.copy_from_slice(&bytes[30..30 + NONCE_LEN]);
+        let payload_fmt = bytes[54];
 
         if kdf_id != Self::KDF_ARGON2ID {
             return Err(Error::Unsupported);
@@ -101,13 +101,13 @@ mod tests {
     #[test]
     fn header_roundtrip() {
         let (_, _, _) = (0, [0u8; 16], [0u8; 24]);
-        let h = VaultHeader::new(SnapshotFormat::Bin, [7u8; 16], [9u8; 24]);
-        let bytes = h.bytes();
+        let header = VaultHeader::new(SnapshotFormat::Bin, [7u8; 16], [9u8; 24]);
+        let bytes = header.bytes();
         assert_eq!(bytes.len(), HEADER_LEN);
-        let h2 = VaultHeader::from_bytes(&bytes).unwrap();
-        assert_eq!(h.version, h2.version);
-        assert_eq!(h.salt, h2.salt);
-        assert_eq!(h.nonce, h2.nonce);
-        assert_eq!(h.payload_fmt, h2.payload_fmt);
+        let parsed = VaultHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(header.version, parsed.version);
+        assert_eq!(header.salt, parsed.salt);
+        assert_eq!(header.nonce, parsed.nonce);
+        assert_eq!(header.payload_fmt, parsed.payload_fmt);
     }
 }

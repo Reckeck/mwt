@@ -111,7 +111,11 @@ pub fn run() {
                     .vault
                     .lock()
                     .ok()
-                    .and_then(|guard| guard.as_ref().map(|v| v.doc.settings.minimize_to_tray))
+                    .and_then(|guard| {
+                        guard
+                            .as_ref()
+                            .map(|vault| vault.doc.settings.minimize_to_tray)
+                    })
                     .unwrap_or(true);
                 if minimize_to_tray {
                     window.hide().ok();
@@ -318,7 +322,7 @@ fn spawn_bybit_import_scheduler(app_handle: tauri::AppHandle) {
             }
 
             let interval = std::time::Duration::from_secs(interval_sec as u64);
-            if last_run.is_some_and(|t| t.elapsed() < interval) {
+            if last_run.is_some_and(|previous| previous.elapsed() < interval) {
                 continue;
             }
             last_run = Some(std::time::Instant::now());
@@ -343,15 +347,21 @@ fn spawn_bybit_import_scheduler(app_handle: tauri::AppHandle) {
 async fn poll_bybit_once(app_handle: &tauri::AppHandle) -> Result<u32, String> {
     let state = app_handle.state::<AppState>();
     let keys: Vec<(String, String, String)> = {
-        let guard = state.vault.lock().map_err(|e| e.to_string())?;
+        let guard = state.vault.lock().map_err(|err| err.to_string())?;
         let vault = guard.as_ref().ok_or("REQUIRES_UNLOCK: vault is locked")?;
         vault
             .doc
             .exchanges
             .bybit
             .iter()
-            .filter(|k| !k.api_key.is_empty() && !k.api_secret.is_empty())
-            .map(|k| (k.store_id.clone(), k.api_key.clone(), k.api_secret.clone()))
+            .filter(|entry| !entry.api_key.is_empty() && !entry.api_secret.is_empty())
+            .map(|entry| {
+                (
+                    entry.store_id.clone(),
+                    entry.api_key.clone(),
+                    entry.api_secret.clone(),
+                )
+            })
             .collect()
     };
 
@@ -367,16 +377,16 @@ async fn poll_bybit_once(app_handle: &tauri::AppHandle) -> Result<u32, String> {
 
         let imports: Vec<trade_core::model::vault::PendingImport> = execs
             .iter()
-            .filter_map(|e| {
+            .filter_map(|execution| {
                 trade_core::model::vault::PendingImport::from_execution(
                     &store_id,
-                    e.category_hint(),
-                    e,
+                    execution.category_hint(),
+                    execution,
                 )
             })
             .collect();
 
-        let mut guard = state.vault.lock().map_err(|e| e.to_string())?;
+        let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
         let Some(vault) = guard.as_mut() else {
             return Err("REQUIRES_UNLOCK: vault was locked mid-poll".into());
         };

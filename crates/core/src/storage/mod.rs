@@ -22,8 +22,8 @@ pub enum SnapshotFormat {
 }
 
 impl SnapshotFormat {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub fn from_u8(raw: u8) -> Option<Self> {
+        match raw {
             crypto::header::VaultHeader::FMT_JSON => Some(SnapshotFormat::Json),
             crypto::header::VaultHeader::FMT_BIN => Some(SnapshotFormat::Bin),
             _ => None,
@@ -58,10 +58,10 @@ impl SnapshotFormat {
 pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
     match fmt {
         SnapshotFormat::Json => {
-            serde_json::to_vec_pretty(doc).map_err(|e| Error::Serialize(e.to_string()))
+            serde_json::to_vec_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
         }
         SnapshotFormat::Bin => bincode::serde::encode_to_vec(doc, bincode::config::standard())
-            .map_err(|e| Error::Serialize(e.to_string())),
+            .map_err(|err| Error::Serialize(err.to_string())),
     }
 }
 
@@ -72,7 +72,7 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
 pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
     let doc = match fmt {
         SnapshotFormat::Json => serde_json::from_slice::<VaultDoc>(bytes)
-            .map_err(|e| Error::Deserialize(e.to_string()))?,
+            .map_err(|err| Error::Deserialize(err.to_string()))?,
         SnapshotFormat::Bin => decode_bin(bytes)?,
     };
     if doc.version != VAULT_FORMAT_VERSION {
@@ -83,10 +83,10 @@ pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
 
 /// Decode a bincode payload directly as the current VaultDoc schema.
 fn decode_bin(bytes: &[u8]) -> Result<VaultDoc> {
-    let (doc, n) =
+    let (doc, consumed) =
         bincode::serde::decode_from_slice::<VaultDoc, _>(bytes, bincode::config::standard())
-            .map_err(|e| Error::Deserialize(e.to_string()))?;
-    if n != bytes.len() {
+            .map_err(|err| Error::Deserialize(err.to_string()))?;
+    if consumed != bytes.len() {
         return Err(Error::Deserialize(
             "trailing bytes in bincode payload".into(),
         ));
@@ -123,7 +123,7 @@ impl VaultFile {
 
     /// Export the decrypted snapshot as readable JSON (for debugging/backup).
     pub fn export_json(doc: &VaultDoc) -> Result<String> {
-        serde_json::to_string_pretty(doc).map_err(|e| Error::Serialize(e.to_string()))
+        serde_json::to_string_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
     }
 
     fn save_impl(
@@ -213,14 +213,14 @@ mod tests {
             Some("bitcoin"),
             crate::model::chain::Chain::Bitcoin,
         );
-        let mut t = Transaction::new(
+        let mut tx = Transaction::new(
             TxKind::Income,
             btc.clone(),
             Amount::parse("0.5").unwrap(),
             &store.id,
             "first buy",
         );
-        t.price_usd = Some(Amount::parse("65000").unwrap());
+        tx.price_usd = Some(Amount::parse("65000").unwrap());
         doc.stores.push(store);
         doc.holdings.push(crate::model::store::Holding {
             id: uuid::Uuid::new_v4().to_string(),
@@ -229,7 +229,7 @@ mod tests {
             quantity: Amount::parse("0.5").unwrap(),
             avg_cost: None,
         });
-        doc.transactions.push(t);
+        doc.transactions.push(tx);
         doc
     }
 

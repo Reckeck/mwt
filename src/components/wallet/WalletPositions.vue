@@ -11,15 +11,15 @@ const props = defineProps<{ positions: StorePosition[]; baseCurrency: string; de
 
 const { t } = useI18n()
 
-const b = computed(() => props.baseCurrency.toUpperCase())
+const base = computed(() => props.baseCurrency.toUpperCase())
 
-const money = (v: string) => formatMoney(v, { currency: b.value, decimals: 2 })
-const qty = (v: string) => formatMoney(v, { decimals: props.decimals })
+const money = (value: string) => formatMoney(value, { currency: base.value, decimals: 2 })
+const qty = (value: string) => formatMoney(value, { decimals: props.decimals })
 
-function toneOf(v: string): string {
-  const n = Number(v)
-  if (n > 0) return 'text-emerald-600 dark:text-emerald-400'
-  if (n < 0) return 'text-destructive'
+function toneOf(value: string): string {
+  const amount = Number(value)
+  if (amount > 0) return 'text-emerald-600 dark:text-emerald-400'
+  if (amount < 0) return 'text-destructive'
   return ''
 }
 </script>
@@ -43,25 +43,25 @@ function toneOf(v: string): string {
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          <tr v-for="p in positions" :key="`${p.asset.symbol}-${p.asset.contract ?? ''}`">
+          <tr v-for="position in positions" :key="`${position.asset.symbol}-${position.asset.contract ?? ''}`">
             <td class="py-2 pr-2">
               <div class="flex items-center gap-2">
-                <span class="font-medium">{{ p.asset.symbol.toUpperCase() }}</span>
+                <span class="font-medium">{{ position.asset.symbol.toUpperCase() }}</span>
                 <span class="truncate text-xs text-muted-foreground">
-                  {{ p.asset.chain && p.asset.chain !== 'fiat' ? CHAIN_LABELS[p.asset.chain] : p.asset.name }}
+                  {{ position.asset.chain && position.asset.chain !== 'fiat' ? CHAIN_LABELS[position.asset.chain] : position.asset.name }}
                 </span>
               </div>
             </td>
-            <td class="py-2 text-right tabular-nums">{{ qty(p.quantity) }}</td>
+            <td class="py-2 text-right tabular-nums">{{ qty(position.quantity) }}</td>
             <td class="py-2 text-right tabular-nums text-muted-foreground">
-              {{ p.avg_cost ? money(p.avg_cost) : '—' }}
+              {{ position.avg_cost ? money(position.avg_cost) : '—' }}
             </td>
             <td class="py-2 text-right tabular-nums text-muted-foreground">
-              {{ Number(p.price_usd) > 0 ? money(p.price_usd) : '—' }}
+              {{ Number(position.price_usd) > 0 ? money(position.price_usd) : '—' }}
             </td>
-            <td class="py-2 text-right font-medium tabular-nums">{{ money(p.value_base) }}</td>
-            <td class="py-2 text-right tabular-nums" :class="cn(toneOf(p.unrealized_base))">
-              {{ p.avg_cost ? money(p.unrealized_base) : '—' }}
+            <td class="py-2 text-right font-medium tabular-nums">{{ money(position.value_base) }}</td>
+            <td class="py-2 text-right tabular-nums" :class="cn(toneOf(position.unrealized_base))">
+              {{ position.avg_cost ? money(position.unrealized_base) : '—' }}
             </td>
           </tr>
         </tbody>

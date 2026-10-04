@@ -67,9 +67,9 @@ async function run() {
       },
     })
     error.value = null
-  } catch (e) {
+  } catch (err) {
     result.value = null
-    error.value = parseError(e).message
+    error.value = parseError(err).message
   }
 }
 
@@ -94,15 +94,15 @@ async function autofillPrice(target: AssetRef | null, into: 'in' | 'out') {
   }
 }
 
-watch(from, (v) => void autofillPrice(v, 'in'))
-watch(to, (v) => void autofillPrice(v, 'out'))
+watch(from, (value) => void autofillPrice(value, 'in'))
+watch(to, (value) => void autofillPrice(value, 'out'))
 
 /** 1 unit of the source priced in the target, when both prices are known. */
 const impliedRate = computed(() => {
-  const a = Number(priceIn.value)
-  const b = Number(priceOut.value)
-  if (!a || !b) return null
-  return (a / b).toLocaleString(undefined, { maximumFractionDigits: 8 })
+  const priceInUsd = Number(priceIn.value)
+  const priceOutUsd = Number(priceOut.value)
+  if (!priceInUsd || !priceOutUsd) return null
+  return (priceInUsd / priceOutUsd).toLocaleString(undefined, { maximumFractionDigits: 8 })
 })
 
 interface ResultRow {
@@ -114,46 +114,46 @@ interface ResultRow {
 }
 
 const rows = computed<ResultRow[]>(() => {
-  const r = result.value
-  if (!r) return []
-  const b = props.baseCurrency
-  const money = (v: string) => `${v} ${b.toUpperCase()}`
+  const calc = result.value
+  if (!calc) return []
+  const base = props.baseCurrency
+  const money = (value: string) => `${value} ${base.toUpperCase()}`
   if (mode.value === 'converter') {
     return [
-      { key: 'gross_in', label: t('calc.grossIn'), value: money(r.gross_in) },
-      { key: 'fee', label: t('calc.fee'), value: money(r.fee) },
-      { key: 'gross_out', label: t('calc.grossOut'), value: money(r.gross_out) },
+      { key: 'gross_in', label: t('calc.grossIn'), value: money(calc.gross_in) },
+      { key: 'fee', label: t('calc.fee'), value: money(calc.fee) },
+      { key: 'gross_out', label: t('calc.grossOut'), value: money(calc.gross_out) },
       {
         key: 'net_out',
         label: t('calc.netOut'),
-        value: `${r.net_out} ${to.value?.symbol.toUpperCase() ?? ''}`.trim(),
+        value: `${calc.net_out} ${to.value?.symbol.toUpperCase() ?? ''}`.trim(),
         emphasis: true,
       },
     ]
   }
   return [
-    { key: 'spent', label: t('calc.spent'), value: money(r.spent) },
+    { key: 'spent', label: t('calc.spent'), value: money(calc.spent) },
     {
       key: 'exit_value',
       label: t('calc.exitValue'),
-      value: r.exit_value === '0' ? '—' : money(r.exit_value),
+      value: calc.exit_value === '0' ? '—' : money(calc.exit_value),
     },
     {
       key: 'pnl',
       label: t('calc.pnl'),
-      value: money(r.pnl),
-      tone: Number(r.pnl) < 0 ? 'negative' : 'positive',
+      value: money(calc.pnl),
+      tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
     },
     {
       key: 'roi_pct',
       label: t('calc.roi'),
-      value: r.roi_pct === '0' ? '—' : `${r.roi_pct}%`,
-      tone: Number(r.pnl) < 0 ? 'negative' : 'positive',
+      value: calc.roi_pct === '0' ? '—' : `${calc.roi_pct}%`,
+      tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
     },
     {
       key: 'risk',
       label: t('calc.risk'),
-      value: r.risk === '0' ? '—' : `${money(r.risk)} (${r.risk_pct}%)`,
+      value: calc.risk === '0' ? '—' : `${money(calc.risk)} (${calc.risk_pct}%)`,
       tone: 'negative',
     },
   ]
@@ -179,14 +179,14 @@ function apply() {
         <p class="font-medium">{{ t('calc.title') }}</p>
         <div class="flex rounded-md border border-border p-0.5">
           <button
-            v-for="m in (['converter', 'position'] as CalcMode[])"
-            :key="m"
+            v-for="tab in (['converter', 'position'] as CalcMode[])"
+            :key="tab"
             type="button"
             class="rounded px-2.5 py-1 text-xs font-medium transition-colors"
-            :class="cn(mode === m ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')"
-            @click="mode = m"
+            :class="cn(mode === tab ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')"
+            @click="mode = tab"
           >
-            {{ t(`calc.mode.${m}`) }}
+            {{ t(`calc.mode.${tab}`) }}
           </button>
         </div>
       </div>

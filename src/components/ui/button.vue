@@ -48,7 +48,8 @@ const rest = computed(() => {
 </script>
 
 <template>
-  <button :class="cn(buttonVariants({ variant, size }), cls)" v-bind="rest">
+  <!-- `type` defaults to button; callers pass `type="submit"` through $attrs to override. -->
+  <button type="button" :class="cn(buttonVariants({ variant, size }), cls)" v-bind="rest">
     <slot />
   </button>
 </template>

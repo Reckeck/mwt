@@ -79,30 +79,33 @@ impl HashShape {
 
 /// Classify a transaction hash using only its shape. Pure and offline.
 pub fn hash_shape(raw: &str) -> HashShape {
-    let h = raw.trim();
-    if h.is_empty() {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
         return HashShape::Malformed;
     }
 
     // EVM / Tron.
-    if let Some(hex) = h.strip_prefix("0x").or_else(|| h.strip_prefix("0X")) {
-        return match (hex.len(), hex.chars().all(|c| c.is_ascii_hexdigit())) {
+    if let Some(hex) = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+    {
+        return match (hex.len(), hex.chars().all(|char| char.is_ascii_hexdigit())) {
             (64, true) => HashShape::EvmAmbiguous,
             _ => HashShape::Malformed,
         };
     }
 
-    let lower = h.to_ascii_lowercase();
-    let all_hex = lower.chars().all(|c| c.is_ascii_hexdigit());
+    let lower = trimmed.to_ascii_lowercase();
+    let all_hex = lower.chars().all(|char| char.is_ascii_hexdigit());
 
     // Bitcoin-style txid: 64 hex chars, no `0x` prefix.
-    if all_hex && h.len() == 64 {
+    if all_hex && trimmed.len() == 64 {
         return HashShape::BitcoinLike;
     }
 
     // Base58 (no 0/O/I/l): Solana signatures are 87-90 chars.
-    if h.chars().all(is_base58) {
-        return match h.len() {
+    if trimmed.chars().all(is_base58) {
+        return match trimmed.len() {
             87..=90 => HashShape::Solana,
             _ => HashShape::UnknownShape,
         };
@@ -111,8 +114,8 @@ pub fn hash_shape(raw: &str) -> HashShape {
     HashShape::Malformed
 }
 
-fn is_base58(c: char) -> bool {
-    c.is_ascii_alphanumeric() && !"0OIl".contains(c)
+fn is_base58(char: char) -> bool {
+    char.is_ascii_alphanumeric() && !"0OIl".contains(char)
 }
 
 /// Satoshis -> BTC, without going through `f64` so 8 decimals stay exact.
@@ -167,7 +170,7 @@ impl TxInfo {
         };
 
         TxInfo {
-            explorer_url: network.and_then(|c| c.explorer_url(&tx_hash)),
+            explorer_url: network.and_then(|chain| chain.explorer_url(&tx_hash)),
             tx_hash,
             network,
             needs_manual_network: shape.needs_manual_network(),
@@ -304,16 +307,16 @@ impl TxInfoService {
         };
 
         // BTC amounts are satoshis.
-        let sats = |v: Option<i64>| v.map(sat_to_btc);
+        let sats = |value: Option<i64>| value.map(sat_to_btc);
 
         // The first input and first output are the conventional "from"/"to"
         // of a simple transfer; enough to prefill the form.
         let first_in = tx
             .vin
             .as_ref()
-            .and_then(|v| v.first())
-            .and_then(|v| v.prevout.as_ref());
-        let first_out = tx.vout.as_ref().and_then(|v| v.first());
+            .and_then(|inputs| inputs.first())
+            .and_then(|input| input.prevout.as_ref());
+        let first_out = tx.vout.as_ref().and_then(|outputs| outputs.first());
 
         let occurred = tx
             .block_time
@@ -327,16 +330,16 @@ impl TxInfoService {
             occurred_at: occurred,
             status: tx
                 .status
-                .and_then(|s| s.confirmed)
-                .map(|c| if c { "confirmed" } else { "pending" }.to_string()),
+                .and_then(|status| status.confirmed)
+                .map(|confirmed| if confirmed { "confirmed" } else { "pending" }.to_string()),
             asset_in: first_in
-                .and_then(|p| p.scriptpubkey_address.clone())
+                .and_then(|prevout| prevout.scriptpubkey_address.clone())
                 .map(|_| "BTC".to_string()),
-            amount_in: sats(first_in.and_then(|p| p.value)),
+            amount_in: sats(first_in.and_then(|prevout| prevout.value)),
             asset_out: first_out
-                .and_then(|v| v.scriptpubkey_address.clone())
+                .and_then(|output| output.scriptpubkey_address.clone())
                 .map(|_| "BTC".to_string()),
-            amount_out: sats(first_out.and_then(|v| v.value)),
+            amount_out: sats(first_out.and_then(|output| output.value)),
             fee: sats(tx.fee),
             fee_asset: Some("BTC".to_string()),
             ..Default::default()
@@ -396,7 +399,7 @@ impl TxInfoService {
         let Ok(parsed) = resp.json::<RpcResp>().await else {
             return Ok(None);
         };
-        let Some(value) = parsed.result.and_then(|r| r.value) else {
+        let Some(value) = parsed.result.and_then(|result| result.value) else {
             return Ok(None);
         };
         let Some(meta) = value.meta else {
@@ -404,10 +407,16 @@ impl TxInfoService {
         };
 
         // lamports -> SOL
-        let sol = |v: Option<i64>| v.map(lamports_to_sol);
+        let sol = |value: Option<i64>| value.map(lamports_to_sol);
 
-        let token_before = meta.pre_token_balances.as_ref().and_then(|v| v.first());
-        let token_after = meta.post_token_balances.as_ref().and_then(|v| v.first());
+        let token_before = meta
+            .pre_token_balances
+            .as_ref()
+            .and_then(|balances| balances.first());
+        let token_after = meta
+            .post_token_balances
+            .as_ref()
+            .and_then(|balances| balances.first());
 
         Ok(Some(TxInfo {
             tx_hash: tx_hash.to_string(),
@@ -415,16 +424,24 @@ impl TxInfoService {
             explorer_url: Chain::Solana.explorer_url(tx_hash),
             occurred_at: value.block_time.map(crate::model::vault::unix_to_iso),
             status: Some("confirmed".to_string()),
-            asset_in: token_before.and_then(|a| a.mint.clone()),
+            asset_in: token_before.and_then(|balance| balance.mint.clone()),
             amount_in: token_before
-                .and_then(|a| a.token_amount.as_ref())
-                .and_then(|t| t.amount.clone())
-                .or_else(|| sol(meta.pre_balances.and_then(|b| b.first().copied()))),
-            asset_out: token_after.and_then(|a| a.mint.clone()),
+                .and_then(|balance| balance.token_amount.as_ref())
+                .and_then(|token| token.amount.clone())
+                .or_else(|| {
+                    sol(meta
+                        .pre_balances
+                        .and_then(|balances| balances.first().copied()))
+                }),
+            asset_out: token_after.and_then(|balance| balance.mint.clone()),
             amount_out: token_after
-                .and_then(|a| a.token_amount.as_ref())
-                .and_then(|t| t.amount.clone())
-                .or_else(|| sol(meta.post_balances.and_then(|b| b.first().copied()))),
+                .and_then(|balance| balance.token_amount.as_ref())
+                .and_then(|token| token.amount.clone())
+                .or_else(|| {
+                    sol(meta
+                        .post_balances
+                        .and_then(|balances| balances.first().copied()))
+                }),
             fee: sol(meta.fee),
             fee_asset: Some("SOL".to_string()),
             ..Default::default()

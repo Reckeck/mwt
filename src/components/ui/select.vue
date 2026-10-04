@@ -13,8 +13,8 @@ const rest = computed(() => {
   return others
 })
 
-function onChange(e: Event) {
-  model.value = (e.target as HTMLSelectElement).value
+function onChange(event: Event) {
+  model.value = (event.target as HTMLSelectElement).value
 }
 </script>
 

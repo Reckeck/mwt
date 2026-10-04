@@ -17,22 +17,22 @@ pub struct Amount(pub Decimal);
 impl Amount {
     pub const ZERO: Amount = Amount(Decimal::ZERO);
 
-    pub fn new(d: Decimal) -> Self {
-        Amount(d)
+    pub fn new(value: Decimal) -> Self {
+        Amount(value)
     }
 
-    pub fn parse(s: &str) -> Result<Self> {
-        let s = s.trim();
-        if s.is_empty() {
+    pub fn parse(raw: &str) -> Result<Self> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
             return Ok(Amount::ZERO);
         }
-        let d = Decimal::from_str_exact(s)
-            .map_err(|_| Error::InvalidInput(format!("bad number: {s}")))?;
-        Ok(Amount(d))
+        Decimal::from_str_exact(trimmed)
+            .map(Amount)
+            .map_err(|_| Error::InvalidInput(format!("bad number: {trimmed}")))
     }
 
-    pub fn from_f64(v: f64) -> Self {
-        Amount(Decimal::from_f64_retain(v).unwrap_or(Decimal::ZERO))
+    pub fn from_f64(value: f64) -> Self {
+        Amount(Decimal::from_f64_retain(value).unwrap_or(Decimal::ZERO))
     }
 
     pub fn is_zero(&self) -> bool {
@@ -143,18 +143,18 @@ impl<'de> Deserialize<'de> for Amount {
         impl Visitor<'_> for AmountVisitor {
             type Value = Amount;
 
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "a decimal number encoded as a string")
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a decimal number encoded as a string")
             }
 
-            fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<Amount, E> {
-                Decimal::from_str_exact(v)
+            fn visit_str<E: serde::de::Error>(self, raw: &str) -> std::result::Result<Amount, E> {
+                Decimal::from_str_exact(raw)
                     .map(Amount)
-                    .map_err(|e| E::custom(format!("invalid decimal string `{v}`: {e}")))
+                    .map_err(|err| E::custom(format!("invalid decimal string `{raw}`: {err}")))
             }
 
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Amount, E> {
-                Ok(Amount::from_f64(v))
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> std::result::Result<Amount, E> {
+                Ok(Amount::from_f64(value))
             }
         }
         deserializer.deserialize_str(AmountVisitor)
@@ -197,9 +197,9 @@ mod tests {
 
     #[test]
     fn parses_and_formats() {
-        let a = Amount::parse("123.456").unwrap();
-        assert_eq!(a.to_string(), "123.456");
-        assert!((a.round(2)).to_string().starts_with("123.46"));
+        let parsed = Amount::parse("123.456").unwrap();
+        assert_eq!(parsed.to_string(), "123.456");
+        assert!((parsed.round(2)).to_string().starts_with("123.46"));
     }
 
     #[test]
@@ -210,8 +210,8 @@ mod tests {
 
     #[test]
     fn arithmetic_precision() {
-        let a = Amount::parse("0.1").unwrap();
-        let b = Amount::parse("0.2").unwrap();
-        assert_eq!((a + b).to_string(), "0.3");
+        let tenth = Amount::parse("0.1").unwrap();
+        let fifth = Amount::parse("0.2").unwrap();
+        assert_eq!((tenth + fifth).to_string(), "0.3");
     }
 }

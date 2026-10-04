@@ -47,4 +47,4 @@ export const CHAIN_LABELS: Record<Chain, string> = {
   fiat: 'Fiat',
 }
 
-export const CRYPTO_CHAINS = CHAINS.filter((c) => c !== 'fiat')
+export const CRYPTO_CHAINS = CHAINS.filter((chain) => chain !== 'fiat')

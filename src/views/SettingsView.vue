@@ -67,26 +67,29 @@ function getWidgets() {
   const current = settingsStore.settings
   if (!current) return []
   const widgets = current.dashboard_widgets ?? []
-  return widgetDefs.map((def) => {
-    const existing = widgets.find((w) => w.id === def.id)
-    return {
-      id: def.id,
-      label: t(def.label),
-      visible: existing?.visible ?? true,
-      order: existing?.order ?? def.defaultOrder,
-    }
-  }).sort((a, b) => a.order - b.order)
+  return widgetDefs
+    .map((def) => {
+      const existing = widgets.find((widget) => widget.id === def.id)
+      return {
+        id: def.id,
+        label: t(def.label),
+        visible: existing?.visible ?? true,
+        order: existing?.order ?? def.defaultOrder,
+      }
+    })
+    .sort((left, right) => left.order - right.order)
 }
 
 function toggleWidget(id: string) {
   const current = settingsStore.settings
   if (!current) return
   const widgets = [...(current.dashboard_widgets ?? [])]
-  const idx = widgets.findIndex((w) => w.id === id)
+  const idx = widgets.findIndex((widget) => widget.id === id)
   if (idx >= 0) {
     widgets[idx] = { ...widgets[idx], visible: !widgets[idx].visible }
   } else {
-    widgets.push({ id, visible: true, order: widgetDefs.find((d) => d.id === id)?.defaultOrder ?? 0 })
+    const def = widgetDefs.find((candidate) => candidate.id === id)
+    widgets.push({ id, visible: true, order: def?.defaultOrder ?? 0 })
   }
   settingsStore.settings = { ...current, dashboard_widgets: widgets }
 }
@@ -95,12 +98,12 @@ function moveWidget(id: string, delta: number) {
   const current = settingsStore.settings
   if (!current) return
   const widgets = [...(current.dashboard_widgets ?? [])]
-  const idx = widgets.findIndex((w) => w.id === id)
+  const idx = widgets.findIndex((widget) => widget.id === id)
   if (idx < 0) return
   const newOrder = Math.max(0, widgets[idx].order + delta)
   widgets[idx] = { ...widgets[idx], order: newOrder }
   // Re-sort to maintain order
-  widgets.sort((a, b) => a.order - b.order)
+  widgets.sort((left, right) => left.order - right.order)
   settingsStore.settings = { ...current, dashboard_widgets: widgets }
 }
 
@@ -108,8 +111,8 @@ function moveWidget(id: string, delta: number) {
  * Language applies immediately — the UI must switch while the user is still
  * looking at the control, so it is persisted on change rather than on Save.
  */
-async function onLocaleChange(e: Event) {
-  const next = (e.target as HTMLSelectElement).value as Locale
+async function onLocaleChange(event: Event) {
+  const next = (event.target as HTMLSelectElement).value as Locale
   localeError.value = false
   try {
     await setLocalePreference(next)
@@ -119,24 +122,24 @@ async function onLocaleChange(e: Event) {
 }
 
 function addFavoriteCurrency() {
-  const val = favoriteCurrenciesInput.value.trim().toUpperCase()
-  if (!val || val.length !== 3) return
+  const code = favoriteCurrenciesInput.value.trim().toUpperCase()
+  if (code?.length !== 3) return
   const current = settingsStore.settings
   if (!current) return
   const fav = current.favorite_currencies ?? []
-  if (!fav.includes(val)) {
-    fav.push(val)
+  if (!fav.includes(code)) {
+    fav.push(code)
     settingsStore.settings = { ...current, favorite_currencies: fav }
   }
   favoriteCurrenciesInput.value = ''
 }
 
-function removeFavoriteCurrency(curr: string) {
+function removeFavoriteCurrency(code: string) {
   const current = settingsStore.settings
   if (!current) return
   settingsStore.settings = {
     ...current,
-    favorite_currencies: (current.favorite_currencies ?? []).filter((c) => c !== curr),
+    favorite_currencies: (current.favorite_currencies ?? []).filter((fav) => fav !== code),
   }
 }
 
@@ -152,10 +155,10 @@ function updateBybitImportInterval(value: string) {
   settingsStore.settings = { ...current, bybit_import_interval_sec: Number(value) }
 }
 
-function updateMinimizeToTray(e: Event) {
+function updateMinimizeToTray(event: Event) {
   const current = settingsStore.settings
   if (!current) return
-  settingsStore.settings = { ...current, minimize_to_tray: (e.target as HTMLInputElement).checked }
+  settingsStore.settings = { ...current, minimize_to_tray: (event.target as HTMLInputElement).checked }
 }
 
 
@@ -179,8 +182,8 @@ async function saveSettings() {
   setTimeout(() => (saveMsg.value = null), 2000)
 }
 
-function setTheme(th: Theme) {
-  if (settingsStore.settings) settingsStore.settings.theme = th
+function setTheme(theme: Theme) {
+  if (settingsStore.settings) settingsStore.settings.theme = theme
 }
 
 async function devDumpVault() {
@@ -190,14 +193,14 @@ async function devDumpVault() {
       // Create a blob and download
       const blob = new Blob([result.json], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'vault-dump.json'
-      a.click()
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'vault-dump.json'
+      anchor.click()
       URL.revokeObjectURL(url)
     }
-  } catch (e) {
-    console.error('Failed to dump vault:', e)
+  } catch (err) {
+    console.error('Failed to dump vault:', err)
   }
 }
 </script>
@@ -233,7 +236,9 @@ async function devDumpVault() {
             v-model="baseCurrency"
             class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
           >
-            <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
+            <option v-for="currency in currencies" :key="currency.code" :value="currency.code">
+              {{ currency.label }}
+            </option>
           </select>
         </div>
 
@@ -245,7 +250,9 @@ async function devDumpVault() {
             class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
             @change="onLocaleChange"
           >
-            <option v-for="l in localeOptions" :key="l.code" :value="l.code">{{ t(l.label) }}</option>
+            <option v-for="locale in localeOptions" :key="locale.code" :value="locale.code">
+              {{ t(locale.label) }}
+            </option>
           </select>
           <p v-if="localeError" class="text-xs text-destructive">{{ t('settings.localeSaveFailed') }}</p>
         </div>
@@ -323,25 +330,25 @@ async function devDumpVault() {
           <p class="text-xs text-muted-foreground">{{ t('settings.dashboardWidgetsHint') }}</p>
           <div class="space-y-2">
             <div
-              v-for="w in getWidgets()"
-              :key="w.id"
+              v-for="widget in getWidgets()"
+              :key="widget.id"
               class="flex items-center gap-3 p-2 rounded-md border border-border bg-card"
             >
               <input
-                :id="`widget-${w.id}`"
+                :id="`widget-${widget.id}`"
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                :checked="w.visible"
-                @change="toggleWidget(w.id)"
+                :checked="widget.visible"
+                @change="toggleWidget(widget.id)"
               >
-              <Label :for="`widget-${w.id}`" class="flex-1 cursor-pointer">{{ w.label }}</Label>
+              <Label :for="`widget-${widget.id}`" class="flex-1 cursor-pointer">{{ widget.label }}</Label>
               <div class="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
                   title="Move up"
-                  :disabled="w.order === 0"
-                  @click="moveWidget(w.id, -10)"
+                  :disabled="widget.order === 0"
+                  @click="moveWidget(widget.id, -10)"
                 >
                   <span class="size-4">↑</span>
                 </Button>
@@ -349,7 +356,7 @@ async function devDumpVault() {
                   variant="ghost"
                   size="icon"
                   title="Move down"
-                  @click="moveWidget(w.id, 10)"
+                  @click="moveWidget(widget.id, 10)"
                 >
                   <span class="size-4">↓</span>
                 </Button>

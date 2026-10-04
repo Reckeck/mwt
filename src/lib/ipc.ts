@@ -15,27 +15,27 @@ export interface AppError {
 }
 
 export function parseError(raw: unknown): AppError {
-  const s = typeof raw === 'string' ? raw : String(raw ?? 'Unknown error')
-  const i = s.indexOf(': ')
-  if (i > 0 && s.slice(0, i) === s.slice(0, i).toUpperCase()) {
-    return { code: s.slice(0, i), message: s.slice(i + 2) }
+  const text = typeof raw === 'string' ? raw : String(raw ?? 'Unknown error')
+  const sep = text.indexOf(': ')
+  if (sep > 0 && text.slice(0, sep) === text.slice(0, sep).toUpperCase()) {
+    return { code: text.slice(0, sep), message: text.slice(sep + 2) }
   }
-  return { code: 'UNKNOWN', message: s }
+  return { code: 'UNKNOWN', message: text }
 }
 
 export async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauri) return mock(cmd, args) as Promise<T>
   try {
     return await invoke<T>(cmd, args)
-  } catch (e) {
-    throw parseError(e)
+  } catch (err) {
+    throw parseError(err)
   }
 }
 
 export async function onEvent<T>(event: string, handler: (payload: T) => void): Promise<UnlistenFn> {
   // Quietly no-op in browser dev mode.
   if (!isTauri) return () => {}
-  return listen<T>(event, (e) => handler(e.payload))
+  return listen<T>(event, (received) => handler(received.payload))
 }
 
 // --- browser dev mock --------------------------------------------------------
@@ -61,25 +61,33 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockStores)
     case 'create_store': {
       const input = body as CreateStoreInput
-      const store = { id: crypto.randomUUID(), name: input.name, kind: input.kind, color: input.color, note: input.note, archived: false, parent_id: input.parent_id ?? null }
+      const store = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        kind: input.kind,
+        color: input.color,
+        note: input.note,
+        archived: false,
+        parent_id: input.parent_id ?? null,
+      }
       mockStores.push(store)
       mockTransactions.push(...defaultTxs(input.kind, input.name, store.id))
       return resolve(store)
     }
     case 'update_store': {
       const input = body as UpdateStoreInput
-      const s = mockStores.find((x) => x.id === input.id)
-      if (s) Object.assign(s, { name: input.name, color: input.color, note: input.note })
-      return resolve(s ?? mockStores[0])
+      const store = mockStores.find((candidate) => candidate.id === input.id)
+      if (store) Object.assign(store, { name: input.name, color: input.color, note: input.note })
+      return resolve(store ?? mockStores[0])
     }
     case 'archive_store': {
-      const i = mockStores.findIndex((x) => x.id === String(args?.id))
-      if (i >= 0) mockStores[i].archived = Boolean(args?.archived)
+      const idx = mockStores.findIndex((candidate) => candidate.id === String(args?.id))
+      if (idx >= 0) mockStores[idx].archived = Boolean(args?.archived)
       return resolve({})
     }
     case 'delete_store': {
-      const i = mockStores.findIndex((x) => x.id === String(args?.id))
-      if (i >= 0) mockStores.splice(i, 1)
+      const idx = mockStores.findIndex((candidate) => candidate.id === String(args?.id))
+      if (idx >= 0) mockStores.splice(idx, 1)
       return resolve({})
     }
     // Tauri v2 converts primitive command args to camelCase, so the mock must
@@ -102,12 +110,12 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockSettings)
     case 'update_settings': {
       const input = body as UpdateSettingsInput
-      const s = mockSettings
-      if (input.base_currency) s.base_currency = input.base_currency
-      if (input.theme) s.theme = input.theme
-      if (input.locale) s.locale = input.locale
-      if (input.display_decimals) s.display_decimals = input.display_decimals
-      return resolve(s)
+      const settings = mockSettings
+      if (input.base_currency) settings.base_currency = input.base_currency
+      if (input.theme) settings.theme = input.theme
+      if (input.locale) settings.locale = input.locale
+      if (input.display_decimals) settings.display_decimals = input.display_decimals
+      return resolve(settings)
     }
     case 'list_categories':
       return resolve(['salary', 'trading', 'staking', 'other'])
@@ -120,13 +128,13 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'add_trade':
       return resolve(mockAddTrade(body as TradeInput))
     case 'delete_transaction': {
-      const i = mockTransactions.findIndex((x) => x.id === String(args?.id))
-      if (i >= 0) mockTransactions.splice(i, 1)
+      const idx = mockTransactions.findIndex((tx) => tx.id === String(args?.id))
+      if (idx >= 0) mockTransactions.splice(idx, 1)
       return resolve({})
     }
     case 'update_comment': {
       const input = body as UpdateCommentInput
-      const tx = mockTransactions.find((x) => x.id === input.transaction_id)
+      const tx = mockTransactions.find((candidate) => candidate.id === input.transaction_id)
       if (tx) tx.comment = input.comment
       return resolve(tx ?? mockTransactions[0])
     }
@@ -150,10 +158,10 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockKeyStatus)
     case 'set_exchange_key': {
       const input = body as SetExchangeKeyInput
-      const k = input.api_key
+      const apiKey = input.api_key
       mockKeyStatus = {
         configured: true,
-        hint: k.length <= 8 ? '*'.repeat(k.length) : `${k.slice(0, 4)}…${k.slice(-4)}`,
+        hint: apiKey.length <= 8 ? '*'.repeat(apiKey.length) : `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`,
       }
       return resolve(mockKeyStatus)
     }
@@ -162,9 +170,7 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockKeyStatus)
     case 'bybit_executions':
       return resolve(
-        mockKeyStatus.configured
-          ? { executions: mockExecutions, notice: null }
-          : { executions: [], notice: 'no_key' },
+        mockKeyStatus.configured ? { executions: mockExecutions, notice: null } : { executions: [], notice: 'no_key' },
       )
     // --- bybit import staging (D2.4) ---
     case 'import_bybit_history':
@@ -177,16 +183,16 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve({ imports: mockPendingImports() })
     case 'confirm_pending_imports': {
       const input = body as ConfirmPendingImportsInput
-      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((i) => i.exec_id)
+      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((entry) => entry.exec_id)
       const staged = mockPendingImports()
-      mockPendingStore = staged.filter((i) => !ids.includes(i.exec_id))
+      mockPendingStore = staged.filter((entry) => !ids.includes(entry.exec_id))
       return resolve({ confirmed: staged.length - mockPendingStore.length })
     }
     case 'discard_pending_imports': {
       const input = body as DiscardPendingImportsInput
-      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((i) => i.exec_id)
+      const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((entry) => entry.exec_id)
       const staged = mockPendingImports()
-      mockPendingStore = staged.filter((i) => !ids.includes(i.exec_id))
+      mockPendingStore = staged.filter((entry) => !ids.includes(entry.exec_id))
       return resolve({ discarded: staged.length - mockPendingStore.length })
     }
     case 'list_strategies':
@@ -246,21 +252,21 @@ const mockKeyStatusStoreId = 'mock-store-bybit'
 function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImport[] {
   if (mockPendingStore.length) return mockPendingStore
   const now = Date.now()
-  mockPendingStore = ['a1', 'a2'].map((suffix, i) => ({
+  mockPendingStore = ['a1', 'a2'].map((suffix, index) => ({
     exec_id: `mock-exec-${suffix}`,
     store_id: storeId,
     category: 'spot',
     symbol: 'BTCUSDT',
-    side: i === 0 ? 'buy' : 'sell',
+    side: index === 0 ? 'buy' : 'sell',
     asset_bought: 'BTC',
-    qty_bought: i === 0 ? '0.02' : '0',
+    qty_bought: index === 0 ? '0.02' : '0',
     asset_sold: 'USDT',
-    qty_sold: i === 0 ? '1285.01' : '1300',
+    qty_sold: index === 0 ? '1285.01' : '1300',
     price: '64250.5',
     fee: '0.642505',
     fee_asset: 'USDT',
-    occurred_at: new Date(now - i * 86_400_000).toISOString(),
-    comment: `bybit spot ${i === 0 ? 'buy' : 'sell'} · mock`,
+    occurred_at: new Date(now - index * 86_400_000).toISOString(),
+    comment: `bybit spot ${index === 0 ? 'buy' : 'sell'} · mock`,
   }))
   return mockPendingStore
 }
@@ -295,7 +301,7 @@ const mockSettings: Settings = {
 
 function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transaction[] {
   const now = Date.now()
-  const t = (offsetHours: number, kind: TxKind, symbol: string, amount: string, comment: string): Transaction => ({
+  const tx = (offsetHours: number, kind: TxKind, symbol: string, amount: string, comment: string): Transaction => ({
     id: crypto.randomUUID(),
     kind,
     asset: { symbol, name: symbol, coingecko_id: null, chain: 'bitcoin', contract: null, quote: symbol },
@@ -314,18 +320,31 @@ function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transactio
     price_base: null,
     fx_override: null,
   })
-  return [
-    t(48, 'income', 'BTC', '4', `Init ${name}`),
-    t(20, 'income', 'ETH', '135', 'Stacking rewards'),
-  ]
+  return [tx(48, 'income', 'BTC', '4', `Init ${name}`), tx(20, 'income', 'ETH', '135', 'Stacking rewards')]
 }
 
 const mockStores: Store[] = [
-  { id: crypto.randomUUID(), name: 'Binance', kind: 'exchange', color: '#f0b90b', archived: false, note: 'Фьючи', parent_id: null },
-  { id: crypto.randomUUID(), name: 'Ledger', kind: 'cold_wallet', color: '#3b82f6', archived: false, note: '', parent_id: null },
+  {
+    id: crypto.randomUUID(),
+    name: 'Binance',
+    kind: 'exchange',
+    color: '#f0b90b',
+    archived: false,
+    note: 'Фьючи',
+    parent_id: null,
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Ledger',
+    kind: 'cold_wallet',
+    color: '#3b82f6',
+    archived: false,
+    note: '',
+    parent_id: null,
+  },
 ]
 
-const mockTransactions: Transaction[] = mockStores.flatMap((s) => defaultTxs(s.kind, s.name, s.id))
+const mockTransactions: Transaction[] = mockStores.flatMap((store) => defaultTxs(store.kind, store.name, store.id))
 
 /** Last known USD prices, mirroring what the Rust `price_cache` would hold. */
 const mockPrices: Record<string, number> = { BTC: 90000, ETH: 3000, USD: 1, USDT: 1 }
@@ -349,18 +368,12 @@ const assetOf = (
 
 function mockFilterTxs(storeId: string | null): Transaction[] {
   const list = storeId
-    ? mockTransactions.filter((x) => x.store_id === storeId || x.to_store_id === storeId)
+    ? mockTransactions.filter((tx) => tx.store_id === storeId || tx.to_store_id === storeId)
     : mockTransactions
-  return [...list].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+  return [...list].sort((left, right) => right.timestamp.localeCompare(left.timestamp))
 }
 
-function mockBaseTx(
-  kind: TxKind,
-  asset: AssetRef,
-  amount: string,
-  storeId: string,
-  comment: string,
-): Transaction {
+function mockBaseTx(kind: TxKind, asset: AssetRef, amount: string, storeId: string, comment: string): Transaction {
   return {
     id: crypto.randomUUID(),
     kind,
@@ -382,55 +395,61 @@ function mockBaseTx(
   }
 }
 
-function mockAddTransaction(i: TxnInput): Transaction {
-  const asset = assetOf(i.symbol, i.name, i.coingecko_id, i.chain, i.contract)
-  const signed = i.kind === 'expense' || i.kind === 'fee' ? `-${i.amount}` : i.amount
-  const tx = mockBaseTx(i.kind, asset, signed, i.store_id, i.comment)
-  tx.category = i.category ?? null
-  tx.network = i.network ?? null
-  tx.tx_hash = i.tx_hash ?? null
-  tx.fee = i.fee ?? null
-  if (i.price_usd) tx.price_usd = i.price_usd
-  if (i.timestamp) tx.timestamp = i.timestamp
+function mockAddTransaction(input: TxnInput): Transaction {
+  const asset = assetOf(input.symbol, input.name, input.coingecko_id, input.chain, input.contract)
+  const signed = input.kind === 'expense' || input.kind === 'fee' ? `-${input.amount}` : input.amount
+  const tx = mockBaseTx(input.kind, asset, signed, input.store_id, input.comment)
+  tx.category = input.category ?? null
+  tx.network = input.network ?? null
+  tx.tx_hash = input.tx_hash ?? null
+  tx.fee = input.fee ?? null
+  if (input.price_usd) tx.price_usd = input.price_usd
+  if (input.timestamp) tx.timestamp = input.timestamp
   mockTransactions.push(tx)
   return tx
 }
 
-function mockAddTransfer(i: TransferInput): Transaction[] {
-  const asset = assetOf(i.symbol, i.name, i.coingecko_id, i.chain, i.contract)
+function mockAddTransfer(input: TransferInput): Transaction[] {
+  const asset = assetOf(input.symbol, input.name, input.coingecko_id, input.chain, input.contract)
   const group = crypto.randomUUID()
-  const out = mockBaseTx('transfer', asset, `-${i.amount}`, i.from_store_id, i.comment)
-  const inn = mockBaseTx('transfer', asset, i.amount, i.to_store_id, i.comment)
+  const out = mockBaseTx('transfer', asset, `-${input.amount}`, input.from_store_id, input.comment)
+  const inn = mockBaseTx('transfer', asset, input.amount, input.to_store_id, input.comment)
   for (const leg of [out, inn]) {
     leg.group_id = group
-    leg.category = i.category ?? null
-    leg.network = i.network ?? null
-    leg.tx_hash = i.tx_hash ?? null
-    leg.fee = i.fee ?? null
+    leg.category = input.category ?? null
+    leg.network = input.network ?? null
+    leg.tx_hash = input.tx_hash ?? null
+    leg.fee = input.fee ?? null
   }
-  out.to_store_id = i.to_store_id
-  inn.to_store_id = i.from_store_id
+  out.to_store_id = input.to_store_id
+  inn.to_store_id = input.from_store_id
   mockTransactions.push(out, inn)
   return [out, inn]
 }
 
-function mockAddTrade(i: TradeInput): Transaction[] {
-  const sell = assetOf(i.sell_symbol, i.sell_name, i.sell_coingecko_id, i.sell_chain, i.sell_contract)
-  const buy = assetOf(i.buy_symbol, i.buy_name, i.buy_coingecko_id, i.buy_chain, i.buy_contract)
+function mockAddTrade(input: TradeInput): Transaction[] {
+  const sell = assetOf(
+    input.sell_symbol,
+    input.sell_name,
+    input.sell_coingecko_id,
+    input.sell_chain,
+    input.sell_contract,
+  )
+  const buy = assetOf(input.buy_symbol, input.buy_name, input.buy_coingecko_id, input.buy_chain, input.buy_contract)
   const group = crypto.randomUUID()
-  const out = mockBaseTx('trade', sell, `-${i.sell_qty}`, i.store_id, i.comment)
-  const inn = mockBaseTx('trade', buy, i.buy_qty, i.store_id, i.comment)
+  const out = mockBaseTx('trade', sell, `-${input.sell_qty}`, input.store_id, input.comment)
+  const inn = mockBaseTx('trade', buy, input.buy_qty, input.store_id, input.comment)
   for (const leg of [out, inn]) {
     leg.group_id = group
-    leg.category = i.category ?? null
-    leg.fee = i.fee ?? null
+    leg.category = input.category ?? null
+    leg.fee = input.fee ?? null
   }
   mockTransactions.push(out, inn)
   return [out, inn]
 }
 
 function mockOverview(storeId: string): StoreOverview {
-  const store = mockStores.find((s) => s.id === storeId) ?? mockStores[0]
+  const store = mockStores.find((candidate) => candidate.id === storeId) ?? mockStores[0]
   const txs = mockFilterTxs(storeId)
   const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
 
@@ -447,30 +466,30 @@ function mockOverview(storeId: string): StoreOverview {
   }
 
   const positions: StorePosition[] = [...byAsset.values()]
-    .filter((r) => r.qty !== 0)
-    .map((r) => {
-      const price_usd = priceOf(r.asset.symbol)
+    .filter((row) => row.qty !== 0)
+    .map((row) => {
+      const priceUsd = priceOf(row.asset.symbol)
       return {
-        asset: r.asset,
-        quantity: String(r.qty),
-        avg_cost: r.cost ? String(r.cost) : null,
-        price_usd: String(price_usd),
-        value_usd: String(r.qty * price_usd),
-        value_base: String(r.qty * price_usd),
-        unrealized_base: String(r.qty * (price_usd - r.cost)),
+        asset: row.asset,
+        quantity: String(row.qty),
+        avg_cost: row.cost ? String(row.cost) : null,
+        price_usd: String(priceUsd),
+        value_usd: String(row.qty * priceUsd),
+        value_base: String(row.qty * priceUsd),
+        unrealized_base: String(row.qty * (priceUsd - row.cost)),
       }
     })
-    .sort((a, b) => Number(b.value_base) - Number(a.value_base))
+    .sort((left, right) => Number(right.value_base) - Number(left.value_base))
 
-  const total_usd = positions.reduce((acc, p) => acc + Number(p.value_usd), 0)
+  const totalUsd = positions.reduce((acc, position) => acc + Number(position.value_usd), 0)
 
   return {
     store,
     base_currency: mockSettings.base_currency,
     fx_per_usd: '1',
-    total_usd: String(total_usd),
-    total_base: String(total_usd),
-    subtree_total_base: String(total_usd),
+    total_usd: String(totalUsd),
+    total_base: String(totalUsd),
+    subtree_total_base: String(totalUsd),
     realized_pnl_base: '0',
     positions,
     children: [],
@@ -480,40 +499,69 @@ function mockOverview(storeId: string): StoreOverview {
   }
 }
 
-function mockCachedPrice(i: AssetPriceInput): CachedPrice {
-  const price = priceOf(i.symbol)
+function mockCachedPrice(input: AssetPriceInput): CachedPrice {
+  const price = priceOf(input.symbol)
   if (!price) return { price_usd: '0', ts: '' }
   return { price_usd: String(price), ts: new Date().toISOString() }
 }
 
-function mockCalc(i: CalcInput): CalcResult {
-  const n = (v: string | null | undefined) => Number(v ?? 0)
-  const amount = n(i.amount)
-  const priceIn = n(i.price_in)
-  const priceOut = n(i.price_out)
-  const feePct = n(i.fee_pct)
+function mockCalc(input: CalcInput): CalcResult {
+  const num = (value: string | null | undefined) => Number(value ?? 0)
+  const amount = num(input.amount)
+  const priceIn = num(input.price_in)
+  const priceOut = num(input.price_out)
+  const feePct = num(input.fee_pct)
   if (!amount || !priceIn) {
-    return { gross_in: '0', fee: '0', spent: '0', gross_out: '0', net_out: '0', exit_value: '0', pnl: '0', roi_pct: '0', risk: '0', risk_pct: '0' }
+    return {
+      gross_in: '0',
+      fee: '0',
+      spent: '0',
+      gross_out: '0',
+      net_out: '0',
+      exit_value: '0',
+      pnl: '0',
+      roi_pct: '0',
+      risk: '0',
+      risk_pct: '0',
+    }
   }
-  const zero = (): CalcResult => ({ gross_in: '0', fee: '0', spent: '0', gross_out: '0', net_out: '0', exit_value: '0', pnl: '0', roi_pct: '0', risk: '0', risk_pct: '0' })
+  const zero = (): CalcResult => ({
+    gross_in: '0',
+    fee: '0',
+    spent: '0',
+    gross_out: '0',
+    net_out: '0',
+    exit_value: '0',
+    pnl: '0',
+    roi_pct: '0',
+    risk: '0',
+    risk_pct: '0',
+  })
   const gross_in = amount * priceIn
   const fee = (gross_in * feePct) / 100
   const spent = gross_in + fee
-  if (i.mode === 'converter') {
+  if (input.mode === 'converter') {
     if (!priceOut) return { ...zero(), gross_in: String(gross_in), fee: String(fee), spent: String(spent) }
     const gross_out = amount * priceOut
-    return { ...zero(), gross_in: String(gross_in), fee: String(fee), spent: String(spent), gross_out: String(gross_out), net_out: String(gross_out - fee) }
+    return {
+      ...zero(),
+      gross_in: String(gross_in),
+      fee: String(fee),
+      spent: String(spent),
+      gross_out: String(gross_out),
+      net_out: String(gross_out - fee),
+    }
   }
   const out: CalcResult = { ...zero(), gross_in: String(gross_in), fee: String(fee), spent: String(spent) }
-  if (i.target_price) {
-    const exit = amount * Number(i.target_price)
+  if (input.target_price) {
+    const exit = amount * Number(input.target_price)
     const pnl = exit - spent
     out.exit_value = String(exit)
     out.pnl = String(pnl)
     out.roi_pct = String((pnl / spent) * 100)
   }
-  if (i.stop_price) {
-    out.risk = String(amount * Math.max(priceIn - Number(i.stop_price), 0))
+  if (input.stop_price) {
+    out.risk = String(amount * Math.max(priceIn - Number(input.stop_price), 0))
     out.risk_pct = String((Number(out.risk) / spent) * 100)
   }
   return out
@@ -525,8 +573,32 @@ const mockSummary: PortfolioSummary = {
   total_usd: '42000',
   total_base: '42000',
   assets: [
-    { asset: { symbol: 'BTC', name: 'Bitcoin', coingecko_id: 'bitcoin', chain: 'bitcoin', contract: null, quote: 'BTC' }, quantity: '3', price_usd: '9000', value_usd: '27000' },
-    { asset: { symbol: 'ETH', name: 'Ethereum', coingecko_id: 'ethereum', chain: 'ethereum', contract: null, quote: 'ETH' }, quantity: '50', price_usd: '300', value_usd: '15000' },
+    {
+      asset: {
+        symbol: 'BTC',
+        name: 'Bitcoin',
+        coingecko_id: 'bitcoin',
+        chain: 'bitcoin',
+        contract: null,
+        quote: 'BTC',
+      },
+      quantity: '3',
+      price_usd: '9000',
+      value_usd: '27000',
+    },
+    {
+      asset: {
+        symbol: 'ETH',
+        name: 'Ethereum',
+        coingecko_id: 'ethereum',
+        chain: 'ethereum',
+        contract: null,
+        quote: 'ETH',
+      },
+      quantity: '50',
+      price_usd: '300',
+      value_usd: '15000',
+    },
   ],
   by_chain: [
     { label: 'Bitcoin', value_usd: '27000', value_base: '27000', pct: 64.3 },
@@ -544,24 +616,24 @@ const mockHistory: HistoryPoint[] = [
   { ts: '2026-09-28T00:00:00Z', ts_ms: 1787961600000n, value_usd: '42000', value_base: '42000' },
 ]
 
-function mockSearch(q: string): AssetSearchHit[] {
+function mockSearch(rawQuery: string): AssetSearchHit[] {
   const known = [
     { symbol: 'BTC', name: 'Bitcoin', coingecko_id: 'bitcoin' },
     { symbol: 'ETH', name: 'Ethereum', coingecko_id: 'ethereum' },
     { symbol: 'SOL', name: 'Solana', coingecko_id: 'solana' },
     { symbol: 'USDT', name: 'Tether', coingecko_id: 'tether' },
   ]
-  const ql = (q ?? '').toLowerCase()
+  const needle = (rawQuery ?? '').toLowerCase()
   return known
-    .filter((x) => x.symbol.toLowerCase().includes(ql) || x.name.toLowerCase().includes(ql))
-    .map((x) => ({ ...x, chain: 'ethereum', contract: null, rank: 1n }))
+    .filter((entry) => entry.symbol.toLowerCase().includes(needle) || entry.name.toLowerCase().includes(needle))
+    .map((entry) => ({ ...entry, chain: 'ethereum', contract: null, rank: 1n }))
 }
 
 function mockRun(strategyId: string): SimRun {
-  const eq = (i: number, v: number): EquityPoint => ({
-    ts: new Date(Date.now() - (1000 - i) * 3.6e6).toISOString(),
-    equity: v.toFixed(2),
-    value: v.toFixed(2),
+  const point = (step: number, equity: number): EquityPoint => ({
+    ts: new Date(Date.now() - (1000 - step) * 3.6e6).toISOString(),
+    equity: equity.toFixed(2),
+    value: equity.toFixed(2),
   })
   return {
     id: crypto.randomUUID(),
@@ -574,7 +646,7 @@ function mockRun(strategyId: string): SimRun {
     max_drawdown_pct: '8.11',
     win_rate_pct: '61.5',
     total_trades: 12,
-    equity_curve: Array.from({ length: 80 }, (_, i) => eq(i, 1000 + i * 3 + Math.sin(i / 9) * 40)),
+    equity_curve: Array.from({ length: 80 }, (_, index) => point(index, 1000 + index * 3 + Math.sin(index / 9) * 40)),
     trades: [],
     synthetic: true,
     signals: [],
@@ -583,22 +655,22 @@ function mockRun(strategyId: string): SimRun {
   }
 }
 
-function mockCandles(i: GetCandlesInput): GetCandlesOutput {
-  const limit = Math.min(Math.max(i.limit || 300, 1), 1000)
-  const stepMs = (i.interval_min || 60) * 60_000
+function mockCandles(input: GetCandlesInput): GetCandlesOutput {
+  const limit = Math.min(Math.max(input.limit || 300, 1), 1000)
+  const stepMs = (input.interval_min || 60) * 60_000
   const now = Math.floor(Date.now() / stepMs) * stepMs
-  const basePrice = 60000 + (i.symbol.length * 1500) % 30000
+  const basePrice = 60000 + ((input.symbol.length * 1500) % 30000)
   let price = basePrice
   const candles: CandlePoint[] = []
-  for (let k = limit - 1; k >= 0; k--) {
-    const drift = Math.sin(k / 17) * 0.004 + Math.cos(k / 6) * 0.002
+  for (let step = limit - 1; step >= 0; step--) {
+    const drift = Math.sin(step / 17) * 0.004 + Math.cos(step / 6) * 0.002
     const open = price
     const close = open * (1 + drift)
-    const high = Math.max(open, close) * (1 + 0.002 * ((k * 7) % 5))
-    const low = Math.min(open, close) * (1 - 0.002 * ((k * 3) % 5))
-    const volume = String(50 + ((k * 37) % 200))
+    const high = Math.max(open, close) * (1 + 0.002 * ((step * 7) % 5))
+    const low = Math.min(open, close) * (1 - 0.002 * ((step * 3) % 5))
+    const volume = String(50 + ((step * 37) % 200))
     candles.push({
-      ts: new Date(now - k * stepMs).toISOString(),
+      ts: new Date(now - step * stepMs).toISOString(),
       open: open.toFixed(2),
       high: high.toFixed(2),
       low: low.toFixed(2),
@@ -610,6 +682,6 @@ function mockCandles(i: GetCandlesInput): GetCandlesOutput {
   return { candles }
 }
 
-function resolve<T>(v: T): Promise<T> {
-  return new Promise((r) => setTimeout(() => r(structuredClone(v)), 30))
+function resolve<T>(value: T): Promise<T> {
+  return new Promise((res) => setTimeout(() => res(structuredClone(value)), 30))
 }

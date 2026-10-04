@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { CHAIN_LABELS } from '@/lib/chains'
@@ -18,6 +18,7 @@ const props = withDefaults(
 const asset = defineModel<AssetRef | null>({ default: null })
 
 const { t } = useI18n()
+const inputId = useId()
 const query = ref('')
 const hits = ref<AssetSearchHit[]>([])
   const open = ref(false)
@@ -26,20 +27,20 @@ const loading = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 let seq = 0
 
-watch(asset, (v) => {
-  query.value = v ? v.symbol : ''
+watch(asset, (value) => {
+  query.value = value ? value.symbol : ''
 })
 
-async function search(q: string) {
+async function search(rawQuery: string) {
   const token = ++seq
-  if (q.trim().length < 1) {
+  if (rawQuery.trim().length < 1) {
     hits.value = []
     loading.value = false
     return
   }
   loading.value = true
   try {
-    const res = await call<AssetSearchHit[]>('search_assets', { query: q.trim() })
+    const res = await call<AssetSearchHit[]>('search_assets', { query: rawQuery.trim() })
     if (token === seq) hits.value = res
   } catch {
     if (token === seq) hits.value = []
@@ -48,8 +49,8 @@ async function search(q: string) {
   }
 }
 
-function onInput(e: Event) {
-  const value = (e.target as HTMLInputElement).value
+function onInput(event: Event) {
+  const value = (event.target as HTMLInputElement).value
   query.value = value
   open.value = true
   asset.value = null
@@ -97,17 +98,20 @@ function onBlur() {
 
 const canOfferFiat = () =>
   query.value.trim().length > 0 &&
-  !hits.value.some((h) => h.symbol.toUpperCase() === query.value.trim().toUpperCase())
+  !hits.value.some((hit) => hit.symbol.toUpperCase() === query.value.trim().toUpperCase())
 
-const subtitle = (a: AssetRef) =>
-  a.chain && a.chain !== 'fiat' ? `${a.name} · ${CHAIN_LABELS[a.chain]}` : a.name
+const subtitle = (asset: AssetRef) =>
+  asset.chain && asset.chain !== 'fiat' ? `${asset.name} · ${CHAIN_LABELS[asset.chain]}` : asset.name
 </script>
 
 <template>
   <div class="relative grid gap-1.5">
-    <label v-if="props.label" class="text-sm font-medium leading-none">{{ props.label }}</label>
+    <label v-if="props.label" :for="inputId" class="text-sm font-medium leading-none">
+      {{ props.label }}
+    </label>
     <div class="relative">
       <input
+        :id="inputId"
         :value="query"
         type="text"
         autocomplete="off"
@@ -130,16 +134,16 @@ const subtitle = (a: AssetRef) =>
       v-if="open && (hits.length > 0 || canOfferFiat())"
       class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
     >
-      <li v-for="h in hits" :key="`${h.symbol}-${h.contract ?? ''}`">
+      <li v-for="hit in hits" :key="`${hit.symbol}-${hit.contract ?? ''}`">
         <button
           type="button"
           class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-          @mousedown.prevent="pick(h)"
+          @mousedown.prevent="pick(hit)"
         >
-          <span class="w-20 shrink-0 truncate font-medium">{{ h.symbol.toUpperCase() }}</span>
-          <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ h.name }}</span>
-          <span v-if="h.chain && h.chain !== 'fiat'" class="shrink-0 text-xs text-muted-foreground">
-            {{ CHAIN_LABELS[h.chain] }}
+          <span class="w-20 shrink-0 truncate font-medium">{{ hit.symbol.toUpperCase() }}</span>
+          <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ hit.name }}</span>
+          <span v-if="hit.chain && hit.chain !== 'fiat'" class="shrink-0 text-xs text-muted-foreground">
+            {{ CHAIN_LABELS[hit.chain] }}
           </span>
         </button>
       </li>

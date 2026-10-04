@@ -37,7 +37,7 @@ export const useVaultStore = defineStore('vault', {
     },
     async forgetRecent(path: string) {
       await call('forget_recent_vault', { path })
-      this.recents = this.recents.filter((r: RecentVault) => r.path !== path)
+      this.recents = this.recents.filter((recent: RecentVault) => recent.path !== path)
     },
     async pickVaultFile(save: boolean) {
       return await call<{ path: string } | null>('pick_vault_file', { save })
@@ -54,9 +54,9 @@ export const useVaultStore = defineStore('vault', {
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
         this.status = { ...status, unlocked: true, info: this.info }
-      } catch (e) {
-        this.error = (e as Error).message
-        throw e
+      } catch (err) {
+        this.error = (err as Error).message
+        throw err
       } finally {
         this.busy = false
       }
@@ -72,9 +72,9 @@ export const useVaultStore = defineStore('vault', {
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
         this.status = { ...status, exists: true, unlocked: true, info: this.info }
-      } catch (e) {
-        this.error = (e as Error).message
-        throw e
+      } catch (err) {
+        this.error = (err as Error).message
+        throw err
       } finally {
         this.busy = false
       }
@@ -87,9 +87,9 @@ export const useVaultStore = defineStore('vault', {
       localStorage.setItem('trade-app:unlocked', 'false')
     },
     listen() {
-      return onEvent<VaultStatus>('vault-changed', (s) => {
-        this.status = s
-        this.locked = s.unlocked !== true
+      return onEvent<VaultStatus>('vault-changed', (status) => {
+        this.status = status
+        this.locked = status.unlocked !== true
       })
     },
   },

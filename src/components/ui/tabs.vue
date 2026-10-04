@@ -16,7 +16,7 @@ defineSlots<Record<string, () => unknown>>()
 <template>
   <TabsRoot
     :model-value="props.modelValue"
-    @update:model-value="(v) => emit('update:modelValue', String(v))"
+    @update:model-value="(value) => emit('update:modelValue', String(value))"
   >
     <TabsList class="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
       <TabsTrigger

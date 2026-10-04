@@ -66,7 +66,7 @@ watch(
  * not an override: anything already typed wins.
  */
 function fillIfEmpty(target: Ref<string>, value: string | undefined) {
-  if (!value || !value.trim()) return false
+  if (!value?.trim()) return false
   if (target.value.trim()) return false
   target.value = value.trim()
   return true
@@ -96,9 +96,9 @@ function applyHint(hint: TxFieldHint): boolean {
 
 /** Auto-inspect once the hash stops changing. */
 let hashTimer: ReturnType<typeof setTimeout> | undefined
-watch(txHash, (v) => {
+watch(txHash, (value) => {
   if (hashTimer) clearTimeout(hashTimer)
-  const hash = v.trim()
+  const hash = value.trim()
   if (!hash) {
     lookup.reset()
     return
@@ -126,19 +126,19 @@ watch(
 
 /** Apply a Bybit fill to the form as a trade. */
 async function applyBybitExecution(exec: BybitExecution) {
-  const p = exec.prefill
+  const fill = exec.prefill
   mode.value = 'trade'
-  fillIfEmpty(amount, p.side === 'buy' ? p.qty_bought ?? '' : p.qty_sold ?? '')
-  fillIfEmpty(priceUsd, p.price ?? '')
-  fillIfEmpty(fee, p.fee ?? '')
-  fillIfEmpty(comment, p.comment ?? '')
-  if (!timestamp.value.trim() && p.occurred_at) timestamp.value = p.occurred_at
+  fillIfEmpty(amount, fill.side === 'buy' ? fill.qty_bought ?? '' : fill.qty_sold ?? '')
+  fillIfEmpty(priceUsd, fill.price ?? '')
+  fillIfEmpty(fee, fill.fee ?? '')
+  fillIfEmpty(comment, fill.comment ?? '')
+  if (!timestamp.value.trim() && fill.occurred_at) timestamp.value = fill.occurred_at
 
   // Resolve the two legs by symbol; leave them untouched if the search fails.
   const resolve = async (symbol: string | null | undefined): Promise<AssetRef | null> => {
     if (!symbol) return null
     const hits = await call<AssetSearchHit[]>('search_assets', { query: symbol })
-    const hit = hits.find((h) => h.symbol.toUpperCase() === symbol.toUpperCase()) ?? hits[0]
+    const hit = hits.find((item) => item.symbol.toUpperCase() === symbol.toUpperCase()) ?? hits[0]
     if (!hit) return null
     const sym = hit.symbol.toUpperCase()
     return {
@@ -151,10 +151,7 @@ async function applyBybitExecution(exec: BybitExecution) {
       quote: sym,
     }
   }
-  const [sold, bought] = await Promise.all([
-    resolve(p.asset_sold),
-    resolve(p.asset_bought),
-  ])
+  const [sold, bought] = await Promise.all([resolve(fill.asset_sold), resolve(fill.asset_bought)])
   if (!sellAsset.value && sold) sellAsset.value = sold
   if (!buyAsset.value && bought) buyAsset.value = bought
 }
@@ -173,7 +170,9 @@ const isTransfer = computed(() => mode.value === 'transfer')
 const isTrade = computed(() => mode.value === 'trade')
 
 /** Other stores are the only valid transfer destinations. */
-const otherStores = computed(() => (stores.data.value ?? []).filter((s) => s.id !== props.storeId && !s.archived))
+const otherStores = computed(() =>
+  (stores.data.value ?? []).filter((store) => store.id !== props.storeId && !store.archived),
+)
 
 watch(otherStores, (list) => {
   if (!toStoreId.value && list.length) toStoreId.value = list[0].id
@@ -181,7 +180,9 @@ watch(otherStores, (list) => {
 
 /** Keep the network dropdown in sync with the picked asset. */
 watch([asset, sellAsset, buyAsset], () => {
-  const picked = [asset.value, sellAsset.value, buyAsset.value].find((a) => a?.chain && a.chain !== 'fiat')
+  const picked = [asset.value, sellAsset.value, buyAsset.value].find(
+    (ref) => ref?.chain && ref.chain !== 'fiat',
+  )
   if (picked?.chain) network.value = picked.chain
 })
 
@@ -284,25 +285,25 @@ const save = useMutation({
     invalidate()
     setTimeout(() => (saved.value = null), 3000)
   },
-  onError: (e) => {
-    const parsed = parseError(e)
+  onError: (err) => {
+    const parsed = parseError(err)
     error.value = parsed.code === 'UNKNOWN' ? t('form.assetRequired') : t(`errors.${parsed.code}`) || parsed.message
   },
 })
 
 /** Fill the form from a calculator plan. */
-function prefill(p: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }) {
-  if (p.mode === 'converter' && p.from && p.to) {
+function prefill(plan: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }) {
+  if (plan.mode === 'converter' && plan.from && plan.to) {
     mode.value = 'trade'
-    sellAsset.value = p.from
-    buyAsset.value = p.to
-    amount.value = p.amount
-    priceUsd.value = p.price
-  } else if (p.from) {
+    sellAsset.value = plan.from
+    buyAsset.value = plan.to
+    amount.value = plan.amount
+    priceUsd.value = plan.price
+  } else if (plan.from) {
     mode.value = 'income'
-    asset.value = p.from
-    amount.value = p.amount
-    priceUsd.value = p.price
+    asset.value = plan.from
+    amount.value = plan.amount
+    priceUsd.value = plan.price
   }
   comment.value = ''
 }
@@ -327,14 +328,14 @@ const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
         <p class="font-medium">{{ t('form.title') }}</p>
         <div class="flex flex-wrap rounded-md border border-border p-0.5">
           <button
-            v-for="m in modes"
-            :key="m"
+            v-for="entry in modes"
+            :key="entry"
             type="button"
             class="rounded px-2.5 py-1 text-xs font-medium transition-colors"
-            :class="mode === m ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'"
-            @click="mode = m"
+            :class="mode === entry ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'"
+            @click="mode = entry"
           >
-            {{ t(`form.mode.${m}`) }}
+            {{ t(`form.mode.${entry}`) }}
           </button>
         </div>
       </div>
@@ -350,7 +351,7 @@ const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
         <div v-if="isTransfer" class="grid gap-1.5">
           <Label>{{ t('form.toStore') }}</Label>
           <Select v-model="toStoreId">
-            <option v-for="s in otherStores" :key="s.id" :value="s.id">{{ s.name }}</option>
+            <option v-for="store in otherStores" :key="store.id" :value="store.id">{{ store.name }}</option>
           </Select>
         </div>
       </div>
@@ -413,14 +414,20 @@ const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
           <Label>{{ t('form.category') }}</Label>
           <Select v-model="category">
             <option value="">{{ t('form.noCategory') }}</option>
-            <option v-for="c in categories.data.value ?? []" :key="c" :value="c">{{ c }}</option>
+            <option
+              v-for="entry in categories.data.value ?? []"
+              :key="entry"
+              :value="entry"
+            >
+              {{ entry }}
+            </option>
           </Select>
         </div>
         <div class="grid gap-1.5">
           <Label>{{ t('form.network') }}</Label>
           <Select v-model="network">
             <option value="">{{ t('form.noNetwork') }}</option>
-            <option v-for="c in CHAINS" :key="c" :value="c">{{ CHAIN_LABELS[c] }}</option>
+            <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
           </Select>
         </div>
         <div v-if="!isTrade" class="grid gap-1.5">

@@ -136,12 +136,12 @@ pub struct ExchangeKeys {
 impl ExchangeKeys {
     /// Short, non-secret identifier safe to show in the UI (e.g. `abcd…wxyz`).
     pub fn hint(&self) -> String {
-        let k = self.api_key.as_str();
-        if k.len() <= 8 {
-            return "*".repeat(k.len());
+        let api_key = self.api_key.as_str();
+        if api_key.len() <= 8 {
+            return "*".repeat(api_key.len());
         }
-        let head: String = k.chars().take(4).collect();
-        let tail: String = k.chars().skip(k.chars().count() - 4).collect();
+        let head: String = api_key.chars().take(4).collect();
+        let tail: String = api_key.chars().skip(api_key.chars().count() - 4).collect();
         format!("{head}…{tail}")
     }
 }
@@ -213,14 +213,14 @@ impl PendingImport {
         if exec_id.is_empty() {
             return None;
         }
-        let p = exec.to_prefill();
+        let prefill = exec.to_prefill();
         // Both legs must be fully known: a trade with an unknown quote leg
         // cannot be turned into balanced holdings.
-        let asset_bought = nonempty(p.asset_bought?);
-        let asset_sold = nonempty(p.asset_sold?);
-        let qty_bought = Amount::parse(&nonempty(p.qty_bought?)).ok()?;
-        let qty_sold = Amount::parse(&nonempty(p.qty_sold?)).ok()?;
-        let price = Amount::parse(&nonempty(p.price?)).ok()?;
+        let asset_bought = nonempty(prefill.asset_bought?);
+        let asset_sold = nonempty(prefill.asset_sold?);
+        let qty_bought = Amount::parse(&nonempty(prefill.qty_bought?)).ok()?;
+        let qty_sold = Amount::parse(&nonempty(prefill.qty_sold?)).ok()?;
+        let price = Amount::parse(&nonempty(prefill.price?)).ok()?;
         if !qty_bought.is_positive() || !qty_sold.is_positive() || !price.is_positive() {
             return None;
         }
@@ -228,21 +228,21 @@ impl PendingImport {
             exec_id: exec_id.to_string(),
             store_id: store_id.to_string(),
             category: category.to_string(),
-            symbol: nonempty(p.symbol),
-            side: nonempty(p.side),
+            symbol: nonempty(prefill.symbol),
+            side: nonempty(prefill.side),
             asset_bought,
             qty_bought,
             asset_sold,
             qty_sold,
             price,
-            fee: p
+            fee: prefill
                 .fee
                 .as_deref()
-                .and_then(|f| Amount::parse(f).ok())
+                .and_then(|amount| Amount::parse(amount).ok())
                 .unwrap_or(Amount::ZERO),
-            fee_asset: p.fee_asset.map(nonempty).unwrap_or_default(),
-            occurred_at: nonempty(p.occurred_at.unwrap_or_default()),
-            comment: p.comment.unwrap_or_default(),
+            fee_asset: prefill.fee_asset.map(nonempty).unwrap_or_default(),
+            occurred_at: nonempty(prefill.occurred_at.unwrap_or_default()),
+            comment: prefill.comment.unwrap_or_default(),
         })
     }
 
@@ -252,8 +252,8 @@ impl PendingImport {
     }
 }
 
-fn nonempty(s: String) -> String {
-    s.trim().to_string()
+fn nonempty(raw: String) -> String {
+    raw.trim().to_string()
 }
 
 /// Exchange credentials grouped by exchange name.
@@ -327,7 +327,7 @@ impl VaultDoc {
     pub fn chain_list() -> Vec<ChainInfo> {
         crate::model::chain::ALL_CHAINS
             .iter()
-            .map(|c| c.info())
+            .map(|chain| chain.info())
             .collect()
     }
 }
@@ -342,7 +342,7 @@ pub fn now_iso() -> String {
 pub fn iso_to_millis(iso: &str) -> i64 {
     use time::format_description::well_known::Rfc3339;
     time::OffsetDateTime::parse(iso, &Rfc3339)
-        .map(|d| (d.unix_timestamp_nanos() / 1_000_000) as i64)
+        .map(|parsed| (parsed.unix_timestamp_nanos() / 1_000_000) as i64)
         .unwrap_or(0)
 }
 
@@ -352,6 +352,6 @@ pub fn unix_to_iso(secs: i64) -> String {
     use time::format_description::well_known::Rfc3339;
     time::OffsetDateTime::from_unix_timestamp(secs)
         .ok()
-        .and_then(|d| d.format(&Rfc3339).ok())
+        .and_then(|stamp| stamp.format(&Rfc3339).ok())
         .unwrap_or_default()
 }

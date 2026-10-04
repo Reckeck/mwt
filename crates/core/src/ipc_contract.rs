@@ -318,18 +318,18 @@ pub struct BybitExecutionsResult {
 }
 
 impl From<crate::exchange::Execution> for BybitExecution {
-    fn from(e: crate::exchange::Execution) -> Self {
+    fn from(source: crate::exchange::Execution) -> Self {
         BybitExecution {
-            symbol: e.symbol.clone(),
-            side: e.side.clone(),
-            order_type: e.order_type.clone(),
-            exec_price: e.exec_price.clone(),
-            exec_qty: e.exec_qty.clone(),
-            exec_value: e.exec_value.clone(),
-            exec_fee: e.exec_fee.clone(),
-            exec_time: e.exec_time.clone(),
-            is_maker: e.is_maker,
-            prefill: e.to_prefill(),
+            symbol: source.symbol.clone(),
+            side: source.side.clone(),
+            order_type: source.order_type.clone(),
+            exec_price: source.exec_price.clone(),
+            exec_qty: source.exec_qty.clone(),
+            exec_value: source.exec_value.clone(),
+            exec_fee: source.exec_fee.clone(),
+            exec_time: source.exec_time.clone(),
+            is_maker: source.is_maker,
+            prefill: source.to_prefill(),
         }
     }
 }

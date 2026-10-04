@@ -61,15 +61,15 @@ async function submit() {
       await vault.unlock(password.value)
     }
     await router.replace({ name: 'dashboard' })
-  } catch (e) {
-    const maybe = e as { code?: string; message?: string }
+  } catch (err) {
+    const maybe = err as { code?: string; message?: string }
     if (maybe.code === 'ALREADY_EXISTS') {
       await vault.refreshStatus().catch(() => {})
       error.value = t('auth.alreadyExists')
     } else if (maybe.code === 'UNSUPPORTED') {
       error.value = t('auth.unsupported')
     } else {
-      error.value = maybe.code === 'SECRET' ? t('auth.wrongPassword') : maybe.message ?? String(e)
+      error.value = maybe.code === 'SECRET' ? t('auth.wrongPassword') : maybe.message ?? String(err)
     }
   } finally {
     busy.value = false
@@ -96,8 +96,8 @@ async function browsePath() {
       // Refresh status to get exists flag
       await vault.refreshStatus()
     }
-  } catch (e) {
-    error.value = parseError(e).message
+  } catch (err) {
+    error.value = parseError(err).message
   }
 }
 
@@ -137,22 +137,22 @@ async function forgetRecent(path: string) {
             <p class="text-xs font-medium text-muted-foreground">{{ t('auth.recentVaults') }}</p>
             <div class="grid gap-1.5 max-h-40 overflow-y-auto">
               <Button
-                v-for="r in vault.recents"
-                :key="r.path"
+                v-for="recent in vault.recents"
+                :key="recent.path"
                 variant="outline"
                 class="justify-start gap-2 text-left"
-                :class="{ 'bg-destructive/10 text-destructive': !r.exists }"
-                @click="selectRecent(r.path)"
+                :class="{ 'bg-destructive/10 text-destructive': !recent.exists }"
+                @click="selectRecent(recent.path)"
               >
                 <ChevronRight class="size-4 shrink-0" />
                 <div class="flex-1 min-w-0">
-                  <p class="truncate font-medium">{{ r.path.split('/').pop() || r.path }}</p>
-                  <p class="truncate text-xs text-muted-foreground">{{ r.path }}</p>
+                  <p class="truncate font-medium">{{ recent.path.split('/').pop() || recent.path }}</p>
+                  <p class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span v-if="r.exists" class="text-xs text-emerald-600">{{ t('auth.exists') }}</span>
+                  <span v-if="recent.exists" class="text-xs text-emerald-600">{{ t('auth.exists') }}</span>
                   <span v-else class="text-xs text-destructive">{{ t('auth.missing') }}</span>
-                  <Button variant="ghost" size="icon" @click.stop="forgetRecent(r.path)">
+                  <Button variant="ghost" size="icon" @click.stop="forgetRecent(recent.path)">
                     <X class="size-3.5" />
                   </Button>
                 </div>
@@ -198,6 +198,7 @@ async function forgetRecent(path: string) {
 
         <div class="grid gap-1.5">
           <Label for="pw">{{ t('auth.password') }}</Label>
+          <!-- biome-ignore lint/a11y/noAutofocus: the unlock screen exists to type the password. -->
           <Input id="pw" v-model="password" type="password" autocomplete="current-password" autofocus />
         </div>
 

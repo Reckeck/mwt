@@ -44,8 +44,8 @@ impl Default for AppState {
 }
 
 /// Map a core error into a Tauri-compatible error string (code-prefixed).
-pub fn err_to_string(e: Error) -> String {
-    format!("{}: {}", e.code(), e)
+pub fn err_to_string(err: Error) -> String {
+    format!("{}: {}", err.code(), err)
 }
 
 /// Grab a locked vault; returns an error if the app is locked.
@@ -61,9 +61,9 @@ pub fn lock_vault<'a>(
 pub fn require_vault(
     state: &AppState,
 ) -> Result<std::sync::MutexGuard<'_, Option<UnlockedVault>>, Error> {
-    let g = lock_vault(state)?;
-    if g.is_none() {
+    let guard = lock_vault(state)?;
+    if guard.is_none() {
         return Err(Error::RequiresUnlock);
     }
-    Ok(g)
+    Ok(guard)
 }
