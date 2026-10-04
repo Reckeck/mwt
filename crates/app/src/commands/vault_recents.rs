@@ -28,7 +28,7 @@ fn load_recents(app: &AppHandle) -> Vec<RecentVault> {
     }
     std::fs::read_to_string(&path)
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default()
 }
 
@@ -48,7 +48,7 @@ fn save_recents(app: &AppHandle, recents: &[RecentVault]) {
 pub fn add_recent(app: &AppHandle, path: &str) {
     let mut recents = load_recents(app);
     let path_str = path.to_string();
-    recents.retain(|r| r.path != path_str);
+    recents.retain(|recent| recent.path != path_str);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -70,7 +70,7 @@ pub fn add_recent(app: &AppHandle, path: &str) {
 /// Remove a vault from recents
 fn remove_recent(app: &AppHandle, path: &str) {
     let mut recents = load_recents(app);
-    recents.retain(|r| r.path != path);
+    recents.retain(|recent| recent.path != path);
     save_recents(app, &recents);
 }
 
@@ -80,8 +80,8 @@ fn remove_recent(app: &AppHandle, path: &str) {
 pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
     let mut recents = load_recents(&app);
     // Refresh exists flag
-    for r in &mut recents {
-        r.exists = Path::new(&r.path).exists();
+    for recent in &mut recents {
+        recent.exists = Path::new(&recent.path).exists();
     }
     save_recents(&app, &recents);
     Ok(recents)
@@ -98,27 +98,27 @@ pub async fn select_vault(
         return Err("NOT_FOUND: vault file does not exist".into());
     }
     // If vault is unlocked, we need to lock it first before switching
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    if g.is_some() {
-        *g = None; // Lock current vault
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    if guard.is_some() {
+        *guard = None; // Lock current vault
     }
     // Update vault_path in AppState
-    *state
-        .vault_path
-        .lock()
-        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
-        path.clone();
+    *state.vault_path.lock().map_err(|err| {
+        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+    })? = path.clone();
     // Return status for the new path
-    let g = require_vault(&state).map_err(err_to_string)?;
-    let unlocked = g.is_some();
-    let info = g.as_ref().map(|v| trade_core::ipc_contract::VaultInfo {
-        path: v.path.display().to_string(),
-        doc_version: v.doc.version,
-        id: v.doc.id.clone(),
-        created_at: v.doc.created_at.clone(),
-        format: v.fmt.label().to_string(),
-        base_currency: v.doc.settings.base_currency.clone(),
-    });
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let unlocked = guard.is_some();
+    let info = guard
+        .as_ref()
+        .map(|vault| trade_core::ipc_contract::VaultInfo {
+            path: vault.path.display().to_string(),
+            doc_version: vault.doc.version,
+            id: vault.doc.id.clone(),
+            created_at: vault.doc.created_at.clone(),
+            format: vault.fmt.label().to_string(),
+            base_currency: vault.doc.settings.base_currency.clone(),
+        });
     add_recent(&app, &input.path);
     Ok(trade_core::ipc_contract::VaultStatus {
         path: path.display().to_string(),
@@ -151,5 +151,5 @@ pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<String
     } else {
         dialog.blocking_pick_file()
     };
-    Ok(path.map(|p| p.to_string()))
+    Ok(path.map(|path| path.to_string()))
 }

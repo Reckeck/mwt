@@ -7,14 +7,14 @@ use trade_core::service::UnlockedVault;
 
 use crate::commands::{AppState, err_to_string, lock_vault, require_vault};
 
-fn info_of(v: &UnlockedVault) -> VaultInfo {
+fn info_of(vault: &UnlockedVault) -> VaultInfo {
     VaultInfo {
-        path: v.path.display().to_string(),
-        doc_version: v.doc.version,
-        id: v.doc.id.clone(),
-        created_at: v.doc.created_at.clone(),
-        format: v.fmt.label().to_string(),
-        base_currency: v.doc.settings.base_currency.clone(),
+        path: vault.path.display().to_string(),
+        doc_version: vault.doc.version,
+        id: vault.doc.id.clone(),
+        created_at: vault.doc.created_at.clone(),
+        format: vault.fmt.label().to_string(),
+        base_currency: vault.doc.settings.base_currency.clone(),
     }
 }
 
@@ -25,9 +25,9 @@ pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, Str
         .lock()
         .map_err(|_| "lock".to_string())?
         .clone();
-    let g = lock_vault(&state).map_err(err_to_string)?;
-    let unlocked = g.is_some();
-    let info = g.as_ref().map(info_of);
+    let guard = lock_vault(&state).map_err(err_to_string)?;
+    let unlocked = guard.is_some();
+    let info = guard.as_ref().map(info_of);
     Ok(VaultStatus {
         path: path.display().to_string(),
         exists: path.exists(),
@@ -55,11 +55,9 @@ pub async fn create_vault(
         .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))? =
         Some(vault);
     // Update vault_path and record in recents
-    *state
-        .vault_path
-        .lock()
-        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
-        path.clone();
+    *state.vault_path.lock().map_err(|err| {
+        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+    })? = path.clone();
     crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
 }
@@ -74,25 +72,21 @@ pub async fn unlock_vault(
     let vault = UnlockedVault::open(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
     let info = info_of(&vault);
-    *state
-        .vault
-        .lock()
-        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
-        Some(vault);
+    *state.vault.lock().map_err(|err| {
+        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+    })? = Some(vault);
     // Update vault_path and record in recents
-    *state
-        .vault_path
-        .lock()
-        .map_err(|e| err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", e))))? =
-        path.clone();
+    *state.vault_path.lock().map_err(|err| {
+        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+    })? = path.clone();
     crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
 }
 
 #[tauri::command]
 pub async fn lock_vault_cmd(state: State<'_, AppState>) -> Result<(), String> {
-    let mut g = lock_vault(&state).map_err(err_to_string)?;
-    *g = None;
+    let mut guard = lock_vault(&state).map_err(err_to_string)?;
+    *guard = None;
     Ok(())
 }
 
@@ -104,8 +98,9 @@ pub async fn change_password(
     if input.new_password.is_empty() {
         return Err("INVALID_INPUT: new password must not be empty".into());
     }
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().ok_or("Vault is locked")?;
-    v.change_password(&input.new_password)
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().ok_or("Vault is locked")?;
+    vault
+        .change_password(&input.new_password)
         .map_err(crate::commands::err_to_string)
 }

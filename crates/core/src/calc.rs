@@ -127,12 +127,12 @@ pub fn preview(input: &CalcInput) -> CalcResult {
                 spent,
                 ..CalcResult::default()
             };
-            if let Some(target) = input.target_price.filter(|t| t.is_positive()) {
+            if let Some(target) = input.target_price.filter(|price| price.is_positive()) {
                 out.exit_value = (amount * target.abs()).round(8);
                 out.pnl = (out.exit_value - spent).round(8);
                 out.roi_pct = ratio(out.pnl, spent);
             }
-            if let Some(stop) = input.stop_price.filter(|s| s.is_positive()) {
+            if let Some(stop) = input.stop_price.filter(|price| price.is_positive()) {
                 let per_unit = price_in - stop.abs();
                 out.risk = (amount * per_unit.max(Amount::ZERO)).round(8);
                 out.risk_pct = ratio(out.risk, spent);
@@ -146,8 +146,8 @@ pub fn preview(input: &CalcInput) -> CalcResult {
 mod tests {
     use super::*;
 
-    fn amt(s: &str) -> Amount {
-        Amount::parse(s).unwrap()
+    fn amt(raw: &str) -> Amount {
+        Amount::parse(raw).unwrap()
     }
 
     /// Decimal keeps its scale in `Display` ("40" vs "40.0"), so compare by value.
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn converter_applies_fee() {
-        let r = preview(&CalcInput {
+        let res = preview(&CalcInput {
             mode: CalcMode::Converter,
             amount: amt("2"),
             price_in: amt("20000"),
@@ -165,16 +165,16 @@ mod tests {
             fee_pct: amt("0.1"),
             ..CalcInput::default()
         });
-        assert_amt(&r.gross_in, "40000");
-        assert_amt(&r.fee, "40");
-        assert_amt(&r.spent, "40040");
-        assert_amt(&r.gross_out, "60000");
-        assert_amt(&r.net_out, "59960");
+        assert_amt(&res.gross_in, "40000");
+        assert_amt(&res.fee, "40");
+        assert_amt(&res.spent, "40040");
+        assert_amt(&res.gross_out, "60000");
+        assert_amt(&res.net_out, "59960");
     }
 
     #[test]
     fn position_take_profit() {
-        let r = preview(&CalcInput {
+        let res = preview(&CalcInput {
             mode: CalcMode::Position,
             amount: amt("2"),
             price_in: amt("1000"),
@@ -182,23 +182,23 @@ mod tests {
             fee_pct: amt("0"),
             ..CalcInput::default()
         });
-        assert_amt(&r.spent, "2000");
-        assert_amt(&r.exit_value, "3000");
-        assert_amt(&r.pnl, "1000");
-        assert_amt(&r.roi_pct, "50");
+        assert_amt(&res.spent, "2000");
+        assert_amt(&res.exit_value, "3000");
+        assert_amt(&res.pnl, "1000");
+        assert_amt(&res.roi_pct, "50");
     }
 
     #[test]
     fn position_stop_loss_risk() {
-        let r = preview(&CalcInput {
+        let res = preview(&CalcInput {
             mode: CalcMode::Position,
             amount: amt("2"),
             price_in: amt("1000"),
             stop_price: Some(amt("900")),
             ..CalcInput::default()
         });
-        assert_amt(&r.risk, "200");
-        assert_amt(&r.risk_pct, "10");
+        assert_amt(&res.risk, "200");
+        assert_amt(&res.risk_pct, "10");
         // a stop above entry must not produce negative risk
         let up = preview(&CalcInput {
             mode: CalcMode::Position,
@@ -212,13 +212,13 @@ mod tests {
 
     #[test]
     fn zero_price_is_safe() {
-        let r = preview(&CalcInput {
+        let res = preview(&CalcInput {
             mode: CalcMode::Position,
             amount: amt("1"),
             price_in: amt("0"),
             target_price: Some(amt("1200")),
             ..CalcInput::default()
         });
-        assert_eq!(r, CalcResult::default());
+        assert_eq!(res, CalcResult::default());
     }
 }

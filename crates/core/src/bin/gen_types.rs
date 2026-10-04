@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let out_dir = match std::env::var_os("TS_RS_EXPORT_DIR") {
-        Some(v) => PathBuf::from(v),
+        Some(raw) => PathBuf::from(raw),
         None => PathBuf::from("src/lib/.ts-tmp"),
     };
     fs::create_dir_all(&out_dir).expect("create export dir");
@@ -117,23 +117,23 @@ fn main() {
     merged.push_str("type Amount = string; // rust_decimal money — always a decimal string\n");
     let mut files: Vec<OsString> = fs::read_dir(&out_dir)
         .expect("read export dir")
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name())
-        .filter(|n| n.to_string_lossy().ends_with(".ts"))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name())
+        .filter(|name| name.to_string_lossy().ends_with(".ts"))
         .collect();
     files.sort();
-    for f in files {
-        let content = fs::read_to_string(out_dir.join(&f)).expect("read export file");
+    for file in files {
+        let content = fs::read_to_string(out_dir.join(&file)).expect("read export file");
         for line in content.lines() {
-            let t = line.trim_start();
-            if t.starts_with("import") || t.starts_with("// This file was generated") {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("import") || trimmed.starts_with("// This file was generated") {
                 continue;
             }
-            let t = t
+            let exported = trimmed
                 .strip_prefix("export ")
                 .map(str::to_string)
                 .unwrap_or_else(|| line.to_string());
-            merged.push_str(&t);
+            merged.push_str(&exported);
             merged.push('\n');
         }
     }
@@ -148,8 +148,8 @@ fn main() {
 fn export_ty<T: ts_rs::TS + 'static>(out_dir: &Path) -> bool {
     match T::export_all_to(out_dir) {
         Ok(()) => true,
-        Err(e) => {
-            eprintln!("gen-types: failed for {}: {e}", T::name());
+        Err(err) => {
+            eprintln!("gen-types: failed for {}: {err}", T::name());
             false
         }
     }

@@ -30,8 +30,8 @@ pub async fn get_cached_price(
     input: AssetPriceInput,
     state: State<'_, AppState>,
 ) -> Result<CachedPrice, String> {
-    let g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_ref().unwrap();
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
     let symbol = input.symbol.trim().to_uppercase();
     if symbol.is_empty() {
         return Ok(CachedPrice::default());
@@ -45,16 +45,16 @@ pub async fn get_cached_price(
         contract: input.contract,
     };
     let key = asset.key();
-    let hit = v
+    let hit = vault
         .doc
         .price_cache
         .iter()
-        .filter(|p| p.asset_key == key)
-        .max_by(|a, b| a.ts.cmp(&b.ts));
+        .filter(|point| point.asset_key == key)
+        .max_by(|left, right| left.ts.cmp(&right.ts));
     Ok(match hit {
-        Some(p) => CachedPrice {
-            price_usd: p.value_usd,
-            ts: p.ts.clone(),
+        Some(point) => CachedPrice {
+            price_usd: point.value_usd,
+            ts: point.ts.clone(),
         },
         None => CachedPrice::default(),
     })
@@ -67,20 +67,21 @@ pub async fn refresh_all(
     state: State<'_, AppState>,
 ) -> Result<RefreshResult, String> {
     let (assets, base) = {
-        let mut g = require_vault(&state).map_err(err_to_string)?;
-        let v = g.as_mut().unwrap();
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_mut().unwrap();
 
         let assets: Vec<trade_core::model::store::AssetRef> = {
             let mut seen = std::collections::HashSet::new();
-            v.doc
+            vault
+                .doc
                 .holdings
                 .iter()
-                .filter(|h| h.asset.is_crypto())
-                .map(|h| h.asset.clone())
-                .filter(|a| seen.insert(a.key()))
+                .filter(|hit| hit.asset.is_crypto())
+                .map(|hit| hit.asset.clone())
+                .filter(|asset| seen.insert(asset.key()))
                 .collect()
         };
-        let base = v.doc.settings.base_currency.clone();
+        let base = vault.doc.settings.base_currency.clone();
         (assets, base)
     };
 
@@ -95,12 +96,12 @@ pub async fn refresh_all(
         .await
         .map_err(crate::commands::err_to_string)?;
 
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    trade_core::pricing::PricingService::apply_prices(&mut v.doc, &prices);
-    trade_core::pricing::PricingService::apply_fx(&mut v.doc, &fx);
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    trade_core::pricing::PricingService::apply_prices(&mut vault.doc, &prices);
+    trade_core::pricing::PricingService::apply_fx(&mut vault.doc, &fx);
     let updated_at = trade_core::model::vault::now_iso();
-    let _ = v.persist();
+    let _ = vault.persist();
 
     let result = RefreshResult {
         prices: prices.len(),
@@ -125,9 +126,10 @@ pub async fn set_tx_prices(
     input: SetTxPricesInput,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    v.set_prices(&input.transaction_id, input.price_usd, input.fx_override)
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault
+        .set_prices(&input.transaction_id, input.price_usd, input.fx_override)
         .map_err(crate::commands::err_to_string)
 }
 
@@ -152,13 +154,13 @@ pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, Str
 
     let candles = candles
         .into_iter()
-        .map(|c| CandlePoint {
-            ts: c.ts,
-            open: c.open.to_string(),
-            high: c.high.to_string(),
-            low: c.low.to_string(),
-            close: c.close.to_string(),
-            volume: c.volume.to_string(),
+        .map(|candle| CandlePoint {
+            ts: candle.ts,
+            open: candle.open.to_string(),
+            high: candle.high.to_string(),
+            low: candle.low.to_string(),
+            close: candle.close.to_string(),
+            volume: candle.volume.to_string(),
         })
         .collect();
 

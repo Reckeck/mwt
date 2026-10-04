@@ -45,7 +45,7 @@ const option = computed<ChartOption>(() => ({
       smooth: true,
       showSymbol: false,
       // ts_ms is a bigint on the TS side
-      data: points.value.map((p) => [Number(p.ts_ms), Number(p.value_base)]),
+      data: points.value.map((point) => [Number(point.ts_ms), Number(point.value_base)]),
       lineStyle: { width: 2 },
       areaStyle: { opacity: 0.12 },
     },

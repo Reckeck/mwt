@@ -31,7 +31,7 @@ const widths = {
 </script>
 
 <template>
-  <DialogRoot :open="props.open" @update:open="(v) => emit('update:open', v)">
+  <DialogRoot :open="props.open" @update:open="(value) => emit('update:open', value)">
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in" />
       <DialogContent

@@ -21,8 +21,8 @@ export function useViewport() {
   return width
 }
 
-export function sidebarState(w: number): SidebarState {
-  if (w >= BREAKPOINT_FULL) return 'full'
-  if (w >= BREAKPOINT_RAIL) return 'rail'
+export function sidebarState(width: number): SidebarState {
+  if (width >= BREAKPOINT_FULL) return 'full'
+  if (width >= BREAKPOINT_RAIL) return 'rail'
   return 'compact'
 }

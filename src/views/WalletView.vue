@@ -62,20 +62,20 @@ const isArchived = computed(() => store.value?.archived === true)
 const decimals = computed(() => settingsStore.settings?.display_decimals ?? 8)
 const positions = computed(() => overview.data.value?.positions ?? [])
 
-const money = (v: string) => formatMoney(v, { currency: base.value, decimals: 2 })
+const money = (value: string) => formatMoney(value, { currency: base.value, decimals: 2 })
 
 /** Backend failures surface with their own code so the cause is visible. */
 const errorText = computed(() => {
-  const e = overview.error.value as AppError | null
-  if (!e) return t('wallet.notFound')
-  const known = t(`errors.${e.code}`)
-  return known === `errors.${e.code}` ? e.message : known
+  const failure = overview.error.value as AppError | null
+  if (!failure) return t('wallet.notFound')
+  const known = t(`errors.${failure.code}`)
+  return known === `errors.${failure.code}` ? failure.message : known
 })
 
-function pnlTone(v: string): string {
-  const n = Number(v)
-  if (n > 0) return 'text-emerald-600 dark:text-emerald-400'
-  if (n < 0) return 'text-destructive'
+function pnlTone(value: string): string {
+  const amount = Number(value)
+  if (amount > 0) return 'text-emerald-600 dark:text-emerald-400'
+  if (amount < 0) return 'text-destructive'
   return ''
 }
 
@@ -106,10 +106,11 @@ const stats = computed(() => [
     key: 'positions',
     label: t('pos.title'),
     value: String(positions.value.length),
-    hint: positions.value
-      .slice(0, 3)
-      .map((p) => p.asset.symbol.toUpperCase())
-      .join(' · ') || '—',
+    hint:
+      positions.value
+        .slice(0, 3)
+        .map((position) => position.asset.symbol.toUpperCase())
+        .join(' · ') || '—',
     tone: '',
   },
   {
@@ -184,8 +185,8 @@ async function saveBybitKey() {
     bybitSecret.value = ''
     bybitSaved.value = true
     await keyStatus.refetch()
-  } catch (e) {
-    bybitError.value = parseError(e).message
+  } catch (err) {
+    bybitError.value = parseError(err).message
   } finally {
     bybitBusy.value = false
   }
@@ -198,8 +199,8 @@ async function removeBybitKey() {
     await call('clear_exchange_key', { storeId: storeId.value })
     bybitSaved.value = false
     await keyStatus.refetch()
-  } catch (e) {
-    bybitError.value = parseError(e).message
+  } catch (err) {
+    bybitError.value = parseError(err).message
   } finally {
     bybitBusy.value = false
   }
@@ -301,9 +302,9 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
         <span
           class="flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ring-background"
           :style="{
-            backgroundColor: store.color + '1A',
+            backgroundColor: `${store.color}1A`,
             color: store.color,
-            borderColor: store.color + '33',
+            borderColor: `${store.color}33`,
           }"
         >
           <component :is="getStoreIcon(store.kind)" class="size-4" />
@@ -373,10 +374,10 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
 
     <!-- Stats strip -->
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <Card v-for="s in stats" :key="s.key" class="p-4">
-        <p class="truncate text-xs text-muted-foreground">{{ s.label }}</p>
-        <p class="mt-1 truncate text-lg font-bold tabular-nums" :class="s.tone">{{ s.value }}</p>
-        <p class="truncate text-xs text-muted-foreground">{{ s.hint }}</p>
+      <Card v-for="stat in stats" :key="stat.key" class="p-4">
+        <p class="truncate text-xs text-muted-foreground">{{ stat.label }}</p>
+        <p class="mt-1 truncate text-lg font-bold tabular-nums" :class="stat.tone">{{ stat.value }}</p>
+        <p class="truncate text-xs text-muted-foreground">{{ stat.hint }}</p>
       </Card>
     </div>
 

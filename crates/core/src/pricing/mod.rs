@@ -128,25 +128,28 @@ impl PricingService {
     /// Best cached FX rate for a currency (refresh if absent).
     pub async fn fx_rate(&self, doc: &mut VaultDoc, base: &str) -> Result<Amount> {
         let base_l = base.to_lowercase();
-        if let Some(p) = doc.fx_cache.iter().find(|p| p.currency == base_l)
-            && fresh(&p.ts, FX_TTL_SECONDS)
+        if let Some(point) = doc.fx_cache.iter().find(|point| point.currency == base_l)
+            && fresh(&point.ts, FX_TTL_SECONDS)
         {
-            return Ok(p.per_usd);
+            return Ok(point.per_usd);
         }
         let _ = self.refresh_fx(doc, &base_l).await;
         doc.fx_cache
             .iter()
-            .find(|p| p.currency == base_l)
-            .map(|p| p.per_usd)
+            .find(|point| point.currency == base_l)
+            .map(|point| point.per_usd)
             .ok_or_else(|| Error::Pricing(format!("no fx rate for {base_l}")))
     }
 
     /// Cached USD price of an asset (refreshed automagically if absent/stale).
     pub async fn price_usd_cached(&self, doc: &mut VaultDoc, asset: &AssetRef) -> Result<Amount> {
-        if let Some(p) = doc.price_cache.iter().find(|p| p.asset_key == asset.key())
-            && fresh(&p.ts, PRICE_TTL_SECONDS)
+        if let Some(point) = doc
+            .price_cache
+            .iter()
+            .find(|point| point.asset_key == asset.key())
+            && fresh(&point.ts, PRICE_TTL_SECONDS)
         {
-            return Ok(p.value_usd);
+            return Ok(point.value_usd);
         }
         let val = self.price_usd(asset).await?;
         upsert_prices(
@@ -172,20 +175,22 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
 
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
 
         let mut hits = Vec::new();
-        if let Some(coins) = body.get("coins").and_then(|c| c.as_array()) {
+        if let Some(coins) = body.get("coins").and_then(|list| list.as_array()) {
             for coin in coins.iter().take(limit) {
                 let id = coin["id"].as_str().unwrap_or_default();
                 let symbol = coin["symbol"].as_str().unwrap_or_default().to_uppercase();
                 let name = coin["name"].as_str().unwrap_or_default();
-                let platform = coin.pointer("/market_cap_rank").and_then(|v| v.as_u64());
+                let platform = coin
+                    .pointer("/market_cap_rank")
+                    .and_then(|rank| rank.as_u64());
                 if !id.is_empty() {
                     hits.push(AssetSearchHit {
                         symbol,
@@ -198,7 +203,7 @@ impl PricingService {
                 }
             }
         }
-        hits.sort_by_key(|h| h.rank);
+        hits.sort_by_key(|hit| hit.rank);
         Ok(hits)
     }
 
@@ -207,24 +212,24 @@ impl PricingService {
     async fn price_usd(&self, asset: &AssetRef) -> Result<Amount> {
         // 1) CoinGecko by id
         if let Some(id) = &asset.coingecko_id
-            && let Ok(v) = self
+            && let Ok(prices) = self
                 .coingecko_id_prices(&[(id.clone(), &asset.symbol)])
                 .await
-            && v.get(id).is_some_and(|a| !a.is_zero())
+            && prices.get(id).is_some_and(|price| !price.is_zero())
         {
-            return Ok(v[id]);
+            return Ok(prices[id]);
         }
         // 2) CoinGecko token by contract
         if let (Some(chain), Some(contract)) = (asset.chain, &asset.contract)
-            && let Ok(v) = self
+            && let Ok(price) = self
                 .coingecko_token_price(chain, contract, &asset.symbol)
                 .await
         {
-            return Ok(v);
+            return Ok(price);
         }
         // 3) CoinCap search
-        if let Ok(v) = self.coincap_symbol(asset).await {
-            return Ok(v);
+        if let Ok(price) = self.coincap_symbol(asset).await {
+            return Ok(price);
         }
         // 4) Binance ticker
         self.binance_ticker(&asset.symbol).await
@@ -248,7 +253,7 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
                 "coingecko http {:?}",
@@ -258,10 +263,10 @@ impl PricingService {
         let body: HashMap<String, serde_json::Value> = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         let mut out = HashMap::new();
-        for (id, v) in body {
-            if let Some(price) = v.get("usd").and_then(|p| p.as_f64()) {
+        for (id, quote) in body {
+            if let Some(price) = quote.get("usd").and_then(|value| value.as_f64()) {
                 out.insert(id, Amount::from_f64(price));
             }
         }
@@ -287,7 +292,7 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
                 "token price http {:?}",
@@ -297,9 +302,9 @@ impl PricingService {
         let body: HashMap<String, HashMap<String, f64>> = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         body.get(contract)
-            .and_then(|m| m.get("usd"))
+            .and_then(|quote| quote.get("usd"))
             .copied()
             .ok_or_else(|| Error::Pricing(format!("no price for {symbol} token")))
             .map(Amount::from_f64)
@@ -315,27 +320,27 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("coincap http {:?}", resp.status())));
         }
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         let arr = body
             .get("data")
-            .and_then(|d| d.as_array())
+            .and_then(|data| data.as_array())
             .cloned()
             .unwrap_or_default();
         for item in arr {
             let sym = item["symbol"].as_str().unwrap_or_default().to_uppercase();
             if sym == asset.symbol
-                && let Some(p) = item["priceUsd"]
+                && let Some(raw) = item["priceUsd"]
                     .as_str()
-                    .and_then(|s| Decimal::from_str_exact(s).ok())
+                    .and_then(|text| Decimal::from_str_exact(text).ok())
             {
-                return Ok(Amount(p));
+                return Ok(Amount(raw));
             }
         }
         Err(Error::Pricing(format!(
@@ -355,17 +360,17 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("binance http {:?}", resp.status())));
         }
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         body.get("price")
-            .and_then(|p| p.as_str())
-            .and_then(|s| Decimal::from_str_exact(s).ok())
+            .and_then(|price| price.as_str())
+            .and_then(|text| Decimal::from_str_exact(text).ok())
             .map(Amount)
             .ok_or_else(|| Error::Pricing(format!("no binance price for {symbol}")))
     }
@@ -379,26 +384,26 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("er-api http {:?}", resp.status())));
         }
         let body: HashMap<String, serde_json::Value> = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         let rates = body
             .get("rates")
             .cloned()
             .unwrap_or(serde_json::Value::Null);
         let pairs = match rates {
-            serde_json::Value::Object(m) => m,
+            serde_json::Value::Object(map) => map,
             _ => return Err(Error::Pricing("er-api: no rates".into())),
         };
         let mut out = HashMap::new();
-        for (ccy, v) in pairs {
-            if let Some(f) = v.as_f64() {
-                out.insert(ccy.to_lowercase(), Amount::from_f64(f));
+        for (ccy, rate) in pairs {
+            if let Some(rate) = rate.as_f64() {
+                out.insert(ccy.to_lowercase(), Amount::from_f64(rate));
             }
         }
         Ok(out)
@@ -420,29 +425,29 @@ pub struct AssetSearchHit {
 
 fn upsert_prices(cache: &mut Vec<PricePoint>, fresh: &[PricePoint]) {
     let mut known: HashSet<&str> = HashSet::new();
-    for p in fresh {
-        known.insert(p.asset_key.as_str());
+    for point in fresh {
+        known.insert(point.asset_key.as_str());
     }
-    cache.retain(|p| !known.contains(p.asset_key.as_str()));
+    cache.retain(|point| !known.contains(point.asset_key.as_str()));
     cache.extend_from_slice(fresh);
     // prune: drop assets with more than 2000 cached points (oldest half)
     let mut counts: HashMap<String, usize> = HashMap::new();
-    for p in cache.iter() {
-        *counts.entry(p.asset_key.clone()).or_default() += 1;
+    for point in cache.iter() {
+        *counts.entry(point.asset_key.clone()).or_default() += 1;
     }
     let over: Vec<String> = counts
         .iter()
-        .filter(|(_, n)| **n > 2000)
-        .map(|(k, _)| k.clone())
+        .filter(|(_, count)| **count > 2000)
+        .map(|(key, _)| key.clone())
         .collect();
     for key in over {
-        cache.retain(|p| p.asset_key != key);
+        cache.retain(|point| point.asset_key != key);
     }
 }
 
 fn upsert_fx(cache: &mut Vec<FxPoint>, fresh: &[FxPoint]) {
-    let known: HashSet<&str> = fresh.iter().map(|p| p.currency.as_str()).collect();
-    cache.retain(|p| !known.contains(p.currency.as_str()));
+    let known: HashSet<&str> = fresh.iter().map(|point| point.currency.as_str()).collect();
+    cache.retain(|point| !known.contains(point.currency.as_str()));
     cache.extend_from_slice(fresh);
 }
 

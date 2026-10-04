@@ -14,8 +14,8 @@ const rest = computed(() => {
   return others
 })
 
-function onInput(e: Event) {
-  model.value = (e.target as HTMLInputElement).value
+function onInput(event: Event) {
+  model.value = (event.target as HTMLInputElement).value
 }
 </script>
 

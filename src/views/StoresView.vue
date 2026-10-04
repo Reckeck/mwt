@@ -47,7 +47,7 @@ async function submitCreate() {
 }
 
 const toggleArchive = useMutation({
-  mutationFn: (s: Store) => call('archive_store', { id: s.id, archived: !s.archived }),
+  mutationFn: (store: Store) => call('archive_store', { id: store.id, archived: !store.archived }),
   onSuccess: () => void invalidate(),
 })
 
@@ -68,35 +68,35 @@ const remove = useMutation({
     </div>
 
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
-      <Card v-for="s in stores.data.value ?? []" :key="s.id" :class="cn(s.archived && 'opacity-60')">
+      <Card v-for="store in stores.data.value ?? []" :key="store.id" :class="cn(store.archived && 'opacity-60')">
         <template #header>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <span
                 class="flex size-6 shrink-0 items-center justify-center rounded-md border"
                 :style="{
-                  backgroundColor: s.color + '1A',
-                  color: s.color,
-                  borderColor: s.color + '33',
+                  backgroundColor: `${store.color}1A`,
+                  color: store.color,
+                  borderColor: `${store.color}33`,
                 }"
               >
-                <component :is="getStoreIcon(s.kind)" class="size-3.5" />
+                <component :is="getStoreIcon(store.kind)" class="size-3.5" />
               </span>
-              <p class="font-medium">{{ s.name }}</p>
+              <p class="font-medium">{{ store.name }}</p>
             </div>
             <div class="flex items-center gap-1">
-              <Badge variant="secondary">{{ t(`stores.kind.${s.kind}`) }}</Badge>
+              <Badge variant="secondary">{{ t(`stores.kind.${store.kind}`) }}</Badge>
             </div>
           </div>
         </template>
         <div class="flex items-center justify-between gap-2">
-          <p class="text-sm text-muted-foreground">{{ s.note || '—' }}</p>
+          <p class="text-sm text-muted-foreground">{{ store.note || '—' }}</p>
           <div class="flex gap-1">
-            <Button variant="ghost" size="icon" :title="s.archived ? t('stores.unarchive') : t('stores.archive')" @click="toggleArchive.mutate(s)">
-              <ArchiveRestore v-if="s.archived" class="size-4" />
+            <Button variant="ghost" size="icon" :title="store.archived ? t('stores.unarchive') : t('stores.archive')" @click="toggleArchive.mutate(store)">
+              <ArchiveRestore v-if="store.archived" class="size-4" />
               <Archive v-else class="size-4" />
             </Button>
-            <Button variant="ghost" size="icon" :title="t('stores.delete')" @click="remove.mutate(s.id)">
+            <Button variant="ghost" size="icon" :title="t('stores.delete')" @click="remove.mutate(store.id)">
               <Trash2 class="size-4 text-destructive" />
             </Button>
           </div>
@@ -128,7 +128,7 @@ const remove = useMutation({
             v-model="kind"
             class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           >
-            <option v-for="k in kinds" :key="k" :value="k">{{ t(`stores.kind.${k}`) }}</option>
+            <option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`stores.kind.${kind}`) }}</option>
           </select>
         </div>
         <div class="grid gap-1.5">

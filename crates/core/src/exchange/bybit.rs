@@ -80,9 +80,9 @@ impl Execution {
     /// is matched against the known USDT/USDC suffixes first and only then
     /// guessed from the remainder.
     pub fn split_symbol(symbol: &str) -> Option<(String, String)> {
-        let s = symbol.to_ascii_uppercase();
+        let upper = symbol.to_ascii_uppercase();
         for quote in ["USDT", "USDC", "USD", "BTC", "ETH"] {
-            if let Some(base) = s.strip_suffix(quote)
+            if let Some(base) = upper.strip_suffix(quote)
                 && !base.is_empty()
                 && base != quote
             {
@@ -98,7 +98,7 @@ impl Execution {
     pub fn is_closing(&self) -> bool {
         self.closed_size
             .as_ref()
-            .is_some_and(|s| !s.is_empty() && s != "0")
+            .is_some_and(|size| !size.is_empty() && size != "0")
     }
 
     /// Best-effort product category from the symbol, for imports that sweep
@@ -142,7 +142,7 @@ impl Execution {
             (self.symbol.to_ascii_uppercase(), String::new())
         });
 
-        let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
+        let nonempty = |raw: String| if raw.is_empty() { None } else { Some(raw) };
 
         let (asset_sold, qty_sold, asset_bought, qty_bought) = if is_buy {
             (
@@ -249,19 +249,19 @@ struct ApiExecution {
 }
 
 impl From<ApiExecution> for Execution {
-    fn from(a: ApiExecution) -> Self {
+    fn from(api: ApiExecution) -> Self {
         Execution {
-            symbol: a.symbol,
-            side: a.side,
-            order_type: a.order_type,
-            exec_price: a.exec_price,
-            exec_qty: a.exec_qty,
-            exec_value: a.exec_value,
-            exec_fee: a.exec_fee,
-            exec_time: a.exec_time,
-            is_maker: a.is_maker,
-            closed_size: a.closed_size,
-            exec_id: a.exec_id,
+            symbol: api.symbol,
+            side: api.side,
+            order_type: api.order_type,
+            exec_price: api.exec_price,
+            exec_qty: api.exec_qty,
+            exec_value: api.exec_value,
+            exec_fee: api.exec_fee,
+            exec_time: api.exec_time,
+            is_maker: api.is_maker,
+            closed_size: api.closed_size,
+            exec_id: api.exec_id,
         }
     }
 }
@@ -351,14 +351,14 @@ impl BybitClient {
 
         let limit = limit.clamp(1, 100);
         let mut query = format!("category={}&limit={limit}", category.as_str());
-        if let Some(s) = symbol.filter(|s| !s.is_empty()) {
+        if let Some(filter) = symbol.filter(|sym| !sym.is_empty()) {
             query.push_str("&symbol=");
-            query.push_str(s);
+            query.push_str(filter);
         }
 
         let timestamp_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
+            .map(|elapsed| elapsed.as_millis() as u64)
             .unwrap_or_default();
 
         let headers =
@@ -371,12 +371,12 @@ impl BybitClient {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
 
         let envelope: ApiEnvelope<ExecutionPage> = resp
             .json()
             .await
-            .map_err(|e| Error::Network(e.to_string()))?;
+            .map_err(|err| Error::Network(err.to_string()))?;
         if envelope.retcode != 0 {
             return Err(Error::Network(format!(
                 "bybit error {}: {}",
@@ -386,7 +386,7 @@ impl BybitClient {
 
         Ok(envelope
             .result
-            .map(|p| p.list.into_iter().map(Execution::from).collect())
+            .map(|page| page.list.into_iter().map(Execution::from).collect())
             .unwrap_or_default())
     }
 
@@ -440,18 +440,18 @@ impl BybitClient {
                     .headers(headers)
                     .send()
                     .await
-                    .map_err(|e| Error::Network(e.to_string()))?;
+                    .map_err(|err| Error::Network(err.to_string()))?;
 
                 let envelope: ApiEnvelope<ExecutionPage> = resp
                     .json()
                     .await
-                    .map_err(|e| Error::Network(e.to_string()))?;
+                    .map_err(|err| Error::Network(err.to_string()))?;
                 if envelope.retcode != 0 {
                     // No permission for this category (common for inverse on a
                     // spot-only key): skip it, keep sweeping the others.
                     break;
                 }
-                let rows = envelope.result.map(|p| p.list).unwrap_or_default();
+                let rows = envelope.result.map(|page| page.list).unwrap_or_default();
                 all.extend(rows.into_iter().map(Execution::from));
 
                 if window_start == 0 {
@@ -462,14 +462,14 @@ impl BybitClient {
         }
 
         // Sort newest-first (by exec_time desc)
-        all.sort_by(|a, b| b.exec_time.cmp(&a.exec_time));
+        all.sort_by(|left, right| right.exec_time.cmp(&left.exec_time));
         all.truncate(max_total as usize);
         Ok(all)
     }
 }
 
-fn header(v: &str) -> Result<HeaderValue> {
-    HeaderValue::from_str(v).map_err(|_| Error::InvalidInput("invalid header value".into()))
+fn header(value: &str) -> Result<HeaderValue> {
+    HeaderValue::from_str(value).map_err(|_| Error::InvalidInput("invalid header value".into()))
 }
 
 impl BybitClient {
@@ -477,18 +477,18 @@ impl BybitClient {
     fn now_millis() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
+            .map(|elapsed| elapsed.as_millis() as u64)
             .unwrap_or_default()
     }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
         use std::fmt::Write;
-        let _ = write!(s, "{b:02x}");
+        let _ = write!(out, "{byte:02x}");
     }
-    s
+    out
 }
 
 #[cfg(test)]
@@ -557,15 +557,18 @@ mod tests {
         assert_eq!(sig.len(), 64);
         assert!(
             sig.chars()
-                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+                .all(|char| char.is_ascii_hexdigit() && !char.is_ascii_uppercase())
         );
     }
 
     #[test]
     fn changing_the_query_changes_the_signature() {
-        let a = BybitClient::signed_headers("k", "s", 5000, 1, "category=spot").unwrap();
-        let b = BybitClient::signed_headers("k", "s", 5000, 1, "category=linear").unwrap();
-        assert_ne!(a.get("X-BAPI-SIGN").unwrap(), b.get("X-BAPI-SIGN").unwrap());
+        let spot = BybitClient::signed_headers("k", "s", 5000, 1, "category=spot").unwrap();
+        let linear = BybitClient::signed_headers("k", "s", 5000, 1, "category=linear").unwrap();
+        assert_ne!(
+            spot.get("X-BAPI-SIGN").unwrap(),
+            linear.get("X-BAPI-SIGN").unwrap()
+        );
     }
 
     #[test]
@@ -588,77 +591,77 @@ mod tests {
     /// A buy spends quote to get base, so the *sold* leg must be the quote.
     #[test]
     fn buy_prefill_swaps_the_legs_correctly() {
-        let p = fill().to_prefill();
-        assert_eq!(p.side, "buy");
-        assert_eq!(p.asset_sold.as_deref(), Some("USDT"));
-        assert_eq!(p.qty_sold.as_deref(), Some("32500"));
-        assert_eq!(p.asset_bought.as_deref(), Some("BTC"));
-        assert_eq!(p.qty_bought.as_deref(), Some("0.5"));
-        assert_eq!(p.price.as_deref(), Some("65000"));
-        assert_eq!(p.fee.as_deref(), Some("16.25"));
-        assert_eq!(p.fee_asset.as_deref(), Some("USDT"));
+        let prefill = fill().to_prefill();
+        assert_eq!(prefill.side, "buy");
+        assert_eq!(prefill.asset_sold.as_deref(), Some("USDT"));
+        assert_eq!(prefill.qty_sold.as_deref(), Some("32500"));
+        assert_eq!(prefill.asset_bought.as_deref(), Some("BTC"));
+        assert_eq!(prefill.qty_bought.as_deref(), Some("0.5"));
+        assert_eq!(prefill.price.as_deref(), Some("65000"));
+        assert_eq!(prefill.fee.as_deref(), Some("16.25"));
+        assert_eq!(prefill.fee_asset.as_deref(), Some("USDT"));
     }
 
     #[test]
     fn sell_prefill_swaps_the_legs_correctly() {
-        let mut f = fill();
-        f.side = "Sell".into();
-        let p = f.to_prefill();
-        assert_eq!(p.side, "sell");
-        assert_eq!(p.asset_sold.as_deref(), Some("BTC"));
-        assert_eq!(p.qty_sold.as_deref(), Some("0.5"));
-        assert_eq!(p.asset_bought.as_deref(), Some("USDT"));
-        assert_eq!(p.qty_bought.as_deref(), Some("32500"));
-        assert_eq!(p.fee_asset.as_deref(), Some("BTC"));
+        let mut execution = fill();
+        execution.side = "Sell".into();
+        let prefill = execution.to_prefill();
+        assert_eq!(prefill.side, "sell");
+        assert_eq!(prefill.asset_sold.as_deref(), Some("BTC"));
+        assert_eq!(prefill.qty_sold.as_deref(), Some("0.5"));
+        assert_eq!(prefill.asset_bought.as_deref(), Some("USDT"));
+        assert_eq!(prefill.qty_bought.as_deref(), Some("32500"));
+        assert_eq!(prefill.fee_asset.as_deref(), Some("BTC"));
     }
 
     #[test]
     fn exec_time_millis_becomes_iso_seconds() {
-        let p = fill().to_prefill();
+        let prefill = fill().to_prefill();
         // 1700000000000 ms == 2023-11-14T22:13:20Z
-        assert_eq!(p.occurred_at.as_deref(), Some("2023-11-14T22:13:20Z"));
+        assert_eq!(prefill.occurred_at.as_deref(), Some("2023-11-14T22:13:20Z"));
     }
 
     #[test]
     fn comments_record_the_provenance() {
-        let p = fill().to_prefill();
-        let c = p.comment.unwrap();
-        assert!(c.contains("bybit"), "{c}");
-        assert!(c.contains("buy"), "{c}");
-        assert!(c.contains("0.5"), "{c}");
-        assert!(c.contains("65000"), "{c}");
+        let prefill = fill().to_prefill();
+        let comment = prefill.comment.unwrap();
+        assert!(comment.contains("bybit"), "{comment}");
+        assert!(comment.contains("buy"), "{comment}");
+        assert!(comment.contains("0.5"), "{comment}");
+        assert!(comment.contains("65000"), "{comment}");
     }
 
     #[test]
     fn closing_positions_are_detected() {
-        let mut f = fill();
-        assert!(!f.is_closing());
-        f.closed_size = Some("0.5".into());
-        assert!(f.is_closing());
-        f.closed_size = Some("0".into());
-        assert!(!f.is_closing());
-        f.closed_size = None;
-        assert!(!f.is_closing());
+        let mut execution = fill();
+        assert!(!execution.is_closing());
+        execution.closed_size = Some("0.5".into());
+        assert!(execution.is_closing());
+        execution.closed_size = Some("0".into());
+        assert!(!execution.is_closing());
+        execution.closed_size = None;
+        assert!(!execution.is_closing());
     }
 
     #[test]
     fn unknown_symbol_layout_does_not_panic() {
-        let mut f = fill();
-        f.symbol = "MYSTERY".into();
-        let p = f.to_prefill();
+        let mut execution = fill();
+        execution.symbol = "MYSTERY".into();
+        let prefill = execution.to_prefill();
         // Base leg is known; the quote leg is not, so it must stay empty
         // rather than be guessed at.
-        assert_eq!(p.asset_bought.as_deref(), Some("MYSTERY"));
-        assert_eq!(p.qty_bought.as_deref(), Some("0.5"));
-        assert_eq!(p.asset_sold, None);
-        assert_eq!(p.fee_asset, None);
+        assert_eq!(prefill.asset_bought.as_deref(), Some("MYSTERY"));
+        assert_eq!(prefill.qty_bought.as_deref(), Some("0.5"));
+        assert_eq!(prefill.asset_sold, None);
+        assert_eq!(prefill.fee_asset, None);
     }
 
     /// No credentials must short-circuit to an empty list, never a request.
     #[tokio::test]
     async fn missing_credentials_return_empty_without_network() {
-        let c = BybitClient::testnet();
-        let out = c
+        let client = BybitClient::testnet();
+        let out = client
             .executions("", "", Category::Spot, None, 10)
             .await
             .unwrap();

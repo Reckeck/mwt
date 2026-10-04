@@ -7,43 +7,43 @@ export function formatMoney(
 ): string {
   if (value === null || value === undefined || value === '') return '—'
   const { decimals = 2, currency } = opts
-  const n = typeof value === 'string' ? Number(value) : value
+  const numeric = typeof value === 'string' ? Number(value) : value
   const fmt = new Intl.NumberFormat(activeLocale.value, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })
-  const body = fmt.format(n)
+  const body = fmt.format(numeric)
   return currency ? `${body} ${currency.toUpperCase()}` : body
 }
 
 export function formatPct(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—'
-  const n = typeof value === 'string' ? Number(value) : value
-  return `${n.toFixed(2)}%`
+  const numeric = typeof value === 'string' ? Number(value) : value
+  return `${numeric.toFixed(2)}%`
 }
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
   return new Intl.DateTimeFormat(activeLocale.value, {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
-  }).format(d)
+  }).format(date)
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
   return new Intl.DateTimeFormat(activeLocale.value, {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(d)
+  }).format(date)
 }
 
 export function useMoney() {

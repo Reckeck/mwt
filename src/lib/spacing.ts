@@ -9,44 +9,44 @@ export const Spacing = {
   base: 1, // 4px
 
   // Common spacing values (Tailwind units)
-  xs: 0.5,   // 2px  - gap-0.5, p-0.5
-  sm: 1,     // 4px  - gap-1, p-1, m-1
-  md: 1.5,   // 6px  - gap-1.5, p-1.5, space-y-1.5
-  lg: 2,     // 8px  - gap-2, p-2, m-2
-  xl: 3,     // 12px - gap-3, p-3, m-3
-  '2xl': 4,  // 16px - gap-4, p-4, m-4
-  '3xl': 6,  // 24px - gap-6, p-6, m-6
-  '4xl': 8,  // 32px - gap-8, p-8, m-8
+  xs: 0.5, // 2px  - gap-0.5, p-0.5
+  sm: 1, // 4px  - gap-1, p-1, m-1
+  md: 1.5, // 6px  - gap-1.5, p-1.5, space-y-1.5
+  lg: 2, // 8px  - gap-2, p-2, m-2
+  xl: 3, // 12px - gap-3, p-3, m-3
+  '2xl': 4, // 16px - gap-4, p-4, m-4
+  '3xl': 6, // 24px - gap-6, p-6, m-6
+  '4xl': 8, // 32px - gap-8, p-8, m-8
 
   // Semantic spacing aliases
   // Form fields
-  formGap: 1.5,        // gap-1.5 - gap between label and input
-  formFieldGap: 4,     // gap-4 - gap between form fields
-  formSectionGap: 6,   // gap-6 - gap between form sections
+  formGap: 1.5, // gap-1.5 - gap between label and input
+  formFieldGap: 4, // gap-4 - gap between form fields
+  formSectionGap: 6, // gap-6 - gap between form sections
 
   // Layout
-  cardPadding: 4,      // p-4 for cards
-  cardPaddingLg: 6,    // p-6 for large cards
-  sectionGap: 6,       // gap-6 between sections
-  pagePadding: 4,      // p-4 for page containers
-  pagePaddingLg: 6,    // p-6 for large page containers
-  headerHeight: 14,    // h-14 for headers (56px)
+  cardPadding: 4, // p-4 for cards
+  cardPaddingLg: 6, // p-6 for large cards
+  sectionGap: 6, // gap-6 between sections
+  pagePadding: 4, // p-4 for page containers
+  pagePaddingLg: 6, // p-6 for large page containers
+  headerHeight: 14, // h-14 for headers (56px)
 
   // Components
-  btnGap: 2,           // gap-2 for button icon+text
-  inputGap: 2,         // gap-2 for input icon+text
-  iconSize: 4,         // size-4 (16px) for icons
-  iconSizeSm: 3,       // size-3 (12px) for small icons
-  iconSizeLg: 6,       // size-6 (24px) for large icons
+  btnGap: 2, // gap-2 for button icon+text
+  inputGap: 2, // gap-2 for input icon+text
+  iconSize: 4, // size-4 (16px) for icons
+  iconSizeSm: 3, // size-3 (12px) for small icons
+  iconSizeLg: 6, // size-6 (24px) for large icons
 
   // Navigation
-  navItemGap: 2.5,     // gap-2.5 for nav items
-  navPadding: 3,       // p-3 for nav container
+  navItemGap: 2.5, // gap-2.5 for nav items
+  navPadding: 3, // p-3 for nav container
 
   // Grid gaps
-  gridGapSm: 2,        // gap-2 for tight grids
-  gridGapMd: 4,        // gap-4 for standard grids
-  gridGapLg: 6,        // gap-6 for loose grids
+  gridGapSm: 2, // gap-2 for tight grids
+  gridGapMd: 4, // gap-4 for standard grids
+  gridGapLg: 6, // gap-6 for loose grids
 
   // Container
   containerMaxWidth: 'max-w-7xl', // 80rem = 1280px

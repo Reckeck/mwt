@@ -1,20 +1,7 @@
 import type { Component } from 'vue'
-import {
-  ArrowLeftRight,
-  Banknote,
-  FlaskConical,
-  Landmark,
-  Lock,
-  Wallet,
-} from 'lucide-vue-next'
+import { ArrowLeftRight, Banknote, FlaskConical, Landmark, Lock, Wallet } from 'lucide-vue-next'
 
-export type StoreKind =
-  | 'exchange'
-  | 'hot_wallet'
-  | 'cold_wallet'
-  | 'bank'
-  | 'cash'
-  | 'paper'
+export type StoreKind = 'exchange' | 'hot_wallet' | 'cold_wallet' | 'bank' | 'cash' | 'paper'
 
 export function getStoreIcon(kind: StoreKind): Component {
   switch (kind) {

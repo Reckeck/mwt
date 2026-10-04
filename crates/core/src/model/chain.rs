@@ -136,7 +136,9 @@ impl Chain {
 
     /// Explorer link for a tx hash, if supported.
     pub fn explorer_url(self, tx_hash: &str) -> Option<String> {
-        self.info().explorer.map(|t| t.replace("{tx}", tx_hash))
+        self.info()
+            .explorer
+            .map(|template| template.replace("{tx}", tx_hash))
     }
 }
 

@@ -13,6 +13,7 @@ const rest = computed(() => {
 </script>
 
 <template>
+  <!-- biome-ignore lint/a11y/noLabelWithoutControl: primitive forwards `for` from $attrs to the caller. -->
   <label
     :class="cn('text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70', cls)"
     v-bind="rest"

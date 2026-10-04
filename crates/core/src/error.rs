@@ -77,20 +77,20 @@ impl Error {
 }
 
 impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::Io(e.to_string())
+    fn from(source: std::io::Error) -> Self {
+        Error::Io(source.to_string())
     }
 }
 
 impl From<argon2::password_hash::Error> for Error {
-    fn from(e: argon2::password_hash::Error) -> Self {
-        Error::Crypto(e.to_string())
+    fn from(source: argon2::password_hash::Error) -> Self {
+        Error::Crypto(source.to_string())
     }
 }
 
 impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Error::Serialize(e.to_string())
+    fn from(source: serde_json::Error) -> Self {
+        Error::Serialize(source.to_string())
     }
 }
 

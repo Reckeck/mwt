@@ -13,14 +13,14 @@ const symbol = ref('BTC')
 const draft = ref('BTC')
 
 function submit() {
-  const s = draft.value.trim().toUpperCase().replace(/USDT?$/, '')
-  if (s) symbol.value = s
+  const next = draft.value.trim().toUpperCase().replace(/USDT?$/, '')
+  if (next) symbol.value = next
 }
 
-watch(symbol, (s) => (draft.value = s))
+watch(symbol, (value) => (draft.value = value))
 
-function pick(s: string) {
-  symbol.value = s
+function pick(next: string) {
+  symbol.value = next
 }
 </script>
 
@@ -38,15 +38,15 @@ function pick(s: string) {
       <div class="mx-1 h-5 w-px bg-border" />
 
       <Button
-        v-for="s in WATCHLIST"
-        :key="s"
+        v-for="coin in WATCHLIST"
+        :key="coin"
         variant="ghost"
         size="sm"
         class="px-2 text-xs tabular-nums"
-        :class="symbol === s && 'bg-accent text-accent-foreground'"
-        @click="pick(s)"
+        :class="symbol === coin && 'bg-accent text-accent-foreground'"
+        @click="pick(coin)"
       >
-        {{ s }}
+        {{ coin }}
       </Button>
     </div>
 

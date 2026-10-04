@@ -63,12 +63,12 @@ watch(runs.data, () => {
     selectedRunId.value = runs.data.value[0].id
   }
 })
-const selectedRun = computed(() => runs.data.value?.find((r) => r.id === selectedRunId.value) ?? null)
+const selectedRun = computed(() => runs.data.value?.find((run) => run.id === selectedRunId.value) ?? null)
 
 // Candles query for selected run
 const { data: runCandles, isLoading: candlesLoading, refetch: refetchCandles } = useQuery({
   queryKey: ['run-candles', selectedRunId],
-  queryFn: () => call<GetRunCandlesOutput>('get_run_candles', { input: { run_id: selectedRunId.value! } }),
+  queryFn: () => call<GetRunCandlesOutput>('get_run_candles', { input: { run_id: selectedRunId.value ?? '' } }),
   enabled: !!selectedRunId.value,
 })
 
@@ -76,7 +76,10 @@ const { data: runCandles, isLoading: candlesLoading, refetch: refetchCandles } =
 const showFan = ref(false)
 const { data: gbmData, refetch: refetchGbm } = useQuery({
   queryKey: ['gbm', selectedRunId, showFan],
-  queryFn: () => call<GbmPathsOutput>('get_gbm_paths', { input: { run_id: selectedRunId.value!, paths: 20, horizon: 100 } }),
+  queryFn: () =>
+    call<GbmPathsOutput>('get_gbm_paths', {
+      input: { run_id: selectedRunId.value ?? '', paths: 20, horizon: 100 },
+    }),
   enabled: showFan.value && !!selectedRunId.value,
 })
 
@@ -84,8 +87,8 @@ function addRule(group: Group) {
   editing[group].push(blankRule())
 }
 
-function removeRule(group: Group, i: number) {
-  editing[group].splice(i, 1)
+function removeRule(group: Group, index: number) {
+  editing[group].splice(index, 1)
 }
 
 function buildStrategy(): Strategy {
@@ -119,10 +122,10 @@ async function saveStrategy() {
 }
 
 async function runStrategy() {
-  let selected = (strategies.data.value ?? []).find((s) => s.name === editing.name)
+  let selected = (strategies.data.value ?? []).find((strategy) => strategy.name === editing.name)
   if (!selected) {
     await saveStrategy()
-    selected = (await call<Strategy[]>('list_strategies')).find((s) => s.name === editing.name)
+    selected = (await call<Strategy[]>('list_strategies')).find((strategy) => strategy.name === editing.name)
   }
   if (!selected) return
   await call<SimRun>('run_strategy', {
@@ -157,7 +160,7 @@ const equityOption = computed<ChartOption>(() => {
         showSymbol: false,
         smooth: true,
         name: 'equity',
-        data: curve.map((p) => [p.ts, Number(p.equity)]),
+        data: curve.map((point) => [point.ts, Number(point.equity)]),
       },
     ],
   }
@@ -172,23 +175,29 @@ const candleOption = computed<ChartOption>(() => {
   const trades = run?.trades ?? []
   const signals = run?.signals ?? []
 
-  const ohlc = candles.map((c: CandlePoint) => [c.ts, Number(c.open), Number(c.close), Number(c.low), Number(c.high)])
+  const ohlc = candles.map((candle: CandlePoint) => [
+    candle.ts,
+    Number(candle.open),
+    Number(candle.close),
+    Number(candle.low),
+    Number(candle.high),
+  ])
 
   // Trade markers: buy/sell
   const buyMarkers = trades
-    .filter((t) => t.side === 'buy')
-    .map((t) => ({ ts: t.ts, price: Number(t.price), type: 'buy' as const }))
+    .filter((trade) => trade.side === 'buy')
+    .map((trade) => ({ ts: trade.ts, price: Number(trade.price), type: 'buy' as const }))
   const sellMarkers = trades
-    .filter((t) => t.side === 'sell')
-    .map((t) => ({ ts: t.ts, price: Number(t.price), type: 'sell' as const }))
+    .filter((trade) => trade.side === 'sell')
+    .map((trade) => ({ ts: trade.ts, price: Number(trade.price), type: 'sell' as const }))
 
   // Signal markers: entry/exit with detail
   const entrySignals = signals
-    .filter((s) => s.side === 'entry')
-    .map((s) => ({ ts: s.ts, price: Number(s.price), detail: s.detail, reason: s.reason }))
+    .filter((signal) => signal.side === 'entry')
+    .map((signal) => ({ ts: signal.ts, price: Number(signal.price), detail: signal.detail, reason: signal.reason }))
   const exitSignals = signals
-    .filter((s) => s.side === 'exit')
-    .map((s) => ({ ts: s.ts, price: Number(s.price), detail: s.detail, reason: s.reason }))
+    .filter((signal) => signal.side === 'exit')
+    .map((signal) => ({ ts: signal.ts, price: Number(signal.price), detail: signal.detail, reason: signal.reason }))
 
   // GBM fan paths
   const fanPaths = gbmData.value?.paths ?? []
@@ -217,8 +226,8 @@ const candleOption = computed<ChartOption>(() => {
       symbolSize: 10,
       symbolRotate: 90,
       itemStyle: { color: '#22c55e' },
-      data: buyMarkers.map((m) => ({ value: [m.ts, m.price], itemStyle: { color: '#22c55e' } })),
-      tooltip: { formatter: (p: unknown) => `${t('sim.buy')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { value?: (string | number)[] })?.value?.[1] },
+      data: buyMarkers.map((marker) => ({ value: [marker.ts, marker.price], itemStyle: { color: '#22c55e' } })),
+      tooltip: { formatter: (point: unknown) => `${t('sim.buy')}<br/>${(point as { value?: (string | number)[] })?.value?.[0]}<br/>${(point as { value?: (string | number)[] })?.value?.[1]}` },
     })
   }
   if (sellMarkers.length) {
@@ -229,8 +238,8 @@ const candleOption = computed<ChartOption>(() => {
       symbolSize: 10,
       symbolRotate: -90,
       itemStyle: { color: '#ef4444' },
-      data: sellMarkers.map((m) => ({ value: [m.ts, m.price], itemStyle: { color: '#ef4444' } })),
-      tooltip: { formatter: (p: unknown) => `${t('sim.sell')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { value?: (string | number)[] })?.value?.[1] },
+      data: sellMarkers.map((marker) => ({ value: [marker.ts, marker.price], itemStyle: { color: '#ef4444' } })),
+      tooltip: { formatter: (point: unknown) => `${t('sim.sell')}<br/>${(point as { value?: (string | number)[] })?.value?.[0]}<br/>${(point as { value?: (string | number)[] })?.value?.[1]}` },
     })
   }
   // Signal markers
@@ -242,8 +251,8 @@ const candleOption = computed<ChartOption>(() => {
       symbolSize: 8,
       symbolOffset: [0, '-50%'],
       itemStyle: { color: '#3b82f6' },
-      data: entrySignals.map((s) => ({ value: [s.ts, s.price], detail: s.detail, reason: s.reason })),
-      tooltip: { formatter: (p: unknown) => `${t('sim.signal.entry')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { data?: { reason: string; detail: string } })?.data?.reason + `: ` + (p as { data?: { reason: string; detail: string } })?.data?.detail },
+      data: entrySignals.map((signal) => ({ value: [signal.ts, signal.price], detail: signal.detail, reason: signal.reason })),
+      tooltip: { formatter: (point: unknown) => `${t('sim.signal.entry')}<br/>${(point as { value?: (string | number)[] })?.value?.[0]}<br/>${(point as { data?: { reason: string; detail: string } })?.data?.reason}: ${(point as { data?: { reason: string; detail: string } })?.data?.detail}` },
     })
   }
   if (exitSignals.length) {
@@ -254,8 +263,8 @@ const candleOption = computed<ChartOption>(() => {
       symbolSize: 8,
       symbolOffset: [0, '-50%'],
       itemStyle: { color: '#f97316' },
-      data: exitSignals.map((s) => ({ value: [s.ts, s.price], detail: s.detail, reason: s.reason })),
-      tooltip: { formatter: (p: unknown) => `${t('sim.signal.exit')}<br/>` + (p as { value?: (string | number)[] })?.value?.[0] + `<br/>` + (p as { data?: { reason: string; detail: string } })?.data?.reason + `: ` + (p as { data?: { reason: string; detail: string } })?.data?.detail },
+      data: exitSignals.map((signal) => ({ value: [signal.ts, signal.price], detail: signal.detail, reason: signal.reason })),
+      tooltip: { formatter: (point: unknown) => `${t('sim.signal.exit')}<br/>${(point as { value?: (string | number)[] })?.value?.[0]}<br/>${(point as { data?: { reason: string; detail: string } })?.data?.reason}: ${(point as { data?: { reason: string; detail: string } })?.data?.detail}` },
     })
   }
   // GBM fan paths as low-opacity lines
@@ -266,7 +275,7 @@ const candleOption = computed<ChartOption>(() => {
         name: `${t('sim.fanPath')} ${idx + 1}`,
         showSymbol: false,
         lineStyle: { width: 1, opacity: 0.15, color: '#888' },
-        data: path.map((p: GbmPathPoint) => [p.ts, Number(p.price)]),
+        data: path.map((point: GbmPathPoint) => [point.ts, Number(point.price)]),
         tooltip: { show: false },
       })
     })
@@ -354,7 +363,7 @@ const formatSignalReason = (reason: string) => t(`sim.signal.reason.${reason}`)
                 <option v-for="ind in indicators" :key="ind" :value="ind">{{ ind }}</option>
               </select>
               <select v-model="r.op" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
-                <option v-for="o in ops" :key="o.value" :value="o.value">{{ o.label }}</option>
+                <option v-for="op in ops" :key="op.value" :value="op.value">{{ op.label }}</option>
               </select>
               <Input v-model="r.value" class="h-8 w-24" />
               <Button variant="ghost" size="icon" @click="removeRule(group, i)">
@@ -387,8 +396,8 @@ const formatSignalReason = (reason: string) => t(`sim.signal.reason.${reason}`)
           <div class="mb-4">
             <Label class="block text-sm mb-1">{{ t('sim.selectRun') }}</Label>
             <Select v-model="selectedRunId" @update:model-value="onRunChange($event)">
-              <option v-for="r in runs.data.value" :key="r.id" :value="r.id">
-                {{ r.strategy_id.slice(0, 8) }} · {{ r.started_at }} · {{ r.total_trades }} trades
+              <option v-for="run in runs.data.value" :key="run.id" :value="run.id">
+                {{ run.strategy_id.slice(0, 8) }} · {{ run.started_at }} · {{ run.total_trades }} trades
               </option>
             </Select>
           </div>
@@ -453,12 +462,12 @@ const formatSignalReason = (reason: string) => t(`sim.signal.reason.${reason}`)
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-border">
-                    <tr v-for="s in selectedRun.signals" :key="s.ts" class="hover:bg-muted/50">
-                      <td class="py-2 px-3 font-mono">{{ s.ts }}</td>
-                      <td class="py-2 px-3 text-center capitalize">{{ formatSignalSide(s.side) }}</td>
-                      <td class="py-2 px-3 capitalize">{{ formatSignalReason(s.reason) }}</td>
-                      <td class="py-2 px-3 max-w-xs truncate">{{ s.detail }}</td>
-                      <td class="py-2 px-3 text-right font-mono tabular-nums">{{ Number(s.price).toFixed(4) }}</td>
+                    <tr v-for="signal in selectedRun.signals" :key="signal.ts" class="hover:bg-muted/50">
+                      <td class="py-2 px-3 font-mono">{{ signal.ts }}</td>
+                      <td class="py-2 px-3 text-center capitalize">{{ formatSignalSide(signal.side) }}</td>
+                      <td class="py-2 px-3 capitalize">{{ formatSignalReason(signal.reason) }}</td>
+                      <td class="py-2 px-3 max-w-xs truncate">{{ signal.detail }}</td>
+                      <td class="py-2 px-3 text-right font-mono tabular-nums">{{ Number(signal.price).toFixed(4) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -474,10 +483,10 @@ const formatSignalReason = (reason: string) => t(`sim.signal.reason.${reason}`)
           <p class="font-medium">{{ t('nav.strategyLab') }}</p>
         </template>
         <div class="divide-y divide-border">
-          <div v-for="s in strategies.data.value ?? []" :key="s.id" class="flex items-center justify-between py-3">
+          <div v-for="strategy in strategies.data.value ?? []" :key="strategy.id" class="flex items-center justify-between py-3">
             <div>
-              <p class="font-medium">{{ s.name }}</p>
-              <p class="text-xs text-muted-foreground">{{ s.symbol }} · {{ s.source }}</p>
+              <p class="font-medium">{{ strategy.name }}</p>
+              <p class="text-xs text-muted-foreground">{{ strategy.symbol }} · {{ strategy.source }}</p>
             </div>
           </div>
         </div>

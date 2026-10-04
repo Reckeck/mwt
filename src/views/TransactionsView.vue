@@ -37,7 +37,7 @@ const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outli
   paper_trade: 'outline',
 }
 
-const storeName = (id: string) => stores.data.value?.find((s) => s.id === id)?.name ?? id
+const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
 
 async function remove(id: string) {
   await call('delete_transaction', { id })
@@ -54,7 +54,7 @@ async function remove(id: string) {
         @change="() => queryClient.invalidateQueries({ queryKey: ['transactions'] })"
       >
         <option value="">{{ t('tx.type') }} · все</option>
-        <option v-for="s in stores.data.value ?? []" :key="s.id" :value="s.id">{{ s.name }}</option>
+        <option v-for="store in stores.data.value ?? []" :key="store.id" :value="store.id">{{ store.name }}</option>
       </select>
 
       <Button size="sm" @click="() => queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })">

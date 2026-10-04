@@ -59,9 +59,9 @@ const isOnline = ref(true)
 // Surface that so the user knows there is something to confirm.
 const queryClient = useQueryClient()
 const pendingNotice = ref<number | null>(null)
-void onEvent<{ staged: number }>('bybit-import-pending', (p) => {
+void onEvent<{ staged: number }>('bybit-import-pending', (payload) => {
   queryClient.invalidateQueries({ queryKey: ['pending-imports'] })
-  pendingNotice.value = p.staged
+  pendingNotice.value = payload.staged
   setTimeout(() => (pendingNotice.value = null), 8000)
 })
 
@@ -90,7 +90,7 @@ const titleKey = computed(() => (route.meta.i18n as string | undefined) ?? 'app.
 const walletTitle = computed(() => {
   if (route.name !== 'wallet') return ''
   const id = String(route.params.id ?? '')
-  return storesQuery.data.value?.find((s) => s.id === id)?.name ?? t('nav.wallets')
+  return storesQuery.data.value?.find((store) => store.id === id)?.name ?? t('nav.wallets')
 })
 
 const pageTitle = computed(() => (route.name === 'wallet' ? walletTitle.value : t(titleKey.value)))
@@ -157,9 +157,11 @@ async function lock() {
       </div>
     </aside>
 
-    <div
+    <button
       v-if="sidebar === 'compact' && menuOpen"
-      class="fixed inset-0 z-30 bg-black/40"
+      type="button"
+      class="fixed inset-0 z-30 cursor-default bg-black/40"
+      :aria-label="t('actions.close')"
       @click="menuOpen = false"
     />
 
@@ -214,7 +216,7 @@ async function lock() {
                           ? formatMoney(summary.data.value.total_base, { currency: curr, decimals: 2 })
                           : curr.toLowerCase() === 'usd'
                             ? formatMoney(summary.data.value.total_usd, { currency: 'usd', decimals: 2 })
-                            : formatMoney(summary.data.value.total_usd, { currency: curr, decimals: 2 }) + ' (est.)'
+                            : `${formatMoney(summary.data.value.total_usd, { currency: curr, decimals: 2 })} (est.)`
                       }}
                     </span>
                   </div>
@@ -226,7 +228,7 @@ async function lock() {
             </Tooltip>
             <span class="hidden md:inline-flex items-center gap-1.5 px-2 py-1 text-muted-foreground">
               {{ settingsStore.settings.base_currency.toUpperCase() }}
-              · {{ t('settings.theme.' + settingsStore.settings.theme) }}
+              · {{ t(`settings.theme.${settingsStore.settings.theme}`) }}
             </span>
           </div>
         </div>

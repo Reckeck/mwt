@@ -15,42 +15,50 @@ pub async fn save_strategy(
     input: SaveStrategyInput,
     state: State<'_, AppState>,
 ) -> Result<Strategy, String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
     let mut strategy = input.strategy;
     strategy.id = uuid::Uuid::new_v4().to_string();
     strategy.created_at = trade_core::model::vault::now_iso();
     // never overwrite by name collision; append
-    v.doc.sim.strategies.retain(|s| s.id != strategy.id);
-    v.doc.sim.strategies.push(strategy.clone());
-    v.persist().map_err(crate::commands::err_to_string)?;
+    vault
+        .doc
+        .sim
+        .strategies
+        .retain(|candidate| candidate.id != strategy.id);
+    vault.doc.sim.strategies.push(strategy.clone());
+    vault.persist().map_err(crate::commands::err_to_string)?;
     Ok(strategy)
 }
 
 #[tauri::command]
 pub async fn list_strategies(state: State<'_, AppState>) -> Result<Vec<Strategy>, String> {
-    let g = require_vault(&state).map_err(err_to_string)?;
-    Ok(g.as_ref().unwrap().doc.sim.strategies.clone())
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().doc.sim.strategies.clone())
 }
 
 #[tauri::command]
 pub async fn delete_strategy(id: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    let before = v.doc.sim.strategies.len();
-    v.doc.sim.strategies.retain(|s| s.id != id);
-    v.doc.sim.runs.retain(|r| r.strategy_id != id);
-    if v.doc.sim.strategies.len() == before {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    let before = vault.doc.sim.strategies.len();
+    vault
+        .doc
+        .sim
+        .strategies
+        .retain(|candidate| candidate.id != id);
+    vault.doc.sim.runs.retain(|run| run.strategy_id != id);
+    if vault.doc.sim.strategies.len() == before {
         return Err("MISSING: strategy".into());
     }
-    v.persist().map_err(crate::commands::err_to_string)?;
+    vault.persist().map_err(crate::commands::err_to_string)?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn list_runs(state: State<'_, AppState>) -> Result<Vec<SimRun>, String> {
-    let g = require_vault(&state).map_err(err_to_string)?;
-    Ok(g.as_ref().unwrap().doc.sim.runs.clone())
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().doc.sim.runs.clone())
 }
 
 #[tauri::command]
@@ -59,14 +67,15 @@ pub async fn run_strategy(
     state: State<'_, AppState>,
 ) -> Result<SimRun, String> {
     let strategy = {
-        let g = require_vault(&state).map_err(err_to_string)?;
-        g.as_ref()
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_ref()
             .unwrap()
             .doc
             .sim
             .strategies
             .iter()
-            .find(|s| s.id == input.strategy_id)
+            .find(|candidate| candidate.id == input.strategy_id)
             .cloned()
             .ok_or_else(|| "MISSING: strategy".to_string())?
     };
@@ -76,7 +85,7 @@ pub async fn run_strategy(
             let client = Client::builder()
                 .timeout(std::time::Duration::from_secs(20))
                 .build()
-                .map_err(|e| e.to_string())?;
+                .map_err(|err| err.to_string())?;
             let symbol = if strategy.symbol.is_empty() {
                 "BTC".into()
             } else {
@@ -90,11 +99,11 @@ pub async fn run_strategy(
             (candles, None, granularity)
         }
         DataSource::Synthetic => {
-            let n = input.candles.clamp(50, 20_000);
+            let count = input.candles.clamp(50, 20_000);
             let granularity = input.granularity_min.max(1);
             let params = trade_core::sim::CandleParams {
                 seed: uuid::Uuid::new_v4().as_u128() as u64,
-                n,
+                count,
                 start_price: trade_core::Amount::parse("100").unwrap(),
                 annual_vol: trade_core::Amount::parse("0.8").unwrap(),
                 candles_per_year: trade_core::Amount::from_f64(
@@ -110,46 +119,46 @@ pub async fn run_strategy(
     // replay metadata: lets get_run_candles/get_gbm_paths rebuild this exact series
     run.granularity_min = granularity;
     run.candle_params = candle_params;
-    let mut g = require_vault(&state).map_err(err_to_string)?;
-    let v = g.as_mut().unwrap();
-    v.doc.sim.runs.insert(0, run.clone());
-    if v.doc.sim.runs.len() > 200 {
-        v.doc.sim.runs.truncate(200);
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault.doc.sim.runs.insert(0, run.clone());
+    if vault.doc.sim.runs.len() > 200 {
+        vault.doc.sim.runs.truncate(200);
     }
-    v.persist().map_err(crate::commands::err_to_string)?;
+    vault.persist().map_err(crate::commands::err_to_string)?;
     Ok(run)
 }
 
 // -- run replay (D2.2) -------------------------------------------------------
 
-fn candle_point(c: trade_core::sim::engine::Candle) -> CandlePoint {
+fn candle_point(candle: trade_core::sim::engine::Candle) -> CandlePoint {
     CandlePoint {
-        ts: c.ts,
-        open: c.open.to_string(),
-        high: c.high.to_string(),
-        low: c.low.to_string(),
-        close: c.close.to_string(),
-        volume: c.volume.to_string(),
+        ts: candle.ts,
+        open: candle.open.to_string(),
+        high: candle.high.to_string(),
+        low: candle.low.to_string(),
+        close: candle.close.to_string(),
+        volume: candle.volume.to_string(),
     }
 }
 
 /// Clone a run and its strategy out of the vault — the guard must not live
 /// across `.await` (non-`Send` future, see AGENTS.md rule 3).
 fn load_run(state: &State<'_, AppState>, run_id: &str) -> Result<(Strategy, SimRun), String> {
-    let g = require_vault(state).map_err(err_to_string)?;
-    let doc = &g.as_ref().unwrap().doc;
+    let guard = require_vault(state).map_err(err_to_string)?;
+    let doc = &guard.as_ref().unwrap().doc;
     let run = doc
         .sim
         .runs
         .iter()
-        .find(|r| r.id == run_id)
+        .find(|candidate| candidate.id == run_id)
         .cloned()
         .ok_or_else(|| "MISSING: run".to_string())?;
     let strategy = doc
         .sim
         .strategies
         .iter()
-        .find(|s| s.id == run.strategy_id)
+        .find(|candidate| candidate.id == run.strategy_id)
         .cloned()
         .ok_or_else(|| "MISSING: strategy".to_string())?;
     Ok((strategy, run))
@@ -159,7 +168,7 @@ fn replay_client() -> Result<Client, String> {
     Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
-        .map_err(|e| e.to_string())
+        .map_err(|err| err.to_string())
 }
 
 fn run_range(run: &SimRun) -> Result<(u64, u64), String> {
@@ -234,7 +243,7 @@ pub async fn get_gbm_paths(
             let candles = trade_core::sim::engine::synthetic_from_params(&strategy.symbol, params);
             let start = candles
                 .last()
-                .map(|c| c.close)
+                .map(|candle| candle.close)
                 .unwrap_or(params.start_price.to_f64());
             let cpy = params.candles_per_year.to_f64().max(1.0);
             (start, params.annual_vol.to_f64() / cpy.sqrt())
@@ -253,7 +262,7 @@ pub async fn get_gbm_paths(
             }
             let start = candles
                 .last()
-                .map(|c| c.close)
+                .map(|candle| candle.close)
                 .ok_or_else(|| "MISSING: run candles".to_string())?;
             (start, sigma)
         }
@@ -271,8 +280,8 @@ pub async fn get_gbm_paths(
         .map(|path| {
             path.into_iter()
                 .enumerate()
-                .map(|(i, price)| GbmPathPoint {
-                    ts: trade_core::sim::engine::iso_from_millis(base_ms + i as u64 * step_ms),
+                .map(|(index, price)| GbmPathPoint {
+                    ts: trade_core::sim::engine::iso_from_millis(base_ms + index as u64 * step_ms),
                     price: price.to_string(),
                 })
                 .collect()

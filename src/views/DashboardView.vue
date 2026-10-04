@@ -29,9 +29,9 @@ async function refresh() {
   await queryClient.invalidateQueries({ queryKey: ['summary'] })
 }
 
-function pctWidth(v: string | number | null | undefined): string {
-  const n = typeof v === 'string' ? Number(v) : v ?? 0
-  return `${Math.min(100, Math.max(0, n)).toFixed(1)}%`
+function pctWidth(value: string | number | null | undefined): string {
+  const pct = typeof value === 'string' ? Number(value) : value ?? 0
+  return `${Math.min(100, Math.max(0, pct)).toFixed(1)}%`
 }
 
 // Dashboard widget definitions matching backend
@@ -47,15 +47,15 @@ const visibleWidgets = computed(() => {
   const widgets = settingsStore.settings?.dashboard_widgets ?? []
   return widgetDefs
     .map((def) => {
-      const existing = widgets.find((w) => w.id === def.id)
+      const existing = widgets.find((widget) => widget.id === def.id)
       return {
         id: def.id,
         visible: existing?.visible ?? true,
         order: existing?.order ?? def.defaultOrder,
       }
     })
-    .filter((w) => w.visible)
-    .sort((a, b) => a.order - b.order)
+    .filter((widget) => widget.visible)
+    .sort((left, right) => left.order - right.order)
 })
 </script>
 
@@ -63,7 +63,7 @@ const visibleWidgets = computed(() => {
   <div class="grid gap-6 @container">
     <!-- Top row widgets (total, assets, fx) - 3 columns on lg, 2 on sm -->
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
-      <Card v-if="visibleWidgets.some(w => w.id === 'total')" class="@lg:col-span-1">
+      <Card v-if="visibleWidgets.some((widget) => widget.id === 'total')" class="@lg:col-span-1">
         <template #header>
           <p class="text-sm text-muted-foreground">{{ t('store.total') }}</p>
         </template>
@@ -77,18 +77,22 @@ const visibleWidgets = computed(() => {
         </div>
       </Card>
 
-      <Card v-if="visibleWidgets.some(w => w.id === 'assets')" class="@lg:col-span-1">
+      <Card v-if="visibleWidgets.some((widget) => widget.id === 'assets')" class="@lg:col-span-1">
         <template #header>
           <p class="text-sm text-muted-foreground">Assets</p>
         </template>
         <div class="flex flex-wrap gap-1.5">
-          <Badge v-for="a in summary.data.value?.assets ?? []" :key="a.asset.symbol" variant="secondary">
-            {{ a.asset.symbol }} · {{ a.quantity }}
+          <Badge
+            v-for="asset in summary.data.value?.assets ?? []"
+            :key="asset.asset.symbol"
+            variant="secondary"
+          >
+            {{ asset.asset.symbol }} · {{ asset.quantity }}
           </Badge>
         </div>
       </Card>
 
-      <Card v-if="visibleWidgets.some(w => w.id === 'fx')" class="@lg:col-span-1">
+      <Card v-if="visibleWidgets.some((widget) => widget.id === 'fx')" class="@lg:col-span-1">
         <template #header>
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">{{ t('store.fxRate') }}</p>
@@ -108,7 +112,7 @@ const visibleWidgets = computed(() => {
 
     <!-- Bottom row widgets (byChain, byStore) - 2 columns on sm -->
     <div class="grid gap-4 @sm:grid-cols-2">
-      <Card v-if="visibleWidgets.some(w => w.id === 'byChain')">
+      <Card v-if="visibleWidgets.some((widget) => widget.id === 'byChain')">
         <template #header>
           <p class="font-medium">{{ t('store.byChain') }}</p>
         </template>
@@ -134,7 +138,7 @@ const visibleWidgets = computed(() => {
         </div>
       </Card>
 
-      <Card v-if="visibleWidgets.some(w => w.id === 'byStore')">
+      <Card v-if="visibleWidgets.some((widget) => widget.id === 'byStore')">
         <template #header>
           <p class="font-medium">{{ t('store.byStore') }}</p>
         </template>

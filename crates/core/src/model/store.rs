@@ -84,7 +84,7 @@ impl AssetRef {
         Self {
             symbol: symbol.to_uppercase(),
             name: name.to_string(),
-            coingecko_id: coingecko_id.map(|s| s.to_string()),
+            coingecko_id: coingecko_id.map(|id| id.to_string()),
             chain: Some(chain),
             contract: None,
             quote: symbol.to_uppercase(),
@@ -129,9 +129,9 @@ impl AssetRef {
     }
 }
 
-fn chain_key(c: &Chain) -> &'static str {
-    match c {
+fn chain_key(chain: &Chain) -> &'static str {
+    match chain {
         Chain::Fiat => "fiat",
-        _ => c.label(),
+        _ => chain.label(),
     }
 }

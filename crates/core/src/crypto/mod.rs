@@ -49,12 +49,12 @@ pub const KDF_PAR: u8 = 1;
 /// Derive a 32-byte key from the master password + salt.
 pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; KEY_LEN]> {
     let params = Params::new(KDF_MEM_KIB, KDF_ITERS, KDF_PAR as u32, Some(KEY_LEN))
-        .map_err(|e| Error::Crypto(e.to_string()))?;
+        .map_err(|err| Error::Crypto(err.to_string()))?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = [0u8; KEY_LEN];
     argon
         .hash_password_into(password, salt, &mut key)
-        .map_err(|e| Error::Crypto(e.to_string()))?;
+        .map_err(|err| Error::Crypto(err.to_string()))?;
     Ok(key)
 }
 
@@ -139,7 +139,7 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_name = format!(
         ".{}.tmp.{}.{}",
         path.file_name()
-            .map(|s| s.to_string_lossy().to_string())
+            .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| "vault".into()),
         std::process::id(),
         uuid::Uuid::new_v4().simple(),
@@ -147,13 +147,13 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_path = dir.join(tmp_name);
 
     let result = (|| -> Result<()> {
-        let mut f = File::create(&tmp_path)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-        drop(f);
+        let mut file = File::create(&tmp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
         std::fs::rename(&tmp_path, path)?;
-        if let Ok(d) = File::open(dir) {
-            let _ = d.sync_all(); // best-effort dir fsync
+        if let Ok(handle) = File::open(dir) {
+            let _ = handle.sync_all(); // best-effort dir fsync
         }
         Ok(())
     })();
@@ -165,15 +165,15 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 pub fn read_all(path: &Path) -> Result<Vec<u8>> {
-    let mut f = File::open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
+    let mut file = File::open(path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
             Error::NotFound(path.display().to_string())
         } else {
-            Error::Io(e.to_string())
+            Error::Io(err.to_string())
         }
     })?;
     let mut buf = Vec::new();
-    f.read_to_end(&mut buf)?;
+    file.read_to_end(&mut buf)?;
     Ok(buf)
 }
 

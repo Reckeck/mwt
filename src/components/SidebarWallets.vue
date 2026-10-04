@@ -66,14 +66,14 @@ const buildTree = (stores: Store[]): StoreTreeNode[] => {
   const roots: StoreTreeNode[] = []
 
   // Create nodes
-  for (const s of stores) {
-    map.set(s.id, { ...s, children: [], level: 0 })
+  for (const store of stores) {
+    map.set(store.id, { ...store, children: [], level: 0 })
   }
 
   // Link children to parents
   for (const node of map.values()) {
-    if (node.parent_id && map.has(node.parent_id)) {
-      const parent = map.get(node.parent_id)!
+    const parent = node.parent_id ? map.get(node.parent_id) : undefined
+    if (parent) {
       parent.children.push(node)
     } else {
       roots.push(node)
@@ -82,20 +82,20 @@ const buildTree = (stores: Store[]): StoreTreeNode[] => {
 
   // Compute levels
   const setLevels = (nodes: StoreTreeNode[], level: number) => {
-    for (const n of nodes) {
-      n.level = level
-      setLevels(n.children, level + 1)
+    for (const node of nodes) {
+      node.level = level
+      setLevels(node.children, level + 1)
     }
   }
   setLevels(roots, 0)
 
   // Sort: live first, then archived; alphabetical within each group
   const sortTree = (nodes: StoreTreeNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.archived !== b.archived) return a.archived ? 1 : -1
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    nodes.sort((left, right) => {
+      if (left.archived !== right.archived) return left.archived ? 1 : -1
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
     })
-    for (const n of nodes) sortTree(n.children)
+    for (const node of nodes) sortTree(node.children)
   }
   sortTree(roots)
 
@@ -125,22 +125,16 @@ const computeSubtreeValues = (nodes: StoreTreeNode[], byStoreMap: Map<string, nu
 const flattenTree = (nodes: StoreTreeNode[], expanded: Set<string>): StoreTreeNode[] => {
   const result: StoreTreeNode[] = []
   const walk = (nodes: StoreTreeNode[]) => {
-    for (const n of nodes) {
-      result.push(n)
-      if (expanded.has(n.id) && n.children.length > 0) {
-        walk(n.children)
+    for (const node of nodes) {
+      result.push(node)
+      if (expanded.has(node.id) && node.children.length > 0) {
+        walk(node.children)
       }
     }
   }
   walk(nodes)
   return result
 }
-
-
-// Silence unused variable warnings (used in template)
-void t
-
-
 
 const treeRoots = computed(() => {
   const list = stores.data.value ?? []
@@ -166,16 +160,13 @@ const displayValue = (node: StoreTreeNode): string => {
     return formatMoney(val, { currency: base.value, decimals: 0 })
   }
   // Fallback to direct value
-  const direct = summary.data.value?.by_store.find((s) => s.store_id === node.id)
+  const direct = summary.data.value?.by_store.find((row) => row.store_id === node.id)
   return direct ? formatMoney(direct.value_base, { currency: base.value, decimals: 0 }) : ''
 }
 
 onMounted(() => {
   computeSubtreeValues(treeRoots.value, byStoreMap.value)
 })
-
-// Silence unused function warning (used in template)
-void displayValue
 </script>
 
 <template>
@@ -227,9 +218,9 @@ void displayValue
             class="flex size-6 shrink-0 items-center justify-center rounded-md ring-1 ring-background"
             :class="node.archived && 'opacity-40'"
             :style="{
-              backgroundColor: node.color + '1A',
+              backgroundColor: `${node.color}1A`,
               color: node.color,
-              borderColor: node.color + '33',
+              borderColor: `${node.color}33`,
             }"
           >
             <component :is="getStoreIcon(node.kind)" class="size-3.5" />

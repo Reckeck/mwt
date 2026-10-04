@@ -45,9 +45,7 @@ export async function setLocalePreference(pref: LocalePreference): Promise<void>
 export function useLocale() {
   const settingsStore = useSettingsStore()
 
-  const preference = computed<LocalePreference>(
-    () => settingsStore.settings?.locale ?? detectLocalePreference(),
-  )
+  const preference = computed<LocalePreference>(() => settingsStore.settings?.locale ?? detectLocalePreference())
 
   watch(
     preference,
