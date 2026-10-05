@@ -31,6 +31,7 @@ crates/core/          # весь бизнес-логика, БЕЗ Tauri
   src/error.rs        # Error enum: Crypto/Secret/NotFound/Unsupported/…, метод .code()
   src/amount.rs       # Amount (Decimal newtype), сериализация строкой; кастомный ts-rs TS impl
   src/model/          # домен: chain.rs, store.rs, transaction.rs, vault.rs (VaultDoc, Settings…)
+  src/appconfig.rs    # настройки приложения ВНЕ vault: theme, locale, base_currency, favorites
   src/crypto/         # header.rs (55 байт, AAD) + mod.rs (seal/open/atomic_write)
   src/storage/        # SnapshotFormat (Json/Bin + for_profile()), VaultFile::create/open/save
   src/pricing/        # PricingService: fetch_prices/fetch_fx (чистые, без мутации doc)
