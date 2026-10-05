@@ -50,9 +50,9 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
   lib/ipc.gen.d.ts    # AUTO-GENERATED, пересоздаётся mise run gen-types
   i18n/locales/       # ru.json + en.json, плоские точечные ключи ("nav.dashboard"); набор ключей должен совпадать
   features/           # 8 пустых каталогов-заглушек (auth, charts, dashboard, pricing, settings, sim, stores, transactions). Кода нет, git их не трекает. Реальный код — в views/ и components/
-.opencode/skills/     # project-specific skills (см. таблицу ниже)
+.agents/skills/       # скиллы агентов, ВСЕ здесь (см. таблицу ниже)
 mise.toml             # tools + env + tasks
-docs/                 # architecture, data-model, ipc, security, roadmap
+docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor
 ```
 
 ## Правила работы с кодом
@@ -179,13 +179,14 @@ jj config path --repo     # ~/.config/jj/repos/<hash>/config.toml
 
 Нюансы (split, squash, bookmark вместо веток, rebase, undo, работа с
 незакоммиченным состоянием) — в скилле `jj-workflow`
-(`.opencode/skills/jj-workflow/SKILL.md`). Коммиты непустого рабочего
+(`.agents/skills/jj-workflow/SKILL.md`). Коммиты непустого рабочего
 состояния влекут за собой мусор в истории — сначала посмотри `jj diff`.
 
-## Project-specific skills
+## Skills агентов
 
-Лежат в `.opencode/skills/<name>/SKILL.md`, грузятся по необходимости.
-Загружай нужный **до** правки кода, а не после:
+**Все скиллы лежат в `.agents/skills/<name>/SKILL.md`** — это единственное
+место. Каталога `.opencode/skills/` больше нет. Загружай нужный **до** правки
+кода, а не после:
 
 | Skill | Когда |
 |---|---|
@@ -193,8 +194,33 @@ jj config path --repo     # ~/.config/jj/repos/<hash>/config.toml
 | `ipc-command` | новая или изменённая Tauri-команда (DTO → core → хендлер → gen-types) |
 | `vault-crypto` | формат vault, миграции, крипта, `Amount`, секреты |
 | `frontend-feature` | Vue-фича, i18n, TanStack Query, графики |
+| `ui-design-system` | вёрстка, токены отступов, формы, **уведомления** |
+| `shadcn-vue` | любой shadcn-компонент: добавить, найти, починить, скомпоновать |
+| `json-editor` | редактор vault в формате JSON (Настройки → Просмотр JSON) |
 | `sim-strategy` | симулятор, стратегии, GBM, индикаторы |
 | `pricing-offline` | цены/FX, провайдеры, кэш, офлайн-деградация |
+
+### Управление скиллами
+
+Скиллы ставятся и обновляются утилитой `skills` (npm-пакет `skills`,
+запускается через пакетный раннер проекта). Каталог один — `.agents/skills/`,
+его читают OpenCode, Claude Code, Codex и Zed.
+
+```bash
+pnpm dlx skills add <registry> --agent '*' -y   # поставить/обновить скилл
+pnpm dlx skills list                             # что установлено и кем читается
+```
+
+- `--agent '*' -y` обязательны: без них CLI требует TTY и умирает в агентском
+  окружении («Interactive prompt required but stdin is not a TTY»).
+- Скилл из реестра (`Source: <repo>`) обновляй только этой командой, руками не
+  правь — апдейт приедет поверх.
+- Скилл `Source: local` написан руками в `.agents/skills/` и обновляется
+  вместе с кодом проекта.
+- У каждого `SKILL.md` обязателен YAML-фронтматтер с `name` и `description`,
+  иначе скилл молча выпадает из загрузки (видно в `skills list` как `Skipped`).
+- `shadcn-vue` ставится из `unovue/shadcn-vue`; он читает `components.json`,
+  который лежит в корне и описывает алиасы проекта.
 
 ## Definition of Done
 
