@@ -137,7 +137,7 @@ async function save() {
     dirtyFlag.value = normalizeJson(editor.state.doc.toString()) !== appliedNormalized.value
     // The whole document may have changed, so every cached view is suspect.
     await queryClient.invalidateQueries()
-    await settingsStore.load()
+    await settingsStore.loadVault()
     if (view && hadFocus) {
       view.focus()
       view.dispatch({ selection: { anchor: Math.min(head, view.state.doc.length) } })

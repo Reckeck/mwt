@@ -60,7 +60,7 @@ const pnl = useQuery({
 const base = computed(() => overview.data.value?.base_currency ?? '')
 const store = computed(() => overview.data.value?.store)
 const isArchived = computed(() => store.value?.archived === true)
-const decimals = computed(() => settingsStore.settings?.display_decimals ?? 8)
+const decimals = computed(() => settingsStore.vault?.display_decimals ?? 8)
 const positions = computed(() => overview.data.value?.positions ?? [])
 
 const money = (value: string) => formatMoney(value, { currency: base.value, decimals: 2 })

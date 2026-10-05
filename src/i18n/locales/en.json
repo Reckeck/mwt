@@ -399,5 +399,18 @@
   "settings.dev.reloadedFromEditor": "Document re-read from the file",
   "settings.dev.reloadFailed": "Could not re-read the file",
   "settings.dev.schemaFailed": "Could not load the vault schema",
-  "settings.dev.loadFailed": "Could not load the document"
+  "settings.dev.loadFailed": "Could not load the document",
+  "settings.appTitle": "Application settings",
+  "settings.appScopeHint": "Theme, language and currencies are shared by the whole app: they do not depend on a vault and apply immediately.",
+  "settings.vaultTitle": "Vault settings",
+  "settings.vaultScopeHint": "These settings live in the open vault only. Application-wide settings are in the ⚙ menu in the header.",
+  "settings.favoriteCurrencyRemove": "Remove {code}",
+  "settings.currencyListBuiltin": "Limited list: the public sources are unreachable. USD, EUR, RUB and other major currencies are available.",
+  "settings.currencyListCached": "Showing currencies from the last successful request — the network is unavailable.",
+  "settings.currencySearchPlaceholder": "Search code…",
+  "settings.currencyLoading": "Loading the currency list…",
+  "settings.currencyMatchLimit": "Showing the first 300 of {count} — refine your search",
+  "settings.favoriteCurrencyPlaceholder": "Currency code",
+  "settings.currencyNoMatches": "Nothing found",
+  "settings.currencySelect": "Currency selector"
 }

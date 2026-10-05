@@ -8,12 +8,10 @@ import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import Dialog from '@/components/ui/dialog.vue'
-import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
 import Select from '@/components/ui/select.vue'
 import VaultJsonEditor from '@/components/settings/VaultJsonEditor.vue'
 import { call, parseError, type AppError } from '@/lib/ipc'
-import { setLocalePreference } from '@/locale'
 import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
@@ -21,24 +19,8 @@ const settingsStore = useSettingsStore()
 
 const isDev = import.meta.env.DEV
 
-const baseCurrency = ref<string>(settingsStore.settings?.base_currency ?? 'usd')
-const favoriteCurrenciesInput = ref<string>('')
-
 /* --- vault JSON (DEV): view + export --- */
 const jsonDialogOpen = ref(false)
-
-const currencies = [
-  { code: 'usd', label: 'USD' },
-  { code: 'eur', label: 'EUR' },
-  { code: 'rub', label: 'RUB' },
-  { code: 'cny', label: 'CNY' },
-]
-
-const localeOptions: { code: Locale; label: string }[] = [
-  { code: 'auto', label: 'settings.locale.auto' },
-  { code: 'ru', label: 'settings.locale.ru' },
-  { code: 'en', label: 'settings.locale.en' },
-]
 
 const fxIntervalOptions = [
   { value: 30, label: '30 сек' },
@@ -56,8 +38,6 @@ const bybitIntervalOptions = [
   { value: 3600, label: '1 час' },
   { value: 21600, label: '6 час' },
 ]
-
-const currentLocale = () => settingsStore.settings?.locale ?? 'auto'
 
 // Dashboard widget definitions
 const widgetDefs = [
@@ -81,35 +61,20 @@ const widgetDefs = [
  */
 async function persist(patch: Partial<Settings>) {
   try {
-    settingsStore.settings = await call<Settings>('update_settings', { input: toInput(patch) })
+    await settingsStore.updateVault(patch)
     toast.success(t('settings.saved'))
   } catch (err) {
     toast.error(t('settings.saveFailed'), { description: parseError(err).message })
     try {
-      await settingsStore.load()
+      await settingsStore.loadVault()
     } catch {
       /* the error above is the one worth showing */
     }
   }
 }
 
-/** Only the fields present in `patch` are sent; the backend ignores the rest. */
-function toInput(patch: Partial<Settings>): UpdateSettingsInput {
-  return {
-    base_currency: patch.base_currency ?? null,
-    theme: patch.theme ?? null,
-    locale: patch.locale ?? null,
-    display_decimals: patch.display_decimals ?? null,
-    favorite_currencies: patch.favorite_currencies ?? null,
-    dashboard_widgets: patch.dashboard_widgets ?? null,
-    fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
-    minimize_to_tray: patch.minimize_to_tray ?? null,
-    bybit_import_interval_sec: patch.bybit_import_interval_sec ?? null,
-  }
-}
-
 function getWidgets() {
-  const current = settingsStore.settings
+  const current = settingsStore.vault
   if (!current) return []
   const widgets = current.dashboard_widgets ?? []
   return widgetDefs.map((def) => {
@@ -124,7 +89,7 @@ function getWidgets() {
 }
 
 function toggleWidget(id: string) {
-  const current = settingsStore.settings
+  const current = settingsStore.vault
   if (!current) return
   const widgets = [...(current.dashboard_widgets ?? [])]
   const idx = widgets.findIndex((widget) => widget.id === id)
@@ -137,7 +102,7 @@ function toggleWidget(id: string) {
 }
 
 function moveWidget(id: string, delta: number) {
-  const current = settingsStore.settings
+  const current = settingsStore.vault
   if (!current) return
   const widgets = [...(current.dashboard_widgets ?? [])]
   const idx = widgets.findIndex((widget) => widget.id === id)
@@ -146,40 +111,6 @@ function moveWidget(id: string, delta: number) {
   widgets[idx] = { ...widgets[idx], order: newOrder }
   widgets.sort((left, right) => left.order - right.order)
   void persist({ dashboard_widgets: widgets })
-}
-
-/**
- * Language applies immediately — the UI must switch while the user is still
- * looking at the control — so it persists right away too.
- */
-async function onLocaleChange(event: Event) {
-  const next = (event.target as HTMLSelectElement).value as Locale
-  try {
-    await setLocalePreference(next)
-  } catch {
-    toast.error(t('settings.localeSaveFailed'))
-  }
-}
-
-function addFavoriteCurrency() {
-  const code = favoriteCurrenciesInput.value.trim().toUpperCase()
-  if (code.length !== 3) return
-  const current = settingsStore.settings
-  if (!current) return
-  const currencies = [...(current.favorite_currencies ?? [])]
-  if (!currencies.includes(code)) {
-    currencies.push(code)
-    favoriteCurrenciesInput.value = ''
-    void persist({ favorite_currencies: currencies })
-  }
-}
-
-function removeFavoriteCurrency(curr: string) {
-  const current = settingsStore.settings
-  if (!current) return
-  void persist({
-    favorite_currencies: (current.favorite_currencies ?? []).filter((code) => code !== curr),
-  })
 }
 
 function updateFxInterval(value: string) {
@@ -192,16 +123,6 @@ function updateBybitImportInterval(value: string) {
 
 function updateMinimizeToTray(event: Event) {
   void persist({ minimize_to_tray: (event.target as HTMLInputElement).checked })
-}
-
-function updateBaseCurrency(value: string) {
-  baseCurrency.value = value
-  void persist({ base_currency: value })
-}
-
-function setTheme(theme: Theme) {
-  if (!settingsStore.settings || settingsStore.settings.theme === theme) return
-  void persist({ theme })
 }
 
 async function devDumpVault() {
@@ -231,91 +152,16 @@ function errorText(err: AppError): string {
   <div class="mx-auto grid max-w-3xl gap-4">
     <Card>
       <template #header>
-        <p class="font-medium">{{ t('settings.title') }}</p>
+        <p class="font-medium">{{ t('settings.vaultTitle') }}</p>
       </template>
 
       <div class="grid gap-4">
-        <div class="grid gap-1.5">
-          <Label>{{ t('settings.theme.title') }}</Label>
-          <div v-if="settingsStore.settings" class="grid grid-cols-3 gap-2">
-            <button
-              v-for="th in (['light', 'dark', 'auto'] as const)"
-              :key="th"
-              type="button"
-              class="rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
-              :class="settingsStore.settings.theme === th && 'border-primary bg-accent'"
-              @click="setTheme(th)"
-            >
-              {{ t(`settings.theme.${th}`) }}
-            </button>
-          </div>
-        </div>
-
-        <div class="grid gap-1.5">
-          <Label for="bcur">{{ t('settings.baseCurrency') }}</Label>
-          <select
-            id="bcur"
-            :value="settingsStore.settings?.base_currency ?? baseCurrency"
-            class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            @change="updateBaseCurrency(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="currency in currencies" :key="currency.code" :value="currency.code">
-              {{ currency.label }}
-            </option>
-          </select>
-        </div>
-
-        <div class="grid gap-1.5">
-          <Label for="loc">{{ t('settings.language') }}</Label>
-          <select
-            id="loc"
-            :value="currentLocale()"
-            class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            @change="onLocaleChange"
-          >
-            <option v-for="locale in localeOptions" :key="locale.code" :value="locale.code">
-              {{ t(locale.label) }}
-            </option>
-          </select>
-        </div>
-
-        <div class="grid gap-1.5">
-          <Label>{{ t('settings.favoriteCurrencies') }}</Label>
-          <div class="flex flex-wrap gap-2 items-center">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span
-                v-for="curr in settingsStore.settings?.favorite_currencies ?? []"
-                :key="curr"
-                class="inline-flex items-center gap-1 px-2 py-1 text-sm bg-accent rounded-md text-accent-foreground"
-              >
-                {{ curr }}
-                <button
-                  type="button"
-                  class="text-xs hover:text-destructive transition-colors"
-                  @click="removeFavoriteCurrency(curr)"
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <Input
-                v-model="favoriteCurrenciesInput"
-                placeholder="USD"
-                class="w-24 h-9 text-sm"
-                @keyup.enter="addFavoriteCurrency"
-              />
-              <Button size="sm" @click="addFavoriteCurrency">{{ t('settings.favoriteCurrencyAdd') }}</Button>
-            </div>
-            <p class="text-xs text-muted-foreground">{{ t('settings.favoriteCurrenciesHint') }}</p>
-          </div>
-        </div>
-
+        <p class="text-xs text-muted-foreground">{{ t('settings.vaultScopeHint') }}</p>
         <div class="grid gap-1.5">
           <Label for="fx-interval">{{ t('settings.fxRefreshInterval') }}</Label>
           <Select
             id="fx-interval"
-            :value="String(settingsStore.settings?.fx_refresh_interval_sec ?? 300)"
+            :value="String(settingsStore.vault?.fx_refresh_interval_sec ?? 300)"
             @update:model-value="updateFxInterval"
           >
             <option v-for="opt in fxIntervalOptions" :key="opt.value" :value="String(opt.value)">{{ opt.label }}</option>
@@ -326,7 +172,7 @@ function errorText(err: AppError): string {
           <Label for="bybit-import-interval">{{ t('settings.bybit.importInterval') }}</Label>
           <Select
             id="bybit-import-interval"
-            :value="String(settingsStore.settings?.bybit_import_interval_sec ?? 900)"
+            :value="String(settingsStore.vault?.bybit_import_interval_sec ?? 900)"
             @update:model-value="updateBybitImportInterval"
           >
             <option v-for="opt in bybitIntervalOptions" :key="opt.value" :value="String(opt.value)">
@@ -340,7 +186,7 @@ function errorText(err: AppError): string {
           <input
             id="minimize-to-tray"
             type="checkbox"
-            :checked="settingsStore.settings?.minimize_to_tray ?? true"
+            :checked="settingsStore.vault?.minimize_to_tray ?? true"
             class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
             @change="updateMinimizeToTray"
           >

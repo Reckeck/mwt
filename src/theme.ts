@@ -10,9 +10,9 @@ export function useTheme() {
   const settingsStore = useSettingsStore()
 
   const resolved = computed<ResolvedTheme>(() => {
-    const t = settingsStore.settings?.theme ?? 'auto'
-    if (t === 'dark') return 'dark'
-    if (t === 'light') return 'light'
+    const preference = settingsStore.app?.theme ?? 'auto'
+    if (preference === 'dark') return 'dark'
+    if (preference === 'light') return 'light'
     return media.matches ? 'dark' : 'light'
   })
 

@@ -399,5 +399,18 @@
   "settings.dev.reloadedFromEditor": "Документ перечитан из файла",
   "settings.dev.reloadFailed": "Не удалось перечитать файл",
   "settings.dev.schemaFailed": "Не удалось получить схему vault",
-  "settings.dev.loadFailed": "Не удалось загрузить документ"
+  "settings.dev.loadFailed": "Не удалось загрузить документ",
+  "settings.appTitle": "Настройки приложения",
+  "settings.appScopeHint": "Тема, язык и валюты — общие для всего приложения: они не зависят от хранилища и применяются сразу.",
+  "settings.vaultTitle": "Настройки хранилища",
+  "settings.vaultScopeHint": "Эти настройки хранятся только в открытом хранилище. Общие настройки приложения — в меню ⚙ в шапке.",
+  "settings.favoriteCurrencyRemove": "Убрать {code}",
+  "settings.currencyListBuiltin": "Список валют ограниченный: публичные источники недоступны. Выбрать можно USD, EUR, RUB и другие базовые валюты.",
+  "settings.currencyListCached": "Показаны валюты из последнего успешного запроса — сеть сейчас недоступна.",
+  "settings.currencySearchPlaceholder": "Поиск кода…",
+  "settings.currencyLoading": "Загружаю список валют…",
+  "settings.currencyMatchLimit": "Показаны первые 300 из {count} — уточните поиск",
+  "settings.favoriteCurrencyPlaceholder": "Код валюты",
+  "settings.currencyNoMatches": "Ничего не найдено",
+  "settings.currencySelect": "Выбор валюты"
 }

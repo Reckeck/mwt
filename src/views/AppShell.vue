@@ -17,8 +17,9 @@ import {
 } from 'lucide-vue-next'
 
 import Button from '@/components/ui/button.vue'
+import Dialog from '@/components/ui/dialog.vue'
+import AppSettingsModal from '@/components/settings/AppSettingsModal.vue'
 import SidebarWallets from '@/components/SidebarWallets.vue'
-import Toaster from '@/components/ui/sonner.vue'
 import Tooltip from '@/components/ui/tooltip.vue'
 import { call, onEvent } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,7 @@ const width = useViewport()
 const sidebar = computed(() => sidebarState(width.value))
 const showLabels = computed(() => sidebar.value !== 'rail')
 const menuOpen = ref(false)
+const settingsModalOpen = ref(false)
 
 // deduped with the identical query inside <SidebarWallets />
 const storesQuery = useQuery({
@@ -52,7 +54,7 @@ const summary = useQuery({
   staleTime: 60_000,
 })
 
-const favoriteCurrencies = computed(() => settingsStore.settings?.favorite_currencies ?? [])
+const favoriteCurrencies = computed(() => settingsStore.favoriteCurrencies)
 
 const isOnline = ref(true)
 
@@ -178,8 +180,18 @@ async function lock() {
           <Menu class="size-5" />
         </button>
         <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{{ pageTitle }}</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="shrink-0"
+          :aria-label="t('nav.settings')"
+          :title="t('nav.settings')"
+          @click="settingsModalOpen = true"
+        >
+          <Settings class="size-5" />
+        </Button>
         <div v-if="sidebar !== 'compact'" class="flex shrink-0 items-center gap-4 text-sm text-muted-foreground">
-          <div v-if="settingsStore.settings" class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <Tooltip side="bottom" :side-offset="6">
               <template #trigger>
                 <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-accent cursor-pointer transition-colors">
@@ -228,8 +240,8 @@ async function lock() {
               </div>
             </Tooltip>
             <span class="hidden md:inline-flex items-center gap-1.5 px-2 py-1 text-muted-foreground">
-              {{ settingsStore.settings.base_currency.toUpperCase() }}
-              · {{ t(`settings.theme.${settingsStore.settings.theme}`) }}
+              {{ settingsStore.baseCurrency.toUpperCase() }}
+              · {{ t(`settings.theme.${settingsStore.theme}`) }}
             </span>
           </div>
         </div>
@@ -240,6 +252,17 @@ async function lock() {
       </div>
     </main>
 
-    <Toaster position="bottom-right" rich-colors close-button />
+    <Dialog
+      v-model:open="settingsModalOpen"
+      :title="t('settings.appTitle')"
+      :description="t('settings.appScopeHint')"
+      size="lg"
+    >
+      <!-- Mounted per open so every visit starts from the file on disk. -->
+      <AppSettingsModal v-if="settingsModalOpen" />
+      <template #footer>
+        <Button @click="settingsModalOpen = false">{{ t('actions.close') }}</Button>
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -50,7 +50,7 @@ const widgetDefs = [
 ] as const
 
 const visibleWidgets = computed(() => {
-  const widgets = settingsStore.settings?.dashboard_widgets ?? []
+  const widgets = settingsStore.vault?.dashboard_widgets ?? []
   return widgetDefs
     .map((def) => {
       const existing = widgets.find((widget) => widget.id === def.id)

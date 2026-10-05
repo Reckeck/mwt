@@ -2,6 +2,7 @@
 import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import Toaster from '@/components/ui/sonner.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useVaultStore } from '@/stores/vault'
 import { useLocale } from '@/locale'
@@ -14,6 +15,13 @@ const settingsStore = useSettingsStore()
 
 useTheme()
 useLocale()
+
+// Loaded before any vault work: the theme and language follow the user, not the
+// vault, so they must be readable on the unlock screen — the first thing
+// rendered. Vault settings, by contrast, need an unlocked vault and load later.
+if (!settingsStore.appLoaded) {
+  settingsStore.loadApp().catch(() => {})
+}
 
 router.beforeEach(async (to) => {
   const wantsPublic = to.meta.public === true
@@ -38,11 +46,15 @@ watch(
   },
 )
 
-if (settingsStore.settings === null) {
-  settingsStore.load().catch(() => {})
+if (settingsStore.vault === null && !vault.locked) {
+  settingsStore.loadVault().catch(() => {})
 }
 </script>
 
 <template>
   <router-view />
+
+  <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
+       settings dialog reports saves through toasts. -->
+  <Toaster position="bottom-right" rich-colors close-button />
 </template>
