@@ -52,6 +52,16 @@
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.546 0.245 262.881);
   --radius: 0.625rem;
+
+  /* JSON syntax highlighting for the CodeMirror editor (see lib/editor). */
+  --syntax-key: oklch(0.52 0.13 235);
+  --syntax-string: oklch(0.48 0.12 152);
+  --syntax-number: oklch(0.55 0.14 70);
+  --syntax-literal: oklch(0.52 0.17 300);
+  --syntax-comment: oklch(0.552 0.016 285.938);
+  --syntax-invalid: oklch(0.577 0.245 27.325);
+  --syntax-active-line: oklch(0.546 0.245 262.881 / 8%);
+  --syntax-selection: oklch(0.546 0.245 262.881 / 18%);
 }
 
 .dark {
@@ -74,6 +84,16 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.623 0.214 259.815);
+
+  /* Dark counterparts; the editor theme only ever references these. */
+  --syntax-key: oklch(0.72 0.12 230);
+  --syntax-string: oklch(0.74 0.14 150);
+  --syntax-number: oklch(0.79 0.13 75);
+  --syntax-literal: oklch(0.73 0.15 300);
+  --syntax-comment: oklch(0.705 0.015 286.067);
+  --syntax-invalid: oklch(0.704 0.191 22.216);
+  --syntax-active-line: oklch(1 0 0 / 6%);
+  --syntax-selection: oklch(1 0 0 / 16%);
 }
 
 * {

@@ -195,6 +195,27 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       mockPendingStore = staged.filter((entry) => !ids.includes(entry.exec_id))
       return resolve({ discarded: staged.length - mockPendingStore.length })
     }
+    case 'dev_dump_vault':
+      return resolve({ json: JSON.stringify(mockVaultDoc(), null, 2) })
+    case 'dev_export_vault':
+      // No native save dialog in the browser mock; report a plausible path so
+      // the success path stays observable during `pnpm dev`.
+      return resolve('/tmp/mock/vault.json')
+    case 'dev_apply_vault_json': {
+      // Reject anything the editor would not accept, exactly like the backend.
+      const text = String(args?.json ?? '')
+      try {
+        JSON.parse(text)
+      } catch (err) {
+        throw { code: 'DESERIALIZE', message: String(err) }
+      }
+      return resolve(JSON.stringify(JSON.parse(text), null, 2))
+    }
+    case 'dev_open_vault_json_in_editor':
+      return resolve('/tmp/tradeapp-vault.json')
+    case 'dev_reload_vault_json_from_editor':
+      // Stands in for the scratch file: whatever the backend last reported.
+      return resolve(mockScratchJson)
     case 'list_strategies':
       return resolve([])
     case 'save_strategy':
@@ -217,6 +238,9 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
 }
 
 let mockKeyStatus: ExchangeKeyStatus = { configured: false, hint: null }
+
+/** Scratch-file contents for the "pull from editor" mock round-trip. */
+const mockScratchJson = ''
 
 const mockExecutions: BybitExecution[] = [
   {
@@ -680,6 +704,25 @@ function mockCandles(input: GetCandlesInput): GetCandlesOutput {
     price = close
   }
   return { candles }
+}
+
+/** Stand-in for the decrypted `VaultDoc`, mirroring the Rust dump command. */
+function mockVaultDoc(): VaultDoc {
+  return {
+    version: 1,
+    id: mockInfo.id,
+    created_at: mockInfo.created_at,
+    settings: mockSettings,
+    stores: mockStores,
+    holdings: [],
+    transactions: mockTransactions,
+    categories: ['salary', 'trading', 'staking', 'other'],
+    price_cache: [],
+    fx_cache: [],
+    pending_imports: [],
+    strategies: [],
+    runs: [],
+  }
 }
 
 function resolve<T>(value: T): Promise<T> {

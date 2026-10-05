@@ -57,6 +57,23 @@ impl UnlockedVault {
         VaultFile::save(&self.path, &self.password, &self.doc, self.fmt)
     }
 
+    /// Replace the whole document with an externally supplied one and persist
+    /// it (raw JSON editor).
+    ///
+    /// Holdings are re-derived from the transactions rather than trusted from
+    /// the payload, so an edited `holdings` array can never disagree with the
+    /// transactions it summarizes. `id` and `created_at` are pinned to the
+    /// current document: a replace edits *content*, it does not re-create the
+    /// vault, and a changed id would orphan every store in the recents list.
+    pub fn replace_doc(&mut self, mut doc: VaultDoc) -> Result<()> {
+        doc.id = self.doc.id.clone();
+        doc.created_at = self.doc.created_at.clone();
+        doc.version = crate::VAULT_FORMAT_VERSION;
+        self.doc = doc;
+        self.recompute_holdings();
+        self.persist()
+    }
+
     /// Try opening with a possibly-wrong password (used by unlock screen).
     pub fn try_open(path: PathBuf, password: &str) -> Result<Self> {
         Self::open(path, password)
@@ -1292,6 +1309,47 @@ mod tests {
     }
 
     #[test]
+    fn replace_doc_rederives_holdings_and_pins_identity() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let original_id = vault.doc.id.clone();
+        let original_created = vault.doc.created_at.clone();
+
+        let mut edited = VaultDoc::default();
+        edited.transactions.push({
+            let mut tx = Transaction::new(
+                TxKind::Income,
+                btc(),
+                Amount::parse("2").unwrap(),
+                &store,
+                "edited",
+            );
+            tx.timestamp = "2026-02-01T00:00:00Z".into();
+            tx.price_usd = Some(Amount::parse("50000").unwrap());
+            tx
+        });
+        // An editor is free to send a wrong id/version and a stale holdings
+        // array; none of it may survive the replace.
+        edited.id = "some-other-id".into();
+        edited.created_at = "1999-01-01T00:00:00Z".into();
+        edited.version = crate::VAULT_FORMAT_VERSION + 7;
+        edited.holdings.clear();
+
+        vault.replace_doc(edited).unwrap();
+
+        assert_eq!(vault.doc.id, original_id);
+        assert_eq!(vault.doc.created_at, original_created);
+        assert_eq!(vault.doc.version, crate::VAULT_FORMAT_VERSION);
+        assert_eq!(vault.doc.holdings.len(), 1);
+        assert_eq!(vault.doc.holdings[0].quantity.to_string(), "2");
+
+        // And it is really on disk, not just in memory.
+        let (reopened, _) = VaultFile::open(&vault.path, "pw").unwrap();
+        assert_eq!(reopened.transactions.len(), 1);
+        assert_eq!(reopened.transactions[0].comment, "edited");
+    }
+
+    #[test]
     fn transfer_moves_quantities_between_stores() {
         let (_dir, mut vault) = setup();
         let s1 = vault.doc.stores[0].id.clone();
@@ -1875,5 +1933,73 @@ mod import_tests {
         assert_eq!(execution.category_hint(), "spot");
         execution.symbol = "BTCUSDT_PERP".into();
         assert_eq!(execution.category_hint(), "linear");
+    }
+}
+
+#[cfg(test)]
+mod persist_tests {
+    use super::*;
+    use crate::model::vault::Settings;
+    use tempfile::tempdir;
+
+    /// Every settings field the UI can edit must survive a save and a reopen.
+    ///
+    /// This is the "does it come back after a restart" guarantee: a field that
+    /// is not round-tripped here is a setting that silently reverts.
+    #[test]
+    fn every_settings_field_survives_a_restart() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("settings.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+
+        let edited = Settings {
+            base_currency: "rub".into(),
+            theme: crate::model::vault::Theme::Dark,
+            locale: crate::model::vault::Locale::Ru,
+            display_decimals: 6,
+            favorite_currencies: vec!["USD".into(), "RUB".into()],
+            dashboard_widgets: vec![crate::model::vault::DashboardWidgetCfg {
+                id: "assets".into(),
+                visible: false,
+                order: 3,
+            }],
+            fx_refresh_interval_sec: 900,
+            minimize_to_tray: false,
+            bybit_import_interval_sec: 0,
+        };
+
+        // Applied the way `update_settings` does it: mutate, then persist.
+        vault.doc.settings = edited.clone();
+        vault.persist().unwrap();
+
+        let (reopened, _) = VaultFile::open(&path, "pw").unwrap();
+        assert_eq!(
+            reopened.settings, edited,
+            "settings reverted across a restart"
+        );
+    }
+
+    /// The same, but through `replace_doc` — the path the raw JSON editor uses.
+    /// Editing one field in the editor must not drop the others.
+    #[test]
+    fn settings_survive_a_json_editor_replace() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("editor.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        vault.doc.settings.theme = crate::model::vault::Theme::Light;
+        vault.doc.settings.fx_refresh_interval_sec = 1800;
+        vault.persist().unwrap();
+
+        // What the editor sends back: the document it read, theme flipped.
+        let (mut draft, _) = VaultFile::open(&path, "pw").unwrap();
+        draft.settings.theme = crate::model::vault::Theme::Dark;
+        vault.replace_doc(draft).unwrap();
+
+        let (reopened, _) = VaultFile::open(&path, "pw").unwrap();
+        assert_eq!(reopened.settings.theme, crate::model::vault::Theme::Dark);
+        assert_eq!(
+            reopened.settings.fx_refresh_interval_sec, 1800,
+            "an unrelated setting was lost by the editor write"
+        );
     }
 }

@@ -32,6 +32,7 @@ uuid.workspace = true
 time.workspace = true
 zeroize.workspace = true
 reqwest.workspace = true
+schemars.workspace = true
 ts-rs.workspace = true
 tauri-plugin-window-state = "2.5.0"
 

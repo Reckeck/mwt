@@ -5,8 +5,11 @@ use crate::model::chain::ChainInfo;
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
 use crate::sim::{SimRun, Strategy};
+use schemars::JsonSchema;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
     #[default]
@@ -15,7 +18,9 @@ pub enum Theme {
     Dark,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Locale {
     #[default]
@@ -24,7 +29,7 @@ pub enum Locale {
     Ru,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct DashboardWidgetCfg {
     pub id: String,
     pub visible: bool,
@@ -49,7 +54,7 @@ fn default_minimize_to_tray() -> bool {
     true
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Settings {
     /// ISO currency code used as the portfolio base (e.g. `usd`, `rub`, `eur`).
     pub base_currency: String,
@@ -92,7 +97,7 @@ impl Default for Settings {
 }
 
 /// A cached price: one unit of an asset in USD.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct PricePoint {
     /// `AssetRef::key()`.
     pub asset_key: String,
@@ -103,7 +108,7 @@ pub struct PricePoint {
 }
 
 /// A cached FX rate: units of `currency` per 1 USD.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct FxPoint {
     pub currency: String,
     pub per_usd: Amount,
@@ -112,7 +117,7 @@ pub struct FxPoint {
 }
 
 /// Simulation state kept inside the vault (paper accounts & runs).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct SimState {
     pub strategies: Vec<Strategy>,
     pub runs: Vec<SimRun>,
@@ -126,7 +131,7 @@ pub struct SimState {
 /// - both fields are zeroized when the value is dropped.
 /// - `ts(skip)` on the `VaultDoc` field keeps it out of the generated
 ///   TypeScript bindings entirely.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ExchangeKeys {
     pub store_id: String,
     pub api_key: String,
@@ -170,7 +175,7 @@ impl Drop for ExchangeKeys {
 /// Fills land here first and never touch `transactions` until the user
 /// confirms them, so a background import can never silently rewrite history.
 /// Deduplication key is Bybit's `execId`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct PendingImport {
     /// Bybit's execution ID (`execId`) — the deduplication key.
@@ -257,14 +262,14 @@ fn nonempty(raw: String) -> String {
 }
 
 /// Exchange credentials grouped by exchange name.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Exchanges {
     #[serde(default)]
     pub bybit: Vec<ExchangeKeys>,
 }
 
 /// Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct VaultDoc {
     pub version: u32,
     pub id: String,
@@ -285,6 +290,17 @@ pub struct VaultDoc {
     /// Staged Bybit fills awaiting user confirmation (D2.4).
     #[serde(default)]
     pub pending_imports: Vec<PendingImport>,
+}
+
+/// JSON Schema of the decrypted document.
+///
+/// Derived from [`VaultDoc`] itself, so the raw JSON editor's field
+/// suggestions cannot drift away from the format the vault is actually
+/// serialized in. This is also why `#[serde]` attributes — not `#[ts]` ones —
+/// decide the field names: the editor shows the bytes on disk, and those come
+/// from serde.
+pub fn json_schema() -> serde_json::Value {
+    schemars::schema_for!(VaultDoc).into()
 }
 
 impl Default for VaultDoc {
@@ -354,4 +370,60 @@ pub fn unix_to_iso(secs: i64) -> String {
         .ok()
         .and_then(|stamp| stamp.format(&Rfc3339).ok())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod json_schema_tests {
+    use super::*;
+
+    #[test]
+    fn schema_describes_the_serialized_document() {
+        let schema = json_schema();
+        let defs = schema["$defs"].as_object().expect("$defs");
+        let root = schema["properties"].as_object().expect("root properties");
+
+        // Field names come from serde, so `sim` stays nested. This is exactly
+        // where the generated TypeScript bindings flatten it and therefore
+        // disagree with the bytes on disk.
+        assert!(
+            root.contains_key("sim"),
+            "root must keep serde's nested `sim`"
+        );
+        assert!(defs.contains_key("SimState"));
+        assert!(
+            !root.contains_key("strategies"),
+            "`strategies` lives under `sim` on disk, not at the root"
+        );
+
+        // Every field serde actually writes must be describable.
+        let on_disk = serde_json::to_value(VaultDoc::default()).unwrap();
+        let written = on_disk.as_object().unwrap();
+        for key in written.keys() {
+            assert!(root.contains_key(key), "schema is missing `{key}`");
+        }
+
+        // `Amount` reaches JSON as a decimal string.
+        let quantity = &defs["Holding"]["properties"]["quantity"];
+        assert_eq!(quantity["type"], "string");
+
+        // Enums are constrained, so the editor can offer the values. Variants
+        // carrying doc comments come back as `oneOf` with `const` instead of a
+        // flat `enum`, so only require that the names are present somewhere.
+        assert_eq!(defs["Theme"]["enum"][0], "auto");
+        let store_kinds = defs["StoreKind"].to_string();
+        for kind in [
+            "exchange",
+            "hot_wallet",
+            "cold_wallet",
+            "bank",
+            "cash",
+            "paper",
+        ] {
+            assert!(store_kinds.contains(kind), "StoreKind is missing `{kind}`");
+        }
+
+        // Optional fields admit null.
+        let fee = &defs["Transaction"]["properties"]["fee"];
+        assert_eq!(fee["type"][1], "null");
+    }
 }
