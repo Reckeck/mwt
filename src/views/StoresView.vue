@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, Plus, Trash2, X } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
@@ -10,7 +11,7 @@ import Card from '@/components/ui/card.vue'
 import Dialog from '@/components/ui/dialog.vue'
 import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
-import { call } from '@/lib/ipc'
+import { call, parseError } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { getStoreIcon } from '@/lib/store-icons'
 
@@ -35,25 +36,35 @@ function invalidate() {
 
 const createStore = useMutation({
   mutationFn: () => call<Store>('create_store', { input: { name: name.value, kind: kind.value, color: color.value, note: '' } }),
-  onSuccess: () => {
+  onSuccess: (store) => {
+    toast.success(t('stores.created'), { description: store.name })
     name.value = ''
     void invalidate()
   },
+  onError: (err) => toast.error(t('stores.createFailed'), { description: parseError(err).message }),
 })
 
 async function submitCreate() {
-  await createStore.mutateAsync()
-  createDialogOpen.value = false
+  const created = await createStore.mutateAsync().catch(() => null)
+  if (created) createDialogOpen.value = false
 }
 
 const toggleArchive = useMutation({
   mutationFn: (store: Store) => call('archive_store', { id: store.id, archived: !store.archived }),
-  onSuccess: () => void invalidate(),
+  onSuccess: (_result, store) => {
+    toast.success(store.archived ? t('stores.unarchived') : t('stores.archived'), { description: store.name })
+    void invalidate()
+  },
+  onError: (err) => toast.error(t('stores.archiveFailed'), { description: parseError(err).message }),
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_store', { id }),
-  onSuccess: () => void invalidate(),
+  onSuccess: () => {
+    toast.success(t('stores.deleted'))
+    void invalidate()
+  },
+  onError: (err) => toast.error(t('stores.deleteFailed'), { description: parseError(err).message }),
 })
 </script>
 

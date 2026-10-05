@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { Play, Plus, Save, Trash2, Eye, EyeOff } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
@@ -10,7 +11,7 @@ import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
 import Select from '@/components/ui/select.vue'
 import { Chart, type ChartOption } from '@/lib/echarts'
-import { call } from '@/lib/ipc'
+import { call, parseError } from '@/lib/ipc'
 import { useTheme } from '@/theme'
 
 const { t } = useI18n()
@@ -116,22 +117,34 @@ function buildStrategy(): Strategy {
   }
 }
 
-async function saveStrategy() {
-  await call('save_strategy', { input: { strategy: buildStrategy() } })
-  await strategies.refetch()
+/** `quiet` is for the implicit save inside `runStrategy`. */
+async function saveStrategy(quiet = false) {
+  try {
+    await call('save_strategy', { input: { strategy: buildStrategy() } })
+    await strategies.refetch()
+    if (!quiet) toast.success(t('sim.saved'), { description: editing.name })
+  } catch (err) {
+    toast.error(t('sim.saveFailed'), { description: parseError(err).message })
+    throw err
+  }
 }
 
 async function runStrategy() {
-  let selected = (strategies.data.value ?? []).find((strategy) => strategy.name === editing.name)
-  if (!selected) {
-    await saveStrategy()
-    selected = (await call<Strategy[]>('list_strategies')).find((strategy) => strategy.name === editing.name)
+  try {
+    let selected = (strategies.data.value ?? []).find((strategy) => strategy.name === editing.name)
+    if (!selected) {
+      await saveStrategy(true)
+      selected = (await call<Strategy[]>('list_strategies')).find((strategy) => strategy.name === editing.name)
+    }
+    if (!selected) return
+    const run = await call<SimRun>('run_strategy', {
+      input: { strategy_id: selected.id, candles: candles.value, granularity_min: granularity_min.value },
+    })
+    toast.success(t('sim.ran'), { description: run.id })
+    await runs.refetch()
+  } catch (err) {
+    toast.error(t('sim.runFailed'), { description: parseError(err).message })
   }
-  if (!selected) return
-  await call<SimRun>('run_strategy', {
-    input: { strategy_id: selected.id, candles: candles.value, granularity_min: granularity_min.value },
-  })
-  await runs.refetch()
 }
 
 async function onRunChange(runId: string) {

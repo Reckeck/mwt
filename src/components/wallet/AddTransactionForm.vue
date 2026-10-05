@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
 
 import AssetInput from '@/components/AssetInput.vue'
 import Button from '@/components/ui/button.vue'
@@ -40,9 +41,6 @@ const comment = ref('')
 const network = ref<Chain | ''>('')
 const txHash = ref('')
 const timestamp = ref('')
-
-const error = ref<string | null>(null)
-const saved = ref<string | null>(null)
 
 const lookup = useTradeLookupStore()
 
@@ -279,15 +277,16 @@ const save = useMutation({
     })
   },
   onSuccess: () => {
-    error.value = null
-    saved.value = t('form.saved')
+    toast.success(t('form.saved'))
     reset()
     invalidate()
-    setTimeout(() => (saved.value = null), 3000)
   },
   onError: (err) => {
     const parsed = parseError(err)
-    error.value = parsed.code === 'UNKNOWN' ? t('form.assetRequired') : t(`errors.${parsed.code}`) || parsed.message
+    const known = t(`errors.${parsed.code}`)
+    const message =
+      parsed.code === 'UNKNOWN' ? t('form.assetRequired') : known === `errors.${parsed.code}` ? parsed.message : known
+    toast.error(t('form.saveFailed'), { description: message })
   },
 })
 
@@ -459,9 +458,7 @@ const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
         <Button type="submit" :disabled="!valid || save.isPending.value || props.disabled">
           {{ t('form.submit') }}
         </Button>
-        <p v-if="saved" class="text-sm text-emerald-600 dark:text-emerald-400">{{ saved }}</p>
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
-      </div>
+              </div>
     </form>
   </Card>
 </template>

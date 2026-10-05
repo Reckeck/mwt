@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Check, ExternalLink, X } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
@@ -10,7 +11,7 @@ import Card from '@/components/ui/card.vue'
 import Input from '@/components/ui/input.vue'
 import Select from '@/components/ui/select.vue'
 import { formatDateTime, formatMoney } from '@/lib/format'
-import { call } from '@/lib/ipc'
+import { call, parseError } from '@/lib/ipc'
 import { cn, shortHash } from '@/lib/utils'
 
 const props = defineProps<{ storeId: string }>()
@@ -78,7 +79,11 @@ const invalidations = () => {
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_transaction', { id }),
-  onSuccess: invalidations,
+  onSuccess: () => {
+    toast.success(t('tx.deleted'))
+    invalidations()
+  },
+  onError: (err) => toast.error(t('tx.deleteFailed'), { description: parseError(err).message }),
 })
 
 const saveComment = useMutation({
@@ -89,8 +94,10 @@ const saveComment = useMutation({
   onSuccess: () => {
     editingId.value = null
     editingText.value = ''
+    toast.success(t('tx.commentSaved'))
     invalidations()
   },
+  onError: (err) => toast.error(t('tx.commentSaveFailed'), { description: parseError(err).message }),
 })
 
 function startEdit(tx: Transaction) {

@@ -4,12 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { RefreshCw } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import { formatMoney, formatPct } from '@/lib/format'
-import { call } from '@/lib/ipc'
+import { call, parseError } from '@/lib/ipc'
 import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
@@ -24,9 +25,14 @@ const summary = useQuery({
 const refreshBusy = computed(() => summary.isFetching.value)
 
 async function refresh() {
-  const result = await call<RefreshResult>('refresh_all')
-  queryClient.setQueryData(['refresh'], result)
-  await queryClient.invalidateQueries({ queryKey: ['summary'] })
+  try {
+    const result = await call<RefreshResult>('refresh_all')
+    queryClient.setQueryData(['refresh'], result)
+    toast.success(t('store.refreshed'), { description: `${result.prices} · ${result.fx}` })
+    await queryClient.invalidateQueries({ queryKey: ['summary'] })
+  } catch (err) {
+    toast.error(t('store.refreshFailed'), { description: parseError(err).message })
+  }
 }
 
 function pctWidth(value: string | number | null | undefined): string {
