@@ -5,8 +5,10 @@ use trade_core::ipc_contract::{
 };
 use trade_core::service::UnlockedVault;
 
-use crate::commands::{AppState, err_to_string, lock_vault, require_vault};
+use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require_vault};
 
+/// Vault identity for the unlock screen. The base currency is *not* part of the
+/// document any more — it is an app-level preference — so it is left out here.
 fn info_of(vault: &UnlockedVault) -> VaultInfo {
     VaultInfo {
         path: vault.path.display().to_string(),
@@ -14,7 +16,7 @@ fn info_of(vault: &UnlockedVault) -> VaultInfo {
         id: vault.doc.id.clone(),
         created_at: vault.doc.created_at.clone(),
         format: vault.fmt.label().to_string(),
-        base_currency: vault.doc.settings.base_currency.clone(),
+        base_currency: vault.base_currency().to_string(),
     }
 }
 
@@ -48,12 +50,22 @@ pub async fn create_vault(
     }
     let vault = UnlockedVault::create(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
-    let info = info_of(&vault);
     *state
         .vault
         .lock()
         .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))? =
         Some(vault);
+    // The base currency lives in the app config, so push it into the new vault
+    // before reading the info back out.
+    app_settings::sync_base_currency(&state, &app);
+    let info = info_of(
+        state
+            .vault
+            .lock()
+            .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))?
+            .as_ref()
+            .expect("just stored"),
+    );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
         err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
@@ -71,10 +83,22 @@ pub async fn unlock_vault(
     let path = std::path::PathBuf::from(&input.path);
     let vault = UnlockedVault::open(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
-    let info = info_of(&vault);
     *state.vault.lock().map_err(|err| {
         err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = Some(vault);
+    // The base currency lives in the app config, so push it into the opened
+    // vault before reading the info back out.
+    app_settings::sync_base_currency(&state, &app);
+    let info = info_of(
+        state
+            .vault
+            .lock()
+            .map_err(|err| {
+                err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+            })?
+            .as_ref()
+            .expect("just stored"),
+    );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
         err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))

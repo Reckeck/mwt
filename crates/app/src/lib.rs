@@ -4,8 +4,8 @@
 mod commands;
 
 use commands::{
-    AppState, auth, calc, categories, err_to_string, exchange, portfolio, pricing, settings, sim,
-    stores, transactions, vault_recents,
+    AppState, app_settings, auth, calc, categories, err_to_string, exchange, portfolio, pricing,
+    settings, sim, stores, transactions, vault_recents,
 };
 use tauri::{
     Emitter, Manager,
@@ -69,6 +69,10 @@ pub fn run() {
             portfolio::get_store_pnl,
             // calculator
             calc::calc_preview,
+            // app settings (outside the vault)
+            app_settings::get_app_settings,
+            app_settings::update_app_settings,
+            app_settings::get_supported_currencies,
             // settings
             settings::get_settings,
             settings::update_settings,

@@ -1,6 +1,7 @@
 //! IPC command layer — thin translation between `trade-core` services and
 //! the frontend. See `docs/ipc.md` for the full contract.
 
+pub mod app_settings;
 pub mod auth;
 pub mod calc;
 pub mod categories;

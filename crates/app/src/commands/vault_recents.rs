@@ -117,7 +117,7 @@ pub async fn select_vault(
             id: vault.doc.id.clone(),
             created_at: vault.doc.created_at.clone(),
             format: vault.fmt.label().to_string(),
-            base_currency: vault.doc.settings.base_currency.clone(),
+            base_currency: vault.base_currency().to_string(),
         });
     add_recent(&app, &input.path);
     Ok(trade_core::ipc_contract::VaultStatus {

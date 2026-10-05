@@ -209,6 +209,51 @@ impl PricingService {
 
     // -- provider chain ----------------------------------------------------
 
+    /// Every FX rate the public provider knows, keyed by lowercase currency
+    /// code (units per 1 USD).
+    ///
+    /// One call returns the whole table, so this is also how the settings
+    /// pickers learn which fiat currencies exist at all.
+    pub async fn fx_rates(&self) -> Result<HashMap<String, Amount>> {
+        self.fx_table().await
+    }
+
+    /// Every coin symbol CoinGecko lists, lowercased.
+    ///
+    /// Backs the crypto half of the currency catalog. A failure here is not
+    /// fatal for callers: the fiat half and the built-in fallback still stand.
+    pub async fn coin_symbols(&self) -> Result<Vec<String>> {
+        let url = format!("{COINGECKO_V3}/coins/list");
+        let resp = self
+            .client
+            .get(url)
+            .header(USER_AGENT, "trade-app")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!(
+                "coingecko http {:?}",
+                resp.status()
+            )));
+        }
+        let coins: Vec<CoinListEntry> = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.to_string()))?;
+        let mut out: Vec<String> = coins
+            .into_iter()
+            .filter_map(|coin| {
+                let symbol = coin.symbol.trim().to_lowercase();
+                (!symbol.is_empty()).then_some(symbol)
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        Ok(out)
+    }
+
     async fn price_usd(&self, asset: &AssetRef) -> Result<Amount> {
         // 1) CoinGecko by id
         if let Some(id) = &asset.coingecko_id
@@ -419,6 +464,12 @@ pub struct AssetSearchHit {
     pub contract: Option<String>,
     /// CoinGecko market-cap rank (0 = unknown).
     pub rank: u64,
+}
+
+/// One row of CoinGecko `/coins/list`; only the symbol is of interest here.
+#[derive(serde::Deserialize)]
+struct CoinListEntry {
+    symbol: String,
 }
 
 // -- cache helpers ----------------------------------------------------------

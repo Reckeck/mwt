@@ -17,7 +17,7 @@ pub async fn get_history(
 ) -> Result<Vec<HistoryPoint>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
-    let base = base_currency.unwrap_or_else(|| vault.doc.settings.base_currency.clone());
+    let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
     Ok(vault.history_series(&base))
 }
 
@@ -36,7 +36,7 @@ pub async fn get_store_history(
 ) -> Result<Vec<HistoryPoint>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
-    let base = base_currency.unwrap_or_else(|| vault.doc.settings.base_currency.clone());
+    let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
     Ok(vault.store_history(&store_id, &base))
 }
 

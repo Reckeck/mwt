@@ -52,27 +52,8 @@ pub async fn update_settings(
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     let settings = &mut vault.doc.settings;
-    if let Some(base) = input.base_currency
-        && !base.trim().is_empty()
-    {
-        settings.base_currency = base.trim().to_lowercase();
-    }
-    if let Some(theme) = input.theme {
-        settings.theme = theme;
-    }
-    if let Some(locale) = input.locale {
-        settings.locale = locale;
-    }
     if let Some(decimals) = input.display_decimals {
         settings.display_decimals = decimals.clamp(0, 18);
-    }
-    if let Some(favorites) = input.favorite_currencies {
-        settings.favorite_currencies = favorites
-            .into_iter()
-            .map(|code| code.trim().to_uppercase())
-            .filter(|code| !code.is_empty() && code.len() == 3)
-            .collect::<Vec<_>>();
-        settings.favorite_currencies.dedup();
     }
     if let Some(widgets) = input.dashboard_widgets {
         settings.dashboard_widgets = widgets;
