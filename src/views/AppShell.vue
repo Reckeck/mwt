@@ -18,6 +18,7 @@ import {
 
 import Button from '@/components/ui/button.vue'
 import SidebarWallets from '@/components/SidebarWallets.vue'
+import Toaster from '@/components/ui/sonner.vue'
 import Tooltip from '@/components/ui/tooltip.vue'
 import { call, onEvent } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -238,5 +239,7 @@ async function lock() {
         <RouterView />
       </div>
     </main>
+
+    <Toaster position="bottom-right" rich-colors close-button />
   </div>
 </template>

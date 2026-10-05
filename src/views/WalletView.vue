@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
 import {
   Archive,
   ArchiveRestore,
@@ -131,38 +132,44 @@ const stats = computed(() => [
 
 const refreshPrices = useMutation({
   mutationFn: () => call<RefreshResult>('refresh_all'),
-  onSuccess: () => {
+  onSuccess: (result) => {
+    toast.success(t('wallet.pricesRefreshed'), {
+      description: `${result.prices} · ${result.fx}`,
+    })
     void queryClient.invalidateQueries({ queryKey: ['store', storeId.value] })
     void queryClient.invalidateQueries({ queryKey: ['store-history', storeId.value] })
     void queryClient.invalidateQueries({ queryKey: ['summary'] })
   },
+  onError: (err) => toast.error(t('wallet.pricesRefreshFailed'), { description: parseError(err).message }),
 })
 
 const toggleArchive = useMutation({
   mutationFn: (archived: boolean) => call('archive_store', { id: storeId.value, archived }),
-  onSuccess: () => {
+  onSuccess: (_result, archived) => {
+    toast.success(archived ? t('wallet.archived') : t('wallet.unarchived'))
     void queryClient.invalidateQueries({ queryKey: ['store', storeId.value] })
     void queryClient.invalidateQueries({ queryKey: ['stores'] })
     void queryClient.invalidateQueries({ queryKey: ['summary'] })
   },
+  onError: (err) => toast.error(t('wallet.archiveFailed'), { description: parseError(err).message }),
 })
 
 const destroy = useMutation({
   mutationFn: () => call('delete_store', { id: storeId.value }),
   onSuccess: () => {
+    toast.success(t('wallet.deleted'))
     void queryClient.invalidateQueries({ queryKey: ['stores'] })
     void queryClient.invalidateQueries({ queryKey: ['summary'] })
     void router.push({ name: 'stores' })
   },
+  onError: (err) => toast.error(t('wallet.deleteFailed'), { description: parseError(err).message }),
 })
 
 /* --- Bybit API key management (only for exchange nodes) --- */
 const isExchangeNode = computed(() => store.value?.kind === 'exchange')
 const bybitKey = ref('')
 const bybitSecret = ref('')
-const bybitError = ref<string | null>(null)
 const bybitBusy = ref(false)
-const bybitSaved = ref(false)
 
 const keyStatus = useQuery({
   queryKey: ['bybit-key-status', storeId.value],
@@ -174,8 +181,6 @@ const bybitHasKey = computed(() => keyStatus.data.value?.configured === true)
 const bybitHint = computed(() => keyStatus.data.value?.hint ?? '')
 
 async function saveBybitKey() {
-  bybitError.value = null
-  bybitSaved.value = false
   bybitBusy.value = true
   try {
     await call('set_exchange_key', {
@@ -183,24 +188,23 @@ async function saveBybitKey() {
     })
     bybitKey.value = ''
     bybitSecret.value = ''
-    bybitSaved.value = true
+    toast.success(t('wallet.bybit.keySaved'))
     await keyStatus.refetch()
   } catch (err) {
-    bybitError.value = parseError(err).message
+    toast.error(t('wallet.bybit.keySaveFailed'), { description: parseError(err).message })
   } finally {
     bybitBusy.value = false
   }
 }
 
 async function removeBybitKey() {
-  bybitError.value = null
   bybitBusy.value = true
   try {
     await call('clear_exchange_key', { storeId: storeId.value })
-    bybitSaved.value = false
+    toast.success(t('wallet.bybit.keyRemoved'))
     await keyStatus.refetch()
   } catch (err) {
-    bybitError.value = parseError(err).message
+    toast.error(t('wallet.bybit.keyRemoveFailed'), { description: parseError(err).message })
   } finally {
     bybitBusy.value = false
   }
@@ -210,10 +214,6 @@ async function removeBybitKey() {
 // Fills are staged in the vault and only become transactions when the user
 // confirms them, so an import can never silently rewrite history.
 const importBusy = ref(false)
-const importNotice = ref<string | null>(null)
-const importNoticeText = computed(() =>
-  importNotice.value ? t(`import.notice.${importNotice.value}`) : null,
-)
 
 const pending = useQuery({
   queryKey: ['pending-imports'],
@@ -224,15 +224,18 @@ const pendingCount = computed(() => pending.data.value?.imports.length ?? 0)
 
 async function loadHistory() {
   importBusy.value = true
-  importNotice.value = null
   try {
     const res = await call<ImportBybitHistoryOutput>('import_bybit_history', {
       input: { store_id: storeId.value },
     })
-    importNotice.value = res.notice ?? null
+    if (res.notice) {
+      toast.warning(t(`import.notice.${res.notice}`))
+    } else {
+      toast.success(t('import.staged'), { description: String(res.staged) })
+    }
     await pending.refetch()
   } catch {
-    importNotice.value = 'unreachable'
+    toast.error(t('import.notice.unreachable'))
   } finally {
     importBusy.value = false
   }
@@ -241,7 +244,8 @@ async function loadHistory() {
 async function confirmImports(execIds: string[]) {
   importBusy.value = true
   try {
-    await call('confirm_pending_imports', { input: { exec_ids: execIds } })
+    const res = await call<ConfirmPendingImportsOutput>('confirm_pending_imports', { input: { exec_ids: execIds } })
+    toast.success(t('import.confirmed'), { description: String(res.confirmed) })
     await pending.refetch()
     // Confirmed fills became trades, so every derived view is stale.
     const staleKeys: ReadonlyArray<readonly unknown[]> = [
@@ -254,6 +258,8 @@ async function confirmImports(execIds: string[]) {
     await Promise.all(
       staleKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
     )
+  } catch (err) {
+    toast.error(t('import.confirmFailed'), { description: parseError(err).message })
   } finally {
     importBusy.value = false
   }
@@ -262,8 +268,11 @@ async function confirmImports(execIds: string[]) {
 async function discardImports(execIds: string[]) {
   importBusy.value = true
   try {
-    await call('discard_pending_imports', { input: { exec_ids: execIds } })
+    const res = await call<DiscardPendingImportsOutput>('discard_pending_imports', { input: { exec_ids: execIds } })
+    toast.success(t('import.discarded'), { description: String(res.discarded) })
     await pending.refetch()
+  } catch (err) {
+    toast.error(t('import.discardFailed'), { description: parseError(err).message })
   } finally {
     importBusy.value = false
   }
@@ -418,11 +427,8 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
             <Button :disabled="bybitBusy || !bybitKey || !bybitSecret" @click="saveBybitKey">
               {{ t('wallet.bybit.save') }}
             </Button>
-            <Badge v-if="bybitSaved" variant="default">✓</Badge>
           </div>
         </template>
-
-        <p v-if="bybitError" class="text-xs text-destructive">{{ bybitError }}</p>
 
         <!-- D2.4: import history into a staging area, confirmed explicitly -->
         <div v-if="bybitHasKey" class="grid gap-3 border-t border-border pt-3">
@@ -448,7 +454,6 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
             </div>
           </div>
           <p class="text-xs text-muted-foreground">{{ t('import.hint') }}</p>
-          <p v-if="importNoticeText" class="text-xs text-destructive">{{ importNoticeText }}</p>
 
           <div v-if="pendingCount" class="max-h-72 overflow-auto rounded-md border border-border">
             <table class="w-full text-sm">

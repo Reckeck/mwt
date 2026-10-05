@@ -2,12 +2,13 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
 
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import { formatDateTime, formatMoney } from '@/lib/format'
-import { call, onEvent } from '@/lib/ipc'
+import { call, onEvent, parseError } from '@/lib/ipc'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -40,8 +41,13 @@ const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outli
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
 
 async function remove(id: string) {
-  await call('delete_transaction', { id })
-  await queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })
+  try {
+    await call('delete_transaction', { id })
+    toast.success(t('tx.deleted'))
+    await queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })
+  } catch (err) {
+    toast.error(t('tx.deleteFailed'), { description: parseError(err).message })
+  }
 }
 </script>
 
