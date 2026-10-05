@@ -7,28 +7,6 @@ use crate::model::transaction::Transaction;
 use crate::sim::{SimRun, Strategy};
 use schemars::JsonSchema;
 
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum Theme {
-    #[default]
-    Auto,
-    Light,
-    Dark,
-}
-
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum Locale {
-    #[default]
-    Auto,
-    En,
-    Ru,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct DashboardWidgetCfg {
     pub id: String,
@@ -54,17 +32,15 @@ fn default_minimize_to_tray() -> bool {
     true
 }
 
+/// Vault-scoped settings.
+///
+/// The preferences that describe the *user* rather than this particular vault
+/// (theme, language, base currency, favourite currencies) live outside the
+/// encrypted doc — see [`crate::appconfig::AppSettings`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Settings {
-    /// ISO currency code used as the portfolio base (e.g. `usd`, `rub`, `eur`).
-    pub base_currency: String,
-    pub theme: Theme,
-    pub locale: Locale,
     /// Decimal places used to render balances.
     pub display_decimals: u32,
-    /// Список валют для быстрого отображения (ISO 4217)
-    #[serde(default)]
-    pub favorite_currencies: Vec<String>,
     #[serde(default)]
     pub dashboard_widgets: Vec<DashboardWidgetCfg>,
     #[serde(default = "default_fx_interval")]
@@ -83,11 +59,7 @@ fn default_bybit_import_interval() -> u32 {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            base_currency: "usd".into(),
-            theme: Theme::Auto,
-            locale: Locale::Auto,
             display_decimals: 8,
-            favorite_currencies: vec![],
             dashboard_widgets: vec![],
             fx_refresh_interval_sec: 300,
             minimize_to_tray: true,
@@ -409,7 +381,6 @@ mod json_schema_tests {
         // Enums are constrained, so the editor can offer the values. Variants
         // carrying doc comments come back as `oneOf` with `const` instead of a
         // flat `enum`, so only require that the names are present somewhere.
-        assert_eq!(defs["Theme"]["enum"][0], "auto");
         let store_kinds = defs["StoreKind"].to_string();
         for kind in [
             "exchange",
@@ -420,6 +391,18 @@ mod json_schema_tests {
             "paper",
         ] {
             assert!(store_kinds.contains(kind), "StoreKind is missing `{kind}`");
+        }
+
+        // The user-scoped preferences live in the app config, not in the
+        // document: the editor must not offer to write them into the vault.
+        let settings = defs["Settings"]["properties"]
+            .as_object()
+            .expect("Settings properties");
+        for moved in ["base_currency", "theme", "locale", "favorite_currencies"] {
+            assert!(
+                !settings.contains_key(moved),
+                "`{moved}` moved to appconfig and must leave the vault schema"
+            );
         }
 
         // Optional fields admit null.

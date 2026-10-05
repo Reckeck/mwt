@@ -81,7 +81,7 @@ pub async fn refresh_all(
                 .filter(|asset| seen.insert(asset.key()))
                 .collect()
         };
-        let base = vault.doc.settings.base_currency.clone();
+        let base = vault.base_currency().to_string();
         (assets, base)
     };
 

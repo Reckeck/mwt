@@ -3,6 +3,7 @@
 //! to compile and fully unit-testable (`cargo test -p trade-core`).
 
 pub mod amount;
+pub mod appconfig;
 pub mod calc;
 pub mod crypto;
 pub mod error;

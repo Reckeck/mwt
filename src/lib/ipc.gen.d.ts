@@ -2,6 +2,20 @@
 type Amount = string; // rust_decimal money — always a decimal string
 
 /**
+ * Preferences that follow the *user*, not the vault: they must survive opening
+ * a different vault, so they are stored next to the app, not inside the doc.
+ */
+type AppSettings = { theme: Theme, locale: Locale, 
+/**
+ * ISO 4217 code the whole portfolio is valued in (e.g. `usd`, `rub`).
+ */
+base_currency: string, 
+/**
+ * Currencies offered on hover next to any price. Empty = no tooltip.
+ */
+favorite_currencies: Array<string>, };
+
+/**
  * Loose asset identification: enough to rebuild an [`AssetRef`] cache key
  * without making the frontend construct a full `quote` field.
  */
@@ -190,6 +204,18 @@ type ConfirmPendingImportsOutput = { confirmed: number, };
 type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, parent_id: string | null, };
 
 type CreateVaultInput = { path: string, password: string, };
+
+/**
+ * Catalog of currencies the base/favourite pickers may offer.
+ */
+type CurrencyCatalogOutput = { catalog: SupportedCurrencies, 
+/**
+ * Machine code describing where the list came from: `builtin` when it is
+ * the built-in fallback (never fetched), `cached` when the network was
+ * unreachable and the last successful fetch was reused, `null` when the
+ * providers answered just now.
+ */
+notice: string | null, };
 
 type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
@@ -432,19 +458,18 @@ type SetExchangeKeyInput = { store_id: string, api_key: string, api_secret: stri
 
 type SetTxPricesInput = { transaction_id: string, price_usd: Amount | null, fx_override: Amount | null, };
 
-type Settings = { 
 /**
- * ISO currency code used as the portfolio base (e.g. `usd`, `rub`, `eur`).
+ * Vault-scoped settings.
+ *
+ * The preferences that describe the *user* rather than this particular vault
+ * (theme, language, base currency, favourite currencies) live outside the
+ * encrypted doc — see [`crate::appconfig::AppSettings`].
  */
-base_currency: string, theme: Theme, locale: Locale, 
+type Settings = { 
 /**
  * Decimal places used to render balances.
  */
-display_decimals: number, 
-/**
- * Список валют для быстрого отображения (ISO 4217)
- */
-favorite_currencies: Array<string>, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refresh_interval_sec: number, minimize_to_tray: boolean, 
+display_decimals: number, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refresh_interval_sec: number, minimize_to_tray: boolean, 
 /**
  * Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
  */
@@ -574,6 +599,22 @@ type Strategy = { id: string, name: string, symbol: string, chain: Chain | null,
  */
 entry_rules: Array<Rule>, exit_rules: Array<Rule>, stop_loss_pct: Amount | null, take_profit_pct: Amount | null, position_size_pct: Amount, created_at: string, };
 
+/**
+ * Currencies the pickers may offer.
+ *
+ * Built from the public providers at runtime and cached on disk; see
+ * [`fallback`] for the degraded case.
+ */
+type SupportedCurrencies = { 
+/**
+ * ISO 4217 codes, lowercase.
+ */
+fiat: Array<string>, 
+/**
+ * Crypto ticker symbols, lowercase.
+ */
+crypto: Array<string>, };
+
 type Theme = "auto" | "light" | "dark";
 
 type TradeInput = { store_id: string, sell_symbol: string, sell_name: string, sell_coingecko_id: string | null, sell_chain: Chain | null, sell_contract: string | null, sell_qty: Amount, buy_symbol: string, buy_name: string, buy_coingecko_id: string | null, buy_chain: Chain | null, buy_contract: string | null, buy_qty: Amount, comment: string, category: string | null, fee: Amount | null, };
@@ -683,9 +724,17 @@ amount: Amount, store_id: string, comment: string, category: string | null, time
 
 type UnlockInput = { path: string, password: string, };
 
+/**
+ * Partial update: only the fields present in the payload are touched.
+ */
+type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, favorite_currencies: Array<string> | null, };
+
 type UpdateCommentInput = { transaction_id: string, comment: string, };
 
-type UpdateSettingsInput = { base_currency: string | null, theme: Theme | null, locale: Locale | null, display_decimals: number | null, favorite_currencies: Array<string> | null, dashboard_widgets: Array<DashboardWidgetCfg> | null, fx_refresh_interval_sec: number | null, minimize_to_tray: boolean | null, 
+/**
+ * Partial update of the **vault-scoped** settings.
+ */
+type UpdateSettingsInput = { display_decimals: number | null, dashboard_widgets: Array<DashboardWidgetCfg> | null, fx_refresh_interval_sec: number | null, minimize_to_tray: boolean | null, 
 /**
  * Background Bybit poll interval; `0` disables it (D2.4).
  */

@@ -26,6 +26,13 @@ pub struct UnlockedVault {
     pub path: PathBuf,
     pub fmt: SnapshotFormat,
     pub doc: VaultDoc,
+    /// Portfolio base currency for this session.
+    ///
+    /// Deliberately *not* part of `doc`: the base currency is an app-level
+    /// preference (see [`crate::appconfig::AppSettings`]), so opening a
+    /// different vault must not change it. The app layer pushes the current
+    /// value in right after the vault is opened.
+    base_currency: String,
     password: Zeroizing<String>,
 }
 
@@ -38,6 +45,7 @@ impl UnlockedVault {
             path,
             fmt,
             doc,
+            base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
         })
     }
@@ -48,8 +56,29 @@ impl UnlockedVault {
             path,
             fmt,
             doc,
+            base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
         })
+    }
+
+    /// Point the vault at the app-level base currency.
+    ///
+    /// Holdings, average costs and every "in base" figure are re-derived, so an
+    /// existing vault keeps reporting the right numbers after the switch. The
+    /// document itself is not rewritten — only the document's *history* values
+    /// (`price_base` stamps) stay as they were written.
+    pub fn set_base_currency(&mut self, base: &str) {
+        let base = base.trim().to_lowercase();
+        if base.is_empty() || base == self.base_currency {
+            return;
+        }
+        self.base_currency = base;
+        self.recompute_holdings();
+    }
+
+    /// Current base currency, never empty.
+    pub fn base_currency(&self) -> &str {
+        &self.base_currency
     }
 
     /// Persist the current document (encrypt + atomic write).
@@ -461,10 +490,12 @@ impl UnlockedVault {
         // key: (store_id, asset_key) -> (quantity, avg_cost)
         let mut qty: HashMap<(String, String), Amount> = HashMap::new();
         let mut cost: HashMap<(String, String), Amount> = HashMap::new();
-        let mut base = self.doc.settings.base_currency.to_ascii_lowercase();
-        if base.is_empty() {
-            base = "usd".into();
-        }
+        let base = self.base_currency.to_ascii_lowercase();
+        let base = if base.is_empty() {
+            crate::appconfig::DEFAULT_BASE_CURRENCY.to_string()
+        } else {
+            base
+        };
 
         let mut txs: Vec<Transaction> = self.doc.transactions.clone();
         txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
@@ -524,9 +555,9 @@ impl UnlockedVault {
 
     /// Base currency code (never empty) and its cached FX rate.
     fn base_and_fx(&self) -> (String, Amount) {
-        let base = self.doc.settings.base_currency.to_ascii_lowercase();
+        let base = self.base_currency.to_ascii_lowercase();
         let base = if base.is_empty() {
-            "usd".to_string()
+            crate::appconfig::DEFAULT_BASE_CURRENCY.to_string()
         } else {
             base
         };
@@ -1953,11 +1984,7 @@ mod persist_tests {
         let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
 
         let edited = Settings {
-            base_currency: "rub".into(),
-            theme: crate::model::vault::Theme::Dark,
-            locale: crate::model::vault::Locale::Ru,
             display_decimals: 6,
-            favorite_currencies: vec!["USD".into(), "RUB".into()],
             dashboard_widgets: vec![crate::model::vault::DashboardWidgetCfg {
                 id: "assets".into(),
                 visible: false,
@@ -1986,17 +2013,17 @@ mod persist_tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("editor.wallet");
         let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
-        vault.doc.settings.theme = crate::model::vault::Theme::Light;
+        vault.doc.settings.display_decimals = 4;
         vault.doc.settings.fx_refresh_interval_sec = 1800;
         vault.persist().unwrap();
 
-        // What the editor sends back: the document it read, theme flipped.
+        // What the editor sends back: the document it read, decimals changed.
         let (mut draft, _) = VaultFile::open(&path, "pw").unwrap();
-        draft.settings.theme = crate::model::vault::Theme::Dark;
+        draft.settings.display_decimals = 2;
         vault.replace_doc(draft).unwrap();
 
         let (reopened, _) = VaultFile::open(&path, "pw").unwrap();
-        assert_eq!(reopened.settings.theme, crate::model::vault::Theme::Dark);
+        assert_eq!(reopened.settings.display_decimals, 2);
         assert_eq!(
             reopened.settings.fx_refresh_interval_sec, 1800,
             "an unrelated setting was lost by the editor write"

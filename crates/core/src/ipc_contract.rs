@@ -9,7 +9,6 @@ use crate::Amount;
 use crate::model::chain::Chain;
 use crate::model::store::StoreKind;
 use crate::model::transaction::TxKind;
-use crate::model::vault::{Locale, Theme};
 
 // -- auth --------------------------------------------------------------------
 
@@ -176,18 +175,31 @@ pub use crate::calc::{CalcInput, CalcResult};
 
 // -- settings ----------------------------------------------------------------
 
+/// Partial update of the **vault-scoped** settings.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct UpdateSettingsInput {
-    pub base_currency: Option<String>,
-    pub theme: Option<Theme>,
-    pub locale: Option<Locale>,
     pub display_decimals: Option<u32>,
-    pub favorite_currencies: Option<Vec<String>>,
     pub dashboard_widgets: Option<Vec<crate::model::vault::DashboardWidgetCfg>>,
     pub fx_refresh_interval_sec: Option<u32>,
     pub minimize_to_tray: Option<bool>,
     /// Background Bybit poll interval; `0` disables it (D2.4).
     pub bybit_import_interval_sec: Option<u32>,
+}
+
+// -- app settings (outside the vault) ------------------------------------------
+
+pub use crate::appconfig::{AppSettings, SupportedCurrencies, UpdateAppSettingsInput};
+pub use crate::appconfig::{Locale, Theme};
+
+/// Catalog of currencies the base/favourite pickers may offer.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct CurrencyCatalogOutput {
+    pub catalog: SupportedCurrencies,
+    /// Machine code describing where the list came from: `builtin` when it is
+    /// the built-in fallback (never fetched), `cached` when the network was
+    /// unreachable and the last successful fetch was reused, `null` when the
+    /// providers answered just now.
+    pub notice: Option<String>,
 }
 
 // -- sim ---------------------------------------------------------------------
