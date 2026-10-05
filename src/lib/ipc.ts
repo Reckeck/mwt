@@ -111,12 +111,23 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'update_settings': {
       const input = body as UpdateSettingsInput
       const settings = mockSettings
-      if (input.base_currency) settings.base_currency = input.base_currency
-      if (input.theme) settings.theme = input.theme
-      if (input.locale) settings.locale = input.locale
       if (input.display_decimals) settings.display_decimals = input.display_decimals
+      if (input.fx_refresh_interval_sec) settings.fx_refresh_interval_sec = input.fx_refresh_interval_sec
       return resolve(settings)
     }
+    // --- app settings (outside the vault) ---
+    case 'get_app_settings':
+      return resolve(mockAppSettings)
+    case 'update_app_settings': {
+      const input = body as UpdateAppSettingsInput
+      if (input.theme) mockAppSettings.theme = input.theme
+      if (input.locale) mockAppSettings.locale = input.locale
+      if (input.base_currency) mockAppSettings.base_currency = input.base_currency
+      if (input.favorite_currencies) mockAppSettings.favorite_currencies = input.favorite_currencies
+      return resolve(mockAppSettings)
+    }
+    case 'get_supported_currencies':
+      return resolve({ catalog: mockCurrencies, notice: null })
     case 'list_categories':
       return resolve(['salary', 'trading', 'staking', 'other'])
     case 'add_category':
@@ -312,15 +323,24 @@ const mockInfo: VaultInfo = {
 }
 
 const mockSettings: Settings = {
-  base_currency: 'usd',
-  theme: 'dark',
-  locale: 'auto',
   display_decimals: 8,
-  favorite_currencies: [],
   dashboard_widgets: [],
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
   bybit_import_interval_sec: 900,
+}
+
+/** Mirrors what `app_settings.json` would hold. */
+const mockAppSettings: AppSettings = {
+  theme: 'dark',
+  locale: 'auto',
+  base_currency: 'usd',
+  favorite_currencies: [],
+}
+
+const mockCurrencies: SupportedCurrencies = {
+  fiat: ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy', 'chf', 'cad', 'aud'],
+  crypto: ['btc', 'eth', 'sol', 'usdt', 'bnb', 'xrp', 'doge'],
 }
 
 function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transaction[] {
@@ -509,7 +529,7 @@ function mockOverview(storeId: string): StoreOverview {
 
   return {
     store,
-    base_currency: mockSettings.base_currency,
+    base_currency: mockAppSettings.base_currency,
     fx_per_usd: '1',
     total_usd: String(totalUsd),
     total_base: String(totalUsd),

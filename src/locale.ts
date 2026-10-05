@@ -23,29 +23,30 @@ export function applyLocale(pref: LocalePreference): ResolvedLocale {
 }
 
 /**
- * Change the language immediately and persist it to the vault.
+ * Change the language immediately and persist it to the app settings.
  *
- * The vault is the source of truth, but localStorage is written too so a
- * cold start shows the right language before the vault is even unlocked.
+ * The app config is the source of truth, but localStorage is written too so a
+ * cold start shows the right language before the settings file has been read —
+ * and before any vault is unlocked.
  */
 export async function setLocalePreference(pref: LocalePreference): Promise<void> {
   persistLocale(pref)
   applyLocale(pref)
 
   const settingsStore = useSettingsStore()
-  if (settingsStore.settings) {
-    await settingsStore.update({ locale: pref })
+  if (settingsStore.app) {
+    await settingsStore.updateApp({ locale: pref })
   }
 }
 
 /**
- * Keeps vue-i18n, `activeLocale` and localStorage in sync with the vault
- * setting. Call once from `App.vue`, mirroring `useTheme()`.
+ * Keeps vue-i18n, `activeLocale` and localStorage in sync with the app-level
+ * language preference. Call once from `App.vue`, mirroring `useTheme()`.
  */
 export function useLocale() {
   const settingsStore = useSettingsStore()
 
-  const preference = computed<LocalePreference>(() => settingsStore.settings?.locale ?? detectLocalePreference())
+  const preference = computed<LocalePreference>(() => settingsStore.app?.locale ?? detectLocalePreference())
 
   watch(
     preference,

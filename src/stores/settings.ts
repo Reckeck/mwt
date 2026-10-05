@@ -2,29 +2,111 @@ import { defineStore } from 'pinia'
 
 import { call } from '@/lib/ipc'
 
+/**
+ * All settings, from two different places.
+ *
+ * - `app` — theme, language, base currency, favourite currencies. Plain JSON in
+ *   the app config directory: they follow the *user*, survive opening another
+ *   vault, and are readable before any vault is unlocked (which is what lets the
+ *   unlock screen render in the right language).
+ * - `vault` — refresh intervals, tray behaviour, dashboard widgets. Encrypted
+ *   inside the vault, so they are genuinely per-vault.
+ *
+ * Both halves share one store on purpose. The backend split is a storage detail;
+ * making callers import a second store to find out where a setting comes from
+ * would only move the decision into every view. The split stays visible in the
+ * field and action names (`app` / `vault`).
+ */
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
-    settings: null as Settings | null,
+    /** User-scoped preferences, stored outside the vault. */
+    app: null as AppSettings | null,
+    /** Vault-scoped preferences, stored encrypted inside it. */
+    vault: null as Settings | null,
+    /** Currency catalog for the pickers; null until `loadCurrencies()` runs. */
+    currencies: null as SupportedCurrencies | null,
+    /** `builtin` | `cached` | null — see `CurrencyCatalogOutput.notice`. */
+    currenciesNotice: null as string | null,
+    currenciesLoading: false,
+    /** Whether the app-level read has landed at least once. */
+    appLoaded: false,
   }),
-  actions: {
-    async load() {
-      this.settings = await call<Settings>('get_settings')
+
+  getters: {
+    // -- app-scoped: the values views actually read --
+
+    theme: (state): Theme => state.app?.theme ?? 'auto',
+    locale: (state): Locale => state.app?.locale ?? 'auto',
+    /** Lowercase ISO code; always non-empty so labels never render blank. */
+    baseCurrency: (state): string => state.app?.base_currency || 'usd',
+    favoriteCurrencies: (state): string[] => state.app?.favorite_currencies ?? [],
+    /** Every code either picker may show, sorted and deduplicated. */
+    allCurrencies: (state): string[] => {
+      const catalog = state.currencies
+      if (!catalog) return []
+      return [...new Set([...catalog.fiat, ...catalog.crypto])].sort()
     },
-    async update(patch: Partial<Settings>) {
-      this.settings = await call<Settings>('update_settings', { input: patchToInput(patch) })
+
+    // -- vault-scoped --
+
+    /** Decimal places used to render balances. */
+    displayDecimals: (state): number => state.vault?.display_decimals ?? 8,
+    dashboardWidgets: (state): DashboardWidgetCfg[] => state.vault?.dashboard_widgets ?? [],
+  },
+
+  actions: {
+    async loadApp() {
+      this.app = await call<AppSettings>('get_app_settings')
+      this.appLoaded = true
+    },
+
+    async loadVault() {
+      this.vault = await call<Settings>('get_settings')
+    },
+
+    /**
+     * Fetch the currency catalog from the public providers.
+     *
+     * The backend degrades on its own (network → last cached fetch → built-in
+     * list), so this never rejects over an offline machine; `currenciesNotice`
+     * says which rung was used.
+     */
+    async loadCurrencies() {
+      if (this.currenciesLoading || this.currencies) return
+      this.currenciesLoading = true
+      try {
+        const result = await call<CurrencyCatalogOutput>('get_supported_currencies')
+        this.currencies = result.catalog
+        this.currenciesNotice = result.notice
+      } finally {
+        this.currenciesLoading = false
+      }
+    },
+
+    /** Persist a partial update and keep the store in step with the backend. */
+    async updateApp(patch: Partial<UpdateAppSettingsInput>) {
+      this.app = await call<AppSettings>('update_app_settings', {
+        input: {
+          theme: patch.theme ?? null,
+          locale: patch.locale ?? null,
+          base_currency: patch.base_currency ?? null,
+          favorite_currencies: patch.favorite_currencies ?? null,
+        },
+      })
+    },
+
+    async updateVault(patch: Partial<Settings>) {
+      this.vault = await call<Settings>('update_settings', { input: vaultPatchToInput(patch) })
     },
   },
 })
 
-function patchToInput(patch: Partial<Settings>) {
+function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
   return {
-    base_currency: patch.base_currency ?? null,
-    theme: patch.theme ?? null,
-    locale: patch.locale ?? null,
     display_decimals: patch.display_decimals ?? null,
-    favorite_currencies: patch.favorite_currencies ?? null,
     dashboard_widgets: patch.dashboard_widgets ?? null,
     fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
     minimize_to_tray: patch.minimize_to_tray ?? null,
+    bybit_import_interval_sec: patch.bybit_import_interval_sec ?? null,
   }
 }
