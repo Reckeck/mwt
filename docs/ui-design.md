@@ -155,6 +155,29 @@ icon: 'h-10 w-10'
 - **No nested modals** — use tabs/steps inside single dialog
 - Max width: `max-w-md` (forms), `max-w-lg` (content), `max-w-4xl` (full)
 - Close: ESC, backdrop click, × button, submit/cancel
+- Always pass a `description` — Reka warns when `DialogContent` has none, and
+  screen readers get nothing to announce for a settings dialog otherwise
+
+### Combobox (select with search)
+`src/components/shared/CurrencySelect.vue` — Reka `Combobox*` primitives, used
+for every currency picker (base currency, favourites).
+
+- **Shape**: trigger looks like a `<Select>`; the panel has a search input on top
+  and the option list below.
+- **Anchoring**: `ComboboxAnchor` + `ComboboxTrigger`, both `as-child`, so the
+  DOM stays one `<button>`. Anchor registers the popper reference, Trigger
+  toggles the panel — neither alone is enough.
+- **`position="popper"` is mandatory.** `ComboboxContent` has no default for it,
+  and without it the panel renders inline at the bottom of the page instead of
+  under the trigger.
+- **Width var** is `--reka-combobox-trigger-width` (no `content-` in the name).
+- **Override two Reka defaults** on the trigger: it hardcodes an English
+  `aria-label="Show popup"` and `tabindex="-1"`. The second makes the control
+  unreachable by Tab while the panel is closed — the only tab stop there.
+- The panel input is a **pure filter**: pass `:display-value="() => ''"`, else it
+  pre-fills with the current value and typing appends to it.
+- Long lists are capped (300) with a visible "showing N of M" hint, never
+  silently truncated.
 
 ---
 

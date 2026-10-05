@@ -10,7 +10,7 @@
 | `version` | `u32` | `VAULT_FORMAT_VERSION`; бамп на ломающее изменение схемы + миграция |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
-| `settings` | `Settings` | базовая валюта, тема, локаль, decimals |
+| `settings` | `Settings` | vault-scoped: decimals, виджеты, интервалы, трей |
 | `stores` | `Vec<Store>` | контейнеры портфеля |
 | `holdings` | `Vec<Holding>` | derived from transactions (`recompute_holdings`) |
 | `transactions` | `Vec<Transaction>` | история операций (источник истины) |
@@ -19,9 +19,61 @@
 | `fx_cache` | `Vec<FxPoint>` | units per 1 USD для валют |
 | `sim` | `SimState` | стратегии + прогоны симулятора |
 
-### Settings
-`base_currency` (`usd` по умолчанию), `theme` (`auto|light|dark`),
-`locale` (`auto|en|ru`), `display_decimals` (по умолчанию 8).
+### Settings — только vault-scoped
+
+`display_decimals` (по умолчанию 8), `dashboard_widgets`,
+`fx_refresh_interval_sec` (300), `minimize_to_tray` (true),
+`bybit_import_interval_sec` (900; `0` — выкл).
+
+Настройки, описывающие **пользователя**, а не этот vault, живут не в документе,
+а рядом с приложением — см. «Настройки приложения» ниже.
+
+## Настройки приложения (вне vault)
+
+Тема, язык, базовая валюта и избранные валюты следуют за пользователем, а не за
+vault: они переживают открытие другого хранилища и читаются **до** разблокировки
+(поэтому экран входа сразу рендерится на нужном языке). Поэтому они не
+зашифрованы и не дублируются в каждом vault — лежат обычным JSON в
+`app_config_dir`.
+
+`crates/core/src/appconfig.rs`, два файла:
+
+| Файл | Что |
+|---|---|
+| `app_settings.json` | `AppSettings { theme, locale, base_currency, favorite_currencies[] }` |
+| `currencies.json` | кэш каталога валют, `SupportedCurrencies { fiat[], crypto[] }` |
+
+Дефолты: `theme: auto`, `locale: auto`, `base_currency: "usd"`, favorites пуст.
+Битый или отсутствующий файл даёт дефолты — экран входа обязан отрисоваться
+всегда.
+
+**Нормализация при записи:** `base_currency` → trim + lowercase, пустое → `usd`;
+коды избранных валют → uppercase, только 3 буквы, дедупликация.
+
+### Каталог валют: лестница деградации
+
+`get_supported_currencies` никогда не падает — выбирается первая доступная ступень:
+
+1. **сеть** — `open.er-api.com` (фиат) + CoinGecko `/coins/list` (крипта);
+   успешный ответ кэшируется в `currencies.json`;
+2. **кэш** — последний успешный ответ, если сеть недоступна (упавшая половина
+   берётся из кэша, а не выбрасывается);
+3. **встроенный список** — `FALLBACK_FIAT` / `FALLBACK_CRYPTO`, если промаха
+   ещё не было ни разу.
+
+`notice` в ответе говорит, какая ступень использована: `builtin`, `cached` или
+`null` (ответили только что). UI показывает по нему предупреждение, что список
+может быть неполным.
+
+### Base currency — поле времени выполнения, не документа
+
+`UnlockedVault::base_currency` живёт в памяти, а не в `doc`: базовая валюта
+настраивается приложением, поэтому хранилище не может о ней знать. После
+`open`/`create` слой IPC вызывает `sync_base_currency`, который заталкивает
+значение в vault; смена базовой валюты пересчитывает холдинги и средние
+стоимости (`set_base_currency` → `recompute_holdings`), чтобы цифры на экране
+соответствовали подписи. Уже записанные в транзакциях отпечатки `price_base` не
+переписываются — они остаются такими, какими были зафиксированы в момент сделки.
 
 ## Store / StoreKind
 
