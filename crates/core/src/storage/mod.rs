@@ -126,6 +126,20 @@ impl VaultFile {
         serde_json::to_string_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
     }
 
+    /// Copy the vault file on disk to its backup slot, replacing an older one.
+    ///
+    /// Used before a destructive whole-document replace so the previous vault
+    /// stays recoverable. A missing source is not an error: there is simply
+    /// nothing to back up yet, and the target path is still returned.
+    pub fn backup(path: &Path) -> Result<PathBuf> {
+        if !path.exists() {
+            return Ok(backup_path(path));
+        }
+        let target = backup_path(path);
+        std::fs::copy(path, &target).map_err(|err| Error::Io(err.to_string()))?;
+        Ok(target)
+    }
+
     fn save_impl(
         path: &Path,
         password: &str,
@@ -142,6 +156,14 @@ impl VaultFile {
         crypto::atomic_write(path, &file)?;
         Ok(path.to_path_buf())
     }
+}
+
+/// Conventional backup slot for a vault file: `<name>.bak` appended to the
+/// full file name, so `vault.wallet` becomes `vault.wallet.bak`.
+pub fn backup_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".bak");
+    path.with_file_name(name)
 }
 
 /// The default data directory for the app.
@@ -263,6 +285,37 @@ mod tests {
         assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
         assert_eq!(out.transactions[0].kind, TxKind::Income);
         assert_eq!(out.id, doc.id);
+    }
+
+    #[test]
+    fn backup_copies_previous_vault_and_survives_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v.wallet");
+        let doc = sample_doc();
+        VaultFile::create(&path, "pw").unwrap();
+        VaultFile::save(&path, "pw", &doc, SnapshotFormat::Json).unwrap();
+
+        let bak = VaultFile::backup(&path).unwrap();
+        assert_eq!(bak, dir.path().join("v.wallet.bak"));
+        assert!(bak.exists());
+
+        // A later save must not clobber the backup we just took.
+        let mut emptied = sample_doc();
+        emptied.transactions.clear();
+        VaultFile::save(&path, "pw", &emptied, SnapshotFormat::Json).unwrap();
+
+        let (out, _) = VaultFile::open(&bak, "pw").unwrap();
+        assert_eq!(out.transactions.len(), doc.transactions.len());
+        assert_eq!(out.id, doc.id);
+    }
+
+    #[test]
+    fn backup_of_missing_vault_is_a_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("absent.wallet");
+        let bak = VaultFile::backup(&path).unwrap();
+        assert_eq!(bak, dir.path().join("absent.wallet.bak"));
+        assert!(!bak.exists());
     }
 
     #[test]

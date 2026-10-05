@@ -11,10 +11,11 @@ use crate::Amount;
 use crate::model::chain::Chain;
 use crate::model::store::AssetRef;
 use crate::model::vault::now_iso;
+use schemars::JsonSchema;
 
 /// A price feed for simulation: real historical candles (Binance/CoinGecko)
 /// or synthetic (GBM) when offline.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DataSource {
     #[default]
@@ -23,7 +24,7 @@ pub enum DataSource {
 }
 
 /// Trading signal definitions keyed by strategy.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Rule {
     pub indicator: String,
     pub field: String,
@@ -32,7 +33,7 @@ pub struct Rule {
 }
 
 /// A runnable trading strategy.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Strategy {
     pub id: String,
     pub name: String,
@@ -71,7 +72,7 @@ impl Default for Strategy {
 }
 
 /// One executed paper trade inside a run.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct SimTrade {
     pub id: String,
     pub ts: String,
@@ -83,7 +84,7 @@ pub struct SimTrade {
 }
 
 /// Result of running a strategy over a price stream.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct SimRun {
     pub id: String,
     pub strategy_id: String,
@@ -117,7 +118,7 @@ fn default_granularity_min() -> u32 {
 }
 
 /// A fired trading signal: what happened, when, and why in rule terms.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SimSignal {
     pub ts: String,
@@ -132,7 +133,7 @@ pub struct SimSignal {
 }
 
 /// Seeded GBM parameters of a synthetic candle stream.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct CandleParams {
     pub seed: u64,
     /// Number of candles to generate. Kept as `n` on the wire for compatibility.
@@ -143,7 +144,7 @@ pub struct CandleParams {
     pub candles_per_year: Amount,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct EquityPoint {
     pub ts: String,
     pub equity: Amount,

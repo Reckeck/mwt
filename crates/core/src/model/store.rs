@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::chain::Chain;
+use schemars::JsonSchema;
 
 /// What kind of container a store represents.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreKind {
     /// CEX (e.g. Binance, Bybit)
@@ -19,7 +22,7 @@ pub enum StoreKind {
 
 /// A "store"/"platform" (хранилище) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Store {
     pub id: String,
     pub name: String,
@@ -54,7 +57,7 @@ impl Store {
 }
 
 /// A position of one asset inside one store (хранилище !== актив).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Holding {
     pub id: String,
     pub store_id: String,
@@ -64,7 +67,7 @@ pub struct Holding {
     pub avg_cost: Option<crate::Amount>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct AssetRef {
     pub symbol: String,
     pub name: String,

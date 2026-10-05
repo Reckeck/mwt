@@ -191,6 +191,22 @@ impl ts_rs::TS for Amount {
     fn visit_dependencies(_: &mut impl ts_rs::TypeVisitor) {}
 }
 
+/// Schema for the editor: `Amount` reaches JSON as a decimal *string*, so the
+/// schema must say `string` rather than expose the `Decimal` newtype.
+impl schemars::JsonSchema for Amount {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "string".into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        <String as schemars::JsonSchema>::json_schema(generator)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

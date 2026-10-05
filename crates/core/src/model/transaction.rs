@@ -3,9 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::Amount;
 use crate::model::chain::Chain;
 use crate::model::store::AssetRef;
+use schemars::JsonSchema;
 
 /// High-level meaning of a transaction.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum TxKind {
     /// Deposit, reward, airdrop — increases the store balance.
@@ -30,7 +33,7 @@ pub enum TxKind {
 /// - `amount < 0` — asset flows **out** of `store_id`.
 /// - `Transfer` legs: from-leg has negative amount on `store_id` + `to_store_id` set;
 ///   to-leg has positive amount with `store_id == source leg's to_store_id`.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Transaction {
     pub id: String,
     pub kind: TxKind,

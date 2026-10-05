@@ -73,6 +73,11 @@ pub fn run() {
             settings::get_settings,
             settings::update_settings,
             settings::dev_dump_vault,
+            settings::vault_schema,
+            settings::dev_export_vault,
+            settings::dev_apply_vault_json,
+            settings::dev_open_vault_json_in_editor,
+            settings::dev_reload_vault_json_from_editor,
             // sim (strategy lab)
             sim::save_strategy,
             sim::list_strategies,
