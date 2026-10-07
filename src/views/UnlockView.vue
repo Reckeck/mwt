@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { LockKeyhole, ShieldCheck, FolderOpen, Settings, X, ChevronRight } from 'lucide-vue-next'
+import { FolderOpen, FolderPlus, LockKeyhole, Settings, X } from 'lucide-vue-next'
 
 import AppSettingsModal from '@/components/settings/AppSettingsModal.vue'
 import Button from '@/components/ui/button.vue'
@@ -18,101 +18,147 @@ const { t } = useI18n()
 const router = useRouter()
 const vault = useVaultStore()
 
-const password = ref('')
-const passwordRepeat = ref('')
-const error = ref<string | null>(null)
-const busy = ref(false)
 const settingsOpen = ref(false)
 
-const manualPath = ref('')
-const showPathInput = ref(false)
+// -- unlock dialog ------------------------------------------------------------
+const unlockOpen = ref(false)
+const unlockPassword = ref('')
+const unlockError = ref<string | null>(null)
+const unlockBusy = ref(false)
+/** `true` when the vault came from the recents list and the path is fixed. */
+const unlockPathFixed = ref(false)
+const unlockTargetPath = ref('')
 
-const creating = computed(() => vault.status?.exists !== true)
+const unlockPath = computed(() => unlockTargetPath.value.trim())
+
+// -- create dialog ------------------------------------------------------------
+const createOpen = ref(false)
+const createPath = ref('')
+const createPassword = ref('')
+const createPasswordRepeat = ref('')
+const createError = ref<string | null>(null)
+const createBusy = ref(false)
+
+const passwordMatch = computed(() => createPasswordRepeat.value.length > 0 && createPasswordRepeat.value === createPassword.value)
 
 onMounted(async () => {
-  if (vault.status === null) {
-    try {
-      await vault.refreshStatus()
-    } catch {
-      /* keep create mode when offline/mock */
-    }
-  }
+  // `status` doubles as "is the default location free?" for the create dialog.
+  await vault.refreshStatus().catch(() => {})
   await vault.loadRecents()
 })
 
-async function submit() {
-  if (!vault.status) {
-    error.value = String(t('auth.vaultUnavailable'))
+// -- dialog openers -----------------------------------------------------------
+
+function openUnlock(path: string) {
+  unlockPathFixed.value = true
+  unlockTargetPath.value = path
+  unlockPassword.value = ''
+  unlockError.value = null
+  unlockOpen.value = true
+}
+
+/** Opens the dialog in "pick any file" mode: the path becomes editable. */
+function openUnlockOther() {
+  unlockPathFixed.value = false
+  unlockTargetPath.value = ''
+  unlockPassword.value = ''
+  unlockError.value = null
+  unlockOpen.value = true
+}
+
+async function openCreate() {
+  createPassword.value = ''
+  createPasswordRepeat.value = ''
+  createError.value = null
+  createOpen.value = true
+  // Pre-fill the default location only while it is still free — suggesting a
+  // path that already holds a vault would just fail with ALREADY_EXISTS.
+  try {
+    const status = vault.status ?? (await vault.refreshStatus())
+    createPath.value = status?.exists ? '' : (status?.path ?? '')
+  } catch {
+    createPath.value = ''
+  }}
+
+/**
+ * Reads an `AppError` into a translated message. `SECRET` and `ALREADY_EXISTS`
+ * are the two codes the vault commands produce that deserve their own wording.
+ */
+function vaultErrorMessage(err: unknown): string {
+  const { code, message } = parseError(err)
+  if (code === 'SECRET') return t('auth.wrongPassword')
+  if (code === 'ALREADY_EXISTS') return t('auth.pathTaken')
+  if (code === 'UNSUPPORTED') return t('auth.unsupported')
+  if (code === 'NOT_FOUND') return t('auth.missing')
+  return message
+}
+
+// -- unlock -------------------------------------------------------------------
+
+async function browseUnlockPath() {
+  try {
+    const picked = await vault.pickVaultFile(false)
+    if (picked) unlockTargetPath.value = picked
+  } catch (err) {
+    unlockError.value = vaultErrorMessage(err)
+  }
+}
+
+async function submitUnlock() {
+  if (!unlockPath.value) {
+    unlockError.value = t('auth.pathRequired')
     return
   }
-  if (creating.value) {
-    if (password.value.length < 4) {
-      error.value = t('auth.passwordTooShort')
-      return
-    }
-    if (password.value !== passwordRepeat.value) {
-      error.value = t('auth.passwordMismatch')
-      return
-    }
-  }
-  busy.value = true
-  error.value = null
+  unlockBusy.value = true
+  unlockError.value = null
   try {
-    if (creating.value) {
-      await vault.createVault(password.value)
-    } else {
-      await vault.unlock(password.value)
-    }
+    await vault.unlock(unlockPath.value, unlockPassword.value)
     await router.replace({ name: 'dashboard' })
   } catch (err) {
-    const maybe = err as { code?: string; message?: string }
-    if (maybe.code === 'ALREADY_EXISTS') {
-      await vault.refreshStatus().catch(() => {})
-      error.value = t('auth.alreadyExists')
-    } else if (maybe.code === 'UNSUPPORTED') {
-      error.value = t('auth.unsupported')
-    } else {
-      error.value = maybe.code === 'SECRET' ? t('auth.wrongPassword') : maybe.message ?? String(err)
-    }
+    unlockError.value = vaultErrorMessage(err)
   } finally {
-    busy.value = false
+    unlockBusy.value = false
   }
 }
 
-async function selectRecent(path: string) {
-  await vault.selectVault(path)
-  showPathInput.value = false
-  manualPath.value = ''
-}
+// -- create -------------------------------------------------------------------
 
-async function useOtherPath() {
-  showPathInput.value = true
-  manualPath.value = vault.status?.path || ''
-  error.value = null
-}
-
-async function browsePath() {
+async function browseCreatePath() {
   try {
-    const result = await vault.pickVaultFile(!vault.status?.exists)
-    if (result?.path) {
-      manualPath.value = result.path
-      // Refresh status to get exists flag
-      await vault.refreshStatus()
-    }
+    const picked = await vault.pickVaultFile(true)
+    if (picked) createPath.value = picked
   } catch (err) {
-    error.value = parseError(err).message
+    createError.value = vaultErrorMessage(err)
   }
 }
 
-async function confirmPath() {
-  if (!manualPath.value.trim()) {
-    error.value = t('auth.pathRequired')
+async function submitCreate() {
+  const path = createPath.value.trim()
+  if (!path) {
+    createError.value = t('auth.pathRequired')
     return
   }
-  await vault.selectVault(manualPath.value)
-  showPathInput.value = false
-  manualPath.value = ''
+  if (createPassword.value.length < 4) {
+    createError.value = t('auth.passwordTooShort')
+    return
+  }
+  if (createPassword.value !== createPasswordRepeat.value) {
+    createError.value = t('auth.passwordMismatch')
+    return
+  }
+  createBusy.value = true
+  createError.value = null
+  try {
+    await vault.createVault(path, createPassword.value)
+    await router.replace({ name: 'dashboard' })
+  } catch (err) {
+    createError.value = vaultErrorMessage(err)
+  } finally {
+    createBusy.value = false
+  }
 }
+
+// -- recents ------------------------------------------------------------------
 
 async function forgetRecent(path: string) {
   await vault.forgetRecent(path)
@@ -141,117 +187,167 @@ async function forgetRecent(path: string) {
       </Button>
     </header>
 
-    <div class="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6">
-      <Card class="w-full max-w-sm">
-        <template #header>
-          <div class="flex flex-col items-center gap-2 text-center">
-            <div class="flex size-12 items-center justify-center rounded-full bg-primary/10">
-              <LockKeyhole v-if="!creating" class="size-6 text-primary" />
-              <ShieldCheck v-else class="size-6 text-primary" />
+    <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-6">
+      <div class="grid w-full max-w-md gap-4">
+        <!-- Block 1: open one of the vaults seen before. -->
+        <Card>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <LockKeyhole class="size-4 shrink-0 text-muted-foreground" />
+              <h2 class="text-base font-semibold">{{ t('auth.recentVaults') }}</h2>
             </div>
-            <h2 class="text-lg font-semibold">{{ creating ? t('auth.createTitle') : t('auth.title') }}</h2>
-            <p class="text-sm text-muted-foreground">{{ creating ? '' : t('auth.locked') }}</p>
-          </div>
-        </template>
+          </template>
 
-        <form class="grid gap-4" @submit.prevent="submit">
-          <!-- Step 1: Choose vault (recents or custom path) -->
-          <div v-if="!showPathInput" class="grid gap-3">
-            <div v-if="vault.recents.length > 0" class="grid gap-2">
-              <p class="text-xs font-medium text-muted-foreground">{{ t('auth.recentVaults') }}</p>
-              <div class="grid gap-1.5 max-h-40 overflow-y-auto">
-                <Button
-                  v-for="recent in vault.recents"
-                  :key="recent.path"
-                  variant="outline"
-                  class="justify-start gap-2 text-left"
-                  :class="{ 'bg-destructive/10 text-destructive': !recent.exists }"
-                  @click="selectRecent(recent.path)"
+          <div class="grid gap-3">
+            <div v-if="vault.recents.length" class="grid max-h-64 gap-1.5 overflow-y-auto">
+              <div
+                v-for="recent in vault.recents"
+                :key="recent.path"
+                class="flex items-center gap-1 rounded-md border border-border"
+              >
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 items-center gap-2 rounded-l-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
+                  :class="{ 'text-destructive': !recent.exists }"
+                  @click="openUnlock(recent.path)"
                 >
-                  <ChevronRight class="size-4 shrink-0" />
-                  <div class="flex-1 min-w-0">
-                    <p class="truncate font-medium">{{ recent.path.split('/').pop() || recent.path }}</p>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium">{{ recent.path.split('/').pop() || recent.path }}</p>
                     <p class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
                   </div>
-                  <div class="flex items-center gap-1.5">
-                    <span v-if="recent.exists" class="text-xs text-emerald-600">{{ t('auth.exists') }}</span>
-                    <span v-else class="text-xs text-destructive">{{ t('auth.missing') }}</span>
-                    <Button variant="ghost" size="icon" @click.stop="forgetRecent(recent.path)">
-                      <X class="size-3.5" />
-                    </Button>
-                  </div>
+                  <span v-if="!recent.exists" class="shrink-0 text-xs text-destructive">{{ t('auth.missing') }}</span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 shrink-0 text-muted-foreground"
+                  :aria-label="t('auth.forget')"
+                  :title="t('auth.forget')"
+                  @click="forgetRecent(recent.path)"
+                >
+                  <X class="size-3.5" />
                 </Button>
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              class="justify-start gap-2"
-              @click="useOtherPath"
-            >
+            <p v-else class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
+
+            <Button variant="ghost" class="justify-start gap-2" @click="openUnlockOther">
               <FolderOpen class="size-4" />
-              {{ t('auth.otherPath') }}
+              {{ t('auth.openOther') }}
             </Button>
           </div>
+        </Card>
 
-          <!-- Step 2: Custom path input -->
-          <div v-else class="grid gap-3">
-            <div class="grid gap-1.5">
-              <Label for="vault-path">{{ t('auth.vaultPath') }}</Label>
-              <div class="flex gap-1.5">
-                <Input
-                  id="vault-path"
-                  v-model="manualPath"
-                  placeholder="Выберите или введите путь к vault"
-                  @keydown.enter="confirmPath"
-                />
-                <Button variant="outline" type="button" @click="browsePath">
-                  <FolderOpen class="size-4" />
-                </Button>
-              </div>
+        <!-- Block 2: create a vault at any path. Always available — it does not
+             depend on whether a vault already exists at the default location. -->
+        <Card>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <FolderPlus class="size-4 shrink-0 text-muted-foreground" />
+              <h2 class="text-base font-semibold">{{ t('auth.createVaultTitle') }}</h2>
             </div>
-            <Button
-              variant="outline"
-              class="justify-start"
-              @click="showPathInput = false"
-            >
-              <ChevronRight class="size-4 mr-1" />
-              {{ t('auth.backToRecents') }}
+            <p class="text-sm text-muted-foreground">{{ t('auth.createVaultHint') }}</p>
+          </template>
+
+          <Button size="lg" class="w-full" @click="openCreate">
+            <FolderPlus class="size-4" />
+            {{ t('auth.createVaultButton') }}
+          </Button>
+        </Card>
+      </div>
+    </div>
+
+    <!-- Unlock dialog: password for a vault chosen above, or for any file. -->
+    <Dialog
+      v-model:open="unlockOpen"
+      :title="t('auth.unlockTitle')"
+      :description="t('auth.unlockHint')"
+      size="sm"
+    >
+      <form id="unlock-form" class="grid gap-4" @submit.prevent="submitUnlock">
+        <div v-if="!unlockPathFixed" class="grid gap-1.5">
+          <Label for="unlock-path">{{ t('auth.vaultPath') }}</Label>
+          <div class="flex gap-1.5">
+            <Input id="unlock-path" v-model="unlockTargetPath" :placeholder="t('auth.pathPlaceholder')" />
+            <Button variant="outline" type="button" :aria-label="t('auth.browse')" :title="t('auth.browse')" @click="browseUnlockPath">
+              <FolderOpen class="size-4" />
             </Button>
           </div>
+        </div>
 
-          <div class="grid gap-1.5">
-            <Label for="pw">{{ t('auth.password') }}</Label>
-            <!-- biome-ignore lint/a11y/noAutofocus: the unlock screen exists to type the password. -->
-            <Input id="pw" v-model="password" type="password" autocomplete="current-password" autofocus />
+        <div class="grid gap-1.5">
+          <Label for="unlock-password">{{ t('auth.password') }}</Label>
+          <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
+          <Input id="unlock-password" v-model="unlockPassword" type="password" autocomplete="current-password" autofocus />
+          <p class="truncate text-xs text-muted-foreground">{{ unlockPath }}</p>
+        </div>
+
+        <p
+          v-if="unlockError"
+          role="alert"
+          class="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {{ unlockError }}
+        </p>
+      </form>
+
+      <template #footer>
+        <Button variant="ghost" @click="unlockOpen = false">{{ t('actions.cancel') }}</Button>
+        <Button form="unlock-form" type="submit" :disabled="unlockBusy">
+          <span v-if="unlockBusy" class="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          {{ unlockBusy ? t('auth.unlocking') : t('auth.enter') }}
+        </Button>
+      </template>
+    </Dialog>
+
+    <!-- Create dialog: path + password, then the vault is saved and opened. -->
+    <Dialog
+      v-model:open="createOpen"
+      :title="t('auth.createVaultTitle')"
+      :description="t('auth.createVaultHint')"
+      size="sm"
+    >
+      <form id="create-form" class="grid gap-4" @submit.prevent="submitCreate">
+        <div class="grid gap-1.5">
+          <Label for="create-path">{{ t('auth.vaultPath') }}</Label>
+          <div class="flex gap-1.5">
+            <Input id="create-path" v-model="createPath" :placeholder="t('auth.pathPlaceholder')" />
+            <Button variant="outline" type="button" :aria-label="t('auth.browse')" :title="t('auth.browse')" @click="browseCreatePath">
+              <FolderOpen class="size-4" />
+            </Button>
           </div>
+        </div>
 
-          <div v-if="creating" class="grid gap-1.5">
-            <Label for="pw2">{{ t('auth.passwordRepeat') }}</Label>
-            <Input id="pw2" v-model="passwordRepeat" type="password" autocomplete="new-password" />
-            <p
-              v-if="passwordRepeat.length > 0 && passwordRepeat === password"
-              class="flex items-center gap-1 text-xs text-emerald-600"
-            >
-              ✓ {{ t('auth.passwordMatch') }}
-            </p>
-          </div>
+        <div class="grid gap-1.5">
+          <Label for="create-password">{{ t('auth.password') }}</Label>
+          <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
+          <Input id="create-password" v-model="createPassword" type="password" autocomplete="new-password" autofocus />
+        </div>
 
-          <p v-if="error" role="alert" class="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {{ error }}
-          </p>
+        <div class="grid gap-1.5">
+          <Label for="create-password-repeat">{{ t('auth.passwordRepeat') }}</Label>
+          <Input id="create-password-repeat" v-model="createPasswordRepeat" type="password" autocomplete="new-password" />
+          <p v-if="passwordMatch" class="text-xs text-emerald-600">✓ {{ t('auth.passwordMatch') }}</p>
+        </div>
 
-          <div v-if="vault.status" class="text-xs text-muted-foreground">
-            {{ vault.status.path }}
-          </div>
+        <p
+          v-if="createError"
+          role="alert"
+          class="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {{ createError }}
+        </p>
+      </form>
 
-          <Button type="submit" :disabled="busy">
-            <span v-if="busy" class="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            {{ creating ? t('auth.create') : t('auth.unlock') }}
-          </Button>
-        </form>
-      </Card>
-    </div>
+      <template #footer>
+        <Button variant="ghost" @click="createOpen = false">{{ t('actions.cancel') }}</Button>
+        <Button form="create-form" type="submit" :disabled="createBusy">
+          <span v-if="createBusy" class="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          {{ createBusy ? t('auth.creating') : t('auth.createVaultButton') }}
+        </Button>
+      </template>
+    </Dialog>
 
     <Dialog
       v-model:open="settingsOpen"

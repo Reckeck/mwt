@@ -47,15 +47,21 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(mockStatus)
     case 'unlock_vault':
       if (body?.password === 'secret') {
-        mockStatus = { ...mockStatus, unlocked: true, info: mockInfo }
+        mockStatus = { path: String(body?.path ?? mockStatus.path), exists: true, unlocked: true, info: mockInfo }
         return resolve(mockInfo)
       }
       throw { code: 'SECRET', message: 'Wrong password' }
     case 'create_vault':
-      mockStatus = { ...mockStatus, exists: true, unlocked: true, info: mockInfo }
+      mockStatus = { path: String(body?.path ?? mockStatus.path), exists: true, unlocked: true, info: mockInfo }
       return resolve(mockInfo)
     case 'lock_vault_cmd':
       mockStatus = { ...mockStatus, unlocked: false, info: null }
+      return resolve({})
+    case 'pick_vault_file':
+      // No native dialog in the browser mock; report a plausible path so the
+      // create/open flows stay observable during `pnpm dev`.
+      return resolve(args?.save ? '/tmp/mock/new-vault.wallet' : '/tmp/mock/vault.wallet')
+    case 'forget_recent_vault':
       return resolve({})
     case 'list_stores':
       return resolve(mockStores)

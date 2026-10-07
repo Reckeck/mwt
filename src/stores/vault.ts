@@ -26,34 +26,32 @@ export const useVaultStore = defineStore('vault', {
     async refreshStatus() {
       this.status = await call<VaultStatus>('vault_status')
       this.locked = this.status?.unlocked !== true
+      return this.status
     },
     async loadRecents() {
       this.recents = await call<RecentVault[]>('recent_vaults')
-    },
-    async selectVault(path: string) {
-      const status = await call<VaultStatus>('select_vault', { path })
-      this.status = status
-      this.locked = status.unlocked !== true
     },
     async forgetRecent(path: string) {
       await call('forget_recent_vault', { path })
       this.recents = this.recents.filter((recent: RecentVault) => recent.path !== path)
     },
+    /** Resolves to the chosen path, or `null` when the dialog was cancelled. */
     async pickVaultFile(save: boolean) {
-      return await call<{ path: string } | null>('pick_vault_file', { save })
+      return await call<string | null>('pick_vault_file', { save })
     },
-    async unlock(password: string) {
+    /** `path` is explicit: the unlock screen may target any vault, not just the
+     *  default one, and `select_vault` cannot be used for a file that does not
+     *  exist yet (creation). */
+    async unlock(path: string, password: string) {
       this.busy = true
       this.error = null
       try {
-        const status = await call<VaultStatus>('vault_status')
-        if (!status) throw new Error('no vault')
         this.info = await call<VaultInfo>('unlock_vault', {
-          input: { path: status.path, password },
+          input: { path, password },
         })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
-        this.status = { ...status, unlocked: true, info: this.info }
+        this.status = { path, exists: true, unlocked: true, info: this.info }
       } catch (err) {
         this.error = (err as Error).message
         throw err
@@ -61,17 +59,16 @@ export const useVaultStore = defineStore('vault', {
         this.busy = false
       }
     },
-    async createVault(password: string) {
+    async createVault(path: string, password: string) {
       this.busy = true
       this.error = null
       try {
-        const status = await call<VaultStatus>('vault_status')
         this.info = await call<VaultInfo>('create_vault', {
-          input: { path: status.path, password },
+          input: { path, password },
         })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
-        this.status = { ...status, exists: true, unlocked: true, info: this.info }
+        this.status = { path, exists: true, unlocked: true, info: this.info }
       } catch (err) {
         this.error = (err as Error).message
         throw err
