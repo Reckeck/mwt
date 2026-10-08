@@ -92,7 +92,6 @@ pub fn run() {
             sim::get_gbm_paths,
             // vault recents
             vault_recents::recent_vaults,
-            vault_recents::select_vault,
             vault_recents::forget_recent_vault,
             vault_recents::pick_vault_file,
         ])

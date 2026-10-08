@@ -3,10 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::commands::{AppState, err_to_string, require_vault};
 use trade_core::ipc_contract::{RecentVault, SelectVaultInput};
 
 const RECENTS_FILE: &str = "recent_vaults.json";
@@ -85,47 +84,6 @@ pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
     }
     save_recents(&app, &recents);
     Ok(recents)
-}
-
-#[tauri::command]
-pub async fn select_vault(
-    input: SelectVaultInput,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<trade_core::ipc_contract::VaultStatus, String> {
-    let path = PathBuf::from(&input.path);
-    if !path.exists() {
-        return Err("NOT_FOUND: vault file does not exist".into());
-    }
-    // If vault is unlocked, we need to lock it first before switching
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    if guard.is_some() {
-        *guard = None; // Lock current vault
-    }
-    // Update vault_path in AppState
-    *state.vault_path.lock().map_err(|err| {
-        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
-    })? = path.clone();
-    // Return status for the new path
-    let guard = require_vault(&state).map_err(err_to_string)?;
-    let unlocked = guard.is_some();
-    let info = guard
-        .as_ref()
-        .map(|vault| trade_core::ipc_contract::VaultInfo {
-            path: vault.path.display().to_string(),
-            doc_version: vault.doc.version,
-            id: vault.doc.id.clone(),
-            created_at: vault.doc.created_at.clone(),
-            format: vault.fmt.label().to_string(),
-            base_currency: vault.base_currency().to_string(),
-        });
-    add_recent(&app, &input.path);
-    Ok(trade_core::ipc_contract::VaultStatus {
-        path: path.display().to_string(),
-        exists: true,
-        unlocked,
-        info,
-    })
 }
 
 #[tauri::command]
