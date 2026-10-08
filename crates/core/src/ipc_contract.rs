@@ -85,7 +85,9 @@ pub struct TxnInput {
     pub amount: Amount,
     pub store_id: String,
     pub comment: String,
-    pub category: Option<String>,
+    /// User tags; any number of them, normalized by the backend.
+    #[serde(default)]
+    pub categories: Vec<String>,
     pub timestamp: Option<String>,
     pub tx_hash: Option<String>,
     pub network: Option<Chain>,
@@ -104,7 +106,9 @@ pub struct TransferInput {
     pub contract: Option<String>,
     pub amount: Amount,
     pub comment: String,
-    pub category: Option<String>,
+    /// Tags applied to both legs of the transfer.
+    #[serde(default)]
+    pub categories: Vec<String>,
     pub network: Option<Chain>,
     pub tx_hash: Option<String>,
     pub fee: Option<Amount>,
@@ -126,7 +130,9 @@ pub struct TradeInput {
     pub buy_contract: Option<String>,
     pub buy_qty: Amount,
     pub comment: String,
-    pub category: Option<String>,
+    /// Tags applied to both legs of the trade.
+    #[serde(default)]
+    pub categories: Vec<String>,
     pub fee: Option<Amount>,
 }
 

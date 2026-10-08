@@ -25,7 +25,7 @@ const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-type FormMode = 'income' | 'expense' | 'transfer' | 'trade'
+type FormMode = 'income' | 'expense' | 'payment' | 'transfer' | 'trade'
 
 const mode = ref<FormMode>('income')
 
@@ -36,7 +36,8 @@ const toStoreId = ref('')
 const amount = ref('')
 const priceUsd = ref('')
 const fee = ref('')
-const category = ref('')
+const selectedCategories = ref<string[]>([])
+const categoryDraft = ref('')
 const comment = ref('')
 const network = ref<Chain | ''>('')
 const txHash = ref('')
@@ -167,6 +168,42 @@ const categories = useQuery({
 const isTransfer = computed(() => mode.value === 'transfer')
 const isTrade = computed(() => mode.value === 'trade')
 
+/**
+ * Tags offered by the picker: the vault-wide vocabulary, plus whatever this
+ * transaction already carries (an edited transaction may hold a tag the
+ * vocabulary has since lost).
+ */
+const categoryOptions = computed(() => {
+  const known = categories.data.value ?? []
+  return [...new Set([...selectedCategories.value, ...known])].sort()
+})
+
+/** Same canonical form the backend applies — keep the two in step. */
+function normalizeCategory(raw: string): string {
+  return raw.trim().toLowerCase()
+}
+
+function isCategoryPicked(category: string): boolean {
+  return selectedCategories.value.includes(category)
+}
+
+function toggleCategory(category: string) {
+  selectedCategories.value = isCategoryPicked(category)
+    ? selectedCategories.value.filter((entry) => entry !== category)
+    : [...selectedCategories.value, category]
+}
+
+/** Add a brand-new tag from the free-text field. */
+function addCategory() {
+  const normalized = normalizeCategory(categoryDraft.value)
+  if (!normalized || isCategoryPicked(normalized)) {
+    categoryDraft.value = ''
+    return
+  }
+  selectedCategories.value = [...selectedCategories.value, normalized]
+  categoryDraft.value = ''
+}
+
 /** Other stores are the only valid transfer destinations. */
 const otherStores = computed(() =>
   (stores.data.value ?? []).filter((store) => store.id !== props.storeId && !store.archived),
@@ -188,6 +225,8 @@ function reset() {
   amount.value = ''
   priceUsd.value = ''
   fee.value = ''
+  selectedCategories.value = []
+  categoryDraft.value = ''
   comment.value = ''
   txHash.value = ''
   lookup.reset()
@@ -206,7 +245,7 @@ function invalidate() {
 
 const save = useMutation({
   mutationFn: async () => {
-    const cat = category.value.trim() || null
+    const tags = [...selectedCategories.value]
     const feeAmt = fee.value.trim() || null
     const hash = txHash.value.trim() || null
     const net = network.value || null
@@ -229,7 +268,7 @@ const save = useMutation({
           buy_contract: buyAsset.value.contract,
           buy_qty: priceUsd.value.trim(),
           comment: comment.value.trim(),
-          category: cat,
+          categories: tags,
           fee: feeAmt,
         },
       })
@@ -252,7 +291,7 @@ const save = useMutation({
           ...shared,
           amount: amount.value.trim(),
           comment: comment.value.trim(),
-          category: cat,
+          categories: tags,
           network: net,
           tx_hash: hash,
           fee: feeAmt,
@@ -262,12 +301,12 @@ const save = useMutation({
 
     return call<Transaction>('add_transaction', {
       input: {
-        kind: mode.value === 'expense' ? 'expense' : 'income',
+        kind: mode.value === 'income' ? 'income' : mode.value,
         ...shared,
         amount: amount.value.trim(),
         store_id: props.storeId,
         comment: comment.value.trim(),
-        category: cat,
+        categories: tags,
         timestamp: timestamp.value ? new Date(timestamp.value).toISOString() : null,
         tx_hash: hash,
         network: net,
@@ -317,7 +356,7 @@ const valid = computed(() => {
   return true
 })
 
-const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
+const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
 </script>
 
 <template>
@@ -408,20 +447,41 @@ const modes: FormMode[] = ['income', 'expense', 'transfer', 'trade']
         </div>
       </div>
 
-      <div class="grid gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
-        <div class="grid gap-1.5">
-          <Label>{{ t('form.category') }}</Label>
-          <Select v-model="category">
-            <option value="">{{ t('form.noCategory') }}</option>
-            <option
-              v-for="entry in categories.data.value ?? []"
-              :key="entry"
-              :value="entry"
-            >
-              {{ entry }}
-            </option>
-          </Select>
+      <div class="grid gap-1.5">
+        <Label>{{ t('form.categories') }}</Label>
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="entry in categoryOptions"
+            :key="entry"
+            type="button"
+            class="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            :class="
+              isCategoryPicked(entry)
+                ? 'border-transparent bg-primary text-primary-foreground'
+                : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            "
+            :aria-pressed="isCategoryPicked(entry)"
+            @click="toggleCategory(entry)"
+          >
+            {{ entry }}
+          </button>
+          <span v-if="!categoryOptions.length" class="text-xs text-muted-foreground">
+            {{ t('form.noCategoriesYet') }}
+          </span>
         </div>
+        <div class="flex items-center gap-2">
+          <Input
+            v-model="categoryDraft"
+            :placeholder="t('form.categoryHint')"
+            @keyup.enter="addCategory"
+          />
+          <Button type="button" variant="outline" size="sm" @click="addCategory">
+            {{ t('form.addCategory') }}
+          </Button>
+        </div>
+      </div>
+
+      <div class="grid gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
         <div class="grid gap-1.5">
           <Label>{{ t('form.network') }}</Label>
           <Select v-model="network">

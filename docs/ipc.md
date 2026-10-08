@@ -43,9 +43,9 @@ Frontend парсит код и показывает локализованно�
 
 ### transactions
 | `list_transactions` | `store_id?` | `Vec<Transaction>` |
-| `add_transaction` | `TxnInput` | `Transaction` (income/expense) |
-| `add_transfer` | `TransferInput { from_store_id, to_store_id, asset, amount, fee, network, tx_hash, comment, category }` | `[Transaction; 2]` (out+in, один `group_id`) |
-| `add_trade` | `TradeInput { store_id, buy, sell, ... , comment }` | `[Transaction; 2]` (buy+sell legs) |
+| `add_transaction` | `TxnInput { kind, symbol, amount, store_id, comment, categories, timestamp?, tx_hash?, network?, price_usd?, fee? }` | `Transaction` (income/expense/payment) |
+| `add_transfer` | `TransferInput { from_store_id, to_store_id, asset, amount, fee, network, tx_hash, comment, categories }` | `[Transaction; 2]` (out+in, один `group_id`) |
+| `add_trade` | `TradeInput { store_id, buy, sell, ... , comment, categories }` | `[Transaction; 2]` (buy+sell legs) |
 | `delete_transaction` | `id` | `()` |
 | `update_comment` | `UpdateCommentInput { transaction_id, comment }` | `Transaction` |
 
@@ -142,7 +142,9 @@ JSON без шифрования — там нет ничего секретно
   patterns) не передаются по IPC, а живут во фронтенд-константах (см. модель).
 - `Amount` — в TS это просто `string` (все денежные поля).
 - `StoreKind` — `"exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "paper"`.
-- `TxKind` — `"income" | "expense" | "transfer" | "trade" | "fee" | "paper_trade"`.
+- `TxKind` — `"income" | "expense" | "payment" | "transfer" | "trade" | "fee" | "paper_trade"`.
+- `categories` — `string[]`, теги пользователя; сколько угодно на операцию,
+  бэкенд нормализует (trim/lowercase/дедуп) и регистрирует новые в словаре.
 
 ## Добавление новой команды (чеклист)
 

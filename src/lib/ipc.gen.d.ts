@@ -617,7 +617,11 @@ crypto: Array<string>, };
 
 type Theme = "auto" | "light" | "dark";
 
-type TradeInput = { store_id: string, sell_symbol: string, sell_name: string, sell_coingecko_id: string | null, sell_chain: Chain | null, sell_contract: string | null, sell_qty: Amount, buy_symbol: string, buy_name: string, buy_coingecko_id: string | null, buy_chain: Chain | null, buy_contract: string | null, buy_qty: Amount, comment: string, category: string | null, fee: Amount | null, };
+type TradeInput = { store_id: string, sell_symbol: string, sell_name: string, sell_coingecko_id: string | null, sell_chain: Chain | null, sell_contract: string | null, sell_qty: Amount, buy_symbol: string, buy_name: string, buy_coingecko_id: string | null, buy_chain: Chain | null, buy_contract: string | null, buy_qty: Amount, comment: string, 
+/**
+ * Tags applied to both legs of the trade.
+ */
+categories: Array<string>, fee: Amount | null, };
 
 /**
  * A fill shaped for the trade form: what was sold, what was bought, costs.
@@ -636,7 +640,8 @@ occurred_at: string | null, comment: string | null, };
  * A single transaction record.
  *
  * Sign convention:
- * - `amount > 0` — asset flows **into** `store_id` (unless kind is `Expense`, where positive means spent/out).
+ * - `amount > 0` — asset flows **into** `store_id` (unless kind is `Expense` or
+ *   `Payment`, where positive means spent/out).
  * - `amount < 0` — asset flows **out** of `store_id`.
  * - `Transfer` legs: from-leg has negative amount on `store_id` + `to_store_id` set;
  *   to-leg has positive amount with `store_id == source leg's to_store_id`.
@@ -653,7 +658,14 @@ to_store_id: string | null, network: Chain | null,
 /**
  * On-chain tx hash (link to explorer).
  */
-tx_hash: string | null, category: string | null, 
+tx_hash: string | null, 
+/**
+ * User-defined tags for this transaction. A transaction may carry any
+ * number of them — one payment can be `food` *and* `weekend` — and every
+ * tag is a member of `VaultDoc::categories`. Normalized (trimmed,
+ * lowercased, deduplicated) by the service before it is stored.
+ */
+categories: Array<string>, 
 /**
  * User note — REQUIRED field on the UI, free-form text here. (see README/docs)
  */
@@ -683,7 +695,11 @@ price_base: Amount | null,
  */
 fx_override: Amount | null, };
 
-type TransferInput = { from_store_id: string, to_store_id: string, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, amount: Amount, comment: string, category: string | null, network: Chain | null, tx_hash: string | null, fee: Amount | null, };
+type TransferInput = { from_store_id: string, to_store_id: string, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, amount: Amount, comment: string, 
+/**
+ * Tags applied to both legs of the transfer.
+ */
+categories: Array<string>, network: Chain | null, tx_hash: string | null, fee: Amount | null, };
 
 /**
  * A single field suggestion for the trade form.
@@ -714,13 +730,17 @@ occurred_at: string | null, status: string | null, asset_in: string | null, amou
 /**
  * High-level meaning of a transaction.
  */
-type TxKind = "income" | "expense" | "transfer" | "trade" | "fee" | "paper_trade";
+type TxKind = "income" | "expense" | "payment" | "transfer" | "trade" | "fee" | "paper_trade";
 
 type TxnInput = { kind: TxKind, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, 
 /**
  * Always a positive magnitude; sign is applied by the backend per kind.
  */
-amount: Amount, store_id: string, comment: string, category: string | null, timestamp: string | null, tx_hash: string | null, network: Chain | null, price_usd: Amount | null, fee: Amount | null, };
+amount: Amount, store_id: string, comment: string, 
+/**
+ * User tags; any number of them, normalized by the backend.
+ */
+categories: Array<string>, timestamp: string | null, tx_hash: string | null, network: Chain | null, price_usd: Amount | null, fee: Amount | null, };
 
 type UnlockInput = { path: string, password: string, };
 

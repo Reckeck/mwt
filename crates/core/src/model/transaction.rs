@@ -16,6 +16,13 @@ pub enum TxKind {
     Income,
     /// Withdrawal / spending — decreases the store balance.
     Expense,
+    /// Paying for goods or services (a shop, a subscription, a bill).
+    ///
+    /// Money out, like `Expense`, but a separate kind because a payment is
+    /// what the user *bought something with* — the tags in `categories` say
+    /// what, and the reporting built on top of them is about spending rather
+    /// than about withdrawals.
+    Payment,
     /// Displacement between two stores (two legs share `transfer_group`).
     Transfer,
     /// Trade between assets (modelled as out + in legs sharing a group).
@@ -29,7 +36,8 @@ pub enum TxKind {
 /// A single transaction record.
 ///
 /// Sign convention:
-/// - `amount > 0` — asset flows **into** `store_id` (unless kind is `Expense`, where positive means spent/out).
+/// - `amount > 0` — asset flows **into** `store_id` (unless kind is `Expense` or
+///   `Payment`, where positive means spent/out).
 /// - `amount < 0` — asset flows **out** of `store_id`.
 /// - `Transfer` legs: from-leg has negative amount on `store_id` + `to_store_id` set;
 ///   to-leg has positive amount with `store_id == source leg's to_store_id`.
@@ -46,7 +54,11 @@ pub struct Transaction {
     pub network: Option<Chain>,
     /// On-chain tx hash (link to explorer).
     pub tx_hash: Option<String>,
-    pub category: Option<String>,
+    /// User-defined tags for this transaction. A transaction may carry any
+    /// number of them — one payment can be `food` *and* `weekend` — and every
+    /// tag is a member of `VaultDoc::categories`. Normalized (trimmed,
+    /// lowercased, deduplicated) by the service before it is stored.
+    pub categories: Vec<String>,
     /// User note — REQUIRED field on the UI, free-form text here. (see README/docs)
     pub comment: String,
     /// ISO-8601 UTC timestamp, lexicographically sortable.
@@ -81,7 +93,7 @@ impl Transaction {
             to_store_id: None,
             network: None,
             tx_hash: None,
-            category: None,
+            categories: Vec::new(),
             comment: comment.trim().to_string(),
             timestamp: crate::model::vault::now_iso(),
             fee: None,
