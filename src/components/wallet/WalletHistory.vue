@@ -34,11 +34,12 @@ const txs = useQuery({
   queryFn: () => call<Transaction[]>('list_transactions', { storeId: props.storeId }),
 })
 
-const kinds: TxKind[] = ['income', 'expense', 'transfer', 'trade', 'fee', 'paper_trade']
+const kinds: TxKind[] = ['income', 'expense', 'payment', 'transfer', 'trade', 'fee', 'paper_trade']
 
 const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   income: 'default',
   expense: 'destructive',
+  payment: 'destructive',
   transfer: 'secondary',
   trade: 'secondary',
   fee: 'outline',
@@ -62,7 +63,7 @@ const rows = computed(() => {
     return (
       tx.asset.symbol.toLowerCase().includes(needle) ||
       tx.comment.toLowerCase().includes(needle) ||
-      (tx.category ?? '').toLowerCase().includes(needle) ||
+      tx.categories.some((entry) => entry.toLowerCase().includes(needle)) ||
       (tx.tx_hash ?? '').toLowerCase().includes(needle)
     )
   })
@@ -161,7 +162,14 @@ function explorerUrl(tx: Transaction): string | null {
             <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span class="font-medium">{{ tx.asset.symbol.toUpperCase() }}</span>
               <span class="truncate text-sm text-muted-foreground">{{ tx.asset.name }}</span>
-              <Badge v-if="tx.category" variant="outline" class="shrink-0">{{ tx.category }}</Badge>
+              <Badge
+                v-for="entry in tx.categories"
+                :key="entry"
+                variant="outline"
+                class="shrink-0"
+              >
+                {{ entry }}
+              </Badge>
               <span v-if="counterparty(tx)" class="truncate text-xs text-muted-foreground">
                 {{ tx.store_id === storeId ? '→' : '←' }} {{ counterparty(tx) }}
               </span>
@@ -195,7 +203,12 @@ function explorerUrl(tx: Transaction): string | null {
           <div class="shrink-0 text-right">
             <p
               class="whitespace-nowrap font-medium tabular-nums"
-              :class="cn(tx.kind === 'income' && 'text-emerald-600 dark:text-emerald-400', tx.kind === 'expense' && 'text-destructive')"
+              :class="
+                cn(
+                  tx.kind === 'income' && 'text-emerald-600 dark:text-emerald-400',
+                  (tx.kind === 'expense' || tx.kind === 'payment') && 'text-destructive',
+                )
+              "
             >
               {{ tx.amount }} {{ tx.asset.symbol.toUpperCase() }}
             </p>

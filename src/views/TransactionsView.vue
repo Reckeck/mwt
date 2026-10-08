@@ -32,6 +32,7 @@ void onEvent<RefreshResult>('prices-updated', () => {
 const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   income: 'default',
   expense: 'destructive',
+  payment: 'destructive',
   transfer: 'secondary',
   trade: 'secondary',
   fee: 'outline',
@@ -87,7 +88,14 @@ async function remove(id: string) {
             <div class="flex min-w-0 items-center gap-2">
               <span class="shrink-0 font-medium">{{ tx.asset.symbol }}</span>
               <span class="truncate text-sm text-muted-foreground">{{ tx.asset.name }}</span>
-              <Badge v-if="tx.category" variant="outline" class="shrink-0">{{ tx.category }}</Badge>
+              <Badge
+                v-for="entry in tx.categories"
+                :key="entry"
+                variant="outline"
+                class="shrink-0"
+              >
+                {{ entry }}
+              </Badge>
             </div>
             <p class="truncate text-xs text-muted-foreground">
               {{ formatDateTime(tx.timestamp) }} · {{ storeName(tx.store_id) }}
@@ -98,7 +106,7 @@ async function remove(id: string) {
           <div class="shrink-0 text-right">
             <p
               class="whitespace-nowrap font-medium tabular-nums"
-              :class="(tx.kind === 'income' ? 'text-emerald-600' : tx.kind === 'expense' ? 'text-destructive' : '')"
+              :class="(tx.kind === 'income' ? 'text-emerald-600' : (tx.kind === 'expense' || tx.kind === 'payment') ? 'text-destructive' : '')"
             >
               {{ tx.amount }} {{ tx.asset.symbol }}
             </p>

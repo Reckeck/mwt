@@ -360,7 +360,7 @@ function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transactio
     to_store_id: null,
     network: null,
     tx_hash: null,
-    category: null,
+    categories: [],
     comment,
     timestamp: new Date(now - offsetHours * 3.6e6).toISOString(),
     fee: null,
@@ -433,7 +433,7 @@ function mockBaseTx(kind: TxKind, asset: AssetRef, amount: string, storeId: stri
     to_store_id: null,
     network: null,
     tx_hash: null,
-    category: null,
+    categories: [],
     comment,
     timestamp: new Date().toISOString(),
     fee: null,
@@ -447,9 +447,10 @@ function mockBaseTx(kind: TxKind, asset: AssetRef, amount: string, storeId: stri
 
 function mockAddTransaction(input: TxnInput): Transaction {
   const asset = assetOf(input.symbol, input.name, input.coingecko_id, input.chain, input.contract)
-  const signed = input.kind === 'expense' || input.kind === 'fee' ? `-${input.amount}` : input.amount
+  const signed =
+    input.kind === 'expense' || input.kind === 'payment' || input.kind === 'fee' ? `-${input.amount}` : input.amount
   const tx = mockBaseTx(input.kind, asset, signed, input.store_id, input.comment)
-  tx.category = input.category ?? null
+  tx.categories = input.categories ?? []
   tx.network = input.network ?? null
   tx.tx_hash = input.tx_hash ?? null
   tx.fee = input.fee ?? null
@@ -466,7 +467,7 @@ function mockAddTransfer(input: TransferInput): Transaction[] {
   const inn = mockBaseTx('transfer', asset, input.amount, input.to_store_id, input.comment)
   for (const leg of [out, inn]) {
     leg.group_id = group
-    leg.category = input.category ?? null
+    leg.categories = input.categories ?? []
     leg.network = input.network ?? null
     leg.tx_hash = input.tx_hash ?? null
     leg.fee = input.fee ?? null
@@ -491,7 +492,7 @@ function mockAddTrade(input: TradeInput): Transaction[] {
   const inn = mockBaseTx('trade', buy, input.buy_qty, input.store_id, input.comment)
   for (const leg of [out, inn]) {
     leg.group_id = group
-    leg.category = input.category ?? null
+    leg.categories = input.categories ?? []
     leg.fee = input.fee ?? null
   }
   mockTransactions.push(out, inn)
@@ -507,7 +508,7 @@ function mockOverview(storeId: string): StoreOverview {
     // a leg belongs to this store when it is booked on it; transfer
     // counterpart legs are netted out
     if (tx.store_id !== storeId) continue
-    const sign = tx.kind === 'expense' || tx.kind === 'fee' ? -1 : 1
+    const sign = tx.kind === 'expense' || tx.kind === 'payment' || tx.kind === 'fee' ? -1 : 1
     const key = tx.asset.symbol.toUpperCase()
     const row = byAsset.get(key) ?? { asset: tx.asset, qty: 0, cost: 0 }
     row.qty += sign * Number(tx.amount)

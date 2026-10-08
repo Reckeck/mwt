@@ -303,6 +303,7 @@ impl UnlockedVault {
         match tx.kind {
             TxKind::Income => self.ensure_positive(&tx.amount, "income")?,
             TxKind::Expense => self.ensure_positive(&tx.amount, "expense")?,
+            TxKind::Payment => self.ensure_positive(&tx.amount, "payment")?,
             TxKind::Fee => self.ensure_positive(&tx.amount, "fee")?,
             TxKind::Transfer => {
                 if tx.to_store_id.as_deref() == Some(tx.store_id.as_str()) {
@@ -318,10 +319,36 @@ impl UnlockedVault {
             }
             TxKind::PaperTrade => {}
         }
+        let mut tx = tx;
+        self.adopt_categories(&mut tx.categories);
         self.doc.transactions.push(tx.clone());
         self.recompute_holdings();
         self.persist()?;
         Ok(tx)
+    }
+
+    /// Normalize `categories` in place and add the ones the user has not seen
+    /// before to the vault-wide vocabulary, so the picker always offers every
+    /// tag that is actually in use.
+    ///
+    /// Canonical form: trimmed, lowercased, empty entries dropped, duplicates
+    /// removed while keeping the input order. Two entries differing only in
+    /// case or whitespace are the same tag — otherwise the category analytics
+    /// would split one bucket in two.
+    fn adopt_categories(&mut self, categories: &mut Vec<String>) {
+        let mut seen = HashSet::new();
+        categories.retain(|raw| {
+            let normalized = raw.trim().to_lowercase();
+            !normalized.is_empty() && seen.insert(normalized)
+        });
+        for raw in categories.iter_mut() {
+            *raw = raw.trim().to_lowercase();
+        }
+        for category in categories.iter() {
+            if !self.doc.categories.iter().any(|known| known == category) {
+                self.doc.categories.push(category.clone());
+            }
+        }
     }
 
     /// Move `amount` of `asset` from `from` to `to` (two legs, shared group).
@@ -336,7 +363,7 @@ impl UnlockedVault {
         network: Option<Chain>,
         tx_hash: Option<String>,
         comment: &str,
-        category: Option<String>,
+        categories: Vec<String>,
     ) -> Result<(Transaction, Transaction)> {
         self.ensure_store(from)?;
         self.ensure_store(to)?;
@@ -364,7 +391,7 @@ impl UnlockedVault {
         out.to_store_id = Some(to.to_string());
         out.network = network;
         out.tx_hash = tx_hash.clone();
-        out.category = category.clone();
+        out.categories = categories.clone();
         out.fee = fee.map(|fee| fee.abs());
         out.group_id = Some(group.clone());
         out.timestamp = ts.clone();
@@ -373,10 +400,12 @@ impl UnlockedVault {
         inn.to_store_id = Some(from.to_string());
         inn.network = network;
         inn.tx_hash = tx_hash;
-        inn.category = category;
+        inn.categories = categories.clone();
         inn.group_id = Some(group);
         inn.timestamp = ts;
 
+        self.adopt_categories(&mut out.categories);
+        self.adopt_categories(&mut inn.categories);
         self.doc.transactions.push(out.clone());
         self.doc.transactions.push(inn.clone());
         self.recompute_holdings();
@@ -395,7 +424,7 @@ impl UnlockedVault {
         buy_qty: Amount,
         fee: Option<Amount>,
         comment: &str,
-        category: Option<String>,
+        categories: Vec<String>,
     ) -> Result<(Transaction, Transaction)> {
         self.ensure_store(store_id)?;
         self.ensure_positive(&sell_qty, "sell qty")?;
@@ -404,16 +433,18 @@ impl UnlockedVault {
         let ts = now_iso();
 
         let mut out = Transaction::new(TxKind::Trade, sell, -sell_qty, store_id, comment);
-        out.category = category.clone();
+        out.categories = categories.clone();
         out.fee = fee.map(|fee| fee.abs());
         out.group_id = Some(group.clone());
         out.timestamp = ts.clone();
 
         let mut inn = Transaction::new(TxKind::Trade, buy, buy_qty, store_id, comment);
-        inn.category = category;
+        inn.categories = categories;
         inn.group_id = Some(group);
         inn.timestamp = ts;
 
+        self.adopt_categories(&mut out.categories);
+        self.adopt_categories(&mut inn.categories);
         self.doc.transactions.push(out.clone());
         self.doc.transactions.push(inn.clone());
         self.recompute_holdings();
@@ -1032,7 +1063,7 @@ impl UnlockedVault {
             } else {
                 imp.occurred_at.clone()
             };
-            let category = Some("trading".to_string());
+            let categories = vec!["trading".to_string()];
             let fee = (!imp.fee.is_zero()).then_some(imp.fee.abs());
             let fee_asset = (!imp.fee_asset.is_empty()).then(|| imp.fee_asset.clone());
 
@@ -1044,7 +1075,7 @@ impl UnlockedVault {
                 &imp.store_id,
                 &imp.comment,
             );
-            out.category = category.clone();
+            out.categories = categories.clone();
             out.fee = fee;
             out.fee_asset = fee_asset;
             out.group_id = Some(group.clone());
@@ -1059,7 +1090,7 @@ impl UnlockedVault {
                 &imp.store_id,
                 &imp.comment,
             );
-            inn.category = category;
+            inn.categories = categories;
             inn.group_id = Some(group);
             inn.timestamp = ts;
 
@@ -1147,7 +1178,7 @@ impl UnlockedVault {
 fn signed_delta(tx: &Transaction) -> Amount {
     match tx.kind {
         TxKind::Income => tx.amount,
-        TxKind::Expense | TxKind::Fee => -tx.amount.abs(),
+        TxKind::Expense | TxKind::Payment | TxKind::Fee => -tx.amount.abs(),
         TxKind::Transfer | TxKind::Trade | TxKind::PaperTrade => tx.amount, // legs carry sign themselves
     }
 }
@@ -1308,6 +1339,107 @@ mod tests {
     }
 
     #[test]
+    fn payment_reduces_the_balance() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+
+        let mut income = Transaction::new(
+            TxKind::Income,
+            usd(),
+            Amount::parse("100").unwrap(),
+            &store,
+            "top up",
+        );
+        income.timestamp = "2026-01-01T00:00:00Z".into();
+        vault.add_transaction(income).unwrap();
+
+        let mut payment = Transaction::new(
+            TxKind::Payment,
+            usd(),
+            Amount::parse("30").unwrap(),
+            &store,
+            "groceries",
+        );
+        payment.timestamp = "2026-01-02T00:00:00Z".into();
+        vault.add_transaction(payment).unwrap();
+
+        let holding = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == store)
+            .unwrap();
+        assert_eq!(holding.quantity.to_string(), "70");
+    }
+
+    #[test]
+    fn payment_rejects_a_negative_magnitude() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let payment = Transaction::new(
+            TxKind::Payment,
+            usd(),
+            Amount::parse("-10").unwrap(),
+            &store,
+            "groceries",
+        );
+        assert!(matches!(
+            vault.add_transaction(payment),
+            Err(Error::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn transaction_takes_any_number_of_categories() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let mut payment = Transaction::new(
+            TxKind::Payment,
+            usd(),
+            Amount::parse("30").unwrap(),
+            &store,
+            "groceries",
+        );
+        payment.categories = vec![
+            "  Food ".to_string(),
+            "Weekend".to_string(),
+            "food".to_string(),
+            "   ".to_string(),
+        ];
+        let stored = vault.add_transaction(payment).unwrap();
+
+        // Normalized, de-duplicated, empties dropped — order preserved.
+        assert_eq!(stored.categories, vec!["food", "weekend"]);
+        // Every tag in use joins the vault-wide vocabulary, so the picker
+        // offers it next time.
+        for category in ["food", "weekend"] {
+            assert!(vault.doc.categories.iter().any(|known| known == category));
+        }
+    }
+
+    #[test]
+    fn transfer_legs_share_normalized_categories() {
+        let (_dir, mut vault) = setup();
+        let from = vault.doc.stores[0].id.clone();
+        let to = vault.doc.stores[1].id.clone();
+        let (out, inn) = vault
+            .transfer(
+                &from,
+                &to,
+                btc(),
+                Amount::parse("0.3").unwrap(),
+                None,
+                None,
+                None,
+                "to cold",
+                vec!["Rebalance".to_string(), "rebalance".to_string()],
+            )
+            .unwrap();
+        assert_eq!(out.categories, vec!["rebalance"]);
+        assert_eq!(inn.categories, vec!["rebalance"]);
+    }
+
+    #[test]
     fn holdings_are_derived_from_transactions() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
@@ -1405,7 +1537,7 @@ mod tests {
                 Some(Chain::Bitcoin),
                 Some("abc123".to_string()),
                 "to cold",
-                None,
+                Vec::new(),
             )
             .unwrap();
         assert!(out.explorer_url().unwrap().contains("abc123"));
@@ -1440,7 +1572,7 @@ mod tests {
                 Amount::parse("50000").unwrap(),
                 None,
                 "sold btc",
-                None,
+                Vec::new(),
             )
             .unwrap();
 
@@ -1706,7 +1838,7 @@ mod tests {
                 None,
                 Some("not-asset-valid-hash".into()),
                 "comment",
-                None,
+                Vec::new(),
             ),
             Err(Error::TxHashMalformed(_))
         ));
@@ -1729,7 +1861,7 @@ mod tests {
                 Some(Chain::Ethereum),
                 Some("0x".to_string() + &"a".repeat(64)),
                 "comment",
-                None,
+                Vec::new(),
             ),
             Err(Error::TxHashNetworkMismatch(_))
         ));
@@ -1750,7 +1882,7 @@ mod tests {
                 None,
                 Some("".into()),
                 "comment",
-                None,
+                Vec::new(),
             )
             .unwrap();
     }

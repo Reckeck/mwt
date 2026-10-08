@@ -19,7 +19,7 @@ fn asset_from(prefix: &str, id: &TxnInput) -> AssetRef {
 
 fn to_transaction(id: &TxnInput) -> Transaction {
     let signed = match id.kind {
-        TxKind::Expense | TxKind::Fee => -id.amount.abs(),
+        TxKind::Expense | TxKind::Payment | TxKind::Fee => -id.amount.abs(),
         _ => id.amount.abs(),
     };
     let mut tx = Transaction::new(
@@ -29,7 +29,7 @@ fn to_transaction(id: &TxnInput) -> Transaction {
         &id.store_id,
         &id.comment,
     );
-    tx.category = id.category.clone();
+    tx.categories = id.categories.clone();
     tx.tx_hash = id.tx_hash.clone();
     tx.network = id.network;
     tx.fee = id.fee.map(|field| field.abs());
@@ -87,7 +87,7 @@ pub async fn add_transfer(
             input.network,
             input.tx_hash.clone(),
             &input.comment,
-            input.category.clone(),
+            input.categories.clone(),
         )
         .map_err(err_to_string)?;
     Ok(vec![out, inn])
@@ -125,7 +125,7 @@ pub async fn add_trade(
             input.buy_qty,
             input.fee,
             &input.comment,
-            input.category.clone(),
+            input.categories.clone(),
         )
         .map_err(err_to_string)?;
     Ok(vec![out, inn])
