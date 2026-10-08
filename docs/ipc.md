@@ -27,6 +27,13 @@ Frontend парсит код и показывает локализованно�
 | `lock_vault_cmd` | — | `()` |
 | `change_password` | `ChangePasswordInput { current_password, new_password }` | `()` |
 
+### vault recents (`crates/app/src/commands/vault_recents.rs`)
+| Команда | Вход | Выход |
+|---|---|---|
+| `recent_vaults` | — | `Vec<RecentVault>` |
+| `forget_recent_vault` | `SelectVaultInput { path }` | `()` (убирает из списка, файл не трогает) |
+| `pick_vault_file` | `save: bool` | `Option<String>` (путь, либо `null` если диалог закрыт) |
+
 ### stores
 | `list_stores` | — | `Vec<Store>` |
 | `create_store` | `CreateStoreInput { name, kind, color, note }` | `Store` |
