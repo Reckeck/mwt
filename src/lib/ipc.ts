@@ -233,18 +233,6 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'dev_reload_vault_json_from_editor':
       // Stands in for the scratch file: whatever the backend last reported.
       return resolve(mockScratchJson)
-    case 'list_strategies':
-      return resolve([])
-    case 'save_strategy':
-      return resolve(body?.strategy)
-    case 'delete_strategy':
-      return resolve({})
-    case 'list_runs':
-      return resolve([])
-    case 'run_strategy': {
-      const input = body as RunStrategyInput
-      return resolve(mockRun(input.strategy_id))
-    }
     case 'get_candles': {
       const input = body as GetCandlesInput
       return resolve(mockCandles(input))
@@ -678,32 +666,6 @@ function mockSearch(rawQuery: string): AssetSearchHit[] {
   return known
     .filter((entry) => entry.symbol.toLowerCase().includes(needle) || entry.name.toLowerCase().includes(needle))
     .map((entry) => ({ ...entry, chain: 'ethereum', contract: null, rank: 1n }))
-}
-
-function mockRun(strategyId: string): SimRun {
-  const point = (step: number, equity: number): EquityPoint => ({
-    ts: new Date(Date.now() - (1000 - step) * 3.6e6).toISOString(),
-    equity: equity.toFixed(2),
-    value: equity.toFixed(2),
-  })
-  return {
-    id: crypto.randomUUID(),
-    strategy_id: strategyId,
-    started_at: new Date().toISOString(),
-    finished_at: new Date().toISOString(),
-    initial_capital: '1000',
-    final_equity: '1234.56',
-    total_return_pct: '23.46',
-    max_drawdown_pct: '8.11',
-    win_rate_pct: '61.5',
-    total_trades: 12,
-    equity_curve: Array.from({ length: 80 }, (_, index) => point(index, 1000 + index * 3 + Math.sin(index / 9) * 40)),
-    trades: [],
-    synthetic: true,
-    signals: [],
-    candle_params: null,
-    granularity_min: 60,
-  }
 }
 
 function mockCandles(input: GetCandlesInput): GetCandlesOutput {
