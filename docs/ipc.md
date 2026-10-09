@@ -35,18 +35,26 @@ Frontend парсит код и показывает локализованно�
 | `pick_vault_file` | `save: bool` | `Option<String>` (путь, либо `null` если диалог закрыт) |
 
 ### stores
-| `list_stores` | — | `Vec<Store>` |
-| `create_store` | `CreateStoreInput { name, kind, color, note }` | `Store` |
-| `update_store` | `UpdateStoreInput { id, name, color, note }` | `Store` |
-| `archive_store` | `id, archived` | `()` (soft delete) |
-| `delete_store` | `id` | `()` (каскадно чистит транзакции/holdings) |
+| `list_stores` | — | `Vec<Store>` (плоско) |
+| `get_store_tree` | — | `Vec<StoreTreeNode { store, depth, path, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children }>` — дерево с суммами; источник для сайдбара, страницы «Кошельки» и выбора узла |
+| `create_store` | `CreateStoreInput { name, kind, color, note, parent_id? }` | `Store` (правила дерева R1–R5) |
+| `update_store` | `UpdateStoreInput { id, name, color, note }` | `Store` (место в дереве не меняет; имя уникально среди соседей) |
+| `move_store` | `MoveStoreInput { id, parent_id? }` | `Store` — перенос субсчёта; `parent_id: null` = «сделать отдельным кошельком»; корень не переносится |
+| `store_move_targets` | `id` | `StoreMoveTargets { parents: Vec<StoreTreeNode> (плоско), can_detach }` — куда можно перенести |
+| `archive_store` | `id, archived` | `()` — каскадно на всё поддерево; восстановление под архивным родителем — ошибка |
+| `delete_store` | `id` | `()` — только без операций и без субсчетов |
+| `get_store_overview` | `store_id, include_children?` (по умолчанию `true`) | `StoreOverview` — см. `docs/data-model.md` |
+
+Ошибки правил дерева приходят со своими кодами (ключи `errors.<CODE>` в локалях):
+`STORE_CYCLE`, `STORE_TOO_DEEP`, `STORE_PARENT_ARCHIVED`, `STORE_NAME_TAKEN`,
+`STORE_ROOT_MOVE`, `STORE_RESTORE_PARENT_FIRST`.
 
 ### transactions
 
 `Transaction` — закрытый enum, поэтому на каждый вид своя команда и свой input:
 запрос, не совпадающий со своим вариантом, не компилируется на TypeScript.
 
-| `list_transactions` | `store_id?` | `Vec<Transaction>` |
+| `list_transactions` | `store_id?, include_children?` (по умолчанию `true`) | `Vec<Transaction>` — новые сверху; с `store_id` — по узлу и его субсчетам |
 | `add_income` | `IncomeInput { store_id, asset, common, source }` | `Transaction` |
 | `add_expense` | `ExpenseInput { store_id, asset, common }` | `Transaction` |
 | `add_payment` | `PaymentInput { store_id, asset, common, payee, receipt_ref? }` | `Transaction` |
@@ -84,9 +92,8 @@ Frontend парсит код и показывает локализованно�
 | `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store }` |
 | `get_history` | `base_currency?` | `Vec<HistoryPoint { ts, ts_ms, value_usd, value_base }>` |
 | `get_realized_pnl` | — | `RealizedPnl` |
-| `get_store_overview` | `store_id` | `StoreOverview { store, base_currency, fx_per_usd, total_usd, total_base, realized_pnl_base, positions, tx_count, first_tx_at, last_tx_at }` |
-| `get_store_history` | `store_id, base_currency?` | `Vec<HistoryPoint>` |
-| `get_store_pnl` | `store_id` | `RealizedPnl { total_base, legs[] }` |
+| `get_store_history` | `store_id, include_children?, base_currency?` | `Vec<HistoryPoint>` — по узлу и (по умолчанию) его субсчетам |
+| `get_store_pnl` | `store_id, include_children?` | `RealizedPnl { total_base, legs[] }` — по той же области |
 
 ### calc
 | `calc_preview` | `CalcInput { mode, amount, price_in, price_out, target_price?, stop_price?, fee_pct? }` | `CalcResult { gross_in, fee, spent, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct }` |
