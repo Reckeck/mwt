@@ -19,7 +19,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AppSettingsModal } from '@/widgets/app-settings'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
-import { Tooltip } from '@/shared/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { call, onEvent } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { formatMoney } from '@/shared/lib/format'
@@ -190,8 +190,8 @@ async function lock() {
         </Button>
         <div v-if="sidebar !== 'compact'" class="flex shrink-0 items-center gap-4 text-sm text-muted-foreground">
           <div class="flex items-center gap-3">
-            <Tooltip side="bottom" :side-offset="6">
-              <template #trigger>
+            <Tooltip>
+              <TooltipTrigger as-child>
                 <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted hover:bg-accent cursor-pointer transition-colors">
                   <WifiOff v-if="!isOnline" class="size-3.5 text-destructive" />
                   <span class="flex items-center gap-1">
@@ -207,35 +207,37 @@ async function lock() {
                     </span>
                   </span>
                 </div>
-              </template>
-              <div class="min-w-[160px] space-y-1">
-                <div v-if="!isOnline" class="px-2 py-1 text-center text-xs text-destructive bg-destructive/10 rounded">
-                  <WifiOff class="size-3 inline mr-1" /> {{ t('app.offline') }}
-                </div>
-                <div
-                  v-if="pendingNotice"
-                  class="px-2 py-1 text-center text-xs text-primary bg-primary/10 rounded"
-                >
-                  {{ t('import.pendingEvent') }} ({{ pendingNotice }})
-                </div>
-                <div v-if="summary.data.value && favoriteCurrencies.length">
-                  <div v-for="curr in favoriteCurrencies" :key="curr" class="px-2 py-1 text-xs flex justify-between">
-                    <span class="font-medium">{{ curr }}</span>
-                    <span class="tabular-nums text-muted-foreground">
-                      {{
-                        curr.toLowerCase() === summary.data.value?.base_currency?.toLowerCase()
-                          ? formatMoney(summary.data.value.total_base, { currency: curr, decimals: 2 })
-                          : curr.toLowerCase() === 'usd'
-                            ? formatMoney(summary.data.value.total_usd, { currency: 'usd', decimals: 2 })
-                            : `${formatMoney(summary.data.value.total_usd, { currency: curr, decimals: 2 })} (est.)`
-                      }}
-                    </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" :side-offset="6">
+                <div class="min-w-[160px] space-y-1">
+                  <div v-if="!isOnline" class="px-2 py-1 text-center text-xs text-destructive bg-destructive/10 rounded">
+                    <WifiOff class="size-3 inline mr-1" /> {{ t('app.offline') }}
+                  </div>
+                  <div
+                    v-if="pendingNotice"
+                    class="px-2 py-1 text-center text-xs text-primary bg-primary/10 rounded"
+                  >
+                    {{ t('import.pendingEvent') }} ({{ pendingNotice }})
+                  </div>
+                  <div v-if="summary.data.value && favoriteCurrencies.length">
+                    <div v-for="curr in favoriteCurrencies" :key="curr" class="px-2 py-1 text-xs flex justify-between">
+                      <span class="font-medium">{{ curr }}</span>
+                      <span class="tabular-nums text-muted-foreground">
+                        {{
+                          curr.toLowerCase() === summary.data.value?.base_currency?.toLowerCase()
+                            ? formatMoney(summary.data.value.total_base, { currency: curr, decimals: 2 })
+                            : curr.toLowerCase() === 'usd'
+                              ? formatMoney(summary.data.value.total_usd, { currency: 'usd', decimals: 2 })
+                              : `${formatMoney(summary.data.value.total_usd, { currency: curr, decimals: 2 })} (est.)`
+                        }}
+                      </span>
+                    </div>
+                  </div>
+                  <div v-else-if="!favoriteCurrencies.length" class="px-2 py-1 text-center text-xs text-muted-foreground">
+                    {{ t('settings.favoriteCurrencyAdd') }}
                   </div>
                 </div>
-                <div v-else-if="!favoriteCurrencies.length" class="px-2 py-1 text-center text-xs text-muted-foreground">
-                  {{ t('settings.favoriteCurrencyAdd') }}
-                </div>
-              </div>
+              </TooltipContent>
             </Tooltip>
             <span class="hidden md:inline-flex items-center gap-1.5 px-2 py-1 text-muted-foreground">
               {{ settingsStore.baseCurrency.toUpperCase() }}
