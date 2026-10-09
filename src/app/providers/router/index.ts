@@ -44,12 +44,6 @@ export const router = createRouter({
           meta: { i18n: 'nav.charts' },
         },
         {
-          path: 'trading',
-          name: 'trading',
-          component: () => import('@/pages/trading').then((page) => page.Trading),
-          meta: { i18n: 'nav.trading' },
-        },
-        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/pages/settings').then((page) => page.Settings),
