@@ -2,11 +2,10 @@
 import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import Toaster from '@/components/ui/sonner.vue'
-import { useSettingsStore } from '@/stores/settings'
-import { useVaultStore } from '@/stores/vault'
-import { useLocale } from '@/locale'
-import { useTheme } from '@/theme'
+import { Sonner } from '@/shared/ui/sonner'
+import { useLocale } from '@/shared/lib/locale'
+import { useTheme } from '@/shared/lib/theme'
+import { useSettingsStore, useVaultStore } from '@/shared/store'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,5 +55,5 @@ if (settingsStore.vault === null && !vault.locked) {
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <Toaster position="bottom-right" rich-colors close-button />
+  <Sonner position="bottom-right" rich-colors close-button />
 </template>
