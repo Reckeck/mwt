@@ -34,6 +34,9 @@ pub fn run() {
             stores::archive_store,
             stores::delete_store,
             stores::get_store_overview,
+            stores::get_store_tree,
+            stores::move_store,
+            stores::store_move_targets,
             // transactions
             transactions::list_transactions,
             transactions::transaction_kinds_for_store_kind,

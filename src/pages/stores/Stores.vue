@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
@@ -8,66 +9,48 @@ import { toast } from 'vue-sonner'
 import { StoreCreateDialog } from '@/features/store-create'
 import { StoreCard } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
 import { call, parseError } from '@/shared/api/ipc'
-import { buildStoreTree, flattenStoreTree } from '@/shared/lib/store-tree'
+import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
+const router = useRouter()
 const queryClient = useQueryClient()
+const settings = useSettingsStore()
 
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
+const tree = useQuery({
+  queryKey: STORE_TREE_QUERY_KEY,
+  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
 })
 
+const roots = computed(() => tree.data.value ?? [])
 const createDialogOpen = ref(false)
 
-/** Tree order: every parent is followed by its sub-wallets. */
-const rows = computed(() => {
-  const list = stores.data.value ?? []
-  const byId = new Map(list.map((store) => [store.id, store]))
-  return flattenStoreTree(buildStoreTree(list)).map((node) => ({
-    store: node.store,
-    depth: node.depth,
-    parent: node.store.parent_id ? (byId.get(node.store.parent_id) ?? null) : null,
-  }))
-})
-
-const hasChildren = (id: string) => (stores.data.value ?? []).some((store) => store.parent_id === id)
-
 function invalidate() {
-  return queryClient.invalidateQueries({ queryKey: ['stores'] })
+  for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
 }
 
 const toggleArchive = useMutation({
   mutationFn: (store: Store) => call('archive_store', { id: store.id, archived: !store.archived }),
   onSuccess: (_result, store) => {
     toast.success(store.archived ? t('stores.unarchivedToast') : t('stores.archivedToast'), { description: store.name })
-    void invalidate()
+    invalidate()
   },
-  onError: (err) => toast.error(t('stores.archiveFailed'), { description: parseError(err).message }),
+  onError: (err) => toast.error(t('stores.archiveFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_store', { id }),
   onSuccess: () => {
     toast.success(t('stores.deletedToast'))
-    void invalidate()
+    invalidate()
   },
-  // The backend refuses a wallet that still has history; say what to do instead.
-  onError: (err) => {
-    const parsed = parseError(err)
-    const description = parsed.code === 'INVALID_INPUT' ? t('stores.deleteHasTransactions') : parsed.message
-    toast.error(t('stores.deleteFailed'), { description })
-  },
+  onError: (err) => toast.error(t('stores.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 
-function removeStore(id: string) {
-  if (hasChildren(id)) {
-    toast.error(t('stores.deleteFailed'), { description: t('stores.deleteHasChildren') })
-    return
-  }
-  remove.mutate(id)
+function openWallet(created: Store) {
+  void router.push({ name: 'wallet', params: { id: created.id } })
 }
 </script>
 
@@ -81,23 +64,28 @@ function removeStore(id: string) {
       </Button>
     </div>
 
-    <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
+    <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
       <StoreCard
-        v-for="row in rows"
-        :key="row.store.id"
-        :store="row.store"
-        :parent="row.parent"
-        :class="row.depth > 0 && 'border-l-4'"
-        :style="row.parent ? { borderLeftColor: row.parent.color } : undefined"
+        v-for="node in roots"
+        :key="node.store.id"
+        :node="node"
+        :base-currency="settings.baseCurrency"
         @toggle-archive="toggleArchive.mutate"
-        @delete="removeStore"
+        @delete="remove.mutate"
       />
-
-      <Card v-if="!stores.data.value?.length">
-        <p class="text-sm text-muted-foreground">{{ t('stores.empty') }}</p>
-      </Card>
     </div>
 
-    <StoreCreateDialog v-model:open="createDialogOpen" />
+    <div
+      v-if="tree.isSuccess.value && !roots.length"
+      class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-8 text-center"
+    >
+      <p class="text-sm text-muted-foreground">{{ t('stores.empty') }}</p>
+      <Button class="mt-2" @click="createDialogOpen = true">
+        <Plus class="size-4" />
+        {{ t('stores.create') }}
+      </Button>
+    </div>
+
+    <StoreCreateDialog v-model:open="createDialogOpen" @created="openWallet" />
   </div>
 </template>

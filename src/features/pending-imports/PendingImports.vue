@@ -56,8 +56,10 @@ async function confirmImports(execIds: string[]) {
     // Confirmed fills became trades, so every derived view is stale.
     const staleKeys: ReadonlyArray<readonly unknown[]> = [
       ['transactions'],
-      ['store', props.storeId],
-      ['store-pnl', props.storeId],
+      ['store'],
+      ['store-history'],
+      ['store-pnl'],
+      ['stores'],
       ['summary'],
       ['history'],
     ]

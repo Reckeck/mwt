@@ -6,7 +6,7 @@ use trade_core::ipc_contract::{
     WalletTransferInput, to_bank_transfer, to_card_payment, to_cash_flow, to_defi_action,
     to_exchange_trade, to_expense, to_fee, to_income, to_payment, to_transfer, to_wallet_transfer,
 };
-use trade_core::model::store::StoreKind;
+use trade_core::model::store::{StoreKind, StoreScope};
 use trade_core::model::transaction::Transaction;
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -27,10 +27,15 @@ fn store_transaction(tx: Transaction, state: &State<'_, AppState>) -> Result<Tra
 #[tauri::command]
 pub async fn list_transactions(
     store_id: Option<String>,
+    include_children: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard.as_ref().unwrap().transactions(store_id.as_deref()))
+    let scope = match store_id {
+        Some(id) => StoreScope::store(&id, include_children.unwrap_or(true)),
+        None => StoreScope::default(),
+    };
+    Ok(guard.as_ref().unwrap().transactions(&scope))
 }
 
 #[tauri::command]

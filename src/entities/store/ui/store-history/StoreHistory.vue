@@ -29,7 +29,9 @@ import {
 } from '@/shared/lib/transactions'
 import { shortHash } from '@/shared/lib/utils'
 
-const props = defineProps<{ storeId: string }>()
+import type { StoreHistoryProps } from './store-history.types'
+
+const props = withDefaults(defineProps<StoreHistoryProps>(), { includeChildren: true })
 
 /** Per-row actions (delete…) come from the page: entities do not own user actions. */
 defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
@@ -48,8 +50,9 @@ const stores = useQuery({
 })
 
 const txs = useQuery({
-  queryKey: ['transactions', props.storeId],
-  queryFn: () => call<Transaction[]>('list_transactions', { storeId: props.storeId }),
+  queryKey: computed(() => ['transactions', props.storeId, props.includeChildren]),
+  queryFn: () =>
+    call<Transaction[]>('list_transactions', { storeId: props.storeId, includeChildren: props.includeChildren }),
 })
 
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
@@ -73,9 +76,10 @@ const rows = computed(() => {
 
 const invalidations = () => {
   void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-  void queryClient.invalidateQueries({ queryKey: ['store', props.storeId] })
-  void queryClient.invalidateQueries({ queryKey: ['store-history', props.storeId] })
-  void queryClient.invalidateQueries({ queryKey: ['store-pnl', props.storeId] })
+  // A parent's overview rolls this store up too, so refresh every store view.
+  void queryClient.invalidateQueries({ queryKey: ['store'] })
+  void queryClient.invalidateQueries({ queryKey: ['store-history'] })
+  void queryClient.invalidateQueries({ queryKey: ['store-pnl'] })
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
   void queryClient.invalidateQueries({ queryKey: ['history'] })
 }
@@ -164,6 +168,10 @@ function explorerUrl(tx: Transaction): string | null {
                 class="shrink-0"
               >
                 {{ entry }}
+              </Badge>
+              <!-- Booked on a sub-account of this wallet: say which one. -->
+              <Badge v-if="legOf(tx).store_id !== props.storeId" variant="secondary" class="shrink-0">
+                {{ storeName(legOf(tx).store_id) }}
               </Badge>
               <span v-if="counterparty(tx)" class="truncate text-xs text-muted-foreground">
                 {{ legOf(tx).amount.startsWith('-') ? '→' : '←' }} {{ counterparty(tx) }}

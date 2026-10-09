@@ -9,14 +9,21 @@ import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
 import { useTheme } from '@/shared/lib/theme'
 
-const props = defineProps<{ storeId: string; baseCurrency: string }>()
+import type { StoreChartProps } from './store-chart.types'
+
+const props = withDefaults(defineProps<StoreChartProps>(), { includeChildren: true })
 
 const { t } = useI18n()
 const { resolved } = useTheme()
 
 const history = useQuery({
-  queryKey: ['store-history', props.storeId],
-  queryFn: () => call<HistoryPoint[]>('get_store_history', { storeId: props.storeId, baseCurrency: null }),
+  queryKey: computed(() => ['store-history', props.storeId, props.includeChildren]),
+  queryFn: () =>
+    call<HistoryPoint[]>('get_store_history', {
+      storeId: props.storeId,
+      includeChildren: props.includeChildren,
+      baseCurrency: null,
+    }),
 })
 
 const points = computed(() => history.data.value ?? [])

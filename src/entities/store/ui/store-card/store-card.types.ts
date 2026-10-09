@@ -1,5 +1,6 @@
 export interface StoreCardProps {
-  store: Store
-  /** Set for a sub-wallet: shown as "in <parent>". */
-  parent?: Store | null
+  /** A top-level wallet with its whole subtree. */
+  node: StoreTreeNode
+  /** Currency of the `*_base` totals. */
+  baseCurrency: string
 }

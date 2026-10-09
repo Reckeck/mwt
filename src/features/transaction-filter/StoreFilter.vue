@@ -2,23 +2,21 @@
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { Select } from '@/shared/ui/select'
+import { StoreNodeSelect } from '@/entities/store'
 import { call } from '@/shared/api/ipc'
+import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
-/** Selected store id; an empty string means every store. */
+/** Selected store id (its sub-accounts included); an empty string means every store. */
 const storeId = defineModel<string>({ required: true })
 
 const { t } = useI18n()
 
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
+const tree = useQuery({
+  queryKey: STORE_TREE_QUERY_KEY,
+  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
 })
 </script>
 
 <template>
-  <Select v-model="storeId" class="h-9 w-56">
-    <option value="">{{ t('tx.allStores') }}</option>
-    <option v-for="store in stores.data.value ?? []" :key="store.id" :value="store.id">{{ store.name }}</option>
-  </Select>
+  <StoreNodeSelect v-model="storeId" class="h-9 w-56" :nodes="tree.data.value ?? []" :empty-label="t('tx.allStores')" />
 </template>

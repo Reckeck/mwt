@@ -287,9 +287,10 @@ function reset() {
 
 function invalidate() {
   void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-  void queryClient.invalidateQueries({ queryKey: ['store', props.storeId] })
-  void queryClient.invalidateQueries({ queryKey: ['store-history', props.storeId] })
-  void queryClient.invalidateQueries({ queryKey: ['store-pnl', props.storeId] })
+  // Parents roll this store up, so every store view is stale.
+  void queryClient.invalidateQueries({ queryKey: ['store'] })
+  void queryClient.invalidateQueries({ queryKey: ['store-history'] })
+  void queryClient.invalidateQueries({ queryKey: ['store-pnl'] })
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
   void queryClient.invalidateQueries({ queryKey: ['stores'] })
   void queryClient.invalidateQueries({ queryKey: ['history'] })

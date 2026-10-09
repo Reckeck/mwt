@@ -18,6 +18,10 @@ pub enum StoreKind {
     Cash,
 }
 
+/// Deepest allowed node depth; a root is depth 0, so the tree has three levels:
+/// wallet → sub-account → sub-account.
+pub const MAX_STORE_DEPTH: usize = 2;
+
 /// A "store"/"platform" (хранилище) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -30,7 +34,9 @@ pub struct Store {
     pub archived: bool,
     /// Free-form description shown in the UI.
     pub note: String,
-    /// Optional parent store ID for nesting (free tree, any depth).
+    /// Parent store ID for sub-accounts; `None` for a top-level wallet. The tree
+    /// rules (depth, unique sibling names, no cycles) are enforced on write by
+    /// the service, see `MAX_STORE_DEPTH`.
     #[serde(default)]
     pub parent_id: Option<String>,
 }
@@ -51,6 +57,33 @@ impl Store {
     pub fn with_parent(mut self, parent_id: String) -> Self {
         self.parent_id = Some(parent_id);
         self
+    }
+}
+
+/// Which stores a query covers. The one way every report filters by wallet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct StoreScope {
+    /// Empty = every store.
+    pub store_ids: Vec<String>,
+    /// Expand each id to its whole subtree.
+    pub include_children: bool,
+}
+
+impl Default for StoreScope {
+    fn default() -> Self {
+        Self {
+            store_ids: Vec::new(),
+            include_children: true,
+        }
+    }
+}
+
+impl StoreScope {
+    pub fn store(id: &str, include_children: bool) -> Self {
+        Self {
+            store_ids: vec![id.to_string()],
+            include_children,
+        }
     }
 }
 
