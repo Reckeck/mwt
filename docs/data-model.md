@@ -76,9 +76,40 @@ vault: они переживают открытие другого хранил�
 
 ## Store / StoreKind
 
-`Store { id, name, kind, color, archived, note }`, где `kind` — один из:
+`Store { id, name, kind, color, archived, note, parent_id? }`, где `kind` — один из:
 `exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`. Хранилище можно архивировать;
 архивные не считаются в сводке.
+
+### Дерево: кошелёк → субсчёт → субсчёт
+
+`parent_id = None` — кошелёк (корень), иначе субсчёт. Глубина ограничена
+`MAX_STORE_DEPTH = 2` (корень — глубина 0), то есть **три уровня**. У узла с
+субсчетами есть и свои средства и операции («Основной» в UI).
+
+Правила проверяются при записи (`validate_placement` в `service.rs`); чтение
+терпимо: vault, отредактированный руками, всё равно открывается.
+
+| # | Правило | Код ошибки |
+|---|---|---|
+| R1 | Родитель существует | `MISSING` |
+| R2 | Узел не вкладывается в себя и в своё поддерево | `STORE_CYCLE` |
+| R3 | `depth(родитель) + 1 + высота(поддерева узла) ≤ 2` | `STORE_TOO_DEEP` |
+| R4 | Родитель не архивирован | `STORE_PARENT_ARCHIVED` |
+| R5 | Имя уникально среди соседей (без учёта регистра и пробелов по краям); корни — среди корней | `STORE_NAME_TAKEN` |
+| R6 | Корень не становится субсчётом (`move_store`) | `STORE_ROOT_MOVE` |
+| R8 | Архивация — каскадом вниз; восстановление — тоже, но не под архивным родителем | `STORE_RESTORE_PARENT_FIRST` |
+| R9 | Удаление — только без операций и без субсчетов | `INVALID_INPUT` |
+
+Тип и цвет субсчёта по умолчанию берутся от родителя — это решает UI, core тип не
+навязывает. Место узла меняет только `move_store`; `update_store` правит имя,
+цвет и заметку.
+
+### StoreScope — область отчёта
+
+`StoreScope { store_ids: Vec<String>, include_children: bool }` — единый фильтр
+по кошелькам: пустой список = весь vault, `include_children` (по умолчанию
+`true`) раскрывает каждый id в поддерево. На нём построены список операций,
+история стоимости и realized PnL узла. Пока не хранится в vault.
 
 ## AssetRef
 
@@ -170,18 +201,31 @@ enum Transaction {
 `{ store_id, name, value_usd, value_base, pct }`
 
 ### StoreOverview — полная карта одного кошелька
+Запрос `get_store_overview(store_id, include_children)`; `include_children`
+влияет на PnL и статистику операций, суммы приходят обоими способами.
+
 | Поле | Тип | Комментарий |
 |---|---|---|
 | `store` | `Store` | метаданные |
+| `ancestors` | `Vec<StoreCrumb { id, name, color }>` | от корня до родителя — хлебные крошки |
 | `base_currency` | `String` | |
 | `fx_per_usd` | `Amount` | курс base/USD на момент |
-| `total_usd` | `Amount` | сумма позиций в USD |
-| `total_base` | `Amount` | сумма позиций в базовой валюте |
-| `realized_pnl_base` | `Amount` | реализованный PnL только по этому store |
-| `positions` | `Vec<StorePosition>` | открытые позиции |
-| `tx_count` | `u32` | кол-во операций (ноги transfer/trade считаются по каждому store) |
+| `include_children` | `bool` | какой областью посчитаны PnL и операции |
+| `own_usd`, `own_base` | `Amount` | средства на самом узле («Основной») |
+| `subtree_usd`, `subtree_base` | `Amount` | узел + все субсчета |
+| `realized_pnl_base` | `Amount` | реализованный PnL по области |
+| `positions` | `Vec<StorePosition>` | свои позиции |
+| `subtree_positions` | `Vec<StorePosition>` | позиции поддерева, сведённые по активу |
+| `children` | `Vec<StoreChildRow { store, value_usd, value_base, subtree_base, share }>` | прямые субсчета; `share` — доля в `subtree` родителя, 0..1 |
+| `can_add_child` | `bool` | можно ли создать субсчёт здесь (глубина, архив) |
+| `tx_count` | `u32` | кол-во операций в области |
 | `first_tx_at` | `String` | RFC3339 или пусто |
 | `last_tx_at` | `String` | RFC3339 или пусто |
+
+### StoreTreeNode — узел дерева (`get_store_tree`)
+`{ store, depth, path: Vec<String>, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children }`.
+Корни и их дети отсортированы: живые раньше архивных, дальше по имени. Сумма
+узла с детьми в UI — `subtree_base`, листа — `own_base`.
 
 ### StorePosition — одна позиция внутри store
 `{ asset: AssetRef, quantity: Amount, avg_cost?: Amount, price_usd: Amount, value_usd: Amount, value_base: Amount, unrealized_base: Amount }`
