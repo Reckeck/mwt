@@ -46,9 +46,17 @@ watch(
   },
 )
 
-if (settingsStore.vault === null && !vault.locked) {
-  settingsStore.loadVault().catch(() => {})
-}
+// Vault settings exist only while a vault is open: load them on every unlock
+// (not just when the app starts already unlocked, which it never does after a
+// cold start) and forget them on lock so the next vault does not inherit them.
+watch(
+  () => vault.locked,
+  (locked) => {
+    if (locked) settingsStore.vault = null
+    else settingsStore.loadVault().catch(() => {})
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
