@@ -19,8 +19,8 @@ import {
 } from 'lucide-vue-next'
 
 import { TransactionDelete } from '@/features/transaction-delete'
-import { AddTransactionForm } from '@/entities/transaction'
-import { StoreCalculator } from '@/entities/store'
+import { PlanCalculator, type CalculatorPlan } from '@/features/plan-calculator'
+import { AddTransactionForm } from '@/features/transaction-create'
 import { StoreChart } from '@/entities/store'
 import { StoreHistory } from '@/entities/store'
 import { StorePositions } from '@/entities/store'
@@ -281,7 +281,7 @@ async function discardImports(execIds: string[]) {
 }
 
 /** Calculator "create transaction" hand-off: prefill first, then switch to transaction tab. */
-function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }) {
+function onApplyPlan(payload: CalculatorPlan) {
   formRef.value?.prefill(payload)
   dialogTab.value = 'transaction'
 }
@@ -549,7 +549,7 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
           <AddTransactionForm ref="formRef" :store-id="storeId" :disabled="isArchived" />
         </template>
         <template #calculator>
-          <StoreCalculator :base-currency="base" @apply="onApplyPlan" />
+          <PlanCalculator :base-currency="base" @apply="onApplyPlan" />
         </template>
       </Tabs>
     </Dialog>

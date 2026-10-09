@@ -10,11 +10,13 @@ import { Label } from '@/shared/ui/label'
 import { call, parseError } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 
-const props = defineProps<{ baseCurrency: string }>()
+import type { CalculatorPlan, PlanCalculatorProps } from './plan-calculator.types'
+
+const props = defineProps<PlanCalculatorProps>()
 
 const emit = defineEmits<{
   /** Hand a calculated plan over to the transaction form. */
-  apply: [payload: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }]
+  apply: [payload: CalculatorPlan]
 }>()
 
 const { t } = useI18n()
