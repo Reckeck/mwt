@@ -137,6 +137,7 @@
   "pos.pnl": "Нереализ. PnL",
   "pos.empty": "Позиций пока нет",
   "calc.title": "Калькулятор",
+  "calc.hint": "Рассчитайте сделку и превратите её в транзакцию",
   "calc.mode.converter": "Конвертер",
   "calc.mode.position": "Позиция",
   "calc.from": "Отдаёте",

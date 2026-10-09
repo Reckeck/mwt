@@ -7,11 +7,11 @@ import { toast } from 'vue-sonner'
 
 import { AssetInput } from '@/entities/asset'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { formatDateTime } from '@/shared/lib/format'
 import {
@@ -442,7 +442,23 @@ function prefill(plan: TransactionPlan) {
   comment.value = ''
 }
 
-defineExpose({ prefill })
+/** A calculator plan handed in by the page, applied once the wallet's kinds are known. */
+let appliedPlan: TransactionPlan | null = null
+watch(
+  () => [props.plan, kindsQuery.data.value] as const,
+  ([plan, kinds]) => {
+    if (!plan || !kinds || plan === appliedPlan) return
+    appliedPlan = plan
+    prefill(plan)
+  },
+  { immediate: true },
+)
+
+/** The kind always has a value: pressing the active one again is ignored. */
+function pickKind(value: unknown) {
+  if (typeof value === 'string' && value) kind.value = value as TxTag
+}
+
 
 const valid = computed(() => {
   if (!amount.value.trim()) return false
@@ -451,202 +467,194 @@ const valid = computed(() => {
   if (isTransfer.value) return Boolean(toStoreId.value)
   return REQUIRED_TEXT_FIELDS.every((field) => !textFields.value.includes(field) || extra[field]?.trim())
 })
+
+/** The dialog owns the submit button, so it reads these. */
+defineExpose({ valid, pending: computed(() => save.isPending.value) })
 </script>
 
 <template>
-  <Card>
-    <template #header>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="font-medium">{{ t('form.title') }}</p>
-        <div class="flex flex-wrap rounded-md border border-border p-0.5">
-          <button
-            v-for="entry in offeredKinds"
-            :key="entry"
-            type="button"
-            class="rounded px-2.5 py-1 text-xs font-medium transition-colors"
-            :class="kind === entry ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'"
-            @click="kind = entry"
-          >
-            {{ t(`tx.kind.${entry}`) }}
-          </button>
-        </div>
-      </div>
-    </template>
+  <form id="transaction-form" class="flex flex-col gap-4" @submit.prevent="save.mutate()">
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      class="flex-wrap"
+      :spacing="1"
+      :model-value="kind"
+      :aria-label="t('form.kind')"
+      @update:model-value="pickKind"
+    >
+      <ToggleGroupItem v-for="entry in offeredKinds" :key="entry" :value="entry">
+        {{ t(`tx.kind.${entry}`) }}
+      </ToggleGroupItem>
+    </ToggleGroup>
 
-    <form class="grid gap-4" @submit.prevent="save.mutate()">
-      <div v-if="isTrade" class="grid gap-3 @sm:grid-cols-2">
-        <AssetInput v-model="sellAsset" :label="t('form.sellAsset')" />
-        <AssetInput v-model="buyAsset" :label="t('form.buyAsset')" />
+    <div v-if="isTrade" class="grid gap-3 @sm:grid-cols-2">
+      <AssetInput v-model="sellAsset" :label="t('form.sellAsset')" />
+      <AssetInput v-model="buyAsset" :label="t('form.buyAsset')" />
+    </div>
+    <div v-else class="grid gap-3 @sm:grid-cols-2">
+      <AssetInput v-model="asset" :label="t('form.asset')" />
+      <div v-if="isTransfer" class="grid gap-1.5">
+        <Label>{{ t('form.toStore') }}</Label>
+        <Select v-model="toStoreId">
+          <option v-for="store in otherStores" :key="store.id" :value="store.id">{{ store.name }}</option>
+        </Select>
       </div>
-      <div v-else class="grid gap-3 @sm:grid-cols-2">
-        <AssetInput v-model="asset" :label="t('form.asset')" />
-        <div v-if="isTransfer" class="grid gap-1.5">
-          <Label>{{ t('form.toStore') }}</Label>
-          <Select v-model="toStoreId">
-            <option v-for="store in otherStores" :key="store.id" :value="store.id">{{ store.name }}</option>
-          </Select>
-        </div>
-      </div>
+    </div>
 
-      <div class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label>{{ t(isTrade ? 'form.sellQty' : 'form.amount') }}</Label>
-          <Input v-model="amount" inputmode="decimal" :placeholder="t('form.amountHint')" required />
-        </div>
-        <div v-if="isTrade" class="grid gap-1.5">
-          <Label>{{ t('form.buyQty') }}</Label>
-          <Input v-model="boughtQty" inputmode="decimal" :placeholder="t('form.buyQtyHint')" required />
-        </div>
-        <div class="grid gap-1.5">
-          <Label>{{ t('form.priceUsd') }}</Label>
-          <Input v-model="priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
-        </div>
-        <div v-if="hasFee" class="grid gap-1.5">
-          <Label>{{ t('form.fee') }}</Label>
-          <Input v-model="fee" inputmode="decimal" placeholder="0" />
-        </div>
-      </div>
-
-      <div v-if="hasFlow || kind === 'income' || kind === 'bank_transfer' || kind === 'defi_action'" class="grid gap-3 @sm:grid-cols-3">
-        <div v-if="hasFlow" class="grid gap-1.5">
-          <Label>{{ t('form.direction') }}</Label>
-          <Select v-model="flow">
-            <option value="in">{{ t('form.flow.in') }}</option>
-            <option value="out">{{ t('form.flow.out') }}</option>
-          </Select>
-        </div>
-        <div v-if="kind === 'income'" class="grid gap-1.5">
-          <Label>{{ t('tx.detail.source') }}</Label>
-          <Select v-model="incomeSource">
-            <option v-for="entry in INCOME_SOURCES" :key="entry" :value="entry">{{ t(`form.source.${entry}`) }}</option>
-          </Select>
-        </div>
-        <div v-if="kind === 'bank_transfer'" class="grid gap-1.5">
-          <Label>{{ t('tx.detail.rail') }}</Label>
-          <Select v-model="rail">
-            <option v-for="entry in BANK_RAILS" :key="entry" :value="entry">{{ t(`form.rail.${entry}`) }}</option>
-          </Select>
-        </div>
-        <div v-if="kind === 'defi_action'" class="grid gap-1.5">
-          <Label>{{ t('tx.detail.action') }}</Label>
-          <Select v-model="defiAction">
-            <option v-for="entry in DEFI_ACTIONS" :key="entry" :value="entry">{{ t(`form.defiAction.${entry}`) }}</option>
-          </Select>
-        </div>
-      </div>
-
-      <div v-if="textFields.length" class="grid gap-3 @sm:grid-cols-3">
-        <div v-for="field in textFields" :key="field" class="grid gap-1.5">
-          <Label>{{ t(TEXT_FIELD_LABELS[field]) }}</Label>
-          <Input v-model="extra[field]" spellcheck="false" :required="REQUIRED_TEXT_FIELDS.includes(field)" />
-        </div>
-      </div>
-
-      <div v-if="lookup.hasKey" class="grid gap-1.5">
-        <div class="flex items-center justify-between gap-2">
-          <Label>{{ t('tx.bybit.recent') }}</Label>
-          <div class="flex items-center gap-2">
-            <Select v-model="bybitCategory" class="h-8 w-28 text-xs">
-              <option value="spot">spot</option>
-              <option value="linear">linear</option>
-              <option value="inverse">inverse</option>
-            </Select>
-            <Button variant="ghost" size="sm" :disabled="lookup.executionsLoading" @click="reloadExecutions">
-              {{ t('actions.refresh') }}
-            </Button>
-          </div>
-        </div>
-        <p v-if="lookup.keyNotice" class="text-xs text-muted-foreground">
-          {{ t(`tx.bybit.${lookup.keyNotice}`) }}
-        </p>
-        <div v-else-if="lookup.executions.length" class="grid gap-1">
-          <button
-            v-for="(exec, i) in lookup.executions"
-            :key="exec.exec_time + i"
-            type="button"
-            class="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
-            @click="applyBybitExecution(exec)"
-          >
-            <span class="font-medium">{{ exec.symbol }}</span>
-            <span :class="exec.side === 'Buy' ? 'text-emerald-600' : 'text-rose-600'">{{ exec.side }}</span>
-            <span class="text-muted-foreground">{{ exec.exec_qty }} @ {{ exec.exec_price }}</span>
-            <span class="text-muted-foreground">{{ formatDateTime(exec.exec_time) }}</span>
-          </button>
-        </div>
-      </div>
-
+    <div class="grid gap-3 @sm:grid-cols-3">
       <div class="grid gap-1.5">
-        <Label>{{ t('form.categories') }}</Label>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="entry in categoryOptions"
-            :key="entry"
-            type="button"
-            class="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            :class="
-              isCategoryPicked(entry)
-                ? 'border-transparent bg-primary text-primary-foreground'
-                : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-            "
-            :aria-pressed="isCategoryPicked(entry)"
-            @click="toggleCategory(entry)"
-          >
-            {{ entry }}
-          </button>
-          <span v-if="!categoryOptions.length" class="text-xs text-muted-foreground">
-            {{ t('form.noCategoriesYet') }}
-          </span>
-        </div>
+        <Label>{{ t(isTrade ? 'form.sellQty' : 'form.amount') }}</Label>
+        <Input v-model="amount" inputmode="decimal" :placeholder="t('form.amountHint')" required />
+      </div>
+      <div v-if="isTrade" class="grid gap-1.5">
+        <Label>{{ t('form.buyQty') }}</Label>
+        <Input v-model="boughtQty" inputmode="decimal" :placeholder="t('form.buyQtyHint')" required />
+      </div>
+      <div class="grid gap-1.5">
+        <Label>{{ t('form.priceUsd') }}</Label>
+        <Input v-model="priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
+      </div>
+      <div v-if="hasFee" class="grid gap-1.5">
+        <Label>{{ t('form.fee') }}</Label>
+        <Input v-model="fee" inputmode="decimal" placeholder="0" />
+      </div>
+    </div>
+
+    <div v-if="hasFlow || kind === 'income' || kind === 'bank_transfer' || kind === 'defi_action'" class="grid gap-3 @sm:grid-cols-3">
+      <div v-if="hasFlow" class="grid gap-1.5">
+        <Label>{{ t('form.direction') }}</Label>
+        <Select v-model="flow">
+          <option value="in">{{ t('form.flow.in') }}</option>
+          <option value="out">{{ t('form.flow.out') }}</option>
+        </Select>
+      </div>
+      <div v-if="kind === 'income'" class="grid gap-1.5">
+        <Label>{{ t('tx.detail.source') }}</Label>
+        <Select v-model="incomeSource">
+          <option v-for="entry in INCOME_SOURCES" :key="entry" :value="entry">{{ t(`form.source.${entry}`) }}</option>
+        </Select>
+      </div>
+      <div v-if="kind === 'bank_transfer'" class="grid gap-1.5">
+        <Label>{{ t('tx.detail.rail') }}</Label>
+        <Select v-model="rail">
+          <option v-for="entry in BANK_RAILS" :key="entry" :value="entry">{{ t(`form.rail.${entry}`) }}</option>
+        </Select>
+      </div>
+      <div v-if="kind === 'defi_action'" class="grid gap-1.5">
+        <Label>{{ t('tx.detail.action') }}</Label>
+        <Select v-model="defiAction">
+          <option v-for="entry in DEFI_ACTIONS" :key="entry" :value="entry">{{ t(`form.defiAction.${entry}`) }}</option>
+        </Select>
+      </div>
+    </div>
+
+    <div v-if="textFields.length" class="grid gap-3 @sm:grid-cols-3">
+      <div v-for="field in textFields" :key="field" class="grid gap-1.5">
+        <Label>{{ t(TEXT_FIELD_LABELS[field]) }}</Label>
+        <Input v-model="extra[field]" spellcheck="false" :required="REQUIRED_TEXT_FIELDS.includes(field)" />
+      </div>
+    </div>
+
+    <div v-if="lookup.hasKey" class="grid gap-1.5">
+      <div class="flex items-center justify-between gap-2">
+        <Label>{{ t('tx.bybit.recent') }}</Label>
         <div class="flex items-center gap-2">
-          <Input
-            v-model="categoryDraft"
-            :placeholder="t('form.categoryHint')"
-            @keyup.enter="addCategory"
-          />
-          <Button type="button" variant="outline" size="sm" @click="addCategory">
-            {{ t('form.addCategory') }}
+          <Select v-model="bybitCategory" class="h-8 w-28 text-xs">
+            <option value="spot">spot</option>
+            <option value="linear">linear</option>
+            <option value="inverse">inverse</option>
+          </Select>
+          <Button variant="ghost" size="sm" :disabled="lookup.executionsLoading" @click="reloadExecutions">
+            {{ t('actions.refresh') }}
           </Button>
         </div>
       </div>
-
-      <div class="grid gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
-        <div v-if="onChain" class="grid gap-1.5">
-          <Label>{{ t('form.network') }}</Label>
-          <Select v-model="network">
-            <option value="">{{ t('form.noNetwork') }}</option>
-            <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
-          </Select>
-        </div>
-        <div class="grid gap-1.5">
-          <Label>{{ t('form.date') }}</Label>
-          <Input v-model="timestamp" type="datetime-local" />
-        </div>
-        <div v-if="onChain" class="grid gap-1.5">
-          <Label>{{ t('form.txHash') }}</Label>
-          <Input v-model="txHash" spellcheck="false" placeholder="0x…" />
-          <p v-if="lookupHint" class="text-xs text-muted-foreground">{{ lookupHint }}</p>
-          <a
-            v-else-if="lookup.explorerUrl"
-            :href="lookup.explorerUrl"
-            target="_blank"
-            rel="noreferrer noopener"
-            class="text-xs text-primary underline-offset-4 hover:underline"
-          >
-            {{ t('tx.lookup.openExplorer') }}
-          </a>
-        </div>
+      <p v-if="lookup.keyNotice" class="text-xs text-muted-foreground">
+        {{ t(`tx.bybit.${lookup.keyNotice}`) }}
+      </p>
+      <div v-else-if="lookup.executions.length" class="grid gap-1">
+        <button
+          v-for="(exec, i) in lookup.executions"
+          :key="exec.exec_time + i"
+          type="button"
+          class="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+          @click="applyBybitExecution(exec)"
+        >
+          <span class="font-medium">{{ exec.symbol }}</span>
+          <span :class="exec.side === 'Buy' ? 'text-emerald-600' : 'text-rose-600'">{{ exec.side }}</span>
+          <span class="text-muted-foreground">{{ exec.exec_qty }} @ {{ exec.exec_price }}</span>
+          <span class="text-muted-foreground">{{ formatDateTime(exec.exec_time) }}</span>
+        </button>
       </div>
+    </div>
 
-      <div class="grid gap-1.5">
-        <Label>{{ t('form.comment') }}</Label>
-        <Textarea v-model="comment" :placeholder="t('form.commentHint')" required />
+    <div class="grid gap-1.5">
+      <Label>{{ t('form.categories') }}</Label>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="entry in categoryOptions"
+          :key="entry"
+          type="button"
+          class="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          :class="
+            isCategoryPicked(entry)
+              ? 'border-transparent bg-primary text-primary-foreground'
+              : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          "
+          :aria-pressed="isCategoryPicked(entry)"
+          @click="toggleCategory(entry)"
+        >
+          {{ entry }}
+        </button>
+        <span v-if="!categoryOptions.length" class="text-xs text-muted-foreground">
+          {{ t('form.noCategoriesYet') }}
+        </span>
       </div>
-
-      <div class="flex flex-wrap items-center gap-3">
-        <Button type="submit" :disabled="!valid || save.isPending.value || props.disabled">
-          {{ t('form.submit') }}
+      <div class="flex items-center gap-2">
+        <Input
+          v-model="categoryDraft"
+          :placeholder="t('form.categoryHint')"
+          @keyup.enter="addCategory"
+        />
+        <Button type="button" variant="outline" size="sm" @click="addCategory">
+          {{ t('form.addCategory') }}
         </Button>
       </div>
-    </form>
-  </Card>
+    </div>
+
+    <div class="grid gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
+      <div v-if="onChain" class="grid gap-1.5">
+        <Label>{{ t('form.network') }}</Label>
+        <Select v-model="network">
+          <option value="">{{ t('form.noNetwork') }}</option>
+          <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
+        </Select>
+      </div>
+      <div class="grid gap-1.5">
+        <Label>{{ t('form.date') }}</Label>
+        <Input v-model="timestamp" type="datetime-local" />
+      </div>
+      <div v-if="onChain" class="grid gap-1.5">
+        <Label>{{ t('form.txHash') }}</Label>
+        <Input v-model="txHash" spellcheck="false" placeholder="0x…" />
+        <p v-if="lookupHint" class="text-xs text-muted-foreground">{{ lookupHint }}</p>
+        <a
+          v-else-if="lookup.explorerUrl"
+          :href="lookup.explorerUrl"
+          target="_blank"
+          rel="noreferrer noopener"
+          class="text-xs text-primary underline-offset-4 hover:underline"
+        >
+          {{ t('tx.lookup.openExplorer') }}
+        </a>
+      </div>
+    </div>
+
+    <div class="grid gap-1.5">
+      <Label>{{ t('form.comment') }}</Label>
+      <Textarea v-model="comment" :placeholder="t('form.commentHint')" required />
+    </div>
+  </form>
 </template>

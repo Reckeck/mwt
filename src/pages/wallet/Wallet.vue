@@ -20,16 +20,15 @@ import {
 
 import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { PendingImports } from '@/features/pending-imports'
-import { PlanCalculator, type CalculatorPlan } from '@/features/plan-calculator'
+import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calculator'
 import { StoreCreateDialog } from '@/features/store-create'
 import { StoreEditDialog } from '@/features/store-edit'
-import { AddTransactionForm } from '@/features/transaction-create'
+import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { StoreChart, StoreHistory, StorePositions } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { Dialog } from '@/shared/ui/dialog'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { Tabs } from '@/shared/ui/tabs'
@@ -49,7 +48,6 @@ const settingsStore = useSettingsStore()
 
 // The shell keys this page by path, so the id is fixed for its lifetime.
 const storeId = computed(() => String(route.params.id ?? ''))
-const formRef = ref<InstanceType<typeof AddTransactionForm> | null>(null)
 
 const overview = useQuery({
   queryKey: ['store', storeId.value],
@@ -91,26 +89,23 @@ function pnlTone(value: string): string {
   return ''
 }
 
-/* --- dialogs + tabs --- */
-const dialogOpen = ref(false)
-const dialogTab = ref<'transaction' | 'calculator'>('transaction')
+/* --- dialogs + tabs: one dialog per action, never one inside another --- */
+const transactionOpen = ref(false)
+const calculatorOpen = ref(false)
+/** Plan handed from the calculator to the transaction form. */
+const plan = ref<CalculatorPlan | null>(null)
 const editOpen = ref(false)
 const subWalletOpen = ref(false)
 const tab = ref('positions')
 
-function openOperation(which: 'transaction' | 'calculator') {
-  dialogTab.value = which
-  dialogOpen.value = true
+function openTransaction() {
+  plan.value = null
+  transactionOpen.value = true
 }
 
 const tabs = computed(() => [
   { value: 'positions', label: t('pos.title') },
   { value: 'history', label: t('hist.title') },
-])
-
-const dialogTabs = computed(() => [
-  { value: 'transaction', label: t('wallet.operation') },
-  { value: 'calculator', label: t('wallet.plan') },
 ])
 
 const stats = computed(() => {
@@ -193,10 +188,11 @@ const destroy = useMutation({
 const isExchangeNode = computed(() => store.value?.kind === 'exchange')
 const { hasKey: bybitHasKey } = useExchangeKeyStatus(storeId, isExchangeNode)
 
-/** Calculator "create transaction" hand-off: prefill first, then switch to transaction tab. */
+/** Calculator → transaction: close one dialog, open the other with the plan. */
 function onApplyPlan(payload: CalculatorPlan) {
-  formRef.value?.prefill(payload)
-  dialogTab.value = 'transaction'
+  calculatorOpen.value = false
+  plan.value = { ...payload }
+  transactionOpen.value = true
 }
 
 function openWallet(created: Store) {
@@ -247,7 +243,7 @@ function openWallet(created: Store) {
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
-          <Button size="sm" :disabled="isArchived" @click="openOperation('transaction')">
+          <Button size="sm" :disabled="isArchived" @click="openTransaction">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>
@@ -257,7 +253,7 @@ function openWallet(created: Store) {
             class="size-8"
             :title="t('calc.title')"
             :aria-label="t('calc.title')"
-            @click="openOperation('calculator')"
+            @click="calculatorOpen = true"
           >
             <Calculator class="size-4" />
           </Button>
@@ -374,7 +370,7 @@ function openWallet(created: Store) {
         >
           <p class="text-sm font-medium">{{ t('wallet.empty') }}</p>
           <p class="text-sm text-muted-foreground">{{ t('wallet.emptyHint') }}</p>
-          <Button class="mt-2" :disabled="isArchived" @click="openOperation('transaction')">
+          <Button class="mt-2" :disabled="isArchived" @click="openTransaction">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>
@@ -390,16 +386,8 @@ function openWallet(created: Store) {
       </template>
     </Tabs>
 
-    <Dialog v-model:open="dialogOpen" :title="dialogTab === 'transaction' ? t('wallet.operation') : t('wallet.plan')" size="lg">
-      <Tabs v-model="dialogTab" :tabs="dialogTabs" class="w-full">
-        <template #transaction>
-          <AddTransactionForm ref="formRef" :store-id="storeId" :disabled="isArchived" />
-        </template>
-        <template #calculator>
-          <PlanCalculator :base-currency="base" @apply="onApplyPlan" />
-        </template>
-      </Tabs>
-    </Dialog>
+    <TransactionCreateDialog v-model:open="transactionOpen" :store-id="storeId" :disabled="isArchived" :plan="plan" />
+    <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" @apply="onApplyPlan" />
 
     <StoreEditDialog v-model:open="editOpen" :store="store" />
     <StoreCreateDialog v-model:open="subWalletOpen" :parent-id="store.id" @created="openWallet" />
