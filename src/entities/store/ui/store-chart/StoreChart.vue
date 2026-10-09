@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
+import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
 import { useTheme } from '@/shared/lib/theme'
 
@@ -20,9 +21,7 @@ const history = useQuery({
 
 const points = computed(() => history.data.value ?? [])
 
-const axisColor = computed(() =>
-  resolved.value === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)',
-)
+const axisColor = chartAxisColor(resolved)
 
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
