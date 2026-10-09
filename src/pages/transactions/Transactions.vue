@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { RefreshCw } from 'lucide-vue-next'
 
 import { TransactionDelete } from '@/features/transaction-delete'
 import { StoreFilter } from '@/features/transaction-filter'
@@ -43,7 +44,8 @@ const storeName = (id: string) => stores.data.value?.find((store) => store.id ==
     <div class="flex items-center justify-between gap-4">
       <StoreFilter v-model="storeFilter" />
 
-      <Button size="sm" @click="refresh">
+      <Button variant="outline" size="sm" @click="refresh">
+        <RefreshCw class="size-4" />
         {{ t('store.refresh') }}
       </Button>
     </div>

@@ -16,11 +16,7 @@ const { t } = useI18n()
 
 <template>
   <Card>
-    <template #header>
-      <p class="font-medium">{{ t('tx.title') }}</p>
-    </template>
-
-    <div class="divide-y divide-border">
+    <div class="-my-3 divide-y divide-border">
       <TransactionRow
         v-for="tx in props.transactions"
         :key="txId(tx)"
