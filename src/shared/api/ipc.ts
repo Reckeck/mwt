@@ -119,8 +119,10 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'update_settings': {
       const input = body as UpdateSettingsInput
       const settings = mockSettings
-      if (input.display_decimals) settings.display_decimals = input.display_decimals
-      if (input.fx_refresh_interval_sec) settings.fx_refresh_interval_sec = input.fx_refresh_interval_sec
+      // Like the backend: every field that is present is written, the rest is kept.
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== null && value !== undefined) Object.assign(settings, { [key]: value })
+      }
       return resolve(settings)
     }
     // --- app settings (outside the vault) ---
