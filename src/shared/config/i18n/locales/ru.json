@@ -38,6 +38,7 @@
   "auth.currentPassword": "Текущий пароль",
   "auth.newPassword": "Новый пароль",
   "store.total": "Итого",
+  "store.assets": "Активы",
   "store.fxRate": "Курс FX (за 1 $)",
   "store.updatedAt": "Обновлено",
   "store.refresh": "Обновить цены",
