@@ -142,5 +142,5 @@ mise run check       # перед коммитом
 ```
 
 Если менял `price_cache`/`fx_cache` в `model/vault.rs` — это **схема vault**:
-нужны бамп `VAULT_FORMAT_VERSION`, миграция и тест на старый файл (скилл
-`vault-crypto`). Если тип попадает в IPC — `mise run gen-types`.
+версию **не бампать**, поле аддитивное через `#[serde(default)]` (скилл
+`vault-crypto`, AGENTS.md правило 5). Если тип попадает в IPC — `mise run gen-types`.

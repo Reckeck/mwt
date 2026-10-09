@@ -70,8 +70,12 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
    захвати. Образец: `refresh_all` в `commands/pricing.rs`.
 4. **Сеть от кэша отделена.** `PricingService::fetch_prices/fetch_fx` —
    чистые (не трогают `doc`), `apply_prices/apply_fx` — применяют результат.
-5. **Смена схемы vault-файла** = бамп `VAULT_FORMAT_VERSION`, миграция в
-   `service.rs`, и тест на открытие старого файла.
+5. **Схема vault-файла меняется БЕЗ бампа версии.** `VAULT_FORMAT_VERSION`
+   зафиксирован на `1`, миграций нет, а `storage::decode` отвергает любую
+   другую версию. Аддитивные поля добавляй с `#[serde(default)]`; удалённые
+   поля serde молча игнорирует. **Не бампай `VAULT_FORMAT_VERSION` без
+   явного разрешения пользователя** — прошлый бамп молча закрывал доступ к
+   собственному vault, и это решение осознанное.
 6. **IP-контракт.** Держи `#[derive(TS)]` у всех типов из `ipc_contract.rs`
    и доменных структур, что попадают в команды. После изменения Регенерируй:
    `mise run gen-types`. Файл `src/lib/ipc.gen.d.ts` руками не править.
