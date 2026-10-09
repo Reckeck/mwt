@@ -1,45 +1,27 @@
 use tauri::State;
 
-use trade_core::ipc_contract::{TradeInput, TransferInput, TxnInput, UpdateCommentInput};
-use trade_core::model::store::AssetRef;
-use trade_core::model::transaction::{Transaction, TxKind};
+use trade_core::ipc_contract::{
+    BankTransferInput, CardPaymentInput, CashFlowInput, DefiActionInput, ExpenseInput, FeeInput,
+    IncomeInput, PaymentInput, TradeInput, TransactionKinds, TransferInput, UpdateCommentInput,
+    WalletTransferInput, to_bank_transfer, to_card_payment, to_cash_flow, to_defi_action,
+    to_exchange_trade, to_expense, to_fee, to_income, to_payment, to_transfer, to_wallet_transfer,
+};
+use trade_core::model::store::StoreKind;
+use trade_core::model::transaction::Transaction;
 
 use crate::commands::{AppState, err_to_string, require_vault};
 
-fn asset_from(prefix: &str, id: &TxnInput) -> AssetRef {
-    AssetRef {
-        symbol: id.symbol.to_uppercase(),
-        name: id.name.clone(),
-        coingecko_id: id.coingecko_id.clone(),
-        chain: id.chain,
-        contract: id.contract.clone(),
-        quote: format!("{prefix}{}", id.symbol.to_uppercase()),
-    }
-}
-
-fn to_transaction(id: &TxnInput) -> Transaction {
-    let signed = match id.kind {
-        TxKind::Expense | TxKind::Payment | TxKind::Fee => -id.amount.abs(),
-        _ => id.amount.abs(),
-    };
-    let mut tx = Transaction::new(
-        id.kind,
-        asset_from("", id),
-        signed,
-        &id.store_id,
-        &id.comment,
-    );
-    tx.categories = id.categories.clone();
-    tx.tx_hash = id.tx_hash.clone();
-    tx.network = id.network;
-    tx.fee = id.fee.map(|field| field.abs());
-    tx.price_usd = id.price_usd;
-    if let Some(ts) = &id.timestamp
-        && !ts.is_empty()
-    {
-        tx.timestamp = ts.clone();
-    }
-    tx
+/// Every write goes through here: validate, append, re-derive holdings, persist.
+///
+/// The per-variant commands differ only in which input DTO they forward, so
+/// the transaction is built and stored in exactly one place.
+fn store_transaction(tx: Transaction, state: &State<'_, AppState>) -> Result<Transaction, String> {
+    let mut guard = require_vault(state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .add_transaction(tx)
+        .map_err(err_to_string)
 }
 
 #[tauri::command]
@@ -52,90 +34,104 @@ pub async fn list_transactions(
 }
 
 #[tauri::command]
-pub async fn add_transaction(
-    input: TxnInput,
+pub async fn add_income(
+    input: IncomeInput,
     state: State<'_, AppState>,
 ) -> Result<Transaction, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let tx = to_transaction(&input);
-    vault.add_transaction(tx).map_err(err_to_string)
+    store_transaction(to_income(&input), &state)
 }
 
 #[tauri::command]
-pub async fn add_transfer(
-    input: TransferInput,
+pub async fn add_expense(
+    input: ExpenseInput,
     state: State<'_, AppState>,
-) -> Result<Vec<Transaction>, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let asset = AssetRef {
-        symbol: input.symbol.to_uppercase(),
-        name: input.name.clone(),
-        coingecko_id: input.coingecko_id.clone(),
-        chain: input.chain,
-        contract: input.contract.clone(),
-        quote: input.symbol.to_uppercase(),
-    };
-    let (out, inn) = vault
-        .transfer(
-            &input.from_store_id,
-            &input.to_store_id,
-            asset,
-            input.amount,
-            input.fee,
-            input.network,
-            input.tx_hash.clone(),
-            &input.comment,
-            input.categories.clone(),
-        )
-        .map_err(err_to_string)?;
-    Ok(vec![out, inn])
+) -> Result<Transaction, String> {
+    store_transaction(to_expense(&input), &state)
 }
 
+#[tauri::command]
+pub async fn add_payment(
+    input: PaymentInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_payment(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_fee(input: FeeInput, state: State<'_, AppState>) -> Result<Transaction, String> {
+    store_transaction(to_fee(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_bank_transfer(
+    input: BankTransferInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_bank_transfer(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_card_payment(
+    input: CardPaymentInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_card_payment(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_wallet_transfer(
+    input: WalletTransferInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_wallet_transfer(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_defi_action(
+    input: DefiActionInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_defi_action(&input), &state)
+}
+
+/// Both sides of a trade are one record now, so this returns a single
+/// transaction rather than the pair of legs the old command returned.
 #[tauri::command]
 pub async fn add_trade(
     input: TradeInput,
     state: State<'_, AppState>,
-) -> Result<Vec<Transaction>, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let sell = AssetRef {
-        symbol: input.sell_symbol.to_uppercase(),
-        name: input.sell_name.clone(),
-        coingecko_id: input.sell_coingecko_id.clone(),
-        chain: input.sell_chain,
-        contract: input.sell_contract.clone(),
-        quote: input.sell_symbol.to_uppercase(),
-    };
-    let buy = AssetRef {
-        symbol: input.buy_symbol.to_uppercase(),
-        name: input.buy_name.clone(),
-        coingecko_id: input.buy_coingecko_id.clone(),
-        chain: input.buy_chain,
-        contract: input.buy_contract.clone(),
-        quote: input.buy_symbol.to_uppercase(),
-    };
-    let (out, inn) = vault
-        .add_trade(
-            &input.store_id,
-            sell,
-            input.sell_qty,
-            buy,
-            input.buy_qty,
-            input.fee,
-            &input.comment,
-            input.categories.clone(),
-        )
-        .map_err(err_to_string)?;
-    Ok(vec![out, inn])
+) -> Result<Transaction, String> {
+    store_transaction(to_exchange_trade(&input), &state)
+}
+
+/// Likewise a cross-store transfer is one record with two legs.
+#[tauri::command]
+pub async fn add_transfer(
+    input: TransferInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    if input.from_store_id == input.to_store_id {
+        return Err("INVALID_INPUT: transfer origin == destination".into());
+    }
+    store_transaction(to_transfer(&input), &state)
+}
+
+#[tauri::command]
+pub async fn add_cash_flow(
+    input: CashFlowInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    store_transaction(to_cash_flow(&input), &state)
 }
 
 #[tauri::command]
 pub async fn delete_transaction(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    vault.delete_transaction(&id).map_err(err_to_string)
+    guard
+        .as_mut()
+        .unwrap()
+        .delete_transaction(&id)
+        .map_err(err_to_string)
 }
 
 #[tauri::command]
@@ -144,8 +140,19 @@ pub async fn update_comment(
     state: State<'_, AppState>,
 ) -> Result<Transaction, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    vault
+    guard
+        .as_mut()
+        .unwrap()
         .update_comment(&input.transaction_id, &input.comment)
         .map_err(err_to_string)
+}
+
+/// Which transaction kinds a wallet of this kind accepts.
+///
+/// Pure: the binding is static domain data, so this needs no vault and takes no
+/// lock. The frontend calls it with the kind of the wallet it is showing, which
+/// keeps "what may a bank record" in exactly one place.
+#[tauri::command]
+pub async fn transaction_kinds_for_store_kind(kind: StoreKind) -> Result<TransactionKinds, String> {
+    Ok(TransactionKinds::for_store_kind(kind))
 }

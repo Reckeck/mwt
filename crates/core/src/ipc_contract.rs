@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::Amount;
 use crate::model::chain::Chain;
-use crate::model::store::StoreKind;
-use crate::model::transaction::TxKind;
+use crate::model::store::{AssetRef, StoreKind};
+use crate::model::transaction::{
+    BankRail, BankTransferTx, CardPaymentTx, CashFlowTx, DefiAction, DefiActionTx, ExchangeTradeTx,
+    ExpenseTx, FeeTx, Flow, IncomeSource, IncomeTx, PaymentTx, PriceStamp, TradeSide, Transaction,
+    TransferTx, TxMeta, WalletTransferTx,
+};
 
 // -- auth --------------------------------------------------------------------
 
@@ -72,81 +76,398 @@ pub struct UpdateStoreInput {
 }
 
 // -- transactions ------------------------------------------------------------
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-pub struct TxnInput {
-    pub kind: TxKind,
+//
+// One input per transaction variant, mirroring the variant's own fields. The
+// flat `TxnInput { kind, ... }` this replaced let the frontend send a
+// `tx_hash` on a cash payment or an `iban` on a crypto trade; the backend
+// ignored whatever did not fit the kind, so a typo failed silently. Here an
+// impossible request does not compile in TypeScript.
+//
+// Shared asset identification, so each variant does not repeat five optional
+// fields it does not always need.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AssetIdent {
     pub symbol: String,
     pub name: String,
     pub coingecko_id: Option<String>,
     pub chain: Option<Chain>,
     pub contract: Option<String>,
-    /// Always a positive magnitude; sign is applied by the backend per kind.
-    pub amount: Amount,
-    pub store_id: String,
-    pub comment: String,
-    /// User tags; any number of them, normalized by the backend.
-    #[serde(default)]
-    pub categories: Vec<String>,
-    pub timestamp: Option<String>,
-    pub tx_hash: Option<String>,
-    pub network: Option<Chain>,
-    pub price_usd: Option<Amount>,
-    pub fee: Option<Amount>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+impl AssetIdent {
+    /// Rebuild a full [`AssetRef`]. `quote` is display-only and follows the
+    /// symbol, the same convention the form uses.
+    pub fn to_asset(&self) -> AssetRef {
+        let symbol = self.symbol.to_uppercase();
+        AssetRef {
+            quote: symbol.clone(),
+            symbol,
+            name: self.name.clone(),
+            coingecko_id: self.coingecko_id.clone(),
+            chain: self.chain,
+            contract: self.contract.clone(),
+        }
+    }
+}
+
+/// Fields every transaction input carries.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TxInputCommon {
+    /// Positive magnitude. The direction is a separate field (`flow`) or is
+    /// implied by the variant, so a negative amount cannot be sent.
+    pub amount: Amount,
+    pub comment: String,
+    /// User tags; any number, normalized by the backend.
+    pub categories: Vec<String>,
+    /// RFC3339 UTC. Empty means "now".
+    pub timestamp: Option<String>,
+    pub price_usd: Option<Amount>,
+    pub fx_override: Option<Amount>,
+}
+
+impl TxInputCommon {
+    fn meta(&self) -> TxMeta {
+        TxMeta {
+            timestamp: match self.timestamp.as_deref() {
+                Some(raw) if !raw.is_empty() => raw.to_string(),
+                _ => crate::model::vault::now_iso(),
+            },
+            comment: self.comment.clone(),
+            categories: self.categories.clone(),
+            ..TxMeta::new(&self.comment)
+        }
+    }
+
+    fn stamp(&self) -> PriceStamp {
+        PriceStamp {
+            price_usd: self.price_usd,
+            fx_override: self.fx_override,
+            price_base: None,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct IncomeInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub source: IncomeSource,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ExpenseInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct PaymentInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub payee: String,
+    pub receipt_ref: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct FeeInput {
+    pub store_id: String,
+    /// Asset the fee was charged in; may differ from the traded asset.
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub related_id: Option<String>,
+}
+
+// No `Default`: a defaulted direction would book the movement the wrong
+// way, so every call site must state `flow` explicitly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct BankTransferInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub flow: Flow,
+    pub rail: BankRail,
+    pub counterparty_name: String,
+    pub counterparty_account: Option<String>,
+    pub reference: Option<String>,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CardPaymentInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub card_last4: Option<String>,
+    pub merchant: Option<String>,
+    pub mcc: Option<String>,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
+}
+
+// No `Default`: a defaulted direction would book the movement the wrong
+// way, so every call site must state `flow` explicitly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct WalletTransferInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub flow: Flow,
+    pub network: Option<Chain>,
+    pub tx_hash: Option<String>,
+    pub from_address: Option<String>,
+    pub to_address: Option<String>,
+    pub memo: Option<String>,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
+}
+
+// No `Default`: a defaulted direction would book the movement the wrong
+// way, so every call site must state `flow` explicitly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct DefiActionInput {
+    pub store_id: String,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub flow: Flow,
+    pub action: DefiAction,
+    pub network: Option<Chain>,
+    pub tx_hash: Option<String>,
+    pub protocol: Option<String>,
+    pub pool_id: Option<String>,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TradeInput {
+    pub store_id: String,
+    pub sold: AssetIdent,
+    pub sold_qty: Amount,
+    pub bought: AssetIdent,
+    pub bought_qty: Amount,
+    pub common: TxInputCommon,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
+    pub order_id: Option<String>,
+    pub market: Option<String>,
+    pub liquidity: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct TransferInput {
     pub from_store_id: String,
     pub to_store_id: String,
-    pub symbol: String,
-    pub name: String,
-    pub coingecko_id: Option<String>,
-    pub chain: Option<Chain>,
-    pub contract: Option<String>,
-    pub amount: Amount,
-    pub comment: String,
-    /// Tags applied to both legs of the transfer.
-    #[serde(default)]
-    pub categories: Vec<String>,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub fee: Option<Amount>,
+    pub fee_asset: Option<String>,
     pub network: Option<Chain>,
     pub tx_hash: Option<String>,
-    pub fee: Option<Amount>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-pub struct TradeInput {
+// No `Default`: a defaulted direction would book the movement the wrong
+// way, so every call site must state `flow` explicitly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CashFlowInput {
     pub store_id: String,
-    pub sell_symbol: String,
-    pub sell_name: String,
-    pub sell_coingecko_id: Option<String>,
-    pub sell_chain: Option<Chain>,
-    pub sell_contract: Option<String>,
-    pub sell_qty: Amount,
-    pub buy_symbol: String,
-    pub buy_name: String,
-    pub buy_coingecko_id: Option<String>,
-    pub buy_chain: Option<Chain>,
-    pub buy_contract: Option<String>,
-    pub buy_qty: Amount,
-    pub comment: String,
-    /// Tags applied to both legs of the trade.
-    #[serde(default)]
-    pub categories: Vec<String>,
-    pub fee: Option<Amount>,
+    pub asset: AssetIdent,
+    pub common: TxInputCommon,
+    pub flow: Flow,
+    pub location: Option<String>,
+    pub counterparty: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct UpdateCommentInput {
     pub transaction_id: String,
     pub comment: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetTxPricesInput {
     pub transaction_id: String,
     pub price_usd: Option<Amount>,
     pub fx_override: Option<Amount>,
+}
+
+/// Which transaction kinds a wallet of one kind accepts.
+///
+/// Returned already split into the two groups the UI presents, and with the
+/// kind to pre-select, so the frontend holds no copy of the binding and cannot
+/// disagree with the backend about what a bank is allowed to record.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct TransactionKinds {
+    /// Kinds that make sense on any wallet.
+    pub common: Vec<String>,
+    /// Kinds specific to this kind of wallet — a bank transfer, a trade, cash.
+    pub specific: Vec<String>,
+    /// The kind to pre-select when the form opens.
+    pub default: String,
+}
+
+impl TransactionKinds {
+    pub fn for_store_kind(kind: StoreKind) -> Self {
+        Self {
+            common: Transaction::COMMON_TAGS
+                .iter()
+                .map(|tag| (*tag).to_string())
+                .collect(),
+            specific: Transaction::specific_tags_for_store_kind(kind)
+                .iter()
+                .map(|tag| (*tag).to_string())
+                .collect(),
+            default: Transaction::default_tag_for_store_kind(kind).to_string(),
+        }
+    }
+}
+
+// -- transaction construction -------------------------------------------------
+//
+// Input → domain, one function per variant. Kept beside the DTOs so the
+// mapping is a single readable table rather than a switch buried in a command.
+
+macro_rules! build_single_leg {
+    ($variant:ident, $body:ident, $input:ident, $($extra:tt)*) => {{
+        let $input = $input;
+        Transaction::$variant($body {
+            meta: $input.common.meta(),
+            store_id: $input.store_id.clone(),
+            asset: $input.asset.to_asset(),
+            amount: $input.common.amount,
+            $($extra)*
+            price: $input.common.stamp(),
+        })
+    }};
+}
+
+pub fn to_income(input: &IncomeInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(Income, IncomeTx, input, source: input.source,)
+}
+
+pub fn to_expense(input: &ExpenseInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(Expense, ExpenseTx, input,)
+}
+
+pub fn to_payment(input: &PaymentInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        Payment, PaymentTx,
+        input,
+        payee: input.payee.clone(),
+        receipt_ref: input.receipt_ref.clone(),
+    )
+}
+
+pub fn to_fee(input: &FeeInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(Fee, FeeTx, input, related_id: input.related_id.clone(),)
+}
+
+pub fn to_bank_transfer(input: &BankTransferInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        BankTransfer, BankTransferTx,
+        input,
+        flow: input.flow,
+        rail: input.rail,
+        counterparty_name: input.counterparty_name.clone(),
+        counterparty_account: input.counterparty_account.clone(),
+        reference: input.reference.clone(),
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+    )
+}
+
+pub fn to_card_payment(input: &CardPaymentInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        CardPayment, CardPaymentTx,
+        input,
+        card_last4: input.card_last4.clone(),
+        merchant: input.merchant.clone(),
+        mcc: input.mcc.clone(),
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+    )
+}
+
+pub fn to_wallet_transfer(input: &WalletTransferInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        WalletTransfer, WalletTransferTx,
+        input,
+        flow: input.flow,
+        network: input.network,
+        tx_hash: input.tx_hash.clone(),
+        from_address: input.from_address.clone(),
+        to_address: input.to_address.clone(),
+        memo: input.memo.clone(),
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+    )
+}
+
+pub fn to_defi_action(input: &DefiActionInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        DefiAction, DefiActionTx,
+        input,
+        flow: input.flow,
+        action: input.action,
+        network: input.network,
+        tx_hash: input.tx_hash.clone(),
+        protocol: input.protocol.clone(),
+        pool_id: input.pool_id.clone(),
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+    )
+}
+
+pub fn to_cash_flow(input: &CashFlowInput) -> crate::model::transaction::Transaction {
+    build_single_leg!(
+        CashFlow, CashFlowTx,
+        input,
+        flow: input.flow,
+        location: input.location.clone(),
+        counterparty: input.counterparty.clone(),
+    )
+}
+
+/// A trade is one record with two legs, so it does not fit the single-leg
+/// macro.
+pub fn to_exchange_trade(input: &TradeInput) -> crate::model::transaction::Transaction {
+    crate::model::transaction::Transaction::ExchangeTrade(ExchangeTradeTx {
+        meta: input.common.meta(),
+        store_id: input.store_id.clone(),
+        sold: TradeSide {
+            asset: input.sold.to_asset(),
+            qty: input.sold_qty,
+        },
+        bought: TradeSide {
+            asset: input.bought.to_asset(),
+            qty: input.bought_qty,
+        },
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+        order_id: input.order_id.clone(),
+        market: input.market.clone(),
+        liquidity: input.liquidity.clone(),
+        price: input.common.stamp(),
+    })
+}
+
+pub fn to_transfer(input: &TransferInput) -> crate::model::transaction::Transaction {
+    crate::model::transaction::Transaction::Transfer(TransferTx {
+        meta: input.common.meta(),
+        from_store_id: input.from_store_id.clone(),
+        to_store_id: input.to_store_id.clone(),
+        asset: input.asset.to_asset(),
+        amount: input.common.amount,
+        fee: input.fee,
+        fee_asset: input.fee_asset.clone(),
+        network: input.network,
+        tx_hash: input.tx_hash.clone(),
+        price: input.common.stamp(),
+    })
 }
 
 // -- pricing -----------------------------------------------------------------

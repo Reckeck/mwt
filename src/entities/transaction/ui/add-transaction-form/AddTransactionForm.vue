@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -14,10 +14,29 @@ import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { formatDateTime } from '@/shared/lib/format'
+import {
+  TX_COMMAND,
+  TX_TAGS_ON_CHAIN,
+  TX_TAGS_WITH_FEE,
+  TX_TAGS_WITH_FLOW,
+  type TxTag,
+  readStoreKindKinds,
+} from '@/shared/lib/transactions'
 import { call, parseError } from '@/shared/api/ipc'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
 
-const props = defineProps<{ storeId: string; disabled?: boolean }>()
+import {
+  BANK_RAILS,
+  DEFI_ACTIONS,
+  INCOME_SOURCES,
+  KIND_TEXT_FIELDS,
+  REQUIRED_TEXT_FIELDS,
+  TEXT_FIELD_LABELS,
+  type KindTextField,
+} from './add-transaction-form.constants'
+import type { AddTransactionFormProps, TransactionPlan } from './add-transaction-form.types'
+
+const props = defineProps<AddTransactionFormProps>()
 
 /** Emitted after every successful write so the page can refresh its queries. */
 const emit = defineEmits<{ saved: [] }>()
@@ -25,15 +44,50 @@ const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-type FormMode = 'income' | 'expense' | 'payment' | 'transfer' | 'trade'
+const stores = useQuery({
+  queryKey: ['stores'],
+  queryFn: () => call<Store[]>('list_stores'),
+})
 
-const mode = ref<FormMode>('income')
+const storeKind = computed(() => stores.data.value?.find((store) => store.id === props.storeId)?.kind ?? null)
+
+/** Which kinds this wallet accepts. The binding lives in Rust; the form only asks. */
+const kindsQuery = useQuery({
+  queryKey: computed(() => ['transaction-kinds', storeKind.value]),
+  queryFn: async () =>
+    readStoreKindKinds(await call<TransactionKinds>('transaction_kinds_for_store_kind', { kind: storeKind.value })),
+  enabled: computed(() => storeKind.value !== null),
+})
+
+const offeredKinds = computed<TxTag[]>(() => {
+  const kinds = kindsQuery.data.value
+  return kinds ? [...kinds.specific, ...kinds.common] : []
+})
+
+const kind = ref<TxTag>('income')
+
+// Land on the wallet's default kind once known, and leave a kind it does not offer.
+watch(
+  () => kindsQuery.data.value,
+  (kinds) => {
+    if (kinds && !offeredKinds.value.includes(kind.value)) kind.value = kinds.default
+  },
+  { immediate: true },
+)
+
+const isTrade = computed(() => kind.value === 'exchange_trade')
+const isTransfer = computed(() => kind.value === 'transfer')
+const hasFlow = computed(() => TX_TAGS_WITH_FLOW.has(kind.value))
+const hasFee = computed(() => TX_TAGS_WITH_FEE.has(kind.value))
+const onChain = computed(() => TX_TAGS_ON_CHAIN.has(kind.value))
+const textFields = computed(() => KIND_TEXT_FIELDS[kind.value] ?? [])
 
 const asset = ref<AssetRef | null>(null)
 const sellAsset = ref<AssetRef | null>(null)
 const buyAsset = ref<AssetRef | null>(null)
 const toStoreId = ref('')
 const amount = ref('')
+const boughtQty = ref('')
 const priceUsd = ref('')
 const fee = ref('')
 const selectedCategories = ref<string[]>([])
@@ -42,6 +96,12 @@ const comment = ref('')
 const network = ref<Chain | ''>('')
 const txHash = ref('')
 const timestamp = ref('')
+const flow = ref<Flow>('in')
+const rail = ref<BankRail>('internal')
+const incomeSource = ref<IncomeSource>('other')
+const defiAction = ref<DefiAction>('stake')
+/** Kind-specific free text (payee, IBAN, merchant…), keyed by input field name. */
+const extra = reactive<Partial<Record<KindTextField, string>>>({})
 
 const lookup = useTradeLookupStore()
 
@@ -64,7 +124,7 @@ watch(
  * Only ever fills fields the user has not touched. A lookup is an assistant,
  * not an override: anything already typed wins.
  */
-function fillIfEmpty(target: Ref<string>, value: string | undefined) {
+function fillIfEmpty(target: Ref<string>, value: string | null | undefined) {
   if (!value?.trim()) return false
   if (target.value.trim()) return false
   target.value = value.trim()
@@ -75,6 +135,7 @@ function fillIfEmpty(target: Ref<string>, value: string | undefined) {
 function applyHint(hint: TxFieldHint): boolean {
   switch (hint.field) {
     case 'qtyBought':
+      return fillIfEmpty(isTrade.value ? boughtQty : amount, hint.value)
     case 'qtySold':
       return fillIfEmpty(amount, hint.value)
     case 'price':
@@ -83,11 +144,6 @@ function applyHint(hint: TxFieldHint): boolean {
       return fillIfEmpty(fee, hint.value)
     case 'occurredAt':
       return fillIfEmpty(timestamp, hint.value)
-    case 'status':
-    case 'assetBought':
-    case 'assetSold':
-    case 'feeAsset':
-      return false
     default:
       return false
   }
@@ -126,14 +182,15 @@ watch(
 /** Apply a Bybit fill to the form as a trade. */
 async function applyBybitExecution(exec: BybitExecution) {
   const fill = exec.prefill
-  mode.value = 'trade'
-  fillIfEmpty(amount, fill.side === 'buy' ? fill.qty_bought ?? '' : fill.qty_sold ?? '')
-  fillIfEmpty(priceUsd, fill.price ?? '')
-  fillIfEmpty(fee, fill.fee ?? '')
-  fillIfEmpty(comment, fill.comment ?? '')
+  kind.value = 'exchange_trade'
+  fillIfEmpty(amount, fill.qty_sold)
+  fillIfEmpty(boughtQty, fill.qty_bought)
+  fillIfEmpty(priceUsd, fill.price)
+  fillIfEmpty(fee, fill.fee)
+  fillIfEmpty(comment, fill.comment)
   if (!timestamp.value.trim() && fill.occurred_at) timestamp.value = fill.occurred_at
 
-  // Resolve the two legs by symbol; leave them untouched if the search fails.
+  // Resolve the two sides by symbol; leave them untouched if the search fails.
   const resolve = async (symbol: string | null | undefined): Promise<AssetRef | null> => {
     if (!symbol) return null
     const hits = await call<AssetSearchHit[]>('search_assets', { query: symbol })
@@ -155,18 +212,10 @@ async function applyBybitExecution(exec: BybitExecution) {
   if (!buyAsset.value && bought) buyAsset.value = bought
 }
 
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
-})
-
 const categories = useQuery({
   queryKey: ['categories'],
   queryFn: () => call<string[]>('list_categories'),
 })
-
-const isTransfer = computed(() => mode.value === 'transfer')
-const isTrade = computed(() => mode.value === 'trade')
 
 /**
  * Tags offered by the picker: the vault-wide vocabulary, plus whatever this
@@ -209,26 +258,30 @@ const otherStores = computed(() =>
   (stores.data.value ?? []).filter((store) => store.id !== props.storeId && !store.archived),
 )
 
-watch(otherStores, (list) => {
-  if (!toStoreId.value && list.length) toStoreId.value = list[0].id
-}, { immediate: true })
+watch(
+  otherStores,
+  (list) => {
+    if (!toStoreId.value && list.length) toStoreId.value = list[0].id
+  },
+  { immediate: true },
+)
 
 /** Keep the network dropdown in sync with the picked asset. */
 watch([asset, sellAsset, buyAsset], () => {
-  const picked = [asset.value, sellAsset.value, buyAsset.value].find(
-    (ref) => ref?.chain && ref.chain !== 'fiat',
-  )
+  const picked = [asset.value, sellAsset.value, buyAsset.value].find((ref) => ref?.chain && ref.chain !== 'fiat')
   if (picked?.chain) network.value = picked.chain
 })
 
 function reset() {
   amount.value = ''
+  boughtQty.value = ''
   priceUsd.value = ''
   fee.value = ''
   selectedCategories.value = []
   categoryDraft.value = ''
   comment.value = ''
   txHash.value = ''
+  for (const key of Object.keys(extra) as KindTextField[]) delete extra[key]
   lookup.reset()
 }
 
@@ -243,78 +296,121 @@ function invalidate() {
   emit('saved')
 }
 
+const optional = (value: string | undefined): string | null => value?.trim() || null
+
+function identOf(ref: AssetRef): AssetIdent {
+  return { symbol: ref.symbol, name: ref.name, coingecko_id: ref.coingecko_id, chain: ref.chain, contract: ref.contract }
+}
+
+/** The kind-agnostic part every input carries. */
+function common(): TxInputCommon {
+  return {
+    amount: amount.value.trim(),
+    comment: comment.value.trim(),
+    categories: [...selectedCategories.value],
+    timestamp: timestamp.value ? new Date(timestamp.value).toISOString() : null,
+    price_usd: priceUsd.value.trim() || null,
+    fx_override: null,
+  }
+}
+
+/** Build the input DTO of the selected kind; each kind sends only its own fields. */
+function buildInput(): Record<string, unknown> {
+  const feeFields = { fee: fee.value.trim() || null, fee_asset: null }
+  const chainFields = { network: network.value || null, tx_hash: txHash.value.trim() || null }
+
+  if (kind.value === 'exchange_trade') {
+    if (!sellAsset.value || !buyAsset.value) throw new Error('asset')
+    const input: TradeInput = {
+      store_id: props.storeId,
+      sold: identOf(sellAsset.value),
+      sold_qty: amount.value.trim(),
+      bought: identOf(buyAsset.value),
+      bought_qty: boughtQty.value.trim(),
+      common: common(),
+      ...feeFields,
+      order_id: optional(extra.order_id),
+      market: optional(extra.market),
+      liquidity: optional(extra.liquidity),
+    }
+    return input
+  }
+
+  if (!asset.value) throw new Error('asset')
+  const base = { store_id: props.storeId, asset: identOf(asset.value), common: common() }
+
+  switch (kind.value) {
+    case 'transfer': {
+      const input: TransferInput = {
+        from_store_id: props.storeId,
+        to_store_id: toStoreId.value,
+        asset: base.asset,
+        common: base.common,
+        ...feeFields,
+        ...chainFields,
+      }
+      return input
+    }
+    case 'income':
+      return { ...base, source: incomeSource.value } satisfies IncomeInput
+    case 'expense':
+      return base satisfies ExpenseInput
+    case 'payment':
+      return { ...base, payee: extra.payee?.trim() ?? '', receipt_ref: optional(extra.receipt_ref) } satisfies PaymentInput
+    case 'fee':
+      return { ...base, related_id: null } satisfies FeeInput
+    case 'bank_transfer':
+      return {
+        ...base,
+        flow: flow.value,
+        rail: rail.value,
+        counterparty_name: extra.counterparty_name?.trim() ?? '',
+        counterparty_account: optional(extra.counterparty_account),
+        reference: optional(extra.reference),
+        ...feeFields,
+      } satisfies BankTransferInput
+    case 'card_payment':
+      return {
+        ...base,
+        card_last4: optional(extra.card_last4),
+        merchant: optional(extra.merchant),
+        mcc: optional(extra.mcc),
+        ...feeFields,
+      } satisfies CardPaymentInput
+    case 'wallet_transfer':
+      return {
+        ...base,
+        flow: flow.value,
+        ...chainFields,
+        from_address: optional(extra.from_address),
+        to_address: optional(extra.to_address),
+        memo: optional(extra.memo),
+        ...feeFields,
+      } satisfies WalletTransferInput
+    case 'defi_action':
+      return {
+        ...base,
+        flow: flow.value,
+        action: defiAction.value,
+        ...chainFields,
+        protocol: optional(extra.protocol),
+        pool_id: optional(extra.pool_id),
+        ...feeFields,
+      } satisfies DefiActionInput
+    case 'cash_flow':
+      return {
+        ...base,
+        flow: flow.value,
+        location: optional(extra.location),
+        counterparty: optional(extra.counterparty),
+      } satisfies CashFlowInput
+    default:
+      throw new Error(`no input for ${kind.value}`)
+  }
+}
+
 const save = useMutation({
-  mutationFn: async () => {
-    const tags = [...selectedCategories.value]
-    const feeAmt = fee.value.trim() || null
-    const hash = txHash.value.trim() || null
-    const net = network.value || null
-
-    if (isTrade.value) {
-      if (!sellAsset.value || !buyAsset.value) throw new Error('asset')
-      return call<Transaction[]>('add_trade', {
-        input: {
-          store_id: props.storeId,
-          sell_symbol: sellAsset.value.symbol,
-          sell_name: sellAsset.value.name,
-          sell_coingecko_id: sellAsset.value.coingecko_id,
-          sell_chain: sellAsset.value.chain,
-          sell_contract: sellAsset.value.contract,
-          sell_qty: amount.value.trim(),
-          buy_symbol: buyAsset.value.symbol,
-          buy_name: buyAsset.value.name,
-          buy_coingecko_id: buyAsset.value.coingecko_id,
-          buy_chain: buyAsset.value.chain,
-          buy_contract: buyAsset.value.contract,
-          buy_qty: priceUsd.value.trim(),
-          comment: comment.value.trim(),
-          categories: tags,
-          fee: feeAmt,
-        },
-      })
-    }
-
-    if (!asset.value) throw new Error('asset')
-    const shared = {
-      symbol: asset.value.symbol,
-      name: asset.value.name,
-      coingecko_id: asset.value.coingecko_id,
-      chain: asset.value.chain,
-      contract: asset.value.contract,
-    }
-
-    if (isTransfer.value) {
-      return call<Transaction[]>('add_transfer', {
-        input: {
-          from_store_id: props.storeId,
-          to_store_id: toStoreId.value,
-          ...shared,
-          amount: amount.value.trim(),
-          comment: comment.value.trim(),
-          categories: tags,
-          network: net,
-          tx_hash: hash,
-          fee: feeAmt,
-        },
-      })
-    }
-
-    return call<Transaction>('add_transaction', {
-      input: {
-        kind: mode.value === 'income' ? 'income' : mode.value,
-        ...shared,
-        amount: amount.value.trim(),
-        store_id: props.storeId,
-        comment: comment.value.trim(),
-        categories: tags,
-        timestamp: timestamp.value ? new Date(timestamp.value).toISOString() : null,
-        tx_hash: hash,
-        network: net,
-        price_usd: priceUsd.value.trim() || null,
-        fee: feeAmt,
-      },
-    })
-  },
+  mutationFn: () => call<Transaction>(TX_COMMAND[kind.value], { input: buildInput() }),
   onSuccess: () => {
     toast.success(t('form.saved'))
     reset()
@@ -330,19 +426,19 @@ const save = useMutation({
 })
 
 /** Fill the form from a calculator plan. */
-function prefill(plan: { mode: CalcMode; from: AssetRef | null; to: AssetRef | null; amount: string; price: string }) {
-  if (plan.mode === 'converter' && plan.from && plan.to) {
-    mode.value = 'trade'
+function prefill(plan: TransactionPlan) {
+  const tradeOffered = offeredKinds.value.includes('exchange_trade')
+  if (plan.mode === 'converter' && plan.from && plan.to && tradeOffered) {
+    kind.value = 'exchange_trade'
     sellAsset.value = plan.from
     buyAsset.value = plan.to
-    amount.value = plan.amount
-    priceUsd.value = plan.price
   } else if (plan.from) {
-    mode.value = 'income'
+    kind.value = 'income'
     asset.value = plan.from
-    amount.value = plan.amount
-    priceUsd.value = plan.price
   }
+  amount.value = plan.amount
+  // The calculator's price is the USD price of what is being sold/received.
+  priceUsd.value = plan.price
   comment.value = ''
 }
 
@@ -350,13 +446,11 @@ defineExpose({ prefill })
 
 const valid = computed(() => {
   if (!amount.value.trim()) return false
-  if (isTrade.value) return Boolean(sellAsset.value && buyAsset.value && priceUsd.value.trim())
+  if (isTrade.value) return Boolean(sellAsset.value && buyAsset.value && boughtQty.value.trim())
   if (!asset.value) return false
   if (isTransfer.value) return Boolean(toStoreId.value)
-  return true
+  return REQUIRED_TEXT_FIELDS.every((field) => !textFields.value.includes(field) || extra[field]?.trim())
 })
-
-const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
 </script>
 
 <template>
@@ -366,14 +460,14 @@ const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
         <p class="font-medium">{{ t('form.title') }}</p>
         <div class="flex flex-wrap rounded-md border border-border p-0.5">
           <button
-            v-for="entry in modes"
+            v-for="entry in offeredKinds"
             :key="entry"
             type="button"
             class="rounded px-2.5 py-1 text-xs font-medium transition-colors"
-            :class="mode === entry ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'"
-            @click="mode = entry"
+            :class="kind === entry ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'"
+            @click="kind = entry"
           >
-            {{ t(`form.mode.${entry}`) }}
+            {{ t(`tx.kind.${entry}`) }}
           </button>
         </div>
       </div>
@@ -399,18 +493,52 @@ const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
           <Label>{{ t(isTrade ? 'form.sellQty' : 'form.amount') }}</Label>
           <Input v-model="amount" inputmode="decimal" :placeholder="t('form.amountHint')" required />
         </div>
-        <div class="grid gap-1.5">
-          <Label>{{ isTrade ? t('form.buyQty') : t('form.priceUsd') }}</Label>
-          <Input
-            v-model="priceUsd"
-            inputmode="decimal"
-            :placeholder="isTrade ? t('form.buyQtyHint') : t('form.priceHint')"
-            :required="isTrade"
-          />
+        <div v-if="isTrade" class="grid gap-1.5">
+          <Label>{{ t('form.buyQty') }}</Label>
+          <Input v-model="boughtQty" inputmode="decimal" :placeholder="t('form.buyQtyHint')" required />
         </div>
         <div class="grid gap-1.5">
+          <Label>{{ t('form.priceUsd') }}</Label>
+          <Input v-model="priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
+        </div>
+        <div v-if="hasFee" class="grid gap-1.5">
           <Label>{{ t('form.fee') }}</Label>
           <Input v-model="fee" inputmode="decimal" placeholder="0" />
+        </div>
+      </div>
+
+      <div v-if="hasFlow || kind === 'income' || kind === 'bank_transfer' || kind === 'defi_action'" class="grid gap-3 @sm:grid-cols-3">
+        <div v-if="hasFlow" class="grid gap-1.5">
+          <Label>{{ t('form.direction') }}</Label>
+          <Select v-model="flow">
+            <option value="in">{{ t('form.flow.in') }}</option>
+            <option value="out">{{ t('form.flow.out') }}</option>
+          </Select>
+        </div>
+        <div v-if="kind === 'income'" class="grid gap-1.5">
+          <Label>{{ t('tx.detail.source') }}</Label>
+          <Select v-model="incomeSource">
+            <option v-for="entry in INCOME_SOURCES" :key="entry" :value="entry">{{ t(`form.source.${entry}`) }}</option>
+          </Select>
+        </div>
+        <div v-if="kind === 'bank_transfer'" class="grid gap-1.5">
+          <Label>{{ t('tx.detail.rail') }}</Label>
+          <Select v-model="rail">
+            <option v-for="entry in BANK_RAILS" :key="entry" :value="entry">{{ t(`form.rail.${entry}`) }}</option>
+          </Select>
+        </div>
+        <div v-if="kind === 'defi_action'" class="grid gap-1.5">
+          <Label>{{ t('tx.detail.action') }}</Label>
+          <Select v-model="defiAction">
+            <option v-for="entry in DEFI_ACTIONS" :key="entry" :value="entry">{{ t(`form.defiAction.${entry}`) }}</option>
+          </Select>
+        </div>
+      </div>
+
+      <div v-if="textFields.length" class="grid gap-3 @sm:grid-cols-3">
+        <div v-for="field in textFields" :key="field" class="grid gap-1.5">
+          <Label>{{ t(TEXT_FIELD_LABELS[field]) }}</Label>
+          <Input v-model="extra[field]" spellcheck="false" :required="REQUIRED_TEXT_FIELDS.includes(field)" />
         </div>
       </div>
 
@@ -482,18 +610,18 @@ const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
       </div>
 
       <div class="grid gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
-        <div class="grid gap-1.5">
+        <div v-if="onChain" class="grid gap-1.5">
           <Label>{{ t('form.network') }}</Label>
           <Select v-model="network">
             <option value="">{{ t('form.noNetwork') }}</option>
             <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
           </Select>
         </div>
-        <div v-if="!isTrade" class="grid gap-1.5">
+        <div class="grid gap-1.5">
           <Label>{{ t('form.date') }}</Label>
           <Input v-model="timestamp" type="datetime-local" />
         </div>
-        <div class="grid gap-1.5">
+        <div v-if="onChain" class="grid gap-1.5">
           <Label>{{ t('form.txHash') }}</Label>
           <Input v-model="txHash" spellcheck="false" placeholder="0x…" />
           <p v-if="lookupHint" class="text-xs text-muted-foreground">{{ lookupHint }}</p>
@@ -518,7 +646,7 @@ const modes: FormMode[] = ['income', 'expense', 'payment', 'transfer', 'trade']
         <Button type="submit" :disabled="!valid || save.isPending.value || props.disabled">
           {{ t('form.submit') }}
         </Button>
-              </div>
+      </div>
     </form>
   </Card>
 </template>

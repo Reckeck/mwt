@@ -6,6 +6,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { txId, txLegs, txMeta } from '@/shared/lib/transactions'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -138,21 +139,39 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve(['salary', 'trading', 'staking', 'other'])
     case 'add_category':
       return resolve(String(body))
-    case 'add_transaction':
-      return resolve(mockAddTransaction(body as TxnInput))
+    case 'transaction_kinds_for_store_kind':
+      return resolve(mockKindsFor(args?.kind as StoreKind))
+    case 'add_income':
+      return resolve(mockPush({ income: mockSingleLeg(body as IncomeInput) }))
+    case 'add_expense':
+      return resolve(mockPush({ expense: mockSingleLeg(body as ExpenseInput) }))
+    case 'add_payment':
+      return resolve(mockPush({ payment: mockSingleLeg(body as PaymentInput) }))
+    case 'add_fee':
+      return resolve(mockPush({ fee: mockSingleLeg(body as FeeInput) }))
+    case 'add_bank_transfer':
+      return resolve(mockPush({ bank_transfer: mockSingleLeg(body as BankTransferInput) }))
+    case 'add_card_payment':
+      return resolve(mockPush({ card_payment: mockSingleLeg(body as CardPaymentInput) }))
+    case 'add_wallet_transfer':
+      return resolve(mockPush({ wallet_transfer: mockSingleLeg(body as WalletTransferInput) }))
+    case 'add_defi_action':
+      return resolve(mockPush({ defi_action: mockSingleLeg(body as DefiActionInput) }))
+    case 'add_cash_flow':
+      return resolve(mockPush({ cash_flow: mockSingleLeg(body as CashFlowInput) }))
     case 'add_transfer':
-      return resolve(mockAddTransfer(body as TransferInput))
+      return resolve(mockPush(mockTransfer(body as TransferInput)))
     case 'add_trade':
-      return resolve(mockAddTrade(body as TradeInput))
+      return resolve(mockPush(mockTrade(body as TradeInput)))
     case 'delete_transaction': {
-      const idx = mockTransactions.findIndex((tx) => tx.id === String(args?.id))
+      const idx = mockTransactions.findIndex((tx) => txId(tx) === String(args?.id))
       if (idx >= 0) mockTransactions.splice(idx, 1)
       return resolve({})
     }
     case 'update_comment': {
       const input = body as UpdateCommentInput
-      const tx = mockTransactions.find((candidate) => candidate.id === input.transaction_id)
-      if (tx) tx.comment = input.comment
+      const tx = mockTransactions.find((candidate) => txId(candidate) === input.transaction_id)
+      if (tx) txMeta(tx).comment = input.comment
       return resolve(tx ?? mockTransactions[0])
     }
     case 'search_assets':
@@ -339,26 +358,22 @@ const mockCurrencies: SupportedCurrencies = {
 
 function defaultTxs(_kind: StoreKind, name: string, storeId: string): Transaction[] {
   const now = Date.now()
-  const tx = (offsetHours: number, kind: TxKind, symbol: string, amount: string, comment: string): Transaction => ({
-    id: crypto.randomUUID(),
-    kind,
-    asset: { symbol, name: symbol, coingecko_id: null, chain: 'bitcoin', contract: null, quote: symbol },
-    amount,
-    store_id: storeId,
-    to_store_id: null,
-    network: null,
-    tx_hash: null,
-    categories: [],
-    comment,
-    timestamp: new Date(now - offsetHours * 3.6e6).toISOString(),
-    fee: null,
-    fee_asset: null,
-    group_id: null,
-    price_usd: kind === 'income' ? '20000' : null,
-    price_base: null,
-    fx_override: null,
+  const income = (offsetHours: number, symbol: string, amount: string, comment: string): Transaction => ({
+    income: {
+      meta: {
+        id: crypto.randomUUID(),
+        timestamp: new Date(now - offsetHours * 3.6e6).toISOString(),
+        comment,
+        categories: [],
+      },
+      store_id: storeId,
+      asset: { symbol, name: symbol, coingecko_id: null, chain: 'bitcoin', contract: null, quote: symbol },
+      amount,
+      source: 'other',
+      price: { price_usd: '20000', price_base: null, fx_override: null },
+    },
   })
-  return [tx(48, 'income', 'BTC', '4', `Init ${name}`), tx(20, 'income', 'ETH', '135', 'Stacking rewards')]
+  return [income(48, 'BTC', '4', `Init ${name}`), income(20, 'ETH', '135', 'Stacking rewards')]
 }
 
 const mockStores: Store[] = [
@@ -404,87 +419,92 @@ const assetOf = (
   quote: symbol.toUpperCase(),
 })
 
+const timestampOf = (tx: Transaction) => txMeta(tx).timestamp
+
 function mockFilterTxs(storeId: string | null): Transaction[] {
   const list = storeId
-    ? mockTransactions.filter((tx) => tx.store_id === storeId || tx.to_store_id === storeId)
+    ? mockTransactions.filter((tx) => txLegs(tx).some((leg) => leg.store_id === storeId))
     : mockTransactions
-  return [...list].sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+  return [...list].sort((left, right) => timestampOf(right).localeCompare(timestampOf(left)))
 }
 
-function mockBaseTx(kind: TxKind, asset: AssetRef, amount: string, storeId: string, comment: string): Transaction {
-  return {
-    id: crypto.randomUUID(),
-    kind,
-    asset,
-    amount,
-    store_id: storeId,
-    to_store_id: null,
-    network: null,
-    tx_hash: null,
-    categories: [],
-    comment,
-    timestamp: new Date().toISOString(),
-    fee: null,
-    fee_asset: null,
-    group_id: null,
-    price_usd: kind === 'income' ? String(priceOf(asset.symbol)) : null,
-    price_base: null,
-    fx_override: null,
+/** Mirrors `Transaction::specific_tags_for_store_kind` / `COMMON_TAGS` in Rust. */
+function mockKindsFor(kind: StoreKind): TransactionKinds {
+  const specific: Record<StoreKind, string[]> = {
+    exchange: ['exchange_trade', 'wallet_transfer'],
+    hot_wallet: ['wallet_transfer', 'defi_action'],
+    cold_wallet: ['wallet_transfer', 'defi_action'],
+    bank: ['bank_transfer', 'card_payment'],
+    cash: ['cash_flow'],
   }
+  const own = specific[kind] ?? []
+  return { common: ['income', 'expense', 'payment', 'fee', 'transfer'], specific: own, default: own[0] ?? 'income' }
 }
 
-function mockAddTransaction(input: TxnInput): Transaction {
-  const asset = assetOf(input.symbol, input.name, input.coingecko_id, input.chain, input.contract)
-  const signed =
-    input.kind === 'expense' || input.kind === 'payment' || input.kind === 'fee' ? `-${input.amount}` : input.amount
-  const tx = mockBaseTx(input.kind, asset, signed, input.store_id, input.comment)
-  tx.categories = input.categories ?? []
-  tx.network = input.network ?? null
-  tx.tx_hash = input.tx_hash ?? null
-  tx.fee = input.fee ?? null
-  if (input.price_usd) tx.price_usd = input.price_usd
-  if (input.timestamp) tx.timestamp = input.timestamp
+function mockPush(tx: Transaction): Transaction {
   mockTransactions.push(tx)
   return tx
 }
 
-function mockAddTransfer(input: TransferInput): Transaction[] {
-  const asset = assetOf(input.symbol, input.name, input.coingecko_id, input.chain, input.contract)
-  const group = crypto.randomUUID()
-  const out = mockBaseTx('transfer', asset, `-${input.amount}`, input.from_store_id, input.comment)
-  const inn = mockBaseTx('transfer', asset, input.amount, input.to_store_id, input.comment)
-  for (const leg of [out, inn]) {
-    leg.group_id = group
-    leg.categories = input.categories ?? []
-    leg.network = input.network ?? null
-    leg.tx_hash = input.tx_hash ?? null
-    leg.fee = input.fee ?? null
+const assetFrom = (ident: AssetIdent): AssetRef =>
+  assetOf(ident.symbol, ident.name, ident.coingecko_id, ident.chain, ident.contract)
+
+function mockMeta(common: TxInputCommon): TxMeta {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: common.timestamp || new Date().toISOString(),
+    comment: common.comment.trim(),
+    categories: common.categories ?? [],
   }
-  out.to_store_id = input.to_store_id
-  inn.to_store_id = input.from_store_id
-  mockTransactions.push(out, inn)
-  return [out, inn]
 }
 
-function mockAddTrade(input: TradeInput): Transaction[] {
-  const sell = assetOf(
-    input.sell_symbol,
-    input.sell_name,
-    input.sell_coingecko_id,
-    input.sell_chain,
-    input.sell_contract,
-  )
-  const buy = assetOf(input.buy_symbol, input.buy_name, input.buy_coingecko_id, input.buy_chain, input.buy_contract)
-  const group = crypto.randomUUID()
-  const out = mockBaseTx('trade', sell, `-${input.sell_qty}`, input.store_id, input.comment)
-  const inn = mockBaseTx('trade', buy, input.buy_qty, input.store_id, input.comment)
-  for (const leg of [out, inn]) {
-    leg.group_id = group
-    leg.categories = input.categories ?? []
-    leg.fee = input.fee ?? null
+/** The backend stamps the cached price when none was typed; so does the mock. */
+function mockStamp(common: TxInputCommon, symbol: string): PriceStamp {
+  const cached = priceOf(symbol)
+  return {
+    price_usd: common.price_usd ?? (cached ? String(cached) : null),
+    price_base: null,
+    fx_override: common.fx_override ?? null,
   }
-  mockTransactions.push(out, inn)
-  return [out, inn]
+}
+
+/**
+ * Body of any one-leg kind: the input's own fields are exactly the body's
+ * kind-specific fields, so only the shared part needs building.
+ */
+function mockSingleLeg<Input extends { store_id: string; asset: AssetIdent; common: TxInputCommon }>(input: Input) {
+  const { store_id, asset: ident, common, ...own } = input
+  const asset = assetFrom(ident)
+  return {
+    meta: mockMeta(common),
+    store_id,
+    asset,
+    amount: common.amount,
+    price: mockStamp(common, asset.symbol),
+    ...own,
+  }
+}
+
+function mockTransfer(input: TransferInput): Transaction {
+  const { asset: ident, common, ...own } = input
+  const asset = assetFrom(ident)
+  return {
+    transfer: { meta: mockMeta(common), asset, amount: common.amount, price: mockStamp(common, asset.symbol), ...own },
+  }
+}
+
+function mockTrade(input: TradeInput): Transaction {
+  const { sold, sold_qty, bought, bought_qty, common, ...own } = input
+  const soldAsset = assetFrom(sold)
+  return {
+    exchange_trade: {
+      meta: mockMeta(common),
+      sold: { asset: soldAsset, qty: sold_qty },
+      bought: { asset: assetFrom(bought), qty: bought_qty },
+      price: mockStamp(common, soldAsset.symbol),
+      ...own,
+    },
+  }
 }
 
 function mockOverview(storeId: string): StoreOverview {
@@ -492,15 +512,13 @@ function mockOverview(storeId: string): StoreOverview {
   const txs = mockFilterTxs(storeId)
   const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
 
-  for (const tx of txs) {
-    // a leg belongs to this store when it is booked on it; transfer
-    // counterpart legs are netted out
-    if (tx.store_id !== storeId) continue
-    const sign = tx.kind === 'expense' || tx.kind === 'payment' || tx.kind === 'fee' ? -1 : 1
-    const key = tx.asset.symbol.toUpperCase()
-    const row = byAsset.get(key) ?? { asset: tx.asset, qty: 0, cost: 0 }
-    row.qty += sign * Number(tx.amount)
-    if (sign > 0) row.cost = priceOf(key)
+  // Legs carry their own sign, so a trade or transfer needs no special case.
+  for (const leg of txs.flatMap(txLegs)) {
+    if (leg.store_id !== storeId) continue
+    const key = leg.asset.symbol.toUpperCase()
+    const row = byAsset.get(key) ?? { asset: leg.asset, qty: 0, cost: 0 }
+    row.qty += Number(leg.amount)
+    if (Number(leg.amount) > 0) row.cost = priceOf(key)
     byAsset.set(key, row)
   }
 
@@ -533,8 +551,8 @@ function mockOverview(storeId: string): StoreOverview {
     positions,
     children: [],
     tx_count: txs.length,
-    first_tx_at: txs.length ? txs[txs.length - 1].timestamp : '',
-    last_tx_at: txs.length ? txs[0].timestamp : '',
+    first_tx_at: txs.length ? timestampOf(txs[txs.length - 1]) : '',
+    last_tx_at: txs.length ? timestampOf(txs[0]) : '',
   }
 }
 

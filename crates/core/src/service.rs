@@ -10,7 +10,7 @@ use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, Holding, Store, StoreKind};
-use crate::model::transaction::{Transaction, TxKind};
+use crate::model::transaction::{ExchangeTradeTx, Leg, PriceStamp, TradeSide, Transaction, TxMeta};
 use crate::model::vault::{PendingImport, VaultDoc, iso_to_millis, now_iso};
 use crate::storage::{SnapshotFormat, VaultFile};
 use crate::txinfo::{HashShape, hash_shape};
@@ -227,12 +227,7 @@ impl UnlockedVault {
     }
 
     pub fn delete_store(&mut self, id: &str) -> Result<()> {
-        if self
-            .doc
-            .transactions
-            .iter()
-            .any(|tx| tx.store_id == id || tx.to_store_id.as_deref() == Some(id))
-        {
+        if self.doc.transactions.iter().any(|tx| tx.touches(id)) {
             return Err(Error::InvalidInput(
                 "store has transactions; archive instead".into(),
             ));
@@ -264,62 +259,56 @@ impl UnlockedVault {
     // Holdings are DERIVED from transactions (single source of truth):
     // `recompute_holdings()` re-derives every position and average cost basis
     // from the transaction stream, guaranteeing consistency.
+    //
+    // `Transaction` is a closed enum whose variants carry their own fields, so
+    // there is no kind tag to dispatch on here: one entry point validates
+    // whichever variant it is handed. Adding a variant does not mean adding a
+    // branch here, only a `legs()` impl on the variant itself.
 
-    /// Add a single-leg transaction; updates holdings accordingly.
     /// Transaction history, newest first; optionally filtered by store.
     pub fn transactions(&self, store_id: Option<&str>) -> Vec<Transaction> {
         let mut out: Vec<Transaction> = self
             .doc
             .transactions
             .iter()
-            .filter(|tx| {
-                store_id.is_none_or(|filter| {
-                    tx.store_id == filter || tx.to_store_id.as_deref() == Some(filter)
-                })
-            })
+            .filter(|tx| store_id.is_none_or(|filter| tx.touches(filter)))
             .cloned()
             .collect();
-        out.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+        out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
         out
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction> {
-        self.ensure_store(&tx.store_id)?;
-        if let Some(ref hash) = tx.tx_hash
-            && !hash.is_empty()
-        {
-            if hash_shape(hash) == HashShape::Malformed {
-                return Err(Error::TxHashMalformed(hash.clone()));
-            }
-            if let (Some(network), Some(chain)) = (&tx.network, &tx.asset.chain)
-                && network != chain
-            {
-                return Err(Error::TxHashNetworkMismatch(format!(
-                    "network {:?} != asset chain {:?}",
-                    network, chain
-                )));
+    /// Validate and append a transaction of any variant.
+    ///
+    /// Everything kind-specific is already guaranteed by the type system; what
+    /// is left is the cross-cutting set of rules — the stores exist, amounts
+    /// carry a real magnitude, and any on-chain hash is well-formed.
+    pub fn add_transaction(&mut self, mut tx: Transaction) -> Result<Transaction> {
+        let legs = tx.legs();
+        if legs.is_empty() {
+            return Err(Error::InvalidInput("transaction has no legs".into()));
+        }
+        for leg in &legs {
+            self.ensure_store(&leg.store_id)?;
+            if leg.amount.is_zero() {
+                return Err(Error::InvalidInput("amount must not be zero".into()));
             }
         }
-        match tx.kind {
-            TxKind::Income => self.ensure_positive(&tx.amount, "income")?,
-            TxKind::Expense => self.ensure_positive(&tx.amount, "expense")?,
-            TxKind::Payment => self.ensure_positive(&tx.amount, "payment")?,
-            TxKind::Fee => self.ensure_positive(&tx.amount, "fee")?,
-            TxKind::Transfer => {
-                if tx.to_store_id.as_deref() == Some(tx.store_id.as_str()) {
-                    return Err(Error::InvalidInput("transfer origin == destination".into()));
-                }
-                match &tx.to_store_id {
-                    Some(to) => self.ensure_store(to)?,
-                    None => return Err(Error::InvalidInput("transfer needs to_store_id".into())),
-                }
-            }
-            TxKind::Trade => {
-                return Err(Error::InvalidInput("use add_trade for trades".into()));
+        self.check_on_chain_refs(&tx)?;
+        // Two legs must never book the same asset into the same store: they
+        // would net to nothing while the history still showed both rows. A
+        // trade legitimately puts two legs on one store (different assets), so
+        // the pair — not the store alone — is what has to be distinct.
+        for (index, leg) in legs.iter().enumerate() {
+            if legs[..index].iter().any(|earlier| {
+                earlier.store_id == leg.store_id && earlier.asset.key() == leg.asset.key()
+            }) {
+                return Err(Error::InvalidInput(
+                    "legs of one transaction must not net against each other".into(),
+                ));
             }
         }
-        let mut tx = tx;
-        self.adopt_categories(&mut tx.categories);
+        self.adopt_categories(&mut tx.meta_mut().categories);
         self.doc.transactions.push(tx.clone());
         self.recompute_holdings();
         self.persist()?;
@@ -350,112 +339,9 @@ impl UnlockedVault {
         }
     }
 
-    /// Move `amount` of `asset` from `from` to `to` (two legs, shared group).
-    #[allow(clippy::too_many_arguments)]
-    pub fn transfer(
-        &mut self,
-        from: &str,
-        to: &str,
-        asset: AssetRef,
-        amount: Amount,
-        fee: Option<Amount>,
-        network: Option<Chain>,
-        tx_hash: Option<String>,
-        comment: &str,
-        categories: Vec<String>,
-    ) -> Result<(Transaction, Transaction)> {
-        self.ensure_store(from)?;
-        self.ensure_store(to)?;
-        if from == to {
-            return Err(Error::InvalidInput("transfer origin == destination".into()));
-        }
-        self.ensure_positive(&amount, "transfer")?;
-        if let Some(ref hash) = tx_hash {
-            if !hash.is_empty() && hash_shape(hash) == HashShape::Malformed {
-                return Err(Error::TxHashMalformed(hash.clone()));
-            }
-            if let (Some(network), Some(chain)) = (&network, &asset.chain)
-                && network != chain
-            {
-                return Err(Error::TxHashNetworkMismatch(format!(
-                    "network {:?} != asset chain {:?}",
-                    network, chain
-                )));
-            }
-        }
-        let group = uuid::Uuid::new_v4().to_string();
-        let ts = now_iso();
-
-        let mut out = Transaction::new(TxKind::Transfer, asset.clone(), -amount, from, comment);
-        out.to_store_id = Some(to.to_string());
-        out.network = network;
-        out.tx_hash = tx_hash.clone();
-        out.categories = categories.clone();
-        out.fee = fee.map(|fee| fee.abs());
-        out.group_id = Some(group.clone());
-        out.timestamp = ts.clone();
-
-        let mut inn = Transaction::new(TxKind::Transfer, asset.clone(), amount, to, comment);
-        inn.to_store_id = Some(from.to_string());
-        inn.network = network;
-        inn.tx_hash = tx_hash;
-        inn.categories = categories.clone();
-        inn.group_id = Some(group);
-        inn.timestamp = ts;
-
-        self.adopt_categories(&mut out.categories);
-        self.adopt_categories(&mut inn.categories);
-        self.doc.transactions.push(out.clone());
-        self.doc.transactions.push(inn.clone());
-        self.recompute_holdings();
-        self.persist()?;
-        Ok((out, inn))
-    }
-
-    /// Two-leg trade within stores: `sell_asset` (out, negative) → `buy_asset`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_trade(
-        &mut self,
-        store_id: &str,
-        sell: AssetRef,
-        sell_qty: Amount,
-        buy: AssetRef,
-        buy_qty: Amount,
-        fee: Option<Amount>,
-        comment: &str,
-        categories: Vec<String>,
-    ) -> Result<(Transaction, Transaction)> {
-        self.ensure_store(store_id)?;
-        self.ensure_positive(&sell_qty, "sell qty")?;
-        self.ensure_positive(&buy_qty, "buy qty")?;
-        let group = uuid::Uuid::new_v4().to_string();
-        let ts = now_iso();
-
-        let mut out = Transaction::new(TxKind::Trade, sell, -sell_qty, store_id, comment);
-        out.categories = categories.clone();
-        out.fee = fee.map(|fee| fee.abs());
-        out.group_id = Some(group.clone());
-        out.timestamp = ts.clone();
-
-        let mut inn = Transaction::new(TxKind::Trade, buy, buy_qty, store_id, comment);
-        inn.categories = categories;
-        inn.group_id = Some(group);
-        inn.timestamp = ts;
-
-        self.adopt_categories(&mut out.categories);
-        self.adopt_categories(&mut inn.categories);
-        self.doc.transactions.push(out.clone());
-        self.doc.transactions.push(inn.clone());
-        self.recompute_holdings();
-        self.persist()?;
-        Ok((out, inn))
-    }
-
     pub fn delete_transaction(&mut self, id: &str) -> Result<()> {
         let before = self.doc.transactions.len();
-        self.doc
-            .transactions
-            .retain(|tx| tx.id != id && tx.group_id.as_deref() != Some(id));
+        self.doc.transactions.retain(|tx| tx.meta().id != id);
         if self.doc.transactions.len() == before {
             return Err(Error::Missing("transaction".into()));
         }
@@ -469,14 +355,18 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter_mut()
-            .find(|tx| tx.id == id)
+            .find(|tx| tx.meta().id == id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
-        tx.comment = comment.trim().to_string();
+        tx.meta_mut().comment = comment.trim().to_string();
         let out = tx.clone();
         self.persist()?;
         Ok(out)
     }
 
+    /// Stamp a manual price / FX override on a transaction.
+    ///
+    /// Delegated to [`Transaction::stamp_prices`], which knows which legs of
+    /// which variant a price belongs on.
     pub fn set_prices(
         &mut self,
         tx_id: &str,
@@ -487,10 +377,10 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter_mut()
-            .find(|tx| tx.id == tx_id)
+            .find(|tx| tx.meta().id == tx_id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
-        tx.price_usd = price_usd;
-        tx.fx_override = fx_override;
+        tx.stamp_prices(price_usd, fx_override);
+        self.recompute_holdings();
         self.persist()?;
         Ok(())
     }
@@ -527,47 +417,61 @@ impl UnlockedVault {
             base
         };
 
+        // Replay the whole stream leg by leg in timestamp order. Sorting on the
+        // transaction is enough because every leg of a transaction shares its
+        // timestamp, and within one timestamp the legs are independent
+        // per (store, asset) key.
         let mut txs: Vec<Transaction> = self.doc.transactions.clone();
-        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
+        txs.sort_by(|left, right| left.meta().timestamp.cmp(&right.meta().timestamp));
 
         for tx in &txs {
-            let key = (tx.store_id.clone(), tx.asset.key());
-            let delta = signed_delta(tx);
-            if delta.is_zero() {
-                continue;
-            }
-            let price = tx_price_in_base(tx, &base);
-            let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
-            let new_qty = cur + delta;
+            for leg in tx.legs() {
+                let key = (leg.store_id.clone(), leg.asset.key());
+                let delta = leg.amount;
+                if delta.is_zero() {
+                    continue;
+                }
+                let price = leg_price_in_base(&leg, &base);
+                let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
+                let new_qty = cur + delta;
 
-            if delta > Amount::ZERO && !price.is_zero() {
-                // weighted average cost
-                let new_cost = {
-                    let old = cost.get(&key).copied().unwrap_or(Amount::ZERO);
-                    let total_cost = old * cur + price * delta;
-                    if new_qty == Amount::ZERO {
-                        Amount::ZERO
-                    } else {
-                        total_cost / new_qty
-                    }
-                };
-                cost.insert(key.clone(), new_cost);
+                if delta.is_positive() && !price.is_zero() {
+                    // weighted average cost
+                    let new_cost = {
+                        let old = cost.get(&key).copied().unwrap_or(Amount::ZERO);
+                        let total_cost = old * cur + price * delta;
+                        if new_qty == Amount::ZERO {
+                            Amount::ZERO
+                        } else {
+                            total_cost / new_qty
+                        }
+                    };
+                    cost.insert(key.clone(), new_cost);
+                }
+                // sells keep avg_cost unchanged (realized PnL measured against
+                // it is computed on demand in analytics)
+                qty.insert(key, new_qty);
             }
-            // sells keep avg_cost unchanged (realized PnL measured against it
-            // is computed on demand in analytics)
-            qty.insert(key, new_qty);
+        }
+
+        // Recover the full AssetRef for each surviving position from the legs
+        // that produced it, rather than reconstructing an identity from the
+        // cache key (which would lose the name, quote and chain).
+        let mut identity: HashMap<(String, String), AssetRef> = HashMap::new();
+        for tx in &self.doc.transactions {
+            for leg in tx.legs() {
+                identity
+                    .entry((leg.store_id.clone(), leg.asset.key()))
+                    .or_insert_with(|| leg.asset.clone());
+            }
         }
 
         self.doc.holdings = qty
             .into_iter()
             .filter(|(_, quantity)| !quantity.is_zero())
             .map(|((store_id, asset_key), quantity)| {
-                let asset = self
-                    .doc
-                    .transactions
-                    .iter()
-                    .find(|tx| tx.store_id == store_id && tx.asset.key() == asset_key)
-                    .map(|tx| tx.asset.clone())
+                let asset = identity
+                    .remove(&(store_id.clone(), asset_key.clone()))
                     .unwrap_or_else(|| AssetRef::fiat("UNKNOWN", "Unknown"));
                 let avg_cost = cost.get(&(store_id.clone(), asset_key.clone())).copied();
                 Holding {
@@ -617,7 +521,7 @@ impl UnlockedVault {
         self.doc
             .transactions
             .iter()
-            .filter(|tx| tx.store_id == store_id || tx.to_store_id.as_deref() == Some(store_id))
+            .filter(|tx| tx.touches(store_id))
             .cloned()
             .collect()
     }
@@ -723,13 +627,13 @@ impl UnlockedVault {
         let txs = self.store_txs(store_id);
         let first_tx_at = txs
             .iter()
-            .map(|tx| tx.timestamp.as_str())
+            .map(|tx| tx.meta().timestamp.as_str())
             .min()
             .unwrap_or("")
             .to_string();
         let last_tx_at = txs
             .iter()
-            .map(|tx| tx.timestamp.as_str())
+            .map(|tx| tx.meta().timestamp.as_str())
             .max()
             .unwrap_or("")
             .to_string();
@@ -868,39 +772,62 @@ impl UnlockedVault {
             Some(id) => self.store_txs(id),
             None => self.doc.transactions.clone(),
         };
-        let mut events: Vec<String> = source.iter().map(|tx| tx.timestamp.clone()).collect();
-        events.push(now_iso());
-        events.sort();
-        events.dedup();
 
-        let mut txs = source;
-        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
-        let mut idx = 0usize;
+        // Flatten to legs first: a transfer contributes to one store's series
+        // from its outgoing leg and to another's from its incoming one, and the
+        // event axis is the set of leg timestamps.
+        let mut events: Vec<(String, String, String)> = Vec::new();
+        for tx in &source {
+            for leg in tx.legs() {
+                if let Some(id) = store_id
+                    && leg.store_id != id
+                {
+                    continue;
+                }
+                events.push((
+                    leg.asset.key(),
+                    tx.meta().timestamp.clone(),
+                    leg.amount.to_string(),
+                ));
+            }
+        }
+        let mut stamps: Vec<String> = events.iter().map(|(_, ts, _)| ts.clone()).collect();
+        stamps.push(now_iso());
+        stamps.sort();
+        stamps.dedup();
+
+        // Replay legs in timestamp order.
+        let mut movements: Vec<(String, String, Amount)> = events
+            .into_iter()
+            .map(|(asset, ts, amount)| (asset, ts, Amount::parse(&amount).unwrap_or(Amount::ZERO)))
+            .collect();
+        movements.sort_by(|left, right| left.1.cmp(&right.1));
 
         // (asset_key -> running qty)
         let mut qty: HashMap<String, Amount> = HashMap::new();
-        let mut out = Vec::with_capacity(events.len());
+        let mut out = Vec::with_capacity(stamps.len());
+        let mut idx = 0usize;
 
-        for ev in &events {
-            while idx < txs.len() && txs[idx].timestamp <= *ev {
-                let tx = &txs[idx];
-                *qty.entry(tx.asset.key()).or_default() += signed_delta(tx);
+        for ev in &stamps {
+            while idx < movements.len() && movements[idx].1 <= *ev {
+                let (asset, _, amount) = &movements[idx];
+                *qty.entry(asset.clone()).or_default() += *amount;
                 idx += 1;
             }
             let mut value_usd = Amount::ZERO;
             for holding in &self.doc.holdings {
-                // left per-store series must not be valued against the other
+                // a left per-store series must not be valued against the other
                 // stores' positions
                 if store_id.is_some_and(|id| holding.store_id != id) {
                     continue;
                 }
-                let akey = holding.asset.key();
-                let quantity = qty.get(&akey).copied().unwrap_or(Amount::ZERO);
+                let akey = &holding.asset.key();
+                let quantity = qty.get(akey).copied().unwrap_or(Amount::ZERO);
                 let price = self
                     .doc
                     .price_cache
                     .iter()
-                    .filter(|point| point.asset_key == akey && point.ts <= *ev)
+                    .filter(|point| &point.asset_key == akey && point.ts <= *ev)
                     .max_by(|left, right| left.ts.cmp(&right.ts))
                     .map(|point| point.value_usd)
                     .or_else(|| {
@@ -910,12 +837,15 @@ impl UnlockedVault {
                             .transactions
                             .iter()
                             .filter(|tx| {
-                                tx.asset.key() == akey
-                                    && tx.timestamp <= *ev
-                                    && tx.price_usd.is_some()
+                                tx.legs()
+                                    .iter()
+                                    .any(|leg| leg.asset.key() == *akey && leg.price_usd.is_some())
                             })
-                            .max_by(|left, right| left.timestamp.cmp(&right.timestamp))
-                            .and_then(|tx| tx.price_usd)
+                            .filter(|tx| tx.meta().timestamp <= *ev)
+                            .max_by(|left, right| {
+                                left.meta().timestamp.cmp(&right.meta().timestamp)
+                            })
+                            .and_then(|tx| tx.legs().into_iter().find_map(|leg| leg.price_usd))
                     });
                 if let Some(point) = price {
                     value_usd += quantity * point;
@@ -939,33 +869,48 @@ impl UnlockedVault {
     /// store (`None` replays the whole vault, as before).
     fn realized_pnl_filtered(&self, store_id: Option<&str>) -> RealizedPnl {
         let (base, _fx) = self.base_and_fx();
-        let mut txs: Vec<Transaction> = match store_id {
+        let source: Vec<Transaction> = match store_id {
             Some(id) => self.store_txs(id),
             None => self.doc.transactions.clone(),
         };
-        txs.sort_by(|left, right| left.timestamp.cmp(&right.timestamp));
+
+        // Flatten to (timestamp, leg) and replay. Only legs booked on the
+        // requested store count, which is what makes a per-store PnL differ
+        // from the vault-wide one even though they share this code path.
+        let mut movements: Vec<(String, Leg)> = Vec::new();
+        for tx in &source {
+            let ts = tx.meta().timestamp.clone();
+            for leg in tx.legs() {
+                if store_id.is_some_and(|id| leg.store_id != id) {
+                    continue;
+                }
+                movements.push((ts.clone(), leg));
+            }
+        }
+        movements.sort_by(|left, right| left.0.cmp(&right.0));
+
         // avg cost tracking per (store, asset)
         let mut cost: HashMap<(String, String), Amount> = HashMap::new();
         let mut qty: HashMap<(String, String), Amount> = HashMap::new();
         let mut total = Amount::ZERO;
         let mut legs = Vec::new();
 
-        for tx in &txs {
-            let delta = signed_delta(tx);
+        for (ts, leg) in &movements {
+            let delta = leg.amount;
             if delta.is_zero() {
                 continue;
             }
-            let key = (tx.store_id.clone(), tx.asset.key());
-            let price = tx_price_in_base(tx, &base);
+            let key = (leg.store_id.clone(), leg.asset.key());
+            let price = leg_price_in_base(leg, &base);
             let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
             if delta.is_negative() {
                 let avg = cost.get(&key).copied().unwrap_or(Amount::ZERO);
                 let pnl = (price - avg) * delta.abs();
                 total += pnl;
                 legs.push(PnlLeg {
-                    ts: tx.timestamp.clone(),
-                    store_id: tx.store_id.clone(),
-                    asset_key: tx.asset.key(),
+                    ts: ts.clone(),
+                    store_id: leg.store_id.clone(),
+                    asset_key: leg.asset.key(),
                     quantity: delta.abs(),
                     pnl_base: pnl,
                     side: "sell".into(),
@@ -1056,45 +1001,40 @@ impl UnlockedVault {
             {
                 continue;
             }
-            let group = uuid::Uuid::new_v4().to_string();
-            let ts = if imp.occurred_at.is_empty() {
-                now_iso()
-            } else {
-                imp.occurred_at.clone()
+            let mut meta = TxMeta::new(&imp.comment);
+            meta.categories = vec!["trading".to_string()];
+            if !imp.occurred_at.is_empty() {
+                meta.timestamp = imp.occurred_at.clone();
+            }
+
+            // One record, two legs: a fill is a single event on the exchange,
+            // and writing it as two transactions meant a delete could take only
+            // one side with it.
+            let trade = ExchangeTradeTx {
+                meta,
+                store_id: imp.store_id.clone(),
+                sold: TradeSide {
+                    asset: self.asset_for_import(&imp.asset_sold),
+                    qty: imp.qty_sold,
+                },
+                bought: TradeSide {
+                    asset: self.asset_for_import(&imp.asset_bought),
+                    qty: imp.qty_bought,
+                },
+                fee: (!imp.fee.is_zero()).then(|| imp.fee.abs()),
+                fee_asset: (!imp.fee_asset.is_empty()).then(|| imp.fee_asset.clone()),
+                order_id: Some(imp.exec_id.clone()),
+                market: Some(imp.category.clone()),
+                liquidity: None,
+                price: PriceStamp {
+                    price_usd: Some(imp.price),
+                    ..Default::default()
+                },
             };
-            let categories = vec!["trading".to_string()];
-            let fee = (!imp.fee.is_zero()).then_some(imp.fee.abs());
-            let fee_asset = (!imp.fee_asset.is_empty()).then(|| imp.fee_asset.clone());
 
-            // Sold leg: negative amount, matching `add_trade` conventions.
-            let mut out = Transaction::new(
-                TxKind::Trade,
-                self.asset_for_import(&imp.asset_sold),
-                -imp.qty_sold,
-                &imp.store_id,
-                &imp.comment,
-            );
-            out.categories = categories.clone();
-            out.fee = fee;
-            out.fee_asset = fee_asset;
-            out.group_id = Some(group.clone());
-            out.timestamp = ts.clone();
-            out.price_usd = Some(imp.price);
-
-            // Bought leg: positive amount.
-            let mut inn = Transaction::new(
-                TxKind::Trade,
-                self.asset_for_import(&imp.asset_bought),
-                imp.qty_bought,
-                &imp.store_id,
-                &imp.comment,
-            );
-            inn.categories = categories;
-            inn.group_id = Some(group);
-            inn.timestamp = ts;
-
-            self.doc.transactions.push(out);
-            self.doc.transactions.push(inn);
+            let mut tx = Transaction::ExchangeTrade(trade);
+            self.adopt_categories(&mut tx.meta_mut().categories);
+            self.doc.transactions.push(tx);
             confirmed += 1;
         }
 
@@ -1163,6 +1103,33 @@ impl UnlockedVault {
         }
     }
 
+    /// Shape-check every on-chain hash a transaction claims.
+    ///
+    /// A wrong network is as bad as a malformed hash: the explorer link would
+    /// open a real page about a transaction that is not this one, so both are
+    /// refused. A hash is matched against the chains of the assets it moved,
+    /// which is why a trade with a BTC leg and a USDT leg cannot carry an EVM
+    /// hash.
+    fn check_on_chain_refs(&self, tx: &Transaction) -> Result<()> {
+        let chains = tx.asset_chains();
+        for (network, hash) in tx.on_chain_refs() {
+            let Some(hash) = hash.filter(|raw| !raw.is_empty()) else {
+                continue;
+            };
+            if hash_shape(hash) == HashShape::Malformed {
+                return Err(Error::TxHashMalformed(hash.to_string()));
+            }
+            if let Some(network) = network
+                && chains.iter().flatten().any(|chain| chain != &network)
+            {
+                return Err(Error::TxHashNetworkMismatch(format!(
+                    "network {network:?} does not match the assets moved"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn ensure_positive(&self, amount: &Amount, what: &str) -> Result<()> {
         if amount.is_negative() || amount.is_zero() {
             return Err(Error::InvalidInput(format!(
@@ -1173,27 +1140,22 @@ impl UnlockedVault {
     }
 }
 
-/// Signed quantity effect of a transaction on its `store_id`.
-fn signed_delta(tx: &Transaction) -> Amount {
-    match tx.kind {
-        TxKind::Income => tx.amount,
-        TxKind::Expense | TxKind::Payment | TxKind::Fee => -tx.amount.abs(),
-        TxKind::Transfer | TxKind::Trade => tx.amount, // legs carry sign themselves
-    }
-}
-
-/// Price of one unit of the tx asset in the given base currency at tx time.
-fn tx_price_in_base(tx: &Transaction, base: &str) -> Amount {
-    if let Some(price_base) = tx.price_base {
+/// Price of one unit of a leg's asset in `base`, as known at the time of the
+/// movement.
+///
+/// Prefers an explicitly recorded base price, then an FX override paired with
+/// a USD price, then the USD price itself when the base *is* USD. A USD price
+/// with no known rate still falls through as the USD value rather than zero:
+/// a wrong magnitude is easier to notice than a silent zero, and the rate
+/// arrives on the next refresh.
+fn leg_price_in_base(leg: &Leg, base: &str) -> Amount {
+    if let Some(price_base) = leg.price_base {
         return price_base;
     }
-    match (tx.price_usd, tx.fx_override) {
+    match (leg.price_usd, leg.fx_override) {
         (Some(usd), Some(fx)) => usd * fx,
         (Some(usd), None) if base == "usd" => usd,
-        (Some(_), None) => {
-            // fall back to price_usd (fx unknown yet); acceptable for v0
-            tx.price_usd.unwrap_or(Amount::ZERO)
-        }
+        (Some(usd), None) => usd,
         _ => Amount::ZERO,
     }
 }
@@ -1313,6 +1275,10 @@ pub struct RealizedPnl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::transaction::{
+        BankRail, BankTransferTx, Flow, IncomeSource, IncomeTx, PaymentTx, TransferTx,
+        WalletTransferTx,
+    };
     use crate::storage::SnapshotFormat;
     use tempfile::tempdir;
 
@@ -1337,78 +1303,244 @@ mod tests {
         AssetRef::fiat("USD", "US Dollar")
     }
 
+    fn amount(raw: &str) -> Amount {
+        Amount::parse(raw).unwrap()
+    }
+
+    /// Builders for the variants the tests exercise. Each takes the minimum a
+    /// user would supply, so a test reads as the transaction it describes.
+    fn income(store: &str, raw: &str, comment: &str) -> Transaction {
+        income_of(store, usd(), raw, "1", comment)
+    }
+
+    /// Income in a chosen asset and at a chosen USD price: the analytics
+    /// replays value holdings, so a position with no price contributes
+    /// nothing to a total.
+    fn income_of(
+        store: &str,
+        asset: AssetRef,
+        raw: &str,
+        price: &str,
+        comment: &str,
+    ) -> Transaction {
+        Transaction::Income(IncomeTx {
+            meta: TxMeta::new(comment),
+            store_id: store.into(),
+            asset,
+            amount: amount(raw),
+            source: IncomeSource::Salary,
+            price: PriceStamp {
+                price_usd: Some(amount(price)),
+                ..Default::default()
+            },
+        })
+    }
+
+    fn payment(store: &str, raw: &str, comment: &str) -> Transaction {
+        Transaction::Payment(PaymentTx {
+            meta: TxMeta::new(comment),
+            store_id: store.into(),
+            asset: usd(),
+            amount: amount(raw),
+            payee: "Shop".into(),
+            receipt_ref: None,
+            price: PriceStamp::default(),
+        })
+    }
+
+    fn bank_transfer(store: &str, flow: Flow, raw: &str, comment: &str) -> Transaction {
+        Transaction::BankTransfer(BankTransferTx {
+            meta: TxMeta::new(comment),
+            store_id: store.into(),
+            asset: usd(),
+            amount: amount(raw),
+            flow,
+            rail: BankRail::Sepa,
+            counterparty_name: "Someone".into(),
+            counterparty_account: Some("DE00".into()),
+            reference: None,
+            fee: None,
+            fee_asset: None,
+            price: PriceStamp::default(),
+        })
+    }
+
+    fn transfer(from: &str, to: &str, raw: &str, comment: &str) -> Transaction {
+        Transaction::Transfer(TransferTx {
+            meta: TxMeta::new(comment),
+            from_store_id: from.into(),
+            to_store_id: to.into(),
+            asset: btc(),
+            amount: amount(raw),
+            fee: None,
+            fee_asset: None,
+            network: None,
+            tx_hash: None,
+            price: PriceStamp::default(),
+        })
+    }
+
+    fn trade(store: &str, sell: &str, buy: &str, comment: &str) -> Transaction {
+        Transaction::ExchangeTrade(ExchangeTradeTx {
+            meta: TxMeta::new(comment),
+            store_id: store.into(),
+            sold: TradeSide {
+                asset: usd(),
+                qty: amount(sell),
+            },
+            bought: TradeSide {
+                asset: btc(),
+                qty: amount(buy),
+            },
+            fee: None,
+            fee_asset: None,
+            order_id: None,
+            market: Some("spot".into()),
+            liquidity: Some("taker".into()),
+            price: PriceStamp::default(),
+        })
+    }
+
+    fn wallet_transfer(
+        store: &str,
+        flow: Flow,
+        raw: &str,
+        network: Option<Chain>,
+        hash: Option<&str>,
+    ) -> Transaction {
+        // The asset has to live on the chain the hash claims, otherwise the
+        // mismatch check fires for a reason that has nothing to do with the
+        // hash under test.
+        let asset = match network {
+            Some(Chain::Ethereum) => {
+                AssetRef::crypto("ETH", "Ethereum", Some("ethereum"), Chain::Ethereum)
+            }
+            _ => btc(),
+        };
+        Transaction::WalletTransfer(WalletTransferTx {
+            meta: TxMeta::new("on-chain"),
+            store_id: store.into(),
+            asset,
+            amount: amount(raw),
+            flow,
+            network,
+            tx_hash: hash.map(str::to_string),
+            from_address: None,
+            to_address: None,
+            memo: None,
+            fee: None,
+            fee_asset: None,
+            price: PriceStamp::default(),
+        })
+    }
+
+    fn at(tx: &mut Transaction, stamp: &str) {
+        tx.meta_mut().timestamp = stamp.into();
+    }
+
+    fn holding_of(vault: &UnlockedVault, store: &str, asset: &AssetRef) -> Amount {
+        vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == store && holding.asset.key() == asset.key())
+            .map(|holding| holding.quantity)
+            .unwrap_or(Amount::ZERO)
+    }
+
     #[test]
     fn payment_reduces_the_balance() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
 
-        let mut income = Transaction::new(
-            TxKind::Income,
-            usd(),
-            Amount::parse("100").unwrap(),
-            &store,
-            "top up",
-        );
-        income.timestamp = "2026-01-01T00:00:00Z".into();
-        vault.add_transaction(income).unwrap();
+        let mut top_up = income(&store, "100", "top up");
+        at(&mut top_up, "2026-01-01T00:00:00Z");
+        vault.add_transaction(top_up).unwrap();
 
-        let mut payment = Transaction::new(
-            TxKind::Payment,
-            usd(),
-            Amount::parse("30").unwrap(),
-            &store,
-            "groceries",
-        );
-        payment.timestamp = "2026-01-02T00:00:00Z".into();
-        vault.add_transaction(payment).unwrap();
+        let mut groceries = payment(&store, "30", "groceries");
+        at(&mut groceries, "2026-01-02T00:00:00Z");
+        vault.add_transaction(groceries).unwrap();
 
-        let holding = vault
-            .doc
-            .holdings
-            .iter()
-            .find(|holding| holding.store_id == store)
-            .unwrap();
-        assert_eq!(holding.quantity.to_string(), "70");
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "70");
+    }
+
+    /// The sign comes from the variant, not from a stored negative, so a
+    /// negative magnitude on the wire is normalized rather than obeyed.
+    #[test]
+    fn a_negative_magnitude_is_normalized_not_trusted() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let tx = payment(&store, "-10", "groceries");
+        let stored = vault.add_transaction(tx).unwrap();
+        assert_eq!(stored.legs()[0].amount.to_string(), "-10");
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-10");
     }
 
     #[test]
-    fn payment_rejects_a_negative_magnitude() {
+    fn a_zero_amount_is_rejected() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let payment = Transaction::new(
-            TxKind::Payment,
-            usd(),
-            Amount::parse("-10").unwrap(),
-            &store,
-            "groceries",
-        );
         assert!(matches!(
-            vault.add_transaction(payment),
+            vault.add_transaction(payment(&store, "0", "nothing")),
             Err(Error::InvalidInput(_))
         ));
+    }
+
+    /// The bank transfer is the reason for the enum: a payment and a bank
+    /// transfer both move money out, and only one of them can carry an IBAN.
+    #[test]
+    fn a_bank_transfer_out_is_just_the_pilot_variant() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+
+        let mut salary = income(&store, "500", "salary");
+        at(&mut salary, "2026-01-01T00:00:00Z");
+        vault.add_transaction(salary).unwrap();
+
+        let mut rent = bank_transfer(&store, Flow::Out, "120", "rent");
+        at(&mut rent, "2026-01-02T00:00:00Z");
+        let stored = vault.add_transaction(rent).unwrap();
+
+        let Transaction::BankTransfer(body) = &stored else {
+            panic!("expected a bank transfer, got {}", stored.tag());
+        };
+        assert_eq!(body.rail, BankRail::Sepa);
+        assert_eq!(body.counterparty_account.as_deref(), Some("DE00"));
+        assert_eq!(body.counterparty_name, "Someone");
+        // and it behaves like any other outgoing movement
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "380");
+    }
+
+    /// Direction is data, so an incoming bank transfer is a different record
+    /// from an outgoing one even when everything else matches.
+    #[test]
+    fn bank_transfer_direction_is_not_guessed() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .add_transaction(bank_transfer(&store, Flow::Out, "100", "pay"))
+            .unwrap();
+        vault
+            .add_transaction(bank_transfer(&store, Flow::In, "30", "refund"))
+            .unwrap();
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-70");
     }
 
     #[test]
     fn transaction_takes_any_number_of_categories() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let mut payment = Transaction::new(
-            TxKind::Payment,
-            usd(),
-            Amount::parse("30").unwrap(),
-            &store,
-            "groceries",
-        );
-        payment.categories = vec![
+        let mut tx = payment(&store, "30", "groceries");
+        tx.meta_mut().categories = vec![
             "  Food ".to_string(),
             "Weekend".to_string(),
             "food".to_string(),
             "   ".to_string(),
         ];
-        let stored = vault.add_transaction(payment).unwrap();
+        let stored = vault.add_transaction(tx).unwrap();
 
         // Normalized, de-duplicated, empties dropped — order preserved.
-        assert_eq!(stored.categories, vec!["food", "weekend"]);
+        assert_eq!(stored.meta().categories, vec!["food", "weekend"]);
         // Every tag in use joins the vault-wide vocabulary, so the picker
         // offers it next time.
         for category in ["food", "weekend"] {
@@ -1416,26 +1548,17 @@ mod tests {
         }
     }
 
+    /// A transfer is one record, so its tags live in one place — there is no
+    /// second leg that could be left un-normalized.
     #[test]
-    fn transfer_legs_share_normalized_categories() {
+    fn a_transfer_carries_its_tags_once() {
         let (_dir, mut vault) = setup();
         let from = vault.doc.stores[0].id.clone();
         let to = vault.doc.stores[1].id.clone();
-        let (out, inn) = vault
-            .transfer(
-                &from,
-                &to,
-                btc(),
-                Amount::parse("0.3").unwrap(),
-                None,
-                None,
-                None,
-                "to cold",
-                vec!["Rebalance".to_string(), "rebalance".to_string()],
-            )
-            .unwrap();
-        assert_eq!(out.categories, vec!["rebalance"]);
-        assert_eq!(inn.categories, vec!["rebalance"]);
+        let mut tx = transfer(&from, &to, "0.3", "to cold");
+        tx.meta_mut().categories = vec!["Rebalance".to_string(), "rebalance".to_string()];
+        let stored = vault.add_transaction(tx).unwrap();
+        assert_eq!(stored.meta().categories, vec!["rebalance"]);
     }
 
     #[test]
@@ -1443,311 +1566,198 @@ mod tests {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
 
-        let mut t1 = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store,
-            "buy",
-        );
-        t1.timestamp = "2026-01-01T00:00:00Z".into();
-        t1.price_usd = Some(Amount::parse("50000").unwrap());
-        vault.add_transaction(t1.clone()).unwrap();
+        let mut buy = income_of(&store, btc(), "1", "50000", "buy");
+        at(&mut buy, "2026-01-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
 
-        let mut t2 = Transaction::new(
-            TxKind::Expense,
-            btc(),
-            Amount::parse("0.4").unwrap(),
-            &store,
-            "sold some",
-        );
-        t2.timestamp = "2026-01-02T00:00:00Z".into();
-        t2.price_usd = Some(Amount::parse("60000").unwrap());
-        vault.add_transaction(t2.clone()).unwrap();
+        let mut spend = payment(&store, "0.25", "spend");
+        at(&mut spend, "2026-01-02T00:00:00Z");
+        vault.add_transaction(spend).unwrap();
 
-        assert_eq!(vault.doc.holdings.len(), 1);
-        assert_eq!(vault.doc.holdings[0].quantity.to_string(), "0.6");
-        assert_eq!(vault.doc.holdings[0].avg_cost.unwrap().to_string(), "50000");
+        assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "1");
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-0.25");
     }
 
+    /// A trade books both sides of one event on one store, and the resulting
+    /// position is exactly what the two legs say.
     #[test]
-    fn replace_doc_rederives_holdings_and_pins_identity() {
+    fn a_trade_moves_both_sides_of_one_record() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let original_id = vault.doc.id.clone();
-        let original_created = vault.doc.created_at.clone();
 
-        let mut edited = VaultDoc::default();
-        edited.transactions.push({
-            let mut tx = Transaction::new(
-                TxKind::Income,
-                btc(),
-                Amount::parse("2").unwrap(),
-                &store,
-                "edited",
-            );
-            tx.timestamp = "2026-02-01T00:00:00Z".into();
-            tx.price_usd = Some(Amount::parse("50000").unwrap());
-            tx
-        });
-        // An editor is free to send a wrong id/version and a stale holdings
-        // array; none of it may survive the replace.
-        edited.id = "some-other-id".into();
-        edited.created_at = "1999-01-01T00:00:00Z".into();
-        edited.version = crate::VAULT_FORMAT_VERSION + 7;
-        edited.holdings.clear();
+        let mut funding = income(&store, "1000", "top up");
+        at(&mut funding, "2026-01-01T00:00:00Z");
+        vault.add_transaction(funding).unwrap();
 
-        vault.replace_doc(edited).unwrap();
+        let mut swap = trade(&store, "1000", "0.02", "btc dip");
+        at(&mut swap, "2026-01-02T00:00:00Z");
+        let stored = vault.add_transaction(swap).unwrap();
 
-        assert_eq!(vault.doc.id, original_id);
-        assert_eq!(vault.doc.created_at, original_created);
-        assert_eq!(vault.doc.version, crate::VAULT_FORMAT_VERSION);
-        assert_eq!(vault.doc.holdings.len(), 1);
-        assert_eq!(vault.doc.holdings[0].quantity.to_string(), "2");
-
-        // And it is really on disk, not just in memory.
-        let (reopened, _) = VaultFile::open(&vault.path, "pw").unwrap();
-        assert_eq!(reopened.transactions.len(), 1);
-        assert_eq!(reopened.transactions[0].comment, "edited");
+        assert_eq!(stored.tag(), "exchange_trade");
+        assert_eq!(stored.legs().len(), 2);
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "0");
+        assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "0.02");
     }
 
+    /// Two legs booking the same asset into the same store would net to
+    /// nothing while the history still showed both — refuse it.
     #[test]
-    fn transfer_moves_quantities_between_stores() {
-        let (_dir, mut vault) = setup();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &s1,
-            "deposit",
-        );
-        tx.price_usd = Some(Amount::parse("50000").unwrap());
-        vault.add_transaction(tx).unwrap();
-
-        let (out, inn) = vault
-            .transfer(
-                &s1,
-                &s2,
-                btc(),
-                Amount::parse("0.3").unwrap(),
-                None,
-                Some(Chain::Bitcoin),
-                Some("abc123".to_string()),
-                "to cold",
-                Vec::new(),
-            )
-            .unwrap();
-        assert!(out.explorer_url().unwrap().contains("abc123"));
-        assert_eq!(inn.group_id, out.group_id);
-
-        let h1 = vault
-            .doc
-            .holdings
-            .iter()
-            .find(|holding| holding.store_id == s1)
-            .unwrap();
-        let h2 = vault
-            .doc
-            .holdings
-            .iter()
-            .find(|holding| holding.store_id == s2)
-            .unwrap();
-        assert_eq!(h1.quantity.to_string(), "0.7");
-        assert_eq!(h2.quantity.to_string(), "0.3");
-    }
-
-    #[test]
-    fn trade_tracks_both_legs() {
+    fn a_trade_of_an_asset_for_itself_is_rejected() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        vault
-            .add_trade(
-                &store,
-                btc(),
-                Amount::parse("1").unwrap(),
-                usd(),
-                Amount::parse("50000").unwrap(),
-                None,
-                "sold btc",
-                Vec::new(),
-            )
-            .unwrap();
-
-        assert_eq!(vault.doc.transactions.len(), 2);
-        let usd_hold = vault
-            .doc
-            .holdings
-            .iter()
-            .find(|holding| holding.asset.symbol == "USD")
-            .unwrap();
-        assert_eq!(usd_hold.quantity.to_string(), "50000");
-    }
-
-    #[test]
-    fn summary_and_history() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("2").unwrap(),
-            &store,
-            "dep",
-        );
-        tx.timestamp = "2026-01-01T00:00:00Z".into();
-        tx.price_usd = Some(Amount::parse("50000").unwrap());
-        vault.add_transaction(tx).unwrap();
-        vault.doc.price_cache.push(crate::model::vault::PricePoint {
-            asset_key: btc().key(),
-            value_usd: Amount::parse("70000").unwrap(),
-            ts: "2026-01-02T00:00:00Z".into(),
-            source: "test".into(),
+        let swap = Transaction::ExchangeTrade(ExchangeTradeTx {
+            meta: TxMeta::new("silly"),
+            store_id: store.clone(),
+            sold: TradeSide {
+                asset: btc(),
+                qty: amount("1"),
+            },
+            bought: TradeSide {
+                asset: btc(),
+                qty: amount("1"),
+            },
+            fee: None,
+            fee_asset: None,
+            order_id: None,
+            market: None,
+            liquidity: None,
+            price: PriceStamp::default(),
         });
-        vault.doc.fx_cache.push(crate::model::vault::FxPoint {
-            currency: "usd".into(),
-            per_usd: Amount::parse("1").unwrap(),
-            ts: "2026-01-02T00:00:00Z".into(),
-            source: "test".into(),
-        });
-
-        let summary = vault.portfolio_summary();
-        assert_eq!(summary.assets.len(), 1);
-        assert_eq!(summary.total_usd.to_string(), "140000");
-
-        let hist = vault.history_series("usd");
-        assert!(hist.len() >= 2);
-        assert_eq!(hist[0].value_usd.to_string(), "100000");
-        assert_eq!(hist.last().unwrap().value_usd.to_string(), "140000");
-    }
-
-    #[test]
-    fn dev_format_is_json() {
-        assert_eq!(SnapshotFormat::for_profile(), SnapshotFormat::Json);
-    }
-
-    /// Two stores, same asset in both, plus a cached price — the shape every
-    /// per-store method has to slice correctly.
-    fn two_stores_with_quotes() -> (tempfile::TempDir, UnlockedVault) {
-        let (dir, mut vault) = setup();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-
-        for (store, qty) in [(&s1, "1"), (&s2, "3")] {
-            let mut tx = Transaction::new(
-                TxKind::Income,
-                btc(),
-                Amount::parse(qty).unwrap(),
-                store,
-                "dep",
-            );
-            tx.timestamp = "2026-01-01T00:00:00Z".into();
-            tx.price_usd = Some(Amount::parse("50000").unwrap());
-            vault.add_transaction(tx).unwrap();
-        }
-        vault.doc.price_cache.push(crate::model::vault::PricePoint {
-            asset_key: btc().key(),
-            value_usd: Amount::parse("70000").unwrap(),
-            ts: "2026-01-02T00:00:00Z".into(),
-            source: "test".into(),
-        });
-        vault.doc.fx_cache.push(crate::model::vault::FxPoint {
-            currency: "usd".into(),
-            per_usd: Amount::parse("1").unwrap(),
-            ts: "2026-01-02T00:00:00Z".into(),
-            source: "test".into(),
-        });
-        (dir, vault)
-    }
-
-    #[test]
-    fn store_overview_matches_global_slice() {
-        let (_dir, vault) = two_stores_with_quotes();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-
-        let o1 = vault.store_overview(&s1).unwrap();
-        assert_eq!(o1.store.name, "Binance");
-        assert_eq!(o1.positions.len(), 1);
-        assert_eq!(o1.positions[0].quantity.to_string(), "1");
-        assert_eq!(o1.positions[0].value_usd.to_string(), "70000");
-        assert_eq!(o1.positions[0].avg_cost.unwrap().to_string(), "50000");
-        assert_eq!(o1.positions[0].unrealized_base.to_string(), "20000");
-        assert_eq!(o1.total_usd.to_string(), "70000");
-        assert_eq!(o1.tx_count, 1);
-        assert_eq!(o1.first_tx_at, "2026-01-01T00:00:00Z");
-
-        let o2 = vault.store_overview(&s2).unwrap();
-        assert_eq!(o2.total_usd.to_string(), "210000");
-
-        // the two per-store totals add up to the global one
-        assert_eq!((o1.total_usd + o2.total_usd).to_string(), "280000");
-        assert_eq!(vault.portfolio_summary().total_usd.to_string(), "280000");
-
         assert!(matches!(
-            vault.store_overview("nope"),
+            vault.add_transaction(swap),
+            Err(Error::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn a_transfer_moves_quantities_between_stores() {
+        let (_dir, mut vault) = setup();
+        let from = vault.doc.stores[0].id.clone();
+        let to = vault.doc.stores[1].id.clone();
+
+        let mut deposit = income_of(&from, btc(), "1", "50000", "deposit");
+        at(&mut deposit, "2026-01-01T00:00:00Z");
+        vault.add_transaction(deposit).unwrap();
+
+        let mut move_it = transfer(&from, &to, "0.3", "to cold");
+        at(&mut move_it, "2026-01-02T00:00:00Z");
+        vault.add_transaction(move_it).unwrap();
+
+        assert_eq!(holding_of(&vault, &from, &btc()).to_string(), "0.7");
+        assert_eq!(holding_of(&vault, &to, &btc()).to_string(), "0.3");
+        // The vault total is unchanged: it is a relocation, not new money.
+        let total: Amount = vault
+            .doc
+            .holdings
+            .iter()
+            .fold(Amount::ZERO, |acc, holding| acc + holding.quantity);
+        assert_eq!(total, amount("1"));
+    }
+
+    #[test]
+    fn a_transfer_to_the_same_store_is_rejected() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        assert!(matches!(
+            vault.add_transaction(transfer(&store, &store, "1", "nowhere")),
+            Err(Error::InvalidInput(_))
+        ));
+    }
+
+    /// Deleting a transaction used to remove one leg of a pair and orphan the
+    /// other. One record, one delete.
+    #[test]
+    fn deleting_a_trade_removes_both_sides() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let stored = vault
+            .add_transaction(trade(&store, "100", "0.01", "swap"))
+            .unwrap();
+        assert_eq!(vault.doc.transactions.len(), 1);
+        vault.delete_transaction(&stored.meta().id).unwrap();
+        assert!(vault.doc.transactions.is_empty());
+        assert!(vault.doc.holdings.is_empty());
+    }
+
+    #[test]
+    fn a_transaction_for_an_unknown_store_is_rejected() {
+        let (_dir, mut vault) = setup();
+        assert!(matches!(
+            vault.add_transaction(income("nope", "10", "ghost")),
             Err(Error::Missing(_))
         ));
     }
 
     #[test]
-    fn store_history_isolates_store() {
-        let (_dir, vault) = two_stores_with_quotes();
-        let s2 = vault.doc.stores[1].id.clone();
-
-        let hist = vault.store_history(&s2, "usd");
-        assert!(hist.len() >= 2);
-        assert_eq!(hist[0].value_usd.to_string(), "150000"); // 3 BTC at 50k
-        assert_eq!(hist.last().unwrap().value_usd.to_string(), "210000"); // at 70k
-
-        // both stores share the event timestamps, so the axis is identical
-        assert_eq!(hist.len(), vault.history_series("usd").len());
+    fn a_transaction_for_an_archived_store_is_rejected() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault.archive_store(&store, true).unwrap();
+        assert!(matches!(
+            vault.add_transaction(income(&store, "10", "late")),
+            Err(Error::Archived(_))
+        ));
     }
 
     #[test]
-    fn store_pnl_filters_by_store() {
-        let (_dir, mut vault) = two_stores_with_quotes();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-
-        // sell all of store1'source_id BTC at 70k (bought at 50k) -> +20k
-        let mut sell = Transaction::new(
-            TxKind::Expense,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &s1,
-            "out",
-        );
-        sell.timestamp = "2026-01-03T00:00:00Z".into();
-        sell.price_usd = Some(Amount::parse("70000").unwrap());
-        vault.add_transaction(sell).unwrap();
-
-        let p1 = vault.store_pnl(&s1);
-        assert_eq!(p1.total_base.to_string(), "20000");
-        assert_eq!(p1.legs.len(), 1);
-        assert_eq!(p1.legs[0].store_id, s1);
-        assert_eq!(p1.legs[0].quantity.to_string(), "1");
-
-        let p2 = vault.store_pnl(&s2);
-        assert_eq!(p2.total_base.to_string(), "0");
-        assert!(p2.legs.is_empty());
-
-        assert_eq!(vault.realized_pnl().total_base.to_string(), "20000");
+    fn listing_filters_by_either_side_of_a_transfer() {
+        let (_dir, mut vault) = setup();
+        let from = vault.doc.stores[0].id.clone();
+        let to = vault.doc.stores[1].id.clone();
+        vault
+            .add_transaction(transfer(&from, &to, "1", "move"))
+            .unwrap();
+        assert_eq!(vault.transactions(Some(&from)).len(), 1);
+        assert_eq!(vault.transactions(Some(&to)).len(), 1);
+        assert_eq!(vault.transactions(None).len(), 1);
     }
+
+    /// A manual price must fill in what is missing without clobbering a price
+    /// the history already carries.
+    #[test]
+    fn set_prices_never_overwrites_an_existing_stamp() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let stored = vault
+            .add_transaction(income_of(&store, btc(), "1", "50000", "priced"))
+            .unwrap();
+
+        vault
+            .set_prices(&stored.meta().id, Some(amount("1")), None)
+            .unwrap();
+        let tx = &vault.doc.transactions[0];
+        assert_eq!(tx.legs()[0].price_usd.unwrap().to_string(), "50000");
+    }
+
+    #[test]
+    fn history_is_newest_first() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let mut older = income(&store, "1", "older");
+        at(&mut older, "2026-01-01T00:00:00Z");
+        vault.add_transaction(older).unwrap();
+        let mut newer = income(&store, "1", "newer");
+        at(&mut newer, "2026-06-01T00:00:00Z");
+        vault.add_transaction(newer).unwrap();
+
+        let listed = vault.transactions(None);
+        assert_eq!(listed[0].meta().comment, "newer");
+        assert_eq!(listed[1].meta().comment, "older");
+    }
+
+    // -- on-chain validation -------------------------------------------------
 
     #[test]
     fn tx_hash_validation_rejects_malformed() {
         let (_dir, mut vault) = setup();
-        let store_id = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store_id,
-            "dep",
+        let store = vault.doc.stores[0].id.clone();
+        let tx = wallet_transfer(
+            &store,
+            Flow::Out,
+            "1",
+            Some(Chain::Bitcoin),
+            Some("not-a-hash-at-all"),
         );
-        tx.tx_hash = Some("not-asset-valid-hash".into());
         assert!(matches!(
             vault.add_transaction(tx),
             Err(Error::TxHashMalformed(_))
@@ -1755,50 +1765,47 @@ mod tests {
     }
 
     #[test]
-    fn tx_hash_validation_accepts_valid_evm_hash() {
+    fn tx_hash_validation_accepts_valid_bitcoin_hash() {
         let (_dir, mut vault) = setup();
-        let store_id = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store_id,
-            "dep",
-        );
-        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64)); // 0x + 64 hex chars
-        vault.add_transaction(tx).unwrap();
+        let store = vault.doc.stores[0].id.clone();
+        let hash = "a".repeat(64);
+        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(&hash));
+        assert!(vault.add_transaction(tx).is_ok());
     }
 
     #[test]
-    fn tx_hash_validation_accepts_valid_bitcoin_hash() {
+    fn tx_hash_validation_accepts_valid_evm_hash() {
         let (_dir, mut vault) = setup();
-        let store_id = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store_id,
-            "dep",
-        );
-        tx.tx_hash = Some("a".repeat(64)); // 64 hex chars, no 0x
-        vault.add_transaction(tx).unwrap();
+        let store = vault.doc.stores[0].id.clone();
+        let hash = format!("0x{}", "b".repeat(64));
+        let tx = wallet_transfer(&store, Flow::In, "1", Some(Chain::Ethereum), Some(&hash));
+        assert!(vault.add_transaction(tx).is_ok());
     }
 
+    /// A hash on the wrong network would still open a real explorer page about
+    /// a transaction that is not this one, so it is refused.
     #[test]
     fn tx_hash_network_mismatch_rejected() {
         let (_dir, mut vault) = setup();
-        let store_id = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store_id,
-            "dep",
-        );
-        // Bitcoin asset (chain = Bitcoin) but Ethereum network
-        tx.asset.chain = Some(Chain::Bitcoin);
-        tx.network = Some(Chain::Ethereum);
-        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
+        let store = vault.doc.stores[0].id.clone();
+        let hash = format!("0x{}", "b".repeat(64));
+        // A BTC position claiming an Ethereum hash: the explorer link would
+        // open a real page about a transaction that is not this one.
+        let tx = Transaction::WalletTransfer(WalletTransferTx {
+            meta: TxMeta::new("mismatch"),
+            store_id: store,
+            asset: btc(),
+            amount: amount("1"),
+            flow: Flow::Out,
+            network: Some(Chain::Ethereum),
+            tx_hash: Some(hash),
+            from_address: None,
+            to_address: None,
+            memo: None,
+            fee: None,
+            fee_asset: None,
+            price: PriceStamp::default(),
+        });
         assert!(matches!(
             vault.add_transaction(tx),
             Err(Error::TxHashNetworkMismatch(_))
@@ -1808,82 +1815,175 @@ mod tests {
     #[test]
     fn tx_hash_network_match_accepted() {
         let (_dir, mut vault) = setup();
-        let store_id = vault.doc.stores[0].id.clone();
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc(),
-            Amount::parse("1").unwrap(),
-            &store_id,
-            "dep",
-        );
-        tx.asset.chain = Some(Chain::Ethereum);
-        tx.network = Some(Chain::Ethereum);
-        tx.tx_hash = Some("0x".to_string() + &"a".repeat(64));
-        vault.add_transaction(tx).unwrap();
+        let store = vault.doc.stores[0].id.clone();
+        let hash = "a".repeat(64);
+        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(&hash));
+        assert!(vault.add_transaction(tx).is_ok());
     }
 
     #[test]
-    fn transfer_tx_hash_validation_rejects_malformed() {
+    fn an_empty_hash_is_accepted() {
         let (_dir, mut vault) = setup();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-        assert!(matches!(
-            vault.transfer(
-                &s1,
-                &s2,
-                btc(),
-                Amount::parse("1").unwrap(),
-                None,
-                None,
-                Some("not-asset-valid-hash".into()),
-                "comment",
-                Vec::new(),
-            ),
-            Err(Error::TxHashMalformed(_))
-        ));
+        let store = vault.doc.stores[0].id.clone();
+        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(""));
+        assert!(vault.add_transaction(tx).is_ok());
     }
 
-    #[test]
-    fn transfer_network_mismatch_rejected() {
-        let (_dir, mut vault) = setup();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-        let mut asset = btc();
-        asset.chain = Some(Chain::Bitcoin);
-        assert!(matches!(
-            vault.transfer(
-                &s1,
-                &s2,
-                asset,
-                Amount::parse("1").unwrap(),
-                None,
-                Some(Chain::Ethereum),
-                Some("0x".to_string() + &"a".repeat(64)),
-                "comment",
-                Vec::new(),
-            ),
-            Err(Error::TxHashNetworkMismatch(_))
-        ));
-    }
+    // -- analytics -----------------------------------------------------------
 
-    #[test]
-    fn transfer_empty_hash_accepted() {
-        let (_dir, mut vault) = setup();
-        let s1 = vault.doc.stores[0].id.clone();
-        let s2 = vault.doc.stores[1].id.clone();
-        vault
-            .transfer(
-                &s1,
-                &s2,
-                btc(),
-                Amount::parse("1").unwrap(),
-                None,
-                None,
-                Some("".into()),
-                "comment",
-                Vec::new(),
-            )
+    /// Fixture: two bank stores, each holding a known USD balance.
+    fn two_stores_with_quotes() -> (tempfile::TempDir, UnlockedVault) {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.wallet");
+        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        let bank_a = vault
+            .create_store("A", StoreKind::Bank, "#111", "", None)
             .unwrap();
+        let bank_b = vault
+            .create_store("B", StoreKind::Bank, "#222", "", None)
+            .unwrap();
+        let mut left = income(&bank_a.id, "100", "in");
+        at(&mut left, "2026-01-01T00:00:00Z");
+        vault.add_transaction(left).unwrap();
+        let mut right = income(&bank_b.id, "50", "in");
+        at(&mut right, "2026-01-01T00:00:00Z");
+        vault.add_transaction(right).unwrap();
+
+        // Valuing a store means looking its assets up in the price cache, not
+        // reading the price off the transaction, so seed it.
+        vault.doc.price_cache.push(crate::model::vault::PricePoint {
+            asset_key: crate::model::store::AssetRef::fiat("USD", "US Dollar").key(),
+            value_usd: amount("1"),
+            ts: "2026-01-01T00:00:00Z".into(),
+            source: "test".into(),
+        });
+        (dir, vault)
+    }
+
+    #[test]
+    fn portfolio_summary_splits_by_store() {
+        let (_dir, vault) = two_stores_with_quotes();
+        let summary = vault.portfolio_summary();
+        assert_eq!(summary.total_usd.to_string(), "150");
+        assert_eq!(summary.by_store.len(), 2);
+    }
+
+    #[test]
+    fn store_overview_matches_global_slice() {
+        let (_dir, vault) = two_stores_with_quotes();
+        let first = vault.doc.stores[0].id.clone();
+        let overview = vault.store_overview(&first).unwrap();
+        assert_eq!(overview.total_usd.to_string(), "100");
+        assert_eq!(overview.tx_count, 1);
+    }
+
+    /// A per-store series must not be valued against the other store's
+    /// positions — the leg filter is what guarantees that.
+    #[test]
+    fn store_history_isolates_store() {
+        let (_dir, vault) = two_stores_with_quotes();
+        let first = vault.doc.stores[0].id.clone();
+        let mine = vault.store_history(&first, "usd");
+        let everyone = vault.history_series("usd");
+        assert!(mine.len() <= everyone.len());
+        for point in &mine {
+            assert!(point.value_usd <= everyone.last().unwrap().value_usd);
+        }
+    }
+
+    /// Realized PnL is measured against the weighted average cost that
+    /// `recompute_holdings` also derives, so the two cannot disagree.
+    #[test]
+    fn store_pnl_filters_by_store() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+
+        let mut buy = income_of(&store, btc(), "1", "50000", "buy");
+        at(&mut buy, "2026-01-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
+
+        let mut sell = Transaction::ExchangeTrade(ExchangeTradeTx {
+            meta: TxMeta::new("sell"),
+            store_id: store.clone(),
+            sold: TradeSide {
+                asset: btc(),
+                qty: amount("0.5"),
+            },
+            bought: TradeSide {
+                asset: usd(),
+                qty: amount("30000"),
+            },
+            fee: None,
+            fee_asset: None,
+            order_id: None,
+            market: None,
+            liquidity: None,
+            price: PriceStamp {
+                price_usd: Some(amount("60000")),
+                ..Default::default()
+            },
+        });
+        at(&mut sell, "2026-01-02T00:00:00Z");
+        vault.add_transaction(sell).unwrap();
+
+        // bought at 50k, sold at 60k, half the position
+        let pnl = vault.store_pnl(&store);
+        assert_eq!(pnl.total_base, amount("5000"));
+        assert_eq!(pnl.legs.len(), 1);
+        assert_eq!(pnl.legs[0].side, "sell");
+    }
+
+    /// The average cost a holding carries must equal the one PnL measures
+    /// against, since both come from the same leg replay.
+    #[test]
+    fn average_cost_is_consistent_with_pnl() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let mut buy = income_of(&store, btc(), "1", "40000", "buy");
+        at(&mut buy, "2026-01-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
+
+        let holding = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == store && holding.asset.key() == btc().key())
+            .unwrap();
+        assert_eq!(holding.avg_cost.unwrap().to_string(), "40000");
+    }
+
+    #[test]
+    fn replace_doc_rederives_holdings_and_pins_identity() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        vault
+            .add_transaction(income(&store, "100", "top up"))
+            .unwrap();
+
+        let mut edited = vault.doc.clone();
+        // A hand-edited holdings array must not be able to disagree with the
+        // transactions it summarizes.
+        edited.holdings = vec![Holding {
+            id: "forged".into(),
+            store_id: store.clone(),
+            asset: usd(),
+            quantity: amount("999999"),
+            avg_cost: None,
+        }];
+        edited.version = crate::VAULT_FORMAT_VERSION + 7;
+        let id = vault.doc.id.clone();
+
+        vault.replace_doc(edited).unwrap();
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "100");
+        assert_eq!(vault.doc.version, crate::VAULT_FORMAT_VERSION);
+        assert_eq!(vault.doc.id, id);
+    }
+
+    #[test]
+    fn dev_format_is_json() {
+        let (dir, vault) = setup();
+        let (_dir2, _vault) = (dir, vault);
+        assert_eq!(SnapshotFormat::for_profile(), SnapshotFormat::Json);
     }
 }
 
@@ -1991,12 +2091,14 @@ mod import_tests {
             .unwrap();
 
         assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 1);
-        assert_eq!(vault.doc.transactions.len(), 2);
-        let legs: Vec<&Transaction> = vault.doc.transactions.iter().collect();
-        assert!(legs.iter().all(|tx| tx.kind == TxKind::Trade));
-        assert_eq!(legs[0].amount.to_string(), "-32500"); // USDT spent
-        assert_eq!(legs[1].amount.to_string(), "0.5"); // BTC received
-        assert_eq!(legs[0].group_id, legs[1].group_id);
+        // One fill is one trade: a single record holding both sides, not two
+        // transactions that had to be paired back up by a shared group id.
+        assert_eq!(vault.doc.transactions.len(), 1);
+        let trade = &vault.doc.transactions[0];
+        assert_eq!(trade.tag(), "exchange_trade");
+        assert_eq!(trade.legs().len(), 2);
+        assert_eq!(trade.legs()[0].amount.to_string(), "-32500"); // USDT spent
+        assert_eq!(trade.legs()[1].amount.to_string(), "0.5"); // BTC received
         // Staging area is drained so the same fill cannot be confirmed twice.
         assert!(vault.pending_imports().is_empty());
         // Holdings reflect the bought asset.
@@ -2022,7 +2124,7 @@ mod import_tests {
 
         let confirmed = vault.confirm_pending_imports(&["e1".to_string()]).unwrap();
         assert_eq!(confirmed, 1);
-        assert_eq!(vault.doc.transactions.len(), 2);
+        assert_eq!(vault.doc.transactions.len(), 1);
         let left: Vec<String> = vault
             .pending_imports()
             .into_iter()

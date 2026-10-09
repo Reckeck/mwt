@@ -223,7 +223,7 @@ pub fn probe(path: &Path) -> Result<SnapshotFormat> {
 mod tests {
     use super::*;
     use crate::Amount;
-    use crate::model::transaction::{Transaction, TxKind};
+    use crate::model::transaction::{IncomeTx, PriceStamp, Transaction, TxMeta};
     use crate::model::vault::{ExchangeKeys, Exchanges};
     use serde_json::Value as Json;
 
@@ -240,14 +240,17 @@ mod tests {
             Some("bitcoin"),
             crate::model::chain::Chain::Bitcoin,
         );
-        let mut tx = Transaction::new(
-            TxKind::Income,
-            btc.clone(),
-            Amount::parse("0.5").unwrap(),
-            &store.id,
-            "first buy",
-        );
-        tx.price_usd = Some(Amount::parse("65000").unwrap());
+        let tx = Transaction::Income(IncomeTx {
+            meta: TxMeta::new("first buy"),
+            store_id: store.id.clone(),
+            asset: btc.clone(),
+            amount: Amount::parse("0.5").unwrap(),
+            source: crate::model::transaction::IncomeSource::Salary,
+            price: PriceStamp {
+                price_usd: Some(Amount::parse("65000").unwrap()),
+                ..Default::default()
+            },
+        });
         doc.stores.push(store);
         doc.holdings.push(crate::model::store::Holding {
             id: uuid::Uuid::new_v4().to_string(),
@@ -272,9 +275,13 @@ mod tests {
         assert_eq!(fmt, SnapshotFormat::Json);
         assert_eq!(out.stores.len(), 1);
         assert_eq!(out.stores[0].name, "Binance");
-        assert_eq!(out.transactions[0].comment, "first buy");
-        assert_eq!(out.transactions[0].amount.to_string(), "0.5");
-        assert_eq!(out.transactions[0].price_usd.unwrap().to_string(), "65000");
+        let tx = &out.transactions[0];
+        assert_eq!(tx.tag(), "income");
+        assert_eq!(tx.meta().comment, "first buy");
+        // The whole variant survives the round trip, not just its amount.
+        assert_eq!(tx.legs()[0].amount.to_string(), "0.5");
+        assert_eq!(tx.legs()[0].price_usd.unwrap().to_string(), "65000");
+        assert_eq!(out.transactions, doc.transactions);
     }
 
     #[test]
@@ -288,7 +295,7 @@ mod tests {
         let (out, fmt) = VaultFile::open(&path, "pw").unwrap();
         assert_eq!(fmt, SnapshotFormat::Bin);
         assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-        assert_eq!(out.transactions[0].kind, TxKind::Income);
+        assert_eq!(out.transactions[0].tag(), "income");
         assert_eq!(out.id, doc.id);
     }
 
@@ -357,8 +364,11 @@ mod tests {
             assert_eq!(out.stores.len(), 1);
             assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
             assert_eq!(out.transactions.len(), 1);
-            assert_eq!(out.transactions[0].comment, "first buy");
-            assert_eq!(out.transactions[0].price_usd.unwrap().to_string(), "65000");
+            assert_eq!(out.transactions[0].meta().comment, "first buy");
+            assert_eq!(
+                out.transactions[0].legs()[0].price_usd.unwrap().to_string(),
+                "65000"
+            );
         }
     }
 
@@ -405,7 +415,7 @@ mod tests {
         }
     }
 
-    /// A payload with version != 1 must be rejected (Unsupported).
+    /// A payload from any other version must be rejected (Unsupported).
     #[test]
     fn future_payload_version_is_rejected() {
         let doc = VaultDoc {
