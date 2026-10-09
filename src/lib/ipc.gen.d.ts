@@ -157,15 +157,6 @@ risk: Amount,
 risk_pct: Amount, };
 
 /**
- * Seeded GBM parameters of a synthetic candle stream.
- */
-type CandleParams = { seed: bigint, 
-/**
- * Number of candles to generate. Kept as `n` on the wire for compatibility.
- */
-n: number, start_price: Amount, annual_vol: Amount, candles_per_year: Amount, };
-
-/**
  * Single OHLCV candle point for charting.
  */
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
@@ -220,12 +211,6 @@ notice: string | null, };
 type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
 /**
- * A price feed for simulation: real historical candles (Binance/CoinGecko)
- * or synthetic (GBM) when offline.
- */
-type DataSource = "real" | "synthetic";
-
-/**
  * Output of the dev dump vault command (DEV only).
  */
 type DevDumpVaultOutput = { json: string, };
@@ -241,8 +226,6 @@ exec_ids: Array<string>, };
 
 type DiscardPendingImportsOutput = { discarded: number, };
 
-type EquityPoint = { ts: string, equity: Amount, value: Amount, };
-
 /**
  * Whether a key is stored. The secret is never part of this response.
  */
@@ -257,32 +240,9 @@ hint: string | null, };
  */
 type FxPoint = { currency: string, per_usd: Amount, ts: string, source: string, };
 
-type GbmPathPoint = { ts: string, price: string, };
-
-type GbmPathsInput = { run_id: string, 
-/**
- * number of fan lines (clamped server-side).
- */
-paths: number, 
-/**
- * steps into the future (clamped server-side).
- */
-horizon: number, };
-
-type GbmPathsOutput = { paths: Array<Array<GbmPathPoint>>, };
-
 type GetCandlesInput = { symbol: string, interval_min: number, limit: number, };
 
 type GetCandlesOutput = { candles: Array<CandlePoint>, };
-
-type GetRunCandlesInput = { run_id: string, };
-
-/**
- * Candles of a finished run: synthetic runs are regenerated from
- * `candle_params` (deterministic seed), real runs are re-fetched from
- * Binance for the run's time range.
- */
-type GetRunCandlesOutput = { candles: Array<CandlePoint>, };
 
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
@@ -429,23 +389,6 @@ type RecentVault = { path: string, last_opened: string, exists: boolean, };
 type RefreshResult = { prices: number, fx: number, updated_at: string, };
 
 /**
- * Trading signal definitions keyed by strategy.
- */
-type Rule = { indicator: string, field: string, op: string, value: Amount, };
-
-type RunStrategyInput = { strategy_id: string, 
-/**
- * Number of candles to replay (e.g. 500).
- */
-candles: number, 
-/**
- * candle granularity in minutes (e.g. 60 = 1h candles).
- */
-granularity_min: number, };
-
-type SaveStrategyInput = { strategy: Strategy, };
-
-/**
  * Input to select or pick a vault file.
  */
 type SelectVaultInput = { path: string, };
@@ -474,49 +417,6 @@ display_decimals: number, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refre
  * Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
  */
 bybit_import_interval_sec: number, };
-
-/**
- * Result of running a strategy over a price stream.
- */
-type SimRun = { id: string, strategy_id: string, started_at: string, finished_at: string, initial_capital: Amount, final_equity: Amount, total_return_pct: Amount, max_drawdown_pct: Amount, win_rate_pct: Amount, total_trades: number, equity_curve: Array<EquityPoint>, trades: Array<SimTrade>, synthetic: boolean, 
-/**
- * Rule/SL/TP signals that fired during the replay, with the reason.
- * Added in payload v3; empty for runs created before the migration.
- */
-signals: Array<SimSignal>, 
-/**
- * GBM parameters of the synthetic candle stream — the replay key:
- * the same seed reproduces the same candles (and therefore markers).
- * `None` for real Binance data.
- */
-candle_params: CandleParams | null, 
-/**
- * Granularity of the replayed candles in minutes (chart range fetch).
- */
-granularity_min: number, };
-
-/**
- * A fired trading signal: what happened, when, and why in rule terms.
- */
-type SimSignal = { ts: string, 
-/**
- * `"entry"` or `"exit"`.
- */
-side: string, 
-/**
- * `"rules"` | `"stop_loss"` | `"take_profit"` | `"liquidation"`.
- */
-reason: string, 
-/**
- * Human-readable matched rule(s), e.g. `sma20(25.31) gt 25.00`.
- * Backend-generated data, shown as-is.
- */
-detail: string, price: Amount, };
-
-/**
- * One executed paper trade inside a run.
- */
-type SimTrade = { id: string, ts: string, side: string, price: Amount, qty: Amount, value: Amount, fee: Amount, };
 
 /**
  * A "store"/"platform" (хранилище) — a portfolio container.
@@ -589,15 +489,6 @@ unrealized_base: Amount, };
  * store id so the sidebar can link straight to the wallet page.
  */
 type StoreValue = { store_id: string, name: string, value_usd: Amount, value_base: Amount, pct: number, };
-
-/**
- * A runnable trading strategy.
- */
-type Strategy = { id: string, name: string, symbol: string, chain: Chain | null, source: DataSource, initial_capital: Amount, asset: AssetRef, 
-/**
- * Rules evaluated on indicator streams to decide entries/exits.
- */
-entry_rules: Array<Rule>, exit_rules: Array<Rule>, stop_loss_pct: Amount | null, take_profit_pct: Amount | null, position_size_pct: Amount, created_at: string, };
 
 /**
  * Currencies the pickers may offer.
@@ -769,7 +660,7 @@ type VaultDoc = { version: number, id: string, created_at: string, settings: Set
 /**
  * Staged Bybit fills awaiting user confirmation (D2.4).
  */
-pending_imports: Array<PendingImport>, strategies: Array<Strategy>, runs: Array<SimRun>, };
+pending_imports: Array<PendingImport>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

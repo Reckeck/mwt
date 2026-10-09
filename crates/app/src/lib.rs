@@ -5,7 +5,7 @@ mod commands;
 
 use commands::{
     AppState, app_settings, auth, calc, categories, err_to_string, exchange, portfolio, pricing,
-    settings, sim, stores, transactions, vault_recents,
+    settings, stores, transactions, vault_recents,
 };
 use tauri::{
     Emitter, Manager,
@@ -82,14 +82,6 @@ pub fn run() {
             settings::dev_apply_vault_json,
             settings::dev_open_vault_json_in_editor,
             settings::dev_reload_vault_json_from_editor,
-            // sim (strategy lab)
-            sim::save_strategy,
-            sim::list_strategies,
-            sim::delete_strategy,
-            sim::list_runs,
-            sim::run_strategy,
-            sim::get_run_candles,
-            sim::get_gbm_paths,
             // vault recents
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,

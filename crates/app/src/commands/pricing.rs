@@ -138,7 +138,7 @@ pub async fn set_tx_prices(
 #[tauri::command]
 pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, String> {
     use reqwest::Client;
-    use trade_core::sim::engine::fetch_candles;
+    use trade_core::market::fetch_candles;
 
     let symbol = input.symbol.trim().to_uppercase();
     if symbol.is_empty() {

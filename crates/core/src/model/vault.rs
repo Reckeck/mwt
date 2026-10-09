@@ -4,7 +4,6 @@ use crate::Amount;
 use crate::model::chain::ChainInfo;
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
-use crate::sim::{SimRun, Strategy};
 use schemars::JsonSchema;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -86,13 +85,6 @@ pub struct FxPoint {
     pub per_usd: Amount,
     pub ts: String,
     pub source: String,
-}
-
-/// Simulation state kept inside the vault (paper accounts & runs).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
-pub struct SimState {
-    pub strategies: Vec<Strategy>,
-    pub runs: Vec<SimRun>,
 }
 
 /// Read-only exchange API credentials.
@@ -253,8 +245,6 @@ pub struct VaultDoc {
     pub categories: Vec<String>,
     pub price_cache: Vec<PricePoint>,
     pub fx_cache: Vec<FxPoint>,
-    #[ts(flatten)]
-    pub sim: SimState,
     /// Exchange credentials, added in payload v1.
     #[serde(default)]
     #[ts(skip)]
@@ -295,7 +285,6 @@ impl Default for VaultDoc {
             ],
             price_cache: Vec::new(),
             fx_cache: Vec::new(),
-            sim: SimState::default(),
             exchanges: Exchanges::default(),
             pending_imports: Vec::new(),
         }
@@ -354,17 +343,21 @@ mod json_schema_tests {
         let defs = schema["$defs"].as_object().expect("$defs");
         let root = schema["properties"].as_object().expect("root properties");
 
-        // Field names come from serde, so `sim` stays nested. This is exactly
-        // where the generated TypeScript bindings flatten it and therefore
-        // disagree with the bytes on disk.
+        // The Strategy Lab is gone, so the document must no longer carry a
+        // `sim` section — not at the root, and not as a nested `SimState` def.
+        // An old vault that still has it is silently accepted: serde ignores
+        // unknown fields, which is what lets the format version stay pinned.
         assert!(
-            root.contains_key("sim"),
-            "root must keep serde's nested `sim`"
+            !root.contains_key("sim"),
+            "`sim` was removed with the Strategy Lab and must not come back"
         );
-        assert!(defs.contains_key("SimState"));
         assert!(
             !root.contains_key("strategies"),
-            "`strategies` lives under `sim` on disk, not at the root"
+            "`strategies` lived under `sim` and must be gone from the root too"
+        );
+        assert!(
+            !defs.contains_key("SimState"),
+            "SimState must no longer appear in the schema"
         );
 
         // Every field serde actually writes must be describable.

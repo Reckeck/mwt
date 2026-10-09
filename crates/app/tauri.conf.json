@@ -29,7 +29,7 @@
     "targets": ["deb", "rpm", "appimage"],
     "category": "Finance",
     "shortDescription": "Encrypted finance & crypto portfolio manager",
-    "longDescription": "TradeApp — offline-first encrypted transactions, portfolio, prices and strategy simulation.",
+    "longDescription": "TradeApp — offline-first encrypted transactions, portfolio, prices and charts.",
     "icon": ["icons/icon.png"]
   }
 }

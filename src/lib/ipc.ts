@@ -709,8 +709,6 @@ function mockVaultDoc(): VaultDoc {
     price_cache: [],
     fx_cache: [],
     pending_imports: [],
-    strategies: [],
-    runs: [],
   }
 }
 

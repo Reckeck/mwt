@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "TradeApp core: domain model, encrypted vault, pricing, strategy simulator (no Tauri deps)"
+description = "TradeApp core: domain model, encrypted vault, pricing, market data (no Tauri deps)"
 
 [lints]
 workspace = true
