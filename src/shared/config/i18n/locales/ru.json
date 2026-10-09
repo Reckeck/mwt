@@ -359,7 +359,7 @@
   "import.notice.rate_limited": "Bybit временно ограничил запросы — попробуйте позже",
   "import.notice.forbidden_region": "Bybit недоступен из вашего региона",
   "import.pendingEvent": "Новые сделки Bybit ждут подтверждения",
-  "settings.bybit.importInterval": "Фоновая проверка Bybit, с",
+  "settings.bybit.importInterval": "Фоновый импорт Bybit",
   "settings.bybit.importIntervalHint": "Как часто проверять новые сделки. 0 — отключено. Новые сделки попадают в список ожидающих на подтверждение.",
   "settings.bybit.importOff": "Отключено",
   "stores.created": "Хранилище создано",
@@ -429,5 +429,10 @@
   "wallet.ownTotal": "Сам кошелёк",
   "wallet.transactions": "Транзакции",
   "wallet.lastTx": "последняя",
-  "wallet.subWallets": "Под-кошельки"
+  "wallet.subWallets": "Под-кошельки",
+  "duration.seconds": "{n} сек",
+  "duration.minutes": "{n} мин",
+  "duration.hours": "{n} ч",
+  "actions.confirmDelete": "Удалить?",
+  "store.fxSameCurrency": "Базовая валюта — USD, конвертировать нечего"
 }
