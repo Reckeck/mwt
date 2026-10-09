@@ -1,0 +1,125 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+
+import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { Input } from '@/shared/ui/input'
+import { Select } from '@/shared/ui/select'
+import { call, parseError } from '@/shared/api/ipc'
+import { categoryLabel } from '@/shared/lib/categories'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
+
+const { t } = useI18n()
+const queryClient = useQueryClient()
+
+const rules = useQuery({
+  queryKey: ['categorization-rules'],
+  queryFn: () => call<CategorizationRule[]>('list_categorization_rules'),
+})
+const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
+const options = computed(() => (categories.data.value ?? []).filter((category) => !category.archived))
+
+const refresh = () => void queryClient.invalidateQueries({ queryKey: ['categorization-rules'] })
+const fail = (err: unknown) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+
+const update = useMutation({
+  mutationFn: (input: UpdateRuleInput) => call<CategorizationRule>('update_categorization_rule', { input }),
+  onSuccess: refresh,
+  onError: fail,
+})
+const remove = useMutation({
+  mutationFn: (id: string) => call('delete_categorization_rule', { id }),
+  onSuccess: refresh,
+  onError: fail,
+})
+const reorder = useMutation({
+  mutationFn: (ids: string[]) => call('reorder_categorization_rules', { ids }),
+  onSuccess: refresh,
+  onError: fail,
+})
+
+/** Swap a rule with its neighbour: rules run top to bottom. */
+function move(index: number, step: number) {
+  const ids = (rules.data.value ?? []).map((rule) => rule.id)
+  const target = index + step
+  if (target < 0 || target >= ids.length) return
+  ;[ids[index], ids[target]] = [ids[target], ids[index]]
+  reorder.mutate(ids)
+}
+
+const pattern = ref('')
+const category = ref('')
+const create = useMutation({
+  mutationFn: () =>
+    call<CategorizationRule>('create_categorization_rule', { input: { pattern: pattern.value.trim(), category: category.value } }),
+  onSuccess: () => {
+    toast.success(t('rules.created'))
+    pattern.value = ''
+    refresh()
+  },
+  onError: fail,
+})
+</script>
+
+<template>
+  <Card>
+    <template #header>
+      <p class="font-medium">{{ t('rules.title') }}</p>
+    </template>
+
+    <div class="grid gap-4">
+      <p class="text-xs text-muted-foreground">{{ t('rules.hint') }}</p>
+
+      <form class="flex flex-wrap items-center gap-2" @submit.prevent="create.mutate()">
+        <Input v-model="pattern" class="h-9 w-56" :placeholder="t('rules.pattern')" />
+        <Select v-model="category" class="h-9 w-48" :aria-label="t('rules.category')">
+          <option value="" disabled>{{ t('rules.category') }}</option>
+          <option v-for="entry in options" :key="entry.key" :value="entry.key">{{ categoryLabel(entry, t) }}</option>
+        </Select>
+        <Button type="submit" size="sm" :disabled="!pattern.trim() || !category || create.isPending.value">
+          <Plus class="size-4" />
+          {{ t('rules.add') }}
+        </Button>
+      </form>
+
+      <p v-if="!rules.data.value?.length" class="text-sm text-muted-foreground">{{ t('rules.empty') }}</p>
+      <div v-for="(rule, index) in rules.data.value ?? []" :key="rule.id" class="flex items-center gap-2" :class="!rule.active && 'opacity-60'">
+        <input
+          type="checkbox"
+          class="size-4"
+          :checked="rule.active"
+          :aria-label="t('rules.active')"
+          @change="update.mutate({ ...rule, active: !rule.active })"
+        >
+        <Input
+          class="h-8 min-w-0 flex-1"
+          :model-value="rule.pattern"
+          :aria-label="t('rules.pattern')"
+          @change="(event: Event) => update.mutate({ ...rule, pattern: (event.target as HTMLInputElement).value })"
+        />
+        <Select
+          class="h-8 w-44"
+          :model-value="rule.category"
+          :aria-label="t('rules.category')"
+          @update:model-value="(key) => update.mutate({ ...rule, category: String(key) })"
+        >
+          <option v-for="entry in options" :key="entry.key" :value="entry.key">{{ categoryLabel(entry, t) }}</option>
+        </Select>
+        <Button variant="ghost" size="icon" class="size-8" :title="t('rules.up')" :aria-label="t('rules.up')" @click="move(index, -1)">
+          <ArrowUp class="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon" class="size-8" :title="t('rules.down')" :aria-label="t('rules.down')" @click="move(index, 1)">
+          <ArrowDown class="size-4" />
+        </Button>
+        <ConfirmButton :label="t('rules.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(rule.id)">
+          <Trash2 class="size-4" />
+        </ConfirmButton>
+      </div>
+    </div>
+  </Card>
+</template>
