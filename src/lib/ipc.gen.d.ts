@@ -446,7 +446,7 @@ type StoreChildRow = { store: Store, value_usd: Amount, value_base: Amount, };
 /**
  * What kind of container a store represents.
  */
-type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "paper";
+type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash";
 
 /**
  * Everything the wallet page needs about one store, in a single round trip.
@@ -570,7 +570,7 @@ timestamp: string,
  */
 fee: Amount | null, fee_asset: string | null, 
 /**
- * Group id shared across legs of the same transfer/trade/paper run.
+ * Group id shared across legs of the same transfer/trade.
  */
 group_id: string | null, 
 /**
@@ -621,7 +621,7 @@ occurred_at: string | null, status: string | null, asset_in: string | null, amou
 /**
  * High-level meaning of a transaction.
  */
-type TxKind = "income" | "expense" | "payment" | "transfer" | "trade" | "fee" | "paper_trade";
+type TxKind = "income" | "expense" | "payment" | "transfer" | "trade" | "fee";
 
 type TxnInput = { kind: TxKind, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, 
 /**

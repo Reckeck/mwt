@@ -29,8 +29,6 @@ pub enum TxKind {
     Trade,
     /// Standalone fee line.
     Fee,
-    /// Synthetic trade made by the Strategy Lab / paper account.
-    PaperTrade,
 }
 
 /// A single transaction record.
@@ -66,7 +64,7 @@ pub struct Transaction {
     /// Fee paid, in `fee_asset` units (or the tx asset when None).
     pub fee: Option<Amount>,
     pub fee_asset: Option<String>,
-    /// Group id shared across legs of the same transfer/trade/paper run.
+    /// Group id shared across legs of the same transfer/trade.
     pub group_id: Option<String>,
     /// Price of one unit of `asset` in USD at tx time (stamped by backend).
     pub price_usd: Option<Amount>,

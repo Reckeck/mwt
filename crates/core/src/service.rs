@@ -317,7 +317,6 @@ impl UnlockedVault {
             TxKind::Trade => {
                 return Err(Error::InvalidInput("use add_trade for trades".into()));
             }
-            TxKind::PaperTrade => {}
         }
         let mut tx = tx;
         self.adopt_categories(&mut tx.categories);
@@ -1179,7 +1178,7 @@ fn signed_delta(tx: &Transaction) -> Amount {
     match tx.kind {
         TxKind::Income => tx.amount,
         TxKind::Expense | TxKind::Payment | TxKind::Fee => -tx.amount.abs(),
-        TxKind::Transfer | TxKind::Trade | TxKind::PaperTrade => tx.amount, // legs carry sign themselves
+        TxKind::Transfer | TxKind::Trade => tx.amount, // legs carry sign themselves
     }
 }
 
