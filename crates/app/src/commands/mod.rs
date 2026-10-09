@@ -9,7 +9,6 @@ pub mod exchange;
 pub mod portfolio;
 pub mod pricing;
 pub mod settings;
-pub mod sim;
 pub mod stores;
 pub mod transactions;
 pub mod vault_recents;

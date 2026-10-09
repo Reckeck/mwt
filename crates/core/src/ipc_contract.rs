@@ -208,64 +208,6 @@ pub struct CurrencyCatalogOutput {
     pub notice: Option<String>,
 }
 
-// -- sim ---------------------------------------------------------------------
-
-use crate::sim::Strategy;
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-pub struct SaveStrategyInput {
-    pub strategy: Strategy,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-pub struct RunStrategyInput {
-    pub strategy_id: String,
-    /// Number of candles to replay (e.g. 500).
-    pub candles: u32,
-    /// candle granularity in minutes (e.g. 60 = 1h candles).
-    pub granularity_min: u32,
-}
-
-// -- run replay (D2.2) -------------------------------------------------------
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct GetRunCandlesInput {
-    pub run_id: String,
-}
-
-/// Candles of a finished run: synthetic runs are regenerated from
-/// `candle_params` (deterministic seed), real runs are re-fetched from
-/// Binance for the run's time range.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct GetRunCandlesOutput {
-    pub candles: Vec<CandlePoint>,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct GbmPathsInput {
-    pub run_id: String,
-    /// number of fan lines (clamped server-side).
-    pub paths: u32,
-    /// steps into the future (clamped server-side).
-    pub horizon: u32,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct GbmPathPoint {
-    pub ts: String,
-    pub price: String,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct GbmPathsOutput {
-    pub paths: Vec<Vec<GbmPathPoint>>,
-}
-
 pub use crate::model::vault::{FxPoint, PricePoint};
 
 // -- tx inspection -----------------------------------------------------------

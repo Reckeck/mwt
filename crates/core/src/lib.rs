@@ -1,4 +1,4 @@
-//! TradeApp `core` — pure domain, encrypted vault, pricing and simulator.
+//! TradeApp `core` — pure domain, encrypted vault, pricing and market data.
 //! This crate MUST NOT depend on Tauri or any UI runtime so it stays fast
 //! to compile and fully unit-testable (`cargo test -p trade-core`).
 
@@ -9,10 +9,10 @@ pub mod crypto;
 pub mod error;
 pub mod exchange;
 pub mod ipc_contract;
+pub mod market;
 pub mod model;
 pub mod pricing;
 pub mod service;
-pub mod sim;
 pub mod storage;
 pub mod txinfo;
 

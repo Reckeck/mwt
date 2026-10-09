@@ -40,12 +40,6 @@ fn main() {
         trade_core::model::vault::PricePoint,
         trade_core::model::vault::FxPoint,
         trade_core::model::vault::VaultDoc,
-        trade_core::sim::DataSource,
-        trade_core::sim::Rule,
-        trade_core::sim::Strategy,
-        trade_core::sim::SimTrade,
-        trade_core::sim::EquityPoint,
-        trade_core::sim::SimRun,
         trade_core::ipc_contract::VaultStatus,
         trade_core::ipc_contract::UnlockInput,
         trade_core::ipc_contract::CreateVaultInput,
@@ -62,8 +56,6 @@ fn main() {
         trade_core::ipc_contract::AssetPriceInput,
         trade_core::ipc_contract::CachedPrice,
         trade_core::ipc_contract::UpdateSettingsInput,
-        trade_core::ipc_contract::SaveStrategyInput,
-        trade_core::ipc_contract::RunStrategyInput,
         trade_core::calc::CalcMode,
         trade_core::calc::CalcInput,
         trade_core::calc::CalcResult,
@@ -104,11 +96,6 @@ fn main() {
         trade_core::ipc_contract::GetCandlesInput,
         trade_core::ipc_contract::GetCandlesOutput,
         trade_core::ipc_contract::CandlePoint,
-        trade_core::ipc_contract::GetRunCandlesInput,
-        trade_core::ipc_contract::GetRunCandlesOutput,
-        trade_core::ipc_contract::GbmPathsInput,
-        trade_core::ipc_contract::GbmPathsOutput,
-        trade_core::ipc_contract::GbmPathPoint,
     );
 
     if !ok {

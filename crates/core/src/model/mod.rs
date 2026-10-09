@@ -9,4 +9,4 @@ pub mod vault;
 pub use chain::{Chain, ChainInfo};
 pub use store::StoreKind;
 pub use transaction::TxKind;
-pub use vault::{SimState, VaultDoc};
+pub use vault::VaultDoc;
