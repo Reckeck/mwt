@@ -1,7 +1,5 @@
 import type { Component } from 'vue'
-import { ArrowLeftRight, Banknote, Landmark, Lock, Wallet } from 'lucide-vue-next'
-
-export type StoreKind = 'exchange' | 'hot_wallet' | 'cold_wallet' | 'bank' | 'cash'
+import { ArrowLeftRight, Banknote, CreditCard, House, Landmark, Lock, Wallet } from 'lucide-vue-next'
 
 export function getStoreIcon(kind: StoreKind): Component {
   switch (kind) {
@@ -15,6 +13,10 @@ export function getStoreIcon(kind: StoreKind): Component {
       return Landmark
     case 'cash':
       return Banknote
+    case 'asset':
+      return House
+    case 'liability':
+      return CreditCard
     default:
       return Wallet
   }

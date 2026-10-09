@@ -7,7 +7,12 @@ import { CHAIN_LABELS } from '@/shared/lib/chains'
 import { formatMoney } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
-const props = defineProps<{ positions: StorePosition[]; baseCurrency: string; decimals: number }>()
+import type { StorePositionsProps } from './store-positions.types'
+
+const props = withDefaults(defineProps<StorePositionsProps>(), { title: '' })
+
+/** Per-row actions (revalue a property…) come from the page. */
+defineSlots<{ actions?(props: { position: StorePosition }): unknown }>()
 
 const { t } = useI18n()
 
@@ -27,7 +32,7 @@ function toneOf(value: string): string {
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('pos.title') }}</p>
+      <p class="font-medium">{{ props.title || t('pos.title') }}</p>
     </template>
 
     <div v-if="positions.length" class="overflow-x-auto">
@@ -40,6 +45,7 @@ function toneOf(value: string): string {
             <th class="pb-2 text-right font-medium">{{ t('pos.price') }}</th>
             <th class="pb-2 text-right font-medium">{{ t('pos.value') }}</th>
             <th class="pb-2 text-right font-medium">{{ t('pos.pnl') }}</th>
+            <th v-if="$slots.actions" class="pb-2" />
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
@@ -62,6 +68,9 @@ function toneOf(value: string): string {
             <td class="py-2 text-right font-medium tabular-nums">{{ money(position.value_base) }}</td>
             <td class="py-2 text-right tabular-nums" :class="cn(toneOf(position.unrealized_base))">
               {{ position.avg_cost ? money(position.unrealized_base) : '—' }}
+            </td>
+            <td v-if="$slots.actions" class="py-2 pl-2 text-right">
+              <slot name="actions" :position="position" />
             </td>
           </tr>
         </tbody>

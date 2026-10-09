@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { LiabilityTermsFields, emptyLiabilityTerms } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
@@ -28,6 +29,18 @@ const name = ref('')
 const color = ref(DEFAULT_STORE_COLOR)
 const kind = ref<StoreKind>('cash')
 const note = ref('')
+const terms = ref<LiabilityTerms>(emptyLiabilityTerms())
+/** `null` until the user flips it: then it follows the default for the kind (or the parent). */
+const inBudgetChoice = ref<boolean | null>(null)
+
+/** D22: a sub-account starts with its parent's flag; a wallet counts if it is cash or a bank account. */
+const inBudgetDefault = computed(() => props.parent?.in_budget ?? (kind.value === 'cash' || kind.value === 'bank'))
+const inBudget = computed({
+  get: () => inBudgetChoice.value ?? inBudgetDefault.value,
+  set: (value: boolean) => {
+    inBudgetChoice.value = value
+  },
+})
 
 const title = computed(() => {
   if (!props.parent) return t('wallet.newStore')
@@ -46,6 +59,8 @@ watch(open, (isOpen) => {
   note.value = ''
   kind.value = props.parent?.kind ?? 'cash'
   color.value = props.parent?.color ?? DEFAULT_STORE_COLOR
+  terms.value = emptyLiabilityTerms()
+  inBudgetChoice.value = null
 })
 
 const createStore = useMutation({
@@ -57,11 +72,16 @@ const createStore = useMutation({
         color: color.value,
         note: note.value.trim(),
         parent_id: props.parent?.id ?? null,
+        in_budget: inBudget.value,
+        liability: kind.value === 'liability' ? terms.value : null,
+        contact_id: null,
       },
     }),
   onSuccess: (store) => {
     toast.success(props.parent ? t('stores.subAccountCreated') : t('stores.created'), { description: store.name })
-    for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
+    for (const queryKey of [['stores'], ['store'], ['summary'], ['net-worth']]) {
+      void queryClient.invalidateQueries({ queryKey })
+    }
     open.value = false
     emit('created', store)
   },
@@ -71,7 +91,7 @@ const createStore = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="title" size="sm">
-    <form id="store-create-form" class="grid gap-4" @submit.prevent="createStore.mutate()">
+    <form id="store-create-form" class="@container grid gap-4" @submit.prevent="createStore.mutate()">
       <div class="grid gap-1.5">
         <Label for="store-name">{{ t('stores.name') }}</Label>
         <Input id="store-name" v-model="name" :placeholder="t('stores.namePlaceholder')" />
@@ -95,6 +115,14 @@ const createStore = useMutation({
             class="h-9 w-14 cursor-pointer rounded-md border border-input bg-transparent p-1"
           >
         </div>
+      </div>
+      <LiabilityTermsFields v-if="kind === 'liability'" v-model="terms" />
+      <div class="grid gap-1">
+        <div class="flex items-center gap-2">
+          <input id="store-in-budget" v-model="inBudget" type="checkbox" class="size-4">
+          <Label for="store-in-budget">{{ t('stores.inBudget') }}</Label>
+        </div>
+        <p class="text-xs text-muted-foreground">{{ t('stores.inBudgetHint') }}</p>
       </div>
       <div class="grid gap-1.5">
         <Label for="store-note">{{ t('stores.note') }}</Label>

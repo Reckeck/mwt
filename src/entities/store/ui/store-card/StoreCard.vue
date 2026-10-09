@@ -51,7 +51,9 @@ const deleteBlocker = computed(() => {
             <RouterLink :to="{ name: 'wallet', params: { id: store.id } }" class="block truncate font-medium hover:underline">
               {{ store.name }}
             </RouterLink>
-            <p class="truncate text-xs text-muted-foreground">{{ t(`stores.kind.${store.kind}`) }}</p>
+            <p class="truncate text-xs text-muted-foreground">
+              {{ t(`stores.kind.${store.kind}`) }}<template v-if="store.in_budget"> · {{ t('stores.inBudgetBadge') }}</template>
+            </p>
           </div>
         </div>
         <span class="shrink-0 text-sm font-medium tabular-nums">{{ money(props.node.subtree_base) }}</span>

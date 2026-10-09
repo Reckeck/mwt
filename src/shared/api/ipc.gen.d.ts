@@ -2,6 +2,14 @@
 type Amount = string; // rust_decimal money — always a decimal string
 
 /**
+ * One side of a movement: one of the user's own stores, a saved contact (and
+ * optionally one of its accounts), or free text.
+ */
+type AccountRef = { "store": string } | { "contact": { contact_id: string, account_id: string | null, } } | { "raw": string };
+
+type AlertCondition = "above" | "below";
+
+/**
  * Preferences that follow the *user*, not the vault: they must survive opening
  * a different vault, so they are stored next to the app, not inside the doc.
  */
@@ -15,6 +23,10 @@ base_currency: string,
  */
 favorite_currencies: Array<string>, };
 
+/**
+ * Shared asset identification, so each variant does not repeat five
+ * optional fields it does not always need.
+ */
 type AssetIdent = { symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, };
 
 /**
@@ -45,40 +57,53 @@ type AssetSearchHit = { symbol: string, name: string, coingecko_id: string | nul
  */
 rank: bigint, };
 
+/**
+ * Selling a non-financial asset (a flat, a car) out of an `asset` store.
+ */
+type AssetSellTx = { meta: TxMeta, store_id: string, asset: AssetRef, unit_price: Amount, quantity: Amount, 
+/**
+ * Currency of `unit_price` and of the proceeds.
+ */
+currency: AssetRef, 
+/**
+ * Store that received the money, if it is tracked.
+ */
+proceeds_to: string | null, fee: Fee | null, 
+/**
+ * Price of the currency, for valuing the proceeds.
+ */
+price: PriceStamp, };
+
 type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_usd: Amount, };
 
+type Automation = { id: string, name: string, active: boolean, schedule: Schedule, 
 /**
- * Where a bank payment moved. Meaningless for a crypto wallet, which is why it
- * exists only on [`BankTransferTx`].
+ * First planned date, RFC3339.
  */
-type BankRail = "internal" | "sepa" | "swift" | "wire" | "card" | "cashier";
+starts_at: string, template: TransactionDraft, 
+/**
+ * Last planned date already processed (created or rejected).
+ */
+last_planned_at: string | null, created_at: string, };
 
-type BankTransferInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, rail: BankRail, counterparty_name: string, counterparty_account: string | null, reference: string | null, fee: Amount | null, fee_asset: string | null, };
+type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
 
 /**
- * A payment made from a bank account.
- *
- * The pilot for per-kind fields: everything on it is a fact about banking that
- * the other variants cannot express, which is exactly what the flat
- * `Transaction` had nowhere to put.
+ * One processed planned date of an automation. Never retried automatically;
+ * doubles as the automation's history.
  */
-type BankTransferTx = { meta: TxMeta, store_id: string, asset: AssetRef, 
+type AutomationRun = { id: string, automation_id: string, planned_at: string, processed_at: string, outcome: AutomationOutcome, };
+
+type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
+
+type BudgetPeriod = "day" | "week" | "month";
+
+type BudgetTarget = "total" | { "category": string } | { "store": StoreScope };
+
 /**
- * Magnitude; [`Self::flow`] carries the direction.
+ * Product type. Bybit requires this on most private endpoints.
  */
-amount: Amount, flow: Flow, rail: BankRail, 
-/**
- * Who received the money — usually a name, not an identifier.
- */
-counterparty_name: string, 
-/**
- * IBAN / BIC / account number, as the rail requires.
- */
-counterparty_account: string | null, 
-/**
- * The counterparty's own reference, for reconciliation.
- */
-reference: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
+type BybitCategory = "spot" | "linear" | "inverse";
 
 /**
  * A fill as offered in the "recent trades" dropdown.
@@ -89,7 +114,7 @@ type BybitExecution = { symbol: string, side: string, order_type: string, exec_p
  */
 prefill: TradePrefill, };
 
-type BybitExecutionsInput = { category: Category, symbol: string | null, limit: number | null, store_id: string | null, };
+type BybitExecutionsInput = { category: BybitCategory, symbol: string | null, limit: number | null, store_id: string | null, };
 
 /**
  * Never fails: an unconfigured or unreachable key yields an empty list.
@@ -196,36 +221,43 @@ risk_pct: Amount, };
  */
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
 
-type CardPaymentInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, card_last4: string | null, merchant: string | null, mcc: string | null, fee: Amount | null, fee_asset: string | null, };
+/**
+ * One banknote line of a cash count.
+ */
+type CashNote = { denomination: Amount, count: number, };
 
 /**
- * A purchase paid by card.
+ * «If the comment or the contact name contains `pattern`, use `category`.»
  */
-type CardPaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, 
+type CategorizationRule = { id: string, 
 /**
- * Last four digits only; the full number is never stored.
+ * Case-insensitive substring.
  */
-card_last4: string | null, merchant: string | null, 
+pattern: string, 
 /**
- * Merchant category code as it appears on the statement.
+ * Category key.
  */
-mcc: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
+category: string, active: boolean, 
+/**
+ * Lower runs first.
+ */
+order: number, };
 
-type CashFlowInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, location: string | null, counterparty: string | null, };
+type Category = { 
+/**
+ * Stable key stored on transactions; never changes.
+ */
+key: string, 
+/**
+ * User label; `None` means the built-in translation `categories.default.<key>`.
+ */
+name: string | null, group: CategoryGroup, 
+/**
+ * Hidden from pickers; existing transactions keep it.
+ */
+archived: boolean, };
 
-/**
- * Physical money.
- */
-type CashFlowTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, flow: Flow, 
-/**
- * Where the cash moved: an ATM, a shop, a person.
- */
-location: string | null, counterparty: string | null, price: PriceStamp, };
-
-/**
- * Product type. Bybit requires this on most private endpoints.
- */
-type Category = "spot" | "linear" | "inverse";
+type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
 
 /**
  * Supported blockchain networks + a pseudo `Fiat` variant.
@@ -253,7 +285,90 @@ exec_ids: Array<string>, };
 
 type ConfirmPendingImportsOutput = { confirmed: number, };
 
-type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, parent_id: string | null, };
+type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, };
+
+/**
+ * One saved account of a contact: an IBAN, a card, a USDT address.
+ */
+type ContactAccount = { id: string, 
+/**
+ * Grouping label in the UI («Мой банк», «Биржа»).
+ */
+group: string | null, 
+/**
+ * «Основной счёт», «USDT TRC-20».
+ */
+label: string, kind: DetailKind, value: string, 
+/**
+ * Currency code the account holds, lowercase.
+ */
+currency: string | null, 
+/**
+ * Only for `CryptoAddress`.
+ */
+network: Chain | null, 
+/**
+ * An account referenced by transactions is deactivated instead of deleted.
+ */
+active: boolean, };
+
+/**
+ * Personal debt with one contact in one asset: what they owe me and what I owe them.
+ */
+type ContactBalance = { contact_id: string, asset: AssetRef, receivable: Amount, payable: Amount, };
+
+/**
+ * What the UI sends to create or edit a contact. Accounts without an id are new.
+ */
+type ContactDraft = { name: string, kind: ContactKind, note: string, accounts: Array<ContactAccount>, };
+
+type ContactKind = "person" | "company" | "exchanger";
+
+type ContactTurnover = { contact_id: string, account_id: string | null, base_currency: string, rows: Array<TurnoverRow>, 
+/**
+ * Sums at the price stamped on each transaction; unpriced legs count as zero.
+ */
+sent_base: Amount, received_base: Amount, tx_count: number, };
+
+type ContactTurnoverInput = { contact_id: string, account_id: string | null, };
+
+/**
+ * One side of a conversion.
+ */
+type ConvertSide = { account: AccountRef, asset: AssetRef, amount: Amount, price: PriceStamp, };
+
+type ConvertSideInput = { account: AccountRef, asset: AssetIdent, amount: Amount, };
+
+/**
+ * «Обменять»: give one asset, receive another (bank FX, an exchanger, P2P).
+ */
+type ConvertTx = { meta: TxMeta, from: ConvertSide, to: ConvertSide, fee: Fee | null, 
+/**
+ * Rate the user was actually given, `to` per `from`, when it should be kept.
+ */
+rate_override: Amount | null, };
+
+type CreateCategoryInput = { 
+/**
+ * Wanted key; derived from the name when empty.
+ */
+key: string | null, name: string, group: CategoryGroup, };
+
+type CreateRuleInput = { pattern: string, category: string, };
+
+type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, parent_id: string | null, 
+/**
+ * `None` = the default: by kind for a wallet, the parent's for a sub-account.
+ */
+in_budget: boolean | null, 
+/**
+ * Loan terms; only for `liability`.
+ */
+liability: LiabilityTerms | null, 
+/**
+ * Contact the wallet belongs to; top-level only.
+ */
+contact_id: string | null, };
 
 type CreateVaultInput = { path: string, password: string, };
 
@@ -269,31 +384,23 @@ type CurrencyCatalogOutput = { catalog: SupportedCurrencies,
  */
 notice: string | null, };
 
+/**
+ * How the daily budget is computed (plan D18).
+ */
+type DailyBudgetMode = "month" | "until_income";
+
 type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
 /**
- * What was done to a DeFi position.
+ * Effect of a transfer on a personal debt with a contact.
  */
+type DebtEffect = "lend" | "borrow" | "repay" | "collect";
+
 type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liquidity";
 
-type DefiActionInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, action: DefiAction, network: Chain | null, tx_hash: string | null, protocol: string | null, pool_id: string | null, fee: Amount | null, fee_asset: string | null, };
+type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: AssetRef, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: Fee | null, price: PriceStamp, };
 
-/**
- * An on-chain DeFi interaction on a hot or cold wallet.
- */
-type DefiActionTx = { meta: TxMeta, store_id: string, 
-/**
- * The asset the action moved: the staked asset, or the reward claimed.
- */
-asset: AssetRef, amount: Amount, flow: Flow, action: DefiAction, network: Chain | null, tx_hash: string | null, 
-/**
- * e.g. `lido`, `uniswap-v3`.
- */
-protocol: string | null, 
-/**
- * Pool, vault or staking contract identifier.
- */
-pool_id: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
+type DetailKind = "iban" | "account" | "crypto_address" | "card" | "phone" | "url" | "other";
 
 /**
  * Output of the dev dump vault command (DEV only).
@@ -311,6 +418,14 @@ exec_ids: Array<string>, };
 
 type DiscardPendingImportsOutput = { discarded: number, };
 
+type EnrichmentData = { fee: Fee | null, confirmed: boolean | null, block_time: string | null, from_address: string | null, to_address: string | null, token_name: string | null, token_decimals: number | null, contract: string | null, };
+
+type EnrichmentRecord = { id: string, tx_id: string, source: EnrichmentSource, found: EnrichmentData, status: EnrichmentStatus, created_at: string, };
+
+type EnrichmentSource = { "explorer": Chain } | "token_list";
+
+type EnrichmentStatus = "pending" | "applied" | "rejected";
+
 /**
  * Whether a key is stored. The secret is never part of this response.
  */
@@ -318,78 +433,34 @@ type ExchangeKeyStatus = { configured: boolean,
 /**
  * Masked identifier such as `abcd…wxyz`, for the settings screen.
  */
-hint: string | null, };
+hint: string | null, 
+/**
+ * Sub-account spot fills are booked on; `None` = the key's own store.
+ */
+spot_store_id: string | null, 
+/**
+ * Sub-account futures fills are booked on; `None` = the key's own store.
+ */
+futures_store_id: string | null, };
 
 /**
- * A trade between two assets inside one store.
- *
- * Both sides live in one record rather than in two transactions joined by a
- * `group_id`. A trade is one event with two effects; splitting it meant every
- * reader had to reassemble the halves by hand, and deleting one half silently
- * orphaned the other.
+ * A fee paid in some asset. It is booked as its own outgoing leg, so holdings
+ * shrink by it — before this model fees were recorded and then ignored.
  */
-type ExchangeTradeTx = { meta: TxMeta, store_id: string, 
-/**
- * The side that leaves the store.
- */
-sold: TradeSide, 
-/**
- * The side that arrives in the store.
- */
-bought: TradeSide, fee: Amount | null, fee_asset: string | null, 
-/**
- * The exchange's own order identifier, for reconciling with the account.
- */
-order_id: string | null, 
-/**
- * Which market the fill happened on: `spot`, `linear`, `inverse`.
- */
-market: string | null, 
-/**
- * `maker` or `taker`.
- */
-liquidity: string | null, 
-/**
- * Prices the bought side: that is the leg a holding's average cost is
- * derived from.
- */
-price: PriceStamp, };
+type Fee = { asset: AssetRef, amount: Amount, price: PriceStamp, };
 
-type ExpenseInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, };
+type FeeInput = { asset: AssetIdent, amount: Amount, };
 
 /**
- * A withdrawal or a spend that is not a purchase.
+ * Where a transaction lands in the budget (plan §7.3).
  */
-type ExpenseTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, price: PriceStamp, };
+type FlowClass = "income" | "fixed" | "daily" | "savings" | "budget_in" | "budget_out" | "ignored";
 
-type FeeInput = { store_id: string, 
-/**
- * Asset the fee was charged in; may differ from the traded asset.
- */
-asset: AssetIdent, common: TxInputCommon, related_id: string | null, };
+type FuturesAction = "open" | "close";
 
-/**
- * A fee booked on its own rather than attached to the operation that caused it.
- */
-type FeeTx = { meta: TxMeta, store_id: string, 
-/**
- * Asset the fee was charged in; may differ from the traded asset.
- */
-asset: AssetRef, amount: Amount, 
-/**
- * Transaction this fee was split out of, when it was.
- */
-related_id: string | null, price: PriceStamp, };
+type FuturesCategory = "linear" | "inverse";
 
-/**
- * Direction of an asset movement relative to the store it is booked on.
- *
- * This is data, not a convention. The flat `Transaction` this replaced inferred
- * the sign from `TxKind` inside `signed_delta`, so a withdrawal stored a
- * negative `amount` that nothing checked. Here the direction is an explicit
- * field and [`Flow::signed`] is the only place it becomes a number.
- */
-type Flow = "in" | "out";
+type FuturesDirection = "long" | "short";
 
 /**
  * A cached FX rate: units of `currency` per 1 USD.
@@ -399,6 +470,16 @@ type FxPoint = { currency: string, per_usd: Amount, ts: string, source: string, 
 type GetCandlesInput = { symbol: string, interval_min: number, limit: number, };
 
 type GetCandlesOutput = { candles: Array<CandlePoint>, };
+
+type Goal = { id: string, name: string, active: boolean, target_amount: Amount, currency: string, starts_at: string, deadline: string | null, 
+/**
+ * Importance, 1–5.
+ */
+priority: number, 
+/**
+ * What the user is ready to put aside per month.
+ */
+monthly_commitment: Amount | null, scope: StoreScope, created_at: string, };
 
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
@@ -431,18 +512,6 @@ type ImportBybitHistoryOutput = { staged: number,
  */
 notice: string | null, };
 
-type IncomeInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, source: IncomeSource, };
-
-/**
- * Where money came from.
- */
-type IncomeSource = "other" | "salary" | "reward" | "airdrop" | "staking" | "interest" | "mining";
-
-/**
- * An increase of a store's balance.
- */
-type IncomeTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, source: IncomeSource, price: PriceStamp, };
-
 /**
  * Chain the user picked when the hash alone was ambiguous. Without it the
  * backend never guesses an EVM network.
@@ -467,9 +536,73 @@ fetched: boolean, info: TxInfo | null, hints: Array<TxFieldHint>,
  */
 notice: string | null, };
 
+/**
+ * Facts that only some store kinds have. Validated against `store.kind`.
+ */
+type KindDetails = { 
+/**
+ * `cash` only; must add up to the amount.
+ */
+cash_breakdown: Array<CashNote> | null, 
+/**
+ * `asset` only: price of one unit when acquiring (`amount` is the unit count).
+ */
+unit_price: Amount | null, 
+/**
+ * Crypto stores only.
+ */
+network: Chain | null, tx_hash: string | null, };
+
+/**
+ * What a leg represents inside its transaction.
+ */
+type LegRole = "principal" | "fee" | "pnl";
+
+type LiabilityKind = "mortgage" | "loan" | "credit_card" | "installment" | "other";
+
+/**
+ * Terms of a `liability` store. Informational, except `limit`, which caps
+ * what an automation may charge to a credit card.
+ */
+type LiabilityTerms = { kind: LiabilityKind, 
+/**
+ * Annual interest rate in percent.
+ */
+rate: Amount | null, 
+/**
+ * Credit limit, in the store's currency.
+ */
+limit: Amount | null, 
+/**
+ * Day of the month the mandatory payment is due (1–31).
+ */
+due_day: number | null, monthly_payment: Amount | null, };
+
+type Liquidity = "maker" | "taker";
+
 type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 
 type Locale = "auto" | "en" | "ru";
+
+/**
+ * A hand-set value of a non-financial asset; applies to its whole history
+ * (plan D24), so revaluing a flat does not make the net-worth chart jump.
+ */
+type ManualPrice = { 
+/**
+ * `AssetRef::key()` of the asset.
+ */
+asset_key: string, unit_price: Amount, 
+/**
+ * Lowercase currency code of `unit_price`.
+ */
+currency: string, updated_at: string, };
+
+type MeterReading = { id: string, item_id: string, value: Amount, 
+/**
+ * YYYY-MM.
+ */
+period: string, recorded_at: string, };
 
 /**
  * Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
@@ -478,21 +611,40 @@ type MoveStoreInput = { id: string, parent_id: string | null, };
 
 type NamedValue = { label: string, value_usd: Amount, value_base: Amount, pct: number, };
 
-type PaymentInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, payee: string, receipt_ref: string | null, };
+/**
+ * Everything the user owns and owes, in the base currency. All parts are
+ * non-negative; `net = financial + non_financial + receivables − liabilities − payables`.
+ */
+type NetWorth = { base_currency: string, 
+/**
+ * Money and investments: every store except property and loans.
+ */
+financial: Amount, 
+/**
+ * Property valued by hand (`asset` stores).
+ */
+non_financial: Amount, 
+/**
+ * What people owe me (debt transfers).
+ */
+receivables: Amount, 
+/**
+ * Loans, mortgages, credit cards.
+ */
+liabilities: Amount, 
+/**
+ * What I owe people.
+ */
+payables: Amount, net: Amount, };
 
 /**
- * Buying something: money out, but the reporting built on the tags is about
- * spending rather than about withdrawals.
+ * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
  */
-type PaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, 
+type PaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, fee: Fee | null, 
 /**
- * Who was paid: a shop, a person, a service.
+ * Who was paid; never one of the user's stores.
  */
-payee: string, 
-/**
- * Receipt, invoice or subscription id.
- */
-receipt_ref: string | null, price: PriceStamp, };
+to: AccountRef | null, details: KindDetails, price: PriceStamp, };
 
 /**
  * A staged Bybit fill awaiting user confirmation before becoming a trade.
@@ -545,7 +697,16 @@ occurred_at: string,
 /**
  * Provenance note shown in the staging UI.
  */
-comment: string, };
+comment: string, is_maker: boolean | null, 
+/**
+ * Size this fill closed, for futures; `Some(>0)` means it reduced a position.
+ */
+closed_size: Amount | null, 
+/**
+ * Realized PnL of a closing futures fill. Bybit's execution list does not
+ * carry it, so the import leaves it empty; the user can fill it in.
+ */
+closed_pnl: Amount | null, };
 
 type PnlLeg = { ts: string, store_id: string, asset_key: string, 
 /**
@@ -553,7 +714,17 @@ type PnlLeg = { ts: string, store_id: string, asset_key: string,
  */
 quantity: Amount, pnl_base: Amount, side: string, };
 
-type PortfolioSummary = { base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, assets: Array<AssetStat>, by_chain: Array<NamedValue>, by_store: Array<StoreValue>, };
+type PortfolioSummary = { base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, assets: Array<AssetStat>, by_chain: Array<NamedValue>, by_store: Array<StoreValue>, 
+/**
+ * Everything owned, incl. property and what people owe (base currency).
+ */
+assets_base: Amount, 
+/**
+ * Loans and what I owe people, as a positive number.
+ */
+liabilities_base: Amount, net_worth_base: Amount, };
+
+type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, };
 
 /**
  * A cached price: one unit of an asset in USD.
@@ -571,11 +742,8 @@ ts: string, source: string, };
 /**
  * Price stamps a money movement can carry.
  *
- * Shared by every variant because pricing is a property of an asset at a
- * moment, not of the kind of movement: a bank transfer and a DeFi claim are
- * both worth something at a rate. Keeping it in one struct stops eleven
- * copies from drifting apart, and [`PriceStamp::on`] is the single place that
- * decides which legs a price reaches.
+ * Pricing is a property of an asset at a moment, not of the kind of
+ * movement, so every priced side of a transaction carries one of these.
  */
 type PriceStamp = { 
 /**
@@ -591,7 +759,11 @@ price_base: Amount | null,
  */
 fx_override: Amount | null, };
 
-type RealizedPnl = { total_base: Amount, legs: Array<PnlLeg>, };
+type RealizedPnl = { total_base: Amount, 
+/**
+ * Fees paid in scope, at their stamped price; not part of `total_base`.
+ */
+fees_base: Amount, legs: Array<PnlLeg>, };
 
 /**
  * A recently opened vault file.
@@ -599,6 +771,12 @@ type RealizedPnl = { total_base: Amount, legs: Array<PnlLeg>, };
 type RecentVault = { path: string, last_opened: string, exists: boolean, };
 
 type RefreshResult = { prices: number, fx: number, updated_at: string, };
+
+type RejectReason = { "insufficient_funds": { store_id: string, asset: AssetRef, required: Amount, available: Amount, } } | { "credit_limit_exceeded": { store_id: string, limit: Amount, required: Amount, } } | { "invalid": { message: string, } };
+
+type Reminder = { id: string, text: string, due_at: string, done: boolean, };
+
+type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
 /**
  * Input to select or pick a vault file.
@@ -611,7 +789,12 @@ type SelectVaultInput = { path: string, };
  */
 type SetExchangeKeyInput = { store_id: string, api_key: string, api_secret: string, };
 
-type SetTxPricesInput = { transaction_id: string, price_usd: Amount | null, fx_override: Amount | null, };
+/**
+ * Which sub-accounts imported spot and futures fills land on.
+ */
+type SetExchangeTargetsInput = { store_id: string, spot_store_id: string | null, futures_store_id: string | null, };
+
+type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
 
 /**
  * Vault-scoped settings.
@@ -628,7 +811,15 @@ display_decimals: number, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refre
 /**
  * Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
  */
-bybit_import_interval_sec: number, };
+bybit_import_interval_sec: number, 
+/**
+ * Share of income planned for savings, 0..1 (plan D16).
+ */
+savings_rate: Amount, daily_budget_mode: DailyBudgetMode, 
+/**
+ * Currency of budgets and month totals; empty = the base currency.
+ */
+budget_currency: string, };
 
 /**
  * A "store"/"platform" (хранилище) — a portfolio container.
@@ -648,7 +839,19 @@ note: string,
  * rules (depth, unique sibling names, no cycles) are enforced on write by
  * the service, see `MAX_STORE_DEPTH`.
  */
-parent_id: string | null, };
+parent_id: string | null, 
+/**
+ * Saved contact this wallet belongs to (an exchanger, a bank). Top-level only.
+ */
+contact_id: string | null, 
+/**
+ * Loan terms; only on `liability` stores.
+ */
+liability: LiabilityTerms | null, 
+/**
+ * Whether this store's income and spending count in the daily budget.
+ */
+in_budget: boolean, };
 
 /**
  * A direct sub-account row on the wallet page.
@@ -675,7 +878,7 @@ type StoreCrumb = { id: string, name: string, color: string, };
 /**
  * What kind of container a store represents.
  */
-type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash";
+type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "asset" | "liability";
 
 /**
  * Allowed destinations for moving a sub-account.
@@ -720,6 +923,10 @@ positions: Array<StorePosition>,
  * Positions merged per asset across the whole subtree.
  */
 subtree_positions: Array<StorePosition>, 
+/**
+ * Open futures positions (derivatives); never part of the totals.
+ */
+open_positions: Array<StorePosition>, 
 /**
  * Direct sub-accounts.
  */
@@ -804,7 +1011,39 @@ crypto: Array<string>, };
 
 type Theme = "auto" | "light" | "dark";
 
-type TradeInput = { store_id: string, sold: AssetIdent, sold_qty: Amount, bought: AssetIdent, bought_qty: Amount, common: TxInputCommon, fee: Amount | null, fee_asset: string | null, order_id: string | null, market: string | null, liquidity: string | null, };
+/**
+ * «Пополнить»: money comes into a store from outside (salary, cashback, buying an asset).
+ */
+type TopupTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, fee: Fee | null, 
+/**
+ * Who paid; never one of the user's stores (that is a transfer).
+ */
+from: AccountRef | null, details: KindDetails, price: PriceStamp, };
+
+/**
+ * Opening or closing (part of) a futures position.
+ *
+ * The position is a holding of `contract` (a derivative, see
+ * [`AssetRef::perp`]); it is excluded from portfolio value. Realized PnL is
+ * the `closed_pnl` the exchange settled, booked in `settle`.
+ */
+type TradeFuturesTx = { meta: TxMeta, store_id: string, contract: AssetRef, 
+/**
+ * Asset margin and PnL settle in (USDT for linear, the coin for inverse).
+ */
+settle: AssetRef, direction: FuturesDirection, action: FuturesAction, quantity: Amount, 
+/**
+ * Fill price, in `settle` per contract unit.
+ */
+fill_price: Amount, leverage: Amount | null, fee: Fee | null, 
+/**
+ * Only on `Close`; signed (a loss is negative).
+ */
+closed_pnl: Amount | null, order_id: string | null, category: FuturesCategory, 
+/**
+ * Price of the settle asset, for valuing the PnL leg.
+ */
+price: PriceStamp, };
 
 /**
  * A fill shaped for the trade form: what was sold, what was bought, costs.
@@ -820,71 +1059,89 @@ side: string, symbol: string, asset_sold: string | null, qty_sold: string | null
 occurred_at: string | null, comment: string | null, };
 
 /**
- * One side of a trade, as booked on the store.
+ * One side of a spot trade.
  */
-type TradeSide = { asset: AssetRef, 
-/**
- * Magnitude, always positive; the direction comes from the leg it lands on.
- */
-qty: Amount, };
+type TradeSide = { asset: AssetRef, qty: Amount, price: PriceStamp, };
+
+type TradeSideInput = { asset: AssetIdent, qty: Amount, };
 
 /**
- * A recorded transaction.
- *
- * Every variant carries its own fields instead of sharing one flat struct
- * with everything optional: a `BankTransferTx` cannot hold a DEX `pool_id` and
- * a `CashFlowTx` cannot hold an IBAN, so an impossible record is not
- * representable.
- *
- * Serde's default externally tagged shape is used deliberately. It round
- * trips through bincode, which cannot handle string tags, and in TypeScript it
- * becomes a union of single-key objects that `'bank_transfer' in tx` narrows.
+ * A spot trade on an exchange.
  */
-type Transaction = { "income": IncomeTx } | { "expense": ExpenseTx } | { "payment": PaymentTx } | { "fee": FeeTx } | { "bank_transfer": BankTransferTx } | { "card_payment": CardPaymentTx } | { "wallet_transfer": WalletTransferTx } | { "defi_action": DefiActionTx } | { "exchange_trade": ExchangeTradeTx } | { "transfer": TransferTx } | { "cash_flow": CashFlowTx };
+type TradeSpotTx = { meta: TxMeta, store_id: string, sold: TradeSide, bought: TradeSide, fee: Fee | null, liquidity: Liquidity | null, order_id: string | null, };
 
 /**
- * Which transaction kinds a wallet of one kind accepts.
- *
- * Returned already split into the two groups the UI presents, and with the
- * kind to pre-select, so the frontend holds no copy of the binding and cannot
- * disagree with the backend about what a bank is allowed to record.
+ * One thing the user did with money.
+ */
+type Transaction = { "topup": TopupTx } | { "payment": PaymentTx } | { "transfer": TransferTx } | { "convert": ConvertTx } | { "trade_spot": TradeSpotTx } | { "trade_futures": TradeFuturesTx } | { "defi": DefiTx } | { "asset_sell": AssetSellTx };
+
+/**
+ * The transaction an automation creates. `meta.id`, `meta.timestamp`,
+ * `meta.origin` and the price stamps are ignored and filled in when it runs.
+ */
+type TransactionDraft = { "topup": TopupTx } | { "payment": PaymentTx } | { "transfer": TransferTx } | { "convert": ConvertTx };
+
+/**
+ * What the form sends for any kind of transaction.
+ */
+type TransactionInput = { "type": "topup", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, from: AccountRef | null, details: KindDetails, } | { "type": "payment", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, to: AccountRef | null, details: KindDetails, } | { "type": "transfer", common: TxCommonInput, from: AccountRef, to: AccountRef, asset: AssetIdent, amount: Amount, fee: FeeInput | null, network: Chain | null, tx_hash: string | null, debt: DebtEffect | null, } | { "type": "convert", common: TxCommonInput, from: ConvertSideInput, to: ConvertSideInput, fee: FeeInput | null, rate_override: Amount | null, } | { "type": "trade_spot", common: TxCommonInput, store_id: string, sold: TradeSideInput, bought: TradeSideInput, fee: FeeInput | null, liquidity: Liquidity | null, order_id: string | null, } | { "type": "trade_futures", common: TxCommonInput, store_id: string, 
+/**
+ * Exchange the contract trades on, e.g. `bybit`.
+ */
+venue: string, 
+/**
+ * Contract symbol, e.g. `BTCUSDT`.
+ */
+symbol: string, settle: AssetIdent, direction: FuturesDirection, action: FuturesAction, quantity: Amount, fill_price: Amount, leverage: Amount | null, fee: FeeInput | null, closed_pnl: Amount | null, order_id: string | null, category: FuturesCategory, } | { "type": "defi", common: TxCommonInput, store_id: string, action: DefiAction, asset: AssetIdent, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: FeeInput | null, } | { "type": "asset_sell", common: TxCommonInput, store_id: string, asset: AssetIdent, unit_price: Amount, quantity: Amount, currency: AssetIdent, proceeds_to: string | null, fee: FeeInput | null, };
+
+/**
+ * Which transaction kinds a wallet of one kind accepts, split the way the
+ * form presents them, with the kind to pre-select.
  */
 type TransactionKinds = { 
 /**
- * Kinds that make sense on any wallet.
+ * Of the four everyday verbs, the ones this wallet accepts.
  */
-common: Array<string>, 
+verbs: Array<TxKind>, 
 /**
- * Kinds specific to this kind of wallet — a bank transfer, a trade, cash.
+ * Specialised kinds (trades, DeFi, selling property).
  */
-specific: Array<string>, 
-/**
- * The kind to pre-select when the form opens.
- */
-default: string, };
-
-type TransferInput = { from_store_id: string, to_store_id: string, asset: AssetIdent, common: TxInputCommon, fee: Amount | null, fee_asset: string | null, network: Chain | null, tx_hash: string | null, };
+special: Array<TxKind>, default: TxKind, };
 
 /**
- * A movement between two stores of any kind.
- *
- * One variant rather than one per ordered pair of store kinds: six kinds
- * would mean twelve near-identical variants to keep in sync, and the
- * kind-specific detail of each side already belongs to the store it lands on.
+ * «Перевести»: one asset moves between two places, at least one of them mine.
  */
-type TransferTx = { meta: TxMeta, 
+type TransferTx = { meta: TxMeta, from: AccountRef, to: AccountRef, asset: AssetRef, 
 /**
- * Store the asset leaves.
+ * What the receiver gets; the fee is paid on top by the sender.
  */
-from_store_id: string, 
+amount: Amount, fee: Fee | null, network: Chain | null, tx_hash: string | null, 
 /**
- * Store the asset arrives in.
+ * Set when the transfer opens or settles a personal debt with a contact.
  */
-to_store_id: string, asset: AssetRef, amount: Amount, fee: Amount | null, fee_asset: string | null, network: Chain | null, tx_hash: string | null, 
+debt: DebtEffect | null, price: PriceStamp, };
+
 /**
- * Both legs move the same asset, so both share one price.
+ * Money moved with one contact in one asset.
  */
-price: PriceStamp, };
+type TurnoverRow = { asset: AssetRef, sent: Amount, received: Amount, };
+
+/**
+ * Fields every transaction input carries.
+ */
+type TxCommonInput = { 
+/**
+ * RFC3339 UTC. Empty means "now".
+ */
+timestamp: string | null, comment: string, 
+/**
+ * Category keys.
+ */
+categories: Array<string>, flow_id: string | null, contact_id: string | null, 
+/**
+ * Manual USD price of the main asset (the one received, for two-asset kinds).
+ */
+price_usd: Amount | null, fx_override: Amount | null, };
 
 /**
  * A single field suggestion for the trade form.
@@ -913,28 +1170,12 @@ needs_manual_network: boolean, explorer_url: string | null,
 occurred_at: string | null, status: string | null, asset_in: string | null, amount_in: string | null, asset_out: string | null, amount_out: string | null, fee: string | null, fee_asset: string | null, };
 
 /**
- * Fields every transaction input carries.
+ * Kind of a transaction, without its data — what a store accepts, what a form shows.
  */
-type TxInputCommon = { 
-/**
- * Positive magnitude. The direction is a separate field (`flow`) or is
- * implied by the variant, so a negative amount cannot be sent.
- */
-amount: Amount, comment: string, 
-/**
- * User tags; any number, normalized by the backend.
- */
-categories: Array<string>, 
-/**
- * RFC3339 UTC. Empty means "now".
- */
-timestamp: string | null, price_usd: Amount | null, fx_override: Amount | null, };
+type TxKind = "topup" | "payment" | "transfer" | "convert" | "trade_spot" | "trade_futures" | "defi" | "asset_sell";
 
 /**
  * Fields every transaction carries, whatever it is.
- *
- * Not repeated per variant: these five are never kind-specific, and twelve
- * copies would guarantee they drift apart.
  */
 type TxMeta = { id: string, 
 /**
@@ -942,14 +1183,26 @@ type TxMeta = { id: string,
  */
 timestamp: string, 
 /**
- * User note. Free-form; the UI requires it.
+ * Free-form user note.
  */
 comment: string, 
 /**
- * User tags. Any number, all members of `VaultDoc::categories`.
- * Normalized (trimmed, lowercased, deduplicated) before it is stored.
+ * Category keys, all members of `VaultDoc::categories`.
  */
-categories: Array<string>, };
+categories: Array<string>, 
+/**
+ * Groups the operations of one movement of money (RUB → USDT → THB).
+ */
+flow_id: string | null, 
+/**
+ * Who the operation was with or through (an exchanger, a shop, a person).
+ */
+contact_id: string | null, origin: TxOrigin, };
+
+/**
+ * How a transaction came to exist.
+ */
+type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } };
 
 type UnlockInput = { path: string, password: string, };
 
@@ -958,7 +1211,15 @@ type UnlockInput = { path: string, password: string, };
  */
 type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, favorite_currencies: Array<string> | null, };
 
-type UpdateCommentInput = { transaction_id: string, comment: string, };
+type UpdateCategoryInput = { key: string, 
+/**
+ * Empty = the built-in label.
+ */
+name: string | null, group: CategoryGroup, };
+
+type UpdateContactInput = { id: string, contact: ContactDraft, };
+
+type UpdateRuleInput = { id: string, pattern: string, category: string, active: boolean, };
 
 /**
  * Partial update of the **vault-scoped** settings.
@@ -967,18 +1228,43 @@ type UpdateSettingsInput = { display_decimals: number | null, dashboard_widgets:
 /**
  * Background Bybit poll interval; `0` disables it (D2.4).
  */
-bybit_import_interval_sec: number | null, };
+bybit_import_interval_sec: number | null, 
+/**
+ * Share of income planned for savings, 0..1.
+ */
+savings_rate: Amount | null, daily_budget_mode: DailyBudgetMode | null, 
+/**
+ * Empty string = follow the base currency.
+ */
+budget_currency: string | null, };
 
-type UpdateStoreInput = { id: string, name: string, color: string, note: string, };
+type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
+/**
+ * `None` keeps the current value.
+ */
+in_budget: boolean | null, liability: LiabilityTerms | null, contact_id: string | null, };
+
+/**
+ * Replace a stored transaction with a new version of it.
+ */
+type UpdateTransactionInput = { id: string, transaction: TransactionInput, };
+
+type UtilityItem = { id: string, name: string, active: boolean, kind: UtilityKind, currency: string, store_id: string | null, 
+/**
+ * Category key.
+ */
+category: string, };
+
+type UtilityKind = { "metered": { unit: string, tariff: Amount, } } | { "static": { amount: Amount, } } | { "housing": { amount: Amount, deposit: Amount | null, due_day: number, automation_id: string | null, } };
 
 /**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
  */
-type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<string>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, 
+type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<Category>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, 
 /**
  * Staged Bybit fills awaiting user confirmation (D2.4).
  */
-pending_imports: Array<PendingImport>, };
+pending_imports: Array<PendingImport>, contacts: Array<Contact>, automations: Array<Automation>, automation_runs: Array<AutomationRun>, budgets: Array<Budget>, goals: Array<Goal>, reminders: Array<Reminder>, price_alerts: Array<PriceAlert>, categorization_rules: Array<CategorizationRule>, utility_items: Array<UtilityItem>, meter_readings: Array<MeterReading>, enrichments: Array<EnrichmentRecord>, manual_prices: Array<ManualPrice>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 
@@ -986,19 +1272,3 @@ type VaultInfo = { path: string, doc_version: number, id: string, created_at: st
  * What the unlock screen needs to know about the app.
  */
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
-
-type WalletTransferInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, network: Chain | null, tx_hash: string | null, from_address: string | null, to_address: string | null, memo: string | null, fee: Amount | null, fee_asset: string | null, };
-
-/**
- * A movement into or out of a crypto wallet, on-chain or across an
- * exchange's internal ledger.
- */
-type WalletTransferTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, flow: Flow, network: Chain | null, 
-/**
- * On-chain transaction hash; links to the explorer.
- */
-tx_hash: string | null, from_address: string | null, to_address: string | null, 
-/**
- * Destination tag / memo; several exchanges require one to credit funds.
- */
-memo: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };

@@ -5,9 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { RefreshCw } from 'lucide-vue-next'
 
 import { TransactionDelete } from '@/features/transaction-delete'
+import { TransactionEditButton } from '@/features/transaction-edit'
 import { StoreFilter } from '@/features/transaction-filter'
 import { TransactionsList } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
 import { call, onEvent } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 
@@ -16,11 +18,6 @@ const queryClient = useQueryClient()
 
 /** Empty string = every store. */
 const storeFilter = ref('')
-
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
-})
 
 // The filter is part of the key, so switching it fetches (and caches) by itself.
 const txs = useQuery({
@@ -35,8 +32,6 @@ function refresh() {
 }
 
 void onEvent<RefreshResult>('prices-updated', refresh)
-
-const storeName = (id: string) => stores.data.value?.find((store) => store.id === id)?.name ?? id
 </script>
 
 <template>
@@ -50,10 +45,15 @@ const storeName = (id: string) => stores.data.value?.find((store) => store.id ==
       </Button>
     </div>
 
-    <TransactionsList :transactions="txs.data.value ?? []" :store-name="storeName">
-      <template #actions="{ tx }">
-        <TransactionDelete :id="txId(tx)" />
-      </template>
-    </TransactionsList>
+    <Card>
+      <div class="-my-3">
+        <TransactionsList :transactions="txs.data.value ?? []">
+          <template #actions="{ tx }">
+            <TransactionEditButton :tx="tx" />
+            <TransactionDelete :id="txId(tx)" />
+          </template>
+        </TransactionsList>
+      </div>
+    </Card>
   </div>
 </template>

@@ -9,6 +9,7 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
   ALREADY_EXISTS: 'auth.pathTaken',
   UNSUPPORTED: 'auth.unsupported',
   NOT_FOUND: 'auth.missing',
+  INCOMPATIBLE_VAULT: 'vault.incompatible',
 }
 
 /**

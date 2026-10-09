@@ -108,5 +108,8 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
     minimize_to_tray: patch.minimize_to_tray ?? null,
     bybit_import_interval_sec: patch.bybit_import_interval_sec ?? null,
+    savings_rate: patch.savings_rate ?? null,
+    daily_budget_mode: patch.daily_budget_mode ?? null,
+    budget_currency: patch.budget_currency ?? null,
   }
 }
