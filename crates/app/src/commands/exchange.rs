@@ -13,9 +13,8 @@ use trade_core::ipc_contract::{
     ConfirmPendingImportsInput, ConfirmPendingImportsOutput, DiscardPendingImportsInput,
     DiscardPendingImportsOutput, ExchangeKeyStatus, ExchangeKeyStatusInput,
     ImportBybitHistoryInput, ImportBybitHistoryOutput, InspectTxInput, InspectTxResult,
-    ListPendingImportsOutput, SetExchangeKeyInput, TxFieldHint,
+    ListPendingImportsOutput, SetExchangeKeyInput, SetExchangeTargetsInput, TxFieldHint,
 };
-use trade_core::model::store::StoreKind;
 use trade_core::model::vault::{ExchangeKeys, Exchanges, PendingImport};
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
@@ -179,14 +178,8 @@ pub async fn exchange_key_status(
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
     match find_bybit_key_for_store(&vault.doc.exchanges, &input.store_id, vault) {
-        Some(entry) => Ok(ExchangeKeyStatus {
-            configured: true,
-            hint: Some(entry.hint()),
-        }),
-        None => Ok(ExchangeKeyStatus {
-            configured: false,
-            hint: None,
-        }),
+        Some(entry) => Ok(vault.exchange_key_status(&entry.store_id)),
+        None => Ok(ExchangeKeyStatus::default()),
     }
 }
 
@@ -199,49 +192,25 @@ pub async fn set_exchange_key(
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let key = input.api_key.trim().to_string();
-    let secret = input.api_secret.trim().to_string();
-    let store_id = input.store_id.clone();
-    if key.is_empty() || secret.is_empty() {
-        return Err("INVALID_INPUT: api key and secret are required".into());
-    }
-    // Validate store exists and is an exchange node
-    let store = vault
-        .doc
-        .stores
-        .iter()
-        .find(|candidate| candidate.id == store_id);
-    let Some(store) = store else {
-        return Err("NOT_FOUND: store not found".into());
-    };
-    if store.kind != StoreKind::Exchange {
-        return Err("INVALID_INPUT: store is not an exchange".into());
-    }
-    // Upsert by store_id
-    vault
-        .doc
-        .exchanges
-        .bybit
-        .retain(|entry| entry.store_id != store_id);
-    vault.doc.exchanges.bybit.push(ExchangeKeys {
-        store_id: store_id.clone(),
-        api_key: key,
-        api_secret: secret,
-    });
-    vault.persist().map_err(err_to_string)?;
-    let status = vault
-        .doc
-        .exchanges
-        .bybit
-        .iter()
-        .find(|entry| entry.store_id == store_id)
-        .map(|entry| ExchangeKeyStatus {
-            configured: true,
-            hint: Some(entry.hint()),
-        })
-        .unwrap_or_default();
-    Ok(status)
+    guard
+        .as_mut()
+        .unwrap()
+        .set_exchange_key(&input.store_id, &input.api_key, &input.api_secret)
+        .map_err(err_to_string)
+}
+
+/// Choose the sub-accounts imported spot and futures fills land on.
+#[tauri::command]
+pub async fn set_exchange_targets(
+    input: SetExchangeTargetsInput,
+    state: State<'_, AppState>,
+) -> Result<ExchangeKeyStatus, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_exchange_targets(&input.store_id, input.spot_store_id, input.futures_store_id)
+        .map_err(err_to_string)
 }
 
 /// Remove the stored Bybit key for a specific store.

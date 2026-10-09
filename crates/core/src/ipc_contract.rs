@@ -6,13 +6,17 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
+use crate::model::category::CategoryGroup;
 use crate::model::chain::Chain;
-use crate::model::store::{AssetRef, StoreKind};
+use crate::model::store::{AssetRef, LiabilityTerms, StoreKind};
 use crate::model::transaction::{
-    BankRail, BankTransferTx, CardPaymentTx, CashFlowTx, DefiAction, DefiActionTx, ExchangeTradeTx,
-    ExpenseTx, FeeTx, Flow, IncomeSource, IncomeTx, PaymentTx, PriceStamp, TradeSide, Transaction,
-    TransferTx, TxMeta, WalletTransferTx,
+    AccountRef, AssetSellTx, ConvertSide, ConvertTx, DebtEffect, DefiAction, DefiTx, Fee,
+    FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Liquidity, PaymentTx,
+    PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind,
+    TxMeta, allowed_kinds, default_kind,
 };
+use crate::model::vault::DailyBudgetMode;
+use crate::service::ContactDraft;
 
 // -- auth --------------------------------------------------------------------
 
@@ -63,6 +67,15 @@ pub struct CreateStoreInput {
     pub note: String,
     #[serde(default)]
     pub parent_id: Option<String>,
+    /// `None` = the default: by kind for a wallet, the parent's for a sub-account.
+    #[serde(default)]
+    pub in_budget: Option<bool>,
+    /// Loan terms; only for `liability`.
+    #[serde(default)]
+    pub liability: Option<LiabilityTerms>,
+    /// Contact the wallet belongs to; top-level only.
+    #[serde(default)]
+    pub contact_id: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -71,6 +84,13 @@ pub struct UpdateStoreInput {
     pub name: String,
     pub color: String,
     pub note: String,
+    /// `None` keeps the current value.
+    #[serde(default)]
+    pub in_budget: Option<bool>,
+    #[serde(default)]
+    pub liability: Option<LiabilityTerms>,
+    #[serde(default)]
+    pub contact_id: Option<String>,
 }
 
 /// Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
@@ -83,14 +103,12 @@ pub struct MoveStoreInput {
 
 // -- transactions ------------------------------------------------------------
 //
-// One input per transaction variant, mirroring the variant's own fields. The
-// flat `TxnInput { kind, ... }` this replaced let the frontend send a
-// `tx_hash` on a cash payment or an `iban` on a crypto trade; the backend
-// ignored whatever did not fit the kind, so a typo failed silently. Here an
-// impossible request does not compile in TypeScript.
-//
-// Shared asset identification, so each variant does not repeat five optional
-// fields it does not always need.
+// One input enum, internally tagged with `type` — an IPC shape only, never
+// persisted (bincode cannot read internal tags). Each variant mirrors its
+// domain transaction minus what the backend fills in: id, origin, prices.
+
+/// Shared asset identification, so each variant does not repeat five
+/// optional fields it does not always need.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct AssetIdent {
     pub symbol: String,
@@ -101,379 +119,475 @@ pub struct AssetIdent {
 }
 
 impl AssetIdent {
-    /// Rebuild a full [`AssetRef`]. `quote` is display-only and follows the
-    /// symbol, the same convention the form uses.
+    /// Rebuild a full [`AssetRef`]. `quote` is display-only and follows the symbol.
     pub fn to_asset(&self) -> AssetRef {
-        let symbol = self.symbol.to_uppercase();
+        let symbol = self.symbol.trim().to_uppercase();
         AssetRef {
             quote: symbol.clone(),
             symbol,
-            name: self.name.clone(),
-            coingecko_id: self.coingecko_id.clone(),
+            name: self.name.trim().to_string(),
+            coingecko_id: self.coingecko_id.clone().filter(|id| !id.is_empty()),
             chain: self.chain,
-            contract: self.contract.clone(),
+            contract: self
+                .contract
+                .clone()
+                .filter(|contract| !contract.is_empty()),
         }
     }
 }
 
 /// Fields every transaction input carries.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct TxInputCommon {
-    /// Positive magnitude. The direction is a separate field (`flow`) or is
-    /// implied by the variant, so a negative amount cannot be sent.
-    pub amount: Amount,
-    pub comment: String,
-    /// User tags; any number, normalized by the backend.
-    pub categories: Vec<String>,
+pub struct TxCommonInput {
     /// RFC3339 UTC. Empty means "now".
     pub timestamp: Option<String>,
+    pub comment: String,
+    /// Category keys.
+    pub categories: Vec<String>,
+    pub flow_id: Option<String>,
+    pub contact_id: Option<String>,
+    /// Manual USD price of the main asset (the one received, for two-asset kinds).
     pub price_usd: Option<Amount>,
     pub fx_override: Option<Amount>,
 }
 
-impl TxInputCommon {
+impl TxCommonInput {
     fn meta(&self) -> TxMeta {
-        TxMeta {
-            timestamp: match self.timestamp.as_deref() {
-                Some(raw) if !raw.is_empty() => raw.to_string(),
-                _ => crate::model::vault::now_iso(),
-            },
-            comment: self.comment.clone(),
-            categories: self.categories.clone(),
-            ..TxMeta::new(&self.comment)
+        let mut meta = TxMeta::new(&self.comment);
+        if let Some(raw) = self.timestamp.as_deref().filter(|raw| !raw.is_empty()) {
+            meta.timestamp = raw.to_string();
         }
+        meta.categories = self.categories.clone();
+        meta.flow_id = self.flow_id.clone().filter(|flow| !flow.trim().is_empty());
+        meta.contact_id = self
+            .contact_id
+            .clone()
+            .filter(|contact| !contact.is_empty());
+        meta
     }
 
     fn stamp(&self) -> PriceStamp {
         PriceStamp {
             price_usd: self.price_usd,
-            fx_override: self.fx_override,
             price_base: None,
+            fx_override: self.fx_override,
         }
     }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct IncomeInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub source: IncomeSource,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct ExpenseInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct PaymentInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub payee: String,
-    pub receipt_ref: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct FeeInput {
-    pub store_id: String,
-    /// Asset the fee was charged in; may differ from the traded asset.
     pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub related_id: Option<String>,
+    pub amount: Amount,
 }
 
-// No `Default`: a defaulted direction would book the movement the wrong
-// way, so every call site must state `flow` explicitly.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct BankTransferInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub flow: Flow,
-    pub rail: BankRail,
-    pub counterparty_name: String,
-    pub counterparty_account: Option<String>,
-    pub reference: Option<String>,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct CardPaymentInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub card_last4: Option<String>,
-    pub merchant: Option<String>,
-    pub mcc: Option<String>,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-}
-
-// No `Default`: a defaulted direction would book the movement the wrong
-// way, so every call site must state `flow` explicitly.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct WalletTransferInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub flow: Flow,
-    pub network: Option<Chain>,
-    pub tx_hash: Option<String>,
-    pub from_address: Option<String>,
-    pub to_address: Option<String>,
-    pub memo: Option<String>,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-}
-
-// No `Default`: a defaulted direction would book the movement the wrong
-// way, so every call site must state `flow` explicitly.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct DefiActionInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub flow: Flow,
-    pub action: DefiAction,
-    pub network: Option<Chain>,
-    pub tx_hash: Option<String>,
-    pub protocol: Option<String>,
-    pub pool_id: Option<String>,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct TradeInput {
-    pub store_id: String,
-    pub sold: AssetIdent,
-    pub sold_qty: Amount,
-    pub bought: AssetIdent,
-    pub bought_qty: Amount,
-    pub common: TxInputCommon,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-    pub order_id: Option<String>,
-    pub market: Option<String>,
-    pub liquidity: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct TransferInput {
-    pub from_store_id: String,
-    pub to_store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub fee: Option<Amount>,
-    pub fee_asset: Option<String>,
-    pub network: Option<Chain>,
-    pub tx_hash: Option<String>,
-}
-
-// No `Default`: a defaulted direction would book the movement the wrong
-// way, so every call site must state `flow` explicitly.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct CashFlowInput {
-    pub store_id: String,
-    pub asset: AssetIdent,
-    pub common: TxInputCommon,
-    pub flow: Flow,
-    pub location: Option<String>,
-    pub counterparty: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct UpdateCommentInput {
-    pub transaction_id: String,
-    pub comment: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-pub struct SetTxPricesInput {
-    pub transaction_id: String,
-    pub price_usd: Option<Amount>,
-    pub fx_override: Option<Amount>,
-}
-
-/// Which transaction kinds a wallet of one kind accepts.
-///
-/// Returned already split into the two groups the UI presents, and with the
-/// kind to pre-select, so the frontend holds no copy of the binding and cannot
-/// disagree with the backend about what a bank is allowed to record.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub struct TransactionKinds {
-    /// Kinds that make sense on any wallet.
-    pub common: Vec<String>,
-    /// Kinds specific to this kind of wallet — a bank transfer, a trade, cash.
-    pub specific: Vec<String>,
-    /// The kind to pre-select when the form opens.
-    pub default: String,
-}
-
-impl TransactionKinds {
-    pub fn for_store_kind(kind: StoreKind) -> Self {
-        Self {
-            common: Transaction::COMMON_TAGS
-                .iter()
-                .map(|tag| (*tag).to_string())
-                .collect(),
-            specific: Transaction::specific_tags_for_store_kind(kind)
-                .iter()
-                .map(|tag| (*tag).to_string())
-                .collect(),
-            default: Transaction::default_tag_for_store_kind(kind).to_string(),
+impl FeeInput {
+    fn to_fee(&self) -> Fee {
+        Fee {
+            asset: self.asset.to_asset(),
+            amount: self.amount,
+            price: PriceStamp::default(),
         }
     }
 }
 
-// -- transaction construction -------------------------------------------------
-//
-// Input → domain, one function per variant. Kept beside the DTOs so the
-// mapping is a single readable table rather than a switch buried in a command.
-
-macro_rules! build_single_leg {
-    ($variant:ident, $body:ident, $input:ident, $($extra:tt)*) => {{
-        let $input = $input;
-        Transaction::$variant($body {
-            meta: $input.common.meta(),
-            store_id: $input.store_id.clone(),
-            asset: $input.asset.to_asset(),
-            amount: $input.common.amount,
-            $($extra)*
-            price: $input.common.stamp(),
-        })
-    }};
+fn fee_of(input: &Option<FeeInput>) -> Option<Fee> {
+    input
+        .as_ref()
+        .filter(|fee| !fee.amount.is_zero())
+        .map(FeeInput::to_fee)
 }
 
-pub fn to_income(input: &IncomeInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(Income, IncomeTx, input, source: input.source,)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ConvertSideInput {
+    pub account: AccountRef,
+    pub asset: AssetIdent,
+    pub amount: Amount,
 }
 
-pub fn to_expense(input: &ExpenseInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(Expense, ExpenseTx, input,)
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TradeSideInput {
+    pub asset: AssetIdent,
+    pub qty: Amount,
 }
 
-pub fn to_payment(input: &PaymentInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        Payment, PaymentTx,
-        input,
-        payee: input.payee.clone(),
-        receipt_ref: input.receipt_ref.clone(),
-    )
+/// What the form sends for any kind of transaction.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TransactionInput {
+    Topup {
+        common: TxCommonInput,
+        store_id: String,
+        asset: AssetIdent,
+        amount: Amount,
+        fee: Option<FeeInput>,
+        from: Option<AccountRef>,
+        details: KindDetails,
+    },
+    Payment {
+        common: TxCommonInput,
+        store_id: String,
+        asset: AssetIdent,
+        amount: Amount,
+        fee: Option<FeeInput>,
+        to: Option<AccountRef>,
+        details: KindDetails,
+    },
+    Transfer {
+        common: TxCommonInput,
+        from: AccountRef,
+        to: AccountRef,
+        asset: AssetIdent,
+        amount: Amount,
+        fee: Option<FeeInput>,
+        network: Option<Chain>,
+        tx_hash: Option<String>,
+        debt: Option<DebtEffect>,
+    },
+    Convert {
+        common: TxCommonInput,
+        from: ConvertSideInput,
+        to: ConvertSideInput,
+        fee: Option<FeeInput>,
+        rate_override: Option<Amount>,
+    },
+    TradeSpot {
+        common: TxCommonInput,
+        store_id: String,
+        sold: TradeSideInput,
+        bought: TradeSideInput,
+        fee: Option<FeeInput>,
+        liquidity: Option<Liquidity>,
+        order_id: Option<String>,
+    },
+    TradeFutures {
+        common: TxCommonInput,
+        store_id: String,
+        /// Exchange the contract trades on, e.g. `bybit`.
+        venue: String,
+        /// Contract symbol, e.g. `BTCUSDT`.
+        symbol: String,
+        settle: AssetIdent,
+        direction: FuturesDirection,
+        action: FuturesAction,
+        quantity: Amount,
+        fill_price: Amount,
+        leverage: Option<Amount>,
+        fee: Option<FeeInput>,
+        closed_pnl: Option<Amount>,
+        order_id: Option<String>,
+        category: FuturesCategory,
+    },
+    Defi {
+        common: TxCommonInput,
+        store_id: String,
+        action: DefiAction,
+        asset: AssetIdent,
+        amount: Amount,
+        protocol: Option<String>,
+        pool_id: Option<String>,
+        network: Option<Chain>,
+        tx_hash: Option<String>,
+        fee: Option<FeeInput>,
+    },
+    AssetSell {
+        common: TxCommonInput,
+        store_id: String,
+        asset: AssetIdent,
+        unit_price: Amount,
+        quantity: Amount,
+        currency: AssetIdent,
+        proceeds_to: Option<String>,
+        fee: Option<FeeInput>,
+    },
 }
 
-pub fn to_fee(input: &FeeInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(Fee, FeeTx, input, related_id: input.related_id.clone(),)
+fn text(raw: &Option<String>) -> Option<String> {
+    raw.as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
-pub fn to_bank_transfer(input: &BankTransferInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        BankTransfer, BankTransferTx,
-        input,
-        flow: input.flow,
-        rail: input.rail,
-        counterparty_name: input.counterparty_name.clone(),
-        counterparty_account: input.counterparty_account.clone(),
-        reference: input.reference.clone(),
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-    )
+impl TransactionInput {
+    /// Build the domain transaction. Rules are checked by the service, not here.
+    pub fn to_transaction(&self) -> Transaction {
+        match self {
+            Self::Topup {
+                common,
+                store_id,
+                asset,
+                amount,
+                fee,
+                from,
+                details,
+            } => Transaction::Topup(TopupTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                asset: asset.to_asset(),
+                amount: *amount,
+                fee: fee_of(fee),
+                from: from.clone(),
+                details: details.clone(),
+                price: common.stamp(),
+            }),
+            Self::Payment {
+                common,
+                store_id,
+                asset,
+                amount,
+                fee,
+                to,
+                details,
+            } => Transaction::Payment(PaymentTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                asset: asset.to_asset(),
+                amount: *amount,
+                fee: fee_of(fee),
+                to: to.clone(),
+                details: details.clone(),
+                price: common.stamp(),
+            }),
+            Self::Transfer {
+                common,
+                from,
+                to,
+                asset,
+                amount,
+                fee,
+                network,
+                tx_hash,
+                debt,
+            } => Transaction::Transfer(TransferTx {
+                meta: common.meta(),
+                from: from.clone(),
+                to: to.clone(),
+                asset: asset.to_asset(),
+                amount: *amount,
+                fee: fee_of(fee),
+                network: *network,
+                tx_hash: text(tx_hash),
+                debt: *debt,
+                price: common.stamp(),
+            }),
+            Self::Convert {
+                common,
+                from,
+                to,
+                fee,
+                rate_override,
+            } => Transaction::Convert(ConvertTx {
+                meta: common.meta(),
+                from: ConvertSide {
+                    account: from.account.clone(),
+                    asset: from.asset.to_asset(),
+                    amount: from.amount,
+                    price: PriceStamp::default(),
+                },
+                to: ConvertSide {
+                    account: to.account.clone(),
+                    asset: to.asset.to_asset(),
+                    amount: to.amount,
+                    price: common.stamp(),
+                },
+                fee: fee_of(fee),
+                rate_override: *rate_override,
+            }),
+            Self::TradeSpot {
+                common,
+                store_id,
+                sold,
+                bought,
+                fee,
+                liquidity,
+                order_id,
+            } => Transaction::TradeSpot(TradeSpotTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                sold: TradeSide {
+                    asset: sold.asset.to_asset(),
+                    qty: sold.qty,
+                    price: PriceStamp::default(),
+                },
+                bought: TradeSide {
+                    asset: bought.asset.to_asset(),
+                    qty: bought.qty,
+                    price: common.stamp(),
+                },
+                fee: fee_of(fee),
+                liquidity: *liquidity,
+                order_id: text(order_id),
+            }),
+            Self::TradeFutures {
+                common,
+                store_id,
+                venue,
+                symbol,
+                settle,
+                direction,
+                action,
+                quantity,
+                fill_price,
+                leverage,
+                fee,
+                closed_pnl,
+                order_id,
+                category,
+            } => Transaction::TradeFutures(TradeFuturesTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                contract: AssetRef::perp(venue.trim(), symbol.trim()),
+                settle: settle.to_asset(),
+                direction: *direction,
+                action: *action,
+                quantity: *quantity,
+                fill_price: *fill_price,
+                leverage: *leverage,
+                fee: fee_of(fee),
+                closed_pnl: *closed_pnl,
+                order_id: text(order_id),
+                category: *category,
+                price: common.stamp(),
+            }),
+            Self::Defi {
+                common,
+                store_id,
+                action,
+                asset,
+                amount,
+                protocol,
+                pool_id,
+                network,
+                tx_hash,
+                fee,
+            } => Transaction::Defi(DefiTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                action: *action,
+                asset: asset.to_asset(),
+                amount: *amount,
+                protocol: text(protocol),
+                pool_id: text(pool_id),
+                network: *network,
+                tx_hash: text(tx_hash),
+                fee: fee_of(fee),
+                price: common.stamp(),
+            }),
+            Self::AssetSell {
+                common,
+                store_id,
+                asset,
+                unit_price,
+                quantity,
+                currency,
+                proceeds_to,
+                fee,
+            } => Transaction::AssetSell(AssetSellTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                asset: asset.to_asset(),
+                unit_price: *unit_price,
+                quantity: *quantity,
+                currency: currency.to_asset(),
+                proceeds_to: text(proceeds_to),
+                fee: fee_of(fee),
+                price: common.stamp(),
+            }),
+        }
+    }
 }
 
-pub fn to_card_payment(input: &CardPaymentInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        CardPayment, CardPaymentTx,
-        input,
-        card_last4: input.card_last4.clone(),
-        merchant: input.merchant.clone(),
-        mcc: input.mcc.clone(),
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-    )
+/// Replace a stored transaction with a new version of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateTransactionInput {
+    pub id: String,
+    pub transaction: TransactionInput,
 }
 
-pub fn to_wallet_transfer(input: &WalletTransferInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        WalletTransfer, WalletTransferTx,
-        input,
-        flow: input.flow,
-        network: input.network,
-        tx_hash: input.tx_hash.clone(),
-        from_address: input.from_address.clone(),
-        to_address: input.to_address.clone(),
-        memo: input.memo.clone(),
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-    )
+/// Which transaction kinds a wallet of one kind accepts, split the way the
+/// form presents them, with the kind to pre-select.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TransactionKinds {
+    /// Of the four everyday verbs, the ones this wallet accepts.
+    pub verbs: Vec<TxKind>,
+    /// Specialised kinds (trades, DeFi, selling property).
+    pub special: Vec<TxKind>,
+    pub default: TxKind,
 }
 
-pub fn to_defi_action(input: &DefiActionInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        DefiAction, DefiActionTx,
-        input,
-        flow: input.flow,
-        action: input.action,
-        network: input.network,
-        tx_hash: input.tx_hash.clone(),
-        protocol: input.protocol.clone(),
-        pool_id: input.pool_id.clone(),
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-    )
+impl TransactionKinds {
+    pub fn for_store_kind(kind: StoreKind) -> Self {
+        let allowed = allowed_kinds(kind);
+        Self {
+            verbs: allowed
+                .iter()
+                .copied()
+                .filter(|tx_kind| tx_kind.is_verb())
+                .collect(),
+            special: allowed
+                .iter()
+                .copied()
+                .filter(|tx_kind| !tx_kind.is_verb())
+                .collect(),
+            default: default_kind(kind),
+        }
+    }
 }
 
-pub fn to_cash_flow(input: &CashFlowInput) -> crate::model::transaction::Transaction {
-    build_single_leg!(
-        CashFlow, CashFlowTx,
-        input,
-        flow: input.flow,
-        location: input.location.clone(),
-        counterparty: input.counterparty.clone(),
-    )
+// -- contacts ------------------------------------------------------------------
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateContactInput {
+    pub id: String,
+    pub contact: ContactDraft,
 }
 
-/// A trade is one record with two legs, so it does not fit the single-leg
-/// macro.
-pub fn to_exchange_trade(input: &TradeInput) -> crate::model::transaction::Transaction {
-    crate::model::transaction::Transaction::ExchangeTrade(ExchangeTradeTx {
-        meta: input.common.meta(),
-        store_id: input.store_id.clone(),
-        sold: TradeSide {
-            asset: input.sold.to_asset(),
-            qty: input.sold_qty,
-        },
-        bought: TradeSide {
-            asset: input.bought.to_asset(),
-            qty: input.bought_qty,
-        },
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-        order_id: input.order_id.clone(),
-        market: input.market.clone(),
-        liquidity: input.liquidity.clone(),
-        price: input.common.stamp(),
-    })
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ContactTurnoverInput {
+    pub contact_id: String,
+    pub account_id: Option<String>,
 }
 
-pub fn to_transfer(input: &TransferInput) -> crate::model::transaction::Transaction {
-    crate::model::transaction::Transaction::Transfer(TransferTx {
-        meta: input.common.meta(),
-        from_store_id: input.from_store_id.clone(),
-        to_store_id: input.to_store_id.clone(),
-        asset: input.asset.to_asset(),
-        amount: input.common.amount,
-        fee: input.fee,
-        fee_asset: input.fee_asset.clone(),
-        network: input.network,
-        tx_hash: input.tx_hash.clone(),
-        price: input.common.stamp(),
-    })
+// -- categories and rules --------------------------------------------------------
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CreateCategoryInput {
+    /// Wanted key; derived from the name when empty.
+    pub key: Option<String>,
+    pub name: String,
+    pub group: CategoryGroup,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateCategoryInput {
+    pub key: String,
+    /// Empty = the built-in label.
+    pub name: Option<String>,
+    pub group: CategoryGroup,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CreateRuleInput {
+    pub pattern: String,
+    pub category: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateRuleInput {
+    pub id: String,
+    pub pattern: String,
+    pub category: String,
+    pub active: bool,
+}
+
+// -- property value --------------------------------------------------------------
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetManualPriceInput {
+    pub asset_key: String,
+    pub unit_price: Amount,
+    pub currency: String,
 }
 
 // -- pricing -----------------------------------------------------------------
@@ -517,6 +631,11 @@ pub struct UpdateSettingsInput {
     pub minimize_to_tray: Option<bool>,
     /// Background Bybit poll interval; `0` disables it (D2.4).
     pub bybit_import_interval_sec: Option<u32>,
+    /// Share of income planned for savings, 0..1.
+    pub savings_rate: Option<Amount>,
+    pub daily_budget_mode: Option<DailyBudgetMode>,
+    /// Empty string = follow the base currency.
+    pub budget_currency: Option<String>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------
@@ -637,6 +756,10 @@ pub struct ExchangeKeyStatus {
     pub configured: bool,
     /// Masked identifier such as `abcd…wxyz`, for the settings screen.
     pub hint: Option<String>,
+    /// Sub-account spot fills are booked on; `None` = the key's own store.
+    pub spot_store_id: Option<String>,
+    /// Sub-account futures fills are booked on; `None` = the key's own store.
+    pub futures_store_id: Option<String>,
 }
 
 /// Input to query key status for a specific store.
@@ -654,6 +777,15 @@ pub struct SetExchangeKeyInput {
     pub store_id: String,
     pub api_key: String,
     pub api_secret: String,
+}
+
+/// Which sub-accounts imported spot and futures fills land on.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct SetExchangeTargetsInput {
+    pub store_id: String,
+    pub spot_store_id: Option<String>,
+    pub futures_store_id: Option<String>,
 }
 
 /// Input to clear a key for a specific store.

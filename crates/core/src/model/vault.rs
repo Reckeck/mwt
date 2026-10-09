@@ -1,7 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
+use crate::model::category::{Category, default_categories};
 use crate::model::chain::ChainInfo;
+use crate::model::contact::Contact;
+use crate::model::enrichment::EnrichmentRecord;
+use crate::model::planning::{
+    Automation, AutomationRun, Budget, CategorizationRule, Goal, MeterReading, PriceAlert,
+    Reminder, UtilityItem,
+};
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
 use schemars::JsonSchema;
@@ -49,6 +56,36 @@ pub struct Settings {
     /// Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
     #[serde(default = "default_bybit_import_interval")]
     pub bybit_import_interval_sec: u32,
+    /// Share of income planned for savings, 0..1 (plan D16).
+    pub savings_rate: Amount,
+    pub daily_budget_mode: DailyBudgetMode,
+    /// Currency of budgets and month totals; empty = the base currency.
+    pub budget_currency: String,
+}
+
+/// How the daily budget is computed (plan D18).
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DailyBudgetMode {
+    /// Month's free money spread over its days; what is left carries over.
+    #[default]
+    Month,
+    /// Free balance spread over the days until the next income.
+    UntilIncome,
+}
+
+/// A hand-set value of a non-financial asset; applies to its whole history
+/// (plan D24), so revaluing a flat does not make the net-worth chart jump.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ManualPrice {
+    /// `AssetRef::key()` of the asset.
+    pub asset_key: String,
+    pub unit_price: Amount,
+    /// Lowercase currency code of `unit_price`.
+    pub currency: String,
+    pub updated_at: String,
 }
 
 fn default_bybit_import_interval() -> u32 {
@@ -63,6 +100,9 @@ impl Default for Settings {
             fx_refresh_interval_sec: 300,
             minimize_to_tray: true,
             bybit_import_interval_sec: 900,
+            savings_rate: Amount::parse("0.10").unwrap_or(Amount::ZERO),
+            daily_budget_mode: DailyBudgetMode::Month,
+            budget_currency: String::new(),
         }
     }
 }
@@ -100,6 +140,10 @@ pub struct ExchangeKeys {
     pub store_id: String,
     pub api_key: String,
     pub api_secret: String,
+    /// Sub-account spot fills are booked on; `None` = `store_id`.
+    pub spot_store_id: Option<String>,
+    /// Sub-account futures fills are booked on; `None` = `store_id`.
+    pub futures_store_id: Option<String>,
 }
 
 impl ExchangeKeys {
@@ -167,6 +211,12 @@ pub struct PendingImport {
     pub occurred_at: String,
     /// Provenance note shown in the staging UI.
     pub comment: String,
+    pub is_maker: Option<bool>,
+    /// Size this fill closed, for futures; `Some(>0)` means it reduced a position.
+    pub closed_size: Option<Amount>,
+    /// Realized PnL of a closing futures fill. Bybit's execution list does not
+    /// carry it, so the import leaves it empty; the user can fill it in.
+    pub closed_pnl: Option<Amount>,
 }
 
 impl PendingImport {
@@ -212,6 +262,13 @@ impl PendingImport {
             fee_asset: prefill.fee_asset.map(nonempty).unwrap_or_default(),
             occurred_at: nonempty(prefill.occurred_at.unwrap_or_default()),
             comment: prefill.comment.unwrap_or_default(),
+            is_maker: Some(exec.is_maker),
+            closed_size: exec
+                .closed_size
+                .as_deref()
+                .and_then(|raw| Amount::parse(raw).ok())
+                .filter(|size| size.is_positive()),
+            closed_pnl: None,
         })
     }
 
@@ -242,7 +299,7 @@ pub struct VaultDoc {
     pub stores: Vec<Store>,
     pub holdings: Vec<Holding>,
     pub transactions: Vec<Transaction>,
-    pub categories: Vec<String>,
+    pub categories: Vec<Category>,
     pub price_cache: Vec<PricePoint>,
     pub fx_cache: Vec<FxPoint>,
     /// Exchange credentials, added in payload v1.
@@ -252,6 +309,18 @@ pub struct VaultDoc {
     /// Staged Bybit fills awaiting user confirmation (D2.4).
     #[serde(default)]
     pub pending_imports: Vec<PendingImport>,
+    pub contacts: Vec<Contact>,
+    pub automations: Vec<Automation>,
+    pub automation_runs: Vec<AutomationRun>,
+    pub budgets: Vec<Budget>,
+    pub goals: Vec<Goal>,
+    pub reminders: Vec<Reminder>,
+    pub price_alerts: Vec<PriceAlert>,
+    pub categorization_rules: Vec<CategorizationRule>,
+    pub utility_items: Vec<UtilityItem>,
+    pub meter_readings: Vec<MeterReading>,
+    pub enrichments: Vec<EnrichmentRecord>,
+    pub manual_prices: Vec<ManualPrice>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -275,18 +344,23 @@ impl Default for VaultDoc {
             stores: Vec::new(),
             holdings: Vec::new(),
             transactions: Vec::new(),
-            categories: vec![
-                "salary".into(),
-                "rewards".into(),
-                "trading".into(),
-                "staking".into(),
-                "defi".into(),
-                "other".into(),
-            ],
+            categories: default_categories(),
             price_cache: Vec::new(),
             fx_cache: Vec::new(),
             exchanges: Exchanges::default(),
             pending_imports: Vec::new(),
+            contacts: Vec::new(),
+            automations: Vec::new(),
+            automation_runs: Vec::new(),
+            budgets: Vec::new(),
+            goals: Vec::new(),
+            reminders: Vec::new(),
+            price_alerts: Vec::new(),
+            categorization_rules: Vec::new(),
+            utility_items: Vec::new(),
+            meter_readings: Vec::new(),
+            enrichments: Vec::new(),
+            manual_prices: Vec::new(),
         }
     }
 }
@@ -405,12 +479,48 @@ mod json_schema_tests {
             "Transaction must be a union of tagged variants"
         );
         let tags = tx_schema.to_string();
-        for tag in Transaction::ALL_TAGS {
-            assert!(tags.contains(tag), "schema is missing `{tag}`");
+        for kind in crate::model::transaction::TxKind::ALL {
+            assert!(
+                tags.contains(kind.tag()),
+                "schema is missing `{}`",
+                kind.tag()
+            );
         }
 
         // Optional fields admit null, so the editor can leave them empty.
-        let reference = &defs["BankTransferTx"]["properties"]["reference"];
-        assert_eq!(reference["type"][1], "null");
+        let fee = &defs["TopupTx"]["properties"]["fee"];
+        assert!(fee.to_string().contains("null"), "{fee}");
+
+        // Every collection the later phases need is already in the schema
+        // (plan D11), so the editor can show and edit them.
+        for collection in [
+            "contacts",
+            "automations",
+            "automation_runs",
+            "budgets",
+            "goals",
+            "reminders",
+            "price_alerts",
+            "categorization_rules",
+            "utility_items",
+            "meter_readings",
+            "enrichments",
+            "manual_prices",
+        ] {
+            assert!(
+                root.contains_key(collection),
+                "schema is missing `{collection}`"
+            );
+        }
+        for def in [
+            "Contact",
+            "Category",
+            "Automation",
+            "Goal",
+            "LiabilityTerms",
+            "EnrichmentRecord",
+        ] {
+            assert!(defs.contains_key(def), "schema is missing `{def}`");
+        }
     }
 }

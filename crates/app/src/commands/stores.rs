@@ -2,7 +2,7 @@ use tauri::State;
 
 use trade_core::ipc_contract::{CreateStoreInput, MoveStoreInput, UpdateStoreInput};
 use trade_core::model::store::Store;
-use trade_core::service::{StoreMoveTargets, StoreOverview, StoreTreeNode};
+use trade_core::service::{StoreExtras, StoreMoveTargets, StoreOverview, StoreTreeNode};
 
 use crate::commands::{AppState, err_to_string, require_vault};
 
@@ -20,12 +20,17 @@ pub async fn create_store(
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     vault
-        .create_store(
+        .create_store_with(
             &input.name,
             input.kind,
             &input.color,
             &input.note,
             input.parent_id,
+            StoreExtras {
+                in_budget: input.in_budget,
+                liability: input.liability,
+                contact_id: input.contact_id,
+            },
         )
         .map_err(err_to_string)
 }
@@ -38,7 +43,17 @@ pub async fn update_store(
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     vault
-        .update_store(&input.id, &input.name, &input.color, &input.note)
+        .update_store(
+            &input.id,
+            &input.name,
+            &input.color,
+            &input.note,
+            StoreExtras {
+                in_budget: input.in_budget,
+                liability: input.liability,
+                contact_id: input.contact_id,
+            },
+        )
         .map_err(err_to_string)
 }
 

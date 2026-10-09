@@ -75,15 +75,42 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
 /// [`VAULT_FORMAT_VERSION`]: both require the user's explicit permission. See
 /// the constant's documentation.
 pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
-    let doc = match fmt {
+    let decoded = match fmt {
         SnapshotFormat::Json => serde_json::from_slice::<VaultDoc>(bytes)
-            .map_err(|err| Error::Deserialize(err.to_string()))?,
-        SnapshotFormat::Bin => decode_bin(bytes)?,
+            .map_err(|err| Error::Deserialize(err.to_string())),
+        SnapshotFormat::Bin => decode_bin(bytes),
+    };
+    // A file that says it is the current version but does not fit the current
+    // schema was written before the schema break (plan §4.10). There is no
+    // converter, so say so instead of reporting a parse error.
+    let doc = match decoded {
+        Ok(doc) => doc,
+        Err(err) if stored_version(bytes, fmt) == Some(VAULT_FORMAT_VERSION) => {
+            return Err(Error::IncompatibleVault(err.to_string()));
+        }
+        Err(err) => return Err(err),
     };
     if doc.version != VAULT_FORMAT_VERSION {
         return Err(Error::Unsupported);
     }
     Ok(doc)
+}
+
+/// The `version` a payload claims, read without decoding the rest of it.
+/// `version` is the first field of `VaultDoc`, so for bincode it is the first value.
+fn stored_version(bytes: &[u8], fmt: SnapshotFormat) -> Option<u32> {
+    match fmt {
+        SnapshotFormat::Json => serde_json::from_slice::<serde_json::Value>(bytes)
+            .ok()?
+            .get("version")?
+            .as_u64()
+            .and_then(|version| u32::try_from(version).ok()),
+        SnapshotFormat::Bin => {
+            bincode::serde::decode_from_slice::<u32, _>(bytes, bincode::config::standard())
+                .ok()
+                .map(|(version, _)| version)
+        }
+    }
 }
 
 /// Decode a bincode payload directly as the current VaultDoc schema.
@@ -223,7 +250,7 @@ pub fn probe(path: &Path) -> Result<SnapshotFormat> {
 mod tests {
     use super::*;
     use crate::Amount;
-    use crate::model::transaction::{IncomeTx, PriceStamp, Transaction, TxMeta};
+    use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
     use crate::model::vault::{ExchangeKeys, Exchanges};
     use serde_json::Value as Json;
 
@@ -240,12 +267,16 @@ mod tests {
             Some("bitcoin"),
             crate::model::chain::Chain::Bitcoin,
         );
-        let tx = Transaction::Income(IncomeTx {
-            meta: TxMeta::new("first buy"),
+        let mut meta = TxMeta::new("first buy");
+        meta.categories = vec!["salary".into()];
+        let tx = Transaction::Topup(TopupTx {
+            meta,
             store_id: store.id.clone(),
             asset: btc.clone(),
             amount: Amount::parse("0.5").unwrap(),
-            source: crate::model::transaction::IncomeSource::Salary,
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
             price: PriceStamp {
                 price_usd: Some(Amount::parse("65000").unwrap()),
                 ..Default::default()
@@ -276,7 +307,7 @@ mod tests {
         assert_eq!(out.stores.len(), 1);
         assert_eq!(out.stores[0].name, "Binance");
         let tx = &out.transactions[0];
-        assert_eq!(tx.tag(), "income");
+        assert_eq!(tx.tag(), "topup");
         assert_eq!(tx.meta().comment, "first buy");
         // The whole variant survives the round trip, not just its amount.
         assert_eq!(tx.legs()[0].amount.to_string(), "0.5");
@@ -295,7 +326,7 @@ mod tests {
         let (out, fmt) = VaultFile::open(&path, "pw").unwrap();
         assert_eq!(fmt, SnapshotFormat::Bin);
         assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-        assert_eq!(out.transactions[0].tag(), "income");
+        assert_eq!(out.transactions[0].tag(), "topup");
         assert_eq!(out.id, doc.id);
     }
 
@@ -395,11 +426,15 @@ mod tests {
                         store_id: store1_id.clone(),
                         api_key: "aaaa1111".into(),
                         api_secret: "secret1".into(),
+                        spot_store_id: None,
+                        futures_store_id: None,
                     },
                     ExchangeKeys {
                         store_id: store2_id,
                         api_key: "bbbb2222".into(),
                         api_secret: "secret2".into(),
+                        spot_store_id: Some("spot".into()),
+                        futures_store_id: None,
                     },
                 ],
             },
@@ -436,6 +471,45 @@ mod tests {
         assert!(matches!(err, Error::Unsupported), "got {err:?}");
     }
 
+    /// Plan D11: every persisted type of phases 2–7 exists now. A document
+    /// with every collection filled must survive both encodings unchanged —
+    /// the bincode half is what catches a type serde can write but not read
+    /// back (internal tags, `flatten`, `Value`).
+    #[test]
+    fn a_full_document_round_trips_in_both_formats() {
+        let doc = crate::model::fixtures::full_doc();
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Bin] {
+            let out = decode(&encode(&doc, fmt).unwrap(), fmt).unwrap();
+            assert_eq!(out, doc, "{fmt:?}");
+        }
+    }
+
+    /// A version-1 file from before the schema break says so, instead of
+    /// reporting a parse error (plan §4.10).
+    #[test]
+    fn an_old_vault_is_reported_as_incompatible() {
+        let mut json: Json = serde_json::to_value(sample_doc()).unwrap();
+        json["transactions"] = serde_json::json!([{
+            "income": {
+                "meta": { "id": "x", "timestamp": "2026-01-01T00:00:00Z", "comment": "", "categories": [] },
+                "store_id": "s", "asset": { "symbol": "USD", "name": "", "coingecko_id": null, "chain": null, "contract": null, "quote": "USD" },
+                "amount": "1", "source": "salary", "price": {}
+            }
+        }]);
+        let err = decode(&serde_json::to_vec(&json).unwrap(), SnapshotFormat::Json).unwrap_err();
+        assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
+        assert_eq!(err.code(), "INCOMPATIBLE_VAULT");
+
+        // bincode: the right version up front, then something else entirely.
+        let old = bincode::serde::encode_to_vec(
+            (VAULT_FORMAT_VERSION, "id", "2026-01-01T00:00:00Z", 8u32),
+            bincode::config::standard(),
+        )
+        .unwrap();
+        let err = decode(&old, SnapshotFormat::Bin).unwrap_err();
+        assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
+    }
+
     #[test]
     fn corrupt_payload_is_an_error_not_a_panic() {
         let junk = vec![0xffu8; 32];
@@ -451,6 +525,8 @@ mod tests {
             store_id: "store-1".into(),
             api_key: "abcdef123456".into(),
             api_secret: "s3cr3t".into(),
+            spot_store_id: None,
+            futures_store_id: None,
         };
         let shown = format!("{keys:?}");
         assert!(!shown.contains("s3cr3t"), "secret leaked: {shown}");
@@ -472,7 +548,9 @@ mod tests {
             ExchangeKeys {
                 store_id: "s".into(),
                 api_key: "abcd".into(),
-                api_secret: "x".into()
+                api_secret: "x".into(),
+                spot_store_id: None,
+                futures_store_id: None,
             }
             .hint(),
             "****"

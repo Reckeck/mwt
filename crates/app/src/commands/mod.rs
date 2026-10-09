@@ -5,6 +5,7 @@ pub mod app_settings;
 pub mod auth;
 pub mod calc;
 pub mod categories;
+pub mod contacts;
 pub mod exchange;
 pub mod portfolio;
 pub mod pricing;

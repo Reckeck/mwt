@@ -50,32 +50,11 @@ pub async fn update_settings(
     state: State<'_, AppState>,
 ) -> Result<Settings, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let settings = &mut vault.doc.settings;
-    if let Some(decimals) = input.display_decimals {
-        settings.display_decimals = decimals.clamp(0, 18);
-    }
-    if let Some(widgets) = input.dashboard_widgets {
-        settings.dashboard_widgets = widgets;
-    }
-    if let Some(interval) = input.fx_refresh_interval_sec {
-        settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
-    }
-    if let Some(minimize) = input.minimize_to_tray {
-        settings.minimize_to_tray = minimize;
-    }
-    if let Some(interval) = input.bybit_import_interval_sec {
-        // 0 disables the poller; otherwise keep a sane floor so a typo cannot
-        // hammer the Bybit API every few seconds.
-        settings.bybit_import_interval_sec = if interval == 0 {
-            0
-        } else {
-            interval.clamp(60, 86_400)
-        };
-    }
-    let out = settings.clone();
-    vault.persist().map_err(crate::commands::err_to_string)?;
-    Ok(out)
+    guard
+        .as_mut()
+        .unwrap()
+        .update_settings(input)
+        .map_err(err_to_string)
 }
 
 #[tauri::command]
@@ -138,7 +117,13 @@ pub async fn dev_apply_vault_json(
     json: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
+    // An edit that does not fit the schema is a typo in the editor, not an old
+    // file: report it as a parse error, not as an incompatible vault.
     let decoded = trade_core::storage::decode(json.as_bytes(), SnapshotFormat::Json)
+        .map_err(|err| match err {
+            trade_core::Error::IncompatibleVault(detail) => trade_core::Error::Deserialize(detail),
+            other => other,
+        })
         .map_err(|err| format!("{}: {}", err.code(), err))?;
 
     let mut guard = require_vault(&state).map_err(err_to_string)?;
