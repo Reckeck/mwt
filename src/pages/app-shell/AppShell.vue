@@ -6,11 +6,10 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import { AppSettingsModal } from '@/widgets/app-settings'
+import { AppSettingsDialog } from '@/widgets/app-settings'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Dialog } from '@/shared/ui/dialog'
 import { Separator } from '@/shared/ui/separator'
 import {
   Sidebar,
@@ -195,17 +194,6 @@ async function lock() {
       </div>
     </SidebarInset>
 
-    <Dialog
-      v-model:open="settingsOpen"
-      :title="t('settings.appTitle')"
-      :description="t('settings.appScopeHint')"
-      size="lg"
-    >
-      <!-- Mounted per open so every visit starts from the file on disk. -->
-      <AppSettingsModal v-if="settingsOpen" />
-      <template #footer>
-        <Button @click="settingsOpen = false">{{ t('actions.close') }}</Button>
-      </template>
-    </Dialog>
+    <AppSettingsDialog v-model:open="settingsOpen" />
   </SidebarProvider>
 </template>
