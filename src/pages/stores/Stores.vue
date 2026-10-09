@@ -2,18 +2,14 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Archive, ArchiveRestore, Plus, Trash2, X } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import { Badge } from '@/shared/ui/badge'
+import { StoreCreateDialog } from '@/features/store-create'
+import { StoreCard } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { Dialog } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
 import { call, parseError } from '@/shared/api/ipc'
-import { cn } from '@/shared/lib/utils'
-import { getStoreIcon } from '@/shared/lib/store-icons'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -24,29 +20,9 @@ const stores = useQuery({
 })
 
 const createDialogOpen = ref(false)
-const name = ref('')
-const color = ref('#0ea5e9')
-const kind = ref<StoreKind>('cash')
-
-const kinds: StoreKind[] = ['exchange', 'hot_wallet', 'cold_wallet', 'bank', 'cash']
 
 function invalidate() {
   return queryClient.invalidateQueries({ queryKey: ['stores'] })
-}
-
-const createStore = useMutation({
-  mutationFn: () => call<Store>('create_store', { input: { name: name.value, kind: kind.value, color: color.value, note: '' } }),
-  onSuccess: (store) => {
-    toast.success(t('stores.created'), { description: store.name })
-    name.value = ''
-    void invalidate()
-  },
-  onError: (err) => toast.error(t('stores.createFailed'), { description: parseError(err).message }),
-})
-
-async function submitCreate() {
-  const created = await createStore.mutateAsync().catch(() => null)
-  if (created) createDialogOpen.value = false
 }
 
 const toggleArchive = useMutation({
@@ -79,89 +55,19 @@ const remove = useMutation({
     </div>
 
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
-      <Card v-for="store in stores.data.value ?? []" :key="store.id" :class="cn(store.archived && 'opacity-60')">
-        <template #header>
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <span
-                class="flex size-6 shrink-0 items-center justify-center rounded-md border"
-                :style="{
-                  backgroundColor: `${store.color}1A`,
-                  color: store.color,
-                  borderColor: `${store.color}33`,
-                }"
-              >
-                <component :is="getStoreIcon(store.kind)" class="size-3.5" />
-              </span>
-              <p class="font-medium">{{ store.name }}</p>
-            </div>
-            <div class="flex items-center gap-1">
-              <Badge variant="secondary">{{ t(`stores.kind.${store.kind}`) }}</Badge>
-            </div>
-          </div>
-        </template>
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-sm text-muted-foreground">{{ store.note || '—' }}</p>
-          <div class="flex gap-1">
-            <Button variant="ghost" size="icon" :title="store.archived ? t('stores.unarchive') : t('stores.archive')" @click="toggleArchive.mutate(store)">
-              <ArchiveRestore v-if="store.archived" class="size-4" />
-              <Archive v-else class="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" :title="t('stores.delete')" @click="remove.mutate(store.id)">
-              <Trash2 class="size-4 text-destructive" />
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <StoreCard
+        v-for="store in stores.data.value ?? []"
+        :key="store.id"
+        :store="store"
+        @toggle-archive="toggleArchive.mutate"
+        @delete="remove.mutate"
+      />
 
       <Card v-if="!stores.data.value?.length">
         <p class="text-sm text-muted-foreground">{{ t('stores.empty') }}</p>
       </Card>
     </div>
 
-    <Dialog v-model:open="createDialogOpen" :title="t('wallet.newStore')" size="sm">
-      <template #close>
-        <Button variant="ghost" size="icon" @click="createDialogOpen = false">
-          <X class="size-4" />
-          <span class="sr-only">{{ t('actions.close') }}</span>
-        </Button>
-      </template>
-
-      <form class="grid gap-4" @submit.prevent="submitCreate">
-        <div class="grid gap-1.5">
-          <Label for="sname">{{ t('stores.name') }}</Label>
-          <Input id="sname" v-model="name" :placeholder="t('stores.name')" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="skind">{{ t('stores.kind') }}</Label>
-          <select
-            id="skind"
-            v-model="kind"
-            class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            <option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`stores.kind.${kind}`) }}</option>
-          </select>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="scolor">{{ t('stores.color') }}</Label>
-          <input
-            id="scolor"
-            v-model="color"
-            type="color"
-            class="h-9 w-20 cursor-pointer rounded-md border border-input bg-transparent"
-          >
-        </div>
-
-        <div class="flex justify-end gap-2">
-          <Button type="button" variant="outline" @click="createDialogOpen = false">
-            {{ t('actions.cancel') }}
-          </Button>
-          <Button type="submit" :disabled="!name.trim() || createStore.isPending.value">
-            <Plus class="size-4" />
-            {{ t('stores.create') }}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+    <StoreCreateDialog v-model:open="createDialogOpen" />
   </div>
 </template>
