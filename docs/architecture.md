@@ -12,7 +12,7 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 │                    Vue 3 frontend                    │
 │  Pinia (состояние) · TanStack Query (сеть+кэш)      │
 │  shadcn-vue (UI) · vue-echarts (графики)            │
-│  vue-i18n (ru/en) · types из src/lib/ipc.gen.d.ts        │
+│  vue-i18n (ru/en) · types из src/shared/api/ipc.gen.d.ts        │
 └──────────────────────────┬──────────────────────────┘
                            │ invoke / events
 ┌──────────────────────────┴──────────────────────────┐

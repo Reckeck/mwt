@@ -144,6 +144,6 @@ mise run check                    # полный гейт перед комми�
 `mise run build` — она проверит, что формат переживает реальный цикл записи.
 
 Не забудь про `mise run gen-types`, если тронул `Settings` или типы,
-попадающие в IPC: они экспортируются в `src/lib/ipc.gen.d.ts`.
+попадающие в IPC: они экспортируются в `src/shared/api/ipc.gen.d.ts`.
 Документация по формату — `docs/data-model.md` и `docs/security.md`;
 обнови их, если меняешь схему.

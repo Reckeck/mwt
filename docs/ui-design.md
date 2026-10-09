@@ -159,7 +159,7 @@ icon: 'h-10 w-10'
   screen readers get nothing to announce for a settings dialog otherwise
 
 ### Combobox (select with search)
-`src/components/shared/CurrencySelect.vue` — Reka `Combobox*` primitives, used
+`src/entities/currency/ui/currency-select/CurrencySelect.vue` — Reka `Combobox*` primitives, used
 for every currency picker (base currency, favourites).
 
 - **Shape**: trigger looks like a `<Select>`; the panel has a search input on top
@@ -226,6 +226,6 @@ When editing UI code:
 3. **No hardcoded colors** — use semantic tokens only
 4. **Typography** — follow hierarchy table exactly
 5. **Forms** — label→input `gap-1.5`, field→field `gap-4`
-- **Buttons** — use standard variants from `components/ui/button.vue`
+- **Buttons** — use standard variants from `shared/ui/button`
 6. **No nested modals** — refactor to tabs/steps
 7. **Run `mise run check`** before committing (lint + typecheck + tests)

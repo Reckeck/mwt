@@ -126,7 +126,7 @@ PricingService::apply_fx(&mut g.as_mut().unwrap().doc, &fx);
 ## Событие
 
 `refresh_all` после успеха эмитит `prices-updated` с `RefreshResult`. Фронт
-подписывается через `onEvent<T>` из `src/lib/ipc.ts` и инвалидирует
+подписывается через `onEvent<T>` из `src/shared/api/ipc.ts` и инвалидирует
 query-ключи (`['summary']`, `['store', id]`, `['store-history', id]`).
 Новые события — регистрируй здесь же и в `docs/ipc.md`.
 
