@@ -6,6 +6,7 @@ import { DashboardAllocation } from '@/widgets/dashboard-allocation'
 import { DashboardAssets } from '@/widgets/dashboard-assets'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardTotal } from '@/widgets/dashboard-total'
+import { OnboardingChecklist } from '@/widgets/onboarding-checklist'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
@@ -40,6 +41,7 @@ const isVisible = (id: (typeof widgetDefs)[number]['id']) => visibleWidgets.valu
 
 <template>
   <div class="grid gap-6 @container">
+    <OnboardingChecklist />
     <!-- Top row (total, assets, fx): 3 columns on lg, 2 on sm -->
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
       <DashboardTotal v-if="isVisible('total')" />
