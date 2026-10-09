@@ -53,6 +53,10 @@ pub enum Error {
 
     #[error("{0}")]
     StoreTree(StoreTreeViolation),
+
+    /// The file is from before the transaction-model schema break; there is no converter.
+    #[error("vault was written by an earlier version of the app: {0}")]
+    IncompatibleVault(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -107,6 +111,7 @@ impl Error {
             Error::Archived(_) => "ARCHIVED",
             Error::RequiresUnlock => "REQUIRES_UNLOCK",
             Error::StoreTree(violation) => violation.code(),
+            Error::IncompatibleVault(_) => "INCOMPATIBLE_VAULT",
         }
     }
 }

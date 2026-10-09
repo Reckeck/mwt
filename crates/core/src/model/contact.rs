@@ -1,0 +1,63 @@
+//! Contacts: the outside parties money moves to and from, with any number of
+//! saved accounts each.
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use crate::model::chain::Chain;
+
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ContactKind {
+    #[default]
+    Person,
+    Company,
+    /// A currency exchanger (skycapital and the like): conversions go through it.
+    Exchanger,
+}
+
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DetailKind {
+    Iban,
+    Account,
+    CryptoAddress,
+    Card,
+    Phone,
+    Url,
+    #[default]
+    Other,
+}
+
+/// One saved account of a contact: an IBAN, a card, a USDT address.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ContactAccount {
+    pub id: String,
+    /// Grouping label in the UI («Мой банк», «Биржа»).
+    pub group: Option<String>,
+    /// «Основной счёт», «USDT TRC-20».
+    pub label: String,
+    pub kind: DetailKind,
+    pub value: String,
+    /// Currency code the account holds, lowercase.
+    pub currency: Option<String>,
+    /// Only for `CryptoAddress`.
+    pub network: Option<Chain>,
+    /// An account referenced by transactions is deactivated instead of deleted.
+    pub active: bool,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct Contact {
+    pub id: String,
+    pub name: String,
+    pub kind: ContactKind,
+    pub accounts: Vec<ContactAccount>,
+    pub note: String,
+    pub archived: bool,
+    pub created_at: String,
+}

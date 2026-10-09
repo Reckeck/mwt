@@ -16,6 +16,42 @@ pub enum StoreKind {
     Bank,
     #[default]
     Cash,
+    /// Non-financial property valued by hand: a flat, a car, a collection.
+    Asset,
+    /// Money owed: a mortgage, a loan, a credit card. Its balance is negative.
+    Liability,
+}
+
+impl StoreKind {
+    /// Whether a new top-level store of this kind counts in the daily budget
+    /// by default (plan D22): everyday money does, investments and debts do not.
+    pub fn in_budget_by_default(self) -> bool {
+        matches!(self, Self::Cash | Self::Bank)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LiabilityKind {
+    Mortgage,
+    Loan,
+    CreditCard,
+    Installment,
+    Other,
+}
+
+/// Terms of a `liability` store. Informational, except `limit`, which caps
+/// what an automation may charge to a credit card.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct LiabilityTerms {
+    pub kind: LiabilityKind,
+    /// Annual interest rate in percent.
+    pub rate: Option<crate::Amount>,
+    /// Credit limit, in the store's currency.
+    pub limit: Option<crate::Amount>,
+    /// Day of the month the mandatory payment is due (1–31).
+    pub due_day: Option<u8>,
+    pub monthly_payment: Option<crate::Amount>,
 }
 
 /// Deepest allowed node depth; a root is depth 0, so the tree has three levels:
@@ -39,6 +75,12 @@ pub struct Store {
     /// the service, see `MAX_STORE_DEPTH`.
     #[serde(default)]
     pub parent_id: Option<String>,
+    /// Saved contact this wallet belongs to (an exchanger, a bank). Top-level only.
+    pub contact_id: Option<String>,
+    /// Loan terms; only on `liability` stores.
+    pub liability: Option<LiabilityTerms>,
+    /// Whether this store's income and spending count in the daily budget.
+    pub in_budget: bool,
 }
 
 impl Store {
@@ -51,6 +93,9 @@ impl Store {
             archived: false,
             note: String::new(),
             parent_id: None,
+            contact_id: None,
+            liability: None,
+            in_budget: kind.in_budget_by_default(),
         }
     }
 
@@ -144,8 +189,36 @@ impl AssetRef {
         !self.is_fiat()
     }
 
+    /// A perpetual futures contract. It is held like an asset (the open
+    /// position), but its notional is not the user's money, so it never counts
+    /// in portfolio value.
+    pub fn perp(exchange: &str, symbol: &str) -> Self {
+        Self {
+            symbol: symbol.to_uppercase(),
+            name: symbol.to_uppercase(),
+            coingecko_id: None,
+            chain: None,
+            contract: Some(format!("{PERP_PREFIX}{}", exchange.to_lowercase())),
+            quote: symbol.to_uppercase(),
+        }
+    }
+
+    pub fn is_derivative(&self) -> bool {
+        self.contract
+            .as_deref()
+            .is_some_and(|contract| contract.starts_with(PERP_PREFIX))
+    }
+
     /// Stable key used for price cache lookups.
     pub fn key(&self) -> String {
+        if self.is_derivative() {
+            // perp:{exchange}:{symbol}
+            return format!(
+                "{}:{}",
+                self.contract.as_deref().unwrap_or_default(),
+                self.symbol
+            );
+        }
         match (&self.coingecko_id, &self.chain, &self.contract) {
             (Some(_), Some(chain), Some(contract)) => {
                 format!("token:{}:{}:{}", chain_key(chain), self.symbol, contract)
@@ -162,6 +235,8 @@ impl AssetRef {
         }
     }
 }
+
+const PERP_PREFIX: &str = "perp:";
 
 fn chain_key(chain: &Chain) -> &'static str {
     match chain {

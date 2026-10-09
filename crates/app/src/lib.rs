@@ -4,8 +4,8 @@
 mod commands;
 
 use commands::{
-    AppState, app_settings, auth, calc, categories, err_to_string, exchange, portfolio, pricing,
-    settings, stores, transactions, vault_recents,
+    AppState, app_settings, auth, calc, categories, contacts, err_to_string, exchange, portfolio,
+    pricing, settings, stores, transactions, vault_recents,
 };
 use tauri::{
     Emitter, Manager,
@@ -40,27 +40,34 @@ pub fn run() {
             // transactions
             transactions::list_transactions,
             transactions::transaction_kinds_for_store_kind,
-            transactions::add_income,
-            transactions::add_expense,
-            transactions::add_payment,
-            transactions::add_fee,
-            transactions::add_bank_transfer,
-            transactions::add_card_payment,
-            transactions::add_wallet_transfer,
-            transactions::add_defi_action,
-            transactions::add_cash_flow,
-            transactions::add_transfer,
-            transactions::add_trade,
+            transactions::add_transaction,
+            transactions::update_transaction,
             transactions::delete_transaction,
-            transactions::update_comment,
-            // categories
-            categories::add_category,
+            // categories and rules
             categories::list_categories,
+            categories::create_category,
+            categories::update_category,
+            categories::archive_category,
+            categories::delete_category,
+            categories::list_categorization_rules,
+            categories::create_categorization_rule,
+            categories::update_categorization_rule,
+            categories::delete_categorization_rule,
+            categories::reorder_categorization_rules,
+            // contacts
+            contacts::list_contacts,
+            contacts::create_contact,
+            contacts::update_contact,
+            contacts::archive_contact,
+            contacts::delete_contact,
+            contacts::get_contact_turnover,
+            contacts::get_contact_balances,
             // exchange (read-only prefill)
             exchange::inspect_tx,
             exchange::bybit_executions,
             exchange::exchange_key_status,
             exchange::set_exchange_key,
+            exchange::set_exchange_targets,
             exchange::clear_exchange_key,
             exchange::import_bybit_history,
             exchange::list_pending_imports,
@@ -70,7 +77,6 @@ pub fn run() {
             pricing::search_assets,
             pricing::refresh_all,
             pricing::open_explorer,
-            pricing::set_tx_prices,
             pricing::get_cached_price,
             pricing::get_candles,
             // portfolio
@@ -79,6 +85,9 @@ pub fn run() {
             portfolio::get_realized_pnl,
             portfolio::get_store_history,
             portfolio::get_store_pnl,
+            portfolio::get_net_worth,
+            portfolio::set_manual_price,
+            portfolio::clear_manual_price,
             // calculator
             calc::calc_preview,
             // app settings (outside the vault)

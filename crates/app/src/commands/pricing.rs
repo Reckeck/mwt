@@ -2,7 +2,6 @@ use tauri::{AppHandle, Emitter, State};
 
 use trade_core::ipc_contract::{
     AssetPriceInput, CachedPrice, CandlePoint, GetCandlesInput, GetCandlesOutput, RefreshResult,
-    SetTxPricesInput,
 };
 use trade_core::model::store::AssetRef;
 use trade_core::pricing::AssetSearchHit;
@@ -118,19 +117,6 @@ pub async fn open_explorer(_app: AppHandle, url: String) -> Result<(), String> {
     tauri_plugin_opener::open_url(&url, None::<&str>)
         .map_err(|_| format!("failed to open {url}"))?;
     Ok(())
-}
-
-/// Stamp price/fx overrides on an historical transaction.
-#[tauri::command]
-pub async fn set_tx_prices(
-    input: SetTxPricesInput,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .set_prices(&input.transaction_id, input.price_usd, input.fx_override)
-        .map_err(crate::commands::err_to_string)
 }
 
 /// Fetch OHLCV candles from Binance public API for charting.

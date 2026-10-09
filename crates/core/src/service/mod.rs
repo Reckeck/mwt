@@ -9,11 +9,35 @@ use zeroize::Zeroizing;
 use crate::Amount;
 use crate::error::{Error, Result, StoreTreeViolation};
 use crate::model::chain::Chain;
-use crate::model::store::{AssetRef, Holding, MAX_STORE_DEPTH, Store, StoreKind, StoreScope};
-use crate::model::transaction::{ExchangeTradeTx, Leg, PriceStamp, TradeSide, Transaction, TxMeta};
-use crate::model::vault::{PendingImport, VaultDoc, iso_to_millis, now_iso};
+use crate::model::store::{
+    AssetRef, Holding, LiabilityTerms, MAX_STORE_DEPTH, Store, StoreKind, StoreScope,
+};
+use crate::model::transaction::{
+    Fee, FuturesAction, FuturesCategory, FuturesDirection, Leg, LegRole, Liquidity, PriceStamp,
+    TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TxMeta, TxOrigin,
+};
+use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
 use crate::storage::{SnapshotFormat, VaultFile};
-use crate::txinfo::{HashShape, hash_shape};
+
+mod categories;
+mod contacts;
+#[cfg(test)]
+mod test_support;
+mod validate;
+mod worth;
+
+pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, TurnoverRow};
+pub use worth::{FlowClass, NetWorth};
+
+/// Store fields beyond name, colour and note: budget membership, loan terms
+/// and the contact the wallet belongs to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StoreExtras {
+    /// `None` on create = the default (root: by kind, sub-account: the parent's).
+    pub in_budget: Option<bool>,
+    pub liability: Option<LiabilityTerms>,
+    pub contact_id: Option<String>,
+}
 
 /// Upper bound on staged imports held in the vault. A background poll must not
 /// be able to grow the encrypted file without limit.
@@ -117,6 +141,57 @@ impl UnlockedVault {
     pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()> {
         self.fmt = fmt;
         self.persist()
+    }
+
+    // -- settings -----------------------------------------------------------
+
+    /// Apply a partial update of the vault-scoped settings: every field that is
+    /// present is written (clamped to a sane range), the rest is kept.
+    pub fn update_settings(
+        &mut self,
+        input: crate::ipc_contract::UpdateSettingsInput,
+    ) -> Result<Settings> {
+        if let Some(rate) = input.savings_rate
+            && (rate.is_negative() || rate > Amount::new(rust_decimal::Decimal::ONE))
+        {
+            return Err(Error::InvalidInput(
+                "the savings rate must be between 0 and 100%".into(),
+            ));
+        }
+        let settings = &mut self.doc.settings;
+        if let Some(decimals) = input.display_decimals {
+            settings.display_decimals = decimals.clamp(0, 18);
+        }
+        if let Some(widgets) = input.dashboard_widgets {
+            settings.dashboard_widgets = widgets;
+        }
+        if let Some(interval) = input.fx_refresh_interval_sec {
+            settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
+        }
+        if let Some(minimize) = input.minimize_to_tray {
+            settings.minimize_to_tray = minimize;
+        }
+        if let Some(interval) = input.bybit_import_interval_sec {
+            // 0 disables the poller; otherwise keep a sane floor so a typo cannot
+            // hammer the Bybit API every few seconds.
+            settings.bybit_import_interval_sec = if interval == 0 {
+                0
+            } else {
+                interval.clamp(60, 86_400)
+            };
+        }
+        if let Some(rate) = input.savings_rate {
+            settings.savings_rate = rate;
+        }
+        if let Some(mode) = input.daily_budget_mode {
+            settings.daily_budget_mode = mode;
+        }
+        if let Some(currency) = input.budget_currency {
+            settings.budget_currency = currency.trim().to_lowercase();
+        }
+        let out = settings.clone();
+        self.persist()?;
+        Ok(out)
     }
 
     // -- stores -------------------------------------------------------------
@@ -251,9 +326,66 @@ impl UnlockedVault {
         note: &str,
         parent_id: Option<String>,
     ) -> Result<Store> {
+        self.create_store_with(name, kind, color, note, parent_id, StoreExtras::default())
+    }
+
+    /// R10 and the loan-terms rule, shared by create and update.
+    fn check_store_extras(
+        &self,
+        kind: StoreKind,
+        is_root: bool,
+        extras: &StoreExtras,
+    ) -> Result<()> {
+        if extras.liability.is_some() && kind != StoreKind::Liability {
+            return Err(Error::InvalidInput(
+                "loan terms are only for a loan wallet".into(),
+            ));
+        }
+        if let Some(terms) = &extras.liability
+            && terms.due_day.is_some_and(|day| !(1..=31).contains(&day))
+        {
+            return Err(Error::InvalidInput("the payment day must be 1–31".into()));
+        }
+        if let Some(contact_id) = &extras.contact_id {
+            if !is_root {
+                return Err(Error::InvalidInput(
+                    "a contact is set on the top-level wallet; sub-accounts share it".into(),
+                ));
+            }
+            if !self
+                .doc
+                .contacts
+                .iter()
+                .any(|contact| &contact.id == contact_id)
+            {
+                return Err(Error::Missing(format!("contact {contact_id}")));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn create_store_with(
+        &mut self,
+        name: &str,
+        kind: StoreKind,
+        color: &str,
+        note: &str,
+        parent_id: Option<String>,
+        extras: StoreExtras,
+    ) -> Result<Store> {
         self.validate_placement(None, parent_id.as_deref(), name)?;
+        self.check_store_extras(kind, parent_id.is_none(), &extras)?;
         let mut store = Store::new(name, kind, color);
         store.note = note.trim().to_string();
+        // D22: a sub-account starts with its parent's budget flag, a root with its kind's.
+        store.in_budget = extras.in_budget.unwrap_or_else(|| match &parent_id {
+            Some(parent) => self
+                .find_store(parent)
+                .is_some_and(|parent| parent.in_budget),
+            None => kind.in_budget_by_default(),
+        });
+        store.liability = extras.liability;
+        store.contact_id = extras.contact_id;
         store.parent_id = parent_id;
         self.doc.stores.push(store.clone());
         self.recompute_holdings();
@@ -263,15 +395,23 @@ impl UnlockedVault {
 
     /// Edit a store's own fields. Its place in the tree changes only through
     /// [`Self::move_store`].
-    pub fn update_store(&mut self, id: &str, name: &str, color: &str, note: &str) -> Result<Store> {
-        let parent = self
+    pub fn update_store(
+        &mut self,
+        id: &str,
+        name: &str,
+        color: &str,
+        note: &str,
+        extras: StoreExtras,
+    ) -> Result<Store> {
+        let current = self
             .find_store(id)
-            .ok_or_else(|| Error::Missing("store".into()))?
-            .parent_id
-            .clone();
+            .ok_or_else(|| Error::Missing("store".into()))?;
+        let parent = current.parent_id.clone();
+        let kind = current.kind;
         if !name.trim().is_empty() {
             self.ensure_unique_name(Some(id), parent.as_deref(), name)?;
         }
+        self.check_store_extras(kind, parent.is_none(), &extras)?;
         let out = {
             let store = self
                 .doc
@@ -284,6 +424,11 @@ impl UnlockedVault {
             }
             store.color = color.trim().to_string();
             store.note = note.trim().to_string();
+            if let Some(in_budget) = extras.in_budget {
+                store.in_budget = in_budget;
+            }
+            store.liability = extras.liability;
+            store.contact_id = extras.contact_id;
             store.clone()
         };
         self.persist()?;
@@ -404,65 +549,64 @@ impl UnlockedVault {
         out
     }
 
-    /// Validate and append a transaction of any variant.
-    ///
-    /// Everything kind-specific is already guaranteed by the type system; what
-    /// is left is the cross-cutting set of rules — the stores exist, amounts
-    /// carry a real magnitude, and any on-chain hash is well-formed.
+    /// Fill what the user does not type: the purchase price of property
+    /// (its unit price is in the base currency at the time of buying).
+    fn complete_transaction(&self, tx: &mut Transaction) {
+        if let Transaction::Topup(inner) = tx
+            && let Some(unit_price) = inner.details.unit_price
+            && inner.price.is_empty()
+            && self
+                .find_store(&inner.store_id)
+                .is_some_and(|store| store.kind == StoreKind::Asset)
+        {
+            let (base, _) = self.base_and_fx();
+            inner.price.price_base = Some(unit_price);
+            inner.price.price_usd = self.per_usd(&base).map(|rate| unit_price / rate);
+        }
+    }
+
+    /// Validate and append a transaction of any variant (plan §4.5, §8.1):
+    /// categories are normalized and auto-filled, then every rule is checked.
     pub fn add_transaction(&mut self, mut tx: Transaction) -> Result<Transaction> {
-        let legs = tx.legs();
-        if legs.is_empty() {
-            return Err(Error::InvalidInput("transaction has no legs".into()));
+        Self::normalize_categories(&mut tx);
+        self.apply_categorization_rules(&mut tx);
+        self.complete_transaction(&mut tx);
+        self.validate_transaction(&tx)?;
+        if tx.meta().id.trim().is_empty()
+            || self
+                .doc
+                .transactions
+                .iter()
+                .any(|known| known.meta().id == tx.meta().id)
+        {
+            tx.meta_mut().id = uuid::Uuid::new_v4().to_string();
         }
-        for leg in &legs {
-            self.ensure_store(&leg.store_id)?;
-            if leg.amount.is_zero() {
-                return Err(Error::InvalidInput("amount must not be zero".into()));
-            }
-        }
-        self.check_on_chain_refs(&tx)?;
-        // Two legs must never book the same asset into the same store: they
-        // would net to nothing while the history still showed both rows. A
-        // trade legitimately puts two legs on one store (different assets), so
-        // the pair — not the store alone — is what has to be distinct.
-        for (index, leg) in legs.iter().enumerate() {
-            if legs[..index].iter().any(|earlier| {
-                earlier.store_id == leg.store_id && earlier.asset.key() == leg.asset.key()
-            }) {
-                return Err(Error::InvalidInput(
-                    "legs of one transaction must not net against each other".into(),
-                ));
-            }
-        }
-        self.adopt_categories(&mut tx.meta_mut().categories);
         self.doc.transactions.push(tx.clone());
         self.recompute_holdings();
         self.persist()?;
         Ok(tx)
     }
 
-    /// Normalize `categories` in place and add the ones the user has not seen
-    /// before to the vault-wide vocabulary, so the picker always offers every
-    /// tag that is actually in use.
-    ///
-    /// Canonical form: trimmed, lowercased, empty entries dropped, duplicates
-    /// removed while keeping the input order. Two entries differing only in
-    /// case or whitespace are the same tag — otherwise the category analytics
-    /// would split one bucket in two.
-    fn adopt_categories(&mut self, categories: &mut Vec<String>) {
-        let mut seen = HashSet::new();
-        categories.retain(|raw| {
-            let normalized = raw.trim().to_lowercase();
-            !normalized.is_empty() && seen.insert(normalized)
-        });
-        for raw in categories.iter_mut() {
-            *raw = raw.trim().to_lowercase();
-        }
-        for category in categories.iter() {
-            if !self.doc.categories.iter().any(|known| known == category) {
-                self.doc.categories.push(category.clone());
-            }
-        }
+    /// Replace a transaction entirely. Its id and origin are kept: an edit
+    /// changes what happened, not where the record came from.
+    pub fn update_transaction(&mut self, id: &str, mut tx: Transaction) -> Result<Transaction> {
+        let index = self
+            .doc
+            .transactions
+            .iter()
+            .position(|known| known.meta().id == id)
+            .ok_or_else(|| Error::Missing("transaction".into()))?;
+        let origin = self.doc.transactions[index].meta().origin.clone();
+        tx.meta_mut().id = id.to_string();
+        tx.meta_mut().origin = origin;
+        Self::normalize_categories(&mut tx);
+        self.apply_categorization_rules(&mut tx);
+        self.complete_transaction(&mut tx);
+        self.validate_transaction(&tx)?;
+        self.doc.transactions[index] = tx.clone();
+        self.recompute_holdings();
+        self.persist()?;
+        Ok(tx)
     }
 
     pub fn delete_transaction(&mut self, id: &str) -> Result<()> {
@@ -474,60 +618,6 @@ impl UnlockedVault {
         self.recompute_holdings();
         self.persist()?;
         Ok(())
-    }
-
-    pub fn update_comment(&mut self, id: &str, comment: &str) -> Result<Transaction> {
-        let tx = self
-            .doc
-            .transactions
-            .iter_mut()
-            .find(|tx| tx.meta().id == id)
-            .ok_or_else(|| Error::Missing("transaction".into()))?;
-        tx.meta_mut().comment = comment.trim().to_string();
-        let out = tx.clone();
-        self.persist()?;
-        Ok(out)
-    }
-
-    /// Stamp a manual price / FX override on a transaction.
-    ///
-    /// Delegated to [`Transaction::stamp_prices`], which knows which legs of
-    /// which variant a price belongs on.
-    pub fn set_prices(
-        &mut self,
-        tx_id: &str,
-        price_usd: Option<Amount>,
-        fx_override: Option<Amount>,
-    ) -> Result<()> {
-        let tx = self
-            .doc
-            .transactions
-            .iter_mut()
-            .find(|tx| tx.meta().id == tx_id)
-            .ok_or_else(|| Error::Missing("transaction".into()))?;
-        tx.stamp_prices(price_usd, fx_override);
-        self.recompute_holdings();
-        self.persist()?;
-        Ok(())
-    }
-
-    // -- categories ---------------------------------------------------------
-
-    pub fn add_category(&mut self, category: &str) -> Result<String> {
-        let normalized = category.trim().to_lowercase();
-        if normalized.is_empty() {
-            return Err(Error::InvalidInput("empty category".into()));
-        }
-        if !self
-            .doc
-            .categories
-            .iter()
-            .any(|existing| existing == &normalized)
-        {
-            self.doc.categories.push(normalized.clone());
-            self.persist()?;
-        }
-        Ok(normalized)
     }
 
     // -- holdings recomputation ---------------------------------------------
@@ -561,7 +651,7 @@ impl UnlockedVault {
                 let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
                 let new_qty = cur + delta;
 
-                if delta.is_positive() && !price.is_zero() {
+                if delta.is_positive() && leg.role != LegRole::Fee && !price.is_zero() {
                     // weighted average cost
                     let new_cost = {
                         let old = cost.get(&key).copied().unwrap_or(Amount::ZERO);
@@ -631,14 +721,20 @@ impl UnlockedVault {
         (base, fx)
     }
 
-    /// Newest cached USD price for an asset key, or zero.
+    /// Current USD price of one unit: a hand-set price (property), else the
+    /// newest cached quote, else the last price a transaction recorded for
+    /// the asset, else zero. Derivatives are never valued.
     fn price_usd_for(&self, asset_key: &str) -> Amount {
-        self.doc
-            .price_cache
-            .iter()
-            .filter(|point| point.asset_key == asset_key)
-            .max_by(|left, right| left.ts.cmp(&right.ts))
-            .map(|point| point.value_usd)
+        self.manual_price_usd(asset_key)
+            .or_else(|| {
+                self.doc
+                    .price_cache
+                    .iter()
+                    .filter(|point| point.asset_key == asset_key)
+                    .max_by(|left, right| left.ts.cmp(&right.ts))
+                    .map(|point| point.value_usd)
+            })
+            .or_else(|| self.price_usd_at(asset_key, "9999"))
             .unwrap_or(Amount::ZERO)
     }
 
@@ -672,15 +768,27 @@ impl UnlockedVault {
             .collect()
     }
 
-    /// Aggregate value of a store's holdings, sorted by value descending.
-    fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition> {
+    /// A store's positions, sorted by value descending. `derivatives` picks
+    /// the open futures positions instead of the holdings that have value.
+    fn store_positions_of(
+        &self,
+        store_id: &str,
+        fx: Amount,
+        derivatives: bool,
+    ) -> Vec<StorePosition> {
         let mut out: Vec<StorePosition> = self
             .doc
             .holdings
             .iter()
-            .filter(|holding| holding.store_id == store_id)
+            .filter(|holding| {
+                holding.store_id == store_id && holding.asset.is_derivative() == derivatives
+            })
             .map(|holding| {
-                let price_usd = self.price_usd_for(&holding.asset.key());
+                let price_usd = if derivatives {
+                    Amount::ZERO
+                } else {
+                    self.price_usd_for(&holding.asset.key())
+                };
                 let value_usd = holding.quantity * price_usd;
                 let price_base = price_usd * fx;
                 let unrealized_base = match holding.avg_cost {
@@ -700,6 +808,10 @@ impl UnlockedVault {
             .collect();
         out.sort_by_key(|position| std::cmp::Reverse(position.value_base));
         out
+    }
+
+    fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition> {
+        self.store_positions_of(store_id, fx, false)
     }
 
     /// One row per asset across several stores. The average cost is weighted
@@ -770,19 +882,19 @@ impl UnlockedVault {
     pub fn store_tree(&self) -> Vec<StoreTreeNode> {
         let (_base, fx) = self.base_and_fx();
         let mut own_usd: HashMap<&str, Amount> = HashMap::new();
-        for holding in &self.doc.holdings {
+        for holding in self
+            .doc
+            .holdings
+            .iter()
+            .filter(|holding| !holding.asset.is_derivative())
+        {
             let value = holding.quantity * self.price_usd_for(&holding.asset.key());
             *own_usd.entry(holding.store_id.as_str()).or_default() += value;
         }
         let mut tx_count: HashMap<String, u32> = HashMap::new();
         for tx in &self.doc.transactions {
             let mut touched: HashSet<String> = HashSet::new();
-            for leg in tx.legs() {
-                touched.insert(leg.store_id.clone());
-                if let Some(to) = leg.to_store_id {
-                    touched.insert(to);
-                }
-            }
+            touched.extend(tx.store_ids());
             for id in touched {
                 *tx_count.entry(id).or_default() += 1;
             }
@@ -920,6 +1032,7 @@ impl UnlockedVault {
             realized_pnl_base: self.realized_pnl_filtered(Some(&scope)).total_base,
             positions: self.store_positions(store_id, fx),
             subtree_positions: self.merged_positions(&subtree, fx),
+            open_positions: self.store_positions_of(store_id, fx, true),
             children,
             can_add_child: node.can_add_child,
             tx_count: txs.len() as u32,
@@ -952,7 +1065,12 @@ impl UnlockedVault {
         let mut by_chain: HashMap<String, Amount> = HashMap::new();
         let mut by_store: HashMap<String, Amount> = HashMap::new();
 
-        for holding in &self.doc.holdings {
+        for holding in self
+            .doc
+            .holdings
+            .iter()
+            .filter(|holding| !holding.asset.is_derivative())
+        {
             let price = self.price_usd_for(&holding.asset.key());
             let value_usd = holding.quantity * price;
             let asset_key = holding.asset.key();
@@ -990,7 +1108,11 @@ impl UnlockedVault {
             }
         };
 
+        let worth = self.net_worth();
         PortfolioSummary {
+            assets_base: worth.financial + worth.non_financial + worth.receivables,
+            liabilities_base: worth.liabilities + worth.payables,
+            net_worth_base: worth.net,
             base_currency: base,
             fx_per_usd: fx,
             total_usd,
@@ -1057,7 +1179,7 @@ impl UnlockedVault {
         let mut movements: Vec<(String, String, Amount)> = Vec::new();
         for tx in &self.doc.transactions {
             for leg in tx.legs() {
-                if !in_scope(&leg.store_id) {
+                if !in_scope(&leg.store_id) || leg.asset.is_derivative() {
                     continue;
                 }
                 movements.push((leg.asset.key(), tx.meta().timestamp.clone(), leg.amount));
@@ -1104,6 +1226,9 @@ impl UnlockedVault {
     /// Newest cached USD price of an asset at or before `ts`; without a quote
     /// yet, the latest price a transaction recorded for it (e.g. the last buy).
     fn price_usd_at(&self, asset_key: &str, ts: &str) -> Option<Amount> {
+        if let Some(manual) = self.manual_price_usd(asset_key) {
+            return Some(manual);
+        }
         self.doc
             .price_cache
             .iter()
@@ -1118,7 +1243,9 @@ impl UnlockedVault {
                     .filter_map(|tx| {
                         tx.legs()
                             .into_iter()
-                            .find(|leg| leg.asset.key() == asset_key)
+                            .find(|leg| {
+                                leg.asset.key() == asset_key && leg.role == LegRole::Principal
+                            })
                             .and_then(|leg| leg.price_usd)
                             .map(|price| (tx.meta().timestamp.clone(), price))
                     })
@@ -1155,44 +1282,167 @@ impl UnlockedVault {
         let mut cost: HashMap<(String, String), Amount> = HashMap::new();
         let mut qty: HashMap<(String, String), Amount> = HashMap::new();
         let mut total = Amount::ZERO;
+        let mut fees = Amount::ZERO;
         let mut legs = Vec::new();
 
         for (ts, leg) in &movements {
             let delta = leg.amount;
-            if delta.is_zero() {
+            if delta.is_zero() || leg.asset.is_derivative() {
                 continue;
             }
             let key = (leg.store_id.clone(), leg.asset.key());
             let price = leg_price_in_base(leg, &base);
             let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
-            if delta.is_negative() {
-                let avg = cost.get(&key).copied().unwrap_or(Amount::ZERO);
-                let pnl = (price - avg) * delta.abs();
-                total += pnl;
-                legs.push(PnlLeg {
-                    ts: ts.clone(),
-                    store_id: leg.store_id.clone(),
-                    asset_key: leg.asset.key(),
-                    quantity: delta.abs(),
-                    pnl_base: pnl,
-                    side: "sell".into(),
-                });
-            } else {
-                let new_qty = cur + delta;
-                let new_cost = if new_qty == Amount::ZERO {
-                    Amount::ZERO
-                } else {
-                    (cost.get(&key).copied().unwrap_or(Amount::ZERO) * cur + price * delta)
-                        / new_qty
-                };
-                cost.insert(key.clone(), new_cost);
+            match leg.role {
+                // A fee is a cost of its own, never a sale at a profit.
+                LegRole::Fee => fees += delta.abs() * price,
+                // Settled by the exchange: the PnL is the amount itself.
+                LegRole::Pnl => {
+                    let pnl = delta * price;
+                    total += pnl;
+                    legs.push(PnlLeg {
+                        ts: ts.clone(),
+                        store_id: leg.store_id.clone(),
+                        asset_key: leg.asset.key(),
+                        quantity: delta.abs(),
+                        pnl_base: pnl,
+                        side: "settled".into(),
+                    });
+                }
+                // Moving to one's own wallet, or spending without a known
+                // price, realizes nothing.
+                LegRole::Principal
+                    if delta.is_negative() && leg.to_store_id.is_none() && !price.is_zero() =>
+                {
+                    let avg = cost.get(&key).copied().unwrap_or(Amount::ZERO);
+                    let pnl = (price - avg) * delta.abs();
+                    total += pnl;
+                    legs.push(PnlLeg {
+                        ts: ts.clone(),
+                        store_id: leg.store_id.clone(),
+                        asset_key: leg.asset.key(),
+                        quantity: delta.abs(),
+                        pnl_base: pnl,
+                        side: "sell".into(),
+                    });
+                }
+                LegRole::Principal if delta.is_positive() => {
+                    let new_qty = cur + delta;
+                    let new_cost = if new_qty.is_zero() {
+                        Amount::ZERO
+                    } else {
+                        (cost.get(&key).copied().unwrap_or(Amount::ZERO) * cur + price * delta)
+                            / new_qty
+                    };
+                    cost.insert(key.clone(), new_cost);
+                }
+                LegRole::Principal => {}
             }
             qty.insert(key, cur + delta);
         }
         RealizedPnl {
             total_base: total,
+            fees_base: fees,
             legs,
         }
+    }
+
+    // -- exchange keys --------------------------------------------------------
+
+    /// Status of the Bybit key stored for exactly this store.
+    pub fn exchange_key_status(&self, store_id: &str) -> crate::ipc_contract::ExchangeKeyStatus {
+        self.doc
+            .exchanges
+            .bybit
+            .iter()
+            .find(|entry| entry.store_id == store_id)
+            .map(|entry| crate::ipc_contract::ExchangeKeyStatus {
+                configured: true,
+                hint: Some(entry.hint()),
+                spot_store_id: entry.spot_store_id.clone(),
+                futures_store_id: entry.futures_store_id.clone(),
+            })
+            .unwrap_or_default()
+    }
+
+    /// Store (or replace) a read-only Bybit key for an exchange store.
+    /// Sub-account targets of a replaced key are kept.
+    pub fn set_exchange_key(
+        &mut self,
+        store_id: &str,
+        api_key: &str,
+        api_secret: &str,
+    ) -> Result<crate::ipc_contract::ExchangeKeyStatus> {
+        let (api_key, api_secret) = (api_key.trim(), api_secret.trim());
+        if api_key.is_empty() || api_secret.is_empty() {
+            return Err(Error::InvalidInput(
+                "api key and secret are required".into(),
+            ));
+        }
+        let store = self
+            .find_store(store_id)
+            .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+        if store.kind != StoreKind::Exchange {
+            return Err(Error::InvalidInput("store is not an exchange".into()));
+        }
+        let previous = self
+            .doc
+            .exchanges
+            .bybit
+            .iter()
+            .find(|entry| entry.store_id == store_id)
+            .map(|entry| (entry.spot_store_id.clone(), entry.futures_store_id.clone()))
+            .unwrap_or_default();
+        self.doc
+            .exchanges
+            .bybit
+            .retain(|entry| entry.store_id != store_id);
+        self.doc
+            .exchanges
+            .bybit
+            .push(crate::model::vault::ExchangeKeys {
+                store_id: store_id.to_string(),
+                api_key: api_key.to_string(),
+                api_secret: api_secret.to_string(),
+                spot_store_id: previous.0,
+                futures_store_id: previous.1,
+            });
+        self.persist()?;
+        Ok(self.exchange_key_status(store_id))
+    }
+
+    /// Point imported spot / futures fills at sub-accounts of the key's
+    /// store. Each target must be an exchange store inside that wallet.
+    pub fn set_exchange_targets(
+        &mut self,
+        store_id: &str,
+        spot_store_id: Option<String>,
+        futures_store_id: Option<String>,
+    ) -> Result<crate::ipc_contract::ExchangeKeyStatus> {
+        let mut allowed: HashSet<String> = self.subtree_ids(store_id).into_iter().collect();
+        allowed.insert(store_id.to_string());
+        for target in [&spot_store_id, &futures_store_id].into_iter().flatten() {
+            let ok = allowed.contains(target)
+                && self
+                    .find_store(target)
+                    .is_some_and(|store| store.kind == StoreKind::Exchange && !store.archived);
+            if !ok {
+                return Err(Error::InvalidInput(
+                    "fills can only go to an exchange sub-account of this wallet".into(),
+                ));
+            }
+        }
+        let entry = self
+            .doc
+            .exchanges
+            .bybit
+            .iter_mut()
+            .find(|entry| entry.store_id == store_id)
+            .ok_or_else(|| Error::Missing("exchange key".into()))?;
+        entry.spot_store_id = spot_store_id;
+        entry.futures_store_id = futures_store_id;
+        self.persist()?;
+        Ok(self.exchange_key_status(store_id))
     }
 
     // -- bybit import staging (D2.4) ---------------------------------------
@@ -1240,10 +1490,134 @@ impl UnlockedVault {
         out
     }
 
-    /// Turn staged fills into real trades (two legs each, like `add_trade`).
+    /// Where a fill of this category is booked: the sub-account picked for
+    /// spot or futures on the exchange key, else the key's own store.
+    fn import_target(&self, imp: &PendingImport) -> String {
+        let futures = imp.category != "spot";
+        self.doc
+            .exchanges
+            .bybit
+            .iter()
+            .find(|keys| keys.store_id == imp.store_id)
+            .and_then(|keys| {
+                if futures {
+                    keys.futures_store_id.clone()
+                } else {
+                    keys.spot_store_id.clone()
+                }
+            })
+            .unwrap_or_else(|| imp.store_id.clone())
+    }
+
+    /// The transaction a staged fill becomes: a spot trade, or a futures
+    /// open/close for linear and inverse contracts.
+    fn transaction_for_import(&self, imp: &PendingImport) -> Transaction {
+        let mut meta = TxMeta::new(&imp.comment);
+        meta.categories = vec!["trading".to_string()];
+        meta.origin = TxOrigin::Import {
+            exec_id: imp.exec_id.clone(),
+        };
+        if !imp.occurred_at.is_empty() {
+            meta.timestamp = imp.occurred_at.clone();
+        }
+        let store_id = self.import_target(imp);
+        let is_buy = imp.side.eq_ignore_ascii_case("buy");
+        let (base_symbol, quote_symbol) = if is_buy {
+            (&imp.asset_bought, &imp.asset_sold)
+        } else {
+            (&imp.asset_sold, &imp.asset_bought)
+        };
+        let inverse = imp.category == "inverse";
+        let settle_symbol = if inverse { base_symbol } else { quote_symbol };
+        // Spot fees come in the coin Bybit names; futures fees are always
+        // charged in the settle asset.
+        let fee_symbol = match imp.category.as_str() {
+            "spot" if !imp.fee_asset.is_empty() => imp.fee_asset.as_str(),
+            "spot" => quote_symbol.as_str(),
+            _ => settle_symbol.as_str(),
+        };
+        let fee = (!imp.fee.is_zero()).then(|| Fee {
+            asset: self.asset_for_import(fee_symbol),
+            amount: imp.fee.abs(),
+            price: PriceStamp::default(),
+        });
+        // A stablecoin quote makes the fill price a USD price.
+        let usd_quoted = ["USDT", "USDC", "USD", "FDUSD", "BUSD"]
+            .contains(&quote_symbol.to_ascii_uppercase().as_str());
+        let stamp = |usd: Option<Amount>| PriceStamp {
+            price_usd: usd,
+            ..PriceStamp::default()
+        };
+        if imp.category == "spot" {
+            let base_stamp = stamp(usd_quoted.then_some(imp.price));
+            let quote_stamp = stamp(usd_quoted.then(|| Amount::new(rust_decimal::Decimal::ONE)));
+            let (sold_stamp, bought_stamp) = if is_buy {
+                (quote_stamp, base_stamp)
+            } else {
+                (base_stamp, quote_stamp)
+            };
+            return Transaction::TradeSpot(TradeSpotTx {
+                meta,
+                store_id,
+                sold: TradeSide {
+                    asset: self.asset_for_import(&imp.asset_sold),
+                    qty: imp.qty_sold,
+                    price: sold_stamp,
+                },
+                bought: TradeSide {
+                    asset: self.asset_for_import(&imp.asset_bought),
+                    qty: imp.qty_bought,
+                    price: bought_stamp,
+                },
+                fee,
+                liquidity: imp.is_maker.map(|maker| {
+                    if maker {
+                        Liquidity::Maker
+                    } else {
+                        Liquidity::Taker
+                    }
+                }),
+                order_id: None,
+            });
+        }
+        let closing = imp.closed_size.is_some_and(|size| size.is_positive());
+        // Buying closes a short, selling closes a long.
+        let direction = match (is_buy, closing) {
+            (true, false) | (false, true) => FuturesDirection::Long,
+            (false, false) | (true, true) => FuturesDirection::Short,
+        };
+        let settle = self.asset_for_import(settle_symbol);
+        Transaction::TradeFutures(TradeFuturesTx {
+            meta,
+            store_id,
+            contract: AssetRef::perp("bybit", &imp.symbol),
+            settle,
+            direction,
+            action: if closing {
+                FuturesAction::Close
+            } else {
+                FuturesAction::Open
+            },
+            quantity: if is_buy { imp.qty_bought } else { imp.qty_sold },
+            fill_price: imp.price,
+            leverage: None,
+            fee,
+            closed_pnl: if closing { imp.closed_pnl } else { None },
+            order_id: None,
+            category: if inverse {
+                FuturesCategory::Inverse
+            } else {
+                FuturesCategory::Linear
+            },
+            price: stamp((usd_quoted && !inverse).then(|| Amount::new(rust_decimal::Decimal::ONE))),
+        })
+    }
+
+    /// Turn staged fills into real trades.
     ///
     /// An empty `exec_ids` confirms everything staged. Confirmed entries leave
-    /// the staging area so they cannot be imported twice.
+    /// the staging area so they cannot be imported twice; a fill that fails
+    /// validation (its store was archived, say) stays staged.
     pub fn confirm_pending_imports(&mut self, exec_ids: &[String]) -> Result<u32> {
         let all = exec_ids.is_empty();
         let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
@@ -1255,47 +1629,14 @@ impl UnlockedVault {
                 kept.push(imp);
                 continue;
             }
-            if self.ensure_store(&imp.store_id).is_err() {
+            if self.find_store(&imp.store_id).is_none() {
                 continue; // store vanished: drop the staged fill, don't confirm it
             }
-            if self.ensure_positive(&imp.qty_bought, "bought qty").is_err()
-                || self.ensure_positive(&imp.qty_sold, "sold qty").is_err()
-            {
+            let tx = self.transaction_for_import(&imp);
+            if self.validate_transaction(&tx).is_err() {
+                kept.push(imp);
                 continue;
             }
-            let mut meta = TxMeta::new(&imp.comment);
-            meta.categories = vec!["trading".to_string()];
-            if !imp.occurred_at.is_empty() {
-                meta.timestamp = imp.occurred_at.clone();
-            }
-
-            // One record, two legs: a fill is a single event on the exchange,
-            // and writing it as two transactions meant a delete could take only
-            // one side with it.
-            let trade = ExchangeTradeTx {
-                meta,
-                store_id: imp.store_id.clone(),
-                sold: TradeSide {
-                    asset: self.asset_for_import(&imp.asset_sold),
-                    qty: imp.qty_sold,
-                },
-                bought: TradeSide {
-                    asset: self.asset_for_import(&imp.asset_bought),
-                    qty: imp.qty_bought,
-                },
-                fee: (!imp.fee.is_zero()).then(|| imp.fee.abs()),
-                fee_asset: (!imp.fee_asset.is_empty()).then(|| imp.fee_asset.clone()),
-                order_id: Some(imp.exec_id.clone()),
-                market: Some(imp.category.clone()),
-                liquidity: None,
-                price: PriceStamp {
-                    price_usd: Some(imp.price),
-                    ..Default::default()
-                },
-            };
-
-            let mut tx = Transaction::ExchangeTrade(trade);
-            self.adopt_categories(&mut tx.meta_mut().categories);
             self.doc.transactions.push(tx);
             confirmed += 1;
         }
@@ -1303,8 +1644,8 @@ impl UnlockedVault {
         self.doc.pending_imports = kept;
         if confirmed > 0 {
             self.recompute_holdings();
-            self.persist()?;
         }
+        self.persist()?;
         Ok(confirmed)
     }
 
@@ -1363,42 +1704,6 @@ impl UnlockedVault {
             Some(_) => Ok(()),
             None => Err(Error::Missing(format!("store {id}"))),
         }
-    }
-
-    /// Shape-check every on-chain hash a transaction claims.
-    ///
-    /// A wrong network is as bad as a malformed hash: the explorer link would
-    /// open a real page about a transaction that is not this one, so both are
-    /// refused. A hash is matched against the chains of the assets it moved,
-    /// which is why a trade with a BTC leg and a USDT leg cannot carry an EVM
-    /// hash.
-    fn check_on_chain_refs(&self, tx: &Transaction) -> Result<()> {
-        let chains = tx.asset_chains();
-        for (network, hash) in tx.on_chain_refs() {
-            let Some(hash) = hash.filter(|raw| !raw.is_empty()) else {
-                continue;
-            };
-            if hash_shape(hash) == HashShape::Malformed {
-                return Err(Error::TxHashMalformed(hash.to_string()));
-            }
-            if let Some(network) = network
-                && chains.iter().flatten().any(|chain| chain != &network)
-            {
-                return Err(Error::TxHashNetworkMismatch(format!(
-                    "network {network:?} does not match the assets moved"
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    fn ensure_positive(&self, amount: &Amount, what: &str) -> Result<()> {
-        if amount.is_negative() || amount.is_zero() {
-            return Err(Error::InvalidInput(format!(
-                "{what} amount must be positive"
-            )));
-        }
-        Ok(())
     }
 }
 
@@ -1509,6 +1814,8 @@ pub struct StoreOverview {
     pub positions: Vec<StorePosition>,
     /// Positions merged per asset across the whole subtree.
     pub subtree_positions: Vec<StorePosition>,
+    /// Open futures positions (derivatives); never part of the totals.
+    pub open_positions: Vec<StorePosition>,
     /// Direct sub-accounts.
     pub children: Vec<StoreChildRow>,
     /// Whether a sub-account may be created here (depth and archive rules).
@@ -1602,6 +1909,11 @@ pub struct PortfolioSummary {
     pub assets: Vec<AssetStat>,
     pub by_chain: Vec<NamedValue>,
     pub by_store: Vec<StoreValue>,
+    /// Everything owned, incl. property and what people owe (base currency).
+    pub assets_base: Amount,
+    /// Loans and what I owe people, as a positive number.
+    pub liabilities_base: Amount,
+    pub net_worth_base: Amount,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -1626,567 +1938,334 @@ pub struct PnlLeg {
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct RealizedPnl {
     pub total_base: Amount,
+    /// Fees paid in scope, at their stamped price; not part of `total_base`.
+    pub fees_base: Amount,
     pub legs: Vec<PnlLeg>,
 }
 
 #[cfg(test)]
 mod tests {
+    use super::test_support::*;
     use super::*;
-    use crate::model::transaction::{
-        BankRail, BankTransferTx, Flow, IncomeSource, IncomeTx, PaymentTx, TransferTx,
-        WalletTransferTx,
-    };
+    use crate::model::transaction::{AccountRef, KindDetails, TopupTx};
     use crate::storage::SnapshotFormat;
     use tempfile::tempdir;
-
-    fn setup() -> (tempfile::TempDir, UnlockedVault) {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("test.wallet");
-        let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        vault
-            .create_store("Binance", StoreKind::Exchange, "#f0b90b", "", None)
-            .unwrap();
-        vault
-            .create_store("Cold", StoreKind::ColdWallet, "#555", "", None)
-            .unwrap();
-        (dir, vault)
-    }
-
-    fn btc() -> AssetRef {
-        AssetRef::crypto("BTC", "Bitcoin", Some("bitcoin"), Chain::Bitcoin)
-    }
-
-    fn usd() -> AssetRef {
-        AssetRef::fiat("USD", "US Dollar")
-    }
-
-    fn amount(raw: &str) -> Amount {
-        Amount::parse(raw).unwrap()
-    }
-
-    /// Builders for the variants the tests exercise. Each takes the minimum a
-    /// user would supply, so a test reads as the transaction it describes.
-    fn income(store: &str, raw: &str, comment: &str) -> Transaction {
-        income_of(store, usd(), raw, "1", comment)
-    }
-
-    /// Income in a chosen asset and at a chosen USD price: the analytics
-    /// replays value holdings, so a position with no price contributes
-    /// nothing to a total.
-    fn income_of(
-        store: &str,
-        asset: AssetRef,
-        raw: &str,
-        price: &str,
-        comment: &str,
-    ) -> Transaction {
-        Transaction::Income(IncomeTx {
-            meta: TxMeta::new(comment),
-            store_id: store.into(),
-            asset,
-            amount: amount(raw),
-            source: IncomeSource::Salary,
-            price: PriceStamp {
-                price_usd: Some(amount(price)),
-                ..Default::default()
-            },
-        })
-    }
-
-    fn payment(store: &str, raw: &str, comment: &str) -> Transaction {
-        Transaction::Payment(PaymentTx {
-            meta: TxMeta::new(comment),
-            store_id: store.into(),
-            asset: usd(),
-            amount: amount(raw),
-            payee: "Shop".into(),
-            receipt_ref: None,
-            price: PriceStamp::default(),
-        })
-    }
-
-    fn bank_transfer(store: &str, flow: Flow, raw: &str, comment: &str) -> Transaction {
-        Transaction::BankTransfer(BankTransferTx {
-            meta: TxMeta::new(comment),
-            store_id: store.into(),
-            asset: usd(),
-            amount: amount(raw),
-            flow,
-            rail: BankRail::Sepa,
-            counterparty_name: "Someone".into(),
-            counterparty_account: Some("DE00".into()),
-            reference: None,
-            fee: None,
-            fee_asset: None,
-            price: PriceStamp::default(),
-        })
-    }
-
-    fn transfer(from: &str, to: &str, raw: &str, comment: &str) -> Transaction {
-        Transaction::Transfer(TransferTx {
-            meta: TxMeta::new(comment),
-            from_store_id: from.into(),
-            to_store_id: to.into(),
-            asset: btc(),
-            amount: amount(raw),
-            fee: None,
-            fee_asset: None,
-            network: None,
-            tx_hash: None,
-            price: PriceStamp::default(),
-        })
-    }
-
-    fn trade(store: &str, sell: &str, buy: &str, comment: &str) -> Transaction {
-        Transaction::ExchangeTrade(ExchangeTradeTx {
-            meta: TxMeta::new(comment),
-            store_id: store.into(),
-            sold: TradeSide {
-                asset: usd(),
-                qty: amount(sell),
-            },
-            bought: TradeSide {
-                asset: btc(),
-                qty: amount(buy),
-            },
-            fee: None,
-            fee_asset: None,
-            order_id: None,
-            market: Some("spot".into()),
-            liquidity: Some("taker".into()),
-            price: PriceStamp::default(),
-        })
-    }
-
-    fn wallet_transfer(
-        store: &str,
-        flow: Flow,
-        raw: &str,
-        network: Option<Chain>,
-        hash: Option<&str>,
-    ) -> Transaction {
-        // The asset has to live on the chain the hash claims, otherwise the
-        // mismatch check fires for a reason that has nothing to do with the
-        // hash under test.
-        let asset = match network {
-            Some(Chain::Ethereum) => {
-                AssetRef::crypto("ETH", "Ethereum", Some("ethereum"), Chain::Ethereum)
-            }
-            _ => btc(),
-        };
-        Transaction::WalletTransfer(WalletTransferTx {
-            meta: TxMeta::new("on-chain"),
-            store_id: store.into(),
-            asset,
-            amount: amount(raw),
-            flow,
-            network,
-            tx_hash: hash.map(str::to_string),
-            from_address: None,
-            to_address: None,
-            memo: None,
-            fee: None,
-            fee_asset: None,
-            price: PriceStamp::default(),
-        })
-    }
-
-    fn at(tx: &mut Transaction, stamp: &str) {
-        tx.meta_mut().timestamp = stamp.into();
-    }
-
-    fn holding_of(vault: &UnlockedVault, store: &str, asset: &AssetRef) -> Amount {
-        vault
-            .doc
-            .holdings
-            .iter()
-            .find(|holding| holding.store_id == store && holding.asset.key() == asset.key())
-            .map(|holding| holding.quantity)
-            .unwrap_or(Amount::ZERO)
-    }
 
     #[test]
     fn payment_reduces_the_balance() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-
         let mut top_up = income(&store, "100", "top up");
         at(&mut top_up, "2026-01-01T00:00:00Z");
         vault.add_transaction(top_up).unwrap();
-
         let mut groceries = payment(&store, "30", "groceries");
         at(&mut groceries, "2026-01-02T00:00:00Z");
         vault.add_transaction(groceries).unwrap();
-
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "70");
     }
 
-    /// The sign comes from the variant, not from a stored negative, so a
-    /// negative magnitude on the wire is normalized rather than obeyed.
     #[test]
-    fn a_negative_magnitude_is_normalized_not_trusted() {
+    fn a_zero_or_negative_amount_is_rejected() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let tx = payment(&store, "-10", "groceries");
-        let stored = vault.add_transaction(tx).unwrap();
-        assert_eq!(stored.legs()[0].amount.to_string(), "-10");
-        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-10");
-    }
-
-    #[test]
-    fn a_zero_amount_is_rejected() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        assert!(matches!(
-            vault.add_transaction(payment(&store, "0", "nothing")),
-            Err(Error::InvalidInput(_))
-        ));
-    }
-
-    /// The bank transfer is the reason for the enum: a payment and a bank
-    /// transfer both move money out, and only one of them can carry an IBAN.
-    #[test]
-    fn a_bank_transfer_out_is_just_the_pilot_variant() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-
-        let mut salary = income(&store, "500", "salary");
-        at(&mut salary, "2026-01-01T00:00:00Z");
-        vault.add_transaction(salary).unwrap();
-
-        let mut rent = bank_transfer(&store, Flow::Out, "120", "rent");
-        at(&mut rent, "2026-01-02T00:00:00Z");
-        let stored = vault.add_transaction(rent).unwrap();
-
-        let Transaction::BankTransfer(body) = &stored else {
-            panic!("expected a bank transfer, got {}", stored.tag());
-        };
-        assert_eq!(body.rail, BankRail::Sepa);
-        assert_eq!(body.counterparty_account.as_deref(), Some("DE00"));
-        assert_eq!(body.counterparty_name, "Someone");
-        // and it behaves like any other outgoing movement
-        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "380");
-    }
-
-    /// Direction is data, so an incoming bank transfer is a different record
-    /// from an outgoing one even when everything else matches.
-    #[test]
-    fn bank_transfer_direction_is_not_guessed() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        vault
-            .add_transaction(bank_transfer(&store, Flow::Out, "100", "pay"))
-            .unwrap();
-        vault
-            .add_transaction(bank_transfer(&store, Flow::In, "30", "refund"))
-            .unwrap();
-        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-70");
-    }
-
-    #[test]
-    fn transaction_takes_any_number_of_categories() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let mut tx = payment(&store, "30", "groceries");
-        tx.meta_mut().categories = vec![
-            "  Food ".to_string(),
-            "Weekend".to_string(),
-            "food".to_string(),
-            "   ".to_string(),
-        ];
-        let stored = vault.add_transaction(tx).unwrap();
-
-        // Normalized, de-duplicated, empties dropped — order preserved.
-        assert_eq!(stored.meta().categories, vec!["food", "weekend"]);
-        // Every tag in use joins the vault-wide vocabulary, so the picker
-        // offers it next time.
-        for category in ["food", "weekend"] {
-            assert!(vault.doc.categories.iter().any(|known| known == category));
+        for raw in ["0", "-10"] {
+            assert!(matches!(
+                vault.add_transaction(payment(&store, raw, "nothing")),
+                Err(Error::InvalidInput(_))
+            ));
         }
     }
 
-    /// A transfer is one record, so its tags live in one place — there is no
-    /// second leg that could be left un-normalized.
+    /// Fees used to be recorded and then ignored, so holdings were too high.
     #[test]
-    fn a_transfer_carries_its_tags_once() {
-        let (_dir, mut vault) = setup();
-        let from = vault.doc.stores[0].id.clone();
-        let to = vault.doc.stores[1].id.clone();
-        let mut tx = transfer(&from, &to, "0.3", "to cold");
-        tx.meta_mut().categories = vec!["Rebalance".to_string(), "rebalance".to_string()];
-        let stored = vault.add_transaction(tx).unwrap();
-        assert_eq!(stored.meta().categories, vec!["rebalance"]);
-    }
-
-    #[test]
-    fn holdings_are_derived_from_transactions() {
+    fn fees_reduce_the_holdings() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-
-        let mut buy = income_of(&store, btc(), "1", "50000", "buy");
-        at(&mut buy, "2026-01-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
-
-        let mut spend = payment(&store, "0.25", "spend");
-        at(&mut spend, "2026-01-02T00:00:00Z");
-        vault.add_transaction(spend).unwrap();
-
-        assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "1");
-        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "-0.25");
+        vault.add_transaction(income(&store, "100", "in")).unwrap();
+        let Transaction::Payment(mut rent) = payment(&store, "30", "rent") else {
+            unreachable!()
+        };
+        rent.fee = fee_usd("1.5");
+        vault.add_transaction(Transaction::Payment(rent)).unwrap();
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "68.5");
     }
 
-    /// A trade books both sides of one event on one store, and the resulting
-    /// position is exactly what the two legs say.
+    #[test]
+    fn categories_are_normalized_and_must_exist() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[0].id.clone();
+        let mut tx = payment(&store, "30", "groceries");
+        tx.meta_mut().categories = vec!["  Groceries ".into(), "groceries".into(), "TAXI".into()];
+        let stored = vault.add_transaction(tx).unwrap();
+        assert_eq!(stored.meta().categories, vec!["groceries", "taxi"]);
+
+        let mut unknown = payment(&store, "1", "x");
+        unknown.meta_mut().categories = vec!["no_such".into()];
+        assert!(vault.add_transaction(unknown).is_err());
+    }
+
     #[test]
     fn a_trade_moves_both_sides_of_one_record() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-
-        let mut funding = income(&store, "1000", "top up");
-        at(&mut funding, "2026-01-01T00:00:00Z");
-        vault.add_transaction(funding).unwrap();
-
-        let mut swap = trade(&store, "1000", "0.02", "btc dip");
-        at(&mut swap, "2026-01-02T00:00:00Z");
-        let stored = vault.add_transaction(swap).unwrap();
-
-        assert_eq!(stored.tag(), "exchange_trade");
-        assert_eq!(stored.legs().len(), 2);
-        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "0");
-        assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "0.02");
+        vault.add_transaction(income(&store, "1000", "in")).unwrap();
+        vault
+            .add_transaction(trade(&store, "600", "0.01", "buy"))
+            .unwrap();
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "400");
+        assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "0.01");
+        let id = vault.doc.transactions[1].meta().id.clone();
+        vault.delete_transaction(&id).unwrap();
+        assert_eq!(holding_of(&vault, &store, &btc()), Amount::ZERO);
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "1000");
     }
 
-    /// Two legs booking the same asset into the same store would net to
-    /// nothing while the history still showed both — refuse it.
     #[test]
     fn a_trade_of_an_asset_for_itself_is_rejected() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let swap = Transaction::ExchangeTrade(ExchangeTradeTx {
-            meta: TxMeta::new("silly"),
-            store_id: store.clone(),
-            sold: TradeSide {
-                asset: btc(),
-                qty: amount("1"),
-            },
-            bought: TradeSide {
-                asset: btc(),
-                qty: amount("1"),
-            },
-            fee: None,
-            fee_asset: None,
-            order_id: None,
-            market: None,
-            liquidity: None,
-            price: PriceStamp::default(),
-        });
-        assert!(matches!(
-            vault.add_transaction(swap),
-            Err(Error::InvalidInput(_))
-        ));
+        let Transaction::TradeSpot(mut swap) = trade(&store, "1", "1", "swap") else {
+            unreachable!()
+        };
+        swap.bought.asset = usd();
+        assert!(vault.add_transaction(Transaction::TradeSpot(swap)).is_err());
     }
 
     #[test]
     fn a_transfer_moves_quantities_between_stores() {
         let (_dir, mut vault) = setup();
-        let from = vault.doc.stores[0].id.clone();
-        let to = vault.doc.stores[1].id.clone();
-
-        let mut deposit = income_of(&from, btc(), "1", "50000", "deposit");
-        at(&mut deposit, "2026-01-01T00:00:00Z");
-        vault.add_transaction(deposit).unwrap();
-
-        let mut move_it = transfer(&from, &to, "0.3", "to cold");
-        at(&mut move_it, "2026-01-02T00:00:00Z");
-        vault.add_transaction(move_it).unwrap();
-
-        assert_eq!(holding_of(&vault, &from, &btc()).to_string(), "0.7");
-        assert_eq!(holding_of(&vault, &to, &btc()).to_string(), "0.3");
-        // The vault total is unchanged: it is a relocation, not new money.
-        let total: Amount = vault
-            .doc
-            .holdings
-            .iter()
-            .fold(Amount::ZERO, |acc, holding| acc + holding.quantity);
-        assert_eq!(total, amount("1"));
+        let binance = vault.doc.stores[0].id.clone();
+        let cold = vault.doc.stores[1].id.clone();
+        vault
+            .add_transaction(income_of(&binance, btc(), "1", "50000", "buy"))
+            .unwrap();
+        let Transaction::Transfer(mut out) = transfer(&binance, &cold, "0.4") else {
+            unreachable!()
+        };
+        out.fee = Some(Fee {
+            asset: btc(),
+            amount: amount("0.0001"),
+            price: PriceStamp::default(),
+        });
+        vault.add_transaction(Transaction::Transfer(out)).unwrap();
+        // the receiver gets exactly the amount; the sender pays the fee on top
+        assert_eq!(holding_of(&vault, &binance, &btc()).to_string(), "0.5999");
+        assert_eq!(holding_of(&vault, &cold, &btc()).to_string(), "0.4");
+        assert_eq!(
+            vault.transactions(&StoreScope::store(&cold, false)).len(),
+            1
+        );
+        assert_eq!(
+            vault
+                .transactions(&StoreScope::store(&binance, false))
+                .len(),
+            2
+        );
     }
 
     #[test]
     fn a_transfer_to_the_same_store_is_rejected() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        assert!(matches!(
-            vault.add_transaction(transfer(&store, &store, "1", "nowhere")),
-            Err(Error::InvalidInput(_))
-        ));
-    }
-
-    /// Deleting a transaction used to remove one leg of a pair and orphan the
-    /// other. One record, one delete.
-    #[test]
-    fn deleting_a_trade_removes_both_sides() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let stored = vault
-            .add_transaction(trade(&store, "100", "0.01", "swap"))
-            .unwrap();
-        assert_eq!(vault.doc.transactions.len(), 1);
-        vault.delete_transaction(&stored.meta().id).unwrap();
-        assert!(vault.doc.transactions.is_empty());
-        assert!(vault.doc.holdings.is_empty());
+        assert!(
+            vault
+                .add_transaction(transfer(&store, &store, "1"))
+                .is_err()
+        );
     }
 
     #[test]
-    fn a_transaction_for_an_unknown_store_is_rejected() {
+    fn unknown_and_archived_stores_are_rejected() {
         let (_dir, mut vault) = setup();
         assert!(matches!(
-            vault.add_transaction(income("nope", "10", "ghost")),
+            vault.add_transaction(income("nope", "1", "x")),
             Err(Error::Missing(_))
         ));
-    }
-
-    #[test]
-    fn a_transaction_for_an_archived_store_is_rejected() {
-        let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
         vault.archive_store(&store, true).unwrap();
         assert!(matches!(
-            vault.add_transaction(income(&store, "10", "late")),
+            vault.add_transaction(income(&store, "1", "x")),
             Err(Error::Archived(_))
         ));
-    }
-
-    #[test]
-    fn listing_filters_by_either_side_of_a_transfer() {
-        let (_dir, mut vault) = setup();
-        let from = vault.doc.stores[0].id.clone();
-        let to = vault.doc.stores[1].id.clone();
-        vault
-            .add_transaction(transfer(&from, &to, "1", "move"))
-            .unwrap();
-        assert_eq!(
-            vault.transactions(&StoreScope::store(&from, false)).len(),
-            1
-        );
-        assert_eq!(vault.transactions(&StoreScope::store(&to, false)).len(), 1);
-        assert_eq!(vault.transactions(&StoreScope::default()).len(), 1);
-    }
-
-    /// A manual price must fill in what is missing without clobbering a price
-    /// the history already carries.
-    #[test]
-    fn set_prices_never_overwrites_an_existing_stamp() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let stored = vault
-            .add_transaction(income_of(&store, btc(), "1", "50000", "priced"))
-            .unwrap();
-
-        vault
-            .set_prices(&stored.meta().id, Some(amount("1")), None)
-            .unwrap();
-        let tx = &vault.doc.transactions[0];
-        assert_eq!(tx.legs()[0].price_usd.unwrap().to_string(), "50000");
     }
 
     #[test]
     fn history_is_newest_first() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let mut older = income(&store, "1", "older");
-        at(&mut older, "2026-01-01T00:00:00Z");
-        vault.add_transaction(older).unwrap();
-        let mut newer = income(&store, "1", "newer");
-        at(&mut newer, "2026-06-01T00:00:00Z");
-        vault.add_transaction(newer).unwrap();
-
-        let listed = vault.transactions(&StoreScope::default());
-        assert_eq!(listed[0].meta().comment, "newer");
-        assert_eq!(listed[1].meta().comment, "older");
+        for (day, comment) in [("01", "first"), ("03", "third"), ("02", "second")] {
+            let mut tx = income(&store, "1", comment);
+            at(&mut tx, &format!("2026-01-{day}T00:00:00Z"));
+            vault.add_transaction(tx).unwrap();
+        }
+        let comments: Vec<String> = vault
+            .transactions(&StoreScope::default())
+            .iter()
+            .map(|tx| tx.meta().comment.clone())
+            .collect();
+        assert_eq!(comments, vec!["third", "second", "first"]);
     }
 
-    // -- on-chain validation -------------------------------------------------
+    /// An on-chain transfer out of a cold wallet with a given network and hash.
+    fn on_chain(store: &str, network: Option<Chain>, hash: &str) -> Transaction {
+        let asset = match network {
+            Some(Chain::Ethereum) => {
+                AssetRef::crypto("ETH", "Ethereum", Some("ethereum"), Chain::Ethereum)
+            }
+            _ => btc(),
+        };
+        let Transaction::Transfer(mut tx) = transfer_between(
+            AccountRef::Store(store.into()),
+            AccountRef::Raw("exchange deposit".into()),
+            asset,
+            "0.1",
+        ) else {
+            unreachable!()
+        };
+        tx.network = network;
+        tx.tx_hash = Some(hash.into());
+        Transaction::Transfer(tx)
+    }
 
     #[test]
-    fn tx_hash_validation_rejects_malformed() {
+    fn on_chain_hashes_are_shape_checked() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let tx = wallet_transfer(
-            &store,
-            Flow::Out,
-            "1",
-            Some(Chain::Bitcoin),
-            Some("not-a-hash-at-all"),
-        );
+        let cold = vault.doc.stores[1].id.clone();
         assert!(matches!(
-            vault.add_transaction(tx),
+            vault.add_transaction(on_chain(&cold, Some(Chain::Bitcoin), "not-a-hash")),
             Err(Error::TxHashMalformed(_))
         ));
-    }
-
-    #[test]
-    fn tx_hash_validation_accepts_valid_bitcoin_hash() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let hash = "a".repeat(64);
-        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(&hash));
-        assert!(vault.add_transaction(tx).is_ok());
-    }
-
-    #[test]
-    fn tx_hash_validation_accepts_valid_evm_hash() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let hash = format!("0x{}", "b".repeat(64));
-        let tx = wallet_transfer(&store, Flow::In, "1", Some(Chain::Ethereum), Some(&hash));
-        assert!(vault.add_transaction(tx).is_ok());
-    }
-
-    /// A hash on the wrong network would still open a real explorer page about
-    /// a transaction that is not this one, so it is refused.
-    #[test]
-    fn tx_hash_network_mismatch_rejected() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let hash = format!("0x{}", "b".repeat(64));
-        // A BTC position claiming an Ethereum hash: the explorer link would
-        // open a real page about a transaction that is not this one.
-        let tx = Transaction::WalletTransfer(WalletTransferTx {
-            meta: TxMeta::new("mismatch"),
-            store_id: store,
-            asset: btc(),
-            amount: amount("1"),
-            flow: Flow::Out,
-            network: Some(Chain::Ethereum),
-            tx_hash: Some(hash),
-            from_address: None,
-            to_address: None,
-            memo: None,
-            fee: None,
-            fee_asset: None,
-            price: PriceStamp::default(),
-        });
+        let bitcoin = "a".repeat(64);
+        vault
+            .add_transaction(on_chain(&cold, Some(Chain::Bitcoin), &bitcoin))
+            .unwrap();
+        let evm = format!("0x{}", "b".repeat(64));
+        vault
+            .add_transaction(on_chain(&cold, Some(Chain::Ethereum), &evm))
+            .unwrap();
+        // a hash on a network the moved asset does not live on
         assert!(matches!(
-            vault.add_transaction(tx),
+            vault
+                .add_transaction(on_chain(
+                    &cold,
+                    Some(Chain::Ethereum),
+                    &format!("0x{}", "c".repeat(64))
+                ))
+                .and_then(|_| vault.add_transaction({
+                    let mut tx = on_chain(
+                        &cold,
+                        Some(Chain::Ethereum),
+                        &format!("0x{}", "d".repeat(64)),
+                    );
+                    if let Transaction::Transfer(inner) = &mut tx {
+                        inner.asset = btc();
+                    }
+                    tx
+                })),
             Err(Error::TxHashNetworkMismatch(_))
         ));
     }
 
     #[test]
-    fn tx_hash_network_match_accepted() {
+    fn editing_keeps_the_id_and_origin() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[0].id.clone();
-        let hash = "a".repeat(64);
-        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(&hash));
-        assert!(vault.add_transaction(tx).is_ok());
+        let mut original = income(&store, "100", "salary");
+        original.meta_mut().origin = TxOrigin::Import {
+            exec_id: "e1".into(),
+        };
+        let stored = vault.add_transaction(original).unwrap();
+        let mut edited = income(&store, "250", "salary, corrected");
+        edited.meta_mut().origin = TxOrigin::Manual;
+        let saved = vault.update_transaction(&stored.meta().id, edited).unwrap();
+        assert_eq!(saved.meta().id, stored.meta().id);
+        assert_eq!(
+            saved.meta().origin,
+            TxOrigin::Import {
+                exec_id: "e1".into()
+            }
+        );
+        assert_eq!(vault.doc.transactions.len(), 1);
+        assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "250");
+        assert!(
+            vault
+                .update_transaction("missing", income(&store, "1", "x"))
+                .is_err()
+        );
+    }
+
+    /// Property bought with a unit price is valued at it until revalued.
+    #[test]
+    fn property_is_bought_at_its_unit_price() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("usd");
+        let flat = store(&mut vault, "Flat", StoreKind::Asset, None);
+        let thing = AssetRef {
+            symbol: "FLAT".into(),
+            name: "Flat".into(),
+            coingecko_id: None,
+            chain: None,
+            contract: None,
+            quote: "FLAT".into(),
+        };
+        let buy = |unit_price: Option<&str>| {
+            Transaction::Topup(TopupTx {
+                meta: meta("bought", &["income_other"]),
+                store_id: flat.clone(),
+                asset: thing.clone(),
+                amount: amount("1"),
+                fee: None,
+                from: None,
+                details: KindDetails {
+                    unit_price: unit_price.map(amount),
+                    ..KindDetails::default()
+                },
+                price: PriceStamp::default(),
+            })
+        };
+        assert!(vault.add_transaction(buy(None)).is_err());
+        vault.add_transaction(buy(Some("100000"))).unwrap();
+        assert_eq!(vault.net_worth().non_financial, amount("100000"));
+        vault
+            .set_manual_price(&thing.key(), amount("120000"), "usd")
+            .unwrap();
+        assert_eq!(vault.net_worth().non_financial, amount("120000"));
+        vault.clear_manual_price(&thing.key()).unwrap();
+        assert_eq!(vault.net_worth().non_financial, amount("100000"));
     }
 
     #[test]
-    fn an_empty_hash_is_accepted() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
-        let tx = wallet_transfer(&store, Flow::Out, "1", Some(Chain::Bitcoin), Some(""));
-        assert!(vault.add_transaction(tx).is_ok());
+    fn stores_join_the_budget_by_kind_and_inherit_it() {
+        let (_dir, mut vault) = empty_vault();
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
+        let sub = store(&mut vault, "Spot", StoreKind::Exchange, Some(&exchange));
+        let usd_account = store(&mut vault, "USD", StoreKind::Bank, Some(&bank));
+        let find = |vault: &UnlockedVault, id: &str| vault.find_store(id).unwrap().in_budget;
+        assert!(find(&vault, &bank));
+        assert!(!find(&vault, &exchange));
+        assert!(!find(&vault, &sub));
+        assert!(find(&vault, &usd_account));
+        // loan terms only on a loan
+        let terms = LiabilityTerms {
+            kind: crate::model::store::LiabilityKind::Loan,
+            rate: None,
+            limit: None,
+            due_day: Some(5),
+            monthly_payment: None,
+        };
+        let extras = StoreExtras {
+            liability: Some(terms),
+            ..StoreExtras::default()
+        };
+        assert!(
+            vault
+                .create_store_with("X", StoreKind::Bank, "", "", None, extras.clone())
+                .is_err()
+        );
+        vault
+            .create_store_with("Loan", StoreKind::Liability, "", "", None, extras)
+            .unwrap();
     }
 
     // -- wallet tree -----------------------------------------------------------
@@ -2290,11 +2369,13 @@ mod tests {
         let (_dir, mut vault, [_bybit, uta, spot, _ledger]) = three_levels();
         let futures = node(&mut vault, "Futures", Some(&uta));
         assert_eq!(
-            violation(vault.update_store(&futures, "SPOT", "", "")),
+            violation(vault.update_store(&futures, "SPOT", "", "", StoreExtras::default())),
             StoreTreeViolation::NameTaken
         );
         // keeping its own name (or changing only the case) is fine
-        vault.update_store(&spot, "SPOT", "#fff", "note").unwrap();
+        vault
+            .update_store(&spot, "SPOT", "#fff", "note", StoreExtras::default())
+            .unwrap();
     }
 
     #[test]
@@ -2421,27 +2502,7 @@ mod tests {
         let mut buy = income_of(&uta, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
         vault.add_transaction(buy).unwrap();
-        let mut sell = Transaction::ExchangeTrade(ExchangeTradeTx {
-            meta: TxMeta::new("sell"),
-            store_id: uta.clone(),
-            sold: TradeSide {
-                asset: btc(),
-                qty: amount("0.5"),
-            },
-            bought: TradeSide {
-                asset: usd(),
-                qty: amount("30000"),
-            },
-            fee: None,
-            fee_asset: None,
-            order_id: None,
-            market: None,
-            liquidity: None,
-            price: PriceStamp {
-                price_usd: Some(amount("60000")),
-                ..Default::default()
-            },
-        });
+        let mut sell = sell_btc(&uta, "0.5", "30000", "60000");
         at(&mut sell, "2026-01-02T00:00:00Z");
         vault.add_transaction(sell).unwrap();
 
@@ -2549,27 +2610,7 @@ mod tests {
         at(&mut buy, "2026-01-01T00:00:00Z");
         vault.add_transaction(buy).unwrap();
 
-        let mut sell = Transaction::ExchangeTrade(ExchangeTradeTx {
-            meta: TxMeta::new("sell"),
-            store_id: store.clone(),
-            sold: TradeSide {
-                asset: btc(),
-                qty: amount("0.5"),
-            },
-            bought: TradeSide {
-                asset: usd(),
-                qty: amount("30000"),
-            },
-            fee: None,
-            fee_asset: None,
-            order_id: None,
-            market: None,
-            liquidity: None,
-            price: PriceStamp {
-                price_usd: Some(amount("60000")),
-                ..Default::default()
-            },
-        });
+        let mut sell = sell_btc(&store, "0.5", "30000", "60000");
         at(&mut sell, "2026-01-02T00:00:00Z");
         vault.add_transaction(sell).unwrap();
 
@@ -2742,10 +2783,23 @@ mod import_tests {
         // transactions that had to be paired back up by a shared group id.
         assert_eq!(vault.doc.transactions.len(), 1);
         let trade = &vault.doc.transactions[0];
-        assert_eq!(trade.tag(), "exchange_trade");
-        assert_eq!(trade.legs().len(), 2);
-        assert_eq!(trade.legs()[0].amount.to_string(), "-32500"); // USDT spent
-        assert_eq!(trade.legs()[1].amount.to_string(), "0.5"); // BTC received
+        assert_eq!(trade.tag(), "trade_spot");
+        assert_eq!(
+            trade.meta().origin,
+            TxOrigin::Import {
+                exec_id: "e1".into()
+            }
+        );
+        let legs = trade.legs();
+        assert_eq!(legs.len(), 3);
+        assert_eq!(legs[0].amount.to_string(), "-32500"); // USDT spent
+        assert_eq!(legs[1].amount.to_string(), "0.5"); // BTC received
+        assert_eq!(legs[1].price_usd, Some(Amount::parse("65000").unwrap()));
+        assert_eq!(legs[2].role, LegRole::Fee);
+        let Transaction::TradeSpot(spot) = trade else {
+            unreachable!()
+        };
+        assert_eq!(spot.liquidity, Some(Liquidity::Taker));
         // Staging area is drained so the same fill cannot be confirmed twice.
         assert!(vault.pending_imports().is_empty());
         // Holdings reflect the bought asset.
@@ -2837,6 +2891,80 @@ mod import_tests {
         assert!(imp.comment.contains("bybit"));
     }
 
+    /// Linear fills become futures trades on the futures sub-account, and a
+    /// closing fill (it has a closed size) closes the opposite side.
+    #[test]
+    fn futures_fills_open_and_close_positions_on_the_sub_account() {
+        let (_dir, mut vault) = setup();
+        let bybit = vault.doc.stores[0].id.clone();
+        let futures = vault
+            .create_store("Futures", StoreKind::Exchange, "", "", Some(bybit.clone()))
+            .unwrap()
+            .id;
+        vault.set_exchange_key(&bybit, "key", "secret").unwrap();
+        vault
+            .set_exchange_targets(&bybit, None, Some(futures.clone()))
+            .unwrap();
+        assert!(
+            vault
+                .set_exchange_targets(&bybit, Some("elsewhere".into()), None)
+                .is_err()
+        );
+
+        let mut open = fill("o1", "Buy", "0.5", "65000");
+        open.is_maker = true;
+        let mut close = fill("c1", "Sell", "0.5", "66000");
+        close.closed_size = Some("0.5".into());
+        let mut closing = PendingImport::from_execution(&bybit, "linear", &close).unwrap();
+        closing.closed_pnl = Some(Amount::parse("500").unwrap());
+        vault
+            .stage_imports(vec![
+                PendingImport::from_execution(&bybit, "linear", &open).unwrap(),
+                closing,
+            ])
+            .unwrap();
+        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 2);
+
+        let kinds: Vec<(FuturesDirection, FuturesAction)> = vault
+            .doc
+            .transactions
+            .iter()
+            .map(|tx| match tx {
+                Transaction::TradeFutures(inner) => {
+                    assert_eq!(inner.store_id, futures);
+                    (inner.direction, inner.action)
+                }
+                other => panic!("expected futures, got {}", other.tag()),
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                (FuturesDirection::Long, FuturesAction::Open),
+                (FuturesDirection::Long, FuturesAction::Close)
+            ]
+        );
+        // the position is closed, the PnL landed in USDT, minus two fees
+        assert!(
+            vault
+                .doc
+                .holdings
+                .iter()
+                .all(|holding| !holding.asset.is_derivative())
+        );
+        let usdt = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.asset.symbol == "USDT")
+            .unwrap();
+        assert_eq!(usdt.quantity.to_string(), "499.0");
+        assert_eq!(
+            vault.realized_pnl().total_base,
+            Amount::parse("500").unwrap()
+        );
+    }
+
     /// Perpetual symbols are tagged as derivatives even on a swept import.
     #[test]
     fn category_hint_separates_perps_from_spot() {
@@ -2873,6 +3001,9 @@ mod persist_tests {
             fx_refresh_interval_sec: 900,
             minimize_to_tray: false,
             bybit_import_interval_sec: 0,
+            savings_rate: Amount::parse("0.25").unwrap(),
+            daily_budget_mode: crate::model::vault::DailyBudgetMode::UntilIncome,
+            budget_currency: "thb".into(),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
