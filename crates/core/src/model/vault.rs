@@ -375,16 +375,14 @@ mod json_schema_tests {
         // carrying doc comments come back as `oneOf` with `const` instead of a
         // flat `enum`, so only require that the names are present somewhere.
         let store_kinds = defs["StoreKind"].to_string();
-        for kind in [
-            "exchange",
-            "hot_wallet",
-            "cold_wallet",
-            "bank",
-            "cash",
-            "paper",
-        ] {
+        for kind in ["exchange", "hot_wallet", "cold_wallet", "bank", "cash"] {
             assert!(store_kinds.contains(kind), "StoreKind is missing `{kind}`");
         }
+        // `paper` only ever held the Strategy Lab's virtual money.
+        assert!(
+            !store_kinds.contains("paper"),
+            "the paper account went away with the Strategy Lab"
+        );
 
         // The user-scoped preferences live in the app config, not in the
         // document: the editor must not offer to write them into the vault.

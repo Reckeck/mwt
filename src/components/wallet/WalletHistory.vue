@@ -34,7 +34,7 @@ const txs = useQuery({
   queryFn: () => call<Transaction[]>('list_transactions', { storeId: props.storeId }),
 })
 
-const kinds: TxKind[] = ['income', 'expense', 'payment', 'transfer', 'trade', 'fee', 'paper_trade']
+const kinds: TxKind[] = ['income', 'expense', 'payment', 'transfer', 'trade', 'fee']
 
 const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   income: 'default',
@@ -43,7 +43,6 @@ const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outli
   transfer: 'secondary',
   trade: 'secondary',
   fee: 'outline',
-  paper_trade: 'outline',
 }
 
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id

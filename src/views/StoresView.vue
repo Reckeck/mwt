@@ -28,7 +28,7 @@ const name = ref('')
 const color = ref('#0ea5e9')
 const kind = ref<StoreKind>('cash')
 
-const kinds: StoreKind[] = ['exchange', 'hot_wallet', 'cold_wallet', 'bank', 'cash', 'paper']
+const kinds: StoreKind[] = ['exchange', 'hot_wallet', 'cold_wallet', 'bank', 'cash']
 
 function invalidate() {
   return queryClient.invalidateQueries({ queryKey: ['stores'] })

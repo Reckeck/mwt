@@ -16,8 +16,6 @@ pub enum StoreKind {
     Bank,
     #[default]
     Cash,
-    /// Virtual money used by the Strategy Lab simulator.
-    Paper,
 }
 
 /// A "store"/"platform" (хранилище) — a portfolio container.

@@ -36,7 +36,6 @@ const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outli
   transfer: 'secondary',
   trade: 'secondary',
   fee: 'outline',
-  paper_trade: 'outline',
 }
 
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
