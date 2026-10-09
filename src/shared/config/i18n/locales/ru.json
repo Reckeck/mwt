@@ -67,6 +67,7 @@
   "tx.addTransfer": "Перевод",
   "tx.addTrade": "Обмен",
   "tx.type": "Тип",
+  "tx.allStores": "Все кошельки",
   "tx.asset": "Актив",
   "tx.amount": "Количество",
   "tx.store": "Хранилище",

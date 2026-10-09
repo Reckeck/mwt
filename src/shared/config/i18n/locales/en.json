@@ -67,6 +67,7 @@
   "tx.addTransfer": "Transfer",
   "tx.addTrade": "Trade",
   "tx.type": "Type",
+  "tx.allStores": "All wallets",
   "tx.asset": "Asset",
   "tx.amount": "Amount",
   "tx.store": "Wallet",

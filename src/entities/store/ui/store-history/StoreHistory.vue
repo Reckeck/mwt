@@ -31,6 +31,9 @@ import { shortHash } from '@/shared/lib/utils'
 
 const props = defineProps<{ storeId: string }>()
 
+/** Per-row actions (delete…) come from the page: entities do not own user actions. */
+defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
+
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
@@ -76,15 +79,6 @@ const invalidations = () => {
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
   void queryClient.invalidateQueries({ queryKey: ['history'] })
 }
-
-const remove = useMutation({
-  mutationFn: (id: string) => call('delete_transaction', { id }),
-  onSuccess: () => {
-    toast.success(t('tx.deleted'))
-    invalidations()
-  },
-  onError: (err) => toast.error(t('tx.deleteFailed'), { description: parseError(err).message }),
-})
 
 const saveComment = useMutation({
   mutationFn: () =>
@@ -227,9 +221,7 @@ function explorerUrl(tx: Transaction): string | null {
             >
               <span class="text-xs tabular-nums">{{ shortHash(hashOf(tx) ?? '', 6) }}</span>
             </Button>
-            <Button variant="ghost" size="icon" :title="t('tx.delete')" @click="remove.mutate(txId(tx))">
-              <X class="size-4 text-destructive" />
-            </Button>
+            <slot name="actions" :tx="tx" />
           </div>
         </div>
       </div>
