@@ -67,8 +67,13 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
 
 /// Decode raw payload bytes according to the format written in the file.
 ///
-/// Only accepts payloads with `version == VAULT_FORMAT_VERSION` (currently 2).
-/// No backward compatibility — old files are rejected.
+/// Only accepts payloads with `version == VAULT_FORMAT_VERSION` (currently 1).
+/// No backward compatibility — files written at any other version are rejected
+/// as [`Error::Unsupported`].
+///
+/// Do not "fix" that strictness by accepting a second version or by bumping
+/// [`VAULT_FORMAT_VERSION`]: both require the user's explicit permission. See
+/// the constant's documentation.
 pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
     let doc = match fmt {
         SnapshotFormat::Json => serde_json::from_slice::<VaultDoc>(bytes)

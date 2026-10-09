@@ -27,8 +27,24 @@ pub use storage::{SnapshotFormat, VaultFile};
 pub const VAULT_CONTAINER_VERSION: u32 = 1;
 
 /// Version of the plaintext *payload* schema (`VaultDoc`), stored in the
-/// document's own `version` field. Bump when `VaultDoc` gains or changes a
-/// field, and add a migration in `storage::decode`.
-pub const VAULT_FORMAT_VERSION: u32 = 2;
+/// document's own `version` field.
+///
+/// # DO NOT BUMP THIS WITHOUT THE USER'S EXPLICIT PERMISSION
+///
+/// This constant is deliberately pinned at `1`. Previous versions of this
+/// codebase bumped it every time `VaultDoc` gained a field, which meant every
+/// schema tweak silently locked users out of their own vault: `storage::decode`
+/// rejects any `version` it does not recognize, and there was no migration to
+/// fall back on. The user has decided that schema changes ship without a
+/// version bump — additive fields are handled with `#[serde(default)]` instead
+/// (see the `vault-crypto` skill).
+///
+/// If you believe a bump is genuinely unavoidable — a change that cannot be
+/// made backward compatible — stop and ask the user first. Do not edit this
+/// number on your own initiative.
+///
+/// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
+/// encrypted envelope and only moves when the on-disk bytes change.
+pub const VAULT_FORMAT_VERSION: u32 = 1;
 /// Magic bytes prefix of a TradeApp vault file.
 pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";

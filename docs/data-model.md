@@ -7,7 +7,7 @@
 
 | Поле | Тип | Комментарий |
 |---|---|---|
-| `version` | `u32` | `VAULT_FORMAT_VERSION`; бамп на ломающее изменение схемы + миграция |
+| `version` | `u32` | `VAULT_FORMAT_VERSION`, зафиксирован на `1`. **Не бампать без явного разрешения пользователя**: `decode` отвергает любую другую версию, а миграции нет. Аддитивные поля — через `#[serde(default)]` |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
 | `settings` | `Settings` | vault-scoped: decimals, виджеты, интервалы, трей |
