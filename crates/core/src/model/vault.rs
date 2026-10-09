@@ -396,8 +396,21 @@ mod json_schema_tests {
             );
         }
 
-        // Optional fields admit null.
-        let fee = &defs["Transaction"]["properties"]["fee"];
-        assert_eq!(fee["type"][1], "null");
+        // `Transaction` is an externally tagged enum, so the document stores
+        // one of these keys. The editor has to offer them, and must not offer a
+        // flat record with a `kind` discriminator.
+        let tx_schema = &defs["Transaction"];
+        assert!(
+            tx_schema.get("oneOf").is_some(),
+            "Transaction must be a union of tagged variants"
+        );
+        let tags = tx_schema.to_string();
+        for tag in Transaction::ALL_TAGS {
+            assert!(tags.contains(tag), "schema is missing `{tag}`");
+        }
+
+        // Optional fields admit null, so the editor can leave them empty.
+        let reference = &defs["BankTransferTx"]["properties"]["reference"];
+        assert_eq!(reference["type"][1], "null");
     }
 }

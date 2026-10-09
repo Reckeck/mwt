@@ -4,10 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
-import { Badge } from '@/shared/ui/badge'
+import { TransactionsList } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
-import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { call, onEvent, parseError } from '@/shared/api/ipc'
 
 const { t } = useI18n()
@@ -32,15 +30,6 @@ function refresh() {
 }
 
 void onEvent<RefreshResult>('prices-updated', refresh)
-
-const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  income: 'default',
-  expense: 'destructive',
-  payment: 'destructive',
-  transfer: 'secondary',
-  trade: 'secondary',
-  fee: 'outline',
-}
 
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
 
@@ -72,62 +61,6 @@ async function remove(id: string) {
       </Button>
     </div>
 
-    <Card>
-      <template #header>
-        <p class="font-medium">{{ t('tx.title') }}</p>
-      </template>
-
-      <div class="divide-y divide-border">
-        <div
-          v-for="tx in txs.data.value ?? []"
-          :key="tx.id"
-          class="flex items-center gap-4 py-3"
-        >
-          <Badge :variant="kindBadge[tx.kind] ?? 'secondary'">
-            {{ t(`tx.kind.${tx.kind}`) }}
-          </Badge>
-
-          <div class="min-w-0 flex-1">
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="shrink-0 font-medium">{{ tx.asset.symbol }}</span>
-              <span class="truncate text-sm text-muted-foreground">{{ tx.asset.name }}</span>
-              <Badge
-                v-for="entry in tx.categories"
-                :key="entry"
-                variant="outline"
-                class="shrink-0"
-              >
-                {{ entry }}
-              </Badge>
-            </div>
-            <p class="truncate text-xs text-muted-foreground">
-              {{ formatDateTime(tx.timestamp) }} · {{ storeName(tx.store_id) }}
-            </p>
-            <p v-if="tx.comment" class="truncate text-xs text-muted-foreground">{{ tx.comment }}</p>
-          </div>
-
-          <div class="shrink-0 text-right">
-            <p
-              class="whitespace-nowrap font-medium tabular-nums"
-              :class="(tx.kind === 'income' ? 'text-emerald-600' : (tx.kind === 'expense' || tx.kind === 'payment') ? 'text-destructive' : '')"
-            >
-              {{ tx.amount }} {{ tx.asset.symbol }}
-            </p>
-            <p v-if="tx.price_usd" class="whitespace-nowrap text-xs text-muted-foreground">
-              {{ formatMoney(tx.price_usd, { currency: 'usd' }) }}
-            </p>
-          </div>
-
-          <Button variant="ghost" size="icon" class="shrink-0" :title="t('tx.delete')" @click="remove(tx.id)">
-            <span class="sr-only">{{ t('tx.delete') }}</span>
-            <span class="text-destructive">✕</span>
-          </Button>
-        </div>
-
-        <p v-if="!txs.data.value?.length" class="py-6 text-center text-sm text-muted-foreground">
-          {{ t('tx.empty') }}
-        </p>
-      </div>
-    </Card>
+    <TransactionsList :transactions="txs.data.value ?? []" :store-name="storeName" @remove="remove" />
   </div>
 </template>

@@ -15,6 +15,8 @@ base_currency: string,
  */
 favorite_currencies: Array<string>, };
 
+type AssetIdent = { symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, };
+
 /**
  * Loose asset identification: enough to rebuild an [`AssetRef`] cache key
  * without making the frontend construct a full `quote` field.
@@ -44,6 +46,39 @@ type AssetSearchHit = { symbol: string, name: string, coingecko_id: string | nul
 rank: bigint, };
 
 type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_usd: Amount, };
+
+/**
+ * Where a bank payment moved. Meaningless for a crypto wallet, which is why it
+ * exists only on [`BankTransferTx`].
+ */
+type BankRail = "internal" | "sepa" | "swift" | "wire" | "card" | "cashier";
+
+type BankTransferInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, rail: BankRail, counterparty_name: string, counterparty_account: string | null, reference: string | null, fee: Amount | null, fee_asset: string | null, };
+
+/**
+ * A payment made from a bank account.
+ *
+ * The pilot for per-kind fields: everything on it is a fact about banking that
+ * the other variants cannot express, which is exactly what the flat
+ * `Transaction` had nowhere to put.
+ */
+type BankTransferTx = { meta: TxMeta, store_id: string, asset: AssetRef, 
+/**
+ * Magnitude; [`Self::flow`] carries the direction.
+ */
+amount: Amount, flow: Flow, rail: BankRail, 
+/**
+ * Who received the money — usually a name, not an identifier.
+ */
+counterparty_name: string, 
+/**
+ * IBAN / BIC / account number, as the rail requires.
+ */
+counterparty_account: string | null, 
+/**
+ * The counterparty's own reference, for reconciliation.
+ */
+reference: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
 
 /**
  * A fill as offered in the "recent trades" dropdown.
@@ -161,6 +196,32 @@ risk_pct: Amount, };
  */
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
 
+type CardPaymentInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, card_last4: string | null, merchant: string | null, mcc: string | null, fee: Amount | null, fee_asset: string | null, };
+
+/**
+ * A purchase paid by card.
+ */
+type CardPaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, 
+/**
+ * Last four digits only; the full number is never stored.
+ */
+card_last4: string | null, merchant: string | null, 
+/**
+ * Merchant category code as it appears on the statement.
+ */
+mcc: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
+
+type CashFlowInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, location: string | null, counterparty: string | null, };
+
+/**
+ * Physical money.
+ */
+type CashFlowTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, flow: Flow, 
+/**
+ * Where the cash moved: an ATM, a shop, a person.
+ */
+location: string | null, counterparty: string | null, price: PriceStamp, };
+
 /**
  * Product type. Bybit requires this on most private endpoints.
  */
@@ -211,6 +272,30 @@ notice: string | null, };
 type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
 /**
+ * What was done to a DeFi position.
+ */
+type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liquidity";
+
+type DefiActionInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, action: DefiAction, network: Chain | null, tx_hash: string | null, protocol: string | null, pool_id: string | null, fee: Amount | null, fee_asset: string | null, };
+
+/**
+ * An on-chain DeFi interaction on a hot or cold wallet.
+ */
+type DefiActionTx = { meta: TxMeta, store_id: string, 
+/**
+ * The asset the action moved: the staked asset, or the reward claimed.
+ */
+asset: AssetRef, amount: Amount, flow: Flow, action: DefiAction, network: Chain | null, tx_hash: string | null, 
+/**
+ * e.g. `lido`, `uniswap-v3`.
+ */
+protocol: string | null, 
+/**
+ * Pool, vault or staking contract identifier.
+ */
+pool_id: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };
+
+/**
  * Output of the dev dump vault command (DEV only).
  */
 type DevDumpVaultOutput = { json: string, };
@@ -234,6 +319,77 @@ type ExchangeKeyStatus = { configured: boolean,
  * Masked identifier such as `abcd…wxyz`, for the settings screen.
  */
 hint: string | null, };
+
+/**
+ * A trade between two assets inside one store.
+ *
+ * Both sides live in one record rather than in two transactions joined by a
+ * `group_id`. A trade is one event with two effects; splitting it meant every
+ * reader had to reassemble the halves by hand, and deleting one half silently
+ * orphaned the other.
+ */
+type ExchangeTradeTx = { meta: TxMeta, store_id: string, 
+/**
+ * The side that leaves the store.
+ */
+sold: TradeSide, 
+/**
+ * The side that arrives in the store.
+ */
+bought: TradeSide, fee: Amount | null, fee_asset: string | null, 
+/**
+ * The exchange's own order identifier, for reconciling with the account.
+ */
+order_id: string | null, 
+/**
+ * Which market the fill happened on: `spot`, `linear`, `inverse`.
+ */
+market: string | null, 
+/**
+ * `maker` or `taker`.
+ */
+liquidity: string | null, 
+/**
+ * Prices the bought side: that is the leg a holding's average cost is
+ * derived from.
+ */
+price: PriceStamp, };
+
+type ExpenseInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, };
+
+/**
+ * A withdrawal or a spend that is not a purchase.
+ */
+type ExpenseTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, price: PriceStamp, };
+
+type FeeInput = { store_id: string, 
+/**
+ * Asset the fee was charged in; may differ from the traded asset.
+ */
+asset: AssetIdent, common: TxInputCommon, related_id: string | null, };
+
+/**
+ * A fee booked on its own rather than attached to the operation that caused it.
+ */
+type FeeTx = { meta: TxMeta, store_id: string, 
+/**
+ * Asset the fee was charged in; may differ from the traded asset.
+ */
+asset: AssetRef, amount: Amount, 
+/**
+ * Transaction this fee was split out of, when it was.
+ */
+related_id: string | null, price: PriceStamp, };
+
+/**
+ * Direction of an asset movement relative to the store it is booked on.
+ *
+ * This is data, not a convention. The flat `Transaction` this replaced inferred
+ * the sign from `TxKind` inside `signed_delta`, so a withdrawal stored a
+ * negative `amount` that nothing checked. Here the direction is an explicit
+ * field and [`Flow::signed`] is the only place it becomes a number.
+ */
+type Flow = "in" | "out";
 
 /**
  * A cached FX rate: units of `currency` per 1 USD.
@@ -275,6 +431,18 @@ type ImportBybitHistoryOutput = { staged: number,
  */
 notice: string | null, };
 
+type IncomeInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, source: IncomeSource, };
+
+/**
+ * Where money came from.
+ */
+type IncomeSource = "other" | "salary" | "reward" | "airdrop" | "staking" | "interest" | "mining";
+
+/**
+ * An increase of a store's balance.
+ */
+type IncomeTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, source: IncomeSource, price: PriceStamp, };
+
 /**
  * Chain the user picked when the hash alone was ambiguous. Without it the
  * backend never guesses an EVM network.
@@ -304,6 +472,22 @@ type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 type Locale = "auto" | "en" | "ru";
 
 type NamedValue = { label: string, value_usd: Amount, value_base: Amount, pct: number, };
+
+type PaymentInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, payee: string, receipt_ref: string | null, };
+
+/**
+ * Buying something: money out, but the reporting built on the tags is about
+ * spending rather than about withdrawals.
+ */
+type PaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, 
+/**
+ * Who was paid: a shop, a person, a service.
+ */
+payee: string, 
+/**
+ * Receipt, invoice or subscription id.
+ */
+receipt_ref: string | null, price: PriceStamp, };
 
 /**
  * A staged Bybit fill awaiting user confirmation before becoming a trade.
@@ -378,6 +562,29 @@ asset_key: string, value_usd: Amount,
  * ISO-8601 UTC.
  */
 ts: string, source: string, };
+
+/**
+ * Price stamps a money movement can carry.
+ *
+ * Shared by every variant because pricing is a property of an asset at a
+ * moment, not of the kind of movement: a bank transfer and a DeFi claim are
+ * both worth something at a rate. Keeping it in one struct stops eleven
+ * copies from drifting apart, and [`PriceStamp::on`] is the single place that
+ * decides which legs a price reaches.
+ */
+type PriceStamp = { 
+/**
+ * Price of one unit of the asset in USD.
+ */
+price_usd: Amount | null, 
+/**
+ * Price of one unit of the asset in the base currency, when already known.
+ */
+price_base: Amount | null, 
+/**
+ * Manual USD→base rate the user entered at that moment.
+ */
+fx_override: Amount | null, };
 
 type RealizedPnl = { total_base: Amount, legs: Array<PnlLeg>, };
 
@@ -508,11 +715,7 @@ crypto: Array<string>, };
 
 type Theme = "auto" | "light" | "dark";
 
-type TradeInput = { store_id: string, sell_symbol: string, sell_name: string, sell_coingecko_id: string | null, sell_chain: Chain | null, sell_contract: string | null, sell_qty: Amount, buy_symbol: string, buy_name: string, buy_coingecko_id: string | null, buy_chain: Chain | null, buy_contract: string | null, buy_qty: Amount, comment: string, 
-/**
- * Tags applied to both legs of the trade.
- */
-categories: Array<string>, fee: Amount | null, };
+type TradeInput = { store_id: string, sold: AssetIdent, sold_qty: Amount, bought: AssetIdent, bought_qty: Amount, common: TxInputCommon, fee: Amount | null, fee_asset: string | null, order_id: string | null, market: string | null, liquidity: string | null, };
 
 /**
  * A fill shaped for the trade form: what was sold, what was bought, costs.
@@ -528,69 +731,71 @@ side: string, symbol: string, asset_sold: string | null, qty_sold: string | null
 occurred_at: string | null, comment: string | null, };
 
 /**
- * A single transaction record.
- *
- * Sign convention:
- * - `amount > 0` — asset flows **into** `store_id` (unless kind is `Expense` or
- *   `Payment`, where positive means spent/out).
- * - `amount < 0` — asset flows **out** of `store_id`.
- * - `Transfer` legs: from-leg has negative amount on `store_id` + `to_store_id` set;
- *   to-leg has positive amount with `store_id == source leg's to_store_id`.
+ * One side of a trade, as booked on the store.
  */
-type Transaction = { id: string, kind: TxKind, asset: AssetRef, amount: Amount, 
+type TradeSide = { asset: AssetRef, 
 /**
- * Principal store (origin for expense, destination for income).
+ * Magnitude, always positive; the direction comes from the leg it lands on.
  */
-store_id: string, 
-/**
- * Counterpart store for transfers/trades.
- */
-to_store_id: string | null, network: Chain | null, 
-/**
- * On-chain tx hash (link to explorer).
- */
-tx_hash: string | null, 
-/**
- * User-defined tags for this transaction. A transaction may carry any
- * number of them — one payment can be `food` *and* `weekend` — and every
- * tag is a member of `VaultDoc::categories`. Normalized (trimmed,
- * lowercased, deduplicated) by the service before it is stored.
- */
-categories: Array<string>, 
-/**
- * User note — REQUIRED field on the UI, free-form text here. (see README/docs)
- */
-comment: string, 
-/**
- * ISO-8601 UTC timestamp, lexicographically sortable.
- */
-timestamp: string, 
-/**
- * Fee paid, in `fee_asset` units (or the tx asset when None).
- */
-fee: Amount | null, fee_asset: string | null, 
-/**
- * Group id shared across legs of the same transfer/trade.
- */
-group_id: string | null, 
-/**
- * Price of one unit of `asset` in USD at tx time (stamped by backend).
- */
-price_usd: Amount | null, 
-/**
- * Price of one unit of `asset` in the base currency at tx time.
- */
-price_base: Amount | null, 
-/**
- * Optional user-provided exchange rate override at tx time (base per 1 usd).
- */
-fx_override: Amount | null, };
+qty: Amount, };
 
-type TransferInput = { from_store_id: string, to_store_id: string, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, amount: Amount, comment: string, 
 /**
- * Tags applied to both legs of the transfer.
+ * A recorded transaction.
+ *
+ * Every variant carries its own fields instead of sharing one flat struct
+ * with everything optional: a `BankTransferTx` cannot hold a DEX `pool_id` and
+ * a `CashFlowTx` cannot hold an IBAN, so an impossible record is not
+ * representable.
+ *
+ * Serde's default externally tagged shape is used deliberately. It round
+ * trips through bincode, which cannot handle string tags, and in TypeScript it
+ * becomes a union of single-key objects that `'bank_transfer' in tx` narrows.
  */
-categories: Array<string>, network: Chain | null, tx_hash: string | null, fee: Amount | null, };
+type Transaction = { "income": IncomeTx } | { "expense": ExpenseTx } | { "payment": PaymentTx } | { "fee": FeeTx } | { "bank_transfer": BankTransferTx } | { "card_payment": CardPaymentTx } | { "wallet_transfer": WalletTransferTx } | { "defi_action": DefiActionTx } | { "exchange_trade": ExchangeTradeTx } | { "transfer": TransferTx } | { "cash_flow": CashFlowTx };
+
+/**
+ * Which transaction kinds a wallet of one kind accepts.
+ *
+ * Returned already split into the two groups the UI presents, and with the
+ * kind to pre-select, so the frontend holds no copy of the binding and cannot
+ * disagree with the backend about what a bank is allowed to record.
+ */
+type TransactionKinds = { 
+/**
+ * Kinds that make sense on any wallet.
+ */
+common: Array<string>, 
+/**
+ * Kinds specific to this kind of wallet — a bank transfer, a trade, cash.
+ */
+specific: Array<string>, 
+/**
+ * The kind to pre-select when the form opens.
+ */
+default: string, };
+
+type TransferInput = { from_store_id: string, to_store_id: string, asset: AssetIdent, common: TxInputCommon, fee: Amount | null, fee_asset: string | null, network: Chain | null, tx_hash: string | null, };
+
+/**
+ * A movement between two stores of any kind.
+ *
+ * One variant rather than one per ordered pair of store kinds: six kinds
+ * would mean twelve near-identical variants to keep in sync, and the
+ * kind-specific detail of each side already belongs to the store it lands on.
+ */
+type TransferTx = { meta: TxMeta, 
+/**
+ * Store the asset leaves.
+ */
+from_store_id: string, 
+/**
+ * Store the asset arrives in.
+ */
+to_store_id: string, asset: AssetRef, amount: Amount, fee: Amount | null, fee_asset: string | null, network: Chain | null, tx_hash: string | null, 
+/**
+ * Both legs move the same asset, so both share one price.
+ */
+price: PriceStamp, };
 
 /**
  * A single field suggestion for the trade form.
@@ -619,19 +824,43 @@ needs_manual_network: boolean, explorer_url: string | null,
 occurred_at: string | null, status: string | null, asset_in: string | null, amount_in: string | null, asset_out: string | null, amount_out: string | null, fee: string | null, fee_asset: string | null, };
 
 /**
- * High-level meaning of a transaction.
+ * Fields every transaction input carries.
  */
-type TxKind = "income" | "expense" | "payment" | "transfer" | "trade" | "fee";
+type TxInputCommon = { 
+/**
+ * Positive magnitude. The direction is a separate field (`flow`) or is
+ * implied by the variant, so a negative amount cannot be sent.
+ */
+amount: Amount, comment: string, 
+/**
+ * User tags; any number, normalized by the backend.
+ */
+categories: Array<string>, 
+/**
+ * RFC3339 UTC. Empty means "now".
+ */
+timestamp: string | null, price_usd: Amount | null, fx_override: Amount | null, };
 
-type TxnInput = { kind: TxKind, symbol: string, name: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, 
 /**
- * Always a positive magnitude; sign is applied by the backend per kind.
+ * Fields every transaction carries, whatever it is.
+ *
+ * Not repeated per variant: these five are never kind-specific, and twelve
+ * copies would guarantee they drift apart.
  */
-amount: Amount, store_id: string, comment: string, 
+type TxMeta = { id: string, 
 /**
- * User tags; any number of them, normalized by the backend.
+ * RFC3339 UTC, lexicographically sortable — a real sort key, not a label.
  */
-categories: Array<string>, timestamp: string | null, tx_hash: string | null, network: Chain | null, price_usd: Amount | null, fee: Amount | null, };
+timestamp: string, 
+/**
+ * User note. Free-form; the UI requires it.
+ */
+comment: string, 
+/**
+ * User tags. Any number, all members of `VaultDoc::categories`.
+ * Normalized (trimmed, lowercased, deduplicated) before it is stored.
+ */
+categories: Array<string>, };
 
 type UnlockInput = { path: string, password: string, };
 
@@ -668,3 +897,19 @@ type VaultInfo = { path: string, doc_version: number, id: string, created_at: st
  * What the unlock screen needs to know about the app.
  */
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
+
+type WalletTransferInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, flow: Flow, network: Chain | null, tx_hash: string | null, from_address: string | null, to_address: string | null, memo: string | null, fee: Amount | null, fee_asset: string | null, };
+
+/**
+ * A movement into or out of a crypto wallet, on-chain or across an
+ * exchange's internal ledger.
+ */
+type WalletTransferTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, flow: Flow, network: Chain | null, 
+/**
+ * On-chain transaction hash; links to the explorer.
+ */
+tx_hash: string | null, from_address: string | null, to_address: string | null, 
+/**
+ * Destination tag / memo; several exchanges require one to credit funds.
+ */
+memo: string | null, fee: Amount | null, fee_asset: string | null, price: PriceStamp, };

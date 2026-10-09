@@ -12,14 +12,29 @@ import { Input } from '@/shared/ui/input'
 import { Select } from '@/shared/ui/select'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { call, parseError } from '@/shared/api/ipc'
-import { cn, shortHash } from '@/shared/lib/utils'
+import {
+  DEFAULT_TX_BADGE,
+  TX_KIND_BADGE,
+  TX_TAGS,
+  type TxTag,
+  amountClass,
+  txChainAndHash,
+  txDetails,
+  txFee,
+  txId,
+  txLegForStore,
+  txMeta,
+  txSearchText,
+  txTag,
+} from '@/shared/lib/transactions'
+import { shortHash } from '@/shared/lib/utils'
 
 const props = defineProps<{ storeId: string }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const kindFilter = ref<'' | TxKind>('')
+const kindFilter = ref<'' | TxTag>('')
 const search = ref('')
 const editingId = ref<string | null>(null)
 const editingText = ref('')
@@ -34,37 +49,22 @@ const txs = useQuery({
   queryFn: () => call<Transaction[]>('list_transactions', { storeId: props.storeId }),
 })
 
-const kinds: TxKind[] = ['income', 'expense', 'payment', 'transfer', 'trade', 'fee']
-
-const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  income: 'default',
-  expense: 'destructive',
-  payment: 'destructive',
-  transfer: 'secondary',
-  trade: 'secondary',
-  fee: 'outline',
-}
-
 const storeName = (id: string) => stores.data.value?.find((tx) => tx.id === id)?.name ?? id
 
-/** Counterparty of a transfer leg, for a quick "Binance → Ledger" read. */
+/** This store's side of the transaction: a trade or transfer has two. */
+const legOf = (tx: Transaction) => txLegForStore(tx, props.storeId)
+
+/** Counterparty of a transfer, for a quick "Binance → Ledger" read. */
 const counterparty = (tx: Transaction): string => {
-  if (!tx.to_store_id) return ''
-  if (tx.store_id === props.storeId) return storeName(tx.to_store_id)
-  return storeName(tx.store_id)
+  const leg = legOf(tx)
+  return leg.to_store_id ? storeName(leg.to_store_id) : ''
 }
 
 const rows = computed(() => {
   const needle = search.value.trim().toLowerCase()
   return (txs.data.value ?? []).filter((tx) => {
-    if (kindFilter.value && tx.kind !== kindFilter.value) return false
-    if (!needle) return true
-    return (
-      tx.asset.symbol.toLowerCase().includes(needle) ||
-      tx.comment.toLowerCase().includes(needle) ||
-      tx.categories.some((entry) => entry.toLowerCase().includes(needle)) ||
-      (tx.tx_hash ?? '').toLowerCase().includes(needle)
-    )
+    if (kindFilter.value && txTag(tx) !== kindFilter.value) return false
+    return !needle || txSearchText(tx).includes(needle)
   })
 })
 
@@ -101,23 +101,25 @@ const saveComment = useMutation({
 })
 
 function startEdit(tx: Transaction) {
-  editingId.value = tx.id
-  editingText.value = tx.comment
+  editingId.value = txId(tx)
+  editingText.value = txMeta(tx).comment
 }
 
+const hashOf = (tx: Transaction) => txChainAndHash(tx).hash
+
 async function openExplorer(tx: Transaction) {
-  if (!tx.tx_hash) return
   const url = explorerUrl(tx)
   if (url) await call('open_explorer', { url })
 }
 
 async function copyHash(tx: Transaction) {
-  if (tx.tx_hash) await navigator.clipboard?.writeText(tx.tx_hash)
+  const hash = hashOf(tx)
+  if (hash) await navigator.clipboard?.writeText(hash)
 }
 
 /** Mirrors `Transaction::explorer_url` for the networks we surface in the UI. */
 function explorerUrl(tx: Transaction): string | null {
-  const hash = tx.tx_hash
+  const { chain, hash } = txChainAndHash(tx)
   if (!hash) return null
   const map: Partial<Record<Chain, string>> = {
     bitcoin: `https://mempool.space/tx/${hash}`,
@@ -131,7 +133,7 @@ function explorerUrl(tx: Transaction): string | null {
     solana: `https://solscan.io/tx/${hash}`,
     tron: `https://tronscan.org/#/transaction/${hash}`,
   }
-  return map[tx.network ?? 'fiat'] ?? null
+  return map[chain ?? 'fiat'] ?? null
 }
 </script>
 
@@ -143,7 +145,7 @@ function explorerUrl(tx: Transaction): string | null {
         <div class="flex flex-wrap items-center gap-2">
           <Select v-model="kindFilter" class="h-8 w-40 text-xs">
             <option value="">{{ t('hist.allKinds') }}</option>
-            <option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`tx.kind.${kind}`) }}</option>
+            <option v-for="kind in TX_TAGS" :key="kind" :value="kind">{{ t(`tx.kind.${kind}`) }}</option>
           </Select>
           <Input v-model="search" class="h-8 w-48 text-xs" :placeholder="t('hist.search')" />
         </div>
@@ -151,18 +153,18 @@ function explorerUrl(tx: Transaction): string | null {
     </template>
 
     <div class="divide-y divide-border">
-      <div v-for="tx in rows" :key="tx.id" class="py-3 first:pt-0">
+      <div v-for="tx in rows" :key="txId(tx)" class="py-3 first:pt-0">
         <div class="flex items-start gap-3">
-          <Badge :variant="kindBadge[tx.kind] ?? 'secondary'" class="mt-0.5 shrink-0">
-            {{ t(`tx.kind.${tx.kind}`) }}
+          <Badge :variant="TX_KIND_BADGE[txTag(tx)] ?? DEFAULT_TX_BADGE" class="mt-0.5 shrink-0">
+            {{ t(`tx.kind.${txTag(tx)}`) }}
           </Badge>
 
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span class="font-medium">{{ tx.asset.symbol.toUpperCase() }}</span>
-              <span class="truncate text-sm text-muted-foreground">{{ tx.asset.name }}</span>
+              <span class="font-medium">{{ legOf(tx).asset.symbol.toUpperCase() }}</span>
+              <span class="truncate text-sm text-muted-foreground">{{ legOf(tx).asset.name }}</span>
               <Badge
-                v-for="entry in tx.categories"
+                v-for="entry in txMeta(tx).categories"
                 :key="entry"
                 variant="outline"
                 class="shrink-0"
@@ -170,16 +172,20 @@ function explorerUrl(tx: Transaction): string | null {
                 {{ entry }}
               </Badge>
               <span v-if="counterparty(tx)" class="truncate text-xs text-muted-foreground">
-                {{ tx.store_id === storeId ? '→' : '←' }} {{ counterparty(tx) }}
+                {{ legOf(tx).amount.startsWith('-') ? '→' : '←' }} {{ counterparty(tx) }}
               </span>
             </div>
 
             <p class="text-xs text-muted-foreground">
-              {{ formatDateTime(tx.timestamp) }}
-              <span v-if="tx.fee"> · {{ t('hist.fee') }} {{ tx.fee }} {{ tx.fee_asset ?? tx.asset.symbol.toUpperCase() }}</span>
+              {{ formatDateTime(txMeta(tx).timestamp) }}
+              <span v-if="txFee(tx)"> · {{ t('hist.fee') }} {{ txFee(tx)?.amount }} {{ txFee(tx)?.asset.toUpperCase() }}</span>
+            </p>
+            <!-- The facts only this kind has: rail, counterparty, pool… -->
+            <p v-if="txDetails(tx).length" class="truncate text-xs text-muted-foreground">
+              {{ txDetails(tx).map(([key, value]) => `${t(key)}: ${value}`).join(' · ') }}
             </p>
 
-            <div v-if="editingId === tx.id" class="mt-1.5 flex items-center gap-2">
+            <div v-if="editingId === txId(tx)" class="mt-1.5 flex items-center gap-2">
               <Input v-model="editingText" class="h-8" :placeholder="t('tx.comment')" @keyup.enter="saveComment.mutate()" />
               <Button variant="ghost" size="icon" :title="t('actions.save')" @click="saveComment.mutate()">
                 <Check class="size-4" />
@@ -189,47 +195,39 @@ function explorerUrl(tx: Transaction): string | null {
               </Button>
             </div>
             <button
-              v-else-if="tx.comment"
+              v-else-if="txMeta(tx).comment"
               type="button"
               class="block max-w-full truncate text-left text-xs text-muted-foreground hover:text-foreground"
               :title="t('hist.editComment')"
               @click="startEdit(tx)"
             >
-              {{ tx.comment }}
+              {{ txMeta(tx).comment }}
             </button>
           </div>
 
           <div class="shrink-0 text-right">
-            <p
-              class="whitespace-nowrap font-medium tabular-nums"
-              :class="
-                cn(
-                  tx.kind === 'income' && 'text-emerald-600 dark:text-emerald-400',
-                  (tx.kind === 'expense' || tx.kind === 'payment') && 'text-destructive',
-                )
-              "
-            >
-              {{ tx.amount }} {{ tx.asset.symbol.toUpperCase() }}
+            <p class="whitespace-nowrap font-medium tabular-nums" :class="amountClass(legOf(tx).amount)">
+              {{ legOf(tx).amount }} {{ legOf(tx).asset.symbol.toUpperCase() }}
             </p>
-            <p v-if="tx.price_usd" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-              {{ formatMoney(tx.price_usd, { currency: 'usd' }) }}
+            <p v-if="legOf(tx).price_usd" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+              {{ formatMoney(legOf(tx).price_usd ?? '', { currency: 'usd' }) }}
             </p>
           </div>
 
           <div class="flex shrink-0 items-center gap-0.5">
-            <Button v-if="tx.tx_hash" variant="ghost" size="icon" :title="t('hist.openExplorer')" @click="openExplorer(tx)">
+            <Button v-if="hashOf(tx)" variant="ghost" size="icon" :title="t('hist.openExplorer')" @click="openExplorer(tx)">
               <ExternalLink class="size-4" />
             </Button>
             <Button
-              v-if="tx.tx_hash"
+              v-if="hashOf(tx)"
               variant="ghost"
               size="icon"
               :title="t('hist.copyHash')"
               @click="copyHash(tx)"
             >
-              <span class="text-xs tabular-nums">{{ shortHash(tx.tx_hash, 6) }}</span>
+              <span class="text-xs tabular-nums">{{ shortHash(hashOf(tx) ?? '', 6) }}</span>
             </Button>
-            <Button variant="ghost" size="icon" :title="t('tx.delete')" @click="remove.mutate(tx.id)">
+            <Button variant="ghost" size="icon" :title="t('tx.delete')" @click="remove.mutate(txId(tx))">
               <X class="size-4 text-destructive" />
             </Button>
           </div>

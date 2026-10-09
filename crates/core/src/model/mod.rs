@@ -8,5 +8,5 @@ pub mod vault;
 
 pub use chain::{Chain, ChainInfo};
 pub use store::StoreKind;
-pub use transaction::TxKind;
+pub use transaction::Transaction;
 pub use vault::VaultDoc;
