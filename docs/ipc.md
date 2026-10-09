@@ -42,12 +42,31 @@ Frontend парсит код и показывает локализованно�
 | `delete_store` | `id` | `()` (каскадно чистит транзакции/holdings) |
 
 ### transactions
+
+`Transaction` — закрытый enum, поэтому на каждый вид своя команда и свой input:
+запрос, не совпадающий со своим вариантом, не компилируется на TypeScript.
+
 | `list_transactions` | `store_id?` | `Vec<Transaction>` |
-| `add_transaction` | `TxnInput { kind, symbol, amount, store_id, comment, categories, timestamp?, tx_hash?, network?, price_usd?, fee? }` | `Transaction` (income/expense/payment) |
-| `add_transfer` | `TransferInput { from_store_id, to_store_id, asset, amount, fee, network, tx_hash, comment, categories }` | `[Transaction; 2]` (out+in, один `group_id`) |
-| `add_trade` | `TradeInput { store_id, buy, sell, ... , comment, categories }` | `[Transaction; 2]` (buy+sell legs) |
+| `add_income` | `IncomeInput { store_id, asset, common, source }` | `Transaction` |
+| `add_expense` | `ExpenseInput { store_id, asset, common }` | `Transaction` |
+| `add_payment` | `PaymentInput { store_id, asset, common, payee, receipt_ref? }` | `Transaction` |
+| `add_fee` | `FeeInput { store_id, asset, common, related_id? }` | `Transaction` |
+| `add_bank_transfer` | `BankTransferInput { store_id, asset, common, flow, rail, counterparty_name, counterparty_account?, reference?, fee?, fee_asset? }` | `Transaction` |
+| `add_card_payment` | `CardPaymentInput { store_id, asset, common, card_last4?, merchant?, mcc?, fee?, fee_asset? }` | `Transaction` |
+| `add_wallet_transfer` | `WalletTransferInput { store_id, asset, common, flow, network?, tx_hash?, from_address?, to_address?, memo?, fee?, fee_asset? }` | `Transaction` |
+| `add_defi_action` | `DefiActionInput { store_id, asset, common, flow, action, network?, tx_hash?, protocol?, pool_id?, fee?, fee_asset? }` | `Transaction` |
+| `add_cash_flow` | `CashFlowInput { store_id, asset, common, flow, location?, counterparty? }` | `Transaction` |
+| `add_trade` | `TradeInput { store_id, sold, sold_qty, bought, bought_qty, common, fee?, fee_asset?, order_id?, market?, liquidity? }` | `Transaction` (одна запись, две ноги) |
+| `add_transfer` | `TransferInput { from_store_id, to_store_id, asset, common, fee?, fee_asset?, network?, tx_hash? }` | `Transaction` (одна запись, две ноги) |
 | `delete_transaction` | `id` | `()` |
 | `update_comment` | `UpdateCommentInput { transaction_id, comment }` | `Transaction` |
+
+`common` — `TxInputCommon { amount, comment, categories, timestamp?, price_usd?, fx_override? }`,
+общая для всех видов часть. `asset`/`sold`/`bought` — `AssetIdent`.
+
+Трейд и перевод возвращают **одну** запись: это одно событие с двумя
+эффектами, а не две транзакции, которые надо склеивать по `group_id`. Удаление
+такой записи убирает обе стороны сразу.
 
 ### categories
 | `add_category` | `category` | `String` (добавленная) |
@@ -91,6 +110,9 @@ JSON без шифрования — там нет ничего секретно
 | `dev_open_vault_json_in_editor` | — | `String` — путь scratch-файла. Пишет документ и запускает `$EDITOR` detached, не дожидаясь |
 | `dev_reload_vault_json_from_editor` | — | `String` — содержимое scratch-файла. Путь не принимается: фронт может читать только этот файл |
 
+### виды операций по типу кошелька
+| `transaction_kinds_for_store_kind` | `kind: StoreKind` | `TransactionKinds { common[], specific[], default }` — какие виды операций принимает кошелёк этого типа. Привязка живёт в Rust (`Transaction::tags_for_store_kind`), фронт своей копии не держит |
+
 ### exchange (только чтение)
 | `inspect_tx` | `InspectTxInput { tx_hash, network? }` | `InspectTxResult { fetched, info?, hints[], notice? }` |
 | `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit?, store_id? }` | `BybitExecutionsResult { executions[], notice? }` |
@@ -133,7 +155,10 @@ JSON без шифрования — там нет ничего секретно
   patterns) не передаются по IPC, а живут во фронтенд-константах (см. модель).
 - `Amount` — в TS это просто `string` (все денежные поля).
 - `StoreKind` — `"exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash"`.
-- `TxKind` — `"income" | "expense" | "payment" | "transfer" | "trade" | "fee"`.
+- `Transaction` — union одно-ключевых объектов, ключ = вид операции
+  (`{ income: IncomeTx } | { bank_transfer: BankTransferTx } | …`). На фронте
+  сужение через `body(tx, 'income')` из `src/shared/lib/transactions.ts`; `txLegs(tx)`
+  разворачивает запись в подписанные движения.
 - `categories` — `string[]`, теги пользователя; сколько угодно на операцию,
   бэкенд нормализует (trim/lowercase/дедуп) и регистрирует новые в словаре.
 

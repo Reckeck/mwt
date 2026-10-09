@@ -90,56 +90,61 @@ vault: они переживают открытие другого хранил�
 
 ## Transaction (источник истины)
 
-| Поле | Тип | Комментарий |
+`Transaction` — **закрытый enum**, а не плоская структура. Каждый вариант несёт
+только свои поля, поэтому невозможная запись не представима: у `BankTransferTx`
+нет DEX-`pool_id`, у `CashFlowTx` нет IBAN.
+
+```rust
+enum Transaction {
+    Income(IncomeTx), Expense(ExpenseTx), Payment(PaymentTx), Fee(FeeTx),
+    BankTransfer(BankTransferTx), CardPayment(CardPaymentTx),
+    WalletTransfer(WalletTransferTx), DefiAction(DefiActionTx),
+    ExchangeTrade(ExchangeTradeTx), Transfer(TransferTx), CashFlow(CashFlowTx),
+}
+```
+
+Общая часть вынесена отдельно, чтобы не расходилась между вариантами:
+
+| Структура | Поля |
+|---|---|
+| `TxMeta` | `id`, `timestamp` (RFC3339), `comment`, `categories` |
+| `PriceStamp` | `price_usd?`, `price_base?`, `fx_override?` |
+| `Flow` | `In` \| `Out` — знак задаётся данными, а не соглашением |
+| `BankTransferTx` | `store_id`, `asset`, `amount`, `flow`, `rail`, `counterparty_name`, `counterparty_account?`, `reference?`, `fee?`, `fee_asset?`, `meta`, `price` |
+| `ExchangeTradeTx` | `store_id`, `sold { asset, qty }`, `bought { asset, qty }`, `fee?`, `fee_asset?`, `order_id?`, `market?`, `liquidity?`, `meta`, `price` |
+| `TransferTx` | `from_store_id`, `to_store_id`, `asset`, `amount`, `fee?`, `fee_asset?`, `network?`, `tx_hash?`, `meta`, `price` |
+
+Остальные варианты — по тому же принципу; полный список полей даёт
+`mise run gen-types` → `src/shared/api/ipc.gen.d.ts`.
+
+### Ноги (Leg)
+
+`Transaction::legs()` разворачивает запись в список `Leg` — по одному на
+`(store, asset)`. Трейд и перевод дают по две ноги, остальные — одну. Ноги
+**не хранятся**: они вычисляются при чтении, а всё, что суммирует деньги
+(`recompute_holdings`, `history_series`, `realized_pnl`), работает только с
+ними и не различает виды операций.
+
+Знак берётся из `Flow::signed()` — единственного места, где направление
+становится числом.
+
+### Привязка видов к типу кошелька
+
+`Transaction::tags_for_store_kind(StoreKind)` — что кошелёк данного типа
+принимает. Возвращается двумя группами: `COMMON_TAGS` (работают везде, включая
+`transfer` — он доступен от любого кошелька, потому что второй конец может быть
+любым) и специфичные для кошелька.
+
+| Тип кошелька | Специфичные виды | По умолчанию |
 |---|---|---|
-| `id`, `group_id`? | `String` | group_id общий для связанных ног (transfer/trade) |
-| `kind` | `TxKind` | `income`, `expense`, `payment`, `transfer`, `trade`, `fee` |
-| `store_id` | `String` | главное хранилище (откуда расход / куда доход) |
-| `asset` | `AssetRef` | |
-| `amount` | `Amount` | знак учитывается при агрегации (`signed_delta`); у income положительный, у expense/payment — знак траты |
-| `to_store_id`? | `String` | сторона-контрагент для transfer/trade |
-| `price_usd`? | `Amount` | за единицу на момент сделки |
-| `price_base`? | `Amount` | цена за единицу в базовой валюте |
-| `fx_override`? | `Amount` | ручной курс (base за 1 usd) на момент сделки |
-| `fee`? | `Amount` | в единицах `fee_asset` (или актива сделки) |
-| `fee_asset`? | `String` | символ актива комиссии |
-| `timestamp` | `String` | RFC3339; события-границы для history_series |
-| `network`? | `Chain` | сеть для on-chain операций |
-| `tx_hash`? | `String` | explorer-ссылка строится из хеша и сети |
-| `comment` | `String` | свободный текст (обязательное поле у каждой сделки) |
-| `categories` | `Vec<String>` | теги пользователя, **сколько угодно на одну операцию** |
+| `exchange` | `exchange_trade`, `wallet_transfer` | `exchange_trade` |
+| `hot_wallet` / `cold_wallet` | `wallet_transfer`, `defi_action` | `wallet_transfer` |
+| `bank` | `bank_transfer`, `card_payment` | `bank_transfer` |
+| `cash` | `cash_flow` | `cash_flow` |
 
-Знаковая конвенция: `amount > 0` — актив входит в `store_id` (кроме `expense`
-и `payment`, где положительное = потрачено); `amount < 0` — выходит из
-`store_id`. Ноги перевода: исходящая нога имеет отрицательный `amount` на
-`store_id` + заполненный `to_store_id`; входящая — положительный с
-`store_id == to_store_id` исходящей.
-
-### Виды операций
-
-`payment` — оплата товара или услуги (магазин, подписка, счёт). Отдельный вид
-от `expense`, потому что это расход, за который пользователь что-то
-*получил*: именно по его тегам (`categories`) потом строится аналитика трат.
-Деньги уходят так же, как у `expense` (`signed_delta` → `-amount`), поэтому
-payment уменьшает holdings, но, как и любой выход, не трогает avg_cost.
-
-### Категории
-
-- Словарь — `VaultDoc.categories` (в нём же живут системные `salary`,
-  `rewards`, `trading`, `staking`, `defi`, `other`).
-- Одна операция несёт **любое количество** тегов: `food` + `weekend` +
-  `home`. Это осознанно — по тегам строятся будущие графики трат, и одна
-  покупка часто относится сразу к нескольким срезам.
-- `UnlockedVault::adopt_categories()` нормализует список перед сохранением
-  (trim → lowercase → пустые отброшены → дубликаты сняты с сохранением
-  порядка) и добавляет новые теги в словарь, чтобы пикер всегда предлагал
-  всё, что реально используется.
-- Импорт с биржи проставляет единственный тег `trading`.
-
-### Правила агрегации (holding)
-- Только сущности с ненулевым количеством и не-архивные хранилища.
-- avg_cost обновляется взвешенно на buy/income.
-- Пересчёт — `UnlockedVault::recompute_holdings()` после каждой мутации.
+Фронт спрашивает это командой `transaction_kinds_for_store_kind` и своей копии
+не держит. `match` в `specific_tags_for_store_kind` без wildcard-руки, поэтому
+новый `StoreKind` не соберётся, пока для него не описан набор.
 
 ## Деньги: Amount
 
