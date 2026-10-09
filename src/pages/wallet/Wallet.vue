@@ -233,7 +233,8 @@ function openWallet(created: Store) {
           <component :is="getStoreIcon(store.kind)" class="size-5" />
         </span>
 
-        <div class="min-w-0 flex-1">
+        <!-- min width: on a phone the actions wrap below instead of squeezing the name. -->
+        <div class="min-w-48 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="truncate text-lg font-semibold">{{ store.name }}</h2>
             <Badge variant="secondary">{{ t(`stores.kind.${store.kind}`) }}</Badge>
@@ -312,7 +313,7 @@ function openWallet(created: Store) {
       </p>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Card v-for="stat in stats" :key="stat.key">
         <p class="truncate text-xs text-muted-foreground">{{ stat.label }}</p>
         <p class="mt-1 truncate text-xl font-semibold tabular-nums" :class="stat.tone">{{ stat.value }}</p>
