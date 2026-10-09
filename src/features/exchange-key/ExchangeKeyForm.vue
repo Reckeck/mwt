@@ -57,7 +57,7 @@ async function remove() {
 </script>
 
 <template>
-  <div class="grid gap-3">
+  <div class="flex flex-col gap-4">
     <p class="text-sm text-muted-foreground">{{ t('wallet.bybit.hint') }}</p>
 
     <div v-if="hasKey" class="flex items-center gap-2">
@@ -67,7 +67,8 @@ async function remove() {
       </Button>
     </div>
 
-    <template v-else>
+    <!-- Key, secret and the button on one row: it is a two-field form. -->
+    <form v-else class="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="save">
       <div class="grid gap-1.5">
         <Label for="bk">{{ t('wallet.bybit.apiKey') }}</Label>
         <Input id="bk" v-model="apiKey" autocomplete="off" spellcheck="false" />
@@ -76,11 +77,9 @@ async function remove() {
         <Label for="bs">{{ t('wallet.bybit.apiSecret') }}</Label>
         <Input id="bs" v-model="apiSecret" type="password" autocomplete="new-password" spellcheck="false" />
       </div>
-      <div class="flex items-center gap-3">
-        <Button :disabled="busy || !apiKey || !apiSecret" @click="save">
-          {{ t('wallet.bybit.save') }}
-        </Button>
-      </div>
-    </template>
+      <Button type="submit" :disabled="busy || !apiKey || !apiSecret">
+        {{ t('wallet.bybit.save') }}
+      </Button>
+    </form>
   </div>
 </template>
