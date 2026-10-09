@@ -38,6 +38,7 @@
   "auth.currentPassword": "Current password",
   "auth.newPassword": "New password",
   "store.total": "Total",
+  "store.assets": "Assets",
   "store.fxRate": "FX rate (per 1 $)",
   "store.updatedAt": "Updated",
   "store.refresh": "Refresh prices",
