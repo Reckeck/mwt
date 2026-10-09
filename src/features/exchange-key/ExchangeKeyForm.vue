@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useMutation, useQuery } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
+import { StoreNodeSelect } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { call, parseError } from '@/shared/api/ipc'
+import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { ExchangeKeyFormProps } from './exchange-key.types'
 import { useExchangeKeyStatus } from './useExchangeKeyStatus'
@@ -42,10 +46,44 @@ async function save() {
   }
 }
 
+const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+
+/** Exchange sub-accounts of this wallet: where imported fills may land. */
+const targets = computed(() => {
+  const nodes = flattenStoreTree(tree.data.value ?? [])
+  const self = nodes.find((node) => node.store.id === props.storeId)
+  if (!self) return []
+  const prefix = self.path.join('\u0000')
+  return nodes.filter(
+    (node) =>
+      node.store.id !== props.storeId &&
+      node.store.kind === 'exchange' &&
+      !node.store.archived &&
+      node.path.join('\u0000').startsWith(`${prefix}\u0000`),
+  )
+})
+
+const setTargets = useMutation({
+  mutationFn: (patch: { spot_store_id?: string | null; futures_store_id?: string | null }) =>
+    call<ExchangeKeyStatus>('set_exchange_targets', {
+      input: {
+        store_id: props.storeId,
+        spot_store_id: status.data.value?.spot_store_id ?? null,
+        futures_store_id: status.data.value?.futures_store_id ?? null,
+        ...patch,
+      },
+    }),
+  onSuccess: () => {
+    toast.success(t('settings.saved'))
+    void status.refetch()
+  },
+  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
 async function remove() {
   busy.value = true
   try {
-    await call('clear_exchange_key', { storeId: props.storeId })
+    await call('clear_exchange_key', { input: { store_id: props.storeId } })
     toast.success(t('wallet.bybit.keyRemoved'))
     await status.refetch()
   } catch (err) {
@@ -60,12 +98,37 @@ async function remove() {
   <div class="flex flex-col gap-4">
     <p class="text-sm text-muted-foreground">{{ t('wallet.bybit.hint') }}</p>
 
-    <div v-if="hasKey" class="flex items-center gap-2">
-      <Badge variant="secondary">{{ hint }}</Badge>
-      <Button variant="ghost" :disabled="busy" @click="remove">
-        {{ t('wallet.bybit.remove') }}
-      </Button>
-    </div>
+    <template v-if="hasKey">
+      <div class="flex items-center gap-2">
+        <Badge variant="secondary">{{ hint }}</Badge>
+        <Button variant="ghost" :disabled="busy" @click="remove">
+          {{ t('wallet.bybit.remove') }}
+        </Button>
+      </div>
+      <!-- Where confirmed fills are booked: the wallet itself or one of its exchange sub-accounts. -->
+      <div v-if="targets.length" class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-1.5">
+          <Label for="bybit-spot-target">{{ t('wallet.bybit.spotTarget') }}</Label>
+          <StoreNodeSelect
+            id="bybit-spot-target"
+            :model-value="status.data.value?.spot_store_id ?? ''"
+            :nodes="targets"
+            :empty-label="t('wallet.bybit.thisWallet')"
+            @update:model-value="(id) => setTargets.mutate({ spot_store_id: id || null })"
+          />
+        </div>
+        <div class="grid gap-1.5">
+          <Label for="bybit-futures-target">{{ t('wallet.bybit.futuresTarget') }}</Label>
+          <StoreNodeSelect
+            id="bybit-futures-target"
+            :model-value="status.data.value?.futures_store_id ?? ''"
+            :nodes="targets"
+            :empty-label="t('wallet.bybit.thisWallet')"
+            @update:model-value="(id) => setTargets.mutate({ futures_store_id: id || null })"
+          />
+        </div>
+      </div>
+    </template>
 
     <!-- Key, secret and the button on one row: it is a two-field form. -->
     <form v-else class="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="save">
