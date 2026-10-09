@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Badge } from '@/shared/ui/badge'
@@ -13,6 +14,14 @@ const props = defineProps<TransactionRowProps>()
 defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
+
+/** Full asset name when it says more than the ticker (one-asset kinds only). */
+const assetName = computed(() => {
+  const moves = txLegs(props.tx)
+  const asset = moves[0]?.asset
+  if (moves.length !== 1 || !asset || asset.name.toUpperCase() === asset.symbol.toUpperCase()) return ''
+  return asset.name
+})
 </script>
 
 <template>
@@ -23,14 +32,11 @@ const { t } = useI18n()
 
     <div class="min-w-0 flex-1">
       <div class="flex min-w-0 items-center gap-2">
-        <!-- One row per movement, so a trade shows both of its sides
-             instead of a single half-truth. -->
-        <template v-for="(move, moveIndex) in txLegs(props.tx)" :key="moveIndex">
-          <span class="shrink-0 font-medium">
-            {{ moveIndex > 0 ? '→ ' : '' }}{{ move.amount }} {{ move.asset.symbol }}
-          </span>
-          <span class="truncate text-sm text-muted-foreground">{{ move.asset.name }}</span>
-        </template>
+        <!-- What moved; the amounts are on the right. A trade names both sides. -->
+        <span class="shrink-0 font-medium">
+          {{ txLegs(props.tx).map((move) => move.asset.symbol).join(' → ') }}
+        </span>
+        <span v-if="assetName" class="truncate text-sm text-muted-foreground">{{ assetName }}</span>
         <Badge v-for="entry in txMeta(props.tx).categories" :key="entry" variant="outline" class="shrink-0">
           {{ entry }}
         </Badge>
