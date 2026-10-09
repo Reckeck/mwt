@@ -14,17 +14,17 @@ const rest = computed(() => {
 
 <template>
   <div :class="cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', cls)" v-bind="rest">
-    <div v-if="$slots.header" class="flex flex-col gap-1.5 p-6 pb-4">
+    <div v-if="$slots.header" class="flex flex-col gap-1.5 p-4 pb-3 sm:p-6 sm:pb-4">
       <slot name="header" />
     </div>
     <!-- Only the section right under another one drops its top padding;
          a card without a header used to have its content glued to the edge. -->
-    <div v-if="$slots.default" :class="cn('p-6', $slots.header && 'pt-0')">
+    <div v-if="$slots.default" :class="cn('p-4 sm:p-6', $slots.header && 'pt-0 sm:pt-0')">
       <slot />
     </div>
     <div
       v-if="$slots.footer"
-      :class="cn('flex items-center gap-2 p-6', ($slots.header || $slots.default) && 'pt-0')"
+      :class="cn('flex items-center gap-2 p-4 sm:p-6', ($slots.header || $slots.default) && 'pt-0 sm:pt-0')"
     >
       <slot name="footer" />
     </div>
