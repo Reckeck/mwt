@@ -44,6 +44,19 @@ export const router = createRouter({
           meta: { i18n: 'nav.charts' },
         },
         {
+          path: 'directory',
+          component: () => import('@/pages/directory').then((page) => page.Directory),
+          children: [
+            { path: '', redirect: { name: 'directory-contacts' } },
+            {
+              path: 'contacts',
+              name: 'directory-contacts',
+              component: () => import('@/pages/directory').then((page) => page.DirectoryContacts),
+              meta: { i18n: 'nav.directory' },
+            },
+          ],
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/pages/settings').then((page) => page.Settings),
