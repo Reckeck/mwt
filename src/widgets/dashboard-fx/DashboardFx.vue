@@ -20,6 +20,9 @@ const summary = useQuery({
 
 const refreshBusy = computed(() => summary.isFetching.value)
 
+/** With a USD base the rate is always 1: say so instead of printing "1.00 USD". */
+const sameCurrency = computed(() => summary.data.value?.base_currency.toLowerCase() === 'usd')
+
 async function refresh() {
   try {
     const result = await call<RefreshResult>('refresh_all')
@@ -35,15 +38,24 @@ async function refresh() {
 <template>
   <Card>
     <template #header>
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <p class="text-sm text-muted-foreground">{{ t('store.fxRate') }}</p>
-        <Button variant="ghost" size="sm" :disabled="refreshBusy" @click="refresh">
+        <!-- An icon button keeps this header as tall as its neighbours'. -->
+        <Button
+          variant="ghost"
+          size="icon"
+          class="-my-2 size-8"
+          :title="t('store.refresh')"
+          :aria-label="t('store.refresh')"
+          :disabled="refreshBusy"
+          @click="refresh"
+        >
           <RefreshCw class="size-4" :class="refreshBusy && 'animate-spin'" />
-          {{ t('store.refresh') }}
         </Button>
       </div>
     </template>
-    <p class="text-lg font-semibold">
+    <p v-if="sameCurrency" class="text-sm text-muted-foreground">{{ t('store.fxSameCurrency') }}</p>
+    <p v-else class="text-2xl font-bold tabular-nums">
       {{ formatMoney(summary.data.value?.fx_per_usd, { currency: summary.data.value?.base_currency }) }}
     </p>
   </Card>

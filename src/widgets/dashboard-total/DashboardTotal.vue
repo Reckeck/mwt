@@ -23,7 +23,9 @@ const summary = useQuery({
       <p class="text-2xl font-bold">
         {{ formatMoney(summary.data.value?.total_base, { currency: summary.data.value?.base_currency }) }}
       </p>
-      <p class="text-xs text-muted-foreground">≈ {{ formatMoney(summary.data.value?.total_usd, { currency: 'usd' }) }}</p>
+      <p v-if="summary.data.value?.base_currency.toLowerCase() !== 'usd'" class="text-xs text-muted-foreground">
+        ≈ {{ formatMoney(summary.data.value?.total_usd, { currency: 'usd' }) }}
+      </p>
     </div>
   </Card>
 </template>

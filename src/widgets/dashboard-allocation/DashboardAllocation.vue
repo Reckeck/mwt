@@ -45,14 +45,14 @@ function pctWidth(value: string | number | null | undefined): string {
     <template #header>
       <p class="font-medium">{{ t(props.by === 'chain' ? 'store.byChain' : 'store.byStore') }}</p>
     </template>
-    <div class="space-y-3">
+    <div class="flex flex-col gap-1">
       <component
         :is="row.storeId ? RouterLink : 'div'"
         v-for="row in rows"
         :key="row.key"
         :to="row.storeId ? { name: 'wallet', params: { id: row.storeId } } : undefined"
-        class="flex flex-col gap-1"
-        :class="row.storeId && 'rounded-md px-1 py-0.5 transition-colors hover:bg-accent'"
+        class="-mx-2 flex flex-col gap-1 rounded-md px-2 py-1"
+        :class="row.storeId && 'transition-colors hover:bg-accent'"
       >
         <div class="flex items-center justify-between text-sm">
           <span class="truncate">{{ row.label }}</span>
