@@ -3,10 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AssetInput } from '@/entities/asset'
-import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call, parseError } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 
@@ -163,6 +162,12 @@ const rows = computed<ResultRow[]>(() => {
 
 const canApply = computed(() => amount.value.trim() !== '' && priceIn.value.trim() !== '')
 
+const CALC_MODES: CalcMode[] = ['converter', 'position']
+
+function pickMode(value: unknown) {
+  if (value === 'converter' || value === 'position') mode.value = value
+}
+
 function apply() {
   emit('apply', {
     mode: mode.value,
@@ -172,85 +177,77 @@ function apply() {
     price: priceIn.value.trim(),
   })
 }
+
+/** The dialog owns the "apply" button, so it reads these. */
+defineExpose({ canApply, apply })
 </script>
 
 <template>
-  <Card>
-    <template #header>
-      <div class="flex items-center justify-between gap-2">
-        <p class="font-medium">{{ t('calc.title') }}</p>
-        <div class="flex rounded-md border border-border p-0.5">
-          <button
-            v-for="tab in (['converter', 'position'] as CalcMode[])"
-            :key="tab"
-            type="button"
-            class="rounded px-2.5 py-1 text-xs font-medium transition-colors"
-            :class="cn(mode === tab ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground')"
-            @click="mode = tab"
-          >
-            {{ t(`calc.mode.${tab}`) }}
-          </button>
-        </div>
+  <div class="flex flex-col gap-4">
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      :model-value="mode"
+      :aria-label="t('calc.title')"
+      @update:model-value="pickMode"
+    >
+      <ToggleGroupItem v-for="tab in CALC_MODES" :key="tab" :value="tab">
+        {{ t(`calc.mode.${tab}`) }}
+      </ToggleGroupItem>
+    </ToggleGroup>
+
+    <div class="grid gap-3 @sm:grid-cols-2">
+      <AssetInput v-model="from" :label="t('calc.from')" :placeholder="t('asset.searchPlaceholder')" />
+      <AssetInput v-if="mode === 'converter'" v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />
+      <div v-else class="grid gap-1.5">
+        <Label>{{ t('calc.targetPrice') }}</Label>
+        <Input v-model="targetPrice" inputmode="decimal" :placeholder="t('calc.targetPriceHint')" />
       </div>
-    </template>
-
-    <div class="grid gap-3">
-      <div class="grid gap-3 @sm:grid-cols-2">
-        <AssetInput v-model="from" :label="t('calc.from')" :placeholder="t('asset.searchPlaceholder')" />
-        <AssetInput v-if="mode === 'converter'" v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />
-        <div v-else class="grid gap-1.5">
-          <Label>{{ t('calc.targetPrice') }}</Label>
-          <Input v-model="targetPrice" inputmode="decimal" :placeholder="t('calc.targetPriceHint')" />
-        </div>
-      </div>
-
-      <div class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label>{{ t(mode === 'converter' ? 'calc.amount' : 'calc.quantity') }}</Label>
-          <Input v-model="amount" inputmode="decimal" :placeholder="t('calc.amountHint')" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label>{{ t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice') }}</Label>
-          <Input v-model="priceIn" inputmode="decimal" placeholder="0" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label>{{ t(mode === 'converter' ? 'calc.priceOut' : 'calc.stopPrice') }}</Label>
-          <Input v-if="mode === 'converter'" v-model="priceOut" inputmode="decimal" placeholder="0" />
-          <Input v-else v-model="stopPrice" inputmode="decimal" :placeholder="t('calc.stopPriceHint')" />
-        </div>
-      </div>
-
-      <div class="grid gap-1.5">
-        <Label>{{ t('calc.feePct') }}</Label>
-        <Input v-model="feePct" inputmode="decimal" placeholder="0.1" class="max-w-28" />
-      </div>
-
-      <p v-if="impliedRate && mode === 'converter'" class="text-xs text-muted-foreground">
-        {{ t('calc.rate') }}: 1 {{ from?.symbol.toUpperCase() || '—' }} ≈ {{ impliedRate }}
-        {{ to?.symbol.toUpperCase() || '' }}
-      </p>
-
-      <div v-if="rows.length" class="space-y-1.5 rounded-md border border-border bg-muted/40 p-3">
-        <div v-for="row in rows" :key="row.key" class="flex items-baseline justify-between gap-3 text-sm">
-          <span class="text-muted-foreground">{{ row.label }}</span>
-          <span
-            class="truncate font-medium tabular-nums"
-            :class="cn(
-              row.emphasis && 'text-base',
-              row.tone === 'positive' && 'text-emerald-600 dark:text-emerald-400',
-              row.tone === 'negative' && 'text-destructive',
-            )"
-          >
-            {{ row.value }}
-          </span>
-        </div>
-      </div>
-
-      <p v-if="error" class="text-xs text-destructive">{{ error }}</p>
-
-      <Button variant="outline" size="sm" :disabled="!canApply" @click="apply">
-        {{ t('calc.apply') }}
-      </Button>
     </div>
-  </Card>
+
+    <div class="grid gap-3 @sm:grid-cols-3">
+      <div class="grid gap-1.5">
+        <Label>{{ t(mode === 'converter' ? 'calc.amount' : 'calc.quantity') }}</Label>
+        <Input v-model="amount" inputmode="decimal" :placeholder="t('calc.amountHint')" />
+      </div>
+      <div class="grid gap-1.5">
+        <Label>{{ t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice') }}</Label>
+        <Input v-model="priceIn" inputmode="decimal" placeholder="0" />
+      </div>
+      <div class="grid gap-1.5">
+        <Label>{{ t(mode === 'converter' ? 'calc.priceOut' : 'calc.stopPrice') }}</Label>
+        <Input v-if="mode === 'converter'" v-model="priceOut" inputmode="decimal" placeholder="0" />
+        <Input v-else v-model="stopPrice" inputmode="decimal" :placeholder="t('calc.stopPriceHint')" />
+      </div>
+    </div>
+
+    <div class="grid gap-1.5">
+      <Label>{{ t('calc.feePct') }}</Label>
+      <Input v-model="feePct" inputmode="decimal" placeholder="0.1" class="max-w-28" />
+    </div>
+
+    <p v-if="impliedRate && mode === 'converter'" class="text-xs text-muted-foreground">
+      {{ t('calc.rate') }}: 1 {{ from?.symbol.toUpperCase() || '—' }} ≈ {{ impliedRate }}
+      {{ to?.symbol.toUpperCase() || '' }}
+    </p>
+
+    <div v-if="rows.length" class="flex flex-col gap-1.5 rounded-md border border-border bg-muted/40 p-3">
+      <div v-for="row in rows" :key="row.key" class="flex items-baseline justify-between gap-3 text-sm">
+        <span class="text-muted-foreground">{{ row.label }}</span>
+        <span
+          class="truncate font-medium tabular-nums"
+          :class="cn(
+            row.emphasis && 'text-base',
+            row.tone === 'positive' && 'text-emerald-600 dark:text-emerald-400',
+            row.tone === 'negative' && 'text-destructive',
+          )"
+        >
+          {{ row.value }}
+        </span>
+      </div>
+    </div>
+
+    <p v-if="error" class="text-xs text-destructive">{{ error }}</p>
+  </div>
 </template>

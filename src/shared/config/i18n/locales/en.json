@@ -137,6 +137,7 @@
   "pos.pnl": "Unrealized PnL",
   "pos.empty": "No positions yet",
   "calc.title": "Calculator",
+  "calc.hint": "Work out a trade, then turn it into a transaction",
   "calc.mode.converter": "Converter",
   "calc.mode.position": "Position",
   "calc.from": "You give",
