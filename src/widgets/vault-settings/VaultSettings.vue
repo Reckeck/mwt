@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
@@ -12,22 +13,21 @@ import { useSettingsStore } from '@/shared/store/settings'
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 
-const fxIntervalOptions = [
-  { value: 30, label: '30 сек' },
-  { value: 60, label: '1 мин' },
-  { value: 300, label: '5 мин' },
-  { value: 900, label: '15 мин' },
-  { value: 1800, label: '30 мин' },
-  { value: 3600, label: '1 час' },
-]
+/** "300" → "5 min" in the UI language; the options used to be hard-coded in Russian. */
+function duration(seconds: number): string {
+  if (seconds % 3600 === 0) return t('duration.hours', { n: seconds / 3600 })
+  if (seconds % 60 === 0) return t('duration.minutes', { n: seconds / 60 })
+  return t('duration.seconds', { n: seconds })
+}
 
-const bybitIntervalOptions = [
+const fxIntervalOptions = computed(() =>
+  [30, 60, 300, 900, 1800, 3600].map((value) => ({ value, label: duration(value) })),
+)
+
+const bybitIntervalOptions = computed(() => [
   { value: 0, label: t('settings.bybit.importOff') },
-  { value: 300, label: '5 мин' },
-  { value: 900, label: '15 мин' },
-  { value: 3600, label: '1 час' },
-  { value: 21600, label: '6 час' },
-]
+  ...[300, 900, 3600, 21600].map((value) => ({ value, label: duration(value) })),
+])
 
 // Dashboard widget definitions
 const widgetDefs = [
