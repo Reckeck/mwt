@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { CandlestickChart, ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
+import { ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AppSettingsModal } from '@/widgets/app-settings'
@@ -59,7 +59,6 @@ const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions' },
   { name: 'charts', icon: ChartArea, key: 'nav.charts' },
-  { name: 'trading', icon: CandlestickChart, key: 'nav.trading' },
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
 
