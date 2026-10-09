@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { X } from 'lucide-vue-next'
+import { Trash2 } from 'lucide-vue-next'
 
-import { Button } from '@/shared/ui/button'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
 
 import type { TransactionDeleteProps } from './transaction-delete.types'
 import { useTransactionDelete } from './useTransactionDelete'
@@ -14,15 +14,12 @@ const remove = useTransactionDelete()
 </script>
 
 <template>
-  <Button
-    variant="ghost"
-    size="icon"
-    class="shrink-0"
-    :title="t('tx.delete')"
+  <ConfirmButton
+    :label="t('tx.delete')"
+    :confirm-label="t('actions.confirmDelete')"
     :disabled="remove.isPending.value"
-    @click="remove.mutate(props.id)"
+    @confirm="remove.mutate(props.id)"
   >
-    <span class="sr-only">{{ t('tx.delete') }}</span>
-    <X class="size-4 text-destructive" />
-  </Button>
+    <Trash2 class="size-4" />
+  </ConfirmButton>
 </template>

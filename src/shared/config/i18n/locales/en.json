@@ -359,7 +359,7 @@
   "import.notice.rate_limited": "Bybit rate-limited the request — try again later",
   "import.notice.forbidden_region": "Bybit is unavailable from your region",
   "import.pendingEvent": "New Bybit fills are waiting for confirmation",
-  "settings.bybit.importInterval": "Bybit background poll, s",
+  "settings.bybit.importInterval": "Bybit background import",
   "settings.bybit.importIntervalHint": "How often to look for new fills. 0 disables it. New fills wait in the staging list for confirmation.",
   "settings.bybit.importOff": "Off",
   "stores.created": "Wallet created",
@@ -429,5 +429,10 @@
   "wallet.ownTotal": "This wallet",
   "wallet.transactions": "Transactions",
   "wallet.lastTx": "last",
-  "wallet.subWallets": "Sub-wallets"
+  "wallet.subWallets": "Sub-wallets",
+  "duration.seconds": "{n} s",
+  "duration.minutes": "{n} min",
+  "duration.hours": "{n} h",
+  "actions.confirmDelete": "Delete?",
+  "store.fxSameCurrency": "Base currency is USD — nothing to convert"
 }
