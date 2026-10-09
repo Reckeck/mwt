@@ -1,10 +1,10 @@
-//! Regenerates `src/lib/ipc.gen.d.ts` from the core IPC contract.
+//! Regenerates `src/shared/api/ipc.gen.d.ts` from the core IPC contract.
 //!
 //! Run via: `mise run gen-types`
 //!
 //! Every type enumerated in `collect!` below is exported with ts-rs
 //! (`#[ts(export)]` respecting `TS_RS_EXPORT_DIR`) into the frontend's
-//! `src/lib` directory, then flattened into a single ambient `.d.ts`.
+//! `src/shared/api` directory, then flattened into a single ambient `.d.ts`.
 
 use std::ffi::OsString;
 use std::fs;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 fn main() {
     let out_dir = match std::env::var_os("TS_RS_EXPORT_DIR") {
         Some(raw) => PathBuf::from(raw),
-        None => PathBuf::from("src/lib/.ts-tmp"),
+        None => PathBuf::from("src/shared/api/.ts-tmp"),
     };
     fs::create_dir_all(&out_dir).expect("create export dir");
 
@@ -129,8 +129,11 @@ fn main() {
         }
     }
 
-    let path = Path::new("src").join("lib").join("ipc.gen.d.ts");
-    fs::create_dir_all(path.parent().expect("ipc.gen.d.ts parent")).expect("create src/lib");
+    let path = Path::new("src")
+        .join("shared")
+        .join("api")
+        .join("ipc.gen.d.ts");
+    fs::create_dir_all(path.parent().expect("ipc.gen.d.ts parent")).expect("create src/shared/api");
     fs::write(&path, merged).expect("write ipc.gen.d.ts");
     let _ = fs::remove_dir_all(&out_dir);
     println!("gen-types: wrote {}", path.display());
