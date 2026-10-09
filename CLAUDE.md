@@ -1,0 +1,58 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Основной источник правил — `AGENTS.md` (общий для всех агентов); он импортируется
+ниже целиком и имеет приоритет. Здесь — только дополнения, которых там нет.
+
+@AGENTS.md
+
+## Точечный запуск тестов
+
+Тесты Rust — инлайн-модули `#[cfg(test)]` внутри `crates/core/src/**` (отдельной
+папки `tests/` нет). Фронтенд-тестов нет; проверка фронта = Biome + vue-tsc.
+
+```bash
+cargo test -p trade-core                      # только ядро
+cargo test -p trade-core service::            # по префиксу пути модуля
+cargo test -p trade-core <name> -- --exact --nocapture
+```
+
+`CARGO_TARGET_DIR=.rust-target` задан в `mise.toml` — при запуске cargo вне
+mise артефакты окажутся в `target/`, и сборка пойдёт с нуля.
+
+## Сквозная картина (то, что требует чтения нескольких файлов)
+
+- **Жизненный цикл vault.** `auth::unlock_vault` → `VaultFile::open` (AEAD-проверка
+  пароля = расшифровка, верификатора нет) → `UnlockedVault` кладётся в
+  `AppState.vault: Mutex<Option<UnlockedVault>>`. Каждая мутация в
+  `UnlockedVault` (`service.rs`) заканчивается `persist()` — полное
+  перешифрование и атомарная запись (tmp + fsync + rename). Отдельного «save»
+  с фронта нет.
+- **Два хранилища настроек.** Тема/язык/базовая валюта/избранное — в
+  `appconfig.rs` (обычный JSON в конфиг-директории, доступен до разблокировки,
+  читается в `App.vue` через `get_app_settings`). Всё доменное, включая кэш цен
+  и FX, — внутри зашифрованного vault. Базовая валюта после open/create
+  проталкивается в vault через `sync_base_currency`.
+- **Формат снапшота.** `SnapshotFormat::for_profile()`: JSON в debug, bincode в
+  release — это формат *записи*; при чтении формат берётся из байта
+  `payload_fmt` в 55-байтном заголовке.
+- **Цены.** Команда снимает нужные данные под мьютексом, отпускает его, делает
+  `PricingService::fetch_*` (сеть), снова берёт мьютекс и вызывает
+  `apply_*`; затем шлёт событие `prices-updated`, на которое фронт
+  инвалидирует TanStack Query.
+- **Ошибки через IPC.** Rust отдаёт строку `"CODE: message"` (`Error::code()`),
+  `parseError` в `src/shared/api/ipc.ts` разбирает её в `{ code, message }`.
+- **`pnpm dev` без Tauri.** `call()` в `ipc.ts` при отсутствии
+  `__TAURI_INTERNALS__` уходит в in-memory мок (пароль — `secret`). Новая
+  команда, которую нужно гонять в браузере, требует ветки в этом моке.
+- **Добавление команды** затрагивает: DTO в `ipc_contract.rs` → логика в
+  `service.rs`/core → хендлер в `crates/app/src/commands/*` →
+  `generate_handler![…]` в `crates/app/src/lib.rs` → `mise run gen-types` →
+  `docs/ipc.md`. Подробно — скилл `ipc-command`.
+
+## Коммиты из Claude Code
+
+Правила jj из `AGENTS.md` действуют полностью: `git commit`/`git add` запрещены,
+коммит только по просьбе пользователя, трейлер `Co-authored-by` jj добавляет
+сам через `commit_trailers` — не дописывай вторую строку соавторства руками.
