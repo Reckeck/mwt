@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ChevronRight, Plus } from 'lucide-vue-next'
 
+import { StoreCreateDialog } from '@/features/store-create'
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -20,45 +21,35 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/shared/ui/sidebar'
-import { call } from '@/shared/api/ipc'
+import { call, onEvent } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { getStoreIcon } from '@/shared/lib/store-icons'
-import { buildStoreTree, flattenStoreTree, storeAncestors, type StoreNode } from '@/shared/lib/store-tree'
+import { STORE_TREE_QUERY_KEY, storeAncestorIds } from '@/shared/lib/store-tree'
 import { cn } from '@/shared/lib/utils'
+import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
+const settings = useSettingsStore()
 
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
+// Totals come rolled up from the backend: the sidebar and the wallet page
+// read the same numbers instead of each summing on its own.
+const tree = useQuery({
+  queryKey: STORE_TREE_QUERY_KEY,
+  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
 })
 
-const summary = useQuery({
-  queryKey: ['summary'],
-  queryFn: () => call<PortfolioSummary>('get_summary'),
-})
+const roots = computed(() => tree.data.value ?? [])
 
-const roots = computed(() => buildStoreTree(stores.data.value ?? []))
+// New quotes change every total, wherever the refresh was started.
+void onEvent<RefreshResult>('prices-updated', () => void tree.refetch())
 
-/** Value of every wallet including its sub-wallets, in the base currency. */
-const subtreeValue = computed(() => {
-  const own = new Map<string, number>()
-  for (const row of summary.data.value?.by_store ?? []) own.set(row.store_id, Number(row.value_base))
-  const totals = new Map<string, number>()
-  const walk = (node: StoreNode): number => {
-    const sum = node.children.reduce((acc, child) => acc + walk(child), own.get(node.store.id) ?? 0)
-    totals.set(node.store.id, sum)
-    return sum
-  }
-  for (const node of roots.value) walk(node)
-  return totals
-})
-
-function walletTotal(id: string): string {
-  const value = subtreeValue.value.get(id)
-  if (!value) return ''
-  return formatMoney(value, { currency: summary.data.value?.base_currency ?? '', decimals: 0 })
+/** A parent shows its whole subtree, a leaf its own value. */
+function nodeTotal(node: StoreTreeNode): string {
+  const value = node.children.length ? node.subtree_base : node.own_base
+  if (!Number(value)) return ''
+  return formatMoney(value, { currency: settings.baseCurrency, decimals: 0 })
 }
 
 const activeId = computed(() => (route.name === 'wallet' ? String(route.params.id ?? '') : ''))
@@ -75,12 +66,12 @@ function readExpanded(): Set<string> {
 
 const expanded = ref(readExpanded())
 
-// Opening a sub-wallet (from a link, a breadcrumb) unfolds its parents so it is visible.
+// Opening a sub-account (from a link, a breadcrumb) unfolds its parents so it is visible.
 watch(
-  [activeId, () => stores.data.value],
+  [activeId, roots],
   ([id, list]) => {
-    if (!id || !list) return
-    const parents = storeAncestors(list, id).map((store) => store.id)
+    if (!id || !list.length) return
+    const parents = storeAncestorIds(list, id)
     if (parents.every((parent) => expanded.value.has(parent))) return
     expanded.value = new Set([...expanded.value, ...parents])
   },
@@ -98,21 +89,26 @@ function toggle(id: string) {
     // Storage blocked: the tree just opens collapsed next time.
   }
 }
+
+/* --- a new wallet opens in place, then the app goes to it --- */
+const createOpen = ref(false)
+
+function openWallet(created: Store) {
+  void router.push({ name: 'wallet', params: { id: created.id } })
+}
 </script>
 
 <template>
   <SidebarGroup>
     <SidebarGroupLabel>{{ t('nav.wallets') }}</SidebarGroupLabel>
-    <SidebarGroupAction as-child :title="t('nav.addWallet')">
-      <RouterLink :to="{ name: 'stores' }">
-        <Plus />
-        <span class="sr-only">{{ t('nav.addWallet') }}</span>
-      </RouterLink>
+    <SidebarGroupAction :title="t('nav.addWallet')" @click="createOpen = true">
+      <Plus />
+      <span class="sr-only">{{ t('nav.addWallet') }}</span>
     </SidebarGroupAction>
 
     <SidebarGroupContent>
       <SidebarMenu>
-        <template v-if="stores.isPending.value">
+        <template v-if="tree.isPending.value">
           <SidebarMenuItem v-for="index in 3" :key="index">
             <SidebarMenuSkeleton show-icon />
           </SidebarMenuItem>
@@ -132,11 +128,8 @@ function toggle(id: string) {
           </SidebarMenuButton>
 
           <!-- A parent keeps its rolled-up total, shifted left of the chevron. -->
-          <SidebarMenuBadge
-            v-if="walletTotal(node.store.id)"
-            :class="cn('tabular-nums', node.children.length && 'right-8')"
-          >
-            {{ walletTotal(node.store.id) }}
+          <SidebarMenuBadge v-if="nodeTotal(node)" :class="cn('tabular-nums', node.children.length && 'right-8')">
+            {{ nodeTotal(node) }}
           </SidebarMenuBadge>
           <SidebarMenuAction
             v-if="node.children.length"
@@ -148,33 +141,67 @@ function toggle(id: string) {
           </SidebarMenuAction>
 
           <SidebarMenuSub v-if="node.children.length && expanded.has(node.store.id)">
-            <SidebarMenuSubItem v-for="child in flattenStoreTree(node.children)" :key="child.store.id">
-              <SidebarMenuSubButton
-                as-child
-                :is-active="activeId === child.store.id"
-                :class="cn(child.store.archived && 'opacity-50')"
-              >
-                <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
-                  <component :is="getStoreIcon(child.store.kind)" :style="{ color: child.store.color }" />
-                  <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
-                  <span v-if="walletTotal(child.store.id)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {{ walletTotal(child.store.id) }}
-                  </span>
-                </RouterLink>
-              </SidebarMenuSubButton>
+            <SidebarMenuSubItem v-for="child in node.children" :key="child.store.id">
+              <div class="flex items-center">
+                <SidebarMenuSubButton
+                  as-child
+                  :is-active="activeId === child.store.id"
+                  :class="cn('min-w-0 flex-1', child.store.archived && 'opacity-50')"
+                >
+                  <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
+                    <component :is="getStoreIcon(child.store.kind)" :style="{ color: child.store.color }" />
+                    <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
+                    <span v-if="nodeTotal(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {{ nodeTotal(child) }}
+                    </span>
+                  </RouterLink>
+                </SidebarMenuSubButton>
+                <button
+                  v-if="child.children.length"
+                  type="button"
+                  class="flex size-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+                  :title="child.store.name"
+                  :aria-expanded="expanded.has(child.store.id)"
+                  @click="toggle(child.store.id)"
+                >
+                  <ChevronRight
+                    :class="cn('size-4 transition-transform', expanded.has(child.store.id) && 'rotate-90')"
+                  />
+                </button>
+              </div>
+
+              <!-- Third level: the deepest the tree goes. -->
+              <SidebarMenuSub v-if="child.children.length && expanded.has(child.store.id)" class="mr-0 pr-0">
+                <SidebarMenuSubItem v-for="leaf in child.children" :key="leaf.store.id">
+                  <SidebarMenuSubButton
+                    as-child
+                    size="sm"
+                    :is-active="activeId === leaf.store.id"
+                    :class="cn(leaf.store.archived && 'opacity-50')"
+                  >
+                    <RouterLink :to="{ name: 'wallet', params: { id: leaf.store.id } }">
+                      <component :is="getStoreIcon(leaf.store.kind)" :style="{ color: leaf.store.color }" />
+                      <span class="min-w-0 flex-1 truncate">{{ leaf.store.name }}</span>
+                      <span v-if="nodeTotal(leaf)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {{ nodeTotal(leaf) }}
+                      </span>
+                    </RouterLink>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
             </SidebarMenuSubItem>
           </SidebarMenuSub>
         </SidebarMenuItem>
 
-        <SidebarMenuItem v-if="stores.isSuccess.value && !roots.length">
-          <SidebarMenuButton as-child :tooltip="t('nav.addWallet')">
-            <RouterLink :to="{ name: 'stores' }">
-              <Plus />
-              <span>{{ t('nav.addWallet') }}</span>
-            </RouterLink>
+        <SidebarMenuItem v-if="tree.isSuccess.value && !roots.length">
+          <SidebarMenuButton :tooltip="t('nav.addWallet')" @click="createOpen = true">
+            <Plus />
+            <span>{{ t('nav.addWallet') }}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroupContent>
+
+    <StoreCreateDialog v-model:open="createOpen" @created="openWallet" />
   </SidebarGroup>
 </template>

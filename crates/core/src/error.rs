@@ -50,6 +50,40 @@ pub enum Error {
 
     #[error("vault is locked")]
     RequiresUnlock,
+
+    #[error("{0}")]
+    StoreTree(StoreTreeViolation),
+}
+
+/// A wallet-tree rule a write would break. Each one has its own IPC code so
+/// the UI can say *which* rule, in the user's language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum StoreTreeViolation {
+    #[error("a store cannot be nested inside itself or its own sub-accounts")]
+    Cycle,
+    #[error("the tree is limited to {} levels", crate::model::store::MAX_STORE_DEPTH + 1)]
+    TooDeep,
+    #[error("a sub-account cannot be added to an archived store")]
+    ParentArchived,
+    #[error("this name is already taken at this level")]
+    NameTaken,
+    #[error("a top-level store cannot become a sub-account")]
+    RootMove,
+    #[error("restore the parent store first")]
+    RestoreParentFirst,
+}
+
+impl StoreTreeViolation {
+    pub fn code(&self) -> &'static str {
+        match self {
+            StoreTreeViolation::Cycle => "STORE_CYCLE",
+            StoreTreeViolation::TooDeep => "STORE_TOO_DEEP",
+            StoreTreeViolation::ParentArchived => "STORE_PARENT_ARCHIVED",
+            StoreTreeViolation::NameTaken => "STORE_NAME_TAKEN",
+            StoreTreeViolation::RootMove => "STORE_ROOT_MOVE",
+            StoreTreeViolation::RestoreParentFirst => "STORE_RESTORE_PARENT_FIRST",
+        }
+    }
 }
 
 impl Error {
@@ -72,6 +106,7 @@ impl Error {
             Error::Missing(_) => "MISSING",
             Error::Archived(_) => "ARCHIVED",
             Error::RequiresUnlock => "REQUIRES_UNLOCK",
+            Error::StoreTree(violation) => violation.code(),
         }
     }
 }

@@ -471,6 +471,11 @@ type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 
 type Locale = "auto" | "en" | "ru";
 
+/**
+ * Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
+ */
+type MoveStoreInput = { id: string, parent_id: string | null, };
+
 type NamedValue = { label: string, value_usd: Amount, value_base: Amount, pct: number, };
 
 type PaymentInput = { store_id: string, asset: AssetIdent, common: TxInputCommon, payee: string, receipt_ref: string | null, };
@@ -639,16 +644,33 @@ color: string, archived: boolean,
  */
 note: string, 
 /**
- * Optional parent store ID for nesting (free tree, any depth).
+ * Parent store ID for sub-accounts; `None` for a top-level wallet. The tree
+ * rules (depth, unique sibling names, no cycles) are enforced on write by
+ * the service, see `MAX_STORE_DEPTH`.
  */
 parent_id: string | null, };
 
 /**
- * Everything the wallet page needs about one store, in a single round trip.
- * Computed on the fly — nothing here is persisted, so the vault format
- * version is unaffected.
+ * A direct sub-account row on the wallet page.
  */
-type StoreChildRow = { store: Store, value_usd: Amount, value_base: Amount, };
+type StoreChildRow = { store: Store, 
+/**
+ * Own value (without the child's sub-accounts).
+ */
+value_usd: Amount, value_base: Amount, 
+/**
+ * Value including the child's own sub-accounts.
+ */
+subtree_base: Amount, 
+/**
+ * Share of the parent's subtree value, 0..1.
+ */
+share: number, };
+
+/**
+ * One ancestor in the wallet page breadcrumbs.
+ */
+type StoreCrumb = { id: string, name: string, color: string, };
 
 /**
  * What kind of container a store represents.
@@ -656,25 +678,58 @@ type StoreChildRow = { store: Store, value_usd: Amount, value_base: Amount, };
 type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash";
 
 /**
+ * Allowed destinations for moving a sub-account.
+ */
+type StoreMoveTargets = { 
+/**
+ * Flat (no `children`), in tree order; the current parent is left out.
+ */
+parents: Array<StoreTreeNode>, 
+/**
+ * Whether it may become a top-level wallet (no root has its name).
+ */
+can_detach: boolean, };
+
+/**
  * Everything the wallet page needs about one store, in a single round trip.
  * Computed on the fly — nothing here is persisted, so the vault format
  * version is unaffected.
  */
-type StoreOverview = { store: Store, base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, 
+type StoreOverview = { store: Store, 
 /**
- * Total value including all descendants (subtree).
+ * From the top-level wallet down to the direct parent.
  */
-subtree_total_base: Amount, realized_pnl_base: Amount, 
+ancestors: Array<StoreCrumb>, base_currency: string, fx_per_usd: Amount, 
 /**
- * Sorted by `value_base`, descending.
+ * Whether PnL and transaction stats below cover the subtree.
+ */
+include_children: boolean, 
+/**
+ * Value held on the store itself.
+ */
+own_usd: Amount, own_base: Amount, 
+/**
+ * Own value plus every sub-account at any depth.
+ */
+subtree_usd: Amount, subtree_base: Amount, realized_pnl_base: Amount, 
+/**
+ * Own positions, sorted by `value_base`, descending.
  */
 positions: Array<StorePosition>, 
 /**
- * Direct children with their own values (for tree rendering).
+ * Positions merged per asset across the whole subtree.
  */
-children: Array<StoreChildRow>, tx_count: number, 
+subtree_positions: Array<StorePosition>, 
 /**
- * RFC3339; empty when the store has no transactions.
+ * Direct sub-accounts.
+ */
+children: Array<StoreChildRow>, 
+/**
+ * Whether a sub-account may be created here (depth and archive rules).
+ */
+can_add_child: boolean, tx_count: number, 
+/**
+ * RFC3339; empty when there are no transactions.
  */
 first_tx_at: string, last_tx_at: string, };
 
@@ -690,6 +745,40 @@ avg_cost: Amount | null, price_usd: Amount, value_usd: Amount, value_base: Amoun
  * `(price_base − avg_cost) × |quantity|`; zero when `avg_cost` is unknown.
  */
 unrealized_base: Amount, };
+
+/**
+ * Which stores a query covers. The one way every report filters by wallet.
+ */
+type StoreScope = { 
+/**
+ * Empty = every store.
+ */
+store_ids: Array<string>, 
+/**
+ * Expand each id to its whole subtree.
+ */
+include_children: boolean, };
+
+/**
+ * One node of the wallet tree (sidebar, wallets page, pickers).
+ */
+type StoreTreeNode = { store: Store, 
+/**
+ * 0 for a top-level wallet.
+ */
+depth: number, 
+/**
+ * Names from the top-level wallet down to this node, inclusive.
+ */
+path: Array<string>, own_usd: Amount, own_base: Amount, subtree_usd: Amount, subtree_base: Amount, 
+/**
+ * Transactions with a leg on this very store.
+ */
+own_tx_count: number, 
+/**
+ * `depth < MAX_STORE_DEPTH` and not archived.
+ */
+can_add_child: boolean, children: Array<StoreTreeNode>, };
 
 /**
  * One store's slice of the portfolio. Unlike [`NamedValue`] it carries the
@@ -880,7 +969,7 @@ type UpdateSettingsInput = { display_decimals: number | null, dashboard_widgets:
  */
 bybit_import_interval_sec: number | null, };
 
-type UpdateStoreInput = { id: string, name: string, color: string, note: string, parent_id: string | null, };
+type UpdateStoreInput = { id: string, name: string, color: string, note: string, };
 
 /**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).

@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use zeroize::Zeroizing;
 
 use crate::Amount;
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, StoreTreeViolation};
 use crate::model::chain::Chain;
-use crate::model::store::{AssetRef, Holding, Store, StoreKind};
+use crate::model::store::{AssetRef, Holding, MAX_STORE_DEPTH, Store, StoreKind, StoreScope};
 use crate::model::transaction::{ExchangeTradeTx, Leg, PriceStamp, TradeSide, Transaction, TxMeta};
 use crate::model::vault::{PendingImport, VaultDoc, iso_to_millis, now_iso};
 use crate::storage::{SnapshotFormat, VaultFile};
@@ -120,6 +120,128 @@ impl UnlockedVault {
     }
 
     // -- stores -------------------------------------------------------------
+    //
+    // Stores form a tree of at most `MAX_STORE_DEPTH + 1` levels. Every write
+    // that places a node goes through `validate_placement`, so the tree rules
+    // live in one spot; reads stay lenient so a hand-edited vault still opens.
+
+    fn find_store(&self, id: &str) -> Option<&Store> {
+        self.doc.stores.iter().find(|store| store.id == id)
+    }
+
+    /// Parent chain from the root down to `id`'s parent. Stops at a missing
+    /// parent or at a cycle left behind by a hand-edited vault.
+    fn ancestors_of(&self, id: &str) -> Vec<&Store> {
+        let mut chain = Vec::new();
+        let mut seen = HashSet::from([id.to_string()]);
+        let mut parent = self
+            .find_store(id)
+            .and_then(|store| store.parent_id.as_deref());
+        while let Some(parent_id) = parent {
+            if !seen.insert(parent_id.to_string()) {
+                break;
+            }
+            let Some(store) = self.find_store(parent_id) else {
+                break;
+            };
+            chain.push(store);
+            parent = store.parent_id.as_deref();
+        }
+        chain.reverse();
+        chain
+    }
+
+    /// 0 for a top-level wallet.
+    pub fn depth(&self, id: &str) -> usize {
+        self.ancestors_of(id).len()
+    }
+
+    /// Top-level wallet that `id` belongs to (itself for a root).
+    pub fn root_of(&self, id: &str) -> String {
+        self.ancestors_of(id)
+            .first()
+            .map(|store| store.id.clone())
+            .unwrap_or_else(|| id.to_string())
+    }
+
+    /// Levels below `id`: 0 for a leaf.
+    fn subtree_height(&self, id: &str) -> usize {
+        let mut seen = HashSet::from([id.to_string()]);
+        let mut level = vec![id.to_string()];
+        let mut height = 0;
+        loop {
+            let next: Vec<String> = level
+                .iter()
+                .flat_map(|parent| self.children_of(parent))
+                .filter(|child| seen.insert(child.id.clone()))
+                .map(|child| child.id.clone())
+                .collect();
+            if next.is_empty() {
+                return height;
+            }
+            height += 1;
+            level = next;
+        }
+    }
+
+    /// R5: names are unique among siblings (roots among roots), ignoring case
+    /// and surrounding spaces. `node` is skipped so a rename to itself passes.
+    fn ensure_unique_name(
+        &self,
+        node: Option<&str>,
+        parent: Option<&str>,
+        name: &str,
+    ) -> Result<()> {
+        let wanted = name.trim().to_lowercase();
+        let taken = self.doc.stores.iter().any(|store| {
+            node != Some(store.id.as_str())
+                && store.parent_id.as_deref() == parent
+                && store.name.trim().to_lowercase() == wanted
+        });
+        if taken {
+            return Err(Error::StoreTree(StoreTreeViolation::NameTaken));
+        }
+        Ok(())
+    }
+
+    /// Whether `node` (an existing store, or `None` for a new one) may sit
+    /// under `parent` with `name`. Rules R1–R6.
+    fn validate_placement(
+        &self,
+        node: Option<&str>,
+        parent: Option<&str>,
+        name: &str,
+    ) -> Result<()> {
+        if name.trim().is_empty() {
+            return Err(Error::InvalidInput("store name must not be empty".into()));
+        }
+        if let Some(parent_id) = parent {
+            let parent_store = self
+                .find_store(parent_id)
+                .ok_or_else(|| Error::Missing("parent store".into()))?;
+            if let Some(node_id) = node {
+                if self
+                    .find_store(node_id)
+                    .is_some_and(|store| store.parent_id.is_none())
+                {
+                    return Err(Error::StoreTree(StoreTreeViolation::RootMove));
+                }
+                if parent_id == node_id
+                    || self.subtree_ids(node_id).iter().any(|id| id == parent_id)
+                {
+                    return Err(Error::StoreTree(StoreTreeViolation::Cycle));
+                }
+            }
+            let height = node.map_or(0, |id| self.subtree_height(id));
+            if self.depth(parent_id) + 1 + height > MAX_STORE_DEPTH {
+                return Err(Error::StoreTree(StoreTreeViolation::TooDeep));
+            }
+            if parent_store.archived {
+                return Err(Error::StoreTree(StoreTreeViolation::ParentArchived));
+            }
+        }
+        self.ensure_unique_name(node, parent, name)
+    }
 
     pub fn create_store(
         &mut self,
@@ -129,23 +251,7 @@ impl UnlockedVault {
         note: &str,
         parent_id: Option<String>,
     ) -> Result<Store> {
-        if name.trim().is_empty() {
-            return Err(Error::InvalidInput("store name must not be empty".into()));
-        }
-        if self
-            .doc
-            .stores
-            .iter()
-            .any(|store| store.name.eq_ignore_ascii_case(name.trim()))
-        {
-            return Err(Error::InvalidInput("store name already exists".into()));
-        }
-        // Validate parent exists
-        if let Some(ref pid) = parent_id
-            && !self.doc.stores.iter().any(|store| store.id == *pid)
-        {
-            return Err(Error::Missing("parent store not found".into()));
-        }
+        self.validate_placement(None, parent_id.as_deref(), name)?;
         let mut store = Store::new(name, kind, color);
         store.note = note.trim().to_string();
         store.parent_id = parent_id;
@@ -155,37 +261,16 @@ impl UnlockedVault {
         Ok(store)
     }
 
-    pub fn update_store(
-        &mut self,
-        id: &str,
-        name: &str,
-        color: &str,
-        note: &str,
-        parent_id: Option<String>,
-    ) -> Result<Store> {
-        // Validate new parent if changed
-        if let Some(ref pid) = parent_id
-            && *pid != id
-        {
-            // can't be parent of itself
-            if !self.doc.stores.iter().any(|store| store.id == *pid) {
-                return Err(Error::Missing("parent store not found".into()));
-            }
-            // Check for cycles: walk up from proposed parent
-            let mut ancestor = Some(pid.as_str());
-            while let Some(current) = ancestor {
-                if current == id {
-                    return Err(Error::InvalidInput(
-                        "cycle detected: cannot make store a descendant of itself".into(),
-                    ));
-                }
-                ancestor = self
-                    .doc
-                    .stores
-                    .iter()
-                    .find(|store| store.id == current)
-                    .and_then(|store| store.parent_id.as_deref());
-            }
+    /// Edit a store's own fields. Its place in the tree changes only through
+    /// [`Self::move_store`].
+    pub fn update_store(&mut self, id: &str, name: &str, color: &str, note: &str) -> Result<Store> {
+        let parent = self
+            .find_store(id)
+            .ok_or_else(|| Error::Missing("store".into()))?
+            .parent_id
+            .clone();
+        if !name.trim().is_empty() {
+            self.ensure_unique_name(Some(id), parent.as_deref(), name)?;
         }
         let out = {
             let store = self
@@ -199,31 +284,80 @@ impl UnlockedVault {
             }
             store.color = color.trim().to_string();
             store.note = note.trim().to_string();
-            store.parent_id = parent_id;
             store.clone()
         };
         self.persist()?;
         Ok(out)
     }
 
-    pub fn archive_store(&mut self, id: &str, archived: bool) -> Result<()> {
-        let found = {
+    /// Re-hang a sub-account under another node, or make it a top-level
+    /// wallet with `parent_id = None`. A top-level wallet never moves (R6).
+    pub fn move_store(&mut self, id: &str, parent_id: Option<&str>) -> Result<Store> {
+        let store = self
+            .find_store(id)
+            .cloned()
+            .ok_or_else(|| Error::Missing("store".into()))?;
+        if store.parent_id.as_deref() == parent_id {
+            return Ok(store);
+        }
+        self.validate_placement(Some(id), parent_id, &store.name)?;
+        let out = {
             let store = self
                 .doc
                 .stores
                 .iter_mut()
                 .find(|store| store.id == id)
                 .ok_or_else(|| Error::Missing("store".into()))?;
-            if archived && store.archived {
-                return Err(Error::InvalidInput("already archived".into()));
-            }
-            store.archived = archived;
-            true
+            store.parent_id = parent_id.map(str::to_string);
+            store.clone()
         };
-        if found {
-            self.persist()?;
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Where `id` may be moved: every allowed parent (flat, without the
+    /// current one) and whether it may become a top-level wallet.
+    pub fn store_move_targets(&self, id: &str) -> Result<StoreMoveTargets> {
+        let store = self
+            .find_store(id)
+            .ok_or_else(|| Error::Missing("store".into()))?;
+        if store.parent_id.is_none() {
+            return Ok(StoreMoveTargets::default());
         }
-        Ok(())
+        let parents = flatten_tree(self.store_tree())
+            .into_iter()
+            .filter(|node| store.parent_id.as_deref() != Some(node.store.id.as_str()))
+            .filter(|node| {
+                self.validate_placement(Some(id), Some(&node.store.id), &store.name)
+                    .is_ok()
+            })
+            .collect();
+        Ok(StoreMoveTargets {
+            parents,
+            can_detach: self.ensure_unique_name(Some(id), None, &store.name).is_ok(),
+        })
+    }
+
+    /// Archive (or restore) a store together with its whole subtree. A node
+    /// cannot be restored while an ancestor is still archived (R8).
+    pub fn archive_store(&mut self, id: &str, archived: bool) -> Result<()> {
+        let store = self
+            .find_store(id)
+            .ok_or_else(|| Error::Missing("store".into()))?;
+        if archived && store.archived {
+            return Err(Error::InvalidInput("already archived".into()));
+        }
+        if !archived && self.ancestors_of(id).iter().any(|parent| parent.archived) {
+            return Err(Error::StoreTree(StoreTreeViolation::RestoreParentFirst));
+        }
+        let mut affected: HashSet<String> = self.subtree_ids(id).into_iter().collect();
+        affected.insert(id.to_string());
+        for store in &mut self.doc.stores {
+            if affected.contains(&store.id) {
+                store.archived = archived;
+            }
+        }
+        self.persist()
     }
 
     pub fn delete_store(&mut self, id: &str) -> Result<()> {
@@ -232,15 +366,9 @@ impl UnlockedVault {
                 "store has transactions; archive instead".into(),
             ));
         }
-        // Check for children
-        if self
-            .doc
-            .stores
-            .iter()
-            .any(|store| store.parent_id.as_deref() == Some(id))
-        {
+        if !self.children_of(id).is_empty() {
             return Err(Error::InvalidInput(
-                "store has children; archive them first or move them to another parent".into(),
+                "store has sub-accounts; move or delete them first".into(),
             ));
         }
         let before = self.doc.stores.len();
@@ -265,15 +393,13 @@ impl UnlockedVault {
     // whichever variant it is handed. Adding a variant does not mean adding a
     // branch here, only a `legs()` impl on the variant itself.
 
-    /// Transaction history, newest first; optionally filtered by store.
-    pub fn transactions(&self, store_id: Option<&str>) -> Vec<Transaction> {
-        let mut out: Vec<Transaction> = self
-            .doc
-            .transactions
-            .iter()
-            .filter(|tx| store_id.is_none_or(|filter| tx.touches(filter)))
-            .cloned()
-            .collect();
+    /// Transaction history, newest first, limited to a scope.
+    pub fn transactions(&self, scope: &StoreScope) -> Vec<Transaction> {
+        let ids = (!scope.store_ids.is_empty()).then(|| self.resolve_scope(scope));
+        let mut out: Vec<Transaction> = match ids {
+            Some(ids) => self.scoped_txs(&ids),
+            None => self.doc.transactions.clone(),
+        };
         out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
         out
     }
@@ -516,12 +642,32 @@ impl UnlockedVault {
             .unwrap_or(Amount::ZERO)
     }
 
-    /// Transactions that touch `store_id` (either leg of a transfer/trade).
-    fn store_txs(&self, store_id: &str) -> Vec<Transaction> {
+    /// Every store id a scope covers. An empty id list means the whole vault.
+    pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
+        if scope.store_ids.is_empty() {
+            return self
+                .doc
+                .stores
+                .iter()
+                .map(|store| store.id.clone())
+                .collect();
+        }
+        let mut out = HashSet::new();
+        for id in &scope.store_ids {
+            out.insert(id.clone());
+            if scope.include_children {
+                out.extend(self.subtree_ids(id));
+            }
+        }
+        out
+    }
+
+    /// Transactions with at least one leg on a store in `ids`.
+    fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction> {
         self.doc
             .transactions
             .iter()
-            .filter(|tx| tx.touches(store_id))
+            .filter(|tx| ids.iter().any(|id| tx.touches(id)))
             .cloned()
             .collect()
     }
@@ -556,7 +702,44 @@ impl UnlockedVault {
         out
     }
 
-    /// Return direct children of a store.
+    /// One row per asset across several stores. The average cost is weighted
+    /// by quantity and only kept when every store knows its own.
+    fn merged_positions(&self, ids: &[String], fx: Amount) -> Vec<StorePosition> {
+        let mut merged: Vec<StorePosition> = Vec::new();
+        let mut cost_known: HashMap<String, bool> = HashMap::new();
+        for id in ids {
+            for position in self.store_positions(id, fx) {
+                let key = position.asset.key();
+                let known = cost_known.entry(key.clone()).or_insert(true);
+                *known &= position.avg_cost.is_some();
+                match merged.iter_mut().find(|row| row.asset.key() == key) {
+                    Some(row) => {
+                        let quantity = row.quantity + position.quantity;
+                        row.avg_cost = match (row.avg_cost, position.avg_cost) {
+                            (Some(left), Some(right)) if !quantity.is_zero() => {
+                                Some((left * row.quantity + right * position.quantity) / quantity)
+                            }
+                            _ => None,
+                        };
+                        row.quantity = quantity;
+                        row.value_usd += position.value_usd;
+                        row.value_base += position.value_base;
+                        row.unrealized_base += position.unrealized_base;
+                    }
+                    None => merged.push(position),
+                }
+            }
+        }
+        for row in &mut merged {
+            if !cost_known.get(&row.asset.key()).copied().unwrap_or(false) {
+                row.avg_cost = None;
+            }
+        }
+        merged.sort_by_key(|position| std::cmp::Reverse(position.value_base));
+        merged
+    }
+
+    /// Direct children of a store.
     fn children_of(&self, parent_id: &str) -> Vec<&Store> {
         self.doc
             .stores
@@ -565,66 +748,128 @@ impl UnlockedVault {
             .collect()
     }
 
-    /// Return all descendant store IDs (BFS).
+    /// Every descendant id of `root_id`, without `root_id` itself.
     fn subtree_ids(&self, root_id: &str) -> Vec<String> {
         let mut result = Vec::new();
+        let mut seen = HashSet::from([root_id.to_string()]);
         let mut queue = vec![root_id.to_string()];
         while let Some(id) = queue.pop() {
             for child in self.children_of(&id) {
-                result.push(child.id.clone());
-                queue.push(child.id.clone());
+                if seen.insert(child.id.clone()) {
+                    result.push(child.id.clone());
+                    queue.push(child.id.clone());
+                }
             }
         }
         result
     }
 
-    /// Single-round-trip view of one store for the wallet page.
-    pub fn store_overview(&self, store_id: &str) -> Result<StoreOverview> {
-        let store = self
+    /// The whole wallet tree with own and rolled-up values. Roots (and
+    /// orphans whose parent is gone) come first; live before archived,
+    /// alphabetical inside each group.
+    pub fn store_tree(&self) -> Vec<StoreTreeNode> {
+        let (_base, fx) = self.base_and_fx();
+        let mut own_usd: HashMap<&str, Amount> = HashMap::new();
+        for holding in &self.doc.holdings {
+            let value = holding.quantity * self.price_usd_for(&holding.asset.key());
+            *own_usd.entry(holding.store_id.as_str()).or_default() += value;
+        }
+        let mut tx_count: HashMap<String, u32> = HashMap::new();
+        for tx in &self.doc.transactions {
+            let mut touched: HashSet<String> = HashSet::new();
+            for leg in tx.legs() {
+                touched.insert(leg.store_id.clone());
+                if let Some(to) = leg.to_store_id {
+                    touched.insert(to);
+                }
+            }
+            for id in touched {
+                *tx_count.entry(id).or_default() += 1;
+            }
+        }
+        let ctx = TreeCtx {
+            fx,
+            own_usd,
+            tx_count,
+        };
+        let mut seen = HashSet::new();
+        let roots: Vec<&Store> = self
             .doc
             .stores
             .iter()
-            .find(|store| store.id == store_id)
+            .filter(|store| {
+                store
+                    .parent_id
+                    .as_deref()
+                    .is_none_or(|parent| self.find_store(parent).is_none())
+            })
+            .collect();
+        let mut out: Vec<StoreTreeNode> = roots
+            .into_iter()
+            .map(|store| self.tree_node(store, 0, &[], &ctx, &mut seen))
+            .collect();
+        sort_tree(&mut out);
+        out
+    }
+
+    fn tree_node(
+        &self,
+        store: &Store,
+        depth: usize,
+        parent_path: &[String],
+        ctx: &TreeCtx,
+        seen: &mut HashSet<String>,
+    ) -> StoreTreeNode {
+        seen.insert(store.id.clone());
+        let mut path = parent_path.to_vec();
+        path.push(store.name.clone());
+        let mut children: Vec<StoreTreeNode> = self
+            .children_of(&store.id)
+            .into_iter()
+            .filter(|child| !seen.contains(&child.id))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|child| self.tree_node(child, depth + 1, &path, ctx, seen))
+            .collect();
+        sort_tree(&mut children);
+        let own_usd = ctx
+            .own_usd
+            .get(store.id.as_str())
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        let subtree_usd = children
+            .iter()
+            .fold(own_usd, |acc, child| acc + child.subtree_usd);
+        StoreTreeNode {
+            store: store.clone(),
+            depth: depth as u32,
+            path,
+            own_usd,
+            own_base: own_usd * ctx.fx,
+            subtree_usd,
+            subtree_base: subtree_usd * ctx.fx,
+            own_tx_count: ctx.tx_count.get(&store.id).copied().unwrap_or(0),
+            can_add_child: depth < MAX_STORE_DEPTH && !store.archived,
+            children,
+        }
+    }
+
+    /// Single-round-trip view of one store for the wallet page.
+    /// `include_children` widens the totals, PnL and transaction stats to the
+    /// whole subtree; positions are reported both ways regardless.
+    pub fn store_overview(&self, store_id: &str, include_children: bool) -> Result<StoreOverview> {
+        let store = self
+            .find_store(store_id)
             .cloned()
             .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
         let (base, fx) = self.base_and_fx();
-        let positions = self.store_positions(store_id, fx);
-        let total_usd = positions
-            .iter()
-            .fold(Amount::ZERO, |acc, point| acc + point.value_usd);
+        let node = find_tree_node(self.store_tree(), store_id)
+            .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
 
-        // Children with their direct values
-        let children = self
-            .children_of(store_id)
-            .into_iter()
-            .map(|child| {
-                let child_positions = self.store_positions(&child.id, fx);
-                let child_value_usd = child_positions
-                    .iter()
-                    .fold(Amount::ZERO, |acc, point| acc + point.value_usd);
-                StoreChildRow {
-                    store: child.clone(),
-                    value_usd: child_value_usd,
-                    value_base: child_value_usd * fx,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // Subtree total = own value + sum of all descendants' values
-        let subtree_ids = self.subtree_ids(store_id);
-        let subtree_total_usd = self
-            .doc
-            .holdings
-            .iter()
-            .filter(|holding| {
-                subtree_ids.contains(&holding.store_id) || holding.store_id == store_id
-            })
-            .fold(Amount::ZERO, |acc, holding| {
-                let price = self.price_usd_for(&holding.asset.key());
-                acc + holding.quantity * price
-            });
-
-        let txs = self.store_txs(store_id);
+        let mut subtree: Vec<String> = vec![store_id.to_string()];
+        subtree.extend(self.subtree_ids(store_id));
+        let scope = self.resolve_scope(&StoreScope::store(store_id, include_children));
+        let txs = self.scoped_txs(&scope);
         let first_tx_at = txs
             .iter()
             .map(|tx| tx.meta().timestamp.as_str())
@@ -638,30 +883,66 @@ impl UnlockedVault {
             .unwrap_or("")
             .to_string();
 
+        let children = node
+            .children
+            .iter()
+            .map(|child| StoreChildRow {
+                store: child.store.clone(),
+                value_usd: child.own_usd,
+                value_base: child.own_base,
+                subtree_base: child.subtree_base,
+                share: if node.subtree_usd.is_zero() {
+                    0.0
+                } else {
+                    (child.subtree_usd / node.subtree_usd).to_f64()
+                },
+            })
+            .collect();
+
         Ok(StoreOverview {
+            ancestors: self
+                .ancestors_of(store_id)
+                .into_iter()
+                .map(|parent| StoreCrumb {
+                    id: parent.id.clone(),
+                    name: parent.name.clone(),
+                    color: parent.color.clone(),
+                })
+                .collect(),
             store,
-            base_currency: base.clone(),
+            base_currency: base,
             fx_per_usd: fx,
-            total_usd,
-            total_base: total_usd * fx,
-            subtree_total_base: subtree_total_usd * fx,
-            realized_pnl_base: self.realized_pnl_filtered(Some(store_id)).total_base,
-            positions,
+            include_children,
+            own_usd: node.own_usd,
+            own_base: node.own_base,
+            subtree_usd: node.subtree_usd,
+            subtree_base: node.subtree_base,
+            realized_pnl_base: self.realized_pnl_filtered(Some(&scope)).total_base,
+            positions: self.store_positions(store_id, fx),
+            subtree_positions: self.merged_positions(&subtree, fx),
             children,
+            can_add_child: node.can_add_child,
             tx_count: txs.len() as u32,
             first_tx_at,
             last_tx_at,
         })
     }
 
-    /// Portfolio value of one store over time.
-    pub fn store_history(&self, store_id: &str, base_currency: &str) -> Vec<HistoryPoint> {
-        self.history_series_filtered(Some(store_id), base_currency)
+    /// Portfolio value of one store (optionally with its subtree) over time.
+    pub fn store_history(
+        &self,
+        store_id: &str,
+        include_children: bool,
+        base_currency: &str,
+    ) -> Vec<HistoryPoint> {
+        let scope = self.resolve_scope(&StoreScope::store(store_id, include_children));
+        self.history_series_filtered(Some(&scope), base_currency)
     }
 
-    /// Realized PnL of one store.
-    pub fn store_pnl(&self, store_id: &str) -> RealizedPnl {
-        self.realized_pnl_filtered(Some(store_id))
+    /// Realized PnL of one store (optionally with its subtree).
+    pub fn store_pnl(&self, store_id: &str, include_children: bool) -> RealizedPnl {
+        let scope = self.resolve_scope(&StoreScope::store(store_id, include_children));
+        self.realized_pnl_filtered(Some(&scope))
     }
 
     pub fn portfolio_summary(&self) -> PortfolioSummary {
@@ -752,11 +1033,12 @@ impl UnlockedVault {
         self.history_series_filtered(None, base_currency)
     }
 
-    /// Shared history replay. `store_id` restricts both the event axis and the
-    /// valuation to legs booked on that store (`None` covers the whole vault).
+    /// Shared history replay. `scope` restricts both the event axis and the
+    /// valuation to legs booked on those stores (`None` covers the whole
+    /// vault).
     fn history_series_filtered(
         &self,
-        store_id: Option<&str>,
+        scope: Option<&HashSet<String>>,
         base_currency: &str,
     ) -> Vec<HistoryPoint> {
         let base = base_currency.to_lowercase();
@@ -767,6 +1049,7 @@ impl UnlockedVault {
             .find(|point| point.currency == base)
             .map(|point| point.per_usd)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
+        let in_scope = |store_id: &str| scope.is_none_or(|ids| ids.contains(store_id));
 
         // Flatten to legs first: a transfer contributes to one store's series
         // from its outgoing leg and to another's from its incoming one, and the
@@ -774,7 +1057,7 @@ impl UnlockedVault {
         let mut movements: Vec<(String, String, Amount)> = Vec::new();
         for tx in &self.doc.transactions {
             for leg in tx.legs() {
-                if store_id.is_some_and(|id| leg.store_id != id) {
+                if !in_scope(&leg.store_id) {
                     continue;
                 }
                 movements.push((leg.asset.key(), tx.meta().timestamp.clone(), leg.amount));
@@ -786,9 +1069,9 @@ impl UnlockedVault {
         stamps.dedup();
         movements.sort_by(|left, right| left.1.cmp(&right.1));
 
-        // Running quantity per asset. Valuing these (not the current
-        // holdings) keeps an asset that was sold off later in the series, and
-        // counts an asset held in two stores once.
+        // Running quantity per asset across the whole scope. Valuing these
+        // (not the current holdings) keeps an asset that was sold off later in
+        // the series, and counts an asset held in two scoped stores once.
         let mut qty: HashMap<String, Amount> = HashMap::new();
         let mut out = Vec::with_capacity(stamps.len());
         let mut idx = 0usize;
@@ -848,23 +1131,19 @@ impl UnlockedVault {
         self.realized_pnl_filtered(None)
     }
 
-    /// Shared PnL replay. `store_id` restricts it to the legs booked on that
-    /// store (`None` replays the whole vault, as before).
-    fn realized_pnl_filtered(&self, store_id: Option<&str>) -> RealizedPnl {
+    /// Shared PnL replay. `scope` restricts it to the legs booked on those
+    /// stores (`None` replays the whole vault).
+    fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl {
         let (base, _fx) = self.base_and_fx();
-        let source: Vec<Transaction> = match store_id {
-            Some(id) => self.store_txs(id),
-            None => self.doc.transactions.clone(),
-        };
 
-        // Flatten to (timestamp, leg) and replay. Only legs booked on the
-        // requested store count, which is what makes a per-store PnL differ
-        // from the vault-wide one even though they share this code path.
+        // Flatten to (timestamp, leg) and replay. Only legs booked in scope
+        // count, which is what makes a per-store PnL differ from the
+        // vault-wide one even though they share this code path.
         let mut movements: Vec<(String, Leg)> = Vec::new();
-        for tx in &source {
+        for tx in &self.doc.transactions {
             let ts = tx.meta().timestamp.clone();
             for leg in tx.legs() {
-                if store_id.is_some_and(|id| leg.store_id != id) {
+                if scope.is_some_and(|ids| !ids.contains(&leg.store_id)) {
                     continue;
                 }
                 movements.push((ts.clone(), leg));
@@ -1186,14 +1465,25 @@ pub struct StorePosition {
     pub unrealized_base: Amount,
 }
 
-/// Everything the wallet page needs about one store, in a single round trip.
-/// Computed on the fly — nothing here is persisted, so the vault format
-/// version is unaffected.
+/// A direct sub-account row on the wallet page.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct StoreChildRow {
     pub store: Store,
+    /// Own value (without the child's sub-accounts).
     pub value_usd: Amount,
     pub value_base: Amount,
+    /// Value including the child's own sub-accounts.
+    pub subtree_base: Amount,
+    /// Share of the parent's subtree value, 0..1.
+    pub share: f64,
+}
+
+/// One ancestor in the wallet page breadcrumbs.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct StoreCrumb {
+    pub id: String,
+    pub name: String,
+    pub color: String,
 }
 
 /// Everything the wallet page needs about one store, in a single round trip.
@@ -1202,21 +1492,105 @@ pub struct StoreChildRow {
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct StoreOverview {
     pub store: Store,
+    /// From the top-level wallet down to the direct parent.
+    pub ancestors: Vec<StoreCrumb>,
     pub base_currency: String,
     pub fx_per_usd: Amount,
-    pub total_usd: Amount,
-    pub total_base: Amount,
-    /// Total value including all descendants (subtree).
-    pub subtree_total_base: Amount,
+    /// Whether PnL and transaction stats below cover the subtree.
+    pub include_children: bool,
+    /// Value held on the store itself.
+    pub own_usd: Amount,
+    pub own_base: Amount,
+    /// Own value plus every sub-account at any depth.
+    pub subtree_usd: Amount,
+    pub subtree_base: Amount,
     pub realized_pnl_base: Amount,
-    /// Sorted by `value_base`, descending.
+    /// Own positions, sorted by `value_base`, descending.
     pub positions: Vec<StorePosition>,
-    /// Direct children with their own values (for tree rendering).
+    /// Positions merged per asset across the whole subtree.
+    pub subtree_positions: Vec<StorePosition>,
+    /// Direct sub-accounts.
     pub children: Vec<StoreChildRow>,
+    /// Whether a sub-account may be created here (depth and archive rules).
+    pub can_add_child: bool,
     pub tx_count: u32,
-    /// RFC3339; empty when the store has no transactions.
+    /// RFC3339; empty when there are no transactions.
     pub first_tx_at: String,
     pub last_tx_at: String,
+}
+
+/// One node of the wallet tree (sidebar, wallets page, pickers).
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct StoreTreeNode {
+    pub store: Store,
+    /// 0 for a top-level wallet.
+    pub depth: u32,
+    /// Names from the top-level wallet down to this node, inclusive.
+    pub path: Vec<String>,
+    pub own_usd: Amount,
+    pub own_base: Amount,
+    pub subtree_usd: Amount,
+    pub subtree_base: Amount,
+    /// Transactions with a leg on this very store.
+    pub own_tx_count: u32,
+    /// `depth < MAX_STORE_DEPTH` and not archived.
+    pub can_add_child: bool,
+    pub children: Vec<StoreTreeNode>,
+}
+
+/// Allowed destinations for moving a sub-account.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct StoreMoveTargets {
+    /// Flat (no `children`), in tree order; the current parent is left out.
+    pub parents: Vec<StoreTreeNode>,
+    /// Whether it may become a top-level wallet (no root has its name).
+    pub can_detach: bool,
+}
+
+/// Lookups shared by every node while building the tree.
+struct TreeCtx<'doc> {
+    fx: Amount,
+    own_usd: HashMap<&'doc str, Amount>,
+    tx_count: HashMap<String, u32>,
+}
+
+/// Live before archived, then by name.
+fn sort_tree(nodes: &mut [StoreTreeNode]) {
+    nodes.sort_by(|left, right| {
+        left.store
+            .archived
+            .cmp(&right.store.archived)
+            .then_with(|| {
+                left.store
+                    .name
+                    .to_lowercase()
+                    .cmp(&right.store.name.to_lowercase())
+            })
+    });
+}
+
+/// The node with `id`, children intact.
+fn find_tree_node(nodes: Vec<StoreTreeNode>, id: &str) -> Option<StoreTreeNode> {
+    for node in nodes {
+        if node.store.id == id {
+            return Some(node);
+        }
+        if let Some(found) = find_tree_node(node.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Depth-first flat order without `children`: parent, then its subtree.
+fn flatten_tree(nodes: Vec<StoreTreeNode>) -> Vec<StoreTreeNode> {
+    let mut out = Vec::new();
+    for mut node in nodes {
+        let children = std::mem::take(&mut node.children);
+        out.push(node);
+        out.extend(flatten_tree(children));
+    }
+    out
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -1690,9 +2064,12 @@ mod tests {
         vault
             .add_transaction(transfer(&from, &to, "1", "move"))
             .unwrap();
-        assert_eq!(vault.transactions(Some(&from)).len(), 1);
-        assert_eq!(vault.transactions(Some(&to)).len(), 1);
-        assert_eq!(vault.transactions(None).len(), 1);
+        assert_eq!(
+            vault.transactions(&StoreScope::store(&from, false)).len(),
+            1
+        );
+        assert_eq!(vault.transactions(&StoreScope::store(&to, false)).len(), 1);
+        assert_eq!(vault.transactions(&StoreScope::default()).len(), 1);
     }
 
     /// A manual price must fill in what is missing without clobbering a price
@@ -1723,7 +2100,7 @@ mod tests {
         at(&mut newer, "2026-06-01T00:00:00Z");
         vault.add_transaction(newer).unwrap();
 
-        let listed = vault.transactions(None);
+        let listed = vault.transactions(&StoreScope::default());
         assert_eq!(listed[0].meta().comment, "newer");
         assert_eq!(listed[1].meta().comment, "older");
     }
@@ -1812,6 +2189,293 @@ mod tests {
         assert!(vault.add_transaction(tx).is_ok());
     }
 
+    // -- wallet tree -----------------------------------------------------------
+
+    fn node(vault: &mut UnlockedVault, name: &str, parent: Option<&str>) -> String {
+        vault
+            .create_store(
+                name,
+                StoreKind::Exchange,
+                "#000",
+                "",
+                parent.map(str::to_string),
+            )
+            .unwrap()
+            .id
+    }
+
+    fn violation(result: Result<impl std::fmt::Debug>) -> StoreTreeViolation {
+        match result {
+            Err(Error::StoreTree(violation)) => violation,
+            other => panic!("expected a tree violation, got {other:?}"),
+        }
+    }
+
+    /// Bybit › UTA › Spot, plus an empty top-level Ledger.
+    fn three_levels() -> (tempfile::TempDir, UnlockedVault, [String; 4]) {
+        let dir = tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
+        let bybit = node(&mut vault, "Bybit", None);
+        let uta = node(&mut vault, "UTA", Some(&bybit));
+        let spot = node(&mut vault, "Spot", Some(&uta));
+        let ledger = node(&mut vault, "Ledger", None);
+        (dir, vault, [bybit, uta, spot, ledger])
+    }
+
+    #[test]
+    fn a_store_cannot_become_its_own_parent() {
+        let (_dir, mut vault, [_bybit, uta, ..]) = three_levels();
+        assert_eq!(
+            violation(vault.move_store(&uta, Some(&uta))),
+            StoreTreeViolation::Cycle
+        );
+    }
+
+    #[test]
+    fn a_store_cannot_move_under_its_own_grandchild() {
+        let dir = tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
+        let root = node(&mut vault, "Root", None);
+        let mid = node(&mut vault, "Mid", Some(&root));
+        let leaf = node(&mut vault, "Leaf", Some(&mid));
+        let other = node(&mut vault, "Other", Some(&root));
+        assert_eq!(
+            violation(vault.move_store(&mid, Some(&leaf))),
+            StoreTreeViolation::Cycle
+        );
+        // a legal move still works next to it
+        vault.move_store(&leaf, Some(&other)).unwrap();
+    }
+
+    #[test]
+    fn a_fourth_level_is_rejected() {
+        let (_dir, mut vault, [_bybit, _uta, spot, _ledger]) = three_levels();
+        let created = vault.create_store("Deep", StoreKind::Exchange, "", "", Some(spot));
+        assert_eq!(violation(created), StoreTreeViolation::TooDeep);
+    }
+
+    #[test]
+    fn moving_a_subtree_counts_its_height() {
+        let (_dir, mut vault, [bybit, uta, _spot, ledger]) = three_levels();
+        let cold = node(&mut vault, "Cold", Some(&ledger));
+        // UTA carries Spot below it: under Cold it would reach level four
+        assert_eq!(
+            violation(vault.move_store(&uta, Some(&cold))),
+            StoreTreeViolation::TooDeep
+        );
+        // under a root it fits
+        vault.move_store(&uta, Some(&ledger)).unwrap();
+        assert_eq!(vault.depth(&uta), 1);
+        assert_eq!(vault.root_of(&uta), ledger);
+        assert_ne!(vault.root_of(&uta), bybit);
+    }
+
+    #[test]
+    fn names_are_unique_among_siblings_only() {
+        let (_dir, mut vault, [bybit, uta, _spot, ledger]) = three_levels();
+        // a second "Spot" elsewhere is fine
+        node(&mut vault, "Spot", Some(&ledger));
+        // a case-different twin under the same parent is not, in any script
+        let twin = vault.create_store(" spot ", StoreKind::Exchange, "", "", Some(uta.clone()));
+        assert_eq!(violation(twin), StoreTreeViolation::NameTaken);
+        node(&mut vault, "Наличные", Some(&bybit));
+        let cyrillic = vault.create_store("НАЛИЧНЫЕ", StoreKind::Cash, "", "", Some(bybit));
+        assert_eq!(violation(cyrillic), StoreTreeViolation::NameTaken);
+        let root = vault.create_store("bybit", StoreKind::Exchange, "", "", None);
+        assert_eq!(violation(root), StoreTreeViolation::NameTaken);
+    }
+
+    #[test]
+    fn renaming_into_a_sibling_name_is_rejected() {
+        let (_dir, mut vault, [_bybit, uta, spot, _ledger]) = three_levels();
+        let futures = node(&mut vault, "Futures", Some(&uta));
+        assert_eq!(
+            violation(vault.update_store(&futures, "SPOT", "", "")),
+            StoreTreeViolation::NameTaken
+        );
+        // keeping its own name (or changing only the case) is fine
+        vault.update_store(&spot, "SPOT", "#fff", "note").unwrap();
+    }
+
+    #[test]
+    fn a_top_level_wallet_never_becomes_a_sub_account() {
+        let (_dir, mut vault, [bybit, _uta, _spot, ledger]) = three_levels();
+        assert_eq!(
+            violation(vault.move_store(&ledger, Some(&bybit))),
+            StoreTreeViolation::RootMove
+        );
+        assert_eq!(
+            vault.store_move_targets(&ledger).unwrap(),
+            StoreMoveTargets::default()
+        );
+    }
+
+    #[test]
+    fn detaching_checks_top_level_names() {
+        let (_dir, mut vault, [_bybit, uta, spot, ledger]) = three_levels();
+        let clash = node(&mut vault, "Ledger", Some(&uta));
+        assert!(!vault.store_move_targets(&clash).unwrap().can_detach);
+        assert_eq!(
+            violation(vault.move_store(&clash, None)),
+            StoreTreeViolation::NameTaken
+        );
+
+        assert!(vault.store_move_targets(&spot).unwrap().can_detach);
+        let moved = vault.move_store(&spot, None).unwrap();
+        assert_eq!(moved.parent_id, None);
+        assert_ne!(moved.id, ledger);
+    }
+
+    #[test]
+    fn move_targets_skip_the_subtree_the_parent_and_deep_nodes() {
+        let (_dir, vault, [bybit, uta, spot, ledger]) = three_levels();
+        let targets = vault.store_move_targets(&uta).unwrap();
+        let ids: Vec<&str> = targets
+            .parents
+            .iter()
+            .map(|node| node.store.id.as_str())
+            .collect();
+        // UTA has a child, so it may only hang under a root; Bybit is its parent
+        assert_eq!(ids, vec![ledger.as_str()]);
+        assert!(targets.parents.iter().all(|node| node.children.is_empty()));
+
+        let targets = vault.store_move_targets(&spot).unwrap();
+        let ids: Vec<&str> = targets
+            .parents
+            .iter()
+            .map(|node| node.store.id.as_str())
+            .collect();
+        assert!(ids.contains(&bybit.as_str()));
+        assert!(ids.contains(&ledger.as_str()));
+        assert!(!ids.contains(&uta.as_str()));
+        assert!(!ids.contains(&spot.as_str()));
+        assert_eq!(targets.parents[0].path, vec!["Bybit".to_string()]);
+    }
+
+    #[test]
+    fn archiving_cascades_and_restoring_needs_the_parent() {
+        let (_dir, mut vault, [bybit, uta, spot, _ledger]) = three_levels();
+        vault.archive_store(&uta, true).unwrap();
+        assert!(vault.find_store(&spot).unwrap().archived);
+        assert!(!vault.find_store(&bybit).unwrap().archived);
+
+        let created = vault.create_store("New", StoreKind::Exchange, "", "", Some(uta.clone()));
+        assert_eq!(violation(created), StoreTreeViolation::ParentArchived);
+        assert_eq!(
+            violation(vault.archive_store(&spot, false).map(|()| "ok")),
+            StoreTreeViolation::RestoreParentFirst
+        );
+
+        vault.archive_store(&uta, false).unwrap();
+        assert!(!vault.find_store(&spot).unwrap().archived);
+    }
+
+    #[test]
+    fn tree_totals_roll_up_through_every_level() {
+        let (_dir, mut vault, [bybit, uta, spot, _ledger]) = three_levels();
+        vault.add_transaction(income(&bybit, "1", "own")).unwrap();
+        vault.add_transaction(income(&uta, "10", "mid")).unwrap();
+        vault.add_transaction(income(&spot, "100", "leaf")).unwrap();
+        vault.doc.price_cache.push(crate::model::vault::PricePoint {
+            asset_key: usd().key(),
+            value_usd: amount("1"),
+            ts: "2000-01-01T00:00:00Z".into(),
+            source: "test".into(),
+        });
+
+        let tree = vault.store_tree();
+        let root = tree.iter().find(|node| node.store.id == bybit).unwrap();
+        assert_eq!(root.own_usd, amount("1"));
+        assert_eq!(root.subtree_usd, amount("111"));
+        assert_eq!(
+            root.children[0].children[0].path,
+            vec!["Bybit", "UTA", "Spot"]
+        );
+        assert!(root.children[0].can_add_child);
+        assert!(!root.children[0].children[0].can_add_child);
+
+        let overview = vault.store_overview(&bybit, true).unwrap();
+        assert_eq!(overview.own_usd, amount("1"));
+        assert_eq!(overview.subtree_usd, amount("111"));
+        // the child row counts its own child (B6)
+        assert_eq!(overview.children[0].value_usd, amount("10"));
+        assert_eq!(overview.children[0].subtree_base, amount("110"));
+        assert!((overview.children[0].share - 110.0 / 111.0).abs() < 1e-9);
+        assert_eq!(overview.subtree_positions[0].quantity, amount("111"));
+        assert_eq!(overview.tx_count, 3);
+        assert_eq!(vault.store_overview(&bybit, false).unwrap().tx_count, 1);
+
+        let leaf = vault.store_overview(&spot, true).unwrap();
+        let crumbs: Vec<&str> = leaf
+            .ancestors
+            .iter()
+            .map(|crumb| crumb.name.as_str())
+            .collect();
+        assert_eq!(crumbs, vec!["Bybit", "UTA"]);
+        assert!(!leaf.can_add_child);
+    }
+
+    #[test]
+    fn history_and_pnl_follow_the_scope() {
+        let (_dir, mut vault, [bybit, uta, _spot, _ledger]) = three_levels();
+        let mut buy = income_of(&uta, btc(), "1", "50000", "buy");
+        at(&mut buy, "2026-01-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
+        let mut sell = Transaction::ExchangeTrade(ExchangeTradeTx {
+            meta: TxMeta::new("sell"),
+            store_id: uta.clone(),
+            sold: TradeSide {
+                asset: btc(),
+                qty: amount("0.5"),
+            },
+            bought: TradeSide {
+                asset: usd(),
+                qty: amount("30000"),
+            },
+            fee: None,
+            fee_asset: None,
+            order_id: None,
+            market: None,
+            liquidity: None,
+            price: PriceStamp {
+                price_usd: Some(amount("60000")),
+                ..Default::default()
+            },
+        });
+        at(&mut sell, "2026-01-02T00:00:00Z");
+        vault.add_transaction(sell).unwrap();
+
+        assert!(vault.store_pnl(&bybit, false).legs.is_empty());
+        assert_eq!(vault.store_pnl(&bybit, true).legs.len(), 1);
+        assert_eq!(
+            vault.store_pnl(&bybit, true).total_base,
+            vault.store_pnl(&uta, false).total_base
+        );
+
+        let own = vault.store_history(&bybit, false, "usd");
+        assert!(own.iter().all(|point| point.value_usd.is_zero()));
+        let rolled = vault.store_history(&bybit, true, "usd");
+        assert!(rolled.iter().any(|point| !point.value_usd.is_zero()));
+        assert_eq!(
+            vault.transactions(&StoreScope::store(&bybit, true)).len(),
+            2
+        );
+        assert!(
+            vault
+                .transactions(&StoreScope::store(&bybit, false))
+                .is_empty()
+        );
+    }
+
+    /// The same asset in two stores must be valued once per unit, not once
+    /// per holding.
+    #[test]
+    fn history_counts_an_asset_held_twice_once() {
+        let (_dir, vault) = two_stores_with_quotes();
+        let last = vault.history_series("usd").pop().unwrap();
+        assert_eq!(last.value_usd, amount("150"));
+    }
+
     // -- analytics -----------------------------------------------------------
 
     /// Fixture: two bank stores, each holding a known USD balance.
@@ -1843,15 +2507,6 @@ mod tests {
         (dir, vault)
     }
 
-    /// The same asset in two stores must be valued once per unit, not once
-    /// per holding.
-    #[test]
-    fn history_counts_an_asset_held_twice_once() {
-        let (_dir, vault) = two_stores_with_quotes();
-        let last = vault.history_series("usd").pop().unwrap();
-        assert_eq!(last.value_usd, amount("150"));
-    }
-
     #[test]
     fn portfolio_summary_splits_by_store() {
         let (_dir, vault) = two_stores_with_quotes();
@@ -1864,8 +2519,8 @@ mod tests {
     fn store_overview_matches_global_slice() {
         let (_dir, vault) = two_stores_with_quotes();
         let first = vault.doc.stores[0].id.clone();
-        let overview = vault.store_overview(&first).unwrap();
-        assert_eq!(overview.total_usd.to_string(), "100");
+        let overview = vault.store_overview(&first, true).unwrap();
+        assert_eq!(overview.own_usd.to_string(), "100");
         assert_eq!(overview.tx_count, 1);
     }
 
@@ -1875,7 +2530,7 @@ mod tests {
     fn store_history_isolates_store() {
         let (_dir, vault) = two_stores_with_quotes();
         let first = vault.doc.stores[0].id.clone();
-        let mine = vault.store_history(&first, "usd");
+        let mine = vault.store_history(&first, true, "usd");
         let everyone = vault.history_series("usd");
         assert!(mine.len() <= everyone.len());
         for point in &mine {
@@ -1919,7 +2574,7 @@ mod tests {
         vault.add_transaction(sell).unwrap();
 
         // bought at 50k, sold at 60k, half the position
-        let pnl = vault.store_pnl(&store);
+        let pnl = vault.store_pnl(&store, true);
         assert_eq!(pnl.total_base, amount("5000"));
         assert_eq!(pnl.legs.len(), 1);
         assert_eq!(pnl.legs[0].side, "sell");

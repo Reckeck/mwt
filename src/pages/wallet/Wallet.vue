@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -9,6 +9,7 @@ import {
   ArchiveRestore,
   Calculator,
   ChevronRight,
+  FolderInput,
   FolderPlus,
   Key,
   MoreVertical,
@@ -23,6 +24,7 @@ import { PendingImports } from '@/features/pending-imports'
 import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calculator'
 import { StoreCreateDialog } from '@/features/store-create'
 import { StoreEditDialog } from '@/features/store-edit'
+import { StoreMoveDialog } from '@/features/store-move'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { StoreChart, StoreHistory, StorePositions } from '@/entities/store'
@@ -32,12 +34,13 @@ import { Card } from '@/shared/ui/card'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { Tabs } from '@/shared/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { getStoreIcon } from '@/shared/lib/store-icons'
-import { storeAncestors } from '@/shared/lib/store-tree'
 import { txId } from '@/shared/lib/transactions'
 import { cn } from '@/shared/lib/utils'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const route = useRoute()
@@ -49,30 +52,72 @@ const settingsStore = useSettingsStore()
 // The shell keys this page by path, so the id is fixed for its lifetime.
 const storeId = computed(() => String(route.params.id ?? ''))
 
+/* --- scope: the wallet with its sub-accounts, or only itself; remembered per wallet --- */
+const SCOPE_KEY = `wallet-only-own:${storeId.value}`
+
+function readOnlyOwn(): boolean {
+  try {
+    return localStorage.getItem(SCOPE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const includeChildren = ref(!readOnlyOwn())
+
+watch(includeChildren, (value) => {
+  try {
+    if (value) localStorage.removeItem(SCOPE_KEY)
+    else localStorage.setItem(SCOPE_KEY, '1')
+  } catch {
+    // Storage blocked: the page just opens with sub-accounts next time.
+  }
+})
+
+const scopeValue = computed({
+  get: () => (includeChildren.value ? 'all' : 'own'),
+  set: (value: string) => {
+    if (value) includeChildren.value = value === 'all'
+  },
+})
+
 const overview = useQuery({
-  queryKey: ['store', storeId.value],
-  queryFn: () => call<StoreOverview>('get_store_overview', { storeId: storeId.value }),
+  queryKey: computed(() => ['store', storeId.value, includeChildren.value]),
+  queryFn: () =>
+    call<StoreOverview>('get_store_overview', { storeId: storeId.value, includeChildren: includeChildren.value }),
+  placeholderData: (previous) => previous,
 })
 
 const pnl = useQuery({
-  queryKey: ['store-pnl', storeId.value],
-  queryFn: () => call<RealizedPnl>('get_store_pnl', { storeId: storeId.value }),
-})
-
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
+  queryKey: computed(() => ['store-pnl', storeId.value, includeChildren.value]),
+  queryFn: () => call<RealizedPnl>('get_store_pnl', { storeId: storeId.value, includeChildren: includeChildren.value }),
 })
 
 const base = computed(() => overview.data.value?.base_currency ?? '')
 const store = computed(() => overview.data.value?.store)
 const isArchived = computed(() => store.value?.archived === true)
 const decimals = computed(() => settingsStore.vault?.display_decimals ?? 8)
-const positions = computed(() => overview.data.value?.positions ?? [])
 const children = computed(() => overview.data.value?.children ?? [])
-const ancestors = computed(() => storeAncestors(stores.data.value ?? [], storeId.value))
+const hasChildren = computed(() => children.value.length > 0)
+/** With sub-accounts, positions are merged per asset across the whole subtree. */
+const positions = computed(() => {
+  const data = overview.data.value
+  if (!data) return []
+  return hasChildren.value && includeChildren.value ? data.subtree_positions : data.positions
+})
+const ancestors = computed(() => overview.data.value?.ancestors ?? [])
+const parentPath = computed(() => [...ancestors.value.map((crumb) => crumb.name), store.value?.name ?? ''])
+const canAddChild = computed(() => overview.data.value?.can_add_child === true)
+const isSubAccount = computed(() => !!store.value?.parent_id)
 
 const money = (value: string | undefined) => formatMoney(value ?? '0', { currency: base.value, decimals: 2 })
+const share = (value: number) => `${Math.round(value * 100)}%`
+
+/** Part of the subtree value that sits on the wallet itself. */
+const ownShare = computed(() => {
+  const total = Number(overview.data.value?.subtree_base ?? 0)
+  return total ? Number(overview.data.value?.own_base ?? 0) / total : 0
+})
 
 /** Backend failures surface with their own code so the cause is visible. */
 const errorText = computed(() => {
@@ -96,6 +141,7 @@ const calculatorOpen = ref(false)
 const plan = ref<CalculatorPlan | null>(null)
 const editOpen = ref(false)
 const subWalletOpen = ref(false)
+const moveOpen = ref(false)
 const tab = ref('positions')
 
 function openTransaction() {
@@ -110,15 +156,15 @@ const tabs = computed(() => [
 
 const stats = computed(() => {
   const data = overview.data.value
-  const withChildren = children.value.length > 0
+  const rolledUp = hasChildren.value && includeChildren.value
   return [
     {
       key: 'total',
-      label: withChildren ? t('wallet.totalWithSub') : t('store.total'),
-      value: money(withChildren ? data?.subtree_total_base : data?.total_base),
-      hint: withChildren
-        ? `${t('wallet.ownTotal')}: ${money(data?.total_base)}`
-        : `≈ ${formatMoney(data?.total_usd, { currency: 'usd', decimals: 2 })}`,
+      label: rolledUp ? t('wallet.totalWithSub') : t('store.total'),
+      value: money(rolledUp ? data?.subtree_base : data?.own_base),
+      hint: rolledUp
+        ? `${t('stores.ownFunds')}: ${money(data?.own_base)}`
+        : `≈ ${formatMoney(data?.own_usd, { currency: 'usd', decimals: 2 })}`,
       tone: '',
     },
     {
@@ -149,7 +195,12 @@ const stats = computed(() => {
   ]
 })
 
-/** Why delete is unavailable: the backend refuses a wallet with history or sub-wallets. */
+/** Archiving takes the whole subtree along: say so before it happens. */
+const archiveHint = computed(() =>
+  !store.value?.archived && hasChildren.value ? t('stores.archiveCascade') : '',
+)
+
+/** Why delete is unavailable: the backend refuses a wallet with history or sub-accounts. */
 const deleteBlocker = computed(() => {
   if (children.value.length) return t('stores.deleteHasChildren')
   if ((overview.data.value?.tx_count ?? 0) > 0) return t('stores.deleteHasTransactions')
@@ -160,7 +211,9 @@ const refreshPrices = useMutation({
   mutationFn: () => call<RefreshResult>('refresh_all'),
   onSuccess: (result) => {
     toast.success(t('wallet.pricesRefreshed'), { description: `${result.prices} · ${result.fx}` })
-    for (const queryKey of [['store'], ['store-history'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
+    for (const queryKey of [['store'], ['store-history'], ['stores'], ['summary']]) {
+      void queryClient.invalidateQueries({ queryKey })
+    }
   },
   onError: (err) => toast.error(t('wallet.pricesRefreshFailed'), { description: parseError(err).message }),
 })
@@ -171,7 +224,7 @@ const toggleArchive = useMutation({
     toast.success(archived ? t('wallet.archived') : t('wallet.unarchived'))
     for (const queryKey of [['store'], ['stores'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('wallet.archiveFailed'), { description: parseError(err).message }),
+  onError: (err) => toast.error(t('wallet.archiveFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 
 const destroy = useMutation({
@@ -248,6 +301,10 @@ function openWallet(created: Store) {
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>
+          <Button v-if="canAddChild" variant="outline" size="sm" @click="subWalletOpen = true">
+            <FolderPlus class="size-4" />
+            {{ t('stores.newSubAccountShort') }}
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -280,16 +337,23 @@ function openWallet(created: Store) {
               <Pencil class="size-4 shrink-0" />
               {{ t('stores.edit') }}
             </DropdownMenuItem>
-            <DropdownMenuItem value="sub-wallet" @select="subWalletOpen = true">
+            <DropdownMenuItem v-if="canAddChild" value="sub-account" @select="subWalletOpen = true">
               <FolderPlus class="size-4 shrink-0" />
-              {{ t('stores.addSubWallet') }}
+              {{ t('stores.newSubAccountShort') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="isSubAccount" value="move" @select="moveOpen = true">
+              <FolderInput class="size-4 shrink-0" />
+              {{ t('stores.move') }}
             </DropdownMenuItem>
             <DropdownMenuItem
               :value="store.archived ? 'unarchive' : 'archive'"
               @select="toggleArchive.mutate(!store.archived)"
             >
               <component :is="store.archived ? ArchiveRestore : Archive" class="size-4 shrink-0" />
-              {{ store.archived ? t('stores.unarchive') : t('stores.archive') }}
+              <span class="flex flex-col">
+                {{ store.archived ? t('stores.unarchive') : t('stores.archive') }}
+                <span v-if="archiveHint" class="text-xs text-muted-foreground">{{ archiveHint }}</span>
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem
               value="delete"
@@ -313,6 +377,14 @@ function openWallet(created: Store) {
       </p>
     </div>
 
+    <!-- Only a wallet with sub-accounts has a scope to choose. -->
+    <div v-if="hasChildren" class="flex justify-end">
+      <ToggleGroup v-model="scopeValue" type="single" variant="outline" size="sm" :aria-label="t('stores.scope')">
+        <ToggleGroupItem value="all" class="px-2.5">{{ t('stores.withChildren') }}</ToggleGroupItem>
+        <ToggleGroupItem value="own" class="px-2.5">{{ t('stores.onlyThis') }}</ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Card v-for="stat in stats" :key="stat.key">
         <p class="truncate text-xs text-muted-foreground">{{ stat.label }}</p>
@@ -321,17 +393,24 @@ function openWallet(created: Store) {
       </Card>
     </div>
 
-    <Card v-if="children.length">
+    <Card v-if="hasChildren">
       <template #header>
         <div class="flex items-center justify-between gap-2">
-          <p class="font-medium">{{ t('wallet.subWallets') }}</p>
-          <Button variant="ghost" size="sm" @click="subWalletOpen = true">
+          <p class="font-medium">{{ t('stores.subAccounts') }}</p>
+          <Button v-if="canAddChild" variant="ghost" size="sm" @click="subWalletOpen = true">
             <FolderPlus class="size-4" />
-            {{ t('stores.addSubWallet') }}
+            {{ t('stores.newSubAccountShort') }}
           </Button>
         </div>
       </template>
       <div class="flex flex-col divide-y divide-border">
+        <!-- Money kept on the wallet itself, next to what its sub-accounts hold. -->
+        <div class="flex items-center gap-3 py-2.5">
+          <component :is="getStoreIcon(store.kind)" class="size-4 shrink-0" :style="{ color: store.color }" />
+          <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ t('stores.ownFunds') }}</span>
+          <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ share(ownShare) }}</span>
+          <span class="shrink-0 text-sm tabular-nums">{{ money(overview.data.value?.own_base) }}</span>
+        </div>
         <RouterLink
           v-for="child in children"
           :key="child.store.id"
@@ -342,7 +421,8 @@ function openWallet(created: Store) {
           <component :is="getStoreIcon(child.store.kind)" class="size-4 shrink-0" :style="{ color: child.store.color }" />
           <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ child.store.name }}</span>
           <Badge variant="outline">{{ t(`stores.kind.${child.store.kind}`) }}</Badge>
-          <span class="shrink-0 text-sm tabular-nums">{{ money(child.value_base) }}</span>
+          <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ share(child.share) }}</span>
+          <span class="shrink-0 text-sm tabular-nums">{{ money(child.subtree_base) }}</span>
         </RouterLink>
       </div>
     </Card>
@@ -360,7 +440,7 @@ function openWallet(created: Store) {
       </div>
     </Card>
 
-    <StoreChart :store-id="storeId" :base-currency="base" />
+    <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />
 
     <!-- Always offer both tabs: a wallet with no positions can still have history. -->
     <Tabs v-model="tab" :tabs="tabs">
@@ -379,7 +459,7 @@ function openWallet(created: Store) {
         <StorePositions v-else :positions="positions" :base-currency="base" :decimals="decimals" />
       </template>
       <template #history>
-        <StoreHistory :store-id="storeId">
+        <StoreHistory :store-id="storeId" :include-children="includeChildren">
           <template #actions="{ tx }">
             <TransactionDelete :id="txId(tx)" />
           </template>
@@ -391,6 +471,7 @@ function openWallet(created: Store) {
     <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" @apply="onApplyPlan" />
 
     <StoreEditDialog v-model:open="editOpen" :store="store" />
-    <StoreCreateDialog v-model:open="subWalletOpen" :parent-id="store.id" @created="openWallet" />
+    <StoreMoveDialog v-if="isSubAccount" v-model:open="moveOpen" :store="store" />
+    <StoreCreateDialog v-model:open="subWalletOpen" :parent="store" :parent-path="parentPath" @created="openWallet" />
   </div>
 </template>

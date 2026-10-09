@@ -66,8 +66,23 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
       return resolve({})
     case 'list_stores':
       return resolve(mockStores)
+    case 'get_store_tree':
+      return resolve(mockTree())
+    case 'store_move_targets':
+      return resolve(mockMoveTargets(String(args?.id ?? '')))
+    case 'move_store': {
+      const input = body as MoveStoreInput
+      const store = mockStore(input.id)
+      if (!store) throw { code: 'MISSING', message: 'store' }
+      const failure = mockPlacementError(input.id, input.parent_id, store.name)
+      if (failure) throw failure
+      store.parent_id = input.parent_id
+      return resolve(store)
+    }
     case 'create_store': {
       const input = body as CreateStoreInput
+      const failure = mockPlacementError(null, input.parent_id ?? null, input.name)
+      if (failure) throw failure
       const store = {
         id: crypto.randomUUID(),
         name: input.name,
@@ -83,14 +98,23 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     }
     case 'update_store': {
       const input = body as UpdateStoreInput
-      const store = mockStores.find((candidate) => candidate.id === input.id)
-      if (store)
-        Object.assign(store, { name: input.name, color: input.color, note: input.note, parent_id: input.parent_id })
-      return resolve(store ?? mockStores[0])
+      const store = mockStore(input.id)
+      if (!store) throw { code: 'MISSING', message: 'store' }
+      const failure = mockPlacementError(input.id, store.parent_id, input.name)
+      if (failure?.code === 'STORE_NAME_TAKEN') throw failure
+      Object.assign(store, { name: input.name, color: input.color, note: input.note })
+      return resolve(store)
     }
     case 'archive_store': {
-      const idx = mockStores.findIndex((candidate) => candidate.id === String(args?.id))
-      if (idx >= 0) mockStores[idx].archived = Boolean(args?.archived)
+      // Like the backend: the whole subtree follows, and a child waits for its parent.
+      const id = String(args?.id ?? '')
+      const archived = Boolean(args?.archived)
+      if (!archived && mockAncestors(id).some((parent) => parent.archived))
+        throw { code: 'STORE_RESTORE_PARENT_FIRST', message: 'restore the parent first' }
+      for (const target of [id, ...mockSubtreeIds(id)]) {
+        const store = mockStore(target)
+        if (store) store.archived = archived
+      }
       return resolve({})
     }
     case 'delete_store': {
@@ -100,10 +124,12 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     }
     // Tauri v2 converts primitive command args to camelCase, so the mock must
     // read the same names the real backend receives (data *fields* stay snake_case).
-    case 'list_transactions':
-      return resolve(mockFilterTxs((args?.storeId as string | null) ?? null))
+    case 'list_transactions': {
+      const storeId = (args?.storeId as string | null) ?? null
+      return resolve(mockFilterTxs(storeId ? mockScope(storeId, args?.includeChildren !== false) : null))
+    }
     case 'get_store_overview':
-      return resolve(mockOverview(String(args?.storeId ?? '')))
+      return resolve(mockOverview(String(args?.storeId ?? ''), args?.includeChildren !== false))
     case 'get_store_history':
       return resolve(mockHistory)
     case 'get_store_pnl':
@@ -435,9 +461,9 @@ const assetOf = (
 
 const timestampOf = (tx: Transaction) => txMeta(tx).timestamp
 
-function mockFilterTxs(storeId: string | null): Transaction[] {
-  const list = storeId
-    ? mockTransactions.filter((tx) => txLegs(tx).some((leg) => leg.store_id === storeId))
+function mockFilterTxs(storeIds: string[] | null): Transaction[] {
+  const list = storeIds
+    ? mockTransactions.filter((tx) => txLegs(tx).some((leg) => storeIds.includes(leg.store_id)))
     : mockTransactions
   return [...list].sort((left, right) => timestampOf(right).localeCompare(timestampOf(left)))
 }
@@ -521,13 +547,57 @@ function mockTrade(input: TradeInput): Transaction {
   }
 }
 
-function mockOverview(storeId: string): StoreOverview {
-  const store = mockStores.find((candidate) => candidate.id === storeId) ?? mockStores[0]
-  const txs = mockFilterTxs(storeId)
-  const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
+/** Mirrors `MAX_STORE_DEPTH` in Rust: a root is depth 0, so three levels. */
+const MOCK_MAX_DEPTH = 2
 
+const mockStore = (id: string) => mockStores.find((candidate) => candidate.id === id)
+const mockChildren = (id: string) => mockStores.filter((candidate) => candidate.parent_id === id)
+
+/** Parent chain from the root down to `id`'s parent. */
+function mockAncestors(id: string): Store[] {
+  const chain: Store[] = []
+  let parent = mockStore(id)?.parent_id ?? null
+  while (parent) {
+    const store = mockStore(parent)
+    if (!store || chain.includes(store)) break
+    chain.unshift(store)
+    parent = store.parent_id
+  }
+  return chain
+}
+
+function mockSubtreeIds(id: string): string[] {
+  return mockChildren(id).flatMap((child) => [child.id, ...mockSubtreeIds(child.id)])
+}
+
+function mockHeight(id: string): number {
+  return Math.max(0, ...mockChildren(id).map((child) => mockHeight(child.id) + 1))
+}
+
+/** Same rules and codes as `validate_placement` in Rust (R1–R6). */
+function mockPlacementError(node: string | null, parent: string | null, name: string): AppError | null {
+  if (parent) {
+    const target = mockStore(parent)
+    if (!target) return { code: 'MISSING', message: 'parent store' }
+    if (node && !mockStore(node)?.parent_id) return { code: 'STORE_ROOT_MOVE', message: 'root move' }
+    if (node && (parent === node || mockSubtreeIds(node).includes(parent)))
+      return { code: 'STORE_CYCLE', message: 'cycle' }
+    if (mockAncestors(parent).length + 1 + (node ? mockHeight(node) : 0) > MOCK_MAX_DEPTH)
+      return { code: 'STORE_TOO_DEEP', message: 'too deep' }
+    if (target.archived) return { code: 'STORE_PARENT_ARCHIVED', message: 'parent archived' }
+  }
+  const wanted = name.trim().toLowerCase()
+  const taken = mockStores.some(
+    (store) => store.id !== node && store.parent_id === parent && store.name.trim().toLowerCase() === wanted,
+  )
+  return taken ? { code: 'STORE_NAME_TAKEN', message: 'name taken' } : null
+}
+
+/** Positions held on the store itself, like `store_positions` in Rust. */
+function mockOwnPositions(storeId: string): StorePosition[] {
+  const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
   // Legs carry their own sign, so a trade or transfer needs no special case.
-  for (const leg of txs.flatMap(txLegs)) {
+  for (const leg of mockTransactions.flatMap(txLegs)) {
     if (leg.store_id !== storeId) continue
     const key = leg.asset.symbol.toUpperCase()
     const row = byAsset.get(key) ?? { asset: leg.asset, qty: 0, cost: 0 }
@@ -535,8 +605,7 @@ function mockOverview(storeId: string): StoreOverview {
     if (Number(leg.amount) > 0) row.cost = priceOf(key)
     byAsset.set(key, row)
   }
-
-  const positions: StorePosition[] = [...byAsset.values()]
+  return [...byAsset.values()]
     .filter((row) => row.qty !== 0)
     .map((row) => {
       const priceUsd = priceOf(row.asset.symbol)
@@ -551,27 +620,114 @@ function mockOverview(storeId: string): StoreOverview {
       }
     })
     .sort((left, right) => Number(right.value_base) - Number(left.value_base))
+}
 
-  const totalUsd = positions.reduce((acc, position) => acc + Number(position.value_usd), 0)
+const sumValue = (positions: StorePosition[]) => positions.reduce((acc, row) => acc + Number(row.value_usd), 0)
 
-  // Direct children with their whole subtree, like the backend's rollup.
-  const childRows: StoreChildRow[] = mockStores
-    .filter((candidate) => candidate.parent_id === store.id)
-    .map((child) => {
-      const value = mockOverview(child.id).subtree_total_base
-      return { store: child, value_usd: value, value_base: value }
-    })
-
+function mockTreeNode(store: Store, depth: number, parentPath: string[]): StoreTreeNode {
+  const path = [...parentPath, store.name]
+  const children = mockChildren(store.id)
+    .map((child) => mockTreeNode(child, depth + 1, path))
+    .sort((left, right) => left.store.name.localeCompare(right.store.name))
+  const own = sumValue(mockOwnPositions(store.id))
+  const subtree = children.reduce((acc, child) => acc + Number(child.subtree_usd), own)
   return {
     store,
+    depth,
+    path,
+    own_usd: String(own),
+    own_base: String(own),
+    subtree_usd: String(subtree),
+    subtree_base: String(subtree),
+    own_tx_count: mockFilterTxs([store.id]).length,
+    can_add_child: depth < MOCK_MAX_DEPTH && !store.archived,
+    children,
+  }
+}
+
+function mockTree(): StoreTreeNode[] {
+  return mockStores
+    .filter((store) => !store.parent_id || !mockStore(store.parent_id))
+    .map((store) => mockTreeNode(store, 0, []))
+    .sort((left, right) => left.store.name.localeCompare(right.store.name))
+}
+
+function mockFindNode(nodes: StoreTreeNode[], id: string): StoreTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.store.id === id) return node
+    const found = mockFindNode(node.children, id)
+    if (found) return found
+  }
+  return undefined
+}
+
+const flatNodes = (nodes: StoreTreeNode[]): StoreTreeNode[] =>
+  nodes.flatMap((node) => [{ ...node, children: [] }, ...flatNodes(node.children)])
+
+function mockMoveTargets(id: string): StoreMoveTargets {
+  const store = mockStore(id)
+  if (!store?.parent_id) return { parents: [], can_detach: false }
+  return {
+    parents: flatNodes(mockTree()).filter(
+      (node) => node.store.id !== store.parent_id && !mockPlacementError(id, node.store.id, store.name),
+    ),
+    can_detach: !mockPlacementError(id, null, store.name),
+  }
+}
+
+/** Every id a store scope covers. */
+const mockScope = (storeId: string, includeChildren: boolean) =>
+  includeChildren ? [storeId, ...mockSubtreeIds(storeId)] : [storeId]
+
+function mockOverview(storeId: string, includeChildren: boolean): StoreOverview {
+  const store = mockStore(storeId) ?? mockStores[0]
+  const node = mockFindNode(mockTree(), store.id) ?? mockTreeNode(store, 0, [])
+  const txs = mockFilterTxs(mockScope(store.id, includeChildren))
+  // Merged per asset like `merged_positions` in Rust (cost basis left out).
+  const merged = new Map<string, StorePosition>()
+  for (const row of [store.id, ...mockSubtreeIds(store.id)].flatMap(mockOwnPositions)) {
+    const key = row.asset.symbol.toUpperCase()
+    const prev = merged.get(key)
+    const add = (left: string, right: string) => String(Number(left) + Number(right))
+    merged.set(
+      key,
+      prev
+        ? {
+            ...prev,
+            avg_cost: null,
+            quantity: add(prev.quantity, row.quantity),
+            value_usd: add(prev.value_usd, row.value_usd),
+            value_base: add(prev.value_base, row.value_base),
+            unrealized_base: add(prev.unrealized_base, row.unrealized_base),
+          }
+        : row,
+    )
+  }
+  const subtreePositions = [...merged.values()].sort(
+    (left, right) => Number(right.value_base) - Number(left.value_base),
+  )
+  const subtreeTotal = Number(node.subtree_usd)
+  return {
+    store,
+    ancestors: mockAncestors(store.id).map((parent) => ({ id: parent.id, name: parent.name, color: parent.color })),
     base_currency: mockAppSettings.base_currency,
     fx_per_usd: '1',
-    total_usd: String(totalUsd),
-    total_base: String(totalUsd),
-    subtree_total_base: String(totalUsd + childRows.reduce((acc, row) => acc + Number(row.value_base), 0)),
+    include_children: includeChildren,
+    own_usd: node.own_usd,
+    own_base: node.own_base,
+    subtree_usd: node.subtree_usd,
+    subtree_base: node.subtree_base,
     realized_pnl_base: '0',
-    positions,
-    children: childRows,
+    positions: mockOwnPositions(store.id),
+    subtree_positions: subtreePositions,
+    children: node.children.map((child) => ({
+      store: child.store,
+      value_usd: child.own_usd,
+      value_base: child.own_base,
+      subtree_base: child.subtree_base,
+      share: subtreeTotal ? Number(child.subtree_usd) / subtreeTotal : 0,
+    })),
+    can_add_child: node.can_add_child,
     tx_count: txs.length,
     first_tx_at: txs.length ? timestampOf(txs[txs.length - 1]) : '',
     last_tx_at: txs.length ? timestampOf(txs[0]) : '',

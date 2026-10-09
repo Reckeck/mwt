@@ -71,6 +71,12 @@ pub struct UpdateStoreInput {
     pub name: String,
     pub color: String,
     pub note: String,
+}
+
+/// Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct MoveStoreInput {
+    pub id: String,
     #[serde(default)]
     pub parent_id: Option<String>,
 }
