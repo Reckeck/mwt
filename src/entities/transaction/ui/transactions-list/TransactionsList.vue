@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { Card } from '@/shared/ui/card'
-import { txId, txStoreId } from '@/shared/lib/transactions'
+import { txId } from '@/shared/lib/transactions'
 import TransactionRow from '../transaction-row/TransactionRow.vue'
 
 import type { TransactionsListProps } from './transactions-list.types'
 
-const props = defineProps<TransactionsListProps>()
+const props = withDefaults(defineProps<TransactionsListProps>(), { storeId: null })
 
 defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
@@ -15,22 +14,15 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <Card>
-    <div class="-my-3 divide-y divide-border">
-      <TransactionRow
-        v-for="tx in props.transactions"
-        :key="txId(tx)"
-        :tx="tx"
-        :store-name="props.storeName(txStoreId(tx))"
-      >
-        <template #actions="{ tx: row }">
-          <slot name="actions" :tx="row" />
-        </template>
-      </TransactionRow>
+  <div class="divide-y divide-border">
+    <TransactionRow v-for="tx in props.transactions" :key="txId(tx)" :tx="tx" :store-id="props.storeId">
+      <template #actions="{ tx: row }">
+        <slot name="actions" :tx="row" />
+      </template>
+    </TransactionRow>
 
-      <p v-if="!props.transactions.length" class="py-6 text-center text-sm text-muted-foreground">
-        {{ t('tx.empty') }}
-      </p>
-    </div>
-  </Card>
+    <p v-if="!props.transactions.length" class="py-6 text-center text-sm text-muted-foreground">
+      {{ t('tx.empty') }}
+    </p>
+  </div>
 </template>

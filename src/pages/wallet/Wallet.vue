@@ -19,6 +19,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 
+import { AssetRevalueButton } from '@/features/asset-revalue'
 import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { PendingImports } from '@/features/pending-imports'
 import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calculator'
@@ -27,7 +28,9 @@ import { StoreEditDialog } from '@/features/store-edit'
 import { StoreMoveDialog } from '@/features/store-move'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
-import { StoreChart, StoreHistory, StorePositions } from '@/entities/store'
+import { TransactionEditButton } from '@/features/transaction-edit'
+import { StoreTransactions } from '@/widgets/store-transactions'
+import { StoreChart, StorePositions } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -292,6 +295,7 @@ function openWallet(created: Store) {
             <h2 class="truncate text-lg font-semibold">{{ store.name }}</h2>
             <Badge variant="secondary">{{ t(`stores.kind.${store.kind}`) }}</Badge>
             <Badge v-if="store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
+            <Badge v-if="store.in_budget" variant="outline">{{ t('stores.inBudgetBadge') }}</Badge>
           </div>
           <p v-if="store.note" class="truncate text-sm text-muted-foreground">{{ store.note }}</p>
         </div>
@@ -456,14 +460,28 @@ function openWallet(created: Store) {
             {{ t('wallet.addOperation') }}
           </Button>
         </div>
-        <StorePositions v-else :positions="positions" :base-currency="base" :decimals="decimals" />
+        <StorePositions v-else :positions="positions" :base-currency="base" :decimals="decimals">
+          <template v-if="store.kind === 'asset'" #actions="{ position }">
+            <AssetRevalueButton :asset="position.asset" />
+          </template>
+        </StorePositions>
+        <!-- Futures positions: shown, never counted in the totals. -->
+        <StorePositions
+          v-if="overview.data.value?.open_positions.length"
+          class="mt-4"
+          :title="t('wallet.openPositions')"
+          :positions="overview.data.value.open_positions"
+          :base-currency="base"
+          :decimals="decimals"
+        />
       </template>
       <template #history>
-        <StoreHistory :store-id="storeId" :include-children="includeChildren">
+        <StoreTransactions :store-id="storeId" :include-children="includeChildren">
           <template #actions="{ tx }">
+            <TransactionEditButton :tx="tx" :store-id="storeId" />
             <TransactionDelete :id="txId(tx)" />
           </template>
-        </StoreHistory>
+        </StoreTransactions>
       </template>
     </Tabs>
 

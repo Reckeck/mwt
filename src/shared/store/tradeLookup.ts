@@ -64,16 +64,19 @@ export const useTradeLookupStore = defineStore('tradeLookup', () => {
 
   const executions = ref<BybitExecution[]>([])
   const keyNotice = ref<KeyNotice>(null)
-  const key = ref<ExchangeKeyStatus>({ configured: false, hint: null })
+  const key = ref<ExchangeKeyStatus>({ configured: false, hint: null, spot_store_id: null, futures_store_id: null })
   const executionsLoading = ref(false)
 
   const hasKey = computed(() => key.value.configured)
+  /** Wallet whose key the fills come from; the backend also looks up its ancestors. */
+  const storeId = ref<string | null>(null)
 
-  async function loadKeyStatus() {
+  async function loadKeyStatus(forStore: string) {
+    storeId.value = forStore
     try {
-      key.value = await call<ExchangeKeyStatus>('exchange_key_status')
+      key.value = await call<ExchangeKeyStatus>('exchange_key_status', { input: { store_id: forStore } })
     } catch {
-      key.value = { configured: false, hint: null }
+      key.value = { configured: false, hint: null, spot_store_id: null, futures_store_id: null }
     }
   }
 
@@ -82,16 +85,17 @@ export const useTradeLookupStore = defineStore('tradeLookup', () => {
   }
 
   async function clearKey() {
-    key.value = await call<ExchangeKeyStatus>('clear_exchange_key')
+    if (!storeId.value) return
+    key.value = await call<ExchangeKeyStatus>('clear_exchange_key', { input: { store_id: storeId.value } })
     executions.value = []
     keyNotice.value = null
   }
 
-  async function loadExecutions(category: Category = 'spot', symbol?: string) {
+  async function loadExecutions(category: BybitCategory = 'spot', symbol?: string) {
     executionsLoading.value = true
     try {
       const res = await call<BybitExecutionsResult>('bybit_executions', {
-        input: { category, symbol: symbol ?? null, limit: 20 },
+        input: { category, symbol: symbol ?? null, limit: 20, store_id: storeId.value },
       })
       executions.value = res.executions
       keyNotice.value = res.notice as KeyNotice

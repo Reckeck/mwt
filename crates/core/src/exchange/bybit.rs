@@ -37,6 +37,7 @@ const MAX_IMPORT_PAGES: usize = 12;
 /// Product type. Bybit requires this on most private endpoints.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(rename = "BybitCategory")]
 pub enum Category {
     #[default]
     Spot,

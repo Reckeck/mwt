@@ -27,9 +27,14 @@ const loading = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 let seq = 0
 
-watch(asset, (value) => {
-  query.value = value ? value.symbol : ''
-})
+// Immediate: an asset handed in up front (an edit, a default) shows right away.
+watch(
+  asset,
+  (value) => {
+    query.value = value ? value.symbol : ''
+  },
+  { immediate: true },
+)
 
 async function search(rawQuery: string) {
   const token = ++seq
