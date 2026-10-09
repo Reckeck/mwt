@@ -8,26 +8,16 @@ import {
   DialogTitle,
 } from 'reka-ui'
 
+import { dialogWidths, type DialogProps } from './dialog.constants'
+
 const props = withDefaults(
-  defineProps<{
-    /** Controlled open state; omit for an uncontrolled dialog. */
-    open?: boolean
-    title: string
-    description?: string
-    /** Tailwind max-width class for the panel. */
-    size?: 'sm' | 'md' | 'lg' | 'xl'
-  }>(),
+  defineProps<DialogProps>(),
   { size: 'md' },
 )
 
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
-const widths = {
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-} as const
+const widths = dialogWidths
 </script>
 
 <template>

@@ -6,12 +6,11 @@ import {
   DropdownMenuTrigger,
 } from 'reka-ui'
 
-const props = defineProps<{
-  /** Align the panel against the trigger edge. */
-  align?: 'start' | 'center' | 'end'
-}>()
+import { dropdownMenuAligns, type DropdownMenuProps } from './dropdown-menu.constants'
 
-const aligns = { start: 'start', center: 'center', end: 'end' } as const
+const props = defineProps<DropdownMenuProps>()
+
+const aligns = dropdownMenuAligns
 </script>
 
 <template>

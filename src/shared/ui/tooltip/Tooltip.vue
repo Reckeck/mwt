@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { TooltipRoot, TooltipTrigger, TooltipContent, TooltipProvider } from 'reka-ui'
 
-withDefaults(defineProps<{
-  side?: 'top' | 'right' | 'bottom' | 'left'
-  align?: 'start' | 'center' | 'end'
-  sideOffset?: number
-}>(), {
+import type { TooltipProps } from './tooltip.types'
+
+withDefaults(defineProps<TooltipProps>(), {
   side: 'top',
   align: 'center',
   sideOffset: 8,

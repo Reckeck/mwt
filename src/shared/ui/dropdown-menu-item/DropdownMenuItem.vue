@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { DropdownMenuItem } from 'reka-ui'
 
-defineProps<{
-  /** Emitted value when the row is chosen. */
-  value: string
-  destructive?: boolean
-}>()
+import type { DropdownMenuItemProps } from './dropdown-menu-item.types'
+
+defineProps<DropdownMenuItemProps>()
 
 const emit = defineEmits<{ select: [string] }>()
 </script>
