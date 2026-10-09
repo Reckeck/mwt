@@ -67,7 +67,7 @@ function openUnlock(path: string | null) {
 
       <p v-else class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
 
-      <Button variant="ghost" class="justify-start gap-2" @click="openUnlock(null)">
+      <Button variant="outline" class="w-full justify-start gap-2" @click="openUnlock(null)">
         <FolderOpen class="size-4" />
         {{ t('auth.openOther') }}
       </Button>
