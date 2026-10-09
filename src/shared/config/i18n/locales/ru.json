@@ -411,5 +411,22 @@
   "settings.currencyMatchLimit": "Показаны первые 300 из {count} — уточните поиск",
   "settings.favoriteCurrencyPlaceholder": "Код валюты",
   "settings.currencyNoMatches": "Ничего не найдено",
-  "settings.currencySelect": "Выбор валюты"
+  "settings.currencySelect": "Выбор валюты",
+  "stores.parent": "Родительский кошелёк",
+  "stores.parentNone": "— Верхний уровень —",
+  "stores.parentHint": "Под-кошельки суммируются в родителя: субаккаунт биржи, валютный счёт в банке.",
+  "stores.namePlaceholder": "например, Bybit, Тинькофф USD",
+  "stores.newSubWallet": "Новый под-кошелёк в {parent}",
+  "stores.edit": "Изменить кошелёк",
+  "stores.saved": "Кошелёк сохранён",
+  "stores.saveFailed": "Не удалось сохранить кошелёк",
+  "stores.addSubWallet": "Добавить под-кошелёк",
+  "stores.deleteHasChildren": "Есть под-кошельки — сначала перенесите или удалите их",
+  "stores.deleteHasTransactions": "Есть транзакции — архивируйте вместо удаления",
+  "stores.subWalletOf": "в {parent}",
+  "wallet.totalWithSub": "Итого с под-кошельками",
+  "wallet.ownTotal": "Сам кошелёк",
+  "wallet.transactions": "Транзакции",
+  "wallet.lastTx": "последняя",
+  "wallet.subWallets": "Под-кошельки"
 }
