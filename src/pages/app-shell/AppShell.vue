@@ -43,12 +43,7 @@ useTheme()
 
 const settingsOpen = ref(false)
 
-// Deduped with the identical queries inside the sidebar widgets.
-const stores = useQuery({
-  queryKey: ['stores'],
-  queryFn: () => call<Store[]>('list_stores'),
-})
-
+// Deduped with the identical query inside the sidebar widgets.
 const summary = useQuery({
   queryKey: ['summary'],
   queryFn: () => call<PortfolioSummary>('get_summary'),
@@ -62,14 +57,10 @@ const navItems = [
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
 
-/** On the wallet page the store name is a more useful title than the nav label. */
-const pageTitle = computed(() => {
-  if (route.name === 'wallet') {
-    const id = String(route.params.id ?? '')
-    return stores.data.value?.find((store) => store.id === id)?.name ?? t('nav.wallets')
-  }
-  return t((route.meta.i18n as string | undefined) ?? 'app.title')
-})
+/** A wallet page carries its own name and parents; the shell only says where you are. */
+const pageTitle = computed(() =>
+  route.name === 'wallet' ? t('nav.wallets') : t((route.meta.i18n as string | undefined) ?? 'app.title'),
+)
 
 /** File name of the open vault; the full path is in the tooltip. */
 const vaultPath = computed(() => vault.status?.path ?? '')
@@ -198,7 +189,9 @@ async function lock() {
       </header>
 
       <div class="@container min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-        <RouterView />
+        <!-- Keyed by path: /stores/a → /stores/b reuses the page component, and its
+             queries and child widgets would otherwise keep showing wallet a. -->
+        <RouterView :key="route.path" />
       </div>
     </SidebarInset>
 
