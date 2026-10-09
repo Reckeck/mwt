@@ -50,7 +50,11 @@ const option = computed<ChartOption>(() => ({
     <template #header>
       <p class="font-medium">{{ t('charts.title') }}</p>
     </template>
-    <Chart v-if="(history.data.value ?? []).length > 1" :option="option" autoresize class="h-80 w-full" />
+    <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
+         so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
+    <div v-if="(history.data.value ?? []).length > 1" class="h-80 w-full">
+      <Chart :option="option" autoresize />
+    </div>
     <p v-else class="py-12 text-center text-sm text-muted-foreground">{{ t('charts.historyEmpty') }}</p>
   </Card>
 </template>

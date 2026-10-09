@@ -58,7 +58,11 @@ const option = computed<ChartOption>(() => ({
       <p class="font-medium">{{ t('wallet.chart') }}</p>
     </template>
 
-    <Chart v-if="points.length > 1" :option="option" class="h-56 w-full" autoresize />
+    <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
+         so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
+    <div v-if="points.length > 1" class="h-56 w-full">
+      <Chart :option="option" autoresize />
+    </div>
     <p v-else class="py-8 text-center text-sm text-muted-foreground">{{ t('wallet.chartEmpty') }}</p>
   </Card>
 </template>
