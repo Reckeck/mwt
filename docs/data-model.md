@@ -7,22 +7,31 @@
 
 | Поле | Тип | Комментарий |
 |---|---|---|
-| `version` | `u32` | `VAULT_FORMAT_VERSION`, зафиксирован на `1`. **Не бампать без явного разрешения пользователя**: `decode` отвергает любую другую версию, а миграции нет. Аддитивные поля — через `#[serde(default)]` |
+| `version` | `u32` | `VAULT_FORMAT_VERSION`, зафиксирован на `1`. **Не бампать без явного разрешения пользователя**: `decode` отвергает любую другую версию, а миграции нет. Release пишет bincode, поэтому любое новое поле ломает старые release-файлы — схема заморожена целиком (план D11). Файл версии 1, не подходящий под схему, даёт `INCOMPATIBLE_VAULT` (конвертера нет) |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
 | `settings` | `Settings` | vault-scoped: decimals, виджеты, интервалы, трей |
 | `stores` | `Vec<Store>` | контейнеры портфеля |
 | `holdings` | `Vec<Holding>` | derived from transactions (`recompute_holdings`) |
 | `transactions` | `Vec<Transaction>` | история операций (источник истины) |
-| `categories` | `Vec<String>` | пользовательские категории (после системных: salary/rewards/trading/staking/defi/other) |
+| `categories` | `Vec<Category>` | категории с группами; новый vault получает набор по умолчанию (`default_categories()`) |
 | `price_cache` | `Vec<PricePoint>` | курс актива → USD, с TTL |
 | `fx_cache` | `Vec<FxPoint>` | units per 1 USD для валют |
+| `exchanges` | `Exchanges` | ключи бирж (см. ниже); в TS не экспортируется |
+| `pending_imports` | `Vec<PendingImport>` | сделки Bybit, ждущие подтверждения |
+| `contacts` | `Vec<Contact>` | внешние стороны и их реквизиты |
+| `categorization_rules` | `Vec<CategorizationRule>` | «текст → категория» |
+| `manual_prices` | `Vec<ManualPrice>` | ручная оценка имущества |
+| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | типы фаз 3–7, определены заранее ради одного разлома схемы; пока пустые |
 
 ### Settings — только vault-scoped
 
 `display_decimals` (по умолчанию 8), `dashboard_widgets`,
 `fx_refresh_interval_sec` (300), `minimize_to_tray` (true),
-`bybit_import_interval_sec` (900; `0` — выкл).
+`bybit_import_interval_sec` (900; `0` — выкл), `savings_rate` (доля дохода
+на накопления, 0..1, по умолчанию `0.10`), `daily_budget_mode` (`month` —
+месяц с переносом остатка, по умолчанию; `until_income` — до следующего
+дохода), `budget_currency` (пусто = базовая валюта).
 
 Настройки, описывающие **пользователя**, а не этот vault, живут не в документе,
 а рядом с приложением — см. «Настройки приложения» ниже.
@@ -76,9 +85,16 @@ vault: они переживают открытие другого хранил�
 
 ## Store / StoreKind
 
-`Store { id, name, kind, color, archived, note, parent_id? }`, где `kind` — один из:
-`exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`. Хранилище можно архивировать;
-архивные не считаются в сводке.
+`Store { id, name, kind, color, archived, note, parent_id?, contact_id?, liability?, in_budget }`,
+где `kind` — один из: `exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`,
+`asset` (имущество с ручной оценкой: квартира, машина), `liability` (кредит,
+ипотека, кредитка — баланс отрицательный). Хранилище можно архивировать.
+
+- `in_budget` — траты и доходы узла попадают в бюджет. По умолчанию у корня —
+  `cash`/`bank` да, остальные нет; субсчёт берёт значение родителя (D22).
+- `liability: LiabilityTerms { kind, rate?, limit?, due_day?, monthly_payment? }` —
+  только у `liability`; `limit` ограничивает кредитку для автоматики.
+- `contact_id` — чей это счёт (банк, обменник); только у корня (R10).
 
 ### Дерево: кошелёк → субсчёт → субсчёт
 
@@ -121,61 +137,117 @@ vault: они переживают открытие другого хранил�
 
 ## Transaction (источник истины)
 
-`Transaction` — **закрытый enum**, а не плоская структура. Каждый вариант несёт
-только свои поля, поэтому невозможная запись не представима: у `BankTransferTx`
-нет DEX-`pool_id`, у `CashFlowTx` нет IBAN.
+`Transaction` — **закрытый enum** с внешним тегом (bincode не умеет внутренние
+теги). Четыре глагола и четыре специальных вида:
 
 ```rust
 enum Transaction {
-    Income(IncomeTx), Expense(ExpenseTx), Payment(PaymentTx), Fee(FeeTx),
-    BankTransfer(BankTransferTx), CardPayment(CardPaymentTx),
-    WalletTransfer(WalletTransferTx), DefiAction(DefiActionTx),
-    ExchangeTrade(ExchangeTradeTx), Transfer(TransferTx), CashFlow(CashFlowTx),
+    Topup(TopupTx),       // Пополнить
+    Payment(PaymentTx),   // Оплатить
+    Transfer(TransferTx), // Перевести (один актив)
+    Convert(ConvertTx),   // Обменять (разные активы)
+    TradeSpot(TradeSpotTx), TradeFutures(TradeFuturesTx),
+    Defi(DefiTx), AssetSell(AssetSellTx),
 }
 ```
 
-Общая часть вынесена отдельно, чтобы не расходилась между вариантами:
-
 | Структура | Поля |
 |---|---|
-| `TxMeta` | `id`, `timestamp` (RFC3339), `comment`, `categories` |
-| `PriceStamp` | `price_usd?`, `price_base?`, `fx_override?` |
-| `Flow` | `In` \| `Out` — знак задаётся данными, а не соглашением |
-| `BankTransferTx` | `store_id`, `asset`, `amount`, `flow`, `rail`, `counterparty_name`, `counterparty_account?`, `reference?`, `fee?`, `fee_asset?`, `meta`, `price` |
-| `ExchangeTradeTx` | `store_id`, `sold { asset, qty }`, `bought { asset, qty }`, `fee?`, `fee_asset?`, `order_id?`, `market?`, `liquidity?`, `meta`, `price` |
-| `TransferTx` | `from_store_id`, `to_store_id`, `asset`, `amount`, `fee?`, `fee_asset?`, `network?`, `tx_hash?`, `meta`, `price` |
-
-Остальные варианты — по тому же принципу; полный список полей даёт
-`mise run gen-types` → `src/shared/api/ipc.gen.d.ts`.
+| `TxMeta` | `id`, `timestamp` (RFC3339 UTC), `comment`, `categories` (ключи), `flow_id?` (цепочка), `contact_id?` («с кем / через кого»), `origin` (`manual` \| `import { exec_id }` \| `automation { automation_id, planned_at }`) |
+| `PriceStamp` | `price_usd?`, `price_base?`, `fx_override?` — у каждой оценённой стороны |
+| `Fee` | `{ asset, amount, price }` — вместо пары `fee` + `fee_asset` |
+| `AccountRef` | `store(id)` \| `contact { contact_id, account_id? }` \| `raw(text)` — одна сторона движения |
+| `TopupTx` / `PaymentTx` | `store_id`, `asset`, `amount`, `fee?`, `from?` / `to?` (не `store`), `details: KindDetails`, `price` |
+| `TransferTx` | `from`, `to` (≥ 1 сторона `store`), `asset`, `amount` (получатель получает ровно его), `fee?` (платит отправитель), `network?`, `tx_hash?`, `debt?: DebtEffect`, `price` |
+| `ConvertTx` | `from`/`to: ConvertSide { account, asset, amount, price }`, `fee?`, `rate_override?` |
+| `TradeSpotTx` | `store_id`, `sold`/`bought: TradeSide { asset, qty, price }`, `fee?`, `liquidity?`, `order_id?` |
+| `TradeFuturesTx` | `store_id`, `contract` (дериватив), `settle`, `direction` (long/short), `action` (open/close), `quantity`, `fill_price`, `leverage?`, `fee?`, `closed_pnl?` (только close), `order_id?`, `category` (linear/inverse), `price` (цена settle) |
+| `DefiTx` | `store_id`, `action` (stake/unstake/claim/add_liquidity/remove_liquidity), `asset`, `amount`, `protocol?`, `pool_id?`, `network?`, `tx_hash?`, `fee?`, `price` |
+| `AssetSellTx` | `store_id`, `asset`, `unit_price`, `quantity`, `currency`, `proceeds_to?` (узел), `fee?`, `price` |
+| `KindDetails` | `cash_breakdown?` (только `cash`, Σ = сумма), `unit_price?` (только `asset`: цена единицы в базовой валюте на дату покупки), `network?`, `tx_hash?` (только крипто-кошельки) |
 
 ### Ноги (Leg)
 
-`Transaction::legs()` разворачивает запись в список `Leg` — по одному на
-`(store, asset)`. Трейд и перевод дают по две ноги, остальные — одну. Ноги
-**не хранятся**: они вычисляются при чтении, а всё, что суммирует деньги
-(`recompute_holdings`, `history_series`, `realized_pnl`), работает только с
-ними и не различает виды операций.
+`Transaction::legs()` разворачивает запись в `Leg { store_id, asset, amount (со
+знаком), role, to_store_id?, price_* }`. Ноги **не хранятся**; всё, что суммирует
+деньги, работает только с ними. Ноги есть только у сторон-`store`: перевод
+контакту даёт одну ногу.
 
-Знак берётся из `Flow::signed()` — единственного места, где направление
-становится числом.
+`role`: `principal` — само движение; `fee` — комиссия, отдельная исходящая нога
+(раньше комиссии записывались и игнорировались, холдинги были завышены);
+`pnl` — реализованный PnL закрытия фьючерса в валюте расчёта.
+
+Деривативы — `AssetRef::perp(биржа, символ)`, ключ `perp:{биржа}:{символ}`. Позиция
+лежит как holding контракта, но **не входит** в стоимость, капитал и историю;
+на странице кошелька — блок «Открытые позиции».
+
+Realized PnL: продажей считается только исходящая `principal`-нога с известной
+ценой и без второго своего узла; `fee` идёт отдельной суммой (`fees_base`),
+`pnl` — напрямую.
 
 ### Привязка видов к типу кошелька
 
-`Transaction::tags_for_store_kind(StoreKind)` — что кошелёк данного типа
-принимает. Возвращается двумя группами: `COMMON_TAGS` (работают везде, включая
-`transfer` — он доступен от любого кошелька, потому что второй конец может быть
-любым) и специфичные для кошелька.
+`allowed_kinds(StoreKind)` и `default_kind(StoreKind)` в `model/transaction.rs` —
+единственный источник; фронт спрашивает `transaction_kinds_for_store_kind`.
 
-| Тип кошелька | Специфичные виды | По умолчанию |
-|---|---|---|
-| `exchange` | `exchange_trade`, `wallet_transfer` | `exchange_trade` |
-| `hot_wallet` / `cold_wallet` | `wallet_transfer`, `defi_action` | `wallet_transfer` |
-| `bank` | `bank_transfer`, `card_payment` | `bank_transfer` |
-| `cash` | `cash_flow` | `cash_flow` |
+| Тип | Глаголы | Спец. | По умолчанию |
+|---|---|---|---|
+| `cash`, `bank` | все четыре | — | Оплатить |
+| `exchange` | все четыре | спот, фьючерсы | спот |
+| `hot_wallet`, `cold_wallet` | все четыре | DeFi | Перевести |
+| `asset` | Пополнить («Приобрести») | продажа | Пополнить |
+| `liability` | Оплатить, Перевести | — | Перевести |
 
-Фронт спрашивает это командой `transaction_kinds_for_store_kind` и своей копии
-не держит. `match` в `specific_tags_for_store_kind` без wildcard-руки, поэтому
-новый `StoreKind` не соберётся, пока для него не описан набор.
+### Валидация (V1–V14)
+
+Проверяется при каждом `add_transaction` / `update_transaction`
+(`service/validate.rs`); ошибка — `INVALID_INPUT` с текстом для формы.
+Узлы существуют и не в архиве; вид разрешён для каждого узла; `cash`/`bank`
+держат только фиат, `asset` — только вещи; суммы > 0; у Пополнить/Оплатить есть
+категория подходящей группы (Пополнить — доход или служебная, Оплатить — не
+доход), не архивная; у перевода и обмена ≥ 1 своя сторона и разные стороны,
+у обмена — разные активы; реквизит контакта принадлежит ему и активен; детали —
+только допустимые для типа; `closed_pnl` — только при закрытии; дата валидна и
+не дальше суток вперёд; направление долга совпадает со сторонами. Отрицательный
+баланс (V13) — не ошибка.
+
+Перед проверкой категории нормализуются, а пустые заполняются первым
+подходящим правилом (`CategorizationRule`: подстрока комментария или имени
+контакта, без учёта регистра).
+
+## Контакты
+
+`Contact { id, name, kind (person|company|exchanger), accounts, note, archived, created_at }`,
+`ContactAccount { id, group?, label, kind (iban|account|crypto_address|card|phone|url|other), value, currency?, network?, active }`.
+Обменник — контакт `exchanger`, обмен через него — `Convert` с `meta.contact_id`.
+
+- Удаление контакта, на который ссылаются операции или кошельки, — ошибка
+  («архивируйте»). Убранный реквизит, по которому были операции, не удаляется,
+  а становится `active: false`.
+- Обороты (`contact_turnover`) — отправлено / получено по активам, без внутренних
+  перемещений.
+- Долги — `TransferTx.debt`: `lend` (дал в долг), `collect` (мне вернули),
+  `borrow` (взял), `repay` (вернул). `contact_balances()` — «мне должны / я
+  должен» по контакту и активу. Долги не доход и не расход.
+
+## Категории
+
+`Category { key, name?, group, archived }`. `key` неизменяем и хранится в
+операциях; `name: None` — подпись из i18n `categories.default.<key>`. Группы:
+`income`, `fixed` (обязательные), `daily` (ежедневные), `savings`, `service`
+(служебные — вне бюджетов). Удалить можно только неиспользуемую категорию.
+
+## Капитал, ручная цена, классификация
+
+- `net_worth()` → `NetWorth { financial, non_financial, receivables, liabilities, payables, net }`
+  в базовой валюте; `PortfolioSummary` несёт `assets_base`, `liabilities_base`,
+  `net_worth_base`.
+- `ManualPrice { asset_key, unit_price, currency, updated_at }` — оценка вещи в
+  узле `asset`, действует на всю историю (D24). Без неё — цена покупки.
+- `classify_flow(tx) → FlowClass` (`income`, `fixed`, `daily`, `savings`,
+  `budget_in`, `budget_out`, `ignored`) — общая основа бюджетов, cashflow и
+  итогов месяца (план §7.3): учитывает `in_budget`, группы категорий,
+  платежи по кредитам, переводы в узлы целей, внутренние и долговые переводы.
 
 ## Деньги: Amount
 
@@ -242,6 +314,11 @@ enum Transaction {
 
 ## Ключи бирж (VaultDoc.exchanges)
 
+`ExchangeKeys` получил `spot_store_id?` и `futures_store_id?` — субсчета, на
+которые записываются подтверждённые спот- и фьючерсные сделки (по умолчанию —
+сам кошелёк ключа). `PendingImport` хранит `is_maker`, `closed_size`,
+`closed_pnl`; фьючерсная сделка с `closed_size > 0` — закрытие позиции.
+
 В `VaultDoc` добавлено поле `exchanges: Exchanges` (схема версии **1**, формат
 сброшен с v2 на v1 — обратная совместимость не сохраняется).
 
@@ -250,6 +327,8 @@ pub struct ExchangeKeys {
     pub store_id: String,  // ID кошелька (узла-биржи), которому принадлежит ключ
     pub api_key: String,
     pub api_secret: String,
+    pub spot_store_id: Option<String>,    // куда писать спот-сделки
+    pub futures_store_id: Option<String>, // куда писать фьючерсы
 }
 
 pub struct Exchanges {
