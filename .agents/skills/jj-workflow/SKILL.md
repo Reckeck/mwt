@@ -9,7 +9,7 @@ description: >
   закоммить, commit, jj, jujutsu, describe, new, squash, split, rebase,
   bookmark, ветка, branch, undo, откат, revert, stash, diff, status,
   «проверки перед коммитом», «прогони тесты», соавтор, co-author,
-  Co-authored-by, автор, авторство, «кто написал», opencode.
+  Co-authored-by, автор, авторство, «кто написал».
 ---
 
 # Проверки и коммиты через Jujutsu
@@ -97,54 +97,14 @@ so the unlock form can show auth.wrongPassword.
 - Скоуп (`feat(vault):`, `fix(pricing):`) опционален — используй, когда он
   добавляет информации.
 
-## Соавтор: OpenCode
+## Соавтор: агент указывает себя сам
 
-Каждый коммит агента несёт трейлер — так в истории видно, что код написан
-агентом, а не человеком:
-
-```
-Co-authored-by: OpenCode <agent@opencode.local>
-```
-
-**Обычно jj добавляет его сам.** Настроено через нативный
-`templates.commit_trailers`:
-
-```bash
-jj config path --repo     # ~/.config/jj/repos/<hash>/config.toml
-```
-
-```toml
-[templates]
-commit_trailers = '''"Co-authored-by: OpenCode <agent@opencode.local>" ++ "\n"'''
-```
-
-Работает и для интерактивного редактора, и для `jj describe -m` / `jj new -m`.
-
-Что важно знать:
-
-- **Не пиши трейлер в сообщение руками.** Дедупликация — по **точной строке**:
-  - та же строка `Co-authored-by: OpenCode <agent@opencode.local>` повторно
-    добавленная не будет → `jj describe` скажет «Nothing changed»;
-  - **любая другая** строка `Co-authored-by:` (другой email, другое имя)
-    приведёт к **двум** трейлерам в одном сообщении.
-- Если `jj describe -m` падает с `Failed to parse template` — испорчен
-  `templates.commit_trailers`. Проверь значение: шаблон обязан быть
-  **строковым литералом** в языке шаблонов jj, в TOML обёрнут в `'''…'''`.
-  Голое `Co-authored-by: …` без кавычек не парсится.
-- **Repo-конфиг jj физически лежит вне репозитория** («For security reasons,
-  they are not located inside the repo») — в git он не попадает. Значит на
-  другой машине/у коллеги автоподстановки не будет. Портативная часть
-  правила — в `AGENTS.md`.
-  Проверяй результат: `jj log -r @ --no-graph -T description` — трейлер должен
-  быть. Нет его → допиши в сообщение руками.
-- Правя чужой коммит или переписывая сообщение (`jj describe -r …`,
-  `jj squash`, `jj rebase`) — **не убирай** трейлер у агентских коммитов.
-- Про `Co-authored-by:` в GitLab: соавтор показывается как кликабельная
-  ссылка на профиль **только если этот email принадлежит существующему
-  аккаунту GitLab**. `agent@opencode.local` — не аккаунт, поэтому в UI GitLab
-  трейлер может не отрисоваться, хотя в тексте коммита он останется. Если
-  нужна настоящая атрибуция — заведи сервис-аккаунт в GitLab и поменяй email
-  в двух местах: `jj config path --repo` и `AGENTS.md`.
+Каждый коммит агента несёт трейлер `Co-authored-by:` с **именем своего
+инструмента** (OpenCode, Claude Code, Codex, …). jj его **не** подставляет —
+`templates.commit_trailers` выключен намеренно, — агент дописывает строку сам,
+последним абзацем сообщения. Формат, таблица имён, проверка на дубли и правило
+«не трогать чужие трейлеры» — в скилле `commit-coauthor`; загрузи его перед
+`jj describe`.
 
 ## Коммит — только по явной просьбе
 
