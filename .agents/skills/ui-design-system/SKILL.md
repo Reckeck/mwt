@@ -9,8 +9,11 @@ Consistent UI across TradeApp. Load this **together with** `shadcn-vue` (in
 `.agents/skills/shadcn-vue/`) whenever you touch a component: that skill knows
 how to add and compose shadcn primitives, this one knows how TradeApp looks.
 
-Component source lives flat in `src/shared/ui/<name>.vue` (lowercase, no
-per-component directories) — follow that when adding a primitive.
+Primitives live in `src/shared/ui/<name>/` — one folder per component with
+an `index.ts` (AGENTS.md rule 11). shadcn-vue's CLI writes there directly
+(`components.json` aliases); answer "no" to overwriting the hand-made
+button/input, and drop any `@lucide/vue` it adds — the project uses
+`lucide-vue-next`.
 
 ---
 
@@ -59,8 +62,26 @@ iconSize: 4       // 16px
 Use `shared/ui/button` variants: `default`, `outline`, `ghost`, `destructive`, `link`
 
 ### Modals
-- **NO NESTED MODALS** — use tabs/steps in single dialog
-- Max width: `max-w-md` (forms), `max-w-lg` (content), `max-w-4xl` (full)
+- **One dialog per action.** Two buttons that do different things open two
+  dialogs (see `TransactionCreateDialog` / `PlanCalculatorDialog`); never one
+  dialog that switches content with tabs. Hand-offs close one, open the next.
+- **No chrome inside a dialog:** no Card, no second title. The dialog has the
+  title; content is bare; the primary action sits in `#footer` (right-aligned,
+  `form="…"` for submit). `Dialog` brings its own close button.
+- Content with `@sm:`/`@lg:` container queries needs a `@container` wrapper
+  inside the dialog — the portal is outside the page container.
+- **NO NESTED MODALS.** Max width: `sm` (forms), `lg` (content), `xl` (full).
+
+### Destructive actions
+- Confirm in place with `shared/ui/confirm-button` (click → "Delete?" → click),
+  not with a modal. Disable the action with the reason when the backend
+  would refuse it (e.g. deleting a wallet that has history).
+
+### Charts (vue-echarts)
+- Put the height on a wrapper: `<div class="h-80"><Chart … /></div>`.
+  vue-echarts 8 forces `height: 100%` on its element from an unlayered
+  stylesheet that beats Tailwind's utilities, so `h-*` on `<Chart>` itself
+  yields a 0px canvas.
 
 ---
 
