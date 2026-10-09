@@ -39,9 +39,9 @@ src/router/index.ts маршруты + заголовки через meta.i18n
 
 Это главное архитектурное решение, не нарушай его:
 
-- **TanStack Query** — всё, что приходит из Rust: overview, pnl, transactions,
-  strategies. Ключи — короткие строки: `['store', id]`, `['store-pnl', id]`,
-  `['store-history', id]`, `['summary']`, `['stores']`, `['strategies']`.
+- **TanStack Query** — всё, что приходит из Rust: overview, pnl, transactions.
+  Ключи — короткие строки: `['store', id]`, `['store-pnl', id]`,
+  `['store-history', id]`, `['summary']`, `['stores']`.
 - **Pinia** — только клиентское/кросс-экранное состояние: статус vault,
   настройки, буфер предзаполнения формы сделки.
 

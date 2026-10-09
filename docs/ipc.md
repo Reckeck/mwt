@@ -91,15 +91,6 @@ JSON без шифрования — там нет ничего секретно
 | `dev_open_vault_json_in_editor` | — | `String` — путь scratch-файла. Пишет документ и запускает `$EDITOR` detached, не дожидаясь |
 | `dev_reload_vault_json_from_editor` | — | `String` — содержимое scratch-файла. Путь не принимается: фронт может читать только этот файл |
 
-### sim (Strategy Lab)
-| `save_strategy` | `SaveStrategyInput { strategy }` | `Strategy` |
-| `list_strategies` | — | `Vec<Strategy>` |
-| `delete_strategy` | `id` | `()` |
-| `list_runs` | — | `Vec<SimRun>` |
-| `run_strategy` | `RunStrategyInput { strategy_id, granularity_min, candles }` | `SimRun` |
-| `get_run_candles` | `GetRunCandlesInput { run_id }` | `GetRunCandlesOutput { candles: Vec<CandlePoint> }` (синтетика — воспроизводится по `candle_params` (seed), реал — рефетч из Binance за диапазон прогна) |
-| `get_gbm_paths` | `GbmPathsInput { run_id, paths≤20, horizon≤500 }` | `GbmPathsOutput { paths: Vec<Vec<GbmPathPoint { ts, price }>> }` (driftless GBM фан-чарт от `finished_at`; σ — из `candle_params` или realised vol на реальных свечах) |
-
 ### exchange (только чтение)
 | `inspect_tx` | `InspectTxInput { tx_hash, network? }` | `InspectTxResult { fetched, info?, hints[], notice? }` |
 | `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit?, store_id? }` | `BybitExecutionsResult { executions[], notice? }` |
@@ -141,8 +132,8 @@ JSON без шифрования — там нет ничего секретно
 - `Chain` — union строк; `Chain`/`ChainInfo` метаданные (CoinGecko id, explorer
   patterns) не передаются по IPC, а живут во фронтенд-константах (см. модель).
 - `Amount` — в TS это просто `string` (все денежные поля).
-- `StoreKind` — `"exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "paper"`.
-- `TxKind` — `"income" | "expense" | "payment" | "transfer" | "trade" | "fee" | "paper_trade"`.
+- `StoreKind` — `"exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash"`.
+- `TxKind` — `"income" | "expense" | "payment" | "transfer" | "trade" | "fee"`.
 - `categories` — `string[]`, теги пользователя; сколько угодно на операцию,
   бэкенд нормализует (trim/lowercase/дедуп) и регистрирует новые в словаре.
 
