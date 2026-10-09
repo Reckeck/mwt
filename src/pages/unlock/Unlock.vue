@@ -3,12 +3,11 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderPlus, Settings } from 'lucide-vue-next'
 
-import { AppSettingsModal } from '@/widgets/app-settings'
+import { AppSettingsDialog } from '@/widgets/app-settings'
 import { RecentVaults } from '@/widgets/recent-vaults'
 import { VaultCreateDialog } from '@/features/vault-create'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { Dialog } from '@/shared/ui/dialog'
 
 const { t } = useI18n()
 
@@ -63,17 +62,6 @@ const createOpen = ref(false)
 
     <VaultCreateDialog v-model:open="createOpen" />
 
-    <Dialog
-      v-model:open="settingsOpen"
-      :title="t('settings.appTitle')"
-      :description="t('settings.appScopeHint')"
-      size="lg"
-    >
-      <!-- Mounted per open so every visit starts from the file on disk. -->
-      <AppSettingsModal v-if="settingsOpen" />
-      <template #footer>
-        <Button @click="settingsOpen = false">{{ t('actions.close') }}</Button>
-      </template>
-    </Dialog>
+    <AppSettingsDialog v-model:open="settingsOpen" />
   </div>
 </template>
