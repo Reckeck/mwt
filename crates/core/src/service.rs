@@ -753,7 +753,7 @@ impl UnlockedVault {
     }
 
     /// Shared history replay. `store_id` restricts both the event axis and the
-    /// valuation set to that store (`None` covers the whole vault, as before).
+    /// valuation to legs booked on that store (`None` covers the whole vault).
     fn history_series_filtered(
         &self,
         store_id: Option<&str>,
@@ -768,42 +768,27 @@ impl UnlockedVault {
             .map(|point| point.per_usd)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
 
-        let source: Vec<Transaction> = match store_id {
-            Some(id) => self.store_txs(id),
-            None => self.doc.transactions.clone(),
-        };
-
         // Flatten to legs first: a transfer contributes to one store's series
         // from its outgoing leg and to another's from its incoming one, and the
         // event axis is the set of leg timestamps.
-        let mut events: Vec<(String, String, String)> = Vec::new();
-        for tx in &source {
+        let mut movements: Vec<(String, String, Amount)> = Vec::new();
+        for tx in &self.doc.transactions {
             for leg in tx.legs() {
-                if let Some(id) = store_id
-                    && leg.store_id != id
-                {
+                if store_id.is_some_and(|id| leg.store_id != id) {
                     continue;
                 }
-                events.push((
-                    leg.asset.key(),
-                    tx.meta().timestamp.clone(),
-                    leg.amount.to_string(),
-                ));
+                movements.push((leg.asset.key(), tx.meta().timestamp.clone(), leg.amount));
             }
         }
-        let mut stamps: Vec<String> = events.iter().map(|(_, ts, _)| ts.clone()).collect();
+        let mut stamps: Vec<String> = movements.iter().map(|(_, ts, _)| ts.clone()).collect();
         stamps.push(now_iso());
         stamps.sort();
         stamps.dedup();
-
-        // Replay legs in timestamp order.
-        let mut movements: Vec<(String, String, Amount)> = events
-            .into_iter()
-            .map(|(asset, ts, amount)| (asset, ts, Amount::parse(&amount).unwrap_or(Amount::ZERO)))
-            .collect();
         movements.sort_by(|left, right| left.1.cmp(&right.1));
 
-        // (asset_key -> running qty)
+        // Running quantity per asset. Valuing these (not the current
+        // holdings) keeps an asset that was sold off later in the series, and
+        // counts an asset held in two stores once.
         let mut qty: HashMap<String, Amount> = HashMap::new();
         let mut out = Vec::with_capacity(stamps.len());
         let mut idx = 0usize;
@@ -815,40 +800,12 @@ impl UnlockedVault {
                 idx += 1;
             }
             let mut value_usd = Amount::ZERO;
-            for holding in &self.doc.holdings {
-                // a left per-store series must not be valued against the other
-                // stores' positions
-                if store_id.is_some_and(|id| holding.store_id != id) {
+            for (akey, quantity) in &qty {
+                if quantity.is_zero() {
                     continue;
                 }
-                let akey = &holding.asset.key();
-                let quantity = qty.get(akey).copied().unwrap_or(Amount::ZERO);
-                let price = self
-                    .doc
-                    .price_cache
-                    .iter()
-                    .filter(|point| &point.asset_key == akey && point.ts <= *ev)
-                    .max_by(|left, right| left.ts.cmp(&right.ts))
-                    .map(|point| point.value_usd)
-                    .or_else(|| {
-                        // no live quote yet: fall back to the latest recorded
-                        // transaction price for this asset (e.g. the last buy)
-                        self.doc
-                            .transactions
-                            .iter()
-                            .filter(|tx| {
-                                tx.legs()
-                                    .iter()
-                                    .any(|leg| leg.asset.key() == *akey && leg.price_usd.is_some())
-                            })
-                            .filter(|tx| tx.meta().timestamp <= *ev)
-                            .max_by(|left, right| {
-                                left.meta().timestamp.cmp(&right.meta().timestamp)
-                            })
-                            .and_then(|tx| tx.legs().into_iter().find_map(|leg| leg.price_usd))
-                    });
-                if let Some(point) = price {
-                    value_usd += quantity * point;
+                if let Some(price) = self.price_usd_at(akey, ev) {
+                    value_usd += *quantity * price;
                 }
             }
             out.push(HistoryPoint {
@@ -859,6 +816,32 @@ impl UnlockedVault {
             });
         }
         out
+    }
+
+    /// Newest cached USD price of an asset at or before `ts`; without a quote
+    /// yet, the latest price a transaction recorded for it (e.g. the last buy).
+    fn price_usd_at(&self, asset_key: &str, ts: &str) -> Option<Amount> {
+        self.doc
+            .price_cache
+            .iter()
+            .filter(|point| point.asset_key == asset_key && point.ts.as_str() <= ts)
+            .max_by(|left, right| left.ts.cmp(&right.ts))
+            .map(|point| point.value_usd)
+            .or_else(|| {
+                self.doc
+                    .transactions
+                    .iter()
+                    .filter(|tx| tx.meta().timestamp.as_str() <= ts)
+                    .filter_map(|tx| {
+                        tx.legs()
+                            .into_iter()
+                            .find(|leg| leg.asset.key() == asset_key)
+                            .and_then(|leg| leg.price_usd)
+                            .map(|price| (tx.meta().timestamp.clone(), price))
+                    })
+                    .max_by(|left, right| left.0.cmp(&right.0))
+                    .map(|(_, price)| price)
+            })
     }
 
     pub fn realized_pnl(&self) -> RealizedPnl {
@@ -1858,6 +1841,15 @@ mod tests {
             source: "test".into(),
         });
         (dir, vault)
+    }
+
+    /// The same asset in two stores must be valued once per unit, not once
+    /// per holding.
+    #[test]
+    fn history_counts_an_asset_held_twice_once() {
+        let (_dir, vault) = two_stores_with_quotes();
+        let last = vault.history_series("usd").pop().unwrap();
+        assert_eq!(last.value_usd, amount("150"));
     }
 
     #[test]
