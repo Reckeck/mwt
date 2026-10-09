@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { Sonner } from '@/shared/ui/sonner'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { useLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore, useVaultStore } from '@/shared/store'
@@ -51,7 +52,10 @@ if (settingsStore.vault === null && !vault.locked) {
 </script>
 
 <template>
-  <router-view />
+  <!-- One provider for every tooltip, including the unlock screen outside the shell. -->
+  <TooltipProvider :delay-duration="300">
+    <router-view />
+  </TooltipProvider>
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->

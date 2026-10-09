@@ -1,29 +1,19 @@
 <script setup lang="ts">
-import { TooltipRoot, TooltipTrigger, TooltipContent, TooltipProvider } from 'reka-ui'
+import type { TooltipRootEmits, TooltipRootProps } from "reka-ui"
+import { TooltipRoot, useForwardPropsEmits } from "reka-ui"
 
-import type { TooltipProps } from './tooltip.types'
+const props = defineProps<TooltipRootProps>()
+const emits = defineEmits<TooltipRootEmits>()
 
-withDefaults(defineProps<TooltipProps>(), {
-  side: 'top',
-  align: 'center',
-  sideOffset: 8,
-})
+const forwarded = useForwardPropsEmits(props, emits)
 </script>
 
 <template>
-  <TooltipProvider>
-    <TooltipRoot>
-      <TooltipTrigger as-child>
-        <slot name="trigger" />
-      </TooltipTrigger>
-      <TooltipContent
-        :side="side"
-        :align="align"
-        :side-offset="sideOffset"
-        class="z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
-      >
-        <slot />
-      </TooltipContent>
-    </TooltipRoot>
-  </TooltipProvider>
+  <TooltipRoot
+    v-slot="slotProps"
+    data-slot="tooltip"
+    v-bind="forwarded"
+  >
+    <slot v-bind="slotProps" />
+  </TooltipRoot>
 </template>

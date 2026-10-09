@@ -32,7 +32,7 @@ import {
 } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
-import { Tooltip } from '@/shared/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
 import { useTheme } from '@/shared/lib/theme'
 
@@ -656,7 +656,7 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
       <div class="mx-2 h-5 w-px bg-border" />
 
       <Tooltip v-for="tool in tools" :key="tool.kind">
-        <template #trigger>
+        <TooltipTrigger as-child>
           <Button
             variant="ghost"
             size="sm"
@@ -666,12 +666,14 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
           >
             <component :is="tool.icon" class="size-4" />
           </Button>
-        </template>
-        <span>{{ t(tool.key) }}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{{ t(tool.key) }}</span>
+        </TooltipContent>
       </Tooltip>
 
       <Tooltip>
-        <template #trigger>
+        <TooltipTrigger as-child>
           <Button
             variant="ghost"
             size="sm"
@@ -681,26 +683,32 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
           >
             <Magnet class="size-4" />
           </Button>
-        </template>
-        <span>{{ t('trading.magnet') }}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{{ t('trading.magnet') }}</span>
+        </TooltipContent>
       </Tooltip>
 
       <Tooltip>
-        <template #trigger>
+        <TooltipTrigger as-child>
           <Button variant="ghost" size="sm" class="px-2" :disabled="!undoStack.length" @click="undoDrawing">
             <Undo2 class="size-4" />
           </Button>
-        </template>
-        <span>{{ t('trading.undo') }}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{{ t('trading.undo') }}</span>
+        </TooltipContent>
       </Tooltip>
 
       <Tooltip>
-        <template #trigger>
+        <TooltipTrigger as-child>
           <Button variant="ghost" size="sm" class="px-2" :disabled="!drawingCount" @click="clearDrawings">
             <Trash2 class="size-4" />
           </Button>
-        </template>
-        <span>{{ t('trading.clearDrawings') }}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{{ t('trading.clearDrawings') }}</span>
+        </TooltipContent>
       </Tooltip>
     </div>
 
