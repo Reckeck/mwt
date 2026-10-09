@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 
-export type TabDef = { value: string; label: string }
+import type { TabsProps } from './tabs.types'
 
-const props = defineProps<{
-  modelValue: string
-  tabs: TabDef[]
-}>()
+const props = defineProps<TabsProps>()
 
 const emit = defineEmits<{ 'update:modelValue': [string] }>()
 
