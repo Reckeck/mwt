@@ -25,9 +25,13 @@ const txs = useQuery({
   queryFn: () => call<Transaction[]>('list_transactions', { storeId: storeFilter.value || null }),
 })
 
-void onEvent<RefreshResult>('prices-updated', () => {
-  void queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })
-})
+/** Both lists, not one `['transactions', 'summary']` key — that prefix matches no query. */
+function refresh() {
+  void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+  void queryClient.invalidateQueries({ queryKey: ['summary'] })
+}
+
+void onEvent<RefreshResult>('prices-updated', refresh)
 
 const kindBadge: Record<TxKind, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   income: 'default',
@@ -44,7 +48,7 @@ async function remove(id: string) {
   try {
     await call('delete_transaction', { id })
     toast.success(t('tx.deleted'))
-    await queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })
+    refresh()
   } catch (err) {
     toast.error(t('tx.deleteFailed'), { description: parseError(err).message })
   }
@@ -63,7 +67,7 @@ async function remove(id: string) {
         <option v-for="store in stores.data.value ?? []" :key="store.id" :value="store.id">{{ store.name }}</option>
       </select>
 
-      <Button size="sm" @click="() => queryClient.invalidateQueries({ queryKey: ['transactions', 'summary'] })">
+      <Button size="sm" @click="refresh">
         {{ t('store.refresh') }}
       </Button>
     </div>
