@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
@@ -23,6 +23,7 @@ import {
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { getStoreIcon } from '@/shared/lib/store-icons'
+import { buildStoreTree, flattenStoreTree, storeAncestors, type StoreNode } from '@/shared/lib/store-tree'
 import { cn } from '@/shared/lib/utils'
 
 const { t } = useI18n()
@@ -38,34 +39,7 @@ const summary = useQuery({
   queryFn: () => call<PortfolioSummary>('get_summary'),
 })
 
-interface StoreNode {
-  store: Store
-  children: StoreNode[]
-}
-
-/** Live wallets first, archived last; alphabetical inside each group. */
-function byStatusThenName(left: StoreNode, right: StoreNode): number {
-  if (left.store.archived !== right.store.archived) return left.store.archived ? 1 : -1
-  return left.store.name.localeCompare(right.store.name, undefined, { sensitivity: 'base' })
-}
-
-/** The flat store list as a tree over `parent_id`; an unknown parent makes a root. */
-const roots = computed<StoreNode[]>(() => {
-  const nodes = new Map<string, StoreNode>()
-  for (const store of stores.data.value ?? []) nodes.set(store.id, { store, children: [] })
-  const top: StoreNode[] = []
-  for (const node of nodes.values()) {
-    const parent = node.store.parent_id ? nodes.get(node.store.parent_id) : undefined
-    if (parent) parent.children.push(node)
-    else top.push(node)
-  }
-  const sortTree = (list: StoreNode[]) => {
-    list.sort(byStatusThenName)
-    for (const node of list) sortTree(node.children)
-  }
-  sortTree(top)
-  return top
-})
+const roots = computed(() => buildStoreTree(stores.data.value ?? []))
 
 /** Value of every wallet including its sub-wallets, in the base currency. */
 const subtreeValue = computed(() => {
@@ -80,11 +54,6 @@ const subtreeValue = computed(() => {
   for (const node of roots.value) walk(node)
   return totals
 })
-
-/** Every wallet below `node`, depth-first: the sub-menu is one level, so deeper ones are listed too. */
-function descendants(node: StoreNode): StoreNode[] {
-  return node.children.flatMap((child) => [child, ...descendants(child)])
-}
 
 function walletTotal(id: string): string {
   const value = subtreeValue.value.get(id)
@@ -105,6 +74,18 @@ function readExpanded(): Set<string> {
 }
 
 const expanded = ref(readExpanded())
+
+// Opening a sub-wallet (from a link, a breadcrumb) unfolds its parents so it is visible.
+watch(
+  [activeId, () => stores.data.value],
+  ([id, list]) => {
+    if (!id || !list) return
+    const parents = storeAncestors(list, id).map((store) => store.id)
+    if (parents.every((parent) => expanded.value.has(parent))) return
+    expanded.value = new Set([...expanded.value, ...parents])
+  },
+  { immediate: true },
+)
 
 function toggle(id: string) {
   const next = new Set(expanded.value)
@@ -150,7 +131,13 @@ function toggle(id: string) {
             </RouterLink>
           </SidebarMenuButton>
 
-          <!-- A parent shows the chevron; its total is already in the children's rows. -->
+          <!-- A parent keeps its rolled-up total, shifted left of the chevron. -->
+          <SidebarMenuBadge
+            v-if="walletTotal(node.store.id)"
+            :class="cn('tabular-nums', node.children.length && 'right-8')"
+          >
+            {{ walletTotal(node.store.id) }}
+          </SidebarMenuBadge>
           <SidebarMenuAction
             v-if="node.children.length"
             :class="cn('transition-transform', expanded.has(node.store.id) && 'rotate-90')"
@@ -159,12 +146,9 @@ function toggle(id: string) {
           >
             <ChevronRight />
           </SidebarMenuAction>
-          <SidebarMenuBadge v-else-if="walletTotal(node.store.id)" class="tabular-nums">
-            {{ walletTotal(node.store.id) }}
-          </SidebarMenuBadge>
 
           <SidebarMenuSub v-if="node.children.length && expanded.has(node.store.id)">
-            <SidebarMenuSubItem v-for="child in descendants(node)" :key="child.store.id">
+            <SidebarMenuSubItem v-for="child in flattenStoreTree(node.children)" :key="child.store.id">
               <SidebarMenuSubButton
                 as-child
                 :is-active="activeId === child.store.id"
@@ -172,7 +156,10 @@ function toggle(id: string) {
               >
                 <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
                   <component :is="getStoreIcon(child.store.kind)" :style="{ color: child.store.color }" />
-                  <span>{{ child.store.name }}</span>
+                  <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
+                  <span v-if="walletTotal(child.store.id)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {{ walletTotal(child.store.id) }}
+                  </span>
                 </RouterLink>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
