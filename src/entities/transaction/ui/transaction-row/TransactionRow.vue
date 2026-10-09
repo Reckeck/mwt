@@ -2,15 +2,15 @@
 import { useI18n } from 'vue-i18n'
 
 import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
-import { DEFAULT_TX_BADGE, TX_KIND_BADGE, txAmountClass, txDetails, txId, txLegs, txMeta, txTag } from '@/shared/lib/transactions'
+import { DEFAULT_TX_BADGE, TX_KIND_BADGE, txAmountClass, txDetails, txLegs, txMeta, txTag } from '@/shared/lib/transactions'
 
 import type { TransactionRowProps } from './transaction-row.types'
 
 const props = defineProps<TransactionRowProps>()
 
-const emit = defineEmits<{ remove: [id: string] }>()
+/** Per-row actions (delete…) come from the page: entities do not own user actions. */
+defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
 </script>
@@ -56,9 +56,6 @@ const { t } = useI18n()
       </p>
     </div>
 
-    <Button variant="ghost" size="icon" class="shrink-0" :title="t('tx.delete')" @click="emit('remove', txId(props.tx))">
-      <span class="sr-only">{{ t('tx.delete') }}</span>
-      <span class="text-destructive">✕</span>
-    </Button>
+    <slot name="actions" :tx="props.tx" />
   </div>
 </template>

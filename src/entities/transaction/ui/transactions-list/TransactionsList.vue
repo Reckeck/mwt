@@ -9,7 +9,7 @@ import type { TransactionsListProps } from './transactions-list.types'
 
 const props = defineProps<TransactionsListProps>()
 
-const emit = defineEmits<{ remove: [id: string] }>()
+defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
 </script>
@@ -26,8 +26,11 @@ const { t } = useI18n()
         :key="txId(tx)"
         :tx="tx"
         :store-name="props.storeName(txStoreId(tx))"
-        @remove="(id) => emit('remove', id)"
-      />
+      >
+        <template #actions="{ tx: row }">
+          <slot name="actions" :tx="row" />
+        </template>
+      </TransactionRow>
 
       <p v-if="!props.transactions.length" class="py-6 text-center text-sm text-muted-foreground">
         {{ t('tx.empty') }}

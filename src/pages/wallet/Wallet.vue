@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-vue-next'
 
+import { TransactionDelete } from '@/features/transaction-delete'
 import { AddTransactionForm } from '@/entities/transaction'
 import { StoreCalculator } from '@/entities/store'
 import { StoreChart } from '@/entities/store'
@@ -36,6 +37,7 @@ import { formatDate, formatMoney } from '@/shared/lib/format'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { getStoreIcon } from '@/shared/lib/store-icons'
+import { txId } from '@/shared/lib/transactions'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const route = useRoute()
@@ -526,7 +528,11 @@ function onApplyPlan(payload: { mode: CalcMode; from: AssetRef | null; to: Asset
         <StorePositions :positions="positions" :base-currency="base" :decimals="decimals" />
       </template>
       <template #history>
-        <StoreHistory :store-id="storeId" />
+        <StoreHistory :store-id="storeId">
+          <template #actions="{ tx }">
+            <TransactionDelete :id="txId(tx)" />
+          </template>
+        </StoreHistory>
       </template>
     </Tabs>
 
