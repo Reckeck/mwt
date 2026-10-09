@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
@@ -10,6 +10,7 @@ import { StoreCard } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call, parseError } from '@/shared/api/ipc'
+import { buildStoreTree, flattenStoreTree } from '@/shared/lib/store-tree'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -21,6 +22,19 @@ const stores = useQuery({
 
 const createDialogOpen = ref(false)
 
+/** Tree order: every parent is followed by its sub-wallets. */
+const rows = computed(() => {
+  const list = stores.data.value ?? []
+  const byId = new Map(list.map((store) => [store.id, store]))
+  return flattenStoreTree(buildStoreTree(list)).map((node) => ({
+    store: node.store,
+    depth: node.depth,
+    parent: node.store.parent_id ? (byId.get(node.store.parent_id) ?? null) : null,
+  }))
+})
+
+const hasChildren = (id: string) => (stores.data.value ?? []).some((store) => store.parent_id === id)
+
 function invalidate() {
   return queryClient.invalidateQueries({ queryKey: ['stores'] })
 }
@@ -28,7 +42,7 @@ function invalidate() {
 const toggleArchive = useMutation({
   mutationFn: (store: Store) => call('archive_store', { id: store.id, archived: !store.archived }),
   onSuccess: (_result, store) => {
-    toast.success(store.archived ? t('stores.unarchived') : t('stores.archived'), { description: store.name })
+    toast.success(store.archived ? t('stores.unarchivedToast') : t('stores.archivedToast'), { description: store.name })
     void invalidate()
   },
   onError: (err) => toast.error(t('stores.archiveFailed'), { description: parseError(err).message }),
@@ -37,11 +51,24 @@ const toggleArchive = useMutation({
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_store', { id }),
   onSuccess: () => {
-    toast.success(t('stores.deleted'))
+    toast.success(t('stores.deletedToast'))
     void invalidate()
   },
-  onError: (err) => toast.error(t('stores.deleteFailed'), { description: parseError(err).message }),
+  // The backend refuses a wallet that still has history; say what to do instead.
+  onError: (err) => {
+    const parsed = parseError(err)
+    const description = parsed.code === 'INVALID_INPUT' ? t('stores.deleteHasTransactions') : parsed.message
+    toast.error(t('stores.deleteFailed'), { description })
+  },
 })
+
+function removeStore(id: string) {
+  if (hasChildren(id)) {
+    toast.error(t('stores.deleteFailed'), { description: t('stores.deleteHasChildren') })
+    return
+  }
+  remove.mutate(id)
+}
 </script>
 
 <template>
@@ -56,11 +83,14 @@ const remove = useMutation({
 
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
       <StoreCard
-        v-for="store in stores.data.value ?? []"
-        :key="store.id"
-        :store="store"
+        v-for="row in rows"
+        :key="row.store.id"
+        :store="row.store"
+        :parent="row.parent"
+        :class="row.depth > 0 && 'border-l-4'"
+        :style="row.parent ? { borderLeftColor: row.parent.color } : undefined"
         @toggle-archive="toggleArchive.mutate"
-        @delete="remove.mutate"
+        @delete="removeStore"
       />
 
       <Card v-if="!stores.data.value?.length">

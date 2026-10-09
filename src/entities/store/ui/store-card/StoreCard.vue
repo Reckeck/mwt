@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 import { Archive, ArchiveRestore, Trash2 } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
@@ -24,7 +25,7 @@ const { t } = useI18n()
   <Card :class="cn(props.store.archived && 'opacity-60')">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center gap-2">
           <span
             class="flex size-6 shrink-0 items-center justify-center rounded-md border"
             :style="{
@@ -35,7 +36,17 @@ const { t } = useI18n()
           >
             <component :is="getStoreIcon(props.store.kind)" class="size-3.5" />
           </span>
-          <p class="font-medium">{{ props.store.name }}</p>
+          <div class="min-w-0">
+            <RouterLink
+              :to="{ name: 'wallet', params: { id: props.store.id } }"
+              class="block truncate font-medium hover:underline"
+            >
+              {{ props.store.name }}
+            </RouterLink>
+            <p v-if="props.parent" class="truncate text-xs text-muted-foreground">
+              {{ t('stores.subWalletOf', { parent: props.parent.name }) }}
+            </p>
+          </div>
         </div>
         <div class="flex items-center gap-1">
           <Badge variant="secondary">{{ t(`stores.kind.${props.store.kind}`) }}</Badge>
