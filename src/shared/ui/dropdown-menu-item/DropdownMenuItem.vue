@@ -10,7 +10,8 @@ const emit = defineEmits<{ select: [string] }>()
 
 <template>
   <DropdownMenuItem
-    class="flex cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+    :disabled="disabled"
+    class="flex cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-sm outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
     :class="destructive && 'text-destructive data-[highlighted]:text-destructive'"
     @select="emit('select', value)"
   >
