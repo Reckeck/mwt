@@ -84,7 +84,8 @@ function mock(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     case 'update_store': {
       const input = body as UpdateStoreInput
       const store = mockStores.find((candidate) => candidate.id === input.id)
-      if (store) Object.assign(store, { name: input.name, color: input.color, note: input.note })
+      if (store)
+        Object.assign(store, { name: input.name, color: input.color, note: input.note, parent_id: input.parent_id })
       return resolve(store ?? mockStores[0])
     }
     case 'archive_store': {
@@ -397,6 +398,17 @@ const mockStores: Store[] = [
   },
 ]
 
+// A sub-account, so the wallet tree has something to show in the browser.
+mockStores.push({
+  id: crypto.randomUUID(),
+  name: 'Binance Futures',
+  kind: 'exchange',
+  color: '#f0b90b',
+  archived: false,
+  note: '',
+  parent_id: mockStores[0].id,
+})
+
 const mockTransactions: Transaction[] = mockStores.flatMap((store) => defaultTxs(store.kind, store.name, store.id))
 
 /** Last known USD prices, mirroring what the Rust `price_cache` would hold. */
@@ -540,16 +552,24 @@ function mockOverview(storeId: string): StoreOverview {
 
   const totalUsd = positions.reduce((acc, position) => acc + Number(position.value_usd), 0)
 
+  // Direct children with their whole subtree, like the backend's rollup.
+  const childRows: StoreChildRow[] = mockStores
+    .filter((candidate) => candidate.parent_id === store.id)
+    .map((child) => {
+      const value = mockOverview(child.id).subtree_total_base
+      return { store: child, value_usd: value, value_base: value }
+    })
+
   return {
     store,
     base_currency: mockAppSettings.base_currency,
     fx_per_usd: '1',
     total_usd: String(totalUsd),
     total_base: String(totalUsd),
-    subtree_total_base: String(totalUsd),
+    subtree_total_base: String(totalUsd + childRows.reduce((acc, row) => acc + Number(row.value_base), 0)),
     realized_pnl_base: '0',
     positions,
-    children: [],
+    children: childRows,
     tx_count: txs.length,
     first_tx_at: txs.length ? timestampOf(txs[txs.length - 1]) : '',
     last_tx_at: txs.length ? timestampOf(txs[0]) : '',

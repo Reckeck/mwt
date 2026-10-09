@@ -411,5 +411,22 @@
   "settings.currencyMatchLimit": "Showing the first 300 of {count} — refine your search",
   "settings.favoriteCurrencyPlaceholder": "Currency code",
   "settings.currencyNoMatches": "Nothing found",
-  "settings.currencySelect": "Currency selector"
+  "settings.currencySelect": "Currency selector",
+  "stores.parent": "Parent wallet",
+  "stores.parentNone": "— Top level —",
+  "stores.parentHint": "Sub-wallets roll up into their parent: an exchange sub-account, a per-currency account in a bank.",
+  "stores.namePlaceholder": "e.g. Bybit, Tinkoff USD",
+  "stores.newSubWallet": "New sub-wallet in {parent}",
+  "stores.edit": "Edit wallet",
+  "stores.saved": "Wallet saved",
+  "stores.saveFailed": "Could not save the wallet",
+  "stores.addSubWallet": "Add sub-wallet",
+  "stores.deleteHasChildren": "Has sub-wallets — move or delete them first",
+  "stores.deleteHasTransactions": "Has transactions — archive it instead",
+  "stores.subWalletOf": "in {parent}",
+  "wallet.totalWithSub": "Total incl. sub-wallets",
+  "wallet.ownTotal": "This wallet",
+  "wallet.transactions": "Transactions",
+  "wallet.lastTx": "last",
+  "wallet.subWallets": "Sub-wallets"
 }
