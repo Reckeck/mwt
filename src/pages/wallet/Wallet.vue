@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -8,22 +8,24 @@ import {
   Archive,
   ArchiveRestore,
   Calculator,
+  ChevronRight,
+  FolderPlus,
   Key,
   MoreVertical,
+  Pencil,
   Plus,
   RefreshCw,
   Trash2,
-  X,
 } from 'lucide-vue-next'
 
 import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { PendingImports } from '@/features/pending-imports'
-import { TransactionDelete } from '@/features/transaction-delete'
 import { PlanCalculator, type CalculatorPlan } from '@/features/plan-calculator'
+import { StoreCreateDialog } from '@/features/store-create'
+import { StoreEditDialog } from '@/features/store-edit'
 import { AddTransactionForm } from '@/features/transaction-create'
-import { StoreChart } from '@/entities/store'
-import { StoreHistory } from '@/entities/store'
-import { StorePositions } from '@/entities/store'
+import { TransactionDelete } from '@/features/transaction-delete'
+import { StoreChart, StoreHistory, StorePositions } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -31,11 +33,12 @@ import { Dialog } from '@/shared/ui/dialog'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { Tabs } from '@/shared/ui/tabs'
-import { formatDate, formatMoney } from '@/shared/lib/format'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
-import { cn } from '@/shared/lib/utils'
+import { formatDate, formatMoney } from '@/shared/lib/format'
 import { getStoreIcon } from '@/shared/lib/store-icons'
+import { storeAncestors } from '@/shared/lib/store-tree'
 import { txId } from '@/shared/lib/transactions'
+import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const route = useRoute()
@@ -44,6 +47,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 const settingsStore = useSettingsStore()
 
+// The shell keys this page by path, so the id is fixed for its lifetime.
 const storeId = computed(() => String(route.params.id ?? ''))
 const formRef = ref<InstanceType<typeof AddTransactionForm> | null>(null)
 
@@ -57,13 +61,20 @@ const pnl = useQuery({
   queryFn: () => call<RealizedPnl>('get_store_pnl', { storeId: storeId.value }),
 })
 
+const stores = useQuery({
+  queryKey: ['stores'],
+  queryFn: () => call<Store[]>('list_stores'),
+})
+
 const base = computed(() => overview.data.value?.base_currency ?? '')
 const store = computed(() => overview.data.value?.store)
 const isArchived = computed(() => store.value?.archived === true)
 const decimals = computed(() => settingsStore.vault?.display_decimals ?? 8)
 const positions = computed(() => overview.data.value?.positions ?? [])
+const children = computed(() => overview.data.value?.children ?? [])
+const ancestors = computed(() => storeAncestors(stores.data.value ?? [], storeId.value))
 
-const money = (value: string) => formatMoney(value, { currency: base.value, decimals: 2 })
+const money = (value: string | undefined) => formatMoney(value ?? '0', { currency: base.value, decimals: 2 })
 
 /** Backend failures surface with their own code so the cause is visible. */
 const errorText = computed(() => {
@@ -80,10 +91,17 @@ function pnlTone(value: string): string {
   return ''
 }
 
-/* --- modal + tab state --- */
+/* --- dialogs + tabs --- */
 const dialogOpen = ref(false)
 const dialogTab = ref<'transaction' | 'calculator'>('transaction')
+const editOpen = ref(false)
+const subWalletOpen = ref(false)
 const tab = ref('positions')
+
+function openOperation(which: 'transaction' | 'calculator') {
+  dialogTab.value = which
+  dialogOpen.value = true
+}
 
 const tabs = computed(() => [
   { value: 'positions', label: t('pos.title') },
@@ -95,50 +113,59 @@ const dialogTabs = computed(() => [
   { value: 'calculator', label: t('wallet.plan') },
 ])
 
-const stats = computed(() => [
-  {
-    key: 'total',
-    label: t('store.total'),
-    value: money(overview.data.value?.total_base ?? '0'),
-    hint: `${t('store.fxRate')}: ${formatMoney(overview.data.value?.fx_per_usd, { currency: base.value })}`,
-    tone: '',
-  },
-  {
-    key: 'positions',
-    label: t('pos.title'),
-    value: String(positions.value.length),
-    hint:
-      positions.value
-        .slice(0, 3)
-        .map((position) => position.asset.symbol.toUpperCase())
-        .join(' · ') || '—',
-    tone: '',
-  },
-  {
-    key: 'pnl',
-    label: t('wallet.realizedPnl'),
-    value: money(pnl.data.value?.total_base ?? '0'),
-    hint: `${t('wallet.trades')}: ${pnl.data.value?.legs.length ?? 0}`,
-    tone: pnlTone(pnl.data.value?.total_base ?? '0'),
-  },
-  {
-    key: 'tx',
-    label: t('hist.title'),
-    value: String(overview.data.value?.tx_count ?? 0),
-    hint: overview.data.value?.last_tx_at ? formatDate(overview.data.value.last_tx_at) : '—',
-    tone: '',
-  },
-])
+const stats = computed(() => {
+  const data = overview.data.value
+  const withChildren = children.value.length > 0
+  return [
+    {
+      key: 'total',
+      label: withChildren ? t('wallet.totalWithSub') : t('store.total'),
+      value: money(withChildren ? data?.subtree_total_base : data?.total_base),
+      hint: withChildren
+        ? `${t('wallet.ownTotal')}: ${money(data?.total_base)}`
+        : `≈ ${formatMoney(data?.total_usd, { currency: 'usd', decimals: 2 })}`,
+      tone: '',
+    },
+    {
+      key: 'positions',
+      label: t('pos.title'),
+      value: String(positions.value.length),
+      hint:
+        positions.value
+          .slice(0, 3)
+          .map((position) => position.asset.symbol.toUpperCase())
+          .join(' · ') || '—',
+      tone: '',
+    },
+    {
+      key: 'pnl',
+      label: t('wallet.realizedPnl'),
+      value: money(pnl.data.value?.total_base),
+      hint: `${t('wallet.trades')}: ${pnl.data.value?.legs.length ?? 0}`,
+      tone: pnlTone(pnl.data.value?.total_base ?? '0'),
+    },
+    {
+      key: 'tx',
+      label: t('wallet.transactions'),
+      value: String(data?.tx_count ?? 0),
+      hint: data?.last_tx_at ? `${t('wallet.lastTx')}: ${formatDate(data.last_tx_at)}` : '—',
+      tone: '',
+    },
+  ]
+})
+
+/** Why delete is unavailable: the backend refuses a wallet with history or sub-wallets. */
+const deleteBlocker = computed(() => {
+  if (children.value.length) return t('stores.deleteHasChildren')
+  if ((overview.data.value?.tx_count ?? 0) > 0) return t('stores.deleteHasTransactions')
+  return ''
+})
 
 const refreshPrices = useMutation({
   mutationFn: () => call<RefreshResult>('refresh_all'),
   onSuccess: (result) => {
-    toast.success(t('wallet.pricesRefreshed'), {
-      description: `${result.prices} · ${result.fx}`,
-    })
-    void queryClient.invalidateQueries({ queryKey: ['store', storeId.value] })
-    void queryClient.invalidateQueries({ queryKey: ['store-history', storeId.value] })
-    void queryClient.invalidateQueries({ queryKey: ['summary'] })
+    toast.success(t('wallet.pricesRefreshed'), { description: `${result.prices} · ${result.fx}` })
+    for (const queryKey of [['store'], ['store-history'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
   },
   onError: (err) => toast.error(t('wallet.pricesRefreshFailed'), { description: parseError(err).message }),
 })
@@ -147,9 +174,7 @@ const toggleArchive = useMutation({
   mutationFn: (archived: boolean) => call('archive_store', { id: storeId.value, archived }),
   onSuccess: (_result, archived) => {
     toast.success(archived ? t('wallet.archived') : t('wallet.unarchived'))
-    void queryClient.invalidateQueries({ queryKey: ['store', storeId.value] })
-    void queryClient.invalidateQueries({ queryKey: ['stores'] })
-    void queryClient.invalidateQueries({ queryKey: ['summary'] })
+    for (const queryKey of [['store'], ['stores'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
   },
   onError: (err) => toast.error(t('wallet.archiveFailed'), { description: parseError(err).message }),
 })
@@ -158,8 +183,7 @@ const destroy = useMutation({
   mutationFn: () => call('delete_store', { id: storeId.value }),
   onSuccess: () => {
     toast.success(t('wallet.deleted'))
-    void queryClient.invalidateQueries({ queryKey: ['stores'] })
-    void queryClient.invalidateQueries({ queryKey: ['summary'] })
+    for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
     void router.push({ name: 'stores' })
   },
   onError: (err) => toast.error(t('wallet.deleteFailed'), { description: parseError(err).message }),
@@ -174,6 +198,10 @@ function onApplyPlan(payload: CalculatorPlan) {
   formRef.value?.prefill(payload)
   dialogTab.value = 'transaction'
 }
+
+function openWallet(created: Store) {
+  void router.push({ name: 'wallet', params: { id: created.id } })
+}
 </script>
 
 <template>
@@ -181,65 +209,64 @@ function onApplyPlan(payload: CalculatorPlan) {
     {{ t('store.loading') }}
   </div>
 
-  <div v-else-if="overview.isError.value || !store" class="py-16 text-center">
-    <p class="text-sm text-destructive">
-      {{ overview.isError.value ? errorText : t('wallet.notFound') }}
-    </p>
-    <p v-if="overview.isError.value" class="mt-1 break-all text-xs text-muted-foreground">
-      {{ errorText }}
-    </p>
-    <Button variant="outline" size="sm" class="mt-3" @click="router.push({ name: 'stores' })">
+  <div v-else-if="overview.isError.value || !store" class="flex flex-col items-center gap-3 py-16 text-center">
+    <p class="text-sm text-destructive">{{ errorText }}</p>
+    <Button variant="outline" size="sm" @click="router.push({ name: 'stores' })">
       {{ t('wallet.backToStores') }}
     </Button>
   </div>
 
-  <div v-else class="grid gap-6">
-    <!-- Sticky header: identity, totals and every page action in one bar. -->
-    <div
-      class="sticky top-0 z-20 -mx-4 -mt-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6"
-    >
+  <div v-else class="flex flex-col gap-6">
+    <!-- Identity and every wallet action in one row. -->
+    <div class="flex flex-col gap-3">
+      <nav v-if="ancestors.length" class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <template v-for="parent in ancestors" :key="parent.id">
+          <RouterLink :to="{ name: 'wallet', params: { id: parent.id } }" class="hover:text-foreground hover:underline">
+            {{ parent.name }}
+          </RouterLink>
+          <ChevronRight class="size-3" />
+        </template>
+        <span class="text-foreground">{{ store.name }}</span>
+      </nav>
+
       <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
         <span
-          class="flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ring-background"
-          :style="{
-            backgroundColor: `${store.color}1A`,
-            color: store.color,
-            borderColor: `${store.color}33`,
-          }"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border"
+          :style="{ backgroundColor: `${store.color}1A`, color: store.color, borderColor: `${store.color}33` }"
         >
-          <component :is="getStoreIcon(store.kind)" class="size-4" />
+          <component :is="getStoreIcon(store.kind)" class="size-5" />
         </span>
 
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="truncate font-semibold">{{ store.name }}</h2>
+            <h2 class="truncate text-lg font-semibold">{{ store.name }}</h2>
             <Badge variant="secondary">{{ t(`stores.kind.${store.kind}`) }}</Badge>
             <Badge v-if="store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
           </div>
-          <p v-if="store.note" class="truncate text-xs text-muted-foreground">{{ store.note }}</p>
+          <p v-if="store.note" class="truncate text-sm text-muted-foreground">{{ store.note }}</p>
         </div>
 
-        <div class="shrink-0 text-right">
-          <p class="text-xl font-bold tabular-nums">{{ money(overview.data.value?.total_base ?? '0') }}</p>
-          <p class="text-xs text-muted-foreground">
-            ≈ {{ formatMoney(overview.data.value?.total_usd, { currency: 'usd' }) }}
-          </p>
-        </div>
-
-        <div class="flex shrink-0 items-center gap-1">
-          <Button size="sm" :disabled="isArchived" @click="dialogTab = 'transaction'; dialogOpen = true">
+        <div class="flex shrink-0 items-center gap-2">
+          <Button size="sm" :disabled="isArchived" @click="openOperation('transaction')">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>
-
-          <Button variant="outline" size="icon" :title="t('calc.title')" @click="dialogTab = 'calculator'; dialogOpen = true">
+          <Button
+            variant="outline"
+            size="icon"
+            class="size-8"
+            :title="t('calc.title')"
+            :aria-label="t('calc.title')"
+            @click="openOperation('calculator')"
+          >
             <Calculator class="size-4" />
           </Button>
-
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
+            class="size-8"
             :title="t('store.refresh')"
+            :aria-label="t('store.refresh')"
             :disabled="refreshPrices.isPending.value"
             @click="refreshPrices.mutate()"
           >
@@ -248,10 +275,18 @@ function onApplyPlan(payload: CalculatorPlan) {
 
           <DropdownMenu align="end">
             <template #trigger>
-              <Button variant="ghost" size="icon" :title="t('wallet.more')">
+              <Button variant="ghost" size="icon" class="size-8" :title="t('wallet.more')" :aria-label="t('wallet.more')">
                 <MoreVertical class="size-4" />
               </Button>
             </template>
+            <DropdownMenuItem value="edit" @select="editOpen = true">
+              <Pencil class="size-4 shrink-0" />
+              {{ t('stores.edit') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem value="sub-wallet" @select="subWalletOpen = true">
+              <FolderPlus class="size-4 shrink-0" />
+              {{ t('stores.addSubWallet') }}
+            </DropdownMenuItem>
             <DropdownMenuItem
               :value="store.archived ? 'unarchive' : 'archive'"
               @select="toggleArchive.mutate(!store.archived)"
@@ -259,37 +294,70 @@ function onApplyPlan(payload: CalculatorPlan) {
               <component :is="store.archived ? ArchiveRestore : Archive" class="size-4 shrink-0" />
               {{ store.archived ? t('stores.unarchive') : t('stores.archive') }}
             </DropdownMenuItem>
-            <DropdownMenuItem value="delete" destructive @select="destroy.mutate()">
+            <DropdownMenuItem
+              value="delete"
+              destructive
+              :disabled="!!deleteBlocker"
+              :title="deleteBlocker || undefined"
+              @select="destroy.mutate()"
+            >
               <Trash2 class="size-4 shrink-0" />
-              {{ t('stores.delete') }}
+              <span class="flex flex-col">
+                {{ t('stores.delete') }}
+                <span v-if="deleteBlocker" class="text-xs text-muted-foreground">{{ deleteBlocker }}</span>
+              </span>
             </DropdownMenuItem>
           </DropdownMenu>
         </div>
       </div>
 
-      <p v-if="isArchived" class="mt-2 rounded-md border border-border bg-muted/50 p-2 text-xs text-muted-foreground">
+      <p v-if="isArchived" class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
         {{ t('wallet.archivedHint') }}
       </p>
     </div>
 
-    <!-- Stats strip -->
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <Card v-for="stat in stats" :key="stat.key" class="p-4">
+      <Card v-for="stat in stats" :key="stat.key">
         <p class="truncate text-xs text-muted-foreground">{{ stat.label }}</p>
-        <p class="mt-1 truncate text-lg font-bold tabular-nums" :class="stat.tone">{{ stat.value }}</p>
-        <p class="truncate text-xs text-muted-foreground">{{ stat.hint }}</p>
+        <p class="mt-1 truncate text-xl font-semibold tabular-nums" :class="stat.tone">{{ stat.value }}</p>
+        <p class="mt-1 truncate text-xs text-muted-foreground">{{ stat.hint }}</p>
       </Card>
     </div>
 
-    <!-- Bybit API key section (only for exchange nodes) -->
-    <Card v-if="isExchangeNode" class="mt-4">
+    <Card v-if="children.length">
+      <template #header>
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-medium">{{ t('wallet.subWallets') }}</p>
+          <Button variant="ghost" size="sm" @click="subWalletOpen = true">
+            <FolderPlus class="size-4" />
+            {{ t('stores.addSubWallet') }}
+          </Button>
+        </div>
+      </template>
+      <div class="flex flex-col divide-y divide-border">
+        <RouterLink
+          v-for="child in children"
+          :key="child.store.id"
+          :to="{ name: 'wallet', params: { id: child.store.id } }"
+          class="-mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent"
+          :class="child.store.archived && 'opacity-60'"
+        >
+          <component :is="getStoreIcon(child.store.kind)" class="size-4 shrink-0" :style="{ color: child.store.color }" />
+          <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ child.store.name }}</span>
+          <Badge variant="outline">{{ t(`stores.kind.${child.store.kind}`) }}</Badge>
+          <span class="shrink-0 text-sm tabular-nums">{{ money(child.value_base) }}</span>
+        </RouterLink>
+      </div>
+    </Card>
+
+    <Card v-if="isExchangeNode">
       <template #header>
         <div class="flex items-center gap-2">
-          <Key class="size-4 text-primary" />
+          <Key class="size-4 text-muted-foreground" />
           <p class="font-medium">{{ t('wallet.bybit.title') }}</p>
         </div>
       </template>
-      <div class="grid gap-3">
+      <div class="flex flex-col gap-4">
         <ExchangeKeyForm :store-id="storeId" />
         <PendingImports v-if="bybitHasKey" :store-id="storeId" />
       </div>
@@ -297,18 +365,21 @@ function onApplyPlan(payload: CalculatorPlan) {
 
     <StoreChart :store-id="storeId" :base-currency="base" />
 
-    <div v-if="positions.length === 0" class="rounded-xl border border-dashed border-border p-8 text-center">
-      <p class="text-sm font-medium">{{ t('wallet.empty') }}</p>
-      <p class="mt-1 text-sm text-muted-foreground">{{ t('wallet.emptyHint') }}</p>
-      <Button class="mt-4" :disabled="isArchived" @click="dialogTab = 'transaction'; dialogOpen = true">
-        <Plus class="size-4" />
-        {{ t('wallet.addOperation') }}
-      </Button>
-    </div>
-
-    <Tabs v-else v-model="tab" :tabs="tabs">
+    <!-- Always offer both tabs: a wallet with no positions can still have history. -->
+    <Tabs v-model="tab" :tabs="tabs">
       <template #positions>
-        <StorePositions :positions="positions" :base-currency="base" :decimals="decimals" />
+        <div
+          v-if="positions.length === 0"
+          class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-8 text-center"
+        >
+          <p class="text-sm font-medium">{{ t('wallet.empty') }}</p>
+          <p class="text-sm text-muted-foreground">{{ t('wallet.emptyHint') }}</p>
+          <Button class="mt-2" :disabled="isArchived" @click="openOperation('transaction')">
+            <Plus class="size-4" />
+            {{ t('wallet.addOperation') }}
+          </Button>
+        </div>
+        <StorePositions v-else :positions="positions" :base-currency="base" :decimals="decimals" />
       </template>
       <template #history>
         <StoreHistory :store-id="storeId">
@@ -319,14 +390,7 @@ function onApplyPlan(payload: CalculatorPlan) {
       </template>
     </Tabs>
 
-    <!-- Unified dialog with tabs for Transaction form and Calculator -->
     <Dialog v-model:open="dialogOpen" :title="dialogTab === 'transaction' ? t('wallet.operation') : t('wallet.plan')" size="lg">
-      <template #close>
-        <Button variant="ghost" size="icon" @click="dialogOpen = false">
-          <X class="size-4" />
-          <span class="sr-only">{{ t('actions.close') }}</span>
-        </Button>
-      </template>
       <Tabs v-model="dialogTab" :tabs="dialogTabs" class="w-full">
         <template #transaction>
           <AddTransactionForm ref="formRef" :store-id="storeId" :disabled="isArchived" />
@@ -336,5 +400,8 @@ function onApplyPlan(payload: CalculatorPlan) {
         </template>
       </Tabs>
     </Dialog>
+
+    <StoreEditDialog v-model:open="editOpen" :store="store" />
+    <StoreCreateDialog v-model:open="subWalletOpen" :parent-id="store.id" @created="openWallet" />
   </div>
 </template>
