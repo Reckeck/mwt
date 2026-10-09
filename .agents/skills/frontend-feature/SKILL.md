@@ -16,24 +16,38 @@ description: >
 Pinia (глобальное состояние), TanStack Query (серверное состояние),
 Tailwind v4, shadcn-vue поверх Reka UI, vue-i18n, ECharts через vue-echarts.
 
-## Структура (важно: `src/features/` пуст)
+## Структура (FSD v2.1)
 
 ```
-src/views/          экраны — по одному .vue на маршрут роутера
-src/components/ui/  примитивы shadcn-vue, ИМЕНА В НИЖНЕМ РЕГИСТРЕ (button.vue)
-src/components/wallet/  доменные компоненты кошелька (WalletView.vue и т.п.)
-src/stores/         Pinia: vault.ts, settings.ts, tradeLookup.ts
-src/lib/ipc.ts      ЕДИНСТВЕННАЯ точка вызова Tauri: call<T>() + onEvent<T>()
-src/lib/format.ts   formatMoney / formatDate
-src/lib/echarts.ts  регистрация модулей ECharts
-src/lib/chains.ts   метаданные сетей (CoinGecko id, explorer patterns)
-src/i18n/locales/   ru.json + en.json
-src/router/index.ts маршруты + заголовки через meta.i18n
+src/app/providers/   роутер, TanStack Query client — инфраструктура
+src/app/styles.css   глобальные стили (Tailwind v4, base)
+src/pages/           экраны, по одному на маршрут; ТОЛЬКО композиция
+src/widgets/         композитные блоки страниц (store-header, dashboard-total, …)
+src/features/        пользовательские действия (vault-unlock, store-create, price-refresh, …)
+src/entities/        бизнес-сущности: store/, transaction/, asset/, currency/
+src/shared/ui/       примитивы shadcn-vue/Reka: ПАПКА на компонент + index.ts
+src/shared/lib/      format, echarts, theme, locale, transactions, vault-error…
+src/shared/api/ipc.ts      ЕДИНСТВЕННАЯ точка вызова Tauri: call<T>() + onEvent<T>()
+src/shared/store/    Pinia: vault.ts, settings.ts (глобальное состояние)
+src/shared/config/i18n/locales/   ru.json + en.json
 ```
 
-Каталоги `src/features/{auth,charts,dashboard,pricing,settings,sim,stores,transactions}`
-— **пустые заглушки**, кода в них нет и git их не трекает. Не ищи код там;
-клади новые экраны в `src/views/`, переиспользуемые части — в `src/components/`.
+**Границы импортов:** `app → pages → widgets → features → entities → shared`.
+Слой импортирует только из себя и из перечисленных ниже; `shared` не знает ни
+о ком другом слое. Соседние слайсы одного слоя — только через `index.ts`.
+
+**Куда класть код:**
+
+- **показывает сущность** → `entities/<name>/ui/<component>/`
+- **собирает секцию страницы** из нескольких сущностей/фич → `widgets/<name>/ui/`
+- **выполняет действие пользователя** (create/edit/delete/filter/refresh) →
+  `features/<name>/ui/` (+ `model/` для composable-логики)
+- **страница** в `pages/<route>/` — тонкая композиция, без доменной логики
+
+**Конвенция компонента:** папка + `index.ts`, который экспортирует именованные
+компоненты, типы пропсов (`*.types.ts`) и константы (`*.constants.ts`).
+`default`-экспортов наружу нет. В `<script setup>` экспортировать нельзя —
+поэтому типы и константы живут в отдельных файлах.
 
 ## Слои состояния: Pinia vs TanStack Query
 
@@ -65,7 +79,7 @@ const toggleArchive = useMutation({
 ## Вызов бэкенда
 
 ```ts
-import { call, onEvent, type AppError } from '@/lib/ipc'
+import { call, onEvent, type AppError } from '@/shared/api/ipc'
 ```
 
 - Прямой `invoke` из `@tauri-apps/api/core` в компоненте — ошибка.
@@ -101,22 +115,22 @@ t(`tx.kind.${kind}`)
 - Проверка синхронности ключей (быстрая, вручную или скриптом):
 
   ```bash
-  python3 -c "import json;ru=json.load(open('src/i18n/locales/ru.json'));en=json.load(open('src/i18n/locales/en.json'));print('only ru:',set(ru)-set(en));print('only en:',set(en)-set(ru))"
+  python3 -c "import json;ru=json.load(open('src/shared/config/i18n/locales/ru.json'));en=json.load(open('src/shared/config/i18n/locales/en.json'));print('only ru:',set(ru)-set(en));print('only en:',set(en)-set(ru))"
   ```
 
   Пустой вывод с обеих сторон — ключи синхронны.
 
 `i18n` настроен как `legacy: false`, `fallbackLocale: 'en'`, сообщения
 `{ en, ru }`; язык переключается без перезагрузки через
-`persistLocale` / `resolveLocale` в `src/i18n/index.ts` (значение `auto`
+`persistLocale` / `resolveLocale` в `src/shared/lib/locale.ts` (значение `auto`
 следует за браузером).
 
 ## Стиль компонентов
 
-- Одноимённые примитивы импортируются как `import Button from '@/components/ui/button.vue'`
+- Одноимённые примитивы импортируются как `import Button from '@/shared/ui/ui/button.vue'`
   (имя файла в нижнем регистре, компонент в PascalCase).
 - Варианты примитива заданы через `cva` (`class-variance-authority`) +
-  `withDefaults(defineProps<…>())`; `cn()` из `@/lib/utils` мержит классы.
+  `withDefaults(defineProps<…>())`; `cn()` из `@/shared/lib/utils` мержит классы.
   Новый примитив повторяет этот шаблон, включая
   `defineOptions({ inheritAttrs: false })`.
 - Стили — **Tailwind-утилиты** в разметке. Новый CSS-файл/`<style>` без нужды
@@ -133,17 +147,18 @@ t(`tx.kind.${kind}`)
 ## Графики
 
 ECharts подключён через `vue-echarts`; нужные модули регистрируются в
-`src/lib/echarts.ts` — новый тип графика добавь туда, иначе он не отрисуется.
-Компонент-обёртка лежит в `src/components/wallet/`. При изменении графика
+`src/shared/lib/echarts.ts` — новый тип графика добавь туда, иначе он не отрисуется.
+Компонент-обёртка лежит в `src/widgets/` (например `portfolio-evolution`). При изменении графика
 проверяй, что он корректно ведёт себя на **пустых данных** (состояние
 `chartEmpty` уже есть в локалях).
 
 ## Маршрут
 
-Новый экран → файл в `src/views/`, запись в `src/router/index.ts` c
-`meta: { i18n: 'nav.…' }` (по этому ключу ставится заголовок вкладки).
-Вложенные маршруты — `children` у `AppShell.vue`; `meta.public: true` — для
-экрана вне shell (`/unlock`).
+Новый экран → папка в `src/pages/<route>/` с компонентом и `index.ts`,
+запись в `src/app/providers/router/index.ts` c `meta: { i18n: 'nav.…' }`
+(по этому ключу ставится заголовок вкладки). Вложенные маршруты — `children`
+у `pages/app-shell/AppShell.vue`; `meta.public: true` — для экрана вне shell
+(`/unlock`).
 
 ## Проверки
 

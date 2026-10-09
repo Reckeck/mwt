@@ -52,7 +52,7 @@ mise run check      # biome check . && vue-tsc --noEmit && clippy && cargo test 
 | перед коммитом / рефакторингом / релизом | `mise run check` |
 
 **Если менялись DTO или доменные структуры, попадающие в IPC:** после
-`mise run gen-types` обязан измениться `src/lib/ipc.gen.d.ts`. Если файл не
+`mise run gen-types` обязан измениться `src/shared/api/ipc.gen.d.ts`. Если файл не
 изменился — значит тип не покрыт ts-rs (`#[derive(TS)]` не проставлен), и
 фронтенд не получит тип. Проверяй это диффом, а не на глаз.
 

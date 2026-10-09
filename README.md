@@ -44,7 +44,7 @@ mise run dev          # Tauri dev-сборка (frontend + core)
 mise run test         # cargo test --workspace
 mise run typecheck    # vue-tsc
 mise run lint         # biome (линт + формат)
-mise run gen-types    # пересоздать src/lib/ipc.gen.d.ts из Rust (ts-rs)
+mise run gen-types    # пересоздать src/shared/api/ipc.gen.d.ts из Rust (ts-rs)
 mise run check        # всё вышеперечисленное
 mise run build        # release-бандл (deb/rpm/AppImage)
 ```
@@ -55,7 +55,7 @@ mise run build        # release-бандл (deb/rpm/AppImage)
 ## Состояние проекта
 
 - Backend (`trade-core` + `trade-app` shell): собирается, 66 юнит-тестов зелёные,
-  DTO-типы генерируются в `src/lib/ipc.gen.d.ts`.
+  DTO-типы генерируются в `src/shared/api/ipc.gen.d.ts`.
 - Frontend: MVP готово — Dashboard, Stores CRUD, Transactions (income/expense/transfer/trade),
   Charts, Settings, **Wallet page** (сайдбар кошельков, калькулятор конвертер+PnL,
   формы транзакций, позиции, история, график навигации). Формы операций, калькулятор

@@ -2,7 +2,7 @@
 
 Все команды — `#[tauri::command]` в `crates/app/src/commands/`. Типы — из
 `crates/core/src/ipc_contract.rs` и домена core, генерируются ts-rs в
-`src/lib/ipc.gen.d.ts` через `mise run gen-types`.
+`src/shared/api/ipc.gen.d.ts` через `mise run gen-types`.
 
 Ошибки: команды возвращают `Result<T, String>`; строка —
 `ERR_CODE: message`, где `ERR_CODE` — метод `Error::code()`
@@ -143,5 +143,5 @@ JSON без шифрования — там нет ничего секретно
 2. Метод `UnlockedVault` в `service.rs` + юнит-тест.
 3. Хендлер в `crates/app/src/commands/<модуль>.rs` + регистрация в
    `generate_handler!` (`lib.rs`).
-4. `mise run gen-types` → новый тип в `src/lib/ipc.gen.d.ts`.
+4. `mise run gen-types` → новый тип в `src/shared/api/ipc.gen.d.ts`.
 5. Если команда async и держит vault — скопировать данные до `.await` (правило №3 из AGENTS.md).

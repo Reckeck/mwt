@@ -25,8 +25,8 @@ description: >
 | Контейнер | `crates/core/src/storage/mod.rs` | `SnapshotFormat`, encode/decode, миграция версий |
 | IPC | `crates/app/src/commands/<модуль>.rs` | хендлер `#[tauri::command]` |
 | Регистрация | `crates/app/src/lib.rs` | `tauri::generate_handler![…]` |
-| TS-типы | `src/lib/ipc.gen.d.ts` | **генерируется**, руками не править |
-| Вызов | `src/lib/ipc.ts` → `call<T>(cmd, args)` | единственная точка `invoke` |
+| TS-типы | `src/shared/api/ipc.gen.d.ts` | **генерируется**, руками не править |
+| Вызов | `src/shared/api/ipc.ts` → `call<T>(cmd, args)` | единственная точка `invoke` |
 | Документация | `docs/ipc.md` | таблица команд, чеклист |
 
 ## Пошаговый чеклист
@@ -105,14 +105,14 @@ pub async fn archive_store(
 mise run gen-types
 ```
 
-Проверь дифф `src/lib/ipc.gen.d.ts` — новый тип **должен** появиться. Нет
+Проверь дифф `src/shared/api/ipc.gen.d.ts` — новый тип **должен** появиться. Нет
 диффа → нет `#[derive(TS)]` или DTO не экспортирован в
 `src/bin/gen_types.rs`.
 
 ### 6. Вызвать с фронтенда
 
 ```ts
-import { call } from '@/lib/ipc'
+import { call } from '@/shared/api/ipc'
 
 const overview = useQuery({
   queryKey: ['store', storeId.value],
@@ -125,7 +125,7 @@ const overview = useQuery({
 - Тип `T` бери из `ipc.gen.d.ts` (глобальные типы, без импорта).
 - После мутации инвалидируй затронутые query-ключи:
   `void queryClient.invalidateQueries({ queryKey: ['stores'] })`.
-- Вне Tauri `call` уходит в мок внутри `src/lib/ipc.ts` — добавь туда ветку,
+- Вне Tauri `call` уходит в мок внутри `src/shared/api/ipc.ts` — добавь туда ветку,
   если хочешь проверять UI в браузере через `pnpm dev`.
 
 #### Имена аргументов: camelCase снаружи, snake_case внутри `input`
@@ -150,7 +150,7 @@ call<GetCandlesOutput>('get_candles', {
 работает обычный serde, а он здесь snake_case.
 
 - `Amount` приходит из Rust как **строка** — не парсь его в `number` для
-  арифметики; форматируй через `formatMoney` из `@/lib/format`.
+  арифметики; форматируй через `formatMoney` из `@/shared/lib/format`.
 
 ### 7. Обновить `docs/ipc.md`
 
@@ -196,10 +196,10 @@ let v = g.as_mut().unwrap();
 
 `Error::code()` в `crates/core/src/error.rs` возвращает строку, которая
 становится префиксом сообщения. Фронт парсит его в `parseError`
-(`src/lib/ipc.ts`) и ищет ключ `errors.<CODE>` в локалях.
+(`src/shared/api/ipc.ts`) и ищет ключ `errors.<CODE>` в локалях.
 
 Новый вариант `Error` → добавь его код в `Error::code()` **и** ключ
-`errors.<CODE>` в `src/i18n/locales/ru.json` и `en.json`. Иначе UI покажет
+`errors.<CODE>` в `src/shared/config/i18n/locales/ru.json` и `en.json`. Иначе UI покажет
 `UNKNOWN` или пустую строку.
 
 Существующие коды: `SECRET`, `ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`,
@@ -217,4 +217,4 @@ let v = g.as_mut().unwrap();
 | Форма не очищается после сохранения | забыт `invalidateQueries` |
 | Ошибка локализуется как `UNKNOWN` | нет ключа `errors.<CODE>` в локалях |
 | `MutexGuard` в `.await` не компилируется | нарушено правило трёх шагов выше |
-| Список пуст в браузере (`pnpm dev`) | в моке `src/lib/ipc.ts` нет ветки для новой команды |
+| Список пуст в браузере (`pnpm dev`) | в моке `src/shared/api/ipc.ts` нет ветки для новой команды |

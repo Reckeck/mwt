@@ -9,7 +9,7 @@
 - `[x]` Хранилище: JSON (dev) / bincode (release), VaultFile::create/open/save
 - `[x]` UnlockedVault: мутации, holdings (derived), сводка, история, realized PnL
 - `[x]` Прайсы+FX: CoinGecko→CoinCap→Binance, open.er-api.com, кэш TTL
-- `[x]` IPC-контракт + генератор `src/lib/ipc.gen.d.ts` (ts-rs)
+- `[x]` IPC-контракт + генератор `src/shared/api/ipc.gen.d.ts` (ts-rs)
 - `[x]` Tauri shell: builder, AppState, команды (auth/stores/…/sim)
 - `[x]` Документация (README, AGENTS, docs/*)
 - `[~]` Фронтенд-скаффолд (см. Фазу 2)
@@ -33,8 +33,8 @@
 раздел `[Unreleased]`. Здесь — что изменилось по сути.
 
 - `[x]` **D1. Дизайн-система и настройки интерфейса** (`docs/ui-design.md`)
-  - `[x]` Общие примитивы: иконки кошельков (`src/lib/store-icons.ts`), подсказки
-        (`src/components/ui/tooltip.vue`), шкала отступов (`src/lib/spacing.ts`)
+  - `[x]` Общие примитивы: иконки кошельков (`src/shared/lib/store-icons.ts`), подсказки
+        (`src/shared/ui/tooltip.vue`), шкала отступов (`src/shared/lib/spacing.ts`)
   - `[x]` Виды (`DashboardView`, `StoresView`, `ChartsView`, `SidebarWallets`,
         `TransactionsView`) переведены на общие токены
   - `[x]` Настройки: состав виджетов дашборда, избранные валюты в шапке, интервал

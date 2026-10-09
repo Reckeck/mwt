@@ -9,7 +9,7 @@ Consistent UI across TradeApp. Load this **together with** `shadcn-vue` (in
 `.agents/skills/shadcn-vue/`) whenever you touch a component: that skill knows
 how to add and compose shadcn primitives, this one knows how TradeApp looks.
 
-Component source lives flat in `src/components/ui/<name>.vue` (lowercase, no
+Component source lives flat in `src/shared/ui/<name>.vue` (lowercase, no
 per-component directories) — follow that when adding a primitive.
 
 ---
@@ -56,7 +56,7 @@ iconSize: 4       // 16px
 - Validation: `text-xs text-destructive` below field
 
 ### Buttons
-Use `components/ui/button.vue` variants: `default`, `outline`, `ghost`, `destructive`, `link`
+Use `shared/ui/button` variants: `default`, `outline`, `ghost`, `destructive`, `link`
 
 ### Modals
 - **NO NESTED MODALS** — use tabs/steps in single dialog
@@ -137,7 +137,7 @@ belongs on the screen.
 ## For Agents: When Editing UI
 
 1. **Read existing patterns first** — `grep -r "pattern" src/components/`
-2. **Check `src/components/ui/`** before adding a primitive; prefer the shadcn
+2. **Check `src/shared/ui/`** before adding a primitive; prefer the shadcn
    CLI (`pnpm dlx shadcn-vue@latest add <component>`)
 3. **Use semantic tokens** — never raw `text-blue-500`
 4. **Wire the feedback** — see the rule above; it is not optional

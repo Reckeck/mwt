@@ -6,8 +6,8 @@ description: >
   .bak перед записью, $EDITOR. Использовать при правках crates/app/src/commands/settings.rs
   (vault_schema, dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
   dev_reload_vault_json_from_editor), crates/core/src/model/vault.rs (json_schema),
-  src/lib/editor.ts, src/lib/json.ts, src/lib/json-schema-reader.ts,
-  src/components/settings/VaultJsonEditor.vue, а также на задачах «редактор vault»,
+  src/shared/lib/editor.ts, src/shared/lib/json.ts, src/shared/lib/json-schema-reader.ts,
+  src/widgets/vault-json-editor/ui/VaultJsonEditor.vue, а также на задачах «редактор vault»,
   «JSON vault», «правка документа», «подсказки полей», «Ctrl+S», «схема vault»,
   «autocomplete JSON», «VaultFile::backup», «отклонён документ», «черновик»,
   «dev_apply_vault_json», «vault_schema», «Открыть в редакторе».
@@ -16,7 +16,7 @@ description: >
 # Редактор vault в формате JSON
 
 Документ vault показывается и правится как есть: расшифрованный `VaultDoc` в
-CodeMirror. Экран живёт в `src/components/settings/VaultJsonEditor.vue`,
+CodeMirror. Экран живёт в `src/widgets/vault-json-editor/ui/VaultJsonEditor.vue`,
 схема приходит из Rust по IPC. Полное описание — `docs/json-editor.md`;
 здесь только то, что нужно, чтобы не сломать.
 
@@ -38,10 +38,10 @@ CodeMirror. Экран живёт в `src/components/settings/VaultJsonEditor.vu
 | Схема (`schemars` по `VaultDoc`) | `crates/core/src/model/vault.rs` → `json_schema()` |
 | IPC-хендлеры | `crates/app/src/commands/settings.rs` |
 | Бэкап перед записью | `VaultFile::backup` (вызывает только `dev_apply_vault_json`) |
-| Разбор `$ref` / `anyOf` / `oneOf` | `src/lib/json-schema-reader.ts` |
-| Расширения CodeMirror, тема, autocomplete | `src/lib/editor.ts` |
-| `parseJson` / `normalizeJson` | `src/lib/json.ts` |
-| Компонент + статус-бейдж | `src/components/settings/VaultJsonEditor.vue` |
+| Разбор `$ref` / `anyOf` / `oneOf` | `src/shared/lib/json-schema-reader.ts` |
+| Расширения CodeMirror, тема, autocomplete | `src/shared/lib/editor.ts` |
+| `parseJson` / `normalizeJson` | `src/shared/lib/json.ts` |
+| Компонент + статус-бейдж | `src/widgets/vault-json-editor/ui/VaultJsonEditor.vue` |
 
 ## Что менять и где
 
@@ -49,12 +49,12 @@ CodeMirror. Экран живёт в `src/components/settings/VaultJsonEditor.vu
 и подсказки подхватят сами. Если меняешь только DTO — `mise run gen-types` и
 `mise run test`.
 
-**Новая подсказка в списке** → `src/lib/json-schema-reader.ts`. Схема от
+**Новая подсказка в списке** → `src/shared/lib/json-schema-reader.ts`. Схема от
 `schemars` приходит вся, включая `$defs`; `$ref`, `Option<T>` как
 `anyOf` с `null`, `enum` и как плоский список, и как `oneOf` из `const` —
 все четыре варианта уже разобраны, дублировать не надо.
 
-**Цвета редактора** → `HighlightStyle` в `src/lib/editor.ts` на CSS-переменных
+**Цвета редактора** → `HighlightStyle` в `src/shared/lib/editor.ts` на CSS-переменных
 темы. Не `.cm-*` правилами в CSS: без зарегистрированного хайтлайтера
 CodeMirror генерирует классы, на которые CSS не попадёт, и документ рендерится
 без цвета.
