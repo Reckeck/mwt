@@ -138,10 +138,10 @@ call<StoreOverview>('get_store_overview', { storeId: storeId.value })
 //                                        ^^^^^^^^ Rust: store_id: String
 
 // 2. DTO-структура → поле передаётся как `input`, ВНУТРИ ключи snake_case
-call<SimRun>('run_strategy', {
-  input: { strategy_id: selected.id, candles: n, granularity_min: g },
+call<GetCandlesOutput>('get_candles', {
+  input: { symbol: 'BTC', interval_min: 60, limit: 300 },
 })
-//              ^^^^^^^^^^^^^^^ serde: snake_case, camelCase НЕ работает
+//                        ^^^^^^^^^^^^ serde: snake_case, camelCase НЕ работает
 ```
 
 То есть: `#[tauri::command] fn f(store_id: String)` → `{ storeId }`, а

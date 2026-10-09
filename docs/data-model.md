@@ -17,7 +17,6 @@
 | `categories` | `Vec<String>` | пользовательские категории (после системных: salary/rewards/trading/staking/defi/other) |
 | `price_cache` | `Vec<PricePoint>` | курс актива → USD, с TTL |
 | `fx_cache` | `Vec<FxPoint>` | units per 1 USD для валют |
-| `sim` | `SimState` | стратегии + прогоны симулятора |
 
 ### Settings — только vault-scoped
 
@@ -78,8 +77,7 @@ vault: они переживают открытие другого хранил�
 ## Store / StoreKind
 
 `Store { id, name, kind, color, archived, note }`, где `kind` — один из:
-`exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`, `paper`
-(последний — виртуальные деньги симулятора). Хранилище можно архивировать;
+`exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`. Хранилище можно архивировать;
 архивные не считаются в сводке.
 
 ## AssetRef
@@ -94,8 +92,8 @@ vault: они переживают открытие другого хранил�
 
 | Поле | Тип | Комментарий |
 |---|---|---|
-| `id`, `group_id`? | `String` | group_id общий для связанных ног (transfer/trade/paper-run) |
-| `kind` | `TxKind` | `income`, `expense`, `payment`, `transfer`, `trade`, `fee`, `paper_trade` |
+| `id`, `group_id`? | `String` | group_id общий для связанных ног (transfer/trade) |
+| `kind` | `TxKind` | `income`, `expense`, `payment`, `transfer`, `trade`, `fee` |
 | `store_id` | `String` | главное хранилище (откуда расход / куда доход) |
 | `asset` | `AssetRef` | |
 | `amount` | `Amount` | знак учитывается при агрегации (`signed_delta`); у income положительный, у expense/payment — знак траты |

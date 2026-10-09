@@ -20,14 +20,14 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 │  AppState { vault: Mutex<Option<UnlockedVault>>,    │
 │             vault_path: Mutex<PathBuf>, pricing }   │
 │  commands/{auth,stores,transactions,categories,     │
-│             pricing,portfolio,settings,sim,         │
+│             pricing,portfolio,settings,exchange,     │
 │             app_settings,vault_recents}             │
 └──────────────────────────┬──────────────────────────┘
                            │ (общая зависимость через workspace)
 ┌──────────────────────────┴──────────────────────────┐
 │                crates/core (business)               │
 │  model/      — доменные сущности (VaultDoc, Store,  │
-│                Transaction, Settings, Chain, Sim)   │
+│                Transaction, Settings, Chain)        │
 │  appconfig.rs— настройки приложения (вне vault, JSON)│
 │  service.rs  — UnlockedVault: все мутации + аналитика│
 │  pricing/    — ценовые провайдеры, кэш, FX           │
@@ -35,7 +35,7 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 │                фиксированный 55-байт header (AAD)    │
 │  storage/    — SnapshotFormat (JSON/bincode),        │
 │                атомарная запись                      │
-│  sim/        — стратегии, индикаторы, engine реплея  │
+│  market/     — OHLCV-свечи Binance для графиков     │
 │  ipc_contract.rs — DTO команд (ts-rs → ipc.gen.d.ts)  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -59,7 +59,7 @@ vault.
 1. Пользователь вводит мастер-пароль → `auth::unlock_vault` →
    `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD-проверка
    пароля) → десериализация `VaultDoc`. Результат кладётся в `AppState.vault`.
-2. Все мутации (store/tx/settings/sim) идут через `UnlockedVault::*` методы,
+2. Все мутации (store/tx/settings) идут через `UnlockedVault::*` методы,
    каждый из которых в конце вызывает `persist()` — пере-шифрование и
    атомарная запись на диск.
 3. Цены: `refresh_all` сначала снимает снимок нужного (активы, базовая валюта)
@@ -90,6 +90,6 @@ vault.
 
 ## Масштабирование
 
-Пока монолит. Если ядро вырастет — потенциальные слоты: вынос симулятора в
-отдельный фон-процесс (он CPU-интенсивный), плагины провайдеров данных через
+Пока монолит. Если ядро вырастет — потенциальные слоты: вынос тяжёлых
+численных задач в отдельный фон-процесс, плагины провайдеров данных через
 feature-флаги в `trade-core`. IPC-контракт остаётся источником истины для FE.

@@ -36,11 +36,11 @@ crates/core/          # весь бизнес-логика, БЕЗ Tauri
   src/storage/        # SnapshotFormat (Json/Bin + for_profile()), VaultFile::create/open/save
   src/pricing/        # PricingService: fetch_prices/fetch_fx (чистые, без мутации doc)
   src/service.rs      # UnlockedVault: мутации, холдинги, портфель, история, PnL
-  src/sim/            # strategy model + engine.rs (replay, индикаторы, GBM)
+  src/market/         # OHLCV-свечи Binance для графиков (жило в sim/, лаборатория удалена)
   src/ipc_contract.rs # DTO для команд (входы/выходы IPC)
   src/bin/gen_types.rs# генератор src/lib/ipc.gen.d.ts (ts-rs export_all_to + слияние)
 crates/app/           # Tauri shell: builder, commands/*, tauri.conf.json, capabilities/
-  src/commands/       # auth, stores, transactions, categories, pricing, portfolio, calc, settings, sim, exchange
+  src/commands/       # auth, stores, transactions, categories, pricing, portfolio, calc, settings, exchange
   src/lib.rs          # tauri::Builder + generate_handler![…] (список ВСЕХ команд), AppState (vault: Mutex<Option<UnlockedVault>>, vault_path)
 src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i18n + ECharts)
   views/              # экраны, по одному .vue на маршрут src/router/index.ts
@@ -59,16 +59,15 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 ## Правила работы с кодом
 
 1. **Core не зависит от Tauri.** Всё, что можно протестировать юнит-тестами
-   (крипта, модель, симулятор), тестируется в core. Команды в `crates/app` —
+   (крипта, модель, сервис), тестируется в core. Команды в `crates/app` —
    только тонкая IPC-обёртка.
 2. **Деньги — только `Amount` (Decimal).** Не используй `f64` в доменных
-   количествах и ценах. `f64` допустим только внутри engine симулятора
-   (и помечай знающими комментарием).
+   количествах и ценах. `f64` допустим только в `market/` — OHLCV-свечи
+   для графиков, а не деньги.
 3. **Асинхронные команды Tauri.** Никогда не держи
    `MutexGuard<Option<UnlockedVault>>` через `.await` (future не `Send`).
    Сначала скопируй нужные данные, отпусти guard, потом await, потом снова
-   захвати. Образец: `refresh_all` в `commands/pricing.rs` и `run_strategy`
-   в `commands/sim.rs`.
+   захвати. Образец: `refresh_all` в `commands/pricing.rs`.
 4. **Сеть от кэша отделена.** `PricingService::fetch_prices/fetch_fx` —
    чистые (не трогают `doc`), `apply_prices/apply_fx` — применяют результат.
 5. **Смена схемы vault-файла** = бамп `VAULT_FORMAT_VERSION`, миграция в
@@ -198,7 +197,6 @@ jj config path --repo     # ~/.config/jj/repos/<hash>/config.toml
 | `ui-design-system` | вёрстка, токены отступов, формы, **уведомления** |
 | `shadcn-vue` | любой shadcn-компонент: добавить, найти, починить, скомпоновать |
 | `json-editor` | редактор vault в формате JSON (Настройки → Просмотр JSON) |
-| `sim-strategy` | симулятор, стратегии, GBM, индикаторы |
 | `pricing-offline` | цены/FX, провайдеры, кэш, офлайн-деградация |
 
 ### Управление скиллами
