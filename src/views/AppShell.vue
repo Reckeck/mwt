@@ -7,7 +7,6 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   CandlestickChart,
   ChartArea,
-  FlaskConical,
   LayoutDashboard,
   Lock,
   Menu,
@@ -83,7 +82,6 @@ const navItems = [
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions' },
   { name: 'charts', icon: ChartArea, key: 'nav.charts' },
   { name: 'trading', icon: CandlestickChart, key: 'nav.trading' },
-  { name: 'strategy-lab', icon: FlaskConical, key: 'nav.strategyLab' },
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
 

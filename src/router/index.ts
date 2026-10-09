@@ -50,12 +50,6 @@ export const router = createRouter({
           meta: { i18n: 'nav.trading' },
         },
         {
-          path: 'strategy-lab',
-          name: 'strategy-lab',
-          component: () => import('@/views/StrategyLabView.vue'),
-          meta: { i18n: 'nav.strategyLab' },
-        },
-        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/SettingsView.vue'),
