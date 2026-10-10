@@ -27,6 +27,7 @@ mod categories;
 mod contacts;
 mod goals;
 mod rates;
+mod reports;
 #[cfg(test)]
 mod test_support;
 mod validate;
@@ -40,6 +41,12 @@ pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, TurnoverRow};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
 pub use rates::RateBook;
+pub use reports::{
+    CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
+    CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
+    PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
+    ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
+};
 pub use worth::{FlowClass, NetWorth};
 
 /// Store fields beyond name, colour and note: budget membership, loan terms
@@ -219,7 +226,7 @@ impl UnlockedVault {
 
     /// Parent chain from the root down to `id`'s parent. Stops at a missing
     /// parent or at a cycle left behind by a hand-edited vault.
-    fn ancestors_of(&self, id: &str) -> Vec<&Store> {
+    pub(crate) fn ancestors_of(&self, id: &str) -> Vec<&Store> {
         let mut chain = Vec::new();
         let mut seen = HashSet::from([id.to_string()]);
         let mut parent = self
@@ -1276,7 +1283,7 @@ impl UnlockedVault {
 
     /// Shared PnL replay. `scope` restricts it to the legs booked on those
     /// stores (`None` replays the whole vault).
-    fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl {
+    pub(crate) fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl {
         let (base, _fx) = self.base_and_fx();
         let book = self.rate_book();
 

@@ -258,8 +258,18 @@ impl UnlockedVault {
 
     /// Personal debts per contact and asset, from transfers marked as debts only.
     pub fn contact_balances(&self) -> Vec<ContactBalance> {
+        self.contact_balances_until(i64::MAX)
+    }
+
+    /// Personal debts from debt transfers made up to `secs`.
+    pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance> {
         let mut balances: BTreeMap<(String, String), ContactBalance> = BTreeMap::new();
-        for tx in &self.doc.transactions {
+        for tx in self
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| crate::pricing::history::secs_or_now(&tx.meta().timestamp) <= secs)
+        {
             let Transaction::Transfer(inner) = tx else {
                 continue;
             };

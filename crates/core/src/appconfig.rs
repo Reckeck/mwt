@@ -6,10 +6,12 @@
 //! configured instead of asking again. Nothing here is secret, so there is no
 //! reason to pay for encryption or to keep a copy in every vault.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use crate::Amount;
 
 use crate::error::{Error, Result};
 
@@ -70,6 +72,19 @@ pub struct AppSettings {
     /// IANA zone days and months are cut in (plan §7.6); `None` = the OS zone.
     #[serde(default)]
     pub timezone: Option<String>,
+    /// Annual inflation, percent, by lowercase currency code (plan §6.5).
+    /// Used only by analytics, for «in today's money»; marked as reference.
+    #[serde(default = "default_inflation")]
+    pub inflation: BTreeMap<String, Amount>,
+}
+
+/// Reference annual inflation the user starts with, percent. Rough recent
+/// figures; the settings screen says so and lets the user change them.
+pub fn default_inflation() -> BTreeMap<String, Amount> {
+    [("rub", "8"), ("usd", "3"), ("eur", "2.5"), ("thb", "1")]
+        .into_iter()
+        .filter_map(|(code, rate)| Some((code.to_string(), Amount::parse(rate).ok()?)))
+        .collect()
 }
 
 impl Default for AppSettings {
@@ -80,6 +95,7 @@ impl Default for AppSettings {
             base_currency: DEFAULT_BASE_CURRENCY.into(),
             favorite_currencies: Vec::new(),
             timezone: None,
+            inflation: default_inflation(),
         }
     }
 }
@@ -112,6 +128,14 @@ impl AppSettings {
         if let Some(zone) = &patch.timezone {
             self.timezone = normalize_zone(zone);
         }
+        if let Some(rates) = &patch.inflation {
+            self.inflation = normalize_inflation(rates);
+        }
+    }
+
+    /// Annual inflation of a currency, percent, if the user has one for it.
+    pub fn inflation_of(&self, currency: &str) -> Option<Amount> {
+        self.inflation.get(&currency.trim().to_lowercase()).copied()
     }
 
     /// The zone to cut days in: the chosen one, else `system` (the OS zone
@@ -137,6 +161,15 @@ impl AppSettings {
         self.favorite_currencies = normalize_codes(&self.favorite_currencies);
         self.timezone = self.timezone.as_deref().and_then(normalize_zone);
     }
+}
+
+/// Lowercase codes, rates within ±1000 %; anything else is dropped.
+fn normalize_inflation(raw: &BTreeMap<String, Amount>) -> BTreeMap<String, Amount> {
+    let bound = Amount::parse("1000").unwrap_or_default();
+    raw.iter()
+        .filter(|(code, rate)| !code.trim().is_empty() && rate.abs() <= bound)
+        .map(|(code, rate)| (code.trim().to_lowercase(), *rate))
+        .collect()
 }
 
 /// A known IANA zone name, trimmed; empty or unknown = none.
@@ -168,6 +201,9 @@ pub struct UpdateAppSettingsInput {
     /// IANA zone; an empty string goes back to the OS zone.
     #[serde(default)]
     pub timezone: Option<String>,
+    /// Replaces the whole inflation table.
+    #[serde(default)]
+    pub inflation: Option<BTreeMap<String, Amount>>,
 }
 
 // -- currency catalog ----------------------------------------------------------
@@ -434,6 +470,7 @@ mod tests {
             base_currency: "eur".into(),
             favorite_currencies: vec!["RUB".into()],
             timezone: Some("Asia/Bangkok".into()),
+            inflation: default_inflation(),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
