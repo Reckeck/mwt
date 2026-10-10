@@ -7,7 +7,7 @@ import { ExternalLink } from 'lucide-vue-next'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
-import { formatDateTime } from '@/shared/lib/format'
+import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import {
   DEFAULT_TX_BADGE,
   TX_KIND_BADGE,
@@ -28,7 +28,8 @@ import { useTxContext } from '@/shared/lib/tx-context'
 
 import type { TransactionRowProps } from './transaction-row.types'
 
-const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null })
+const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null, loss: null, openable: false })
+const emit = defineEmits<{ open: [tx: Transaction] }>()
 
 /** Per-row actions (edit, delete…) come from the page: entities do not own user actions. */
 defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
@@ -71,7 +72,37 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
       {{ t(`tx.kind.${kind}`) }}
     </Badge>
 
-    <div class="min-w-0 flex-1">
+    <button
+      v-if="props.openable"
+      type="button"
+      class="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      :title="t('txDetails.open')"
+      @click="emit('open', props.tx)"
+    >
+      <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
+        <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
+          {{ context.categoryName(key) }}
+        </Badge>
+        <Badge v-if="internal" variant="secondary" class="shrink-0">{{ t('tx.internal') }}</Badge>
+        <Badge v-if="debt" variant="secondary" class="shrink-0">{{ t(`debt.${debt}`) }}</Badge>
+        <Badge v-if="txHasNoPrice(props.tx)" variant="outline" class="shrink-0 text-muted-foreground">
+          {{ t('tx.noPrice') }}
+        </Badge>
+      </div>
+      <p class="truncate text-xs text-muted-foreground">
+        {{ formatDateTime(meta.timestamp) }}
+        <!-- A two-sided route already names the wallet. -->
+        <template v-if="!route.includes('→') || route.startsWith('→')"> · {{ where }}</template>
+        <template v-if="route"> · {{ route }}</template>
+        <template v-if="meta.contact_id"> · {{ context.contactName(meta.contact_id) }}</template>
+      </p>
+      <p v-if="txDetails(props.tx).length" class="truncate text-xs text-muted-foreground">
+        {{ txDetails(props.tx).map(([key, value]) => `${t(key)}: ${value}`).join(' · ') }}
+      </p>
+      <p v-if="meta.comment" class="truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
+    </button>
+    <div v-else class="min-w-0 flex-1">
       <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
@@ -107,6 +138,13 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {{ t('tx.fee') }} {{ fee.amount }} {{ fee.asset }}
+      </p>
+      <p
+        v-if="props.loss && Number(props.loss.total) > 0"
+        class="whitespace-nowrap text-xs text-amber-600 tabular-nums dark:text-amber-400"
+        :title="t('losses.rowHint')"
+      >
+        {{ t('losses.rowLabel') }} {{ formatMoney(props.loss.total, { currency: props.loss.currency }) }}
       </p>
     </div>
 

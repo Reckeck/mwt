@@ -14,6 +14,8 @@ export interface TransactionFormProps {
    * parent reads `input` and submits it itself. `transaction` prefills it.
    */
   template?: boolean
+  /** Continue this chain: the new operation joins it (plan §6.4). */
+  flowId?: string | null
 }
 
 /** A calculator result handed to the form. */
@@ -34,6 +36,8 @@ export interface TransactionCreateDialogProps {
   plan?: TransactionPlan | null
   /** Opens a transfer to this side. */
   counterpart?: AccountRef | null
+  /** Continue this chain. */
+  flowId?: string | null
 }
 
 export interface TransactionEditDialogProps {

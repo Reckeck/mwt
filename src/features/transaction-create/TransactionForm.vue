@@ -16,7 +16,7 @@ import { call, parseError } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { txId } from '@/shared/lib/transactions'
+import { txChainAndHash, txId } from '@/shared/lib/transactions'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -42,6 +42,7 @@ const props = withDefaults(defineProps<TransactionFormProps>(), {
   disabled: false,
   counterpart: null,
   template: false,
+  flowId: null,
 })
 
 /** `saved` after every successful write; `submit` instead in template mode. */
@@ -82,6 +83,9 @@ const offered = computed<TxKind[]>(() => {
 const form = reactive(
   props.transaction ? formFromTransaction(props.transaction, props.storeId) : emptyForm(props.storeId, 'payment'),
 )
+
+// Continuing a chain: the new operation joins it.
+if (props.flowId && !props.transaction) form.flowId = props.flowId
 
 // A new form lands on the wallet's default kind once it is known — or on a
 // transfer to the given side, when it was opened from a contact.
@@ -425,6 +429,10 @@ const save = useMutation({
     for (const queryKey of STALE_KEYS) void queryClient.invalidateQueries({ queryKey })
     if (!editing.value) Object.assign(form, emptyForm(props.storeId, form.kind), { kind: form.kind, asset: form.asset })
     lookup.reset()
+    // The first operation with a hash asks once whether it may be looked up.
+    if (txChainAndHash(tx).hash && settings.app && settings.app.enrichment_opt_in === null) {
+      settings.enrichmentConsentOpen = true
+    }
     emit('saved', tx)
   },
   onError: (err) => toast.error(t('form.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),

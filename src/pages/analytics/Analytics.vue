@@ -11,8 +11,17 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-/** `losses` arrives with the loss accounting (plan Ф3b). */
-const KINDS: ReportKind[] = ['cashflow', 'year', 'categories', 'networth', 'stores', 'pnl', 'portfolio', 'inflation']
+const KINDS: ReportKind[] = [
+  'cashflow',
+  'year',
+  'categories',
+  'networth',
+  'stores',
+  'losses',
+  'pnl',
+  'portfolio',
+  'inflation',
+]
 
 const tabs = computed(() => KINDS.map((kind) => ({ value: `analytics-${kind}`, label: t(`analytics.tab.${kind}`) })))
 const tab = computed({

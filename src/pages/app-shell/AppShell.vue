@@ -7,6 +7,7 @@ import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, Lock, ScrollText, 
 import { toast } from 'vue-sonner'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
+import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -34,12 +35,14 @@ import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useTheme } from '@/shared/lib/theme'
+import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const vault = useVaultStore()
+const settingsStore = useSettingsStore()
 const queryClient = useQueryClient()
 
 useTheme()
@@ -145,6 +148,11 @@ void onEvent<AutomationRejectedEvent>('automation-rejected', (payload) => {
 void onEvent<{ count: number }>('automation-skipped', (payload) => {
   refreshPlanning()
   toast.warning(t('automation.event.skipped', { count: payload.count }))
+})
+
+void onEvent<{ tx_id: string }>('enrichment-ready', () => {
+  void queryClient.invalidateQueries({ queryKey: ['enrichments'] })
+  toast.info(t('enrichment.event'))
 })
 
 void onEvent<{ alert_id: string }>('price-alert', () => {
@@ -261,5 +269,6 @@ async function lock() {
     </SidebarInset>
 
     <AppSettingsDialog v-model:open="settingsOpen" />
+    <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
 </template>

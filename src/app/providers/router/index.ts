@@ -42,6 +42,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.transactions' },
             },
             {
+              path: 'losses',
+              name: 'transactions-losses',
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsLosses),
+              meta: { i18n: 'nav.transactions' },
+            },
+            {
               path: 'calendar',
               name: 'transactions-calendar',
               component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
@@ -92,6 +98,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.analytics', report: 'pnl' },
             },
             {
+              path: 'losses',
+              name: 'analytics-losses',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
+              meta: { i18n: 'nav.analytics', report: 'losses' },
+            },
+            {
               path: 'portfolio',
               name: 'analytics-portfolio',
               component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
@@ -114,6 +126,12 @@ export const router = createRouter({
               path: 'contacts',
               name: 'directory-contacts',
               component: () => import('@/pages/directory').then((page) => page.DirectoryContacts),
+              meta: { i18n: 'nav.directory' },
+            },
+            {
+              path: 'rates',
+              name: 'directory-rates',
+              component: () => import('@/pages/directory').then((page) => page.DirectoryRates),
               meta: { i18n: 'nav.directory' },
             },
           ],
