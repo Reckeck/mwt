@@ -15,6 +15,16 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `prices-updated` | `RefreshResult` | после `refresh_all` |
 | `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
+| `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
+| `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
+| `automation-skipped` | `{ count }` | после долгого перерыва старые даты сверх 24 записаны как пропущенные |
+| `price-alert` | `{ alert_id }` | сработал ценовой алерт (один раз) |
+| `reminder-due` | `{ id }` | наступило время напоминания (один раз за сессию) |
+
+Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
+только при разблокированном vault — импорт Bybit, автоматизации, алерты (цены их
+активов — не чаще раза в 5 минут), напоминания. Системные уведомления —
+`tauri-plugin-notification` (capability `notification:default`).
 
 ## Команды
 
@@ -118,12 +128,40 @@ Frontend парсит код и показывает локализованно�
 
 ### app settings (вне vault, в конфигах приложения)
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
-| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются |
+| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается |
 | `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice`: `builtin` — встроенный список (сеть недоступна и промаха не было), `cached` — последний успешный запрос, `null` — провайдеры ответили сейчас |
 
 Файлы: `app_settings.json` и `currencies.json` в `app_config_dir`, обычный
 JSON без шифрования — там нет ничего секретного. Логика типов, нормализации и
 лестницы деградации — в `crates/core/src/appconfig.rs` (юнит-тесты там же).
+
+### planning (`crates/app/src/commands/planning.rs`)
+
+Дни, недели и месяцы режутся в поясе `AppSettings.timezone` (иначе — пояс ОС,
+иначе UTC); «сейчас» берёт команда. Суммы бюджета — в валюте бюджета
+(`Settings.budget_currency`, пусто — базовая) по курсу на дату операции.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `list_automations` | — | `Vec<Automation>` по имени |
+| `create_automation` | `AutomationInput { name, active, schedule, starts_at, template: TransactionInput }` | `Automation`. Шаблон — один из четырёх глаголов и проходит те же проверки, что операция |
+| `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; обработанные даты остаются обработанными |
+| `delete_automation` | `id` | `()` — вместе с историей запусков; созданные операции остаются |
+| `run_automation` | `id` | `Transaction` «сейчас»; не хватает средств — `INSUFFICIENT_FUNDS` с суммами |
+| `list_automation_runs` | `automation_id?` | `Vec<AutomationRun>`, новые первыми |
+| `retry_automation_run` | `run_id` | `Transaction`: баланс проверяется на текущий момент, дата операции — сейчас |
+| `skip_automation_run` | `run_id` | `AutomationRun` с `Skipped` |
+| `list_budgets` / `create_budget` / `update_budget` / `delete_budget` | `BudgetInput { active, target, period, limit, currency }` / `UpdateBudgetInput { id, budget }` / `id` | `Budget` |
+| `get_budget_status` | — | `Vec<BudgetStatus { budget, spent, remaining, used, period_start, period_end }>` — активные лимиты, траты групп «обязательные» и «ежедневные» в валюте лимита |
+| `get_daily_budget` | — | `DailyBudget { mode, currency, date, per_day, carry, available, spent_today, left_today, income, fixed, savings_plan, free, days, next_income?, manual_limit? }` |
+| `get_month_summary` | `month?` (`YYYY-MM`, по умолчанию текущий) | `MonthSummary { income, fixed, daily, savings_plan, savings_fact, deviation, saved_pct, savings_moved, budget_in, budget_out, not_executed, complete }` |
+| `list_goals` / `create_goal` / `update_goal` / `delete_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
+| `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating }>` |
+| `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
+| `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder` |
+| `set_reminder_done` | `id, done` | `Reminder` |
+| `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново |
+| `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — только vault-scoped поля |

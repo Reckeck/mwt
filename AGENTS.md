@@ -40,7 +40,8 @@ crates/core/          # весь бизнес-логика, БЕЗ Tauri
   src/ipc_contract.rs # DTO для команд (входы/выходы IPC)
   src/bin/gen_types.rs# генератор src/shared/api/ipc.gen.d.ts (ts-rs export_all_to + слияние)
 crates/app/           # Tauri shell: builder, commands/*, tauri.conf.json, capabilities/
-  src/commands/       # auth, stores, transactions, categories, pricing, portfolio, calc, settings, exchange
+  src/commands/       # auth, stores, transactions, categories, contacts, planning, pricing, portfolio, calc, settings, exchange
+  src/scheduler.rs    # фоновый поток: импорт Bybit, автоматизации, алерты, напоминания
   src/lib.rs          # tauri::Builder + generate_handler![…] (список ВСЕХ команд), AppState (vault: Mutex<Option<UnlockedVault>>, vault_path)
 src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i18n + ECharts), FSD v2.1
   main.ts             # bootstrap: createApp + роутер/пиния/vue-query/i18n
