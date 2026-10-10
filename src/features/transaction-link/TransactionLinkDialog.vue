@@ -22,7 +22,7 @@ const queryClient = useQueryClient()
 
 const txs = useQuery({
   queryKey: ['transactions', ''],
-  queryFn: () => call<Transaction[]>('list_transactions', { storeId: null }),
+  queryFn: () => call<Transaction[]>('list_transactions', { filter: null }),
 })
 
 const search = ref('')

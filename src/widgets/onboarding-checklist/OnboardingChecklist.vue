@@ -17,7 +17,7 @@ const settings = useSettingsStore()
 
 // Each step is checked off from the vault itself, not by ticking a box.
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
-const txs = useQuery({ queryKey: ['transactions', ''], queryFn: () => call<Transaction[]>('list_transactions', { storeId: null }) })
+const txs = useQuery({ queryKey: ['transactions', ''], queryFn: () => call<Transaction[]>('list_transactions', { filter: null }) })
 const balances = useQuery({
   queryKey: ['contacts', 'balances'],
   queryFn: () => call<ContactBalance[]>('get_contact_balances'),

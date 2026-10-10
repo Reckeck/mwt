@@ -37,7 +37,13 @@ inflation: { [key: string]: Amount },
  * Consent to send transaction hashes to public explorers (plan §8.2);
  * `None` = not asked yet.
  */
-enrichment_opt_in: boolean | null, };
+enrichment_opt_in: boolean | null, 
+/**
+ * System-wide key combination that opens «+ Операция», in the
+ * `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
+ * window manager's own bindings unless the user asks for it.
+ */
+quick_add_shortcut: string | null, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -796,6 +802,52 @@ forecast: string | null,
  * Whether the recent trend grows at all.
  */
 accumulating: boolean, };
+
+type GraphEdge = { 
+/**
+ * Node ids; the source is always earlier, so the graph has no cycles.
+ */
+source: string, target: string, kind: GraphEdgeKind, };
+
+type GraphEdgeKind = "seq" | "transfer" | "convert" | "flow";
+
+/**
+ * One row of the graph: a store, or a store with its sub-accounts folded in.
+ */
+type GraphLane = { store_id: string, 
+/**
+ * From the top-level wallet down, `A › B`.
+ */
+name: string, root_id: string, depth: number, 
+/**
+ * The store has sub-accounts (it can be folded).
+ */
+has_children: boolean, 
+/**
+ * Its sub-accounts are folded into this lane.
+ */
+collapsed: boolean, };
+
+/**
+ * One transaction on one lane; a transfer between two lanes is two nodes.
+ */
+type GraphNode = { 
+/**
+ * `tx_id:lane`.
+ */
+id: string, tx_id: string, kind: TxKind, timestamp: string, 
+/**
+ * Index in `TxGraph::lanes` — the y coordinate.
+ */
+lane: number, 
+/**
+ * Rank in time — the x coordinate; both nodes of a transfer share it.
+ */
+column: number, 
+/**
+ * What moved, in the base currency at the rate of the moment.
+ */
+value: Amount, flow_id: string | null, internal: boolean, comment: string, };
 
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
@@ -1657,6 +1709,41 @@ price_usd: Amount | null, fx_override: Amount | null, };
  * what the provider actually returned.
  */
 type TxFieldHint = { field: string, value: string, };
+
+/**
+ * What the operations list and graph show.
+ */
+type TxFilter = { 
+/**
+ * Wallets; empty = every one.
+ */
+scope: StoreScope, 
+/**
+ * Empty = every kind.
+ */
+kinds: Array<TxKind>, contact_id: string | null, flow_id: string | null, 
+/**
+ * First day, `YYYY-MM-DD` in the user's zone, inclusive.
+ */
+from: string | null, 
+/**
+ * Last day, `YYYY-MM-DD` in the user's zone, inclusive.
+ */
+to: string | null, 
+/**
+ * Leave out transfers and conversions inside one top-level wallet.
+ */
+hide_internal: boolean, 
+/**
+ * Words to find in the comment, categories, assets, stores, contacts or hash.
+ */
+text: string | null, };
+
+type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
+/**
+ * Columns used: `max(column) + 1`.
+ */
+columns: number, };
 
 /**
  * Everything we could learn about a transaction. All fields optional: a

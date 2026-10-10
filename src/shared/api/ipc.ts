@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
+import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import {
   mockCategories,
@@ -18,6 +19,7 @@ import {
   mockTurnover,
 } from './ipc-mock-ledger'
 import { mockCalendar, mockReport } from './ipc-mock-analytics'
+import { mockListTxs, mockTxGraph } from './ipc-mock-explore'
 import { mockPlanning } from './ipc-mock-planning'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -28,6 +30,11 @@ export interface AppError {
 }
 
 export function parseError(raw: unknown): AppError {
+  // `call` already throws the parsed shape (and the mock throws it directly).
+  if (raw && typeof raw === 'object' && 'code' in raw && 'message' in raw) {
+    const { code, message } = raw as Record<string, unknown>
+    if (typeof code === 'string' && typeof message === 'string') return { code, message }
+  }
   const text = typeof raw === 'string' ? raw : String(raw ?? 'Unknown error')
   const sep = text.indexOf(': ')
   if (sep > 0 && text.slice(0, sep) === text.slice(0, sep).toUpperCase()) {
@@ -153,10 +160,16 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
     }
     // Tauri v2 converts primitive command args to camelCase, so the mock must
     // read the same names the real backend receives (data *fields* stay snake_case).
-    case 'list_transactions': {
-      const storeId = (args?.storeId as string | null) ?? null
-      return resolve(mockFilterTxs(storeId ? mockScope(storeId, args?.includeChildren !== false) : null))
-    }
+    case 'list_transactions':
+      return resolve(mockListTxs((args?.filter as TxFilter | null) ?? emptyTxFilter(), mockExploreCtx()))
+    case 'get_tx_graph':
+      return resolve(
+        mockTxGraph(
+          (args?.filter as TxFilter | null) ?? emptyTxFilter(),
+          (args?.collapsed as string[] | null) ?? [],
+          mockExploreCtx(),
+        ),
+      )
     case 'get_store_overview':
       return resolve(mockOverview(String(args?.storeId ?? ''), args?.includeChildren !== false))
     case 'get_store_history':
@@ -193,6 +206,13 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.inflation) mockAppSettings.inflation = input.inflation
       if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
         mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
+      return resolve(mockAppSettings)
+    }
+    case 'set_quick_add_shortcut': {
+      const shortcut = String(args?.shortcut ?? '').trim()
+      // The browser has no global keys; pretend one combination is taken to show the error.
+      if (shortcut === 'Super+Space') throw { code: 'SHORTCUT_FAILED', message: 'already registered' }
+      mockAppSettings.quick_add_shortcut = shortcut || null
       return resolve(mockAppSettings)
     }
     case 'get_supported_currencies':
@@ -664,6 +684,7 @@ const mockAppSettings: AppSettings = {
   timezone: null,
   inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },
   enrichment_opt_in: null,
+  quick_add_shortcut: null,
 }
 
 const mockCurrencies: SupportedCurrencies = {
@@ -964,6 +985,13 @@ function mockMoveTargets(id: string): StoreMoveTargets {
 /** Every id a store scope covers. */
 const mockScope = (storeId: string, includeChildren: boolean) =>
   includeChildren ? [storeId, ...mockSubtreeIds(storeId)] : [storeId]
+
+const mockExploreCtx = () => ({
+  transactions: mockTransactions,
+  tree: mockTree(),
+  contacts: mockContacts,
+  scope: mockScope,
+})
 
 function mockOverview(storeId: string, includeChildren: boolean): StoreOverview {
   const store = mockStore(storeId) ?? mockStores[0]

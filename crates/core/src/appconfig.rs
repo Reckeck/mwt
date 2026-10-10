@@ -80,6 +80,11 @@ pub struct AppSettings {
     /// `None` = not asked yet.
     #[serde(default)]
     pub enrichment_opt_in: Option<bool>,
+    /// System-wide key combination that opens «+ Операция», in the
+    /// `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
+    /// window manager's own bindings unless the user asks for it.
+    #[serde(default)]
+    pub quick_add_shortcut: Option<String>,
 }
 
 /// Reference annual inflation the user starts with, percent. Rough recent
@@ -101,6 +106,7 @@ impl Default for AppSettings {
             timezone: None,
             inflation: default_inflation(),
             enrichment_opt_in: None,
+            quick_add_shortcut: None,
         }
     }
 }
@@ -482,6 +488,7 @@ mod tests {
             timezone: Some("Asia/Bangkok".into()),
             inflation: default_inflation(),
             enrichment_opt_in: Some(true),
+            quick_add_shortcut: Some("CmdOrCtrl+Shift+Space".into()),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

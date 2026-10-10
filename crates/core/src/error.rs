@@ -62,6 +62,10 @@ pub enum Error {
     /// store, the asset and both amounts.
     #[error("insufficient funds: {0}")]
     InsufficientFunds(String),
+
+    /// A query would return more than the UI can draw; narrow the filter.
+    #[error("too large: {0}")]
+    TooLarge(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -118,6 +122,7 @@ impl Error {
             Error::StoreTree(violation) => violation.code(),
             Error::IncompatibleVault(_) => "INCOMPATIBLE_VAULT",
             Error::InsufficientFunds(_) => "INSUFFICIENT_FUNDS",
+            Error::TooLarge(_) => "TOO_LARGE",
         }
     }
 }

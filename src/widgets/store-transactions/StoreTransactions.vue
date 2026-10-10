@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { TransactionFilterBar } from '@/features/transaction-filter'
+import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { TransactionsList } from '@/entities/transaction'
 import { Card } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
-import { TX_KINDS, txKind, txSearchText } from '@/shared/lib/transactions'
+import { txId } from '@/shared/lib/transactions'
+import { storeTxFilter } from '@/shared/lib/tx-filter'
 
 import type { StoreTransactionsProps } from './store-transactions.types'
 
@@ -19,44 +20,48 @@ defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
 
-const kindFilter = ref<'' | TxKind>('')
-const search = ref('')
+/** The wallet is fixed by the page; the rest of the filter is the user's. */
+const filter = ref<TxFilter>(storeTxFilter(props.storeId, props.includeChildren))
+watch(
+  () => [props.storeId, props.includeChildren] as const,
+  ([storeId, includeChildren]) => {
+    filter.value = { ...filter.value, scope: { store_ids: [storeId], include_children: includeChildren } }
+  },
+)
 
 const txs = useQuery({
-  queryKey: computed(() => ['transactions', props.storeId, props.includeChildren]),
-  queryFn: () =>
-    call<Transaction[]>('list_transactions', { storeId: props.storeId, includeChildren: props.includeChildren }),
+  queryKey: computed(() => ['transactions', 'list', filter.value]),
+  queryFn: () => call<Transaction[]>('list_transactions', { filter: filter.value }),
+  placeholderData: (previous) => previous,
 })
 
-const rows = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  return (txs.data.value ?? []).filter((tx) => {
-    if (kindFilter.value && txKind(tx) !== kindFilter.value) return false
-    return !needle || txSearchText(tx).includes(needle)
-  })
-})
+const openedId = ref<string | null>(null)
+const detailsOpen = ref(false)
+const opened = computed(() => (txs.data.value ?? []).find((tx) => txId(tx) === openedId.value) ?? null)
+function openDetails(tx: Transaction) {
+  openedId.value = txId(tx)
+  detailsOpen.value = true
+}
 </script>
 
 <template>
   <Card>
     <template #header>
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="grid gap-3">
         <p class="font-medium">{{ t('hist.title') }}</p>
-        <div class="flex flex-wrap items-center gap-2">
-          <Select v-model="kindFilter" class="h-8 w-40 text-xs" :aria-label="t('form.kind')">
-            <option value="">{{ t('hist.allKinds') }}</option>
-            <option v-for="kind in TX_KINDS" :key="kind" :value="kind">{{ t(`tx.kind.${kind}`) }}</option>
-          </Select>
-          <Input v-model="search" class="h-8 w-48 text-xs" :placeholder="t('hist.search')" />
-        </div>
+        <TransactionFilterBar v-model="filter" fixed-scope id-prefix="store-hist" />
       </div>
     </template>
-    <div class="-my-3">
-      <TransactionsList :transactions="rows" :store-id="props.storeId">
+    <p v-if="txs.isSuccess.value && !txs.data.value?.length" class="text-sm text-muted-foreground">
+      {{ t('filter.empty') }}
+    </p>
+    <div v-else class="-my-3">
+      <TransactionsList :transactions="txs.data.value ?? []" :store-id="props.storeId" openable @open="openDetails">
         <template #actions="{ tx }">
           <slot name="actions" :tx="tx" />
         </template>
       </TransactionsList>
     </div>
+    <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
   </Card>
 </template>

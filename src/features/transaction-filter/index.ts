@@ -1,1 +1,2 @@
-export { default as StoreFilter } from './StoreFilter.vue'
+export { default as TransactionFilterBar } from './TransactionFilterBar.vue'
+export * from './transaction-filter.types'
