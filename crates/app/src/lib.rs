@@ -5,8 +5,8 @@ mod commands;
 mod scheduler;
 
 use commands::{
-    AppState, app_settings, auth, calc, categories, contacts, exchange, planning, portfolio,
-    pricing, settings, stores, transactions, vault_recents,
+    AppState, analytics, app_settings, auth, calc, categories, contacts, exchange, planning,
+    portfolio, pricing, settings, stores, transactions, vault_recents,
 };
 use tauri::{
     Emitter, Manager,
@@ -106,6 +106,10 @@ pub fn run() {
             settings::dev_apply_vault_json,
             settings::dev_open_vault_json_in_editor,
             settings::dev_reload_vault_json_from_editor,
+            // analytics
+            analytics::get_report,
+            analytics::export_report_csv,
+            analytics::get_calendar,
             // planning
             planning::list_automations,
             planning::create_automation,

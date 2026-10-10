@@ -104,6 +104,16 @@ pub struct DailyBudget {
     pub manual_limit: Option<Amount>,
 }
 
+/// What the month mode allows per day of one month.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct MonthAllowance {
+    pub income: Amount,
+    pub fixed: Amount,
+    pub savings_plan: Amount,
+    pub days: u32,
+    pub per_day: Amount,
+}
+
 /// One classified flow.
 #[derive(Debug, Clone)]
 pub(crate) struct Flow {
@@ -544,19 +554,12 @@ impl UnlockedVault {
         };
         match mode {
             DailyBudgetMode::Month => {
-                let fact = |class: FlowClass| {
-                    flows
-                        .iter()
-                        .filter(|flow| flow.class == class)
-                        .fold(Amount::ZERO, |sum, flow| sum + flow.value)
-                };
-                let (plan_income, plan_fixed) = self.month_plan(&cal, today, &currency);
-                out.income = fact(FlowClass::Income).max(plan_income);
-                out.fixed = fact(FlowClass::Fixed).max(plan_fixed);
-                out.savings_plan = out.income * self.doc.settings.savings_rate;
-                out.days = days_in_month(today);
-                out.per_day =
-                    (out.income - out.fixed - out.savings_plan) / amount_of_days(out.days);
+                let allowance = self.month_allowance(&cal, today, &currency, &flows);
+                out.income = allowance.income;
+                out.fixed = allowance.fixed;
+                out.savings_plan = allowance.savings_plan;
+                out.days = allowance.days;
+                out.per_day = allowance.per_day;
                 let mut day = first;
                 while day < today {
                     out.carry += out.per_day - spent_on(day);
@@ -584,8 +587,38 @@ impl UnlockedVault {
         out
     }
 
+    /// The month-mode allowance of the month containing `date` (plan §7.3):
+    /// income and mandatory spending — the larger of fact and plan — less the
+    /// savings plan, spread over the month's days. `flows` are that month's.
+    pub(crate) fn month_allowance(
+        &self,
+        cal: &Calendar,
+        date: NaiveDate,
+        currency: &str,
+        flows: &[Flow],
+    ) -> MonthAllowance {
+        let fact = |class: FlowClass| {
+            flows
+                .iter()
+                .filter(|flow| flow.class == class)
+                .fold(Amount::ZERO, |sum, flow| sum + flow.value)
+        };
+        let (plan_income, plan_fixed) = self.month_plan(cal, date, currency);
+        let income = fact(FlowClass::Income).max(plan_income);
+        let fixed = fact(FlowClass::Fixed).max(plan_fixed);
+        let savings_plan = income * self.doc.settings.savings_rate;
+        let days = days_in_month(date);
+        MonthAllowance {
+            income,
+            fixed,
+            savings_plan,
+            days,
+            per_day: (income - fixed - savings_plan) / amount_of_days(days),
+        }
+    }
+
     /// The smallest active `Total / Day` limit, in `currency`.
-    fn manual_day_limit(&self, currency: &str, now: i64) -> Option<Amount> {
+    pub(crate) fn manual_day_limit(&self, currency: &str, now: i64) -> Option<Amount> {
         let book = self.rate_book();
         self.doc
             .budgets

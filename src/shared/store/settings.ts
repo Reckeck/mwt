@@ -92,6 +92,7 @@ export const useSettingsStore = defineStore('settings', {
           base_currency: patch.base_currency ?? null,
           favorite_currencies: patch.favorite_currencies ?? null,
           timezone: patch.timezone ?? null,
+          inflation: patch.inflation ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

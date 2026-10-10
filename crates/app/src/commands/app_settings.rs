@@ -27,8 +27,12 @@ fn config_dir(app: &AppHandle) -> PathBuf {
 /// The IANA zone days and months are cut in (plan §7.6): the one chosen in
 /// the settings, else the OS zone, else UTC.
 pub fn current_zone(app: &AppHandle) -> String {
-    let system = iana_time_zone::get_timezone().ok();
-    load_settings(&config_dir(app)).zone_or(system.as_deref())
+    current_settings(app).zone_or(iana_time_zone::get_timezone().ok().as_deref())
+}
+
+/// The app settings as stored now (defaults when the file is missing).
+pub fn current_settings(app: &AppHandle) -> AppSettings {
+    load_settings(&config_dir(app))
 }
 
 /// Read the app settings. Never fails: a missing or corrupt file yields the

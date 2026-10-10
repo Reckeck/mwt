@@ -9,6 +9,8 @@ type AccountRef = { "store": string } | { "contact": { contact_id: string, accou
 
 type AlertCondition = "above" | "below";
 
+type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport };
+
 /**
  * Preferences that follow the *user*, not the vault: they must survive opening
  * a different vault, so they are stored next to the app, not inside the doc.
@@ -25,7 +27,12 @@ favorite_currencies: Array<string>,
 /**
  * IANA zone days and months are cut in (plan §7.6); `None` = the OS zone.
  */
-timezone: string | null, };
+timezone: string | null, 
+/**
+ * Annual inflation, percent, by lowercase currency code (plan §6.5).
+ * Used only by analytics, for «in today's money»; marked as reference.
+ */
+inflation: { [key: string]: Amount }, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -273,6 +280,38 @@ risk: Amount,
  */
 risk_pct: Amount, };
 
+type CalendarDay = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, income: Amount, 
+/**
+ * Mandatory and everyday spending.
+ */
+spent: Amount, 
+/**
+ * Everyday spending — what the allowance is about.
+ */
+daily: Amount, 
+/**
+ * Every transaction of the day, budget or not.
+ */
+tx_count: number, status: DayStatus, };
+
+type CalendarMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, currency: string, 
+/**
+ * The day's allowance: the month mode's, or the hand-set day limit when smaller.
+ */
+allowance: Amount | null, days: Array<CalendarDay>, 
+/**
+ * What is still to come this month.
+ */
+upcoming: Array<UpcomingItem>, };
+
 /**
  * Single OHLCV candle point for charting.
  */
@@ -282,6 +321,20 @@ type CandlePoint = { ts: string, open: string, high: string, low: string, close:
  * One banknote line of a cash count.
  */
 type CashNote = { denomination: Amount, count: number, };
+
+type CashflowReport = { meta: ReportMeta, rows: Array<CashflowRow>, total: CashflowRow, };
+
+type CashflowRow = { month: string, income: Amount, fixed: Amount, daily: Amount, savings_moved: Amount, budget_in: Amount, budget_out: Amount, 
+/**
+ * `income − fixed − daily`.
+ */
+net: Amount, };
+
+type CategoriesReport = { meta: ReportMeta, groups: Array<CategoryGroupBlock>, 
+/**
+ * The five biggest spending categories of the period.
+ */
+top: Array<CategoryRow>, };
 
 /**
  * «If the comment or the contact name contains `pattern`, use `category`.»
@@ -315,6 +368,31 @@ name: string | null, group: CategoryGroup,
 archived: boolean, };
 
 type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
+
+type CategoryGroupBlock = { group: CategoryGroup | null, rows: Array<CategoryRow>, 
+/**
+ * Group total per month.
+ */
+totals: Array<Amount>, total: Amount, };
+
+type CategoryRow = { 
+/**
+ * Category key; empty = without a category.
+ */
+key: string, group: CategoryGroup | null, 
+/**
+ * One per report month.
+ */
+cells: Array<Amount>, total: Amount, average: Amount, 
+/**
+ * Share of its group's total, percent.
+ */
+share: Amount, 
+/**
+ * Change against the previous period of the same length, percent;
+ * `None` when that period had nothing.
+ */
+delta_pct: Amount | null, };
 
 /**
  * Supported blockchain networks + a pseudo `Fiat` variant.
@@ -508,6 +586,11 @@ type DailyBudgetMode = "month" | "until_income";
 type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
 
 /**
+ * How one day of the calendar went against its allowance.
+ */
+type DayStatus = "none" | "under" | "near" | "over" | "future";
+
+/**
  * Effect of a transfer on a personal debt with a contact.
  */
 type DebtEffect = "lend" | "borrow" | "repay" | "collect";
@@ -688,6 +771,18 @@ type ImportBybitHistoryOutput = { staged: number,
  */
 notice: string | null, };
 
+type InflationPoint = { month: string, 
+/**
+ * What one unit of that month is worth in today's money.
+ */
+coefficient: Amount, nominal_net: Amount, real_net: Amount, };
+
+type InflationReport = { meta: ReportMeta, points: Array<InflationPoint>, 
+/**
+ * Change of net worth over the period, nominal and real, percent.
+ */
+nominal_change_pct: Amount | null, real_change_pct: Amount | null, };
+
 /**
  * Chain the user picked when the hash alone was ambiguous. Without it the
  * backend never guesses an EVM network.
@@ -858,6 +953,14 @@ liabilities: Amount,
  */
 payables: Amount, net: Amount, };
 
+type NetworthPoint = { month: string, financial: Amount, non_financial: Amount, receivables: Amount, liabilities: Amount, payables: Amount, net: Amount, };
+
+type NetworthReport = { meta: ReportMeta, 
+/**
+ * Value at the end of each month (today for this month).
+ */
+points: Array<NetworthPoint>, };
+
 /**
  * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
  */
@@ -934,6 +1037,30 @@ type PnlLeg = { ts: string, store_id: string, asset_key: string,
  * Absolute size of the closed-out quantity.
  */
 quantity: Amount, pnl_base: Amount, side: string, };
+
+type PnlReport = { meta: ReportMeta, rows: Array<PnlRow>, total_realized: Amount, total_fees: Amount, };
+
+type PnlRow = { month: string, realized: Amount, fees: Amount, };
+
+type PortfolioPoint = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, total: Amount, 
+/**
+ * In the order of [`PortfolioReport::assets`].
+ */
+values: Array<Amount>, 
+/**
+ * Percent; sums to 100 when `total` is positive.
+ */
+shares: Array<Amount>, };
+
+type PortfolioReport = { meta: ReportMeta, 
+/**
+ * Asset symbols, the biggest first; the last may be `""` for «other».
+ */
+assets: Array<string>, points: Array<PortfolioPoint>, };
 
 type PortfolioSummary = { base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, assets: Array<AssetStat>, by_chain: Array<NamedValue>, by_store: Array<StoreValue>, 
 /**
@@ -1013,6 +1140,50 @@ type ReminderInput = { text: string,
  * RFC3339.
  */
 due_at: string, };
+
+/**
+ * What every report is asked for.
+ */
+type ReportFilter = { 
+/**
+ * Wallets to cover; empty = everything.
+ */
+scope: StoreScope, 
+/**
+ * First month, `YYYY-MM`; default: eleven months before `to`.
+ */
+from: string | null, 
+/**
+ * Last month, `YYYY-MM`; default: this month.
+ */
+to: string | null, 
+/**
+ * The year of the year report; default: this year.
+ */
+year: number | null, 
+/**
+ * Report currency; default: the budget currency.
+ */
+currency: string | null, 
+/**
+ * Restate each month in today's money by the reference inflation.
+ */
+real_terms: boolean, };
+
+type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation";
+
+/**
+ * What a report covers, for its header.
+ */
+type ReportMeta = { currency: string, 
+/**
+ * `YYYY-MM`, oldest first.
+ */
+months: Array<string>, real_terms: boolean, 
+/**
+ * Annual inflation used for `real_terms`, percent.
+ */
+inflation_rate: Amount | null, };
 
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
@@ -1191,6 +1362,20 @@ avg_cost: Amount | null, price_usd: Amount, value_usd: Amount, value_base: Amoun
  */
 unrealized_base: Amount, };
 
+type StoreReportRow = { store_id: string, name: string, 
+/**
+ * 0 for a top-level wallet.
+ */
+depth: number, kind: StoreKind | null, 
+/**
+ * Value just before the first month and at the end of the last.
+ */
+value_start: Amount, value_end: Amount, change: Amount, 
+/**
+ * Money in and out over the period, on the day it moved.
+ */
+inflow: Amount, outflow: Amount, tx_count: number, };
+
 /**
  * Which stores a query covers. The one way every report filters by wallet.
  */
@@ -1230,6 +1415,8 @@ can_add_child: boolean, children: Array<StoreTreeNode>, };
  * store id so the sidebar can link straight to the wallet page.
  */
 type StoreValue = { store_id: string, name: string, value_usd: Amount, value_base: Amount, pct: number, };
+
+type StoresReport = { meta: ReportMeta, rows: Array<StoreReportRow>, };
 
 /**
  * Currencies the pickers may offer.
@@ -1483,7 +1670,11 @@ type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base
 /**
  * IANA zone; an empty string goes back to the OS zone.
  */
-timezone: string | null, };
+timezone: string | null, 
+/**
+ * Replaces the whole inflation table.
+ */
+inflation: { [key: string]: Amount } | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 
@@ -1556,3 +1747,19 @@ type VaultInfo = { path: string, doc_version: number, id: string, created_at: st
  * What the unlock screen needs to know about the app.
  */
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
+
+type YearReport = { meta: ReportMeta, year: number, rows: Array<YearRow>, total: YearRow, 
+/**
+ * Average of the non-empty months.
+ */
+average: YearRow, 
+/**
+ * Month with the most and the least left over.
+ */
+best_month: string | null, worst_month: string | null, };
+
+type YearRow = { month: string, income: Amount, fixed: Amount, daily: Amount, savings_plan: Amount, savings_fact: Amount, deviation: Amount, saved_pct: Amount, 
+/**
+ * No income and no spending: left out of the average.
+ */
+empty: boolean, };

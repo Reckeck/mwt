@@ -17,6 +17,7 @@ import {
   mockTransactionFrom,
   mockTurnover,
 } from './ipc-mock-ledger'
+import { mockCalendar, mockReport } from './ipc-mock-analytics'
 import { mockPlanning } from './ipc-mock-planning'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -189,6 +190,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.base_currency) mockAppSettings.base_currency = input.base_currency
       if (input.favorite_currencies) mockAppSettings.favorite_currencies = input.favorite_currencies
       if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
+      if (input.inflation) mockAppSettings.inflation = input.inflation
       return resolve(mockAppSettings)
     }
     case 'get_supported_currencies':
@@ -435,6 +437,13 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       const input = body as GetCandlesInput
       return resolve(mockCandles(input))
     }
+    case 'get_report':
+      return resolve(mockReport(args?.kind as ReportKind, args?.filter as ReportFilter, analyticsContext()))
+    case 'get_calendar':
+      return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))
+    case 'export_report_csv':
+      // No save dialog in the browser.
+      return resolve(null)
     default: {
       const planned = mockPlanning(
         cmd,
@@ -452,6 +461,16 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       )
       return resolve(planned ?? {})
     }
+  }
+}
+
+function analyticsContext() {
+  return {
+    transactions: mockTransactions,
+    categories: mockCategories,
+    stores: mockStores,
+    priceOf,
+    currency: mockSettings.budget_currency || mockAppSettings.base_currency,
   }
 }
 
@@ -550,6 +569,7 @@ const mockAppSettings: AppSettings = {
   base_currency: 'usd',
   favorite_currencies: [],
   timezone: null,
+  inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },
 }
 
 const mockCurrencies: SupportedCurrencies = {
