@@ -5,8 +5,8 @@ mod commands;
 mod scheduler;
 
 use commands::{
-    AppState, analytics, app_settings, auth, calc, categories, contacts, exchange, planning,
-    portfolio, pricing, settings, stores, transactions, vault_recents,
+    AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
+    losses, planning, portfolio, pricing, settings, stores, transactions, vault_recents,
 };
 use tauri::{
     Emitter, Manager,
@@ -106,6 +106,18 @@ pub fn run() {
             settings::dev_apply_vault_json,
             settings::dev_open_vault_json_in_editor,
             settings::dev_reload_vault_json_from_editor,
+            // losses, chains, rates
+            losses::get_tx_loss,
+            losses::get_tx_losses,
+            losses::list_flows,
+            losses::link_transactions,
+            losses::unlink_transaction,
+            losses::get_fx_table,
+            // enrichment
+            enrichment::get_enrichments,
+            enrichment::apply_enrichment,
+            enrichment::reject_enrichment,
+            enrichment::re_enrich,
             // analytics
             analytics::get_report,
             analytics::export_report_csv,

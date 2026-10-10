@@ -9,7 +9,7 @@ type AccountRef = { "store": string } | { "contact": { contact_id: string, accou
 
 type AlertCondition = "above" | "below";
 
-type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport };
+type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
 
 /**
  * Preferences that follow the *user*, not the vault: they must survive opening
@@ -32,7 +32,12 @@ timezone: string | null,
  * Annual inflation, percent, by lowercase currency code (plan §6.5).
  * Used only by analytics, for «in today's money»; marked as reference.
  */
-inflation: { [key: string]: Amount }, };
+inflation: { [key: string]: Amount }, 
+/**
+ * Consent to send transaction hashes to public explorers (plan §8.2);
+ * `None` = not asked yet.
+ */
+enrichment_opt_in: boolean | null, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -651,9 +656,38 @@ type Fee = { asset: AssetRef, amount: Amount, price: PriceStamp, };
 type FeeInput = { asset: AssetIdent, amount: Amount, };
 
 /**
+ * One side of a chain's result.
+ */
+type FlowAmount = { asset: AssetRef | null, amount: Amount, value: Amount, };
+
+/**
  * Where a transaction lands in the budget (plan §7.3).
  */
 type FlowClass = "income" | "fixed" | "daily" | "savings" | "budget_in" | "budget_out" | "ignored";
+
+type FlowLink = { tx: Transaction, loss: TxLoss, };
+
+type FlowSummary = { flow_id: string, currency: string, 
+/**
+ * Oldest first.
+ */
+links: Array<FlowLink>, started_at: string, ended_at: string, 
+/**
+ * What the first link took from the user's stores.
+ */
+gave: Array<FlowAmount>, 
+/**
+ * What the last link brought into them.
+ */
+got: Array<FlowAmount>, gave_value: Amount, got_value: Amount, 
+/**
+ * Fees and spreads of every link.
+ */
+loss: Amount, 
+/**
+ * `gave_value − got_value`: the loss plus how rates moved meanwhile.
+ */
+difference: Amount, };
 
 type FuturesAction = "open" | "close";
 
@@ -665,6 +699,29 @@ type FuturesDirection = "long" | "short";
  * A cached FX rate: units of `currency` per 1 USD.
  */
 type FxPoint = { currency: string, per_usd: Amount, ts: string, source: string, };
+
+/**
+ * One currency against the base.
+ */
+type FxRow = { currency: string, 
+/**
+ * Units of this currency per one unit of the base.
+ */
+per_base: Amount, 
+/**
+ * Base units one unit of this currency buys.
+ */
+in_base: Amount, 
+/**
+ * When the rate was taken.
+ */
+updated_at: string, 
+/**
+ * The vault uses this currency (it keeps rate history).
+ */
+tracked: boolean, };
+
+type FxTable = { base: string, rows: Array<FxRow>, };
 
 type GetCandlesInput = { symbol: string, interval_min: number, limit: number, };
 
@@ -849,11 +906,30 @@ limit: Amount | null,
  */
 due_day: number | null, monthly_payment: Amount | null, };
 
+/**
+ * Put transactions into one chain: `flow_id`, else the chain one of them is
+ * already in, else a new one.
+ */
+type LinkTransactionsInput = { ids: Array<string>, flow_id: string | null, };
+
 type Liquidity = "maker" | "taker";
 
 type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 
 type Locale = "auto" | "en" | "ru";
+
+/**
+ * Losses grouped by one key (a kind, a store, a contact, a chain).
+ */
+type LossBucket = { key: string, total: Amount, count: number, };
+
+type LossReport = { meta: ReportMeta, rows: Array<LossRow>, total: LossRow, by_kind: Array<LossBucket>, by_store: Array<LossBucket>, by_contact: Array<LossBucket>, by_flow: Array<LossBucket>, 
+/**
+ * Transactions whose loss is only partly known.
+ */
+incomplete: number, };
+
+type LossRow = { month: string, fee: Amount, slippage: Amount, total: Amount, };
 
 /**
  * A hand-set value of a non-financial asset; applies to its whole history
@@ -1170,7 +1246,7 @@ currency: string | null,
  */
 real_terms: boolean, };
 
-type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation";
+type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation" | "losses";
 
 /**
  * What a report covers, for its header.
@@ -1600,6 +1676,29 @@ occurred_at: string | null, status: string | null, asset_in: string | null, amou
 type TxKind = "topup" | "payment" | "transfer" | "convert" | "trade_spot" | "trade_futures" | "defi" | "asset_sell";
 
 /**
+ * What one transaction cost beyond what it moved.
+ */
+type TxLoss = { tx_id: string, currency: string, 
+/**
+ * Fees at their stamped price.
+ */
+fee: Amount, 
+/**
+ * Value given minus value received at the market rate of the moment;
+ * negative when the deal beat the market.
+ */
+slippage: Amount, total: Amount, 
+/**
+ * A move between the user's own sub-accounts: only the fee and the
+ * spread count, it is neither income nor spending.
+ */
+internal: boolean, 
+/**
+ * Every side had a price; otherwise the missing side counts as zero.
+ */
+complete: boolean, };
+
+/**
  * Fields every transaction carries, whatever it is.
  */
 type TxMeta = { id: string, 
@@ -1674,7 +1773,7 @@ timezone: string | null,
 /**
  * Replaces the whole inflation table.
  */
-inflation: { [key: string]: Amount } | null, };
+inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 
