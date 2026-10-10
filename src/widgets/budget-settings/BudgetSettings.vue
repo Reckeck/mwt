@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { Card } from '@/shared/ui/card'
@@ -9,10 +10,12 @@ import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
+const queryClient = useQueryClient()
 
 /** The share is stored as 0..1 and edited as a percent. */
 const percent = ref('')
@@ -31,6 +34,26 @@ async function persist(patch: Partial<Settings>) {
   } catch (err) {
     toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
     await settings.loadVault().catch(() => undefined)
+  }
+}
+
+/** Every zone the platform knows; the OS zone is the empty choice. */
+const zones = (() => {
+  try {
+    return Intl.supportedValuesOf('timeZone')
+  } catch {
+    return []
+  }
+})()
+const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+async function saveZone(zone: string) {
+  try {
+    await settings.updateApp({ timezone: zone })
+    toast.success(t('settings.saved'))
+    for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
+  } catch (err) {
+    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
   }
 }
 
@@ -82,6 +105,19 @@ function saveRate() {
           <option value="until_income">{{ t('settings.dailyBudget.until_income') }}</option>
         </Select>
         <p class="text-xs text-muted-foreground">{{ t('settings.dailyBudgetHint') }}</p>
+      </div>
+
+      <div class="grid gap-1.5">
+        <Label for="timezone">{{ t('settings.timezone') }}</Label>
+        <Select
+          id="timezone"
+          :model-value="settings.app?.timezone ?? ''"
+          @update:model-value="(value) => saveZone(String(value))"
+        >
+          <option value="">{{ t('settings.timezoneSystem', { zone: systemZone }) }}</option>
+          <option v-for="zone in zones" :key="zone" :value="zone">{{ zone }}</option>
+        </Select>
+        <p class="text-xs text-muted-foreground">{{ t('settings.timezoneHint') }}</p>
       </div>
     </div>
   </Card>

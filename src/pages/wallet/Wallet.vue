@@ -17,6 +17,8 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  Goal as GoalIcon,
+  Repeat,
 } from 'lucide-vue-next'
 
 import { AssetRevalueButton } from '@/features/asset-revalue'
@@ -26,6 +28,8 @@ import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calcu
 import { StoreCreateDialog } from '@/features/store-create'
 import { StoreEditDialog } from '@/features/store-edit'
 import { StoreMoveDialog } from '@/features/store-move'
+import { AutomationDialog } from '@/features/automation-edit'
+import { GoalDialog } from '@/features/goal-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
@@ -145,6 +149,8 @@ const plan = ref<CalculatorPlan | null>(null)
 const editOpen = ref(false)
 const subWalletOpen = ref(false)
 const moveOpen = ref(false)
+const goalOpen = ref(false)
+const automationOpen = ref(false)
 const tab = ref('positions')
 
 function openTransaction() {
@@ -349,6 +355,14 @@ function openWallet(created: Store) {
               <FolderInput class="size-4 shrink-0" />
               {{ t('stores.move') }}
             </DropdownMenuItem>
+            <DropdownMenuItem v-if="!store.archived" value="goal" @select="goalOpen = true">
+              <GoalIcon class="size-4 shrink-0" />
+              {{ t('goal.makeFromStore') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="!store.archived" value="automation" @select="automationOpen = true">
+              <Repeat class="size-4 shrink-0" />
+              {{ t('automation.makeFromStore') }}
+            </DropdownMenuItem>
             <DropdownMenuItem
               :value="store.archived ? 'unarchive' : 'archive'"
               @select="toggleArchive.mutate(!store.archived)"
@@ -490,6 +504,8 @@ function openWallet(created: Store) {
 
     <StoreEditDialog v-model:open="editOpen" :store="store" />
     <StoreMoveDialog v-if="isSubAccount" v-model:open="moveOpen" :store="store" />
+    <GoalDialog v-model:open="goalOpen" :store-id="storeId" />
+    <AutomationDialog v-model:open="automationOpen" :store-id="storeId" />
     <StoreCreateDialog v-model:open="subWalletOpen" :parent="store" :parent-path="parentPath" @created="openWallet" />
   </div>
 </template>

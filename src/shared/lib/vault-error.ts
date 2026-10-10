@@ -38,8 +38,12 @@ export function appErrorMessage(err: AppError, t: Translate): string {
  * Localize any backend error by its code through the `errors.*` namespace,
  * falling back to the raw message when the code has no translation.
  */
+/** Codes whose backend text carries the specifics (amounts, names) worth keeping. */
+const DETAILED_CODES = new Set(['INSUFFICIENT_FUNDS'])
+
 export function codeErrorMessage(err: AppError, t: Translate): string {
   const key = `errors.${err.code}`
   const known = t(key)
-  return known === key ? err.message : known
+  if (known === key) return err.message
+  return DETAILED_CODES.has(err.code) ? `${known}: ${err.message}` : known
 }

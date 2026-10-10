@@ -36,6 +36,11 @@ const widgetDefs = [
   { id: 'fx', label: 'dashboard.widget.fx', defaultOrder: 2 },
   { id: 'byChain', label: 'dashboard.widget.byChain', defaultOrder: 3 },
   { id: 'byStore', label: 'dashboard.widget.byStore', defaultOrder: 4 },
+  { id: 'dailyBudget', label: 'dashboard.widget.dailyBudget', defaultOrder: 5 },
+  { id: 'monthSummary', label: 'dashboard.widget.monthSummary', defaultOrder: 6 },
+  { id: 'upcoming', label: 'dashboard.widget.upcoming', defaultOrder: 7 },
+  { id: 'goals', label: 'dashboard.widget.goals', defaultOrder: 8 },
+  { id: 'budgets', label: 'dashboard.widget.budgets', defaultOrder: 9 },
 ] as const
 
 /**

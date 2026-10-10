@@ -40,17 +40,18 @@ const props = withDefaults(defineProps<TransactionFormProps>(), {
   plan: null,
   disabled: false,
   counterpart: null,
+  template: false,
 })
 
-/** Emitted after every successful write. */
-const emit = defineEmits<{ saved: [tx: Transaction] }>()
+/** `saved` after every successful write; `submit` instead in template mode. */
+const emit = defineEmits<{ saved: [tx: Transaction]; submit: [] }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 const lookup = useTradeLookupStore()
 const settings = useSettingsStore()
 
-const editing = computed(() => props.transaction !== null)
+const editing = computed(() => props.transaction !== null && !props.template)
 
 const tree = useQuery({
   queryKey: STORE_TREE_QUERY_KEY,
@@ -73,6 +74,7 @@ const kinds = useQuery({
 const offered = computed<TxKind[]>(() => {
   if (editing.value && props.transaction) return [form.kind]
   const data = kinds.data.value
+  if (props.template) return data?.verbs ?? []
   return data ? [...data.verbs, ...data.special] : []
 })
 
@@ -183,6 +185,7 @@ watch(debts, (choices) => {
 
 /** On-chain fields: crypto wallets for topup/payment, a transfer of a non-fiat asset, DeFi. */
 const showChain = computed(() => {
+  if (props.template) return false
   if (form.kind === 'defi') return true
   if (form.kind === 'transfer') return form.asset?.chain !== 'fiat'
   return isCrypto.value && ['topup', 'payment'].includes(form.kind)
@@ -219,7 +222,7 @@ const quote = useQuery({
       },
     })
   },
-  enabled: computed(() => Boolean(priced.value) && !form.priceUsd.trim()),
+  enabled: computed(() => !props.template && Boolean(priced.value) && !form.priceUsd.trim()),
 })
 /** Which day's rate an empty price field stands for — or that there is none yet. */
 const rateHint = computed(() => {
@@ -233,6 +236,54 @@ const rateHint = computed(() => {
     price: formatMoney(price, { decimals: price < 1 ? 6 : 2, currency: 'usd' }),
   })
 })
+
+/* --- budget limits this payment would break (plan §9.7) --- */
+const budgetStatus = useQuery({
+  queryKey: ['budget-status'],
+  queryFn: () => call<BudgetStatus[]>('get_budget_status'),
+  enabled: computed(() => !props.template && form.kind === 'payment'),
+})
+const overLimits = useQuery({
+  queryKey: computed(() => [
+    'budget-overrun',
+    form.kind,
+    form.amount,
+    form.asset?.symbol,
+    form.categories.join(','),
+    budgetStatus.data.value,
+  ]),
+  queryFn: async () => {
+    const amount = Number(form.amount)
+    const asset = form.asset
+    if (!asset || !(amount > 0)) return []
+    const matching = (budgetStatus.data.value ?? []).filter((status) => {
+      const target = status.budget.target
+      if (target === 'total') return true
+      if ('category' in target) return form.categories.includes(target.category)
+      return target.store.store_ids.includes(props.storeId)
+    })
+    const out: Array<{ status: BudgetStatus; over: number }> = []
+    for (const status of matching) {
+      const converted = await call<ConvertedAmount>('convert_amount', {
+        input: { from: asset.symbol, to: status.budget.currency, amount: form.amount, at: null },
+      })
+      const over = Number(converted.amount ?? 0) - Number(status.remaining)
+      if (converted.amount !== null && over > 0) out.push({ status, over })
+    }
+    return out
+  },
+  enabled: computed(() => !props.template && form.kind === 'payment' && Boolean(budgetStatus.data.value?.length)),
+})
+const overrunText = computed(() =>
+  (overLimits.data.value ?? [])
+    .map(({ status, over }) =>
+      t('budget.overrunHint', {
+        period: t(`budget.periodKind.${status.budget.period}`),
+        amount: formatMoney(over, { currency: status.budget.currency }),
+      }),
+    )
+    .join(' · '),
+)
 
 // Moving an operation to another date re-prices it there, unless the price
 // was changed by hand in this edit.
@@ -380,15 +431,28 @@ const save = useMutation({
 
 const valid = computed(() => !props.disabled && isFormComplete(form))
 
-/** The dialog owns the submit button, so it reads these. */
-defineExpose({ valid, pending: computed(() => save.isPending.value) })
+function submit() {
+  if (props.template) emit('submit')
+  else save.mutate()
+}
+
+/** The dialog owns the submit button, so it reads these; a template's parent reads `input`. */
+defineExpose({
+  valid,
+  pending: computed(() => save.isPending.value),
+  input: computed(() => formToInput(form)),
+})
 
 const verbLabel = (kind: TxKind) =>
   kind === 'topup' && isProperty.value ? t('tx.verb.acquire') : t(`tx.kind.${kind}`)
 </script>
 
 <template>
-  <form id="transaction-form" class="flex flex-col gap-4" @submit.prevent="save.mutate()">
+  <form
+    :id="props.template ? 'transaction-template-form' : 'transaction-form'"
+    class="flex flex-col gap-4"
+    @submit.prevent="submit"
+  >
     <ToggleGroup
       v-if="offered.length > 1"
       type="single"
@@ -416,6 +480,12 @@ const verbLabel = (kind: TxKind) =>
           <Input id="tx-amount" v-model="form.amount" inputmode="decimal" :placeholder="t('form.amountHint')" />
         </div>
       </div>
+      <p
+        v-if="overrunText"
+        class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+      >
+        {{ overrunText }}
+      </p>
       <div v-if="isProperty && form.kind === 'topup'" class="grid gap-1.5">
         <Label for="tx-unit-price">{{ t('tx.field.unitPrice') }}</Label>
         <Input id="tx-unit-price" v-model="form.unitPrice" inputmode="decimal" />
@@ -676,12 +746,12 @@ const verbLabel = (kind: TxKind) =>
         <Label for="tx-fee">{{ t('form.fee') }}</Label>
         <Input id="tx-fee" v-model="form.feeAmount" inputmode="decimal" placeholder="0" />
       </div>
-      <div v-if="form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid gap-1.5">
+      <div v-if="!props.template && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid gap-1.5">
         <Label for="tx-price">{{ t('form.priceUsd') }}</Label>
         <Input id="tx-price" v-model="form.priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
         <p v-if="rateHint" class="text-xs text-muted-foreground">{{ rateHint }}</p>
       </div>
-      <div class="grid gap-1.5">
+      <div v-if="!props.template" class="grid gap-1.5">
         <Label for="tx-date">{{ t('form.date') }}</Label>
         <Input id="tx-date" v-model="form.timestamp" type="datetime-local" />
       </div>

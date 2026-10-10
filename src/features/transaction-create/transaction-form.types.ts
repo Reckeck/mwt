@@ -8,6 +8,12 @@ export interface TransactionFormProps {
   disabled?: boolean
   /** Opens a transfer to this side (a contact's card: «write a transfer here»). */
   counterpart?: AccountRef | null
+  /**
+   * Edit a template for an automation instead of a transaction: only the four
+   * verbs, no date, price or on-chain fields, and nothing is saved — the
+   * parent reads `input` and submits it itself. `transaction` prefills it.
+   */
+  template?: boolean
 }
 
 /** A calculator result handed to the form. */
