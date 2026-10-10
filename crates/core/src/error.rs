@@ -57,6 +57,11 @@ pub enum Error {
     /// The file is from before the transaction-model schema break; there is no converter.
     #[error("vault was written by an earlier version of the app: {0}")]
     IncompatibleVault(String),
+
+    /// An automation would overdraw its source (plan D26); the text names the
+    /// store, the asset and both amounts.
+    #[error("insufficient funds: {0}")]
+    InsufficientFunds(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -112,6 +117,7 @@ impl Error {
             Error::RequiresUnlock => "REQUIRES_UNLOCK",
             Error::StoreTree(violation) => violation.code(),
             Error::IncompatibleVault(_) => "INCOMPATIBLE_VAULT",
+            Error::InsufficientFunds(_) => "INSUFFICIENT_FUNDS",
         }
     }
 }

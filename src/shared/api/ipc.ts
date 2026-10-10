@@ -17,6 +17,7 @@ import {
   mockTransactionFrom,
   mockTurnover,
 } from './ipc-mock-ledger'
+import { mockPlanning } from './ipc-mock-planning'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -187,6 +188,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.locale) mockAppSettings.locale = input.locale
       if (input.base_currency) mockAppSettings.base_currency = input.base_currency
       if (input.favorite_currencies) mockAppSettings.favorite_currencies = input.favorite_currencies
+      if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
       return resolve(mockAppSettings)
     }
     case 'get_supported_currencies':
@@ -433,8 +435,23 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       const input = body as GetCandlesInput
       return resolve(mockCandles(input))
     }
-    default:
-      return resolve({})
+    default: {
+      const planned = mockPlanning(
+        cmd,
+        args,
+        {
+          transactions: mockTransactions,
+          categories: mockCategories,
+          stores: mockStores,
+          priceOf,
+          transactionFrom: (input, ts) =>
+            mockTransactionFrom({ ...input, common: { ...input.common, timestamp: ts } } as TransactionInput, priceOf),
+          budgetCurrency: mockSettings.budget_currency || mockAppSettings.base_currency,
+        },
+        mockSettings,
+      )
+      return resolve(planned ?? {})
+    }
   }
 }
 
@@ -532,6 +549,7 @@ const mockAppSettings: AppSettings = {
   locale: 'auto',
   base_currency: 'usd',
   favorite_currencies: [],
+  timezone: null,
 }
 
 const mockCurrencies: SupportedCurrencies = {

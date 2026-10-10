@@ -24,6 +24,13 @@ fn config_dir(app: &AppHandle) -> PathBuf {
     app.path().app_config_dir().expect("app config dir")
 }
 
+/// The IANA zone days and months are cut in (plan §7.6): the one chosen in
+/// the settings, else the OS zone, else UTC.
+pub fn current_zone(app: &AppHandle) -> String {
+    let system = iana_time_zone::get_timezone().ok();
+    load_settings(&config_dir(app)).zone_or(system.as_deref())
+}
+
 /// Read the app settings. Never fails: a missing or corrupt file yields the
 /// defaults, and the lock screen must be able to render them.
 #[tauri::command]

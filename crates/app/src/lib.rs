@@ -2,9 +2,10 @@
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
 mod commands;
+mod scheduler;
 
 use commands::{
-    AppState, app_settings, auth, calc, categories, contacts, err_to_string, exchange, portfolio,
+    AppState, app_settings, auth, calc, categories, contacts, exchange, planning, portfolio,
     pricing, settings, stores, transactions, vault_recents,
 };
 use tauri::{
@@ -18,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +106,38 @@ pub fn run() {
             settings::dev_apply_vault_json,
             settings::dev_open_vault_json_in_editor,
             settings::dev_reload_vault_json_from_editor,
+            // planning
+            planning::list_automations,
+            planning::create_automation,
+            planning::update_automation,
+            planning::delete_automation,
+            planning::run_automation,
+            planning::list_automation_runs,
+            planning::retry_automation_run,
+            planning::skip_automation_run,
+            planning::list_budgets,
+            planning::create_budget,
+            planning::update_budget,
+            planning::delete_budget,
+            planning::get_budget_status,
+            planning::get_daily_budget,
+            planning::get_month_summary,
+            planning::list_goals,
+            planning::create_goal,
+            planning::update_goal,
+            planning::delete_goal,
+            planning::get_goal_progress,
+            planning::get_goal_calendar,
+            planning::list_reminders,
+            planning::create_reminder,
+            planning::update_reminder,
+            planning::delete_reminder,
+            planning::set_reminder_done,
+            planning::list_price_alerts,
+            planning::create_price_alert,
+            planning::update_price_alert,
+            planning::delete_price_alert,
+            planning::get_upcoming,
             // vault recents
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,
@@ -116,8 +150,8 @@ pub fn run() {
             let state = app.state::<AppState>();
             *state.vault_path.lock().expect("vault_path lock") = default_path;
 
-            // Spawn background Bybit import scheduler (D2.4)
-            spawn_bybit_import_scheduler(app.handle().clone());
+            // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
+            scheduler::spawn(app.handle().clone());
 
             // Create system tray with context menu
             create_tray(app)?;
@@ -310,110 +344,4 @@ fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build(&app_handle)?;
 
     Ok(())
-}
-
-/// How often the scheduler wakes up to re-read the interval setting.
-const SCHEDULER_TICK_SEC: u64 = 30;
-
-/// Poll Bybit on the interval from `settings.bybit_import_interval_sec`
-/// (`0` disables it) and stage any new fills for the user to confirm.
-///
-/// Nothing is ever written to `transactions` from here: fills land in
-/// `pending_imports` and the user confirms them explicitly.
-fn spawn_bybit_import_scheduler(app_handle: tauri::AppHandle) {
-    std::thread::spawn(move || {
-        let mut last_run: Option<std::time::Instant> = None;
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(SCHEDULER_TICK_SEC));
-
-            // Snapshot the settings under the lock, then drop the guard: the
-            // guard must never live across `.await` (AGENTS.md rule 3).
-            let (interval_sec, configured) = {
-                let state = app_handle.state::<AppState>();
-                let Ok(guard) = state.vault.lock() else {
-                    continue;
-                };
-                let Some(vault) = guard.as_ref() else {
-                    continue; // locked: nothing to poll for
-                };
-                let has_key = !vault.doc.exchanges.bybit.is_empty();
-                (vault.doc.settings.bybit_import_interval_sec, has_key)
-            };
-            if interval_sec == 0 || !configured {
-                continue;
-            }
-
-            let interval = std::time::Duration::from_secs(interval_sec as u64);
-            if last_run.is_some_and(|previous| previous.elapsed() < interval) {
-                continue;
-            }
-            last_run = Some(std::time::Instant::now());
-
-            // Soft-fail by design: a poll that cannot run leaves the staging
-            // area untouched and simply retries on the next tick.
-            let Ok(staged) = tauri::async_runtime::block_on(poll_bybit_once(&app_handle)) else {
-                continue;
-            };
-            if staged > 0 {
-                let _ = app_handle.emit(
-                    "bybit-import-pending",
-                    serde_json::json!({ "staged": staged }),
-                );
-            }
-        }
-    });
-}
-
-/// One polling pass over every store that has a Bybit key. Returns how many
-/// fills were newly staged.
-async fn poll_bybit_once(app_handle: &tauri::AppHandle) -> Result<u32, String> {
-    let state = app_handle.state::<AppState>();
-    let keys: Vec<(String, String, String)> = {
-        let guard = state.vault.lock().map_err(|err| err.to_string())?;
-        let vault = guard.as_ref().ok_or("REQUIRES_UNLOCK: vault is locked")?;
-        vault
-            .doc
-            .exchanges
-            .bybit
-            .iter()
-            .filter(|entry| !entry.api_key.is_empty() && !entry.api_secret.is_empty())
-            .map(|entry| {
-                (
-                    entry.store_id.clone(),
-                    entry.api_key.clone(),
-                    entry.api_secret.clone(),
-                )
-            })
-            .collect()
-    };
-
-    let client = trade_core::exchange::BybitClient::default();
-    let mut staged_total = 0u32;
-
-    for (store_id, api_key, api_secret) in keys {
-        // Network call happens with no guard held.
-        let execs = client
-            .all_executions(&api_key, &api_secret, 500)
-            .await
-            .map_err(err_to_string)?;
-
-        let imports: Vec<trade_core::model::vault::PendingImport> = execs
-            .iter()
-            .filter_map(|execution| {
-                trade_core::model::vault::PendingImport::from_execution(
-                    &store_id,
-                    execution.category_hint(),
-                    execution,
-                )
-            })
-            .collect();
-
-        let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
-        let Some(vault) = guard.as_mut() else {
-            return Err("REQUIRES_UNLOCK: vault was locked mid-poll".into());
-        };
-        staged_total += vault.stage_imports(imports).map_err(err_to_string)?;
-    }
-
-    Ok(staged_total)
 }

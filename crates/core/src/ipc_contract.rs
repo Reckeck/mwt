@@ -6,8 +6,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
+use crate::error::{Error, Result};
 use crate::model::category::CategoryGroup;
 use crate::model::chain::Chain;
+use crate::model::planning::{
+    AlertCondition, BudgetPeriod, BudgetTarget, Schedule, TransactionDraft,
+};
+use crate::model::store::StoreScope;
 use crate::model::store::{AssetRef, LiabilityTerms, StoreKind};
 use crate::model::transaction::{
     AccountRef, AssetSellTx, ConvertSide, ConvertTx, DebtEffect, DefiAction, DefiTx, Fee,
@@ -16,7 +21,7 @@ use crate::model::transaction::{
     TxMeta, allowed_kinds, default_kind,
 };
 use crate::model::vault::DailyBudgetMode;
-use crate::service::ContactDraft;
+use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
 
 // -- auth --------------------------------------------------------------------
 
@@ -655,6 +660,162 @@ pub struct ConvertAmountInput {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct ConvertedAmount {
     pub amount: Option<Amount>,
+}
+
+// -- planning (plan §7) ---------------------------------------------------------
+
+/// An automation as the form edits it. The template is an ordinary
+/// transaction input of one of the four verbs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AutomationInput {
+    pub name: String,
+    pub active: bool,
+    pub schedule: Schedule,
+    /// RFC3339, the first planned date.
+    pub starts_at: String,
+    pub template: TransactionInput,
+}
+
+impl AutomationInput {
+    pub fn to_draft(&self) -> Result<AutomationDraft> {
+        let template = match self.template.to_transaction() {
+            Transaction::Topup(inner) => TransactionDraft::Topup(inner),
+            Transaction::Payment(inner) => TransactionDraft::Payment(inner),
+            Transaction::Transfer(inner) => TransactionDraft::Transfer(inner),
+            Transaction::Convert(inner) => TransactionDraft::Convert(inner),
+            _ => {
+                return Err(Error::InvalidInput(
+                    "an automation repeats a top-up, payment, transfer or exchange".into(),
+                ));
+            }
+        };
+        Ok(AutomationDraft {
+            name: self.name.clone(),
+            active: self.active,
+            schedule: self.schedule,
+            starts_at: self.starts_at.clone(),
+            template,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateAutomationInput {
+    pub id: String,
+    pub automation: AutomationInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct BudgetInput {
+    pub active: bool,
+    pub target: BudgetTarget,
+    pub period: BudgetPeriod,
+    pub limit: Amount,
+    pub currency: String,
+}
+
+impl From<BudgetInput> for BudgetDraft {
+    fn from(input: BudgetInput) -> Self {
+        Self {
+            active: input.active,
+            target: input.target,
+            period: input.period,
+            limit: input.limit,
+            currency: input.currency,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateBudgetInput {
+    pub id: String,
+    pub budget: BudgetInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct GoalInput {
+    pub name: String,
+    pub active: bool,
+    pub target_amount: Amount,
+    pub currency: String,
+    pub starts_at: String,
+    pub deadline: Option<String>,
+    /// Importance, 1–5.
+    pub priority: u8,
+    pub monthly_commitment: Option<Amount>,
+    pub scope: StoreScope,
+}
+
+impl From<GoalInput> for GoalDraft {
+    fn from(input: GoalInput) -> Self {
+        Self {
+            name: input.name,
+            active: input.active,
+            target_amount: input.target_amount,
+            currency: input.currency,
+            starts_at: input.starts_at,
+            deadline: input.deadline.filter(|value| !value.trim().is_empty()),
+            priority: input.priority,
+            monthly_commitment: input.monthly_commitment,
+            scope: input.scope,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateGoalInput {
+    pub id: String,
+    pub goal: GoalInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ReminderInput {
+    pub text: String,
+    /// RFC3339.
+    pub due_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateReminderInput {
+    pub id: String,
+    pub reminder: ReminderInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct PriceAlertInput {
+    pub asset: AssetIdent,
+    pub condition: AlertCondition,
+    pub price: Amount,
+    pub currency: String,
+    pub active: bool,
+}
+
+impl From<PriceAlertInput> for PriceAlertDraft {
+    fn from(input: PriceAlertInput) -> Self {
+        Self {
+            asset: input.asset.to_asset(),
+            condition: input.condition,
+            price: input.price,
+            currency: input.currency,
+            active: input.active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdatePriceAlertInput {
+    pub id: String,
+    pub alert: PriceAlertInput,
+}
+
+/// Payload of `automation-rejected`: one run the scheduler could not create.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AutomationRejectedEvent {
+    pub run_id: String,
+    pub automation_id: String,
+    pub name: String,
+    pub planned_at: String,
+    pub reason: crate::model::planning::RejectReason,
 }
 
 // -- calc --------------------------------------------------------------------

@@ -67,6 +67,9 @@ pub struct AppSettings {
     /// Currencies offered on hover next to any price. Empty = no tooltip.
     #[serde(default)]
     pub favorite_currencies: Vec<String>,
+    /// IANA zone days and months are cut in (plan §7.6); `None` = the OS zone.
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -76,6 +79,7 @@ impl Default for AppSettings {
             locale: Locale::Auto,
             base_currency: DEFAULT_BASE_CURRENCY.into(),
             favorite_currencies: Vec::new(),
+            timezone: None,
         }
     }
 }
@@ -105,6 +109,18 @@ impl AppSettings {
         if let Some(favorites) = &patch.favorite_currencies {
             self.favorite_currencies = normalize_codes(favorites);
         }
+        if let Some(zone) = &patch.timezone {
+            self.timezone = normalize_zone(zone);
+        }
+    }
+
+    /// The zone to cut days in: the chosen one, else `system` (the OS zone
+    /// the app layer detected), else UTC.
+    pub fn zone_or(&self, system: Option<&str>) -> String {
+        self.timezone
+            .clone()
+            .or_else(|| system.and_then(normalize_zone))
+            .unwrap_or_else(|| "UTC".into())
     }
 
     /// Drop values we could not use anyway, so a hand-edited file cannot leave
@@ -119,7 +135,14 @@ impl AppSettings {
             }
         };
         self.favorite_currencies = normalize_codes(&self.favorite_currencies);
+        self.timezone = self.timezone.as_deref().and_then(normalize_zone);
     }
+}
+
+/// A known IANA zone name, trimmed; empty or unknown = none.
+fn normalize_zone(raw: &str) -> Option<String> {
+    let zone = raw.trim();
+    crate::calendar::Calendar::is_valid_zone(zone).then(|| zone.to_string())
 }
 
 /// Uppercase, keep three-letter ISO codes only, drop the base currency itself:
@@ -142,6 +165,9 @@ pub struct UpdateAppSettingsInput {
     pub locale: Option<Locale>,
     pub base_currency: Option<String>,
     pub favorite_currencies: Option<Vec<String>>,
+    /// IANA zone; an empty string goes back to the OS zone.
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 // -- currency catalog ----------------------------------------------------------
@@ -383,6 +409,23 @@ mod tests {
     }
 
     #[test]
+    fn timezone_keeps_known_zones_and_empty_means_the_os_zone() {
+        let mut settings = AppSettings::default();
+        settings.apply(&UpdateAppSettingsInput {
+            timezone: Some(" Asia/Bangkok ".into()),
+            ..Default::default()
+        });
+        assert_eq!(settings.zone_or(Some("Europe/Moscow")), "Asia/Bangkok");
+        settings.apply(&UpdateAppSettingsInput {
+            timezone: Some(String::new()),
+            ..Default::default()
+        });
+        assert_eq!(settings.timezone, None);
+        assert_eq!(settings.zone_or(Some("Europe/Moscow")), "Europe/Moscow");
+        assert_eq!(settings.zone_or(Some("Nowhere/Land")), "UTC");
+    }
+
+    #[test]
     fn settings_round_trip_on_disk() {
         let dir = temp_dir("roundtrip");
         let settings = AppSettings {
@@ -390,6 +433,7 @@ mod tests {
             locale: Locale::Ru,
             base_currency: "eur".into(),
             favorite_currencies: vec!["RUB".into()],
+            timezone: Some("Asia/Bangkok".into()),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

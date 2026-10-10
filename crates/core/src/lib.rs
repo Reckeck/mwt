@@ -5,6 +5,7 @@
 pub mod amount;
 pub mod appconfig;
 pub mod calc;
+pub mod calendar;
 pub mod crypto;
 pub mod error;
 pub mod exchange;
