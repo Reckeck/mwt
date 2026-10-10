@@ -205,6 +205,11 @@ JSON без шифрования — там нет ничего секретно
 | `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder` |
 | `set_reminder_done` | `id, done` | `Reminder` |
 | `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново |
+| `list_utility_items` / `create_utility_item` / `update_utility_item` / `delete_utility_item` | `UtilityInput { name, active, kind: metered{ unit, tariff } \| static{ amount } \| housing{ amount, deposit?, due_day, automation_id? }, currency, store_id?, category }` / `UpdateUtilityInput { id, item }` / `id` | `UtilityItem`; удаление уносит показания, платежи остаются |
+| `add_meter_reading` | `MeterReadingInput { item_id, value, period (YYYY-MM) }` | `MeterReading`; показание за тот же месяц заменяется; меньше прошлого или больше следующего — `INVALID_INPUT` |
+| `delete_meter_reading` | `id` | `()` |
+| `get_meter_trend` | `item_id` | `UtilityTrend { months[{ period, reading?, consumption?, amount }], average?, delta_pct?, forecast?, anomaly, monthly }` — среднее за 6 месяцев со счётом, прогноз — линейная регрессия, аномалия — > 1.5× среднего прежних |
+| `get_utility_payment_draft` | `item_id`, `period?` (по умолчанию текущий месяц) | `UtilityPaymentDraft { transaction (payment), consumption?, includes_deposit }` — форма «Оплатить» открывается с ним; комментарий = название счёта, категория счёта |
 | `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
 
 ### settings (vault)
