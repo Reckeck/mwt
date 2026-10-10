@@ -20,15 +20,25 @@ use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_
 use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
 
+mod agenda;
+mod automations;
+mod budget;
 mod categories;
 mod contacts;
+mod goals;
 mod rates;
 #[cfg(test)]
 mod test_support;
 mod validate;
 mod worth;
 
+pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
+pub use automations::{
+    AutomationDraft, AutomationPass, MAX_CATCH_UP, describe_reject, planned_dates,
+};
+pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, TurnoverRow};
+pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
 pub use rates::RateBook;
 pub use worth::{FlowClass, NetWorth};
 
@@ -203,7 +213,7 @@ impl UnlockedVault {
     // that places a node goes through `validate_placement`, so the tree rules
     // live in one spot; reads stay lenient so a hand-edited vault still opens.
 
-    fn find_store(&self, id: &str) -> Option<&Store> {
+    pub(crate) fn find_store(&self, id: &str) -> Option<&Store> {
         self.doc.stores.iter().find(|store| store.id == id)
     }
 
@@ -571,14 +581,21 @@ impl UnlockedVault {
         }
     }
 
+    /// Everything a write does before storing: categories normalized and
+    /// auto-filled, property prices completed, unpriced sides stamped, every
+    /// rule checked.
+    pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()> {
+        Self::normalize_categories(tx);
+        self.apply_categorization_rules(tx);
+        self.complete_transaction(tx);
+        Self::stamp_prices(&self.rate_book(), tx);
+        self.validate_transaction(tx)
+    }
+
     /// Validate and append a transaction of any variant (plan §4.5, §8.1):
     /// categories are normalized and auto-filled, then every rule is checked.
     pub fn add_transaction(&mut self, mut tx: Transaction) -> Result<Transaction> {
-        Self::normalize_categories(&mut tx);
-        self.apply_categorization_rules(&mut tx);
-        self.complete_transaction(&mut tx);
-        Self::stamp_prices(&self.rate_book(), &mut tx);
-        self.validate_transaction(&tx)?;
+        self.prepare_transaction(&mut tx)?;
         if tx.meta().id.trim().is_empty()
             || self
                 .doc
@@ -606,11 +623,7 @@ impl UnlockedVault {
         let origin = self.doc.transactions[index].meta().origin.clone();
         tx.meta_mut().id = id.to_string();
         tx.meta_mut().origin = origin;
-        Self::normalize_categories(&mut tx);
-        self.apply_categorization_rules(&mut tx);
-        self.complete_transaction(&mut tx);
-        Self::stamp_prices(&self.rate_book(), &mut tx);
-        self.validate_transaction(&tx)?;
+        self.prepare_transaction(&mut tx)?;
         self.doc.transactions[index] = tx.clone();
         self.recompute_holdings();
         self.persist()?;

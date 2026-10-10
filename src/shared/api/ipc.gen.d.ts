@@ -21,7 +21,11 @@ base_currency: string,
 /**
  * Currencies offered on hover next to any price. Empty = no tooltip.
  */
-favorite_currencies: Array<string>, };
+favorite_currencies: Array<string>, 
+/**
+ * IANA zone days and months are cut in (plan §7.6); `None` = the OS zone.
+ */
+timezone: string | null, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -90,7 +94,39 @@ starts_at: string, template: TransactionDraft,
  */
 last_planned_at: string | null, created_at: string, };
 
+/**
+ * An automation as the form edits it. The template is an ordinary
+ * transaction input of one of the four verbs.
+ */
+type AutomationInput = { name: string, active: boolean, schedule: Schedule, 
+/**
+ * RFC3339, the first planned date.
+ */
+starts_at: string, template: TransactionInput, };
+
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
+
+/**
+ * The outcome of one scheduler pass.
+ */
+type AutomationPass = { 
+/**
+ * Ids of the transactions created.
+ */
+created: Array<string>, 
+/**
+ * Runs rejected in this pass, for the notification.
+ */
+rejected: Array<AutomationRun>, 
+/**
+ * Missed dates beyond the catch-up limit, recorded as skipped.
+ */
+skipped: number, };
+
+/**
+ * Payload of `automation-rejected`: one run the scheduler could not create.
+ */
+type AutomationRejectedEvent = { run_id: string, automation_id: string, name: string, planned_at: string, reason: RejectReason, };
 
 /**
  * One processed planned date of an automation. Never retried automatically;
@@ -100,7 +136,22 @@ type AutomationRun = { id: string, automation_id: string, planned_at: string, pr
 
 type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
 
+type BudgetInput = { active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
+
 type BudgetPeriod = "day" | "week" | "month";
+
+/**
+ * A limit and how much of it the current period used.
+ */
+type BudgetStatus = { budget: Budget, 
+/**
+ * Spent in the current period, in the budget's own currency.
+ */
+spent: Amount, remaining: Amount, 
+/**
+ * `spent / limit`, 0 when the limit is zero.
+ */
+used: Amount, period_start: string, period_end: string, };
 
 type BudgetTarget = "total" | { "category": string } | { "store": StoreScope };
 
@@ -405,6 +456,51 @@ type CurrencyCatalogOutput = { catalog: SupportedCurrencies,
 notice: string | null, };
 
 /**
+ * The daily budget for today (plan §7.3, D18).
+ */
+type DailyBudget = { mode: DailyBudgetMode, currency: string, 
+/**
+ * Local date, `YYYY-MM-DD`.
+ */
+date: string, 
+/**
+ * The day's allowance by the mode's formula.
+ */
+per_day: Amount, 
+/**
+ * Carry-over from the earlier days of the month (month mode); zero otherwise.
+ */
+carry: Amount, 
+/**
+ * `per_day + carry`, or the hand-set day limit when it is smaller.
+ */
+available: Amount, spent_today: Amount, 
+/**
+ * `available − spent_today`.
+ */
+left_today: Amount, 
+/**
+ * Month mode: income, mandatory spending and the savings plan of the month.
+ */
+income: Amount, fixed: Amount, savings_plan: Amount, 
+/**
+ * Until-income mode: budget balance minus what is due before the income.
+ */
+free: Amount, 
+/**
+ * Days the allowance is spread over.
+ */
+days: number, 
+/**
+ * Date of the next planned income, until-income mode.
+ */
+next_income: string | null, 
+/**
+ * A hand-set `Total / Day` limit in the budget currency, if any.
+ */
+manual_limit: Amount | null, };
+
+/**
  * How the daily budget is computed (plan D18).
  */
 type DailyBudgetMode = "month" | "until_income";
@@ -500,6 +596,66 @@ priority: number,
  * What the user is ready to put aside per month.
  */
 monthly_commitment: Amount | null, scope: StoreScope, created_at: string, };
+
+type GoalCalendar = { year: number, currency: string, months: Array<GoalCalendarMonth>, };
+
+type GoalCalendarMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, 
+/**
+ * Planned contributions of the goals active this month.
+ */
+need: Amount, 
+/**
+ * Net money put into goal stores this month, without rate changes.
+ */
+saved: Amount, shortfall: Amount, done: boolean, };
+
+type GoalInput = { name: string, active: boolean, target_amount: Amount, currency: string, starts_at: string, deadline: string | null, 
+/**
+ * Importance, 1–5.
+ */
+priority: number, monthly_commitment: Amount | null, scope: StoreScope, };
+
+type GoalProgress = { goal: Goal, 
+/**
+ * Current value of the goal's share of its stores, in the goal currency.
+ */
+saved: Amount, 
+/**
+ * Net money put into those stores, valued on the day it went in.
+ */
+contributed: Amount, 
+/**
+ * `saved − contributed`: what rates added or took away.
+ */
+fx_gain: Amount, 
+/**
+ * `saved / target × 100`.
+ */
+pct: Amount, 
+/**
+ * Months from the start to the deadline, both included.
+ */
+months_total: number | null, 
+/**
+ * Months from this one to the deadline, both included.
+ */
+months_left: number | null, 
+/**
+ * `(target − saved) / months_left`.
+ */
+need_per_month: Amount | null, realistic: boolean, issues: Array<RealismIssue>, 
+/**
+ * Date (`YYYY-MM-DD`) the target is reached at the recent pace.
+ */
+forecast: string | null, 
+/**
+ * Whether the recent trend grows at all.
+ */
+accumulating: boolean, };
 
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
@@ -625,6 +781,51 @@ type MeterReading = { id: string, item_id: string, value: Amount,
 period: string, recorded_at: string, };
 
 /**
+ * Totals of one calendar month in the budget currency.
+ */
+type MonthSummary = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, currency: string, income: Amount, fixed: Amount, daily: Amount, 
+/**
+ * `income × savings_rate`.
+ */
+savings_plan: Amount, 
+/**
+ * What was left: `income − fixed − daily`.
+ */
+savings_fact: Amount, 
+/**
+ * `savings_fact − savings_plan`.
+ */
+deviation: Amount, 
+/**
+ * Share of income left, percent; 0 without income.
+ */
+saved_pct: Amount, 
+/**
+ * Money moved to savings and goal stores.
+ */
+savings_moved: Amount, 
+/**
+ * Money that entered the budget from the user's other stores.
+ */
+budget_in: Amount, 
+/**
+ * Money that left the budget for the user's other stores.
+ */
+budget_out: Amount, 
+/**
+ * Automation runs planned this month that created nothing.
+ */
+not_executed: number, 
+/**
+ * Whether every flow had a rate; a missing rate counts as zero.
+ */
+complete: boolean, };
+
+/**
  * Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
  */
 type MoveStoreInput = { id: string, parent_id: string | null, };
@@ -746,6 +947,8 @@ liabilities_base: Amount, net_worth_base: Amount, };
 
 type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, };
 
+type PriceAlertInput = { asset: AssetIdent, condition: AlertCondition, price: Amount, currency: string, active: boolean, };
+
 /**
  * A cached price: one unit of an asset in USD.
  */
@@ -779,6 +982,11 @@ price_base: Amount | null,
  */
 fx_override: Amount | null, };
 
+/**
+ * Why a goal is marked «Пересмотреть».
+ */
+type RealismIssue = { "over_commitment": { need: Amount, commitment: Amount, } } | { "over_surplus": { need_total: Amount, surplus: Amount, currency: string, } };
+
 type RealizedPnl = { total_base: Amount, 
 /**
  * Fees paid in scope, at their stamped price; not part of `total_base`.
@@ -799,6 +1007,12 @@ restamped: number, updated_at: string, };
 type RejectReason = { "insufficient_funds": { store_id: string, asset: AssetRef, required: Amount, available: Amount, } } | { "credit_limit_exceeded": { store_id: string, limit: Amount, required: Amount, } } | { "invalid": { message: string, } };
 
 type Reminder = { id: string, text: string, due_at: string, done: boolean, };
+
+type ReminderInput = { text: string, 
+/**
+ * RFC3339.
+ */
+due_at: string, };
 
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
@@ -1231,9 +1445,49 @@ type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": 
 type UnlockInput = { path: string, password: string, };
 
 /**
+ * One thing on the agenda.
+ */
+type UpcomingItem = { kind: UpcomingKind, 
+/**
+ * Automation, utility item, store, reminder or run id.
+ */
+source_id: string, 
+/**
+ * RFC3339 moment.
+ */
+at: string, 
+/**
+ * Local date, `YYYY-MM-DD`.
+ */
+date: string, 
+/**
+ * Automation or item name, store name, reminder text.
+ */
+title: string, store_id: string | null, 
+/**
+ * Signed: money in is positive, money out negative.
+ */
+amount: Amount | null, asset: AssetRef | null, 
+/**
+ * For money going out: how much will be missing by then, at the
+ * balance forecast from today's balance and everything planned before.
+ */
+shortfall: Amount | null, };
+
+type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run";
+
+/**
  * Partial update: only the fields present in the payload are touched.
  */
-type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, favorite_currencies: Array<string> | null, };
+type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, favorite_currencies: Array<string> | null, 
+/**
+ * IANA zone; an empty string goes back to the OS zone.
+ */
+timezone: string | null, };
+
+type UpdateAutomationInput = { id: string, automation: AutomationInput, };
+
+type UpdateBudgetInput = { id: string, budget: BudgetInput, };
 
 type UpdateCategoryInput = { key: string, 
 /**
@@ -1242,6 +1496,12 @@ type UpdateCategoryInput = { key: string,
 name: string | null, group: CategoryGroup, };
 
 type UpdateContactInput = { id: string, contact: ContactDraft, };
+
+type UpdateGoalInput = { id: string, goal: GoalInput, };
+
+type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, };
+
+type UpdateReminderInput = { id: string, reminder: ReminderInput, };
 
 type UpdateRuleInput = { id: string, pattern: string, category: string, active: boolean, };
 

@@ -1,0 +1,447 @@
+/**
+ * Browser-mock half of planning: automations, budgets, goals, reminders,
+ * alerts and the agenda for `pnpm dev`. The numbers are rough stand-ins for
+ * clicking through the UI; the real rules (funds check, carry-over, shares
+ * of shared stores) live only in the backend.
+ */
+
+import { txLegs, txMeta } from '@/shared/lib/transactions'
+
+/** What the planning mock needs from the ledger mock. */
+export interface PlanningMockContext {
+  transactions: Transaction[]
+  categories: Category[]
+  stores: Store[]
+  priceOf: (symbol: string) => number
+  transactionFrom: (input: TransactionInput, ts: string) => Transaction
+  budgetCurrency: string
+}
+
+const automations: Automation[] = []
+const runs: AutomationRun[] = []
+const budgets: Budget[] = []
+const goals: Goal[] = []
+const reminders: Reminder[] = []
+const alerts: PriceAlert[] = []
+
+const uuid = () => crypto.randomUUID()
+const isRejected = (outcome: AutomationOutcome) => typeof outcome === 'object' && 'rejected' in outcome
+const now = () => new Date()
+const iso = (date: Date) => date.toISOString()
+const fail = (message: string, code = 'INVALID_INPUT') => {
+  throw { code, message }
+}
+
+function draftOf(tx: Transaction): TransactionDraft {
+  if ('topup' in tx || 'payment' in tx || 'transfer' in tx || 'convert' in tx) return tx as TransactionDraft
+  return fail('an automation repeats a top-up, payment, transfer or exchange')
+}
+
+/** Monthly dates (clamped to the month), weekly, every N days — from `start` up to `until`. */
+function plannedDates(schedule: Schedule, start: Date, until: Date): Date[] {
+  const out: Date[] = []
+  const at = (year: number, month: number, day: number) => new Date(year, month, day, 9)
+  if ('monthly' in schedule) {
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+    while (cursor <= until) {
+      const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+      const date = at(cursor.getFullYear(), cursor.getMonth(), Math.min(schedule.monthly.day, last))
+      if (date >= start && date <= until) out.push(date)
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+    }
+  } else {
+    const step = 'weekly' in schedule ? 7 : Math.max(1, schedule.every_n_days.days)
+    const cursor = at(start.getFullYear(), start.getMonth(), start.getDate())
+    if ('weekly' in schedule) {
+      const weekday = (cursor.getDay() + 6) % 7
+      cursor.setDate(cursor.getDate() + ((schedule.weekly.weekday - weekday + 7) % 7))
+    }
+    while (cursor <= until) {
+      if (cursor >= start) out.push(new Date(cursor))
+      cursor.setDate(cursor.getDate() + step)
+    }
+  }
+  return out
+}
+
+function groupOf(tx: Transaction, ctx: PlanningMockContext): CategoryGroup | null {
+  for (const key of txMeta(tx).categories) {
+    const category = ctx.categories.find((entry) => entry.key === key)
+    if (category) return category.group
+  }
+  return null
+}
+
+/** Money value of a transaction in USD by its principal legs on budget stores. */
+function flowValue(tx: Transaction, ctx: PlanningMockContext, incoming: boolean): number {
+  const inBudget = new Set(ctx.stores.filter((store) => store.in_budget).map((store) => store.id))
+  return txLegs(tx)
+    .filter((leg) => leg.role === 'principal' && inBudget.has(leg.store_id))
+    .filter((leg) => Number(leg.amount) > 0 === incoming)
+    .reduce(
+      (sum, leg) => sum + Math.abs(Number(leg.amount)) * (Number(leg.price_usd) || ctx.priceOf(leg.asset.symbol)),
+      0,
+    )
+}
+
+function monthTotals(ctx: PlanningMockContext, month: string) {
+  const totals = { income: 0, fixed: 0, daily: 0, perDay: new Map<string, number>() }
+  for (const tx of ctx.transactions) {
+    const stamp = txMeta(tx).timestamp
+    if (!stamp.startsWith(month)) continue
+    const group = groupOf(tx, ctx)
+    if ('topup' in tx && group === 'income') totals.income += flowValue(tx, ctx, true)
+    if ('payment' in tx && group === 'fixed') totals.fixed += flowValue(tx, ctx, false)
+    if ('payment' in tx && group !== 'fixed' && group !== 'service' && group !== 'income') {
+      const spent = flowValue(tx, ctx, false)
+      totals.daily += spent
+      const day = stamp.slice(0, 10)
+      totals.perDay.set(day, (totals.perDay.get(day) ?? 0) + spent)
+    }
+  }
+  return totals
+}
+
+const currentMonth = () => iso(now()).slice(0, 7)
+const money = (value: number) => String(Math.round(value * 100) / 100)
+
+function monthSummary(ctx: PlanningMockContext, month: string, savingsRate: number): MonthSummary {
+  const totals = monthTotals(ctx, month)
+  const fact = totals.income - totals.fixed - totals.daily
+  const plan = totals.income * savingsRate
+  return {
+    month,
+    currency: ctx.budgetCurrency,
+    income: money(totals.income),
+    fixed: money(totals.fixed),
+    daily: money(totals.daily),
+    savings_plan: money(plan),
+    savings_fact: money(fact),
+    deviation: money(fact - plan),
+    saved_pct: totals.income ? money((fact / totals.income) * 100) : '0',
+    savings_moved: '0',
+    budget_in: '0',
+    budget_out: '0',
+    not_executed: runs.filter((run) => isRejected(run.outcome) && run.planned_at.startsWith(month)).length,
+    complete: true,
+  }
+}
+
+function dailyBudget(ctx: PlanningMockContext, mode: DailyBudgetMode, savingsRate: number): DailyBudget {
+  const today = iso(now()).slice(0, 10)
+  const totals = monthTotals(ctx, currentMonth())
+  const days = new Date(now().getFullYear(), now().getMonth() + 1, 0).getDate()
+  const perDay = (totals.income - totals.fixed - totals.income * savingsRate) / days
+  let carry = 0
+  for (let day = 1; day < now().getDate(); day++) {
+    const key = `${currentMonth()}-${String(day).padStart(2, '0')}`
+    carry += perDay - (totals.perDay.get(key) ?? 0)
+  }
+  const spent = totals.perDay.get(today) ?? 0
+  const available = perDay + carry
+  return {
+    mode,
+    currency: ctx.budgetCurrency,
+    date: today,
+    per_day: money(perDay),
+    carry: money(carry),
+    available: money(available),
+    spent_today: money(spent),
+    left_today: money(available - spent),
+    income: money(totals.income),
+    fixed: money(totals.fixed),
+    savings_plan: money(totals.income * savingsRate),
+    free: '0',
+    days,
+    next_income: null,
+    manual_limit: null,
+  }
+}
+
+function goalProgress(ctx: PlanningMockContext): GoalProgress[] {
+  return goals
+    .filter((goal) => goal.active)
+    .map((goal) => {
+      const ids = new Set(goal.scope.store_ids)
+      const saved = ctx.transactions
+        .flatMap((tx) => txLegs(tx))
+        .filter((leg) => leg.role === 'principal' && ids.has(leg.store_id))
+        .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
+      const target = Number(goal.target_amount)
+      const deadline = goal.deadline ? new Date(goal.deadline) : null
+      const monthsLeft = deadline
+        ? Math.max(1, (deadline.getFullYear() - now().getFullYear()) * 12 + deadline.getMonth() - now().getMonth() + 1)
+        : null
+      const need = monthsLeft ? Math.max(0, target - saved) / monthsLeft : null
+      const issues: RealismIssue[] = []
+      if (need !== null && goal.monthly_commitment && need > Number(goal.monthly_commitment)) {
+        issues.push({ over_commitment: { need: money(need), commitment: goal.monthly_commitment } })
+      }
+      return {
+        goal,
+        saved: money(saved),
+        contributed: money(saved),
+        fx_gain: '0',
+        pct: money(target ? (saved / target) * 100 : 0),
+        months_total: monthsLeft,
+        months_left: monthsLeft,
+        need_per_month: need === null ? null : money(need),
+        realistic: issues.length === 0,
+        issues,
+        forecast: null,
+        accumulating: false,
+      }
+    })
+}
+
+function upcoming(days: number): UpcomingItem[] {
+  const until = new Date(now().getTime() + days * 86_400_000)
+  const items: UpcomingItem[] = []
+  for (const automation of automations.filter((entry) => entry.active)) {
+    for (const date of plannedDates(automation.schedule, new Date(automation.starts_at), until)) {
+      if (date <= now()) continue
+      const tx = automation.template as Transaction
+      const leg = txLegs(tx).find((entry) => entry.role === 'principal')
+      items.push({
+        kind: 'automation',
+        source_id: automation.id,
+        at: iso(date),
+        date: iso(date).slice(0, 10),
+        title: automation.name,
+        store_id: leg?.store_id ?? null,
+        amount: leg?.amount ?? null,
+        asset: leg?.asset ?? null,
+        shortfall: null,
+      })
+    }
+  }
+  for (const reminder of reminders.filter((entry) => !entry.done && new Date(entry.due_at) <= until)) {
+    items.push({
+      kind: 'reminder',
+      source_id: reminder.id,
+      at: reminder.due_at,
+      date: reminder.due_at.slice(0, 10),
+      title: reminder.text,
+      store_id: null,
+      amount: null,
+      asset: null,
+      shortfall: null,
+    })
+  }
+  for (const run of runs.filter((entry) => isRejected(entry.outcome))) {
+    items.push({
+      kind: 'rejected_run',
+      source_id: run.id,
+      at: run.planned_at,
+      date: run.planned_at.slice(0, 10),
+      title: automations.find((entry) => entry.id === run.automation_id)?.name ?? '',
+      store_id: null,
+      amount: null,
+      asset: null,
+      shortfall: null,
+    })
+  }
+  return items.sort((left, right) => left.at.localeCompare(right.at))
+}
+
+function replace<T extends { id: string }>(list: T[], id: string, next: Omit<T, 'id'>): T {
+  const index = list.findIndex((entry) => entry.id === id)
+  if (index < 0) fail('not found', 'MISSING')
+  list[index] = { ...list[index], ...next, id }
+  return list[index]
+}
+
+function remove<T extends { id: string }>(list: T[], id: string) {
+  const index = list.findIndex((entry) => entry.id === id)
+  if (index < 0) fail('not found', 'MISSING')
+  list.splice(index, 1)
+}
+
+/**
+ * Answer a planning command, or `undefined` when `cmd` is not one.
+ * `settings` supplies the savings rate and the daily budget mode.
+ */
+export function mockPlanning(
+  cmd: string,
+  args: Record<string, unknown> | undefined,
+  ctx: PlanningMockContext,
+  settings: Settings,
+): unknown {
+  const body = args?.input as Record<string, unknown> | undefined
+  const rate = Number(settings.savings_rate)
+  switch (cmd) {
+    case 'list_automations':
+      return automations
+    case 'create_automation': {
+      const input = body as AutomationInput
+      const automation: Automation = {
+        id: uuid(),
+        name: input.name.trim() || fail('name the automation'),
+        active: input.active,
+        schedule: input.schedule,
+        starts_at: input.starts_at,
+        template: draftOf(ctx.transactionFrom(input.template, input.starts_at)),
+        last_planned_at: null,
+        created_at: iso(now()),
+      }
+      automations.push(automation)
+      return automation
+    }
+    case 'update_automation': {
+      const input = body as UpdateAutomationInput
+      const current = automations.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
+      return replace(automations, input.id, {
+        ...current,
+        name: input.automation.name,
+        active: input.automation.active,
+        schedule: input.automation.schedule,
+        starts_at: input.automation.starts_at,
+        template: draftOf(ctx.transactionFrom(input.automation.template, input.automation.starts_at)),
+      })
+    }
+    case 'delete_automation':
+      remove(automations, String(args?.id))
+      return {}
+    case 'run_automation': {
+      const automation = automations.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
+      const tx = structuredClone(automation.template) as Transaction
+      txMeta(tx).id = uuid()
+      txMeta(tx).timestamp = iso(now())
+      ctx.transactions.unshift(tx)
+      runs.push({
+        id: uuid(),
+        automation_id: automation.id,
+        planned_at: iso(now()),
+        processed_at: iso(now()),
+        outcome: { created: { tx_id: txMeta(tx).id } },
+      })
+      return tx
+    }
+    case 'list_automation_runs':
+      return runs
+        .filter((run) => !args?.automationId || run.automation_id === args.automationId)
+        .sort((left, right) => right.planned_at.localeCompare(left.planned_at))
+    case 'retry_automation_run':
+      return fail('mock: 0 USD of 800 USD', 'INSUFFICIENT_FUNDS')
+    case 'skip_automation_run': {
+      const run = runs.find((entry) => entry.id === args?.runId) ?? fail('not found', 'MISSING')
+      run.outcome = 'skipped'
+      return run
+    }
+    case 'list_budgets':
+      return budgets
+    case 'create_budget': {
+      const budget: Budget = { id: uuid(), ...(body as BudgetInput) }
+      budgets.push(budget)
+      return budget
+    }
+    case 'update_budget': {
+      const input = body as UpdateBudgetInput
+      return replace(budgets, input.id, input.budget)
+    }
+    case 'delete_budget':
+      remove(budgets, String(args?.id))
+      return {}
+    case 'get_budget_status': {
+      const totals = monthTotals(ctx, currentMonth())
+      return budgets
+        .filter((budget) => budget.active)
+        .map((budget): BudgetStatus => {
+          const spent = totals.fixed + totals.daily
+          const limit = Number(budget.limit)
+          return {
+            budget,
+            spent: money(spent),
+            remaining: money(limit - spent),
+            used: money(limit ? spent / limit : 0),
+            period_start: `${currentMonth()}-01T00:00:00Z`,
+            period_end: `${currentMonth()}-28T00:00:00Z`,
+          }
+        })
+    }
+    case 'get_daily_budget':
+      return dailyBudget(ctx, settings.daily_budget_mode, rate)
+    case 'get_month_summary':
+      return monthSummary(ctx, String(args?.month ?? currentMonth()), rate)
+    case 'list_goals':
+      return [...goals].sort((left, right) => right.priority - left.priority)
+    case 'create_goal': {
+      const goal: Goal = { id: uuid(), ...(body as GoalInput), created_at: iso(now()) }
+      goals.push(goal)
+      return goal
+    }
+    case 'update_goal': {
+      const input = body as UpdateGoalInput
+      const current = goals.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
+      return replace(goals, input.id, { ...current, ...input.goal })
+    }
+    case 'delete_goal':
+      remove(goals, String(args?.id))
+      return {}
+    case 'get_goal_progress':
+      return goalProgress(ctx)
+    case 'get_goal_calendar': {
+      const year = Number(args?.year)
+      const months: GoalCalendarMonth[] = Array.from({ length: 12 }, (_unused, index) => {
+        const month = `${year}-${String(index + 1).padStart(2, '0')}`
+        const need = goals.filter((goal) => goal.active && goal.deadline).length ? 100 : 0
+        return { month, need: money(need), saved: '0', shortfall: money(need), done: need === 0 }
+      })
+      return { year, currency: ctx.budgetCurrency, months } satisfies GoalCalendar
+    }
+    case 'list_reminders':
+      return [...reminders].sort((left, right) => left.due_at.localeCompare(right.due_at))
+    case 'create_reminder': {
+      const input = body as ReminderInput
+      const reminder: Reminder = { id: uuid(), text: input.text, due_at: input.due_at, done: false }
+      reminders.push(reminder)
+      return reminder
+    }
+    case 'update_reminder': {
+      const input = body as UpdateReminderInput
+      const current = reminders.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
+      return replace(reminders, input.id, { ...current, ...input.reminder })
+    }
+    case 'delete_reminder':
+      remove(reminders, String(args?.id))
+      return {}
+    case 'set_reminder_done': {
+      const reminder = reminders.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
+      reminder.done = Boolean(args?.done)
+      return reminder
+    }
+    case 'list_price_alerts':
+      return alerts
+    case 'create_price_alert': {
+      const input = body as PriceAlertInput
+      const symbol = input.asset.symbol.toUpperCase()
+      const alert: PriceAlert = {
+        id: uuid(),
+        asset: { ...input.asset, symbol, quote: symbol },
+        condition: input.condition,
+        price: input.price,
+        currency: input.currency,
+        active: input.active,
+        triggered_at: null,
+      }
+      alerts.push(alert)
+      return alert
+    }
+    case 'update_price_alert': {
+      const input = body as UpdatePriceAlertInput
+      const symbol = input.alert.asset.symbol.toUpperCase()
+      return replace(alerts, input.id, {
+        ...input.alert,
+        asset: { ...input.alert.asset, symbol, quote: symbol },
+        triggered_at: null,
+      })
+    }
+    case 'delete_price_alert':
+      remove(alerts, String(args?.id))
+      return {}
+    case 'get_upcoming':
+      return upcoming(Number(args?.days ?? 30))
+    default:
+      return undefined
+  }
+}

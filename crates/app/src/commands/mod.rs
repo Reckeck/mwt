@@ -7,6 +7,7 @@ pub mod calc;
 pub mod categories;
 pub mod contacts;
 pub mod exchange;
+pub mod planning;
 pub mod portfolio;
 pub mod pricing;
 pub mod settings;
