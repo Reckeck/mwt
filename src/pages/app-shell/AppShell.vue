@@ -3,11 +3,12 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
+import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
+import { QuickAddDialog } from '@/features/quick-add'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -48,6 +49,12 @@ const queryClient = useQueryClient()
 useTheme()
 
 const settingsOpen = ref(false)
+const quickAddOpen = ref(false)
+
+// The system-wide shortcut (Settings) brings the window up and lands here.
+void onEvent('quick-add', () => {
+  quickAddOpen.value = true
+})
 
 // Deduped with the identical query inside the sidebar widgets.
 const summary = useQuery({
@@ -249,6 +256,11 @@ async function lock() {
           <TooltipContent v-if="!netWorth.sameCurrency" side="bottom">≈ {{ netWorth.usd }}</TooltipContent>
         </Tooltip>
 
+        <Button size="sm" class="shrink-0" :title="t('quickAdd.title')" @click="quickAddOpen = true">
+          <Plus class="size-4" />
+          <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
+        </Button>
+
         <Button
           variant="ghost"
           size="icon"
@@ -269,6 +281,7 @@ async function lock() {
     </SidebarInset>
 
     <AppSettingsDialog v-model:open="settingsOpen" />
+    <QuickAddDialog v-model:open="quickAddOpen" />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
 </template>

@@ -4,6 +4,7 @@ import { CategorizationRules } from '@/widgets/categorization-rules'
 import { CategoryManager } from '@/widgets/category-manager'
 import { EnrichmentSettings } from '@/widgets/enrichment-settings'
 import { InflationSettings } from '@/widgets/inflation-settings'
+import { QuickAddSettings } from '@/widgets/quick-add-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { VaultSettings } from '@/widgets/vault-settings'
@@ -19,6 +20,7 @@ const isDev = import.meta.env.DEV
     <CategorizationRules />
     <InflationSettings />
     <EnrichmentSettings />
+    <QuickAddSettings />
     <VaultDevTools v-if="isDev">
       <template #viewer>
         <VaultJsonEditor />
