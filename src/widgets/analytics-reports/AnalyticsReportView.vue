@@ -12,6 +12,7 @@ import { codeErrorMessage } from '@/shared/lib/vault-error'
 import CashflowView from './views/CashflowView.vue'
 import CategoriesView from './views/CategoriesView.vue'
 import InflationView from './views/InflationView.vue'
+import LossesView from './views/LossesView.vue'
 import NetworthView from './views/NetworthView.vue'
 import PnlView from './views/PnlView.vue'
 import PortfolioView from './views/PortfolioView.vue'
@@ -47,5 +48,6 @@ const data = computed(() => report.data.value ?? null)
     <PnlView v-else-if="'pnl' in data" :report="data.pnl" />
     <PortfolioView v-else-if="'portfolio' in data" :report="data.portfolio" />
     <InflationView v-else-if="'inflation' in data" :report="data.inflation" />
+    <LossesView v-else-if="'losses' in data" :report="data.losses" />
   </template>
 </template>

@@ -10,7 +10,10 @@ const route = useRoute()
 const router = useRouter()
 
 /** Each tab is a child route, so a tab has its own address. */
-const tabs = computed(() => [{ value: 'directory-contacts', label: t('directory.contacts') }])
+const tabs = computed(() => [
+  { value: 'directory-contacts', label: t('directory.contacts') },
+  { value: 'directory-rates', label: t('directory.rates') },
+])
 
 const tab = computed({
   get: () => String(route.name ?? 'directory-contacts'),
