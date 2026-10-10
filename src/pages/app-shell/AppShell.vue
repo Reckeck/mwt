@@ -95,6 +95,15 @@ void onEvent<{ staged: number }>('bybit-import-pending', (payload) => {
   toast.info(t('import.pendingEvent'), { description: String(payload.staged) })
 })
 
+// A refresh that priced operations saved without a price changes their
+// badges and every cost basis built on them.
+void onEvent<RefreshResult>('prices-updated', (result) => {
+  if (!result.restamped) return
+  for (const queryKey of [['transactions'], ['store'], ['store-pnl'], ['store-history'], ['history'], ['summary']]) {
+    void queryClient.invalidateQueries({ queryKey })
+  }
+})
+
 async function lock() {
   await vault.lock()
 }

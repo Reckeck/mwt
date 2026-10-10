@@ -14,7 +14,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call, parseError } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
-import { formatDateTime } from '@/shared/lib/format'
+import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txId } from '@/shared/lib/transactions'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -31,6 +31,8 @@ import {
   formFromTransaction,
   formToInput,
   isFormComplete,
+  pricedAsset,
+  toIsoTimestamp,
 } from './transaction-form.model'
 
 const props = withDefaults(defineProps<TransactionFormProps>(), {
@@ -191,6 +193,54 @@ watch(
   () => form.asset,
   (asset) => {
     if (asset?.chain && asset.chain !== 'fiat') form.network = asset.chain
+  },
+)
+
+/* --- the rate a new operation records (plan §6.2) --- */
+const priced = computed(() => pricedAsset(form))
+const quote = useQuery({
+  queryKey: computed(() => [
+    'price-at',
+    priced.value?.symbol,
+    priced.value?.coingecko_id,
+    priced.value?.chain,
+    priced.value?.contract,
+    form.timestamp,
+  ]),
+  queryFn: () => {
+    const asset = priced.value as AssetRef
+    return call<CachedPrice>('get_cached_price', {
+      input: {
+        symbol: asset.symbol,
+        coingecko_id: asset.coingecko_id,
+        chain: asset.chain,
+        contract: asset.contract,
+        at: toIsoTimestamp(form.timestamp),
+      },
+    })
+  },
+  enabled: computed(() => Boolean(priced.value) && !form.priceUsd.trim()),
+})
+/** Which day's rate an empty price field stands for — or that there is none yet. */
+const rateHint = computed(() => {
+  const data = quote.data.value
+  // A dollar is always worth a dollar; saying so is noise.
+  if (!priced.value || priced.value.symbol.toUpperCase() === 'USD' || form.priceUsd.trim() || !data) return ''
+  if (!data.ts) return t('tx.rate.none')
+  const price = Number(data.price_usd)
+  return t('tx.rate.at', {
+    date: formatDateTime(data.ts),
+    price: formatMoney(price, { decimals: price < 1 ? 6 : 2, currency: 'usd' }),
+  })
+})
+
+// Moving an operation to another date re-prices it there, unless the price
+// was changed by hand in this edit.
+const loadedPrice = form.priceUsd
+watch(
+  () => form.timestamp,
+  () => {
+    if (editing.value && form.priceUsd === loadedPrice) form.priceUsd = ''
   },
 )
 
@@ -621,7 +671,7 @@ const verbLabel = (kind: TxKind) =>
       </div>
     </div>
 
-    <div class="grid gap-3 @sm:grid-cols-3">
+    <div class="grid items-start gap-3 @sm:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="tx-fee">{{ t('form.fee') }}</Label>
         <Input id="tx-fee" v-model="form.feeAmount" inputmode="decimal" placeholder="0" />
@@ -629,6 +679,7 @@ const verbLabel = (kind: TxKind) =>
       <div v-if="form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid gap-1.5">
         <Label for="tx-price">{{ t('form.priceUsd') }}</Label>
         <Input id="tx-price" v-model="form.priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
+        <p v-if="rateHint" class="text-xs text-muted-foreground">{{ rateHint }}</p>
       </div>
       <div class="grid gap-1.5">
         <Label for="tx-date">{{ t('form.date') }}</Label>

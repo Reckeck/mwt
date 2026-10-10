@@ -627,5 +627,7 @@
   "categories.default.trading": "Trading",
   "categories.default.fee": "Fees",
   "categories.default.transfer": "Transfers",
-  "categories.default.exchange": "Exchange"
+  "categories.default.exchange": "Exchange",
+  "tx.rate.at": "rate as of {date}: {price}",
+  "tx.rate.none": "no rate for this date yet — it is filled in on the next price refresh"
 }

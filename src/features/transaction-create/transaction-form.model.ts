@@ -171,6 +171,21 @@ function feeInput(form: TransactionFormState): FeeInput | null {
   return { asset: ident(asset), amount: form.feeAmount.trim() }
 }
 
+/** The asset `common.price_usd` prices: the one received, for two-asset kinds. */
+export function pricedAsset(form: TransactionFormState): AssetRef | null {
+  switch (form.kind) {
+    case 'convert':
+      return form.toAsset
+    case 'trade_spot':
+      return form.boughtAsset
+    case 'trade_futures':
+    case 'asset_sell':
+      return null
+    default:
+      return form.asset
+  }
+}
+
 /** `datetime-local` (local time, no zone) ⇄ RFC3339 UTC. */
 export function toIsoTimestamp(local: string): string | null {
   if (!local) return null

@@ -627,5 +627,7 @@
   "categories.default.trading": "Трейдинг",
   "categories.default.fee": "Комиссии",
   "categories.default.transfer": "Переводы",
-  "categories.default.exchange": "Обмен"
+  "categories.default.exchange": "Обмен",
+  "tx.rate.at": "курс на {date}: {price}",
+  "tx.rate.none": "курса на эту дату ещё нет — цена подтянется при обновлении курсов"
 }
