@@ -596,6 +596,8 @@ pub struct SetManualPriceInput {
 pub struct RefreshResult {
     pub prices: usize,
     pub fx: usize,
+    /// Transaction sides that were saved without a price and got one now.
+    pub restamped: usize,
     pub updated_at: String,
 }
 
@@ -607,13 +609,52 @@ pub struct AssetPriceInput {
     pub coingecko_id: Option<String>,
     pub chain: Option<Chain>,
     pub contract: Option<String>,
+    /// RFC3339 moment to price at; empty means now.
+    #[serde(default)]
+    pub at: Option<String>,
 }
 
-/// Last cached USD quote. `ts` is empty when the asset was never priced.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+impl AssetPriceInput {
+    pub fn to_asset(&self) -> AssetRef {
+        let symbol = self.symbol.trim().to_uppercase();
+        AssetRef {
+            quote: symbol.clone(),
+            name: symbol.clone(),
+            symbol,
+            coingecko_id: self.coingecko_id.clone().filter(|id| !id.is_empty()),
+            chain: self.chain,
+            contract: self
+                .contract
+                .clone()
+                .filter(|contract| !contract.is_empty()),
+        }
+    }
+}
+
+/// Cached USD quote nearest the asked moment. `ts` is when that rate was
+/// taken, empty when the asset was never priced; a hand-set price and USD
+/// itself hold for all time and carry the asked moment.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct CachedPrice {
     pub price_usd: Amount,
     pub ts: String,
+}
+
+/// Convert an amount between two currency codes at a moment (plan D20).
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct ConvertAmountInput {
+    pub from: String,
+    pub to: String,
+    pub amount: Amount,
+    /// RFC3339; empty means now.
+    #[serde(default)]
+    pub at: Option<String>,
+}
+
+/// `amount` is `None` when a rate of either currency is unknown.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ConvertedAmount {
+    pub amount: Option<Amount>,
 }
 
 // -- calc --------------------------------------------------------------------

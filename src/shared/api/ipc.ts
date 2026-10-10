@@ -345,10 +345,16 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve(mockSearch(body?.query as string))
     case 'get_cached_price':
       return resolve(mockCachedPrice(body as AssetPriceInput))
+    case 'convert_amount': {
+      const input = body as ConvertAmountInput
+      const from = priceOf(input.from)
+      const to = priceOf(input.to)
+      return resolve({ amount: from && to ? String((Number(input.amount) * from) / to) : null })
+    }
     case 'calc_preview':
       return resolve(mockCalc(body as CalcInput))
     case 'refresh_all':
-      return resolve({ prices: 3, fx: 1, updated_at: new Date().toISOString() })
+      return resolve({ prices: 3, fx: 1, restamped: 0, updated_at: new Date().toISOString() })
     case 'open_explorer':
       return resolve({})
     // --- exchange (read-only prefill) ---
@@ -664,7 +670,15 @@ mockStores.push(newStore('Тинькофф', 'bank', '#facc15'))
 const mockTransactions: Transaction[] = []
 
 /** Last known USD prices, mirroring what the Rust `price_cache` would hold. */
-const mockPrices: Record<string, number> = { BTC: 90000, ETH: 3000, USD: 1, USDT: 1, RUB: 0.0105 }
+const mockPrices: Record<string, number> = {
+  BTC: 90000,
+  ETH: 3000,
+  USD: 1,
+  USDT: 1,
+  RUB: 0.0105,
+  EUR: 1.08,
+  THB: 0.028,
+}
 
 const priceOf = (symbol: string) => mockPrices[symbol.toUpperCase()] ?? 0
 
@@ -878,7 +892,7 @@ function mockOverview(storeId: string, includeChildren: boolean): StoreOverview 
 function mockCachedPrice(input: AssetPriceInput): CachedPrice {
   const price = priceOf(input.symbol)
   if (!price) return { price_usd: '0', ts: '' }
-  return { price_usd: String(price), ts: new Date().toISOString() }
+  return { price_usd: String(price), ts: input.at || new Date().toISOString() }
 }
 
 function mockCalc(input: CalcInput): CalcResult {

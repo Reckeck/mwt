@@ -1,9 +1,9 @@
 use tauri::{AppHandle, Emitter, State};
 
 use trade_core::ipc_contract::{
-    AssetPriceInput, CachedPrice, CandlePoint, GetCandlesInput, GetCandlesOutput, RefreshResult,
+    AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount,
+    GetCandlesInput, GetCandlesOutput, RefreshResult,
 };
-use trade_core::model::store::AssetRef;
 use trade_core::pricing::AssetSearchHit;
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -21,9 +21,10 @@ pub async fn search_assets(
         .map_err(crate::commands::err_to_string)
 }
 
-/// Last cached USD quote for an asset. Cache-only: no network call, so it is
-/// safe to hit on every keystroke of a price field. Used to prefill the
-/// transaction form and the wallet calculator.
+/// Cached USD quote of an asset nearest a moment (now when `at` is empty).
+/// Cache-only: no network call, so it is safe to hit on every keystroke of a
+/// price field. Used to prefill the transaction form and the wallet
+/// calculator, and to show which day's rate a new operation will record.
 #[tauri::command]
 pub async fn get_cached_price(
     input: AssetPriceInput,
@@ -31,57 +32,49 @@ pub async fn get_cached_price(
 ) -> Result<CachedPrice, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
-    let symbol = input.symbol.trim().to_uppercase();
-    if symbol.is_empty() {
+    if input.symbol.trim().is_empty() {
         return Ok(CachedPrice::default());
     }
-    let asset = AssetRef {
-        quote: symbol.clone(),
-        name: symbol.clone(),
-        symbol,
-        coingecko_id: input.coingecko_id,
-        chain: input.chain,
-        contract: input.contract,
-    };
-    let key = asset.key();
-    let hit = vault
-        .doc
-        .price_cache
-        .iter()
-        .filter(|point| point.asset_key == key)
-        .max_by(|left, right| left.ts.cmp(&right.ts));
-    Ok(match hit {
-        Some(point) => CachedPrice {
-            price_usd: point.value_usd,
-            ts: point.ts.clone(),
-        },
-        None => CachedPrice::default(),
+    Ok(vault.cached_quote(&input.to_asset(), input.at.as_deref().unwrap_or_default()))
+}
+
+/// Convert an amount between two currencies at the rate of a moment.
+#[tauri::command]
+pub async fn convert_amount(
+    input: ConvertAmountInput,
+    state: State<'_, AppState>,
+) -> Result<ConvertedAmount, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
+    Ok(ConvertedAmount {
+        amount: vault.convert_at(
+            input.amount,
+            &input.from,
+            &input.to,
+            input.at.as_deref().unwrap_or_default(),
+        ),
     })
 }
 
-/// Refresh crypto prices + FX for everything currently held, emit event.
+/// Refresh crypto prices and the whole FX table, then price what was saved
+/// without a price (plan §6.1–§6.2), and emit `prices-updated`.
 #[tauri::command]
 pub async fn refresh_all(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RefreshResult, String> {
-    let (assets, base) = {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
-        let vault = guard.as_mut().unwrap();
-
-        let assets: Vec<trade_core::model::store::AssetRef> = {
-            let mut seen = std::collections::HashSet::new();
-            vault
-                .doc
-                .holdings
-                .iter()
-                .filter(|hit| hit.asset.is_crypto())
-                .map(|hit| hit.asset.clone())
-                .filter(|asset| seen.insert(asset.key()))
-                .collect()
-        };
-        let base = vault.base_currency().to_string();
-        (assets, base)
+    let assets = {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_ref().unwrap();
+        let mut seen = std::collections::HashSet::new();
+        vault
+            .doc
+            .holdings
+            .iter()
+            .filter(|hit| hit.asset.is_crypto() && !hit.asset.is_derivative())
+            .map(|hit| hit.asset.clone())
+            .filter(|asset| seen.insert(asset.key()))
+            .collect::<Vec<_>>()
     };
 
     let prices = state
@@ -91,20 +84,22 @@ pub async fn refresh_all(
         .map_err(crate::commands::err_to_string)?;
     let fx = state
         .pricing
-        .fetch_fx(&base)
+        .fetch_fx()
         .await
         .map_err(crate::commands::err_to_string)?;
 
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
-    trade_core::pricing::PricingService::apply_prices(&mut vault.doc, &prices);
-    trade_core::pricing::PricingService::apply_fx(&mut vault.doc, &fx);
+    vault.apply_prices(&prices);
+    vault.apply_fx(&fx);
+    let restamped = vault.restamp_missing();
     let updated_at = trade_core::model::vault::now_iso();
     let _ = vault.persist();
 
     let result = RefreshResult {
         prices: prices.len(),
         fx: fx.len(),
+        restamped,
         updated_at,
     };
     let _ = app.emit("prices-updated", &result);

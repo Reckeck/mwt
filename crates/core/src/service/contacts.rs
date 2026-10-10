@@ -10,7 +10,8 @@ use crate::model::store::AssetRef;
 use crate::model::transaction::{AccountRef, DebtEffect, LegRole, Transaction};
 use crate::model::vault::now_iso;
 
-use super::{UnlockedVault, leg_price_in_base};
+use super::UnlockedVault;
+use crate::pricing::history::secs_or_now;
 
 /// Money moved with one contact in one asset.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -217,6 +218,7 @@ impl UnlockedVault {
             return Err(Error::Missing(format!("contact {contact_id}")));
         }
         let (base, _) = self.base_and_fx();
+        let book = self.rate_book();
         let mut rows: BTreeMap<String, TurnoverRow> = BTreeMap::new();
         let mut out = ContactTurnover {
             contact_id: contact_id.to_string(),
@@ -239,7 +241,8 @@ impl UnlockedVault {
                     asset: leg.asset.clone(),
                     ..TurnoverRow::default()
                 });
-                let value = leg.amount.abs() * leg_price_in_base(&leg, &base);
+                let value = leg.amount.abs()
+                    * book.leg_price_in_base(&leg, &base, secs_or_now(&tx.meta().timestamp));
                 if leg.amount.is_negative() {
                     row.sent += leg.amount.abs();
                     out.sent_base += value;

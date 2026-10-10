@@ -84,6 +84,7 @@ async function autofillPrice(target: AssetRef | null, into: 'in' | 'out') {
         coingecko_id: target.coingecko_id,
         chain: target.chain,
         contract: target.contract,
+        at: null,
       },
     })
     if (res.ts) {
