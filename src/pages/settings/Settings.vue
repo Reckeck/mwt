@@ -2,6 +2,7 @@
 import { BudgetSettings } from '@/widgets/budget-settings'
 import { CategorizationRules } from '@/widgets/categorization-rules'
 import { CategoryManager } from '@/widgets/category-manager'
+import { InflationSettings } from '@/widgets/inflation-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { VaultSettings } from '@/widgets/vault-settings'
@@ -15,6 +16,7 @@ const isDev = import.meta.env.DEV
     <BudgetSettings />
     <CategoryManager />
     <CategorizationRules />
+    <InflationSettings />
     <VaultDevTools v-if="isDev">
       <template #viewer>
         <VaultJsonEditor />

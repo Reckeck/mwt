@@ -55,9 +55,9 @@ const summary = useQuery({
 
 const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
-  { name: 'transactions', icon: ScrollText, key: 'nav.transactions' },
+  { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
   { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
-  { name: 'charts', icon: ChartArea, key: 'nav.charts' },
+  { name: 'analytics-cashflow', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
   { name: 'directory-contacts', icon: BookUser, key: 'nav.directory', prefix: '/directory' },
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]

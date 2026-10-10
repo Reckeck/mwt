@@ -41,6 +41,9 @@ const widgetDefs = [
   { id: 'upcoming', label: 'dashboard.widget.upcoming', defaultOrder: 7 },
   { id: 'goals', label: 'dashboard.widget.goals', defaultOrder: 8 },
   { id: 'budgets', label: 'dashboard.widget.budgets', defaultOrder: 9 },
+  { id: 'spending7d', label: 'dashboard.widget.spending7d', defaultOrder: 10 },
+  { id: 'miniCalendar', label: 'dashboard.widget.miniCalendar', defaultOrder: 11 },
+  { id: 'netWorth', label: 'dashboard.widget.netWorth', defaultOrder: 12 },
 ] as const
 
 /**
