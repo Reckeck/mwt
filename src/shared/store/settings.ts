@@ -30,6 +30,8 @@ export const useSettingsStore = defineStore('settings', {
     currenciesLoading: false,
     /** Whether the app-level read has landed at least once. */
     appLoaded: false,
+    /** Ask for consent to look hashes up (plan §8.2); the shell shows the dialog. */
+    enrichmentConsentOpen: false,
   }),
 
   getters: {
@@ -93,6 +95,7 @@ export const useSettingsStore = defineStore('settings', {
           favorite_currencies: patch.favorite_currencies ?? null,
           timezone: patch.timezone ?? null,
           inflation: patch.inflation ?? null,
+          enrichment_opt_in: patch.enrichment_opt_in ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

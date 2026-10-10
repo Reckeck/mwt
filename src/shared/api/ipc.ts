@@ -191,6 +191,8 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.favorite_currencies) mockAppSettings.favorite_currencies = input.favorite_currencies
       if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
       if (input.inflation) mockAppSettings.inflation = input.inflation
+      if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
+        mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
       return resolve(mockAppSettings)
     }
     case 'get_supported_currencies':
@@ -441,6 +443,35 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve(mockReport(args?.kind as ReportKind, args?.filter as ReportFilter, analyticsContext()))
     case 'get_calendar':
       return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))
+    case 'get_fx_table':
+      return resolve(mockFxTable())
+    case 'get_tx_loss':
+      return resolve(mockLossOf(String(args?.id)))
+    case 'get_tx_losses':
+      return resolve(Object.fromEntries(mockTransactions.map((tx) => [txId(tx), mockLossOf(txId(tx))])))
+    case 'list_flows':
+      return resolve(mockFlows())
+    case 'link_transactions': {
+      const input = body as LinkTransactionsInput
+      const flow =
+        input.flow_id ??
+        mockTransactions.map((tx) => (input.ids.includes(txId(tx)) ? txMeta(tx).flow_id : null)).find(Boolean) ??
+        crypto.randomUUID()
+      for (const tx of mockTransactions) if (input.ids.includes(txId(tx))) txMeta(tx).flow_id = flow
+      return resolve(flow)
+    }
+    case 'unlink_transaction': {
+      const tx = mockTransactions.find((entry) => txId(entry) === args?.id)
+      if (tx) txMeta(tx).flow_id = null
+      return resolve({})
+    }
+    case 'get_enrichments':
+      return resolve([])
+    case 're_enrich':
+      return resolve(null)
+    case 'apply_enrichment':
+    case 'reject_enrichment':
+      return Promise.reject({ code: 'MISSING', message: 'mock: no findings in the browser' })
     case 'export_report_csv':
       // No save dialog in the browser.
       return resolve(null)
@@ -461,6 +492,68 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       )
       return resolve(planned ?? {})
     }
+  }
+}
+
+/** Rough losses in the mock: the fee only, at the mock prices. */
+function mockLossOf(id: string): TxLoss {
+  const tx = mockTransactions.find((entry) => txId(entry) === id)
+  const fee = tx
+    ? txLegs(tx)
+        .filter((leg) => leg.role === 'fee')
+        .reduce((sum, leg) => sum + Math.abs(Number(leg.amount)) * priceOf(leg.asset.symbol), 0)
+    : 0
+  return {
+    tx_id: id,
+    currency: mockAppSettings.base_currency,
+    fee: String(fee),
+    slippage: '0',
+    total: String(fee),
+    internal: false,
+    complete: true,
+  }
+}
+
+function mockFlows(): FlowSummary[] {
+  const groups = new Map<string, Transaction[]>()
+  for (const tx of mockTransactions) {
+    const flow = txMeta(tx).flow_id
+    if (flow) groups.set(flow, [...(groups.get(flow) ?? []), tx])
+  }
+  return [...groups.entries()].map(([flowId, txs]) => {
+    const links = [...txs].sort((left, right) => txMeta(left).timestamp.localeCompare(txMeta(right).timestamp))
+    const loss = links.reduce((sum, tx) => sum + Number(mockLossOf(txId(tx)).total), 0)
+    return {
+      flow_id: flowId,
+      currency: mockAppSettings.base_currency,
+      links: links.map((tx) => ({ tx, loss: mockLossOf(txId(tx)) })),
+      started_at: txMeta(links[0]).timestamp,
+      ended_at: txMeta(links[links.length - 1]).timestamp,
+      gave: [],
+      got: [],
+      gave_value: '0',
+      got_value: '0',
+      loss: String(loss),
+      difference: String(loss),
+    }
+  })
+}
+
+function mockFxTable(): FxTable {
+  const base = mockAppSettings.base_currency
+  const perUsd: Record<string, number> = { usd: 1, rub: 95, eur: 0.92, thb: 36 }
+  const baseRate = perUsd[base] ?? 1
+  return {
+    base,
+    rows: Object.entries(perUsd)
+      .filter(([code]) => code !== base)
+      .map(([code, rate]) => ({
+        currency: code,
+        per_base: String(rate / baseRate),
+        in_base: String(baseRate / rate),
+        updated_at: new Date().toISOString(),
+        tracked: code === 'rub',
+      })),
   }
 }
 
@@ -570,6 +663,7 @@ const mockAppSettings: AppSettings = {
   favorite_currencies: [],
   timezone: null,
   inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },
+  enrichment_opt_in: null,
 }
 
 const mockCurrencies: SupportedCurrencies = {

@@ -25,7 +25,9 @@ mod automations;
 mod budget;
 mod categories;
 mod contacts;
+mod enrichment;
 mod goals;
+mod losses;
 mod rates;
 mod reports;
 #[cfg(test)]
@@ -40,6 +42,9 @@ pub use automations::{
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, TurnoverRow};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use losses::{
+    FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
+};
 pub use rates::RateBook;
 pub use reports::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,

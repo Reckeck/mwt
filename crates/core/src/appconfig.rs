@@ -76,6 +76,10 @@ pub struct AppSettings {
     /// Used only by analytics, for «in today's money»; marked as reference.
     #[serde(default = "default_inflation")]
     pub inflation: BTreeMap<String, Amount>,
+    /// Consent to send transaction hashes to public explorers (plan §8.2);
+    /// `None` = not asked yet.
+    #[serde(default)]
+    pub enrichment_opt_in: Option<bool>,
 }
 
 /// Reference annual inflation the user starts with, percent. Rough recent
@@ -96,6 +100,7 @@ impl Default for AppSettings {
             favorite_currencies: Vec::new(),
             timezone: None,
             inflation: default_inflation(),
+            enrichment_opt_in: None,
         }
     }
 }
@@ -130,6 +135,9 @@ impl AppSettings {
         }
         if let Some(rates) = &patch.inflation {
             self.inflation = normalize_inflation(rates);
+        }
+        if let Some(consent) = patch.enrichment_opt_in {
+            self.enrichment_opt_in = Some(consent);
         }
     }
 
@@ -204,6 +212,8 @@ pub struct UpdateAppSettingsInput {
     /// Replaces the whole inflation table.
     #[serde(default)]
     pub inflation: Option<BTreeMap<String, Amount>>,
+    #[serde(default)]
+    pub enrichment_opt_in: Option<bool>,
 }
 
 // -- currency catalog ----------------------------------------------------------
@@ -471,6 +481,7 @@ mod tests {
             favorite_currencies: vec!["RUB".into()],
             timezone: Some("Asia/Bangkok".into()),
             inflation: default_inflation(),
+            enrichment_opt_in: Some(true),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

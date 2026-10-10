@@ -1,9 +1,10 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{TransactionInput, TransactionKinds, UpdateTransactionInput};
 use trade_core::model::store::{StoreKind, StoreScope};
 use trade_core::model::transaction::Transaction;
 
+use crate::commands::enrichment::enrich_in_background;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 #[tauri::command]
@@ -25,28 +26,38 @@ pub async fn list_transactions(
 #[tauri::command]
 pub async fn add_transaction(
     input: TransactionInput,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Transaction, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .add_transaction(input.to_transaction())
-        .map_err(err_to_string)
+    let saved = {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_mut()
+            .unwrap()
+            .add_transaction(input.to_transaction())
+            .map_err(err_to_string)?
+    };
+    enrich_in_background(&app, saved.meta().id.clone());
+    Ok(saved)
 }
 
 /// Replace a transaction with an edited version; its id and origin are kept.
 #[tauri::command]
 pub async fn update_transaction(
     input: UpdateTransactionInput,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Transaction, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .update_transaction(&input.id, input.transaction.to_transaction())
-        .map_err(err_to_string)
+    let saved = {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_mut()
+            .unwrap()
+            .update_transaction(&input.id, input.transaction.to_transaction())
+            .map_err(err_to_string)?
+    };
+    enrich_in_background(&app, saved.meta().id.clone());
+    Ok(saved)
 }
 
 #[tauri::command]

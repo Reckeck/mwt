@@ -818,6 +818,17 @@ pub struct AutomationRejectedEvent {
     pub reason: crate::model::planning::RejectReason,
 }
 
+// -- chains --------------------------------------------------------------------
+
+/// Put transactions into one chain: `flow_id`, else the chain one of them is
+/// already in, else a new one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct LinkTransactionsInput {
+    pub ids: Vec<String>,
+    #[serde(default)]
+    pub flow_id: Option<String>,
+}
+
 // -- calc --------------------------------------------------------------------
 
 pub use crate::calc::{CalcInput, CalcResult};

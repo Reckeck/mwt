@@ -41,6 +41,7 @@ pub enum ReportKind {
     Pnl,
     Portfolio,
     Inflation,
+    Losses,
 }
 
 /// What every report is asked for.
@@ -263,6 +264,7 @@ pub enum Report {
     Pnl(PnlReport),
     Portfolio(PortfolioReport),
     Inflation(InflationReport),
+    Losses(super::losses::LossReport),
 }
 
 /// How one day of the calendar went against its allowance.
@@ -305,20 +307,20 @@ pub struct CalendarMonth {
 }
 
 /// Everything a report needs to know about its range.
-struct Ctx {
-    cal: Calendar,
-    currency: String,
+pub(crate) struct Ctx {
+    pub(crate) cal: Calendar,
+    pub(crate) currency: String,
     /// First days of the report months.
-    months: Vec<NaiveDate>,
-    today: NaiveDate,
-    now: i64,
-    rate: Option<Amount>,
-    real: bool,
-    scope: Option<HashSet<String>>,
+    pub(crate) months: Vec<NaiveDate>,
+    pub(crate) today: NaiveDate,
+    pub(crate) now: i64,
+    pub(crate) rate: Option<Amount>,
+    pub(crate) real: bool,
+    pub(crate) scope: Option<HashSet<String>>,
 }
 
 impl Ctx {
-    fn meta(&self) -> ReportMeta {
+    pub(crate) fn meta(&self) -> ReportMeta {
         ReportMeta {
             currency: self.currency.clone(),
             months: self
@@ -331,11 +333,11 @@ impl Ctx {
         }
     }
 
-    fn start(&self) -> i64 {
+    pub(crate) fn start(&self) -> i64 {
         self.cal.start_of(self.months[0])
     }
 
-    fn end(&self) -> i64 {
+    pub(crate) fn end(&self) -> i64 {
         self.cal
             .start_of(next_month(*self.months.last().unwrap_or(&self.today)))
     }
@@ -356,7 +358,7 @@ impl Ctx {
     }
 
     /// `amount` of `month` as the report shows it.
-    fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
+    pub(crate) fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
         if self.real {
             (amount * self.coefficient(month)).round(2)
         } else {
@@ -364,11 +366,11 @@ impl Ctx {
         }
     }
 
-    fn in_scope(&self, store_id: &str) -> bool {
+    pub(crate) fn in_scope(&self, store_id: &str) -> bool {
         self.scope.as_ref().is_none_or(|ids| ids.contains(store_id))
     }
 
-    fn index_of(&self, date: NaiveDate) -> Option<usize> {
+    pub(crate) fn index_of(&self, date: NaiveDate) -> Option<usize> {
         let first = first_of_month(date);
         self.months.iter().position(|month| *month == first)
     }
@@ -407,7 +409,7 @@ type CategoryCells = (Vec<Amount>, Amount, Option<CategoryGroup>);
 type Positions = HashMap<(String, String), (AssetRef, Amount)>;
 
 impl UnlockedVault {
-    fn report_ctx(
+    pub(crate) fn report_ctx(
         &self,
         filter: &ReportFilter,
         now: i64,
@@ -495,6 +497,7 @@ impl UnlockedVault {
             ReportKind::Pnl => Report::Pnl(self.pnl_report(&ctx)),
             ReportKind::Portfolio => Report::Portfolio(self.portfolio_report(&ctx)),
             ReportKind::Inflation => Report::Inflation(self.inflation_report(&ctx)),
+            ReportKind::Losses => Report::Losses(self.loss_report(&ctx)),
         })
     }
 
@@ -757,7 +760,7 @@ impl UnlockedVault {
     }
 
     /// Value of a quantity in `currency` at `secs`; zero without a rate.
-    fn value_at(
+    pub(crate) fn value_at(
         book: &RateBook,
         asset: &AssetRef,
         qty: Amount,
@@ -1441,6 +1444,26 @@ pub fn report_csv(report: &Report) -> String {
                 line.extend(point.values.iter().map(text));
                 line.push(data.meta.currency.clone());
                 lines.push(line);
+            }
+        }
+        Report::Losses(data) => {
+            lines.push(
+                ["month", "fee", "slippage", "total", "currency"]
+                    .map(String::from)
+                    .to_vec(),
+            );
+            for row in data.rows.iter().chain(std::iter::once(&data.total)) {
+                lines.push(vec![
+                    if row.month.is_empty() {
+                        "total".into()
+                    } else {
+                        row.month.clone()
+                    },
+                    text(&row.fee),
+                    text(&row.slippage),
+                    text(&row.total),
+                    data.meta.currency.clone(),
+                ]);
             }
         }
         Report::Inflation(data) => {

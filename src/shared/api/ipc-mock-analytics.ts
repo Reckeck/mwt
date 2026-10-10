@@ -250,6 +250,19 @@ export function mockReport(kind: ReportKind, filter: ReportFilter, ctx: Analytic
         },
       }
     }
+    case 'losses':
+      return {
+        losses: {
+          meta: meta(ctx, months, filter),
+          rows: months.map((month) => ({ month, fee: '0', slippage: '0', total: '0' })),
+          total: { month: '', fee: '0', slippage: '0', total: '0' },
+          by_kind: [],
+          by_store: [],
+          by_contact: [],
+          by_flow: [],
+          incomplete: 0,
+        },
+      }
     case 'inflation': {
       const worth = networth(ctx, months, filter)
       return {
