@@ -16,6 +16,8 @@ export interface TransactionFormProps {
   template?: boolean
   /** Continue this chain: the new operation joins it (plan §6.4). */
   flowId?: string | null
+  /** A new operation pre-filled from this one (a utility bill); saved as new. */
+  prefill?: Transaction | null
 }
 
 /** A calculator result handed to the form. */
@@ -38,6 +40,8 @@ export interface TransactionCreateDialogProps {
   counterpart?: AccountRef | null
   /** Continue this chain. */
   flowId?: string | null
+  /** A new operation pre-filled from this one. */
+  prefill?: Transaction | null
 }
 
 export interface TransactionEditDialogProps {

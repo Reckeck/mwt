@@ -9,6 +9,7 @@ import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
+import { FixedCosts } from '@/widgets/fixed-costs'
 import { MiniCalendar } from '@/widgets/mini-calendar'
 import { MonthSummary } from '@/widgets/month-summary'
 import { NetWorthCard } from '@/widgets/net-worth'
@@ -35,6 +36,7 @@ const widgetDefs = [
   { id: 'spending7d', defaultOrder: 10 },
   { id: 'miniCalendar', defaultOrder: 11 },
   { id: 'netWorth', defaultOrder: 12 },
+  { id: 'fixedCosts', defaultOrder: 13 },
 ] as const
 
 const visibleWidgets = computed(() => {
@@ -72,6 +74,7 @@ const isVisible = (id: (typeof widgetDefs)[number]['id']) => visibleWidgets.valu
     <div class="grid items-start gap-4 @sm:grid-cols-2">
       <DashboardGoals v-if="isVisible('goals')" />
       <DashboardBudgets v-if="isVisible('budgets')" />
+      <FixedCosts v-if="isVisible('fixedCosts')" />
     </div>
     <!-- Top row (total, assets, fx): 3 columns on lg, 2 on sm -->
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">

@@ -43,6 +43,7 @@ const props = withDefaults(defineProps<TransactionFormProps>(), {
   counterpart: null,
   template: false,
   flowId: null,
+  prefill: null,
 })
 
 /** `saved` after every successful write; `submit` instead in template mode. */
@@ -81,7 +82,11 @@ const offered = computed<TxKind[]>(() => {
 })
 
 const form = reactive(
-  props.transaction ? formFromTransaction(props.transaction, props.storeId) : emptyForm(props.storeId, 'payment'),
+  props.transaction
+    ? formFromTransaction(props.transaction, props.storeId)
+    : props.prefill
+      ? formFromTransaction(props.prefill, props.storeId)
+      : emptyForm(props.storeId, 'payment'),
 )
 
 // Continuing a chain: the new operation joins it.

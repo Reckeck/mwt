@@ -160,6 +160,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.planning' },
             },
             {
+              path: 'utilities',
+              name: 'planning-utilities',
+              component: () => import('@/pages/planning').then((page) => page.PlanningUtilities),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
               path: 'reminders',
               name: 'planning-reminders',
               component: () => import('@/pages/planning').then((page) => page.PlanningReminders),
