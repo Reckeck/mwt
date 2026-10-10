@@ -57,6 +57,43 @@ export const router = createRouter({
           ],
         },
         {
+          path: 'planning',
+          component: () => import('@/pages/planning').then((page) => page.Planning),
+          children: [
+            { path: '', redirect: { name: 'planning-automations' } },
+            {
+              path: 'automations',
+              name: 'planning-automations',
+              component: () => import('@/pages/planning').then((page) => page.PlanningAutomations),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
+              path: 'budgets',
+              name: 'planning-budgets',
+              component: () => import('@/pages/planning').then((page) => page.PlanningBudgets),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
+              path: 'goals',
+              name: 'planning-goals',
+              component: () => import('@/pages/planning').then((page) => page.PlanningGoals),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
+              path: 'reminders',
+              name: 'planning-reminders',
+              component: () => import('@/pages/planning').then((page) => page.PlanningReminders),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
+              path: 'alerts',
+              name: 'planning-alerts',
+              component: () => import('@/pages/planning').then((page) => page.PlanningAlerts),
+              meta: { i18n: 'nav.planning' },
+            },
+          ],
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/pages/settings').then((page) => page.Settings),

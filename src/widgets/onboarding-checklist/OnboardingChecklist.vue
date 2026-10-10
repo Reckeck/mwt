@@ -23,6 +23,9 @@ const balances = useQuery({
   queryFn: () => call<ContactBalance[]>('get_contact_balances'),
 })
 
+const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })
+const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_goals') })
+
 const stores = computed(() => flattenStoreTree(tree.data.value ?? []))
 
 const steps = computed(() => [
@@ -34,6 +37,8 @@ const steps = computed(() => [
   },
   { key: 'savings', done: Number(settings.vault?.savings_rate ?? 0.1) !== 0.1, to: { name: 'settings' } },
   { key: 'operation', done: (txs.data.value?.length ?? 0) > 0, to: { name: 'stores' } },
+  { key: 'salary', done: (automations.data.value?.length ?? 0) > 0, to: { name: 'planning-automations' } },
+  { key: 'goal', done: (goals.data.value?.length ?? 0) > 0, to: { name: 'planning-goals' } },
 ])
 
 const allDone = computed(() => steps.value.every((step) => step.done))

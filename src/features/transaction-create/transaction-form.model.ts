@@ -1,4 +1,5 @@
 import { body, txKind } from '@/shared/lib/transactions'
+import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 
 /**
  * Everything the transaction form edits, flat and string-typed the way the
@@ -184,20 +185,6 @@ export function pricedAsset(form: TransactionFormState): AssetRef | null {
     default:
       return form.asset
   }
-}
-
-/** `datetime-local` (local time, no zone) ⇄ RFC3339 UTC. */
-export function toIsoTimestamp(local: string): string | null {
-  if (!local) return null
-  const parsed = new Date(local)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
-}
-
-export function toLocalInput(iso: string): string {
-  const parsed = new Date(iso)
-  if (Number.isNaN(parsed.getTime())) return ''
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
 }
 
 function common(form: TransactionFormState): TxCommonInput {
@@ -497,3 +484,5 @@ export function debtChoices(form: TransactionFormState): DebtEffect[] {
   if (fromContact && form.to && 'store' in form.to) return ['borrow', 'collect']
   return []
 }
+
+export { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'

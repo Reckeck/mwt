@@ -2,11 +2,16 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { DailyBudget } from '@/widgets/daily-budget'
 import { DashboardAllocation } from '@/widgets/dashboard-allocation'
 import { DashboardAssets } from '@/widgets/dashboard-assets'
+import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardFx } from '@/widgets/dashboard-fx'
+import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
+import { MonthSummary } from '@/widgets/month-summary'
 import { OnboardingChecklist } from '@/widgets/onboarding-checklist'
+import { UpcomingList } from '@/widgets/upcoming-list'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
@@ -19,6 +24,11 @@ const widgetDefs = [
   { id: 'fx', defaultOrder: 2 },
   { id: 'byChain', defaultOrder: 3 },
   { id: 'byStore', defaultOrder: 4 },
+  { id: 'dailyBudget', defaultOrder: 5 },
+  { id: 'monthSummary', defaultOrder: 6 },
+  { id: 'upcoming', defaultOrder: 7 },
+  { id: 'goals', defaultOrder: 8 },
+  { id: 'budgets', defaultOrder: 9 },
 ] as const
 
 const visibleWidgets = computed(() => {
@@ -42,6 +52,16 @@ const isVisible = (id: (typeof widgetDefs)[number]['id']) => visibleWidgets.valu
 <template>
   <div class="grid gap-6 @container">
     <OnboardingChecklist />
+    <!-- Budget first (plan §9.9): today, this month, what is coming -->
+    <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
+      <DailyBudget v-if="isVisible('dailyBudget')" />
+      <MonthSummary v-if="isVisible('monthSummary')" />
+      <UpcomingList v-if="isVisible('upcoming')" :days="14" :limit="6" />
+    </div>
+    <div class="grid items-start gap-4 @sm:grid-cols-2">
+      <DashboardGoals v-if="isVisible('goals')" />
+      <DashboardBudgets v-if="isVisible('budgets')" />
+    </div>
     <!-- Top row (total, assets, fx): 3 columns on lg, 2 on sm -->
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
       <DashboardTotal v-if="isVisible('total')" />

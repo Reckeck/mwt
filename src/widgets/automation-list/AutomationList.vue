@@ -1,0 +1,181 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { ChevronDown, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+
+import { AutomationDialog, AutomationRunActions } from '@/features/automation-edit'
+import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { call, parseError } from '@/shared/api/ipc'
+import { formatDate, formatMoney } from '@/shared/lib/format'
+import { LEDGER_KEYS, PLANNING_KEYS, rejectText, scheduleText } from '@/shared/lib/planning'
+import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { txKind, txLegs } from '@/shared/lib/transactions'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
+
+const { t } = useI18n()
+const queryClient = useQueryClient()
+
+const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })
+const runs = useQuery({
+  queryKey: ['automation-runs'],
+  queryFn: () => call<AutomationRun[]>('list_automation_runs', { automationId: null }),
+})
+const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const storeName = (id: string) =>
+  flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === id)?.path.join(' › ') ?? id
+
+/** «−25 000 RUB · Тинькофф» from the template's first leg. */
+function templateLine(automation: Automation): string {
+  const tx = automation.template as Transaction
+  const leg = txLegs(tx)[0]
+  if (!leg) return t(`tx.kind.${txKind(tx)}`)
+  return `${t(`tx.kind.${txKind(tx)}`)} · ${formatMoney(leg.amount, { currency: leg.asset.symbol })} · ${storeName(leg.store_id)}`
+}
+
+const runsOf = (id: string) => (runs.data.value ?? []).filter((run) => run.automation_id === id)
+const pending = (id: string) => runsOf(id).filter((run) => typeof run.outcome === 'object' && 'rejected' in run.outcome)
+
+const expanded = ref<string | null>(null)
+const dialogOpen = ref(false)
+const editing = ref<Automation | null>(null)
+
+function openNew() {
+  editing.value = null
+  dialogOpen.value = true
+}
+function openEdit(automation: Automation) {
+  editing.value = automation
+  dialogOpen.value = true
+}
+
+function refresh() {
+  for (const queryKey of [...PLANNING_KEYS, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
+}
+
+const runNow = useMutation({
+  mutationFn: (id: string) => call<Transaction>('run_automation', { id }),
+  onSuccess: () => {
+    toast.success(t('automation.ranNow'))
+    refresh()
+  },
+  onError: (err) => toast.error(t('automation.runFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
+const remove = useMutation({
+  mutationFn: (id: string) => call('delete_automation', { id }),
+  onSuccess: () => {
+    toast.success(t('automation.deleted'))
+    refresh()
+  },
+  onError: (err) => toast.error(t('automation.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
+function outcomeText(run: AutomationRun): string {
+  if (run.outcome === 'skipped') return t('automation.run.outcome.skipped')
+  if ('created' in run.outcome) return t('automation.run.outcome.created')
+  return rejectText(run.outcome.rejected.reason, t, storeName)
+}
+
+const empty = computed(() => automations.isSuccess.value && !automations.data.value?.length)
+</script>
+
+<template>
+  <div class="grid gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm text-muted-foreground">{{ t('automation.intro') }}</p>
+      <Button @click="openNew">
+        <Plus class="size-4" />
+        {{ t('automation.new') }}
+      </Button>
+    </div>
+
+    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+      {{ t('automation.empty') }}
+    </div>
+
+    <Card v-for="automation in automations.data.value ?? []" :key="automation.id">
+      <div class="grid gap-3">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="grid min-w-0 gap-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="truncate font-medium">{{ automation.name }}</p>
+              <Badge v-if="!automation.active" variant="outline">{{ t('automation.paused') }}</Badge>
+              <Badge v-if="pending(automation.id).length" variant="destructive">
+                {{ t('automation.pendingRuns', { count: pending(automation.id).length }) }}
+              </Badge>
+            </div>
+            <p class="text-sm text-muted-foreground">{{ scheduleText(automation.schedule, t) }}</p>
+            <p class="text-sm tabular-nums">{{ templateLine(automation) }}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-8 text-muted-foreground"
+              :title="t('automation.runNow')"
+              :aria-label="t('automation.runNow')"
+              :disabled="runNow.isPending.value"
+              @click="runNow.mutate(automation.id)"
+            >
+              <Play class="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-8 text-muted-foreground"
+              :title="t('automation.edit')"
+              :aria-label="t('automation.edit')"
+              @click="openEdit(automation)"
+            >
+              <Pencil class="size-4" />
+            </Button>
+            <ConfirmButton
+              :label="t('automation.delete')"
+              :confirm-label="t('actions.confirmDelete')"
+              @confirm="remove.mutate(automation.id)"
+            >
+              <Trash2 class="size-4" />
+            </ConfirmButton>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          :aria-expanded="expanded === automation.id"
+          @click="expanded = expanded === automation.id ? null : automation.id"
+        >
+          <ChevronDown class="size-3.5 transition-transform" :class="expanded === automation.id && 'rotate-180'" />
+          {{ t('automation.history', { count: runsOf(automation.id).length }) }}
+        </button>
+
+        <ul v-if="expanded === automation.id" class="grid gap-1">
+          <li v-if="!runsOf(automation.id).length" class="text-xs text-muted-foreground">{{ t('automation.noRuns') }}</li>
+          <li
+            v-for="run in runsOf(automation.id)"
+            :key="run.id"
+            class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm"
+          >
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="shrink-0 tabular-nums text-muted-foreground">{{ formatDate(run.planned_at) }}</span>
+              <span
+                class="min-w-0"
+                :class="typeof run.outcome === 'object' && 'rejected' in run.outcome && 'text-destructive'"
+              >
+                {{ outcomeText(run) }}
+              </span>
+            </span>
+            <AutomationRunActions v-if="typeof run.outcome !== 'object' || !('created' in run.outcome)" :run="run" />
+          </li>
+        </ul>
+      </div>
+    </Card>
+
+    <AutomationDialog v-model:open="dialogOpen" :automation="editing" />
+  </div>
+</template>

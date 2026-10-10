@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { BookUser, ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
+import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, Lock, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
@@ -28,13 +28,17 @@ import {
   SidebarTrigger,
 } from '@/shared/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
-import { call, onEvent } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
+import { call, onEvent, parseError } from '@/shared/api/ipc'
+import { formatDate, formatMoney } from '@/shared/lib/format'
+import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
+import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useTheme } from '@/shared/lib/theme'
 import { useVaultStore } from '@/shared/store/vault'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const vault = useVaultStore()
 const queryClient = useQueryClient()
 
@@ -52,8 +56,9 @@ const summary = useQuery({
 const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions' },
+  { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
   { name: 'charts', icon: ChartArea, key: 'nav.charts' },
-  { name: 'directory-contacts', icon: BookUser, key: 'nav.directory' },
+  { name: 'directory-contacts', icon: BookUser, key: 'nav.directory', prefix: '/directory' },
   { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
 
@@ -104,6 +109,57 @@ void onEvent<RefreshResult>('prices-updated', (result) => {
   }
 })
 
+/* --- background jobs (plan §7.7): automations, alerts, reminders --- */
+function refreshPlanning() {
+  for (const queryKey of [...PLANNING_KEYS, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
+}
+
+void onEvent<{ tx_ids: string[] }>('automation-created', (payload) => {
+  refreshPlanning()
+  toast.success(t('automation.event.created', { count: payload.tx_ids.length }), {
+    action: { label: t('automation.event.open'), onClick: () => void router.push({ name: 'transactions' }) },
+  })
+})
+
+void onEvent<AutomationRejectedEvent>('automation-rejected', (payload) => {
+  refreshPlanning()
+  const nodes = flattenStoreTree(queryClient.getQueryData<StoreTreeNode[]>(STORE_TREE_QUERY_KEY) ?? [])
+  const storeName = (id: string) => nodes.find((node) => node.store.id === id)?.path.join(' › ') ?? id
+  const settle = (cmd: 'retry_automation_run' | 'skip_automation_run') =>
+    call(cmd, { runId: payload.run_id })
+      .then(() => {
+        refreshPlanning()
+        toast.success(t(cmd === 'retry_automation_run' ? 'automation.run.retried' : 'automation.run.skipped'))
+      })
+      .catch((err) =>
+        toast.error(t('automation.run.retryFailed'), { description: codeErrorMessage(parseError(err), t) }),
+      )
+  toast.error(t('automation.event.rejected', { name: payload.name, date: formatDate(payload.planned_at) }), {
+    description: rejectText(payload.reason, t, storeName),
+    duration: 30_000,
+    action: { label: t('automation.run.retry'), onClick: () => void settle('retry_automation_run') },
+    cancel: { label: t('automation.run.skip'), onClick: () => void settle('skip_automation_run') },
+  })
+})
+
+void onEvent<{ count: number }>('automation-skipped', (payload) => {
+  refreshPlanning()
+  toast.warning(t('automation.event.skipped', { count: payload.count }))
+})
+
+void onEvent<{ alert_id: string }>('price-alert', () => {
+  void queryClient.invalidateQueries({ queryKey: ['price-alerts'] })
+  toast.info(t('alert.event'))
+})
+
+void onEvent<{ id: string }>('reminder-due', (payload) => {
+  void queryClient.invalidateQueries({ queryKey: ['reminders'] })
+  void call<Reminder[]>('list_reminders').then((list) => {
+    const reminder = list.find((entry) => entry.id === payload.id)
+    if (reminder) toast.info(t('reminder.event'), { description: reminder.text })
+  })
+})
+
 async function lock() {
   await vault.lock()
 }
@@ -137,7 +193,7 @@ async function lock() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in navItems" :key="item.name">
-                <SidebarMenuButton as-child :is-active="route.name === item.name" :tooltip="t(item.key)">
+                <SidebarMenuButton as-child :is-active="item.prefix ? route.path.startsWith(item.prefix) : route.name === item.name" :tooltip="t(item.key)">
                   <RouterLink :to="{ name: item.name }">
                     <component :is="item.icon" />
                     <span>{{ t(item.key) }}</span>
