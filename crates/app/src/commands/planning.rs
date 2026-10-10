@@ -6,14 +6,17 @@ use tauri::{AppHandle, State};
 
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    AutomationInput, BudgetInput, GoalInput, PriceAlertInput, ReminderInput, UpdateAutomationInput,
-    UpdateBudgetInput, UpdateGoalInput, UpdatePriceAlertInput, UpdateReminderInput,
+    AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
+    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdatePriceAlertInput,
+    UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
-use trade_core::model::planning::{Automation, AutomationRun, Budget, Goal, PriceAlert, Reminder};
+use trade_core::model::planning::{
+    Automation, AutomationRun, Budget, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
+};
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
     BudgetStatus, DailyBudget, GoalCalendar, GoalProgress, MonthSummary, UnlockedVault,
-    UpcomingItem,
+    UpcomingItem, UtilityPaymentDraft, UtilityTrend,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -294,5 +297,79 @@ pub async fn get_upcoming(
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         Ok(vault.upcoming(days.unwrap_or(30).min(366), now_secs(), &zone))
+    })
+}
+
+// -- utilities (plan §7.5) ---------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_utility_items(state: State<'_, AppState>) -> Result<Vec<UtilityItem>, String> {
+    with_vault(&state, |vault| Ok(vault.utility_items()))
+}
+
+#[tauri::command]
+pub async fn create_utility_item(
+    input: UtilityInput,
+    state: State<'_, AppState>,
+) -> Result<UtilityItem, String> {
+    with_vault_mut(&state, |vault| vault.create_utility_item(input.into()))
+}
+
+#[tauri::command]
+pub async fn update_utility_item(
+    input: UpdateUtilityInput,
+    state: State<'_, AppState>,
+) -> Result<UtilityItem, String> {
+    with_vault_mut(&state, |vault| {
+        vault.update_utility_item(&input.id, input.item.into())
+    })
+}
+
+#[tauri::command]
+pub async fn delete_utility_item(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    with_vault_mut(&state, |vault| vault.delete_utility_item(&id))
+}
+
+#[tauri::command]
+pub async fn add_meter_reading(
+    input: MeterReadingInput,
+    state: State<'_, AppState>,
+) -> Result<MeterReading, String> {
+    with_vault_mut(&state, |vault| {
+        vault.add_meter_reading(&input.item_id, input.value, &input.period)
+    })
+}
+
+#[tauri::command]
+pub async fn delete_meter_reading(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    with_vault_mut(&state, |vault| vault.delete_meter_reading(&id))
+}
+
+#[tauri::command]
+pub async fn get_meter_trend(
+    item_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<UtilityTrend, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| vault.meter_trend(&item_id, &zone))
+}
+
+/// The «Оплатить» for one month (`YYYY-MM`, default: this month).
+#[tauri::command]
+pub async fn get_utility_payment_draft(
+    item_id: String,
+    period: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<UtilityPaymentDraft, String> {
+    let zone = current_zone(&app);
+    let period = period.unwrap_or_else(|| {
+        trade_core::calendar::month_key(
+            trade_core::calendar::Calendar::new(&zone).date_of(now_secs()),
+        )
+    });
+    with_vault(&state, |vault| {
+        vault.utility_payment_draft(&item_id, &period, &zone)
     })
 }

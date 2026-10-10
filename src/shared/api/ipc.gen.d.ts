@@ -951,6 +951,12 @@ type MeterReading = { id: string, item_id: string, value: Amount,
  */
 period: string, recorded_at: string, };
 
+type MeterReadingInput = { item_id: string, value: Amount, 
+/**
+ * `YYYY-MM`.
+ */
+period: string, };
+
 /**
  * Totals of one calendar month in the budget currency.
  */
@@ -1823,6 +1829,14 @@ in_budget: boolean | null, liability: LiabilityTerms | null, contact_id: string 
  */
 type UpdateTransactionInput = { id: string, transaction: TransactionInput, };
 
+type UpdateUtilityInput = { id: string, item: UtilityInput, };
+
+type UtilityInput = { name: string, active: boolean, kind: UtilityKind, currency: string, store_id: string | null, 
+/**
+ * Category key of the payments.
+ */
+category: string, };
+
 type UtilityItem = { id: string, name: string, active: boolean, kind: UtilityKind, currency: string, store_id: string | null, 
 /**
  * Category key.
@@ -1830,6 +1844,72 @@ type UtilityItem = { id: string, name: string, active: boolean, kind: UtilityKin
 category: string, };
 
 type UtilityKind = { "metered": { unit: string, tariff: Amount, } } | { "static": { amount: Amount, } } | { "housing": { amount: Amount, deposit: Amount | null, due_day: number, automation_id: string | null, } };
+
+/**
+ * One month of an item's bills.
+ */
+type UtilityMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+period: string, 
+/**
+ * Metered: the meter reading of the month.
+ */
+reading: Amount | null, 
+/**
+ * Metered: reading minus the previous month's.
+ */
+consumption: Amount | null, 
+/**
+ * The bill in the item's currency: consumption × tariff, or what was paid.
+ */
+amount: Amount, };
+
+/**
+ * A payment the form opens with, for one month of one item.
+ */
+type UtilityPaymentDraft = { item_id: string, period: string, 
+/**
+ * A `payment` ready to be edited and saved; the store is empty when
+ * the item names none.
+ */
+transaction: Transaction, 
+/**
+ * Metered: what was consumed this period.
+ */
+consumption: Amount | null, 
+/**
+ * Housing: the deposit is part of this (first) payment.
+ */
+includes_deposit: boolean, };
+
+type UtilityTrend = { item_id: string, currency: string, 
+/**
+ * Oldest first.
+ */
+months: Array<UtilityMonth>, 
+/**
+ * Average bill of the last six months with a bill.
+ */
+average: Amount | null, 
+/**
+ * Last bill against the one before, percent.
+ */
+delta_pct: Amount | null, 
+/**
+ * Next month by a straight line through the last six.
+ */
+forecast: Amount | null, 
+/**
+ * The last bill is above 1.5 × the average of the ones before it.
+ */
+anomaly: boolean, 
+/**
+ * What the item costs a month as far as is known: the last bill,
+ * the fixed amount, or the rent.
+ */
+monthly: Amount, };
 
 /**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).

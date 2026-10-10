@@ -23,6 +23,39 @@ const budgets: Budget[] = []
 const goals: Goal[] = []
 const reminders: Reminder[] = []
 const alerts: PriceAlert[] = []
+const utilities: UtilityItem[] = []
+const readings: MeterReading[] = []
+
+/** Bills by month of a metered item: consumption × tariff. */
+function utilityTrend(item: UtilityItem): UtilityTrend {
+  const own = readings
+    .filter((entry) => entry.item_id === item.id)
+    .sort((left, right) => left.period.localeCompare(right.period))
+  const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
+  const months: UtilityMonth[] = own.map((entry, index) => {
+    const consumption = index ? Number(entry.value) - Number(own[index - 1].value) : null
+    return {
+      period: entry.period,
+      reading: entry.value,
+      consumption: consumption === null ? null : String(consumption),
+      amount: money((consumption ?? 0) * tariff),
+    }
+  })
+  const billed = months.map((month) => Number(month.amount)).filter((value) => value > 0)
+  const average = billed.length ? billed.reduce((sum, value) => sum + value, 0) / billed.length : null
+  const fixed =
+    'static' in item.kind ? item.kind.static.amount : 'housing' in item.kind ? item.kind.housing.amount : '0'
+  return {
+    item_id: item.id,
+    currency: item.currency,
+    months,
+    average: average === null ? null : money(average),
+    delta_pct: null,
+    forecast: average === null ? null : money(average),
+    anomaly: false,
+    monthly: billed.length ? money(billed[billed.length - 1]) : fixed,
+  }
+}
 
 const uuid = () => crypto.randomUUID()
 const isRejected = (outcome: AutomationOutcome) => typeof outcome === 'object' && 'rejected' in outcome
@@ -439,6 +472,68 @@ export function mockPlanning(
     case 'delete_price_alert':
       remove(alerts, String(args?.id))
       return {}
+    case 'list_utility_items':
+      return utilities
+    case 'create_utility_item': {
+      const item: UtilityItem = { id: uuid(), ...(body as UtilityInput) }
+      utilities.push(item)
+      return item
+    }
+    case 'update_utility_item': {
+      const input = body as UpdateUtilityInput
+      return replace(utilities, input.id, input.item)
+    }
+    case 'delete_utility_item':
+      remove(utilities, String(args?.id))
+      return {}
+    case 'add_meter_reading': {
+      const input = body as MeterReadingInput
+      const reading: MeterReading = { id: uuid(), ...input, recorded_at: iso(now()) }
+      const index = readings.findIndex((entry) => entry.item_id === input.item_id && entry.period === input.period)
+      if (index >= 0) readings.splice(index, 1)
+      readings.push(reading)
+      return reading
+    }
+    case 'delete_meter_reading':
+      remove(readings, String(args?.id))
+      return {}
+    case 'get_meter_trend': {
+      const item = utilities.find((entry) => entry.id === args?.itemId) ?? fail('not found', 'MISSING')
+      return utilityTrend(item)
+    }
+    case 'get_utility_payment_draft': {
+      const item = utilities.find((entry) => entry.id === args?.itemId) ?? fail('not found', 'MISSING')
+      const trend = utilityTrend(item)
+      const code = item.currency.toUpperCase()
+      const tx = ctx.transactionFrom(
+        {
+          type: 'payment',
+          common: {
+            timestamp: null,
+            comment: item.name,
+            categories: [item.category],
+            flow_id: null,
+            contact_id: null,
+            price_usd: null,
+            fx_override: null,
+          },
+          store_id: item.store_id ?? '',
+          asset: { symbol: code, name: code, coingecko_id: null, chain: 'fiat', contract: null },
+          amount: trend.monthly,
+          fee: null,
+          to: null,
+          details: { cash_breakdown: null, unit_price: null, network: null, tx_hash: null },
+        } as TransactionInput,
+        iso(now()),
+      )
+      return {
+        item_id: item.id,
+        period: String(args?.period ?? iso(now()).slice(0, 7)),
+        transaction: tx,
+        consumption: null,
+        includes_deposit: false,
+      } satisfies UtilityPaymentDraft
+    }
     case 'get_upcoming':
       return upcoming(Number(args?.days ?? 30))
     default:
