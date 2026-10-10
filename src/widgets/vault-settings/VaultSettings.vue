@@ -44,6 +44,7 @@ const widgetDefs = [
   { id: 'spending7d', label: 'dashboard.widget.spending7d', defaultOrder: 10 },
   { id: 'miniCalendar', label: 'dashboard.widget.miniCalendar', defaultOrder: 11 },
   { id: 'netWorth', label: 'dashboard.widget.netWorth', defaultOrder: 12 },
+  { id: 'fixedCosts', label: 'dashboard.widget.fixedCosts', defaultOrder: 13 },
 ] as const
 
 /**
