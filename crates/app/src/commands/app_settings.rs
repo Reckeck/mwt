@@ -68,6 +68,29 @@ pub async fn update_app_settings(
     Ok(settings)
 }
 
+/// Set or clear the system-wide «+ Операция» key. The combination is
+/// registered first and saved only if that worked, so the settings never
+/// claim a shortcut the system refused (`SHORTCUT_FAILED`).
+#[tauri::command]
+pub async fn set_quick_add_shortcut(
+    app: AppHandle,
+    shortcut: Option<String>,
+) -> Result<AppSettings, String> {
+    let dir = config_dir(&app);
+    let mut settings = load_settings(&dir);
+    let wanted = shortcut
+        .map(|raw| raw.trim().to_string())
+        .filter(|raw| !raw.is_empty());
+    if let Err(err) = crate::shortcut::apply(&app, wanted.as_deref()) {
+        // Put the previous one back; if that fails too, nothing is registered.
+        crate::shortcut::apply(&app, settings.quick_add_shortcut.as_deref()).ok();
+        return Err(err);
+    }
+    settings.quick_add_shortcut = wanted;
+    save_settings(&dir, &settings).map_err(err_to_string)?;
+    Ok(settings)
+}
+
 /// Currencies the base/favourite pickers may offer.
 ///
 /// Goes to the network first, then to the last successfully fetched catalog,

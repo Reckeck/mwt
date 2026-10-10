@@ -1,24 +1,51 @@
 use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{TransactionInput, TransactionKinds, UpdateTransactionInput};
-use trade_core::model::store::{StoreKind, StoreScope};
+use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
 
+use trade_core::service::{TxFilter, TxGraph};
+
+use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
 use crate::commands::{AppState, err_to_string, require_vault};
 
+/// The operations list: every filter field is optional, `None` = everything.
 #[tauri::command]
 pub async fn list_transactions(
-    store_id: Option<String>,
-    include_children: Option<bool>,
+    filter: Option<TxFilter>,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, String> {
+    let zone = current_zone(&app);
     let guard = require_vault(&state).map_err(err_to_string)?;
-    let scope = match store_id {
-        Some(id) => StoreScope::store(&id, include_children.unwrap_or(true)),
-        None => StoreScope::default(),
-    };
-    Ok(guard.as_ref().unwrap().transactions(&scope))
+    guard
+        .as_ref()
+        .unwrap()
+        .list_transactions(&filter.unwrap_or_default(), &zone)
+        .map_err(err_to_string)
+}
+
+/// The same operations as lanes and edges; `collapsed` folds a store's
+/// sub-accounts into its own lane. More than 2000 nodes is `TOO_LARGE`.
+#[tauri::command]
+pub async fn get_tx_graph(
+    filter: Option<TxFilter>,
+    collapsed: Option<Vec<String>>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TxGraph, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .tx_graph(
+            &filter.unwrap_or_default(),
+            &collapsed.unwrap_or_default(),
+            &zone,
+        )
+        .map_err(err_to_string)
 }
 
 /// Every kind of transaction goes through here: build, auto-categorize,

@@ -6,7 +6,7 @@ import { RefreshCw } from 'lucide-vue-next'
 
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
-import { StoreFilter } from '@/features/transaction-filter'
+import { TransactionFilterBar } from '@/features/transaction-filter'
 import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { TransactionsList } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
@@ -14,16 +14,18 @@ import { Card } from '@/shared/ui/card'
 import { call, onEvent } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 
+import { sharedTxFilter } from './tx-filter.state'
+
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-/** Empty string = every store. */
-const storeFilter = ref('')
+const filter = sharedTxFilter
 
-// The filter is part of the key, so switching it fetches (and caches) by itself.
+// The filter is part of the key, so changing it fetches (and caches) by itself.
 const txs = useQuery({
-  queryKey: ['transactions', storeFilter],
-  queryFn: () => call<Transaction[]>('list_transactions', { storeId: storeFilter.value || null }),
+  queryKey: computed(() => ['transactions', 'list', filter.value]),
+  queryFn: () => call<Transaction[]>('list_transactions', { filter: filter.value }),
+  placeholderData: (previous) => previous,
 })
 
 const losses = useQuery({
@@ -51,17 +53,20 @@ void onEvent<RefreshResult>('prices-updated', refresh)
 
 <template>
   <div class="grid gap-6 @container">
-    <div class="flex items-center justify-between gap-4">
-      <StoreFilter v-model="storeFilter" />
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <TransactionFilterBar v-model="filter" />
 
-      <Button variant="outline" size="sm" @click="refresh">
+      <Button variant="outline" size="sm" class="h-9" @click="refresh">
         <RefreshCw class="size-4" />
         {{ t('store.refresh') }}
       </Button>
     </div>
 
     <Card>
-      <div class="-my-3">
+      <p v-if="txs.isSuccess.value && !txs.data.value?.length" class="text-sm text-muted-foreground">
+        {{ t('filter.empty') }}
+      </p>
+      <div v-else class="-my-3">
         <TransactionsList
           :transactions="txs.data.value ?? []"
           :losses="losses.data.value ?? null"

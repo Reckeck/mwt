@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { TransactionsList } from '@/entities/transaction'
+import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { UpcomingList } from '@/widgets/upcoming-list'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -13,7 +14,8 @@ import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
-import { txMeta } from '@/shared/lib/transactions'
+import { txId } from '@/shared/lib/transactions'
+import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { STATUS_CLASSES } from './spending-calendar.constants'
 
@@ -23,10 +25,6 @@ const month = ref(localDate(new Date()).slice(0, 7))
 const calendar = useQuery({
   queryKey: computed(() => ['calendar', month.value]),
   queryFn: () => call<CalendarMonth>('get_calendar', { month: month.value }),
-})
-const txs = useQuery({
-  queryKey: ['transactions', ''],
-  queryFn: () => call<Transaction[]>('list_transactions', { storeId: null }),
 })
 
 function shift(delta: number) {
@@ -51,11 +49,22 @@ const weekdays = computed(() =>
 const lead = computed(() => (new Date(`${month.value}-01T12:00`).getDay() + 6) % 7)
 
 const selected = ref<string | null>(null)
-const dayTxs = computed(() =>
-  selected.value
-    ? (txs.data.value ?? []).filter((tx) => localDate(new Date(txMeta(tx).timestamp)) === selected.value)
-    : [],
-)
+// The day is cut in the user's zone by the backend, same as the calendar cells.
+const dayQuery = useQuery({
+  queryKey: computed(() => ['transactions', 'day', selected.value]),
+  queryFn: () =>
+    call<Transaction[]>('list_transactions', { filter: emptyTxFilter({ from: selected.value, to: selected.value }) }),
+  enabled: computed(() => selected.value !== null),
+})
+const dayTxs = computed(() => (selected.value ? (dayQuery.data.value ?? []) : []))
+
+const openedId = ref<string | null>(null)
+const detailsOpen = ref(false)
+const opened = computed(() => dayTxs.value.find((tx) => txId(tx) === openedId.value) ?? null)
+function openDetails(tx: Transaction) {
+  openedId.value = txId(tx)
+  detailsOpen.value = true
+}
 const money = (value: string) => formatMoney(value, { decimals: 0 })
 </script>
 
@@ -110,7 +119,7 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
         </template>
         <p v-if="!dayTxs.length" class="text-sm text-muted-foreground">{{ t('calendar.dayEmpty') }}</p>
         <div v-else class="-my-3">
-          <TransactionsList :transactions="dayTxs">
+          <TransactionsList :transactions="dayTxs" openable @open="openDetails">
             <template #actions="{ tx }">
               <TransactionEditButton :tx="tx" />
             </template>
@@ -120,5 +129,7 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
     </div>
 
     <UpcomingList :days="45" :limit="15" />
+
+    <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
   </div>
 </template>

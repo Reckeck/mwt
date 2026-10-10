@@ -3,6 +3,7 @@
 
 mod commands;
 mod scheduler;
+mod shortcut;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
@@ -20,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(shortcut::plugin())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
@@ -41,6 +43,7 @@ pub fn run() {
             stores::store_move_targets,
             // transactions
             transactions::list_transactions,
+            transactions::get_tx_graph,
             transactions::transaction_kinds_for_store_kind,
             transactions::add_transaction,
             transactions::update_transaction,
@@ -96,6 +99,7 @@ pub fn run() {
             // app settings (outside the vault)
             app_settings::get_app_settings,
             app_settings::update_app_settings,
+            app_settings::set_quick_add_shortcut,
             app_settings::get_supported_currencies,
             // settings
             settings::get_settings,
@@ -176,6 +180,13 @@ pub fn run() {
 
             // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
             scheduler::spawn(app.handle().clone());
+
+            // The «+ Операция» key, if the user chose one. A clash only costs
+            // the shortcut; the settings screen shows it as not registered.
+            let stored = app_settings::current_settings(app.handle()).quick_add_shortcut;
+            if let Err(err) = shortcut::apply(app.handle(), stored.as_deref()) {
+                eprintln!("quick-add shortcut: {err}");
+            }
 
             // Create system tray with context menu
             create_tray(app)?;

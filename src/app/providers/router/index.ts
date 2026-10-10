@@ -48,6 +48,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.transactions' },
             },
             {
+              path: 'graph',
+              name: 'transactions-graph',
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsGraph),
+              meta: { i18n: 'nav.transactions' },
+            },
+            {
               path: 'calendar',
               name: 'transactions-calendar',
               component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
