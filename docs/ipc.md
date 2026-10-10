@@ -97,9 +97,10 @@ Frontend парсит код и показывает локализованно�
 
 ### pricing
 | `search_assets` | `query` | `Vec<AssetSearchHit { symbol, name, coingecko_id?, chain?, contract?, rank }>` |
-| `refresh_all` | — | `RefreshResult { prices, fx, updated_at }` + событие |
+| `refresh_all` | — | `RefreshResult { prices, fx, restamped, updated_at }` + событие; `restamped` — сколько сторон операций получили цену |
 | `open_explorer` | `url` | `()` (default browser) |
-| `get_cached_price` | `AssetPriceInput { symbol, chain?, contract? }` | `CachedPrice { price_usd, ts }` |
+| `get_cached_price` | `AssetPriceInput { symbol, coingecko_id?, chain?, contract?, at? }` | `CachedPrice { price_usd, ts }` — курс, ближайший к `at` (пусто = сейчас); `ts` — когда снят курс, пусто — курса нет |
+| `convert_amount` | `ConvertAmountInput { from, to, amount, at? }` | `ConvertedAmount { amount? }` — по курсу на `at`, кросс через USD; `null`, если курса нет |
 | `get_candles` | `GetCandlesInput { symbol, interval_min, limit≤1000 }` | `GetCandlesOutput { candles: Vec<CandlePoint { ts, open, high, low, close, volume }> }` (Binance klines, **без vault**) |
 
 ### portfolio

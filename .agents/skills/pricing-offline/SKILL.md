@@ -2,8 +2,8 @@
 name: pricing-offline
 description: >
   Прайсы, FX, провайдеры и офлайн-деградация в trade-app: PricingService,
-  цепочка фолбэков CoinGecko → CoinCap → Binance, open.er-api для валют, TTL-кэш
-  внутри vault и правило «сеть от кэша отделена». Использовать при правках
+  цепочка фолбэков CoinGecko → CoinCap → Binance, open.er-api для валют, история
+  курсов внутри vault, штамп цены операции и правило «сеть от кэша отделена». Использовать при правках
   crates/core/src/pricing/**, commands/pricing.rs, model/vault.rs (price_cache,
   fx_cache), а также при задачах «цена не обновляется», «офлайн», «stale price»,
   «курс валюты», «новый провайдер», «кэш», «refresh_all», «тормозит при вводе
@@ -31,24 +31,40 @@ Fallback-цепочка живёт в `price_usd(&self, asset)` — **четыр
 попытки, каждая на `if let Ok(...)`**. Упавшая попытка молча уходит к
 следующей; ошибка наружу уходит только если не сработала ни одна.
 
-## TTL-кэш внутри vault
-
-```rust
-pub const PRICE_TTL_SECONDS: i64 = 5 * 60;   // 5 минут
-pub const FX_TTL_SECONDS:    i64 = 60 * 60;  // 1 час
-```
+## История курсов внутри vault (план §6.1)
 
 - Кэш лежит **в vault**: `doc.price_cache: Vec<PricePoint>` и
   `doc.fx_cache: Vec<FxPoint>`, то есть зашифрован и переживает рестарт.
   Это не in-memory кэш — сброс приложения кэш не обнуляет.
-- Свежесть проверяет `fresh(iso_ts, ttl_secs)` — парсит RFC3339 через `time`,
-  **при ошибке парсинга возвращает `false`** (считается несвежим). Это
-  безопасный дефолт: битый таймстамп не даёт верить мусорным данным.
-- `upsert_prices` / `upsert_fx` — `retain` по ключу + `extend` свежими, то есть
-  **последняя точка заменяет прежнюю, а не добавляется**. Плюс prune: если по
-  активу накопилось больше 2000 точек, отбрасывается старейшая половина.
-- `price_usd_cached` / `fx_rate` — «прочитал из кэша; если пусто или протухло —
-  сходи в сеть и запиши обратно». Именно ими пользуются калькулятор и формы.
+- Кэш — **история**, а не «последняя точка»: `pricing/history.rs`,
+  `merge_prices` / `merge_fx`. На серию (валюта или ключ актива) — одна точка
+  в час (свежая побеждает), последняя неделя (`HOURLY_KEEP`) почасово, старше —
+  одна точка в день, не больше `HISTORY_CAP = 2000` точек.
+- `fetch_fx()` приносит **всю таблицу** er-api. Историю хранят только валюты из
+  `UnlockedVault::fx_currencies_in_use()` (USD, базовая, валюта бюджета, фиат в
+  операциях и холдингах, валюты ручных цен); остальные — одну последнюю точку,
+  иначе ~170 валют почасово раздули бы vault, который перешифровывается на
+  каждую запись. Следствие: у валюты, которой начали пользоваться сегодня,
+  прошлого нет.
+- Время сравнивается по unix-секундам (`history::unix_secs`), не строкой:
+  `…:00Z` и `…:00.5Z` строкой сортируются наоборот.
+- Запросы «на момент» — через `RateBook` (`UnlockedVault::rate_book()`,
+  `service/rates.rs`): кэш разбирается один раз, дальше бинарный поиск.
+  `fx_at` / `price_at` — ближайшая точка ≤ ts, иначе первая после;
+  `history_price` для графика сначала смотрит прошлое (кэш, штампы операций) и
+  лишь потом будущее; `convert` — кросс-курс через USD; `leg_price_in_base` —
+  цена проводки в базовой валюте по курсу дня операции.
+- Фиат оценивается через FX: `fiat:RUB` → `1 / per_usd(rub)`. Ручная цена
+  имущества (D24) действует на всю историю. Деривативы цены не имеют.
+
+## Штамп цены при сохранении (план §6.2)
+
+`add_transaction` / `update_transaction` вызывают `stamp_prices`: каждая сторона
+без `price_usd` и `price_base` получает `price_usd = price_at(актив, timestamp)`.
+Введённое руками не перезаписывается. `price_base` штамп **не** пишет —
+базовая валюта меняется, а курс к ней берётся из истории FX на дату операции.
+Нет курса → операция сохраняется без цены; `refresh_all` после применения
+курсов зовёт `restamp_missing()` и пишет число в `RefreshResult.restamped`.
 
 ## Железное правило: сеть отделена от мутации документа
 
@@ -57,15 +73,13 @@ pub const FX_TTL_SECONDS:    i64 = 60 * 60;  // 1 час
 ```rust
 // СЕТЬ — чистые, не трогают doc, безопасны для .await
 async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>>
-async fn fetch_fx(&self, base: &str)               -> Result<Vec<FxPoint>>
+async fn fetch_fx(&self)                            -> Result<Vec<FxPoint>>
 
-// МУТАЦИЯ — применяют уже полученное
-fn apply_prices(doc: &mut VaultDoc, fresh: &[PricePoint])
-fn apply_fx(doc: &mut VaultDoc, fresh: &[FxPoint])
+// МУТАЦИЯ — применяют уже полученное (не персистят: refresh пишет один раз)
+fn UnlockedVault::apply_prices(&mut self, fresh: &[PricePoint])
+fn UnlockedVault::apply_fx(&mut self, fresh: &[FxPoint])   // знает, чью историю хранить
+fn UnlockedVault::restamp_missing(&mut self) -> usize
 ```
-
-`refresh_prices` / `refresh_fx` — это просто `fetch_*` + `apply_*`, и они
-существуют для удобства **там, где мьютировать doc не нужно**.
 
 **Почему так:** `doc` лежит внутри `Mutex<Option<UnlockedVault>>`, а Guard
 нельзя держать через `.await`. Чистый `fetch_*` позволяет забрать из vault
@@ -73,12 +87,15 @@ fn apply_fx(doc: &mut VaultDoc, fresh: &[FxPoint])
 применить. Эталон — `refresh_all` в `crates/app/src/commands/pricing.rs`:
 
 ```rust
-let (assets, base) = { let mut g = require_vault(&state)?; /* …копия… */ (assets, base) };
+let assets = { let g = require_vault(&state)?; /* …копия… */ };
 let prices = state.pricing.fetch_prices(&assets).await?;          // await без guard
-let fx     = state.pricing.fetch_fx(&base).await?;
+let fx     = state.pricing.fetch_fx().await?;
 let mut g = require_vault(&state)?;                                // guard снова
-PricingService::apply_prices(&mut g.as_mut().unwrap().doc, &prices);
-PricingService::apply_fx(&mut g.as_mut().unwrap().doc, &fx);
+let vault = g.as_mut().unwrap();
+vault.apply_prices(&prices);
+vault.apply_fx(&fx);
+let restamped = vault.restamp_missing();
+vault.persist()?;
 ```
 
 Никогда не пиши `&mut doc` и `.await` в одной функции. Если кажется, что
@@ -92,7 +109,7 @@ PricingService::apply_fx(&mut g.as_mut().unwrap().doc, &fx);
 
 | Команда | Поведение при сбое |
 |---|---|
-| `get_cached_price` | cache-only, сети не касается — безопасно звать на каждый ввод |
+| `get_cached_price` / `convert_amount` | cache-only, сети не касаются — безопасно звать на каждый ввод; `at` — момент, на который нужен курс |
 | `search_assets` / `inspect_tx` / `bybit_executions` | пустой список + `notice` (`empty`/`unavailable`/`choose_network`) |
 | `refresh_all` | ошибка наружу (`errors.NETWORK`/`errors.PRICING`), кэш **не трогается** |
 
@@ -127,12 +144,15 @@ PricingService::apply_fx(&mut g.as_mut().unwrap().doc, &fx);
 
 `refresh_all` после успеха эмитит `prices-updated` с `RefreshResult`. Фронт
 подписывается через `onEvent<T>` из `src/shared/api/ipc.ts` и инвалидирует
-query-ключи (`['summary']`, `['store', id]`, `['store-history', id]`).
+query-ключи (`['summary']`, `['store', id]`, `['store-history', id]`); при
+`restamped > 0` `AppShell` инвалидирует ещё и списки операций — бейдж «без
+цены» уходит.
 Новые события — регистрируй здесь же и в `docs/ipc.md`.
 
 ## Тесты и проверки
 
-Юнит-тесты `pricing/mod.rs` — без сети (2 теста). Всё, что ходит в HTTP,
+Юнит-тесты истории — `pricing/history.rs`, штампа и курсов на дату —
+`service/rates.rs`; все без сети. Всё, что ходит в HTTP,
 проверяется **только вручную**: `mise run dev`, затем `refresh_all` в UI.
 
 ```bash
