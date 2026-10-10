@@ -15,6 +15,7 @@ import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { AssetRevalueButtonProps } from './asset-revalue.types'
+import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 
 const props = defineProps<AssetRevalueButtonProps>()
 
@@ -36,7 +37,7 @@ watch(open, (isOpen) => {
 const assetKey = () => `asset:${props.asset.symbol}`
 
 // The new value applies to the whole history, so every value view is stale.
-const STALE = [['store'], ['stores'], ['summary'], ['history'], ['store-history'], ['net-worth']]
+const STALE = [...LEDGER_KEYS, ...PLANNING_KEYS]
 const refresh = () => {
   for (const queryKey of STALE) void queryClient.invalidateQueries({ queryKey })
 }

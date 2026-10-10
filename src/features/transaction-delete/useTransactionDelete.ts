@@ -3,17 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { call, parseError } from '@/shared/api/ipc'
+import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 
 /** Every query a deleted transaction can show up in. */
-const STALE_KEYS: ReadonlyArray<readonly string[]> = [
-  ['transactions'],
-  ['store'],
-  ['store-history'],
-  ['store-pnl'],
-  ['stores'],
-  ['summary'],
-  ['history'],
-]
+const STALE_KEYS: ReadonlyArray<readonly string[]> = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
 
 /** Delete one transaction by id and refresh everything derived from it. */
 export function useTransactionDelete() {

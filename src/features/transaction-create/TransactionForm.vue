@@ -17,6 +17,7 @@ import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txId } from '@/shared/lib/transactions'
+import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
@@ -409,7 +410,7 @@ watch(
 )
 
 /* --- save --- */
-const STALE_KEYS = [['transactions'], ['store'], ['store-history'], ['store-pnl'], ['summary'], ['stores'], ['history'], ['net-worth'], ['contacts', 'balances']]
+const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
 
 const save = useMutation({
   mutationFn: () => {

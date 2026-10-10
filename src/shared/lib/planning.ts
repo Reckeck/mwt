@@ -28,6 +28,8 @@ export const LEDGER_KEYS = [
   ['stores'],
   ['history'],
   ['net-worth'],
+  ['report'],
+  ['calendar'],
 ]
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const

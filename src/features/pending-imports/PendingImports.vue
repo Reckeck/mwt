@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { call, parseError } from '@/shared/api/ipc'
 
 import type { PendingImportsProps } from './pending-imports.types'
+import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 
 const props = defineProps<PendingImportsProps>()
 
@@ -54,15 +55,7 @@ async function confirmImports(execIds: string[]) {
     toast.success(t('import.confirmed'), { description: String(res.confirmed) })
     await pending.refetch()
     // Confirmed fills became trades, so every derived view is stale.
-    const staleKeys: ReadonlyArray<readonly unknown[]> = [
-      ['transactions'],
-      ['store'],
-      ['store-history'],
-      ['store-pnl'],
-      ['stores'],
-      ['summary'],
-      ['history'],
-    ]
+    const staleKeys: ReadonlyArray<readonly unknown[]> = [...LEDGER_KEYS, ...PLANNING_KEYS]
     await Promise.all(
       staleKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
     )
