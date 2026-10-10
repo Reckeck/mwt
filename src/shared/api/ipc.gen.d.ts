@@ -33,7 +33,11 @@ type AssetIdent = { symbol: string, name: string, coingecko_id: string | null, c
  * Loose asset identification: enough to rebuild an [`AssetRef`] cache key
  * without making the frontend construct a full `quote` field.
  */
-type AssetPriceInput = { symbol: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, };
+type AssetPriceInput = { symbol: string, coingecko_id: string | null, chain: Chain | null, contract: string | null, 
+/**
+ * RFC3339 moment to price at; empty means now.
+ */
+at: string | null, };
 
 type AssetRef = { symbol: string, name: string, 
 /**
@@ -122,7 +126,9 @@ type BybitExecutionsInput = { category: BybitCategory, symbol: string | null, li
 type BybitExecutionsResult = { executions: Array<BybitExecution>, notice: string | null, };
 
 /**
- * Last cached USD quote. `ts` is empty when the asset was never priced.
+ * Cached USD quote nearest the asked moment. `ts` is when that rate was
+ * taken, empty when the asset was never priced; a hand-set price and USD
+ * itself hold for all time and carry the asked moment.
  */
 type CachedPrice = { price_usd: Amount, ts: string, };
 
@@ -333,6 +339,15 @@ sent_base: Amount, received_base: Amount, tx_count: number, };
 type ContactTurnoverInput = { contact_id: string, account_id: string | null, };
 
 /**
+ * Convert an amount between two currency codes at a moment (plan D20).
+ */
+type ConvertAmountInput = { from: string, to: string, amount: Amount, 
+/**
+ * RFC3339; empty means now.
+ */
+at: string | null, };
+
+/**
  * One side of a conversion.
  */
 type ConvertSide = { account: AccountRef, asset: AssetRef, amount: Amount, price: PriceStamp, };
@@ -347,6 +362,11 @@ type ConvertTx = { meta: TxMeta, from: ConvertSide, to: ConvertSide, fee: Fee | 
  * Rate the user was actually given, `to` per `from`, when it should be kept.
  */
 rate_override: Amount | null, };
+
+/**
+ * `amount` is `None` when a rate of either currency is unknown.
+ */
+type ConvertedAmount = { amount: Amount | null, };
 
 type CreateCategoryInput = { 
 /**
@@ -770,7 +790,11 @@ fees_base: Amount, legs: Array<PnlLeg>, };
  */
 type RecentVault = { path: string, last_opened: string, exists: boolean, };
 
-type RefreshResult = { prices: number, fx: number, updated_at: string, };
+type RefreshResult = { prices: number, fx: number, 
+/**
+ * Transaction sides that were saved without a price and got one now.
+ */
+restamped: number, updated_at: string, };
 
 type RejectReason = { "insufficient_funds": { store_id: string, asset: AssetRef, required: Amount, available: Amount, } } | { "credit_limit_exceeded": { store_id: string, limit: Amount, required: Amount, } } | { "invalid": { message: string, } };
 

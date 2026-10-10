@@ -17,16 +17,19 @@ use crate::model::transaction::{
     TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TxMeta, TxOrigin,
 };
 use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
+use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
 
 mod categories;
 mod contacts;
+mod rates;
 #[cfg(test)]
 mod test_support;
 mod validate;
 mod worth;
 
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, TurnoverRow};
+pub use rates::RateBook;
 pub use worth::{FlowClass, NetWorth};
 
 /// Store fields beyond name, colour and note: budget membership, loan terms
@@ -561,7 +564,10 @@ impl UnlockedVault {
         {
             let (base, _) = self.base_and_fx();
             inner.price.price_base = Some(unit_price);
-            inner.price.price_usd = self.per_usd(&base).map(|rate| unit_price / rate);
+            inner.price.price_usd = self
+                .fx_at(&base, &inner.meta.timestamp)
+                .filter(|rate| !rate.is_zero())
+                .map(|rate| unit_price / rate);
         }
     }
 
@@ -571,6 +577,7 @@ impl UnlockedVault {
         Self::normalize_categories(&mut tx);
         self.apply_categorization_rules(&mut tx);
         self.complete_transaction(&mut tx);
+        Self::stamp_prices(&self.rate_book(), &mut tx);
         self.validate_transaction(&tx)?;
         if tx.meta().id.trim().is_empty()
             || self
@@ -602,6 +609,7 @@ impl UnlockedVault {
         Self::normalize_categories(&mut tx);
         self.apply_categorization_rules(&mut tx);
         self.complete_transaction(&mut tx);
+        Self::stamp_prices(&self.rate_book(), &mut tx);
         self.validate_transaction(&tx)?;
         self.doc.transactions[index] = tx.clone();
         self.recompute_holdings();
@@ -639,15 +647,17 @@ impl UnlockedVault {
         // per (store, asset) key.
         let mut txs: Vec<Transaction> = self.doc.transactions.clone();
         txs.sort_by(|left, right| left.meta().timestamp.cmp(&right.meta().timestamp));
+        let book = self.rate_book();
 
         for tx in &txs {
+            let secs = secs_or_now(&tx.meta().timestamp);
             for leg in tx.legs() {
                 let key = (leg.store_id.clone(), leg.asset.key());
                 let delta = leg.amount;
                 if delta.is_zero() {
                     continue;
                 }
-                let price = leg_price_in_base(&leg, &base);
+                let price = book.leg_price_in_base(&leg, &base, secs);
                 let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
                 let new_qty = cur + delta;
 
@@ -721,11 +731,17 @@ impl UnlockedVault {
         (base, fx)
     }
 
-    /// Current USD price of one unit: a hand-set price (property), else the
-    /// newest cached quote, else the last price a transaction recorded for
+    /// Current USD price of one unit: a hand-set price (property), fiat
+    /// through its latest FX rate, else the newest cached quote, else the last price a transaction recorded for
     /// the asset, else zero. Derivatives are never valued.
     fn price_usd_for(&self, asset_key: &str) -> Amount {
         self.manual_price_usd(asset_key)
+            .or_else(|| {
+                let code = asset_key.strip_prefix("fiat:")?;
+                self.per_usd(code)
+                    .filter(|rate| !rate.is_zero())
+                    .map(|rate| Amount::new(rust_decimal::Decimal::ONE) / rate)
+            })
             .or_else(|| {
                 self.doc
                     .price_cache
@@ -734,7 +750,7 @@ impl UnlockedVault {
                     .max_by(|left, right| left.ts.cmp(&right.ts))
                     .map(|point| point.value_usd)
             })
-            .or_else(|| self.price_usd_at(asset_key, "9999"))
+            .or_else(|| self.last_stamped_price(asset_key))
             .unwrap_or(Amount::ZERO)
     }
 
@@ -1164,12 +1180,9 @@ impl UnlockedVault {
         base_currency: &str,
     ) -> Vec<HistoryPoint> {
         let base = base_currency.to_lowercase();
-        let fx = self
-            .doc
-            .fx_cache
-            .iter()
-            .find(|point| point.currency == base)
-            .map(|point| point.per_usd)
+        let book = self.rate_book();
+        let fx_now = self
+            .per_usd(&base)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
         let in_scope = |store_id: &str| scope.is_none_or(|ids| ids.contains(store_id));
 
@@ -1204,15 +1217,19 @@ impl UnlockedVault {
                 *qty.entry(asset.clone()).or_default() += *amount;
                 idx += 1;
             }
+            let secs = secs_or_now(ev);
             let mut value_usd = Amount::ZERO;
             for (akey, quantity) in &qty {
                 if quantity.is_zero() {
                     continue;
                 }
-                if let Some(price) = self.price_usd_at(akey, ev) {
+                if let Some(price) = book.history_price(akey, secs) {
                     value_usd += *quantity * price;
                 }
             }
+            // Each point in the base currency of its own day: a ruble
+            // portfolio does not grow just because the ruble fell later.
+            let fx = book.fx_at(&base, secs).unwrap_or(fx_now);
             out.push(HistoryPoint {
                 ts: ev.clone(),
                 ts_ms: iso_to_millis(ev),
@@ -1223,35 +1240,21 @@ impl UnlockedVault {
         out
     }
 
-    /// Newest cached USD price of an asset at or before `ts`; without a quote
-    /// yet, the latest price a transaction recorded for it (e.g. the last buy).
-    fn price_usd_at(&self, asset_key: &str, ts: &str) -> Option<Amount> {
-        if let Some(manual) = self.manual_price_usd(asset_key) {
-            return Some(manual);
-        }
+    /// The latest USD price a transaction recorded for an asset (e.g. the
+    /// last buy), for assets no provider quotes.
+    fn last_stamped_price(&self, asset_key: &str) -> Option<Amount> {
         self.doc
-            .price_cache
+            .transactions
             .iter()
-            .filter(|point| point.asset_key == asset_key && point.ts.as_str() <= ts)
-            .max_by(|left, right| left.ts.cmp(&right.ts))
-            .map(|point| point.value_usd)
-            .or_else(|| {
-                self.doc
-                    .transactions
-                    .iter()
-                    .filter(|tx| tx.meta().timestamp.as_str() <= ts)
-                    .filter_map(|tx| {
-                        tx.legs()
-                            .into_iter()
-                            .find(|leg| {
-                                leg.asset.key() == asset_key && leg.role == LegRole::Principal
-                            })
-                            .and_then(|leg| leg.price_usd)
-                            .map(|price| (tx.meta().timestamp.clone(), price))
-                    })
-                    .max_by(|left, right| left.0.cmp(&right.0))
-                    .map(|(_, price)| price)
+            .filter_map(|tx| {
+                tx.legs()
+                    .into_iter()
+                    .find(|leg| leg.asset.key() == asset_key && leg.role == LegRole::Principal)
+                    .and_then(|leg| leg.price_usd)
+                    .map(|price| (tx.meta().timestamp.clone(), price))
             })
+            .max_by(|left, right| left.0.cmp(&right.0))
+            .map(|(_, price)| price)
     }
 
     pub fn realized_pnl(&self) -> RealizedPnl {
@@ -1262,6 +1265,7 @@ impl UnlockedVault {
     /// stores (`None` replays the whole vault).
     fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl {
         let (base, _fx) = self.base_and_fx();
+        let book = self.rate_book();
 
         // Flatten to (timestamp, leg) and replay. Only legs booked in scope
         // count, which is what makes a per-store PnL differ from the
@@ -1291,7 +1295,7 @@ impl UnlockedVault {
                 continue;
             }
             let key = (leg.store_id.clone(), leg.asset.key());
-            let price = leg_price_in_base(leg, &base);
+            let price = book.leg_price_in_base(leg, &base, secs_or_now(ts));
             let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
             match leg.role {
                 // A fee is a cost of its own, never a sale at a profit.
@@ -1704,26 +1708,6 @@ impl UnlockedVault {
             Some(_) => Ok(()),
             None => Err(Error::Missing(format!("store {id}"))),
         }
-    }
-}
-
-/// Price of one unit of a leg's asset in `base`, as known at the time of the
-/// movement.
-///
-/// Prefers an explicitly recorded base price, then an FX override paired with
-/// a USD price, then the USD price itself when the base *is* USD. A USD price
-/// with no known rate still falls through as the USD value rather than zero:
-/// a wrong magnitude is easier to notice than a silent zero, and the rate
-/// arrives on the next refresh.
-fn leg_price_in_base(leg: &Leg, base: &str) -> Amount {
-    if let Some(price_base) = leg.price_base {
-        return price_base;
-    }
-    match (leg.price_usd, leg.fx_override) {
-        (Some(usd), Some(fx)) => usd * fx,
-        (Some(usd), None) if base == "usd" => usd,
-        (Some(usd), None) => usd,
-        _ => Amount::ZERO,
     }
 }
 

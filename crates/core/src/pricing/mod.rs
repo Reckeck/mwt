@@ -11,6 +11,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub mod history;
+
 use reqwest::Client;
 use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
@@ -25,11 +27,6 @@ const COINGECKO_V3: &str = "https://api.coingecko.com/api/v3";
 const COINCAP_V2: &str = "https://api.coincap.io/v2";
 const BINANCE_API: &str = "https://api.binance.com/api/v3";
 const ER_API: &str = "https://open.er-api.com/v6";
-
-/// Fresh price is stale after this (cache only used within it).
-pub const PRICE_TTL_SECONDS: i64 = 5 * 60;
-/// FX rates refresh window.
-pub const FX_TTL_SECONDS: i64 = 60 * 60;
 
 #[derive(Debug, Clone)]
 pub struct PricingService {
@@ -48,17 +45,6 @@ impl Default for PricingService {
 }
 
 impl PricingService {
-    /// Refresh USD prices for the given assets; updates and returns cache.
-    pub async fn refresh_prices(
-        &self,
-        doc: &mut VaultDoc,
-        assets: &[AssetRef],
-    ) -> Result<Vec<PricePoint>> {
-        let fetched = self.fetch_prices(assets).await?;
-        Self::apply_prices(doc, &fetched);
-        Ok(fetched)
-    }
-
     /// Network-only price fetch (no cache mutation) — usable across `.await`
     /// without borrowing the vault.
     pub async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>> {
@@ -84,84 +70,29 @@ impl PricingService {
         Ok(out)
     }
 
-    /// Insert fetched price points into the vault cache (dedupe + prune).
+    /// Insert fetched price points into the vault cache, keeping history
+    /// (plan §6.1).
     pub fn apply_prices(doc: &mut VaultDoc, fresh: &[PricePoint]) {
-        upsert_prices(&mut doc.price_cache, fresh);
+        history::merge_prices(&mut doc.price_cache, fresh);
     }
 
-    /// Recompute FX cache (units per 1 USD) for the base currency (+ USD).
-    pub async fn refresh_fx(&self, doc: &mut VaultDoc, base: &str) -> Result<Vec<FxPoint>> {
-        let fetched = self.fetch_fx(base).await?;
-        Self::apply_fx(doc, &fetched);
-        Ok(fetched)
-    }
-
-    /// Network-only FX fetch (no cache mutation).
-    pub async fn fetch_fx(&self, base: &str) -> Result<Vec<FxPoint>> {
-        let base = base.to_lowercase();
+    /// Network-only FX fetch (no cache mutation): the whole table, every
+    /// currency the provider knows, as units per 1 USD.
+    pub async fn fetch_fx(&self) -> Result<Vec<FxPoint>> {
         let rates = self.fx_table().await?;
-        let mut out = Vec::new();
-        if let Some(per_usd) = rates.get(&base) {
-            out.push(FxPoint {
-                currency: base.clone(),
-                per_usd: *per_usd,
-                ts: crate::model::vault::now_iso(),
+        let ts = crate::model::vault::now_iso();
+        let mut out: Vec<FxPoint> = rates
+            .into_iter()
+            .filter(|(_, per_usd)| per_usd.is_positive())
+            .map(|(currency, per_usd)| FxPoint {
+                currency,
+                per_usd,
+                ts: ts.clone(),
                 source: "open.er-api".into(),
-            });
-        }
-        if let Some(per_usd) = rates.get("usd") {
-            out.push(FxPoint {
-                currency: "usd".into(),
-                per_usd: *per_usd,
-                ts: crate::model::vault::now_iso(),
-                source: "open.er-api".into(),
-            });
-        }
+            })
+            .collect();
+        out.sort_by(|left, right| left.currency.cmp(&right.currency));
         Ok(out)
-    }
-
-    /// Insert fetched FX points into the vault cache.
-    pub fn apply_fx(doc: &mut VaultDoc, fresh: &[FxPoint]) {
-        upsert_fx(&mut doc.fx_cache, fresh);
-    }
-
-    /// Best cached FX rate for a currency (refresh if absent).
-    pub async fn fx_rate(&self, doc: &mut VaultDoc, base: &str) -> Result<Amount> {
-        let base_l = base.to_lowercase();
-        if let Some(point) = doc.fx_cache.iter().find(|point| point.currency == base_l)
-            && fresh(&point.ts, FX_TTL_SECONDS)
-        {
-            return Ok(point.per_usd);
-        }
-        let _ = self.refresh_fx(doc, &base_l).await;
-        doc.fx_cache
-            .iter()
-            .find(|point| point.currency == base_l)
-            .map(|point| point.per_usd)
-            .ok_or_else(|| Error::Pricing(format!("no fx rate for {base_l}")))
-    }
-
-    /// Cached USD price of an asset (refreshed automagically if absent/stale).
-    pub async fn price_usd_cached(&self, doc: &mut VaultDoc, asset: &AssetRef) -> Result<Amount> {
-        if let Some(point) = doc
-            .price_cache
-            .iter()
-            .find(|point| point.asset_key == asset.key())
-            && fresh(&point.ts, PRICE_TTL_SECONDS)
-        {
-            return Ok(point.value_usd);
-        }
-        let val = self.price_usd(asset).await?;
-        upsert_prices(
-            &mut doc.price_cache,
-            &[PricePoint {
-                asset_key: asset.key(),
-                value_usd: val,
-                source: "cryptoprice".into(),
-                ts: crate::model::vault::now_iso(),
-            }],
-        );
-        Ok(val)
     }
 
     /// Search crypto assets for the UI autocomplete (CoinGecko `/search`).
@@ -470,79 +401,4 @@ pub struct AssetSearchHit {
 #[derive(serde::Deserialize)]
 struct CoinListEntry {
     symbol: String,
-}
-
-// -- cache helpers ----------------------------------------------------------
-
-fn upsert_prices(cache: &mut Vec<PricePoint>, fresh: &[PricePoint]) {
-    let mut known: HashSet<&str> = HashSet::new();
-    for point in fresh {
-        known.insert(point.asset_key.as_str());
-    }
-    cache.retain(|point| !known.contains(point.asset_key.as_str()));
-    cache.extend_from_slice(fresh);
-    // prune: drop assets with more than 2000 cached points (oldest half)
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for point in cache.iter() {
-        *counts.entry(point.asset_key.clone()).or_default() += 1;
-    }
-    let over: Vec<String> = counts
-        .iter()
-        .filter(|(_, count)| **count > 2000)
-        .map(|(key, _)| key.clone())
-        .collect();
-    for key in over {
-        cache.retain(|point| point.asset_key != key);
-    }
-}
-
-fn upsert_fx(cache: &mut Vec<FxPoint>, fresh: &[FxPoint]) {
-    let known: HashSet<&str> = fresh.iter().map(|point| point.currency.as_str()).collect();
-    cache.retain(|point| !known.contains(point.currency.as_str()));
-    cache.extend_from_slice(fresh);
-}
-
-fn fresh(iso: &str, ttl_secs: i64) -> bool {
-    use time::format_description::well_known::Rfc3339;
-    match time::OffsetDateTime::parse(iso, &Rfc3339) {
-        Ok(ts) => {
-            let elapsed = time::OffsetDateTime::now_utc().unix_timestamp() - ts.unix_timestamp();
-            elapsed <= ttl_secs
-        }
-        Err(_) => false,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn freshness_check() {
-        let now = crate::model::vault::now_iso();
-        assert!(fresh(&now, 60));
-        let old = "2020-01-01T00:00:00Z";
-        assert!(!fresh(old, 60));
-    }
-
-    #[test]
-    fn upsert_fx_dedupe() {
-        let mut cache = vec![FxPoint {
-            currency: "usd".into(),
-            per_usd: Amount(Decimal::ONE),
-            ts: "2020-01-01T00:00:00Z".into(),
-            source: "test".into(),
-        }];
-        upsert_fx(
-            &mut cache,
-            &[FxPoint {
-                currency: "usd".into(),
-                per_usd: Amount(Decimal::ONE),
-                ts: "2021-01-01T00:00:00Z".into(),
-                source: "test".into(),
-            }],
-        );
-        assert_eq!(cache.len(), 1);
-        assert_eq!(cache[0].ts, "2021-01-01T00:00:00Z");
-    }
 }

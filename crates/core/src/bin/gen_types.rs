@@ -123,6 +123,8 @@ fn main() {
         trade_core::ipc_contract::RefreshResult,
         trade_core::ipc_contract::AssetPriceInput,
         trade_core::ipc_contract::CachedPrice,
+        trade_core::ipc_contract::ConvertAmountInput,
+        trade_core::ipc_contract::ConvertedAmount,
         trade_core::ipc_contract::UpdateSettingsInput,
         trade_core::calc::CalcMode,
         trade_core::calc::CalcInput,

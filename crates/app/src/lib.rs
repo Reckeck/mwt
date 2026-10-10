@@ -78,6 +78,7 @@ pub fn run() {
             pricing::refresh_all,
             pricing::open_explorer,
             pricing::get_cached_price,
+            pricing::convert_amount,
             pricing::get_candles,
             // portfolio
             portfolio::get_summary,
