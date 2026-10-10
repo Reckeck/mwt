@@ -32,6 +32,7 @@ mod rates;
 mod reports;
 #[cfg(test)]
 mod test_support;
+mod utilities;
 mod validate;
 mod worth;
 
@@ -52,6 +53,7 @@ pub use reports::{
     PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
     ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
 };
+pub use utilities::{UtilityDraft, UtilityMonth, UtilityPaymentDraft, UtilityTrend};
 pub use worth::{FlowClass, NetWorth};
 
 /// Store fields beyond name, colour and note: budget membership, loan terms

@@ -808,6 +808,44 @@ pub struct UpdatePriceAlertInput {
     pub alert: PriceAlertInput,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UtilityInput {
+    pub name: String,
+    pub active: bool,
+    pub kind: crate::model::planning::UtilityKind,
+    pub currency: String,
+    pub store_id: Option<String>,
+    /// Category key of the payments.
+    pub category: String,
+}
+
+impl From<UtilityInput> for crate::service::UtilityDraft {
+    fn from(input: UtilityInput) -> Self {
+        Self {
+            name: input.name,
+            active: input.active,
+            kind: input.kind,
+            currency: input.currency,
+            store_id: input.store_id.filter(|id| !id.trim().is_empty()),
+            category: input.category,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateUtilityInput {
+    pub id: String,
+    pub item: UtilityInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct MeterReadingInput {
+    pub item_id: String,
+    pub value: Amount,
+    /// `YYYY-MM`.
+    pub period: String,
+}
+
 /// Payload of `automation-rejected`: one run the scheduler could not create.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct AutomationRejectedEvent {
