@@ -128,12 +128,25 @@ Frontend парсит код и показывает локализованно�
 
 ### app settings (вне vault, в конфигах приложения)
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
-| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается |
+| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
 | `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice`: `builtin` — встроенный список (сеть недоступна и промаха не было), `cached` — последний успешный запрос, `null` — провайдеры ответили сейчас |
 
 Файлы: `app_settings.json` и `currencies.json` в `app_config_dir`, обычный
 JSON без шифрования — там нет ничего секретного. Логика типов, нормализации и
 лестницы деградации — в `crates/core/src/appconfig.rs` (юнит-тесты там же).
+
+### analytics (`crates/app/src/commands/analytics.rs`)
+
+Отчёты считаются в core (`service/reports.rs`). Суммы — в валюте отчёта
+(`filter.currency`, по умолчанию валюта бюджета) по курсу на дату операции;
+дни и месяцы — в поясе `AppSettings.timezone`. `real_terms` пересчитывает каждый
+месяц в сегодняшние деньги по `AppSettings.inflation` (справочно).
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate? }` |
+| `export_report_csv` | те же `kind`, `filter` | `Option<String>` — путь файла; `None`, если диалог закрыли. CSV: UTF-8 с BOM, `;`, CRLF, колонка валюты в каждой строке |
+| `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, days[{ date, income, spent, daily, tx_count, status }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future` |
 
 ### planning (`crates/app/src/commands/planning.rs`)
 
