@@ -68,7 +68,8 @@ Frontend парсит код и показывает локализованно�
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `list_transactions` | `store_id?, include_children?` (по умолчанию `true`) | `Vec<Transaction>` — новые сверху; с `store_id` — по узлу и его субсчетам |
+| `list_transactions` | `filter?: TxFilter { scope: StoreScope, kinds[], contact_id?, flow_id?, from?, to?, hide_internal, text? }` | `Vec<Transaction>` — новые сверху. `from`/`to` — `YYYY-MM-DD` включительно, по часовому поясу из настроек; `hide_internal` убирает переводы и обмены внутри одного кошелька верхнего уровня; `text` ищет по комментарию, категориям, активам, кошелькам, контактам и хешу. Без `filter` — все операции |
+| `get_tx_graph` | `filter?: TxFilter, collapsed?: string[]` | `TxGraph { currency, lanes[], nodes[], edges[], columns }`. Дорожка — кошелёк в порядке дерева; узел — операция на дорожке (`column` — порядковый номер по времени, `lane` — индекс дорожки, `value` — сумма в базовой валюте на момент операции); рёбра `seq` / `transfer` / `convert` / `flow` всегда идут вперёд по времени. `collapsed` — кошельки, чьи субсчета сворачиваются в их дорожку. Больше 2000 узлов → `TOO_LARGE` |
 | `add_transaction` | `TransactionInput` | `Transaction` — после автокатегоризации и проверок V1–V14 |
 | `update_transaction` | `UpdateTransactionInput { id, transaction: TransactionInput }` | `Transaction` — `id` и `origin` сохраняются, холдинги пересчитываются |
 | `delete_transaction` | `id` | `()` |
@@ -130,6 +131,7 @@ Frontend парсит код и показывает локализованно�
 ### app settings (вне vault, в конфигах приложения)
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
 | `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation?, enrichment_opt_in? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
+| `set_quick_add_shortcut` | `shortcut?: string` (`CmdOrCtrl+Shift+Space`; пусто/`null` — выключить) | `AppSettings`. Сначала регистрирует глобальное сочетание, сохраняет только при успехе; не удалось (занято, неверный формат, нет глобальных клавиш) → `SHORTCUT_FAILED`, прежнее сочетание восстанавливается. Срабатывание показывает окно и шлёт событие `quick-add` |
 | `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice`: `builtin` — встроенный список (сеть недоступна и промаха не было), `cached` — последний успешный запрос, `null` — провайдеры ответили сейчас |
 
 Файлы: `app_settings.json` и `currencies.json` в `app_config_dir`, обычный
