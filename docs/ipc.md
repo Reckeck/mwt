@@ -20,6 +20,7 @@ Frontend парсит код и показывает локализованно�
 | `automation-skipped` | `{ count }` | после долгого перерыва старые даты сверх 24 записаны как пропущенные |
 | `price-alert` | `{ alert_id }` | сработал ценовой алерт (один раз) |
 | `reminder-due` | `{ id }` | наступило время напоминания (один раз за сессию) |
+| `enrichment-ready` | `{ tx_id }` | обозреватель вернул данные по хешу операции; находка ждёт «Применить / Отклонить» |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
 только при разблокированном vault — импорт Bybit, автоматизации, алерты (цены их
@@ -128,12 +129,42 @@ Frontend парсит код и показывает локализованно�
 
 ### app settings (вне vault, в конфигах приложения)
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
-| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
+| `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation?, enrichment_opt_in? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
 | `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice`: `builtin` — встроенный список (сеть недоступна и промаха не было), `cached` — последний успешный запрос, `null` — провайдеры ответили сейчас |
 
 Файлы: `app_settings.json` и `currencies.json` в `app_config_dir`, обычный
 JSON без шифрования — там нет ничего секретного. Логика типов, нормализации и
 лестницы деградации — в `crates/core/src/appconfig.rs` (юнит-тесты там же).
+
+### losses, chains, rates (`crates/app/src/commands/losses.rs`)
+
+Потеря операции = комиссия по штампу + разница между отданным и полученным по
+**рыночному** курсу на момент операции (не по введённому вручную курсу), только
+для обмена, спот-сделки и продажи имущества. Сводка потерь — `get_report` с
+`kind: losses`.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `get_tx_loss` | `id` | `TxLoss { tx_id, currency, fee, slippage, total, internal, complete }` в базовой валюте |
+| `get_tx_losses` | — | `Record<id, TxLoss>` — все операции с ненулевой или неполной потерей (колонка списка) |
+| `list_flows` | `from?`, `to?` (RFC3339) | `Vec<FlowSummary { flow_id, currency, links[{ tx, loss }], started_at, ended_at, gave[], got[], gave_value, got_value, loss, difference }>` — новые первыми |
+| `link_transactions` | `LinkTransactionsInput { ids, flow_id? }` | `String` — id цепочки: заданный, иначе цепочка одной из операций, иначе новый |
+| `unlink_transaction` | `id` | `()` |
+| `get_fx_table` | — | `FxTable { base, rows[{ currency, per_base, in_base, updated_at, tracked }] }` — последние курсы к базовой |
+
+### enrichment (`crates/app/src/commands/enrichment.rs`)
+
+Только при `AppSettings.enrichment_opt_in == true`: после `add_transaction` /
+`update_transaction` с хешем команда в фоне вызывает `TxInfoService::inspect`
+(мьютекс отпущен на время сети), пишет `EnrichmentRecord { Pending }` и шлёт
+`enrichment-ready`. Ничего не применяется само.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `get_enrichments` | `tx_id?` | `Vec<EnrichmentRecord>` — новые первыми |
+| `apply_enrichment` | `id` | `EnrichmentRecord` (`Applied`); комиссия дописывается в операцию, если её не было, через `update_transaction` с проверками |
+| `reject_enrichment` | `id` | `EnrichmentRecord` (`Rejected`); операция не меняется |
+| `re_enrich` | `tx_id` | `Option<EnrichmentRecord>` — проверить ещё раз сейчас; без согласия — `INVALID_INPUT` |
 
 ### analytics (`crates/app/src/commands/analytics.rs`)
 
@@ -144,7 +175,7 @@ JSON без шифрования — там нет ничего секретно
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate? }` |
+| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate? }` |
 | `export_report_csv` | те же `kind`, `filter` | `Option<String>` — путь файла; `None`, если диалог закрыли. CSV: UTF-8 с BOM, `;`, CRLF, колонка валюты в каждой строке |
 | `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, days[{ date, income, spent, daily, tx_count, status }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future` |
 
