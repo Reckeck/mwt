@@ -9,8 +9,11 @@ import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
+import { MiniCalendar } from '@/widgets/mini-calendar'
 import { MonthSummary } from '@/widgets/month-summary'
+import { NetWorthCard } from '@/widgets/net-worth'
 import { OnboardingChecklist } from '@/widgets/onboarding-checklist'
+import { Spending7d } from '@/widgets/spending-7d'
 import { UpcomingList } from '@/widgets/upcoming-list'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -29,6 +32,9 @@ const widgetDefs = [
   { id: 'upcoming', defaultOrder: 7 },
   { id: 'goals', defaultOrder: 8 },
   { id: 'budgets', defaultOrder: 9 },
+  { id: 'spending7d', defaultOrder: 10 },
+  { id: 'miniCalendar', defaultOrder: 11 },
+  { id: 'netWorth', defaultOrder: 12 },
 ] as const
 
 const visibleWidgets = computed(() => {
@@ -57,6 +63,11 @@ const isVisible = (id: (typeof widgetDefs)[number]['id']) => visibleWidgets.valu
       <DailyBudget v-if="isVisible('dailyBudget')" />
       <MonthSummary v-if="isVisible('monthSummary')" />
       <UpcomingList v-if="isVisible('upcoming')" :days="14" :limit="6" />
+    </div>
+    <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
+      <Spending7d v-if="isVisible('spending7d')" />
+      <MiniCalendar v-if="isVisible('miniCalendar')" />
+      <NetWorthCard v-if="isVisible('netWorth')" />
     </div>
     <div class="grid items-start gap-4 @sm:grid-cols-2">
       <DashboardGoals v-if="isVisible('goals')" />
