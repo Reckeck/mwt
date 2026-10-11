@@ -58,7 +58,7 @@ function intervalLabel(seconds: number): string {
 </script>
 
 <template>
-  <div class="@container grid gap-6">
+  <div class="@container grid gap-4">
     <div class="grid gap-2">
       <Label>{{ t('provider.title') }}</Label>
       <div class="grid gap-2 @md:grid-cols-3">

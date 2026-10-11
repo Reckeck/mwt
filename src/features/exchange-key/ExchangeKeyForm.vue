@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useMutation, useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { call, parseError } from '@/shared/api/ipc'
+import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
@@ -80,6 +81,35 @@ const setTargets = useMutation({
   onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 
+/* --- Bybit's own split: Funding, Unified Trading, Earn --- */
+const queryClient = useQueryClient()
+const ACCOUNTS = ['funding', 'unified', 'earn'] as const
+const accounts = computed(() =>
+  ACCOUNTS.map((market) => ({
+    market,
+    node: targets.value.find(
+      (node) => typeof node.store.binding === 'object' && 'market' in node.store.binding && node.store.binding.market === market,
+    ),
+  })),
+)
+const missingAccounts = computed(() => accounts.value.filter((entry) => !entry.node).length)
+const createAccounts = useMutation({
+  mutationFn: () =>
+    call<string[]>('create_bybit_accounts', {
+      input: {
+        store_id: props.storeId,
+        funding_name: t('subType.funding'),
+        unified_name: t('subType.unified'),
+        earn_name: t('subType.earn'),
+      } satisfies CreateBybitAccountsInput,
+    }),
+  onSuccess: () => {
+    toast.success(t('wallet.bybit.accountsCreated'))
+    for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
+  },
+  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
 async function remove() {
   busy.value = true
   try {
@@ -97,6 +127,30 @@ async function remove() {
 <template>
   <div class="flex flex-col gap-4">
     <p class="text-sm text-muted-foreground">{{ t('wallet.bybit.hint') }}</p>
+
+    <!-- Imports land where Bybit keeps the money: one sub-account per Bybit account. -->
+    <div class="grid gap-2 rounded-lg border border-border p-3">
+      <p class="text-sm font-medium">{{ t('wallet.bybit.accounts') }}</p>
+      <ul class="grid gap-1 text-sm">
+        <li v-for="entry in accounts" :key="entry.market" class="flex items-center justify-between gap-2">
+          <span>{{ t(`subType.${entry.market}`) }}</span>
+          <Badge :variant="entry.node ? 'secondary' : 'outline'">
+            {{ entry.node ? entry.node.store.name : t('wallet.bybit.accountMissing') }}
+          </Badge>
+        </li>
+      </ul>
+      <p class="text-xs text-muted-foreground">{{ t('wallet.bybit.accountsHint') }}</p>
+      <Button
+        v-if="missingAccounts"
+        size="sm"
+        variant="outline"
+        class="w-fit"
+        :disabled="createAccounts.isPending.value"
+        @click="createAccounts.mutate()"
+      >
+        {{ t('wallet.bybit.createAccounts', { count: missingAccounts }) }}
+      </Button>
+    </div>
 
     <template v-if="hasKey">
       <div class="flex items-center gap-2">

@@ -10,14 +10,15 @@ use tauri::State;
 use trade_core::exchange::{BybitClient, Category};
 use trade_core::ipc_contract::{
     BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
-    ConfirmPendingImportsInput, ConfirmPendingImportsOutput, DiscardPendingImportsInput,
-    DiscardPendingImportsOutput, ExchangeKeyStatus, ExchangeKeyStatusInput,
-    ImportBybitHistoryInput, ImportBybitHistoryOutput, InspectTxInput, InspectTxResult,
-    ListPendingImportsOutput, SaveTerminalDrawingsInput, SetExchangeKeyInput,
-    SetExchangeTargetsInput, SetImportIntervalInput, TxFieldHint, UpdateTerminalStateInput,
+    ConfirmPendingImportsInput, ConfirmPendingImportsOutput, CreateBybitAccountsInput,
+    DiscardPendingImportsInput, DiscardPendingImportsOutput, ExchangeAccountBalance,
+    ExchangeKeyStatus, ExchangeKeyStatusInput, ImportBybitHistoryInput, ImportBybitHistoryOutput,
+    InspectTxInput, InspectTxResult, ListPendingImportsOutput, SaveTerminalDrawingsInput,
+    SetExchangeKeyInput, SetExchangeTargetsInput, SetImportIntervalInput, TxFieldHint,
+    UpdateTerminalStateInput,
 };
 use trade_core::model::store::TerminalState;
-use trade_core::model::vault::{ExchangeKeys, Exchanges, PendingImport};
+use trade_core::model::vault::{ExchangeKeys, PendingImport};
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -93,21 +94,13 @@ fn hints_from(info: &TxInfo) -> Vec<TxFieldHint> {
     hints
 }
 
-/// Find the Bybit API key for a given store_id, walking up the parent chain.
-/// Returns the first key found (closest ancestor with a key).
-fn find_bybit_key_for_store(
-    exchanges: &Exchanges,
+/// The Bybit key serving a store (its own or its wallet's), copied out of
+/// the vault so the guard can be dropped before any network call.
+fn bybit_key_for(
+    vault: &trade_core::service::UnlockedVault,
     store_id: &str,
-    _vault: &trade_core::service::UnlockedVault,
 ) -> Option<ExchangeKeys> {
-    // Direct match first
-    for key in &exchanges.bybit {
-        if key.store_id == store_id {
-            return Some(key.clone());
-        }
-    }
-    // Walk up parent chain (Phase N: nesting) - for now just fall back to first key
-    exchanges.bybit.first().cloned()
+    vault.bybit_key_for(store_id).cloned()
 }
 
 /// Recent Bybit fills for the prefill dropdown.
@@ -121,11 +114,12 @@ pub async fn bybit_executions(
     let (api_key, api_secret) = {
         let guard = require_vault(&state).map_err(err_to_string)?;
         let vault = guard.as_ref().unwrap();
-        match find_bybit_key_for_store(
-            &vault.doc.exchanges,
-            input.store_id.as_deref().unwrap_or(""),
-            vault,
-        ) {
+        // No wallet in context (the global form): any key will do.
+        let key = match input.store_id.as_deref().filter(|id| !id.is_empty()) {
+            Some(id) => bybit_key_for(vault, id),
+            None => vault.doc.exchanges.bybit.first().cloned(),
+        };
+        match key {
             Some(entry) => (entry.api_key.clone(), entry.api_secret.clone()),
             None => {
                 return Ok(BybitExecutionsResult {
@@ -179,7 +173,7 @@ pub async fn exchange_key_status(
 ) -> Result<ExchangeKeyStatus, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
-    match find_bybit_key_for_store(&vault.doc.exchanges, &input.store_id, vault) {
+    match bybit_key_for(vault, &input.store_id) {
         Some(entry) => Ok(vault.exchange_key_status(&entry.store_id)),
         None => Ok(ExchangeKeyStatus::default()),
     }
@@ -304,6 +298,53 @@ fn import_notice(message: &str) -> &'static str {
     }
 }
 
+/// Give a Bybit wallet its Funding, Unified Trading and Earn sub-accounts;
+/// the ones already there are kept. Returns the wallet's sub-account ids.
+#[tauri::command]
+pub async fn create_bybit_accounts(
+    input: CreateBybitAccountsInput,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    let names = [
+        input.funding_name.trim(),
+        input.unified_name.trim(),
+        input.earn_name.trim(),
+    ];
+    vault
+        .ensure_bybit_accounts(&input.store_id, names)
+        .map(Vec::from)
+        .map_err(err_to_string)
+}
+
+/// What each Bybit account holds per the API, next to the ledger's figures.
+/// An empty list when the wallet has no key; a network failure is an error.
+#[tauri::command]
+pub async fn bybit_balances(
+    store_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ExchangeAccountBalance>, String> {
+    let (root_id, api_key, api_secret) = {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_ref().unwrap();
+        match bybit_key_for(vault, &store_id) {
+            Some(entry) => (
+                entry.store_id.clone(),
+                entry.api_key.clone(),
+                entry.api_secret.clone(),
+            ),
+            None => return Ok(Vec::new()),
+        }
+    };
+    let balances = BybitClient::default()
+        .balances(&api_key, &api_secret)
+        .await
+        .map_err(err_to_string)?;
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().bybit_reconcile(&root_id, &balances))
+}
+
 /// Fetch Bybit fills and stage them for confirmation. Never creates
 /// transactions on its own — that only happens in `confirm_pending_imports`.
 #[tauri::command]
@@ -311,11 +352,15 @@ pub async fn import_bybit_history(
     input: ImportBybitHistoryInput,
     state: State<'_, AppState>,
 ) -> Result<ImportBybitHistoryOutput, String> {
-    let (api_key, api_secret) = {
+    let (root_id, api_key, api_secret) = {
         let guard = require_vault(&state).map_err(err_to_string)?;
         let vault = guard.as_ref().unwrap();
-        match find_bybit_key_for_store(&vault.doc.exchanges, &input.store_id, vault) {
-            Some(entry) => (entry.api_key.clone(), entry.api_secret.clone()),
+        match bybit_key_for(vault, &input.store_id) {
+            Some(entry) => (
+                entry.store_id.clone(),
+                entry.api_key.clone(),
+                entry.api_secret.clone(),
+            ),
             None => {
                 return Ok(ImportBybitHistoryOutput {
                     staged: 0,
@@ -339,13 +384,18 @@ pub async fn import_bybit_history(
         }
     };
 
-    let imports: Vec<PendingImport> = execs
-        .iter()
-        .take(limit as usize)
-        .filter_map(|exec| {
-            PendingImport::from_execution(&input.store_id, exec.category_hint(), exec)
-        })
-        .collect();
+    // Moves between accounts and Earn payouts: a key without those
+    // permissions still imports its fills.
+    let transfers = client
+        .inter_transfers(&api_key, &api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let yields = client
+        .earn_yields(&api_key, &api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let fills: Vec<_> = execs.into_iter().take(limit as usize).collect();
+    let imports = PendingImport::bybit_batch(&root_id, &fills, &transfers, &yields);
 
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
