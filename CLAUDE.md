@@ -54,6 +54,12 @@ mise артефакты окажутся в `target/`, и сборка пойд�
   `generate_handler![…]` в `crates/app/src/lib.rs` → `mise run gen-types` →
   `docs/ipc.md`. Подробно — скилл `ipc-command`.
 
+## Обучение вместе с фичей
+
+Правило 12 из `AGENTS.md`: видимая пользователю фича выходит с туром,
+подсказками и пунктом «Что нового». Перед правкой UI загружай скилл
+`onboarding`; гейт проверяет это скриптом `scripts/check-onboarding.mjs`.
+
 ## Коммиты из Claude Code
 
 Правила jj из `AGENTS.md` действуют полностью: `git commit`/`git add` запрещены,

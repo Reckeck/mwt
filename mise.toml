@@ -21,5 +21,6 @@ CARGO_TARGET_DIR = ".rust-target"
 "format" = { description = "Biome autofix (lint + format)", run = "pnpm exec biome check --write ." }
 "clippy" = { description = "Clippy lints (deny warnings)", run = "cargo clippy --workspace --all-targets -- -D warnings" }
 "gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
-"check" = { description = "Lint + typecheck + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
+"check-onboarding" = { description = "Every screen has a tour; tour, whats-new and learning texts exist (AGENTS.md rule 12)", run = "node scripts/check-onboarding.mjs" }
+"check" = { description = "Lint + typecheck + onboarding + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }

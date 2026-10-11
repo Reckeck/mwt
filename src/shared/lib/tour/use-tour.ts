@@ -1,10 +1,15 @@
-import { driver } from 'driver.js'
+import { driver, type Driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import { useI18n } from 'vue-i18n'
 
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { TOURS } from './tours'
+
+/** The tour on screen: one at a time, gone when the page changes. */
+let active: Driver | null = null
+/** Set while a tour is closed because the page changed: that is not «done». */
+let leaving = false
 
 /** Guided tours over `[data-tour]` elements; a finished tour is remembered in the app settings. */
 export function useTour() {
@@ -20,6 +25,7 @@ export function useTour() {
       .map((step) => ({ step, element: document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`) }))
       .filter((entry): entry is { step: (typeof entry)['step']; element: HTMLElement } => entry.element !== null)
     if (!steps.length) return false
+    stop()
     const tour = driver({
       showProgress: steps.length > 1,
       // driver.js fills its own {{current}} / {{total}} tokens in.
@@ -36,10 +42,26 @@ export function useTour() {
           side: step.side,
         },
       })),
-      onDestroyed: () => void markDone(id),
+      onDestroyed: () => {
+        if (active === tour) active = null
+        if (!leaving) void markDone(id)
+      },
     })
+    active = tour
     tour.drive()
     return true
+  }
+
+  /** Close the tour on screen without counting it as seen (the page changed). */
+  function stop() {
+    if (!active) return
+    leaving = true
+    try {
+      active.destroy()
+    } finally {
+      leaving = false
+      active = null
+    }
   }
 
   async function markDone(id: string) {
@@ -62,5 +84,9 @@ export function useTour() {
     await settings.updateApp({ completed_tours: [] })
   }
 
-  return { hasTour, start, autoStart, resetAll }
+  function isDone(id: string): boolean {
+    return Boolean(settings.app?.completed_tours.includes(id))
+  }
+
+  return { hasTour, start, stop, autoStart, resetAll, isDone }
 }

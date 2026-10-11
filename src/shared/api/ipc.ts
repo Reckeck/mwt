@@ -433,6 +433,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
         mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
       if (input.completed_tours) mockAppSettings.completed_tours = [...new Set(input.completed_tours)]
+      if (input.seen_whats_new) mockAppSettings.seen_whats_new = [...new Set(input.seen_whats_new)]
       return resolve(mockAppSettings)
     }
     case 'set_quick_add_shortcut': {
@@ -1193,6 +1194,7 @@ const mockAppSettings: AppSettings = {
   enrichment_opt_in: null,
   quick_add_shortcut: null,
   completed_tours: [],
+  seen_whats_new: [],
 }
 
 const mockCurrencies: SupportedCurrencies = {

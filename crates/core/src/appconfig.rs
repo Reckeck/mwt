@@ -92,6 +92,9 @@ pub struct AppSettings {
     /// Guided tours already shown (by page), so a tour starts by itself only once.
     #[serde(default)]
     pub completed_tours: Vec<String>,
+    /// «Что нового» entries already shown after an update.
+    #[serde(default)]
+    pub seen_whats_new: Vec<String>,
 }
 
 /// Reference annual inflation the user starts with, percent. Rough recent
@@ -115,6 +118,7 @@ impl Default for AppSettings {
             enrichment_opt_in: None,
             quick_add_shortcut: None,
             completed_tours: Vec::new(),
+            seen_whats_new: Vec::new(),
         }
     }
 }
@@ -154,12 +158,10 @@ impl AppSettings {
             self.enrichment_opt_in = Some(consent);
         }
         if let Some(tours) = &patch.completed_tours {
-            let mut seen = BTreeSet::new();
-            self.completed_tours = tours
-                .iter()
-                .map(|tour| tour.trim().to_string())
-                .filter(|tour| !tour.is_empty() && seen.insert(tour.clone()))
-                .collect();
+            self.completed_tours = dedup(tours);
+        }
+        if let Some(entries) = &patch.seen_whats_new {
+            self.seen_whats_new = dedup(entries);
         }
     }
 
@@ -239,6 +241,19 @@ pub struct UpdateAppSettingsInput {
     /// Replaces the list of tours already shown; `[]` shows them all again.
     #[serde(default)]
     pub completed_tours: Option<Vec<String>>,
+    /// Replaces the list of «Что нового» entries already shown.
+    #[serde(default)]
+    pub seen_whats_new: Option<Vec<String>>,
+}
+
+/// Trimmed, without blanks and repeats, in order.
+fn dedup(items: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    items
+        .iter()
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty() && seen.insert(item.clone()))
+        .collect()
 }
 
 // -- currency catalog ----------------------------------------------------------
@@ -563,6 +578,7 @@ mod tests {
             enrichment_opt_in: Some(true),
             quick_add_shortcut: Some("CmdOrCtrl+Shift+Space".into()),
             completed_tours: vec!["dashboard".into()],
+            seen_whats_new: vec!["2026-10-round-13".into()],
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

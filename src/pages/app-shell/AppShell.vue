@@ -12,6 +12,7 @@ import { SettingsShell } from '@/widgets/settings-shell'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { QuickAddDialog } from '@/features/quick-add'
 import { NotificationBell } from '@/widgets/notification-bell'
+import { WhatsNewDialog } from '@/widgets/whats-new'
 import { noticeReminderId, noticeRoute } from '@/shared/lib/notice-link'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import { Badge } from '@/shared/ui/badge'
@@ -74,12 +75,18 @@ let tourTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   routeTour,
   (id) => {
-    // A pending tour belongs to the screen that scheduled it, never to the next one.
+    // A pending tour belongs to the screen that scheduled it, never to the next one;
+    // one on screen closes with its page.
     clearTimeout(tourTimer)
+    tour.stop()
+    const wanted = route.query.tour === id
     if (!tour.hasTour(id)) return
     // Let the page render its widgets before pointing at them.
     tourTimer = setTimeout(() => {
-      if (routeTour.value === id && !document.querySelector('[role="dialog"]')) tour.autoStart(id)
+      if (routeTour.value !== id || document.querySelector('[role="dialog"]')) return
+      // `?tour=<route>` asks for it explicitly (the learning centre, «Что нового»).
+      if (wanted) tour.start(id)
+      else tour.autoStart(id)
     }, 1200)
   },
   { immediate: true },
@@ -374,6 +381,7 @@ void onEvent('toggle-lock', () => void lock())
 
     <SettingsShell />
     <QuickAddDialog v-model:open="quickAddOpen" />
+    <WhatsNewDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
 </template>
