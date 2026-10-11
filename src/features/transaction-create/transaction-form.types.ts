@@ -8,6 +8,8 @@ export interface TransactionFormProps {
   disabled?: boolean
   /** Opens a transfer to this side (a contact's card: «write a transfer here»). */
   counterpart?: AccountRef | null
+  /** With `counterpart`: a debt operation — lending and repaying send to it, borrowing and collecting come from it. */
+  debt?: DebtEffect | null
   /**
    * Edit a template for an automation instead of a transaction: only the four
    * verbs, no date, price or on-chain fields, and nothing is saved — the
@@ -18,6 +20,13 @@ export interface TransactionFormProps {
   flowId?: string | null
   /** A new operation pre-filled from this one (a utility bill); saved as new. */
   prefill?: Transaction | null
+  /** A new operation starting as this kind with these categories (an automation preset). */
+  initial?: TransactionInitial | null
+}
+
+export interface TransactionInitial {
+  kind: TxKind
+  categories: string[]
 }
 
 /** A calculator result handed to the form. */
@@ -38,6 +47,8 @@ export interface TransactionCreateDialogProps {
   plan?: TransactionPlan | null
   /** Opens a transfer to this side. */
   counterpart?: AccountRef | null
+  /** With `counterpart`: which debt operation the transfer is. */
+  debt?: DebtEffect | null
   /** Continue this chain. */
   flowId?: string | null
   /** A new operation pre-filled from this one. */

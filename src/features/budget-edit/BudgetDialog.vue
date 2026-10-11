@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -11,7 +12,6 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
-import { categoryLabel } from '@/shared/lib/categories'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -27,11 +27,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
 /** Limits watch spending, so only spending groups are offered. */
-const spendingCategories = computed(() =>
-  (categories.data.value ?? []).filter((entry) => !entry.archived && (entry.group === 'fixed' || entry.group === 'daily')),
-)
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
@@ -98,10 +94,12 @@ const save = useMutation({
         </div>
         <div v-if="targetKind === 'category'" class="grid gap-1.5">
           <Label for="budget-category">{{ t('budget.category') }}</Label>
-          <Select id="budget-category" v-model="category">
-            <option value="" disabled>{{ t('budget.pickCategory') }}</option>
-            <option v-for="entry in spendingCategories" :key="entry.key" :value="entry.key">{{ categoryLabel(entry, t) }}</option>
-          </Select>
+          <CategorySelect
+            id="budget-category"
+            v-model="category"
+            :groups="['daily', 'fixed']"
+            :placeholder="t('budget.pickCategory')"
+          />
         </div>
         <div v-else-if="targetKind === 'store'" class="grid gap-1.5">
           <Label for="budget-store">{{ t('budget.store') }}</Label>

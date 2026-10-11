@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { refDebounced } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowUpDown } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AssetInput } from '@/entities/asset'
+import { TxPreviewCard } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
@@ -23,7 +25,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
 
 import { AccountRefPicker } from './ui/account-ref-picker'
-import { CategoryPicker } from './ui/category-picker'
+import { CategorySelect } from '@/features/category-select'
 import type { TransactionFormProps } from './transaction-form.types'
 import {
   categoryGroupsFor,
@@ -64,8 +66,8 @@ const tree = useQuery({
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
 const contextStore = computed(() => nodes.value.find((node) => node.store.id === props.storeId)?.store ?? null)
 const storeKind = computed(() => contextStore.value?.kind ?? null)
-const isProperty = computed(() => storeKind.value === 'asset')
-const isCrypto = computed(() => ['exchange', 'hot_wallet', 'cold_wallet'].includes(storeKind.value ?? ''))
+const isProperty = computed(() => storeKind.value === 'property')
+const isCrypto = computed(() => ['exchange', 'crypto'].includes(storeKind.value ?? ''))
 
 /** Which kinds this wallet accepts. The binding lives in Rust; the form only asks. */
 const kinds = useQuery({
@@ -100,7 +102,17 @@ watch(
     if (!data || editing.value) return
     if (props.counterpart && offered.value.includes('transfer')) {
       form.kind = 'transfer'
-      form.to = props.counterpart
+      // Money comes back from the contact when I borrow or collect; it goes to them otherwise.
+      if (props.debt === 'borrow' || props.debt === 'collect') {
+        form.from = props.counterpart
+        form.to = { store: props.storeId }
+      } else {
+        form.to = props.counterpart
+      }
+      if (props.debt) form.debt = props.debt
+    } else if (props.initial && offered.value.includes(props.initial.kind) && !props.transaction) {
+      form.kind = props.initial.kind
+      if (!form.categories.length) form.categories = [...props.initial.categories]
     } else if (!offered.value.includes(form.kind)) form.kind = data.default
   },
   { immediate: true },
@@ -132,7 +144,7 @@ const overview = useQuery({
 watch(
   () => [overview.data.value, storeKind.value] as const,
   ([data, kind]) => {
-    if (editing.value || form.asset || !kind || kind === 'asset') return
+    if (editing.value || form.asset || !kind || kind === 'property') return
     const main = data?.positions[0]?.asset
     if (main) form.asset = main
     else if (kind === 'bank' || kind === 'cash') {
@@ -417,6 +429,28 @@ watch(
   },
   { immediate: true },
 )
+
+/* --- before/after preview --- */
+// Serialized so the debounce and the query key change only when the draft does.
+const draftKey = computed(() => {
+  if (props.template || !isFormComplete(form)) return null
+  const input = formToInput(form)
+  return input ? JSON.stringify(input) : null
+})
+const debouncedDraft = refDebounced(draftKey, 300)
+const preview = useQuery({
+  queryKey: computed(() => ['tx-preview', debouncedDraft.value, props.transaction ? txId(props.transaction) : null]),
+  queryFn: () =>
+    call<TxPreview>('preview_transaction', {
+      input: {
+        transaction: JSON.parse(debouncedDraft.value ?? 'null') as TransactionInput,
+        replaces: editing.value && props.transaction ? txId(props.transaction) : null,
+      },
+    }),
+  enabled: computed(() => debouncedDraft.value !== null),
+  placeholderData: (previous) => previous,
+  staleTime: 5_000,
+})
 
 /* --- save --- */
 const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
@@ -772,8 +806,8 @@ const verbLabel = (kind: TxKind) =>
     </div>
 
     <div class="grid gap-1.5">
-      <Label>{{ t('form.categories') }}</Label>
-      <CategoryPicker v-model="form.categories" :groups="categoryGroupsFor(form.kind)" />
+      <Label for="tx-categories">{{ t('form.categories') }}</Label>
+      <CategorySelect id="tx-categories" v-model="form.categories" multiple :groups="categoryGroupsFor(form.kind)" />
       <p v-if="form.kind === 'topup' || form.kind === 'payment'" class="text-xs text-muted-foreground">
         {{ t('tx.field.categoryHint') }}
       </p>
@@ -794,5 +828,11 @@ const verbLabel = (kind: TxKind) =>
         <Textarea id="tx-comment" v-model="form.comment" rows="1" :placeholder="t('form.commentHint')" />
       </div>
     </div>
+
+    <TxPreviewCard
+      v-if="debouncedDraft"
+      :preview="preview.data.value"
+      :loading="preview.isFetching.value"
+    />
   </form>
 </template>

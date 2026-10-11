@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<TransactionCreateDialogProps>(), {
   plan: null,
   disabled: false,
   counterpart: null,
+  debt: null,
   flowId: null,
   prefill: null,
 })
@@ -32,6 +33,7 @@ const form = ref<InstanceType<typeof TransactionForm> | null>(null)
         :disabled="props.disabled"
         :plan="props.plan"
         :counterpart="props.counterpart"
+        :debt="props.debt"
         :flow-id="props.flowId"
         :prefill="props.prefill"
         @saved="open = false"
