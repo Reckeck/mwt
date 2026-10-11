@@ -658,6 +658,15 @@ impl TransactionInput {
     }
 }
 
+/// Several operations saved as one chain: all or none.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AddLinkedTransactionsInput {
+    pub transactions: Vec<TransactionInput>,
+    /// Join this chain; `None` starts a new one.
+    #[serde(default)]
+    pub flow_id: Option<String>,
+}
+
 /// Replace a stored transaction with a new version of it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct UpdateTransactionInput {

@@ -602,6 +602,20 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
     // --- transactions ---
     case 'transaction_kinds_for_store_kind':
       return resolve(mockKindsFor(args?.kind as StoreKind))
+    case 'add_linked_transactions': {
+      // Like the backend: one chain, all or none (the mock validates each first).
+      const input = body as AddLinkedTransactionsInput
+      const flow = input.flow_id ?? crypto.randomUUID()
+      const built = input.transactions.map((draft) =>
+        mockTransactionFrom(
+          { ...draft, common: { ...draft.common, flow_id: flow } } as TransactionInput,
+          priceOf,
+          undefined,
+          mockBalanceOf,
+        ),
+      )
+      return resolve(built.map(mockPush))
+    }
     case 'add_transaction':
       return resolve(mockPush(mockTransactionFrom(args?.input as TransactionInput, priceOf, undefined, mockBalanceOf)))
     case 'get_adjustment_draft': {

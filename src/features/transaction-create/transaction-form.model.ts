@@ -1,4 +1,7 @@
 import { body, txKind } from '@/shared/lib/transactions'
+import { parseDecimal } from '@/shared/lib/decimal'
+
+import type { ConvertMode, SplitRow } from './transaction-form.types'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 
 /**
@@ -29,6 +32,11 @@ export interface TransactionFormState {
   unitPrice: string
 
   // convert
+  convertMode: ConvertMode
+  /** P2P: who the money goes through (a contact, their card, or text). */
+  via: AccountRef | null
+  /** More recipients of an exchange or a top-up, saved with it as one chain. */
+  extra: SplitRow[]
   fromAsset: AssetRef | null
   fromAmount: string
   toAsset: AssetRef | null
@@ -109,6 +117,9 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     toAsset: null,
     toAmount: '',
     rate: '',
+    convertMode: 'direct',
+    via: null,
+    extra: [],
     soldAsset: null,
     soldQty: '',
     boughtAsset: null,
@@ -199,6 +210,16 @@ function stampToPrice(stamp: PriceStamp): Pick<TransactionFormState, 'price' | '
   return { price: stamp.price_usd ?? '', priceCurrency: stamp.price_usd ? 'usd' : '' }
 }
 
+/** P2P through a contact: the operation is with them. */
+function viaContact(via: AccountRef | null): string | null {
+  return via && 'contact' in via ? via.contact.contact_id : null
+}
+
+/** P2P through someone named in text: said in the comment. */
+function viaComment(via: AccountRef | null, comment: string): string {
+  return via && 'raw' in via ? [`P2P: ${via.raw}`, comment].filter(Boolean).join(' · ') : comment
+}
+
 function common(form: TransactionFormState): TxCommonInput {
   return {
     timestamp: toIsoTimestamp(form.timestamp),
@@ -263,15 +284,24 @@ export function formToInput(form: TransactionFormState): TransactionInput | null
         tx_hash: text(form.txHash),
         debt: form.debt,
       }
-    case 'convert':
+    case 'convert': {
       if (!form.fromAsset || !form.toAsset || !form.from || !form.to) return null
+      const p2p = form.convertMode === 'p2p'
       return {
         type: 'convert',
         ...shared,
+        common: p2p
+          ? {
+              ...shared.common,
+              contact_id: viaContact(form.via) ?? shared.common.contact_id,
+              comment: viaComment(form.via, shared.common.comment),
+            }
+          : shared.common,
         from: { account: form.from, asset: ident(form.fromAsset), amount: form.fromAmount.trim() },
         to: { account: form.to, asset: ident(form.toAsset), amount: form.toAmount.trim() },
         rate_override: text(form.rate),
       }
+    }
     case 'trade_spot':
       if (!form.soldAsset || !form.boughtAsset) return null
       return {
@@ -333,9 +363,110 @@ export function formToInput(form: TransactionFormState): TransactionInput | null
   }
 }
 
+/** Kinds that may be split between several recipients. */
+export const SPLITTABLE: TxKind[] = ['convert', 'topup']
+
+/** Whether the form saves as several linked operations. */
+export function isLinked(form: TransactionFormState): boolean {
+  return SPLITTABLE.includes(form.kind) && form.extra.length > 0
+}
+
+/**
+ * The main operation and one per extra recipient: an exchange gives each its
+ * share of the same asset from the same account; a top-up puts the same
+ * asset on another account. `null` while something required is missing.
+ */
+export function formToInputs(form: TransactionFormState): TransactionInput[] | null {
+  const main = formToInput(form)
+  if (!main) return null
+  if (!isLinked(form)) return [main]
+  const out: TransactionInput[] = [main]
+  for (const row of form.extra) {
+    if (main.type === 'convert') {
+      if (!row.to || !row.asset || !form.from || !form.fromAsset) return null
+      const p2p = form.convertMode === 'p2p'
+      out.push({
+        ...main,
+        common: p2p
+          ? {
+              ...main.common,
+              contact_id: viaContact(row.via) ?? main.common.contact_id,
+              comment: viaComment(row.via, form.comment.trim()),
+            }
+          : main.common,
+        from: { account: form.from, asset: ident(form.fromAsset), amount: row.give.trim() },
+        to: { account: row.to, asset: ident(row.asset), amount: row.receive.trim() },
+        rate_override: null,
+      })
+    } else if (main.type === 'topup') {
+      if (!row.to || !('store' in row.to)) return null
+      out.push({ ...main, store_id: row.to.store, amount: row.receive.trim() })
+    }
+  }
+  return out
+}
+
+/**
+ * What still has to be filled before the form can be saved, as i18n keys
+ * (`tx.missing.*`) — said under the form instead of a silently grey button.
+ */
+export function missingFields(form: TransactionFormState): string[] {
+  const out: string[] = []
+  const blank = (value: string) => parseDecimal(value) === null || Number(value.replace(',', '.')) <= 0
+  switch (form.kind) {
+    case 'convert':
+      if (!form.from) out.push('from')
+      if (!form.fromAsset) out.push('fromAsset')
+      if (blank(form.fromAmount)) out.push('fromAmount')
+      if (form.convertMode === 'p2p' && !form.via) out.push('via')
+      if (!form.to) out.push('to')
+      if (!form.toAsset) out.push('toAsset')
+      if (blank(form.toAmount)) out.push('toAmount')
+      break
+    case 'transfer':
+      if (!form.asset) out.push('asset')
+      if (blank(form.amount)) out.push('amount')
+      if (!form.from) out.push('from')
+      if (!form.to) out.push('to')
+      break
+    case 'trade_spot':
+      if (!form.soldAsset) out.push('soldAsset')
+      if (blank(form.soldQty)) out.push('soldQty')
+      if (!form.boughtAsset) out.push('boughtAsset')
+      if (blank(form.boughtQty)) out.push('boughtQty')
+      break
+    case 'trade_futures':
+      if (!form.symbol.trim()) out.push('symbol')
+      if (blank(form.quantity)) out.push('quantity')
+      if (blank(form.fillPrice)) out.push('fillPrice')
+      break
+    case 'asset_sell':
+      if (!form.asset) out.push('asset')
+      if (blank(form.sellQty)) out.push('sellQty')
+      if (blank(form.sellPrice)) out.push('sellPrice')
+      if (!form.currency) out.push('currency')
+      break
+    case 'adjustment':
+      break
+    default:
+      if (!form.asset) out.push('asset')
+      if (blank(form.amount)) out.push('amount')
+  }
+  if (SPLITTABLE.includes(form.kind)) {
+    form.extra.forEach((row) => {
+      const incomplete =
+        !row.to ||
+        blank(row.receive) ||
+        (form.kind === 'convert' && (!row.asset || blank(row.give) || (form.convertMode === 'p2p' && !row.via)))
+      if (incomplete && !out.includes('extra')) out.push('extra')
+    })
+  }
+  return out
+}
+
 /** Whether every field the kind cannot do without is filled (the backend checks the rest). */
 export function isFormComplete(form: TransactionFormState): boolean {
-  if (!formToInput(form)) return false
+  if (!formToInputs(form) || missingFields(form).length) return false
   const filled = (...values: string[]) => values.every((value) => value.trim() !== '')
   switch (form.kind) {
     case 'convert':

@@ -64,6 +64,7 @@ pub fn run() {
             transactions::get_tx_graph,
             transactions::transaction_kinds_for_store_kind,
             transactions::add_transaction,
+            transactions::add_linked_transactions,
             transactions::preview_transaction,
             transactions::update_transaction,
             transactions::delete_transaction,
