@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Settings2,
   Goal as GoalIcon,
+  Receipt,
   Repeat,
 } from 'lucide-vue-next'
 
@@ -26,8 +27,14 @@ import { GoalDialog } from '@/features/goal-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
+import { UtilityBillDialog } from '@/features/utility-bill'
+import { DepositSummary } from '@/widgets/deposit-summary'
+import { ExchangeBalances } from '@/widgets/exchange-balances'
+import { LoyaltySummary } from '@/widgets/loyalty-summary'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
 import { StoreTransactions } from '@/widgets/store-transactions'
+import { PropertySummaryCard, UtilityList } from '@/widgets/utility-list'
+import { UtilityStats } from '@/widgets/utility-stats'
 import { StoreChart, StorePositions, bindingLabel } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -143,6 +150,16 @@ const subWalletOpen = ref(false)
 const goalOpen = ref(false)
 const automationOpen = ref(false)
 const tab = ref('positions')
+/** A home's page opens on its utilities: that is what it is visited for. */
+const isPropertyRoot = computed(() => store.value?.kind === 'property' && !store.value.parent_id)
+watch(
+  isPropertyRoot,
+  (property) => {
+    tab.value = route.query.tab ? String(route.query.tab) : property ? 'utilities' : 'positions'
+  },
+  { immediate: true },
+)
+const billOpen = ref(false)
 
 function openTransaction() {
   plan.value = null
@@ -150,6 +167,7 @@ function openTransaction() {
 }
 
 const tabs = computed(() => [
+  ...(isPropertyRoot.value ? [{ value: 'utilities', label: t('walletSettings.utilities') }] : []),
   { value: 'positions', label: t('pos.title') },
   { value: 'history', label: t('hist.title') },
 ])
@@ -162,9 +180,7 @@ const stats = computed(() => {
       key: 'total',
       label: rolledUp ? t('wallet.totalWithSub') : t('store.total'),
       value: money(rolledUp ? data?.subtree_base : data?.own_base),
-      hint: rolledUp
-        ? `${t('stores.ownFunds')}: ${money(data?.own_base)}`
-        : `≈ ${formatMoney(data?.own_usd, { currency: 'usd', decimals: 2 })}`,
+      hint: rolledUp ? `${t('stores.ownFunds')}: ${money(data?.own_base)}` : '',
       tone: '',
     },
     {
@@ -247,7 +263,7 @@ function openWallet(created: Store) {
     </Button>
   </div>
 
-  <div v-else class="flex flex-col gap-6">
+  <div v-else class="flex flex-col gap-4">
     <!-- Identity and every wallet action in one row. -->
     <div class="flex flex-col gap-3">
       <nav v-if="ancestors.length" class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -371,7 +387,8 @@ function openWallet(created: Store) {
 
     <ExchangeTerminal v-if="view === 'terminal'" :store-id="storeId" />
 
-    <Card v-else-if="view === 'import'">
+    <template v-else-if="view === 'import'">
+    <Card>
       <PendingImports v-if="bybitHasKey" :store-id="storeId" />
       <div v-else class="flex flex-col items-start gap-3">
         <p class="text-sm text-muted-foreground">{{ t('wallet.importNeedsKey') }}</p>
@@ -383,6 +400,8 @@ function openWallet(created: Store) {
         </RouterLink>
       </div>
     </Card>
+    <ExchangeBalances v-if="bybitHasKey" :store-id="storeId" />
+    </template>
 
     <template v-else>
     <!-- Only a wallet with sub-accounts has a scope to choose. -->
@@ -436,10 +455,31 @@ function openWallet(created: Store) {
     </Card>
 
 
+    <LoyaltySummary v-if="store.kind === 'loyalty'" :store="store" />
+
+    <DepositSummary
+      v-if="store.sub_type === 'savings' || store.sub_type === 'deposit' || store.sub_type === 'pds'"
+      :store-id="store.id"
+    />
+
     <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />
 
     <!-- Always offer both tabs: a wallet with no positions can still have history. -->
     <Tabs v-model="tab" :tabs="tabs">
+      <template #utilities>
+        <div class="flex flex-col gap-4">
+          <PropertySummaryCard :property-id="store.id" />
+          <div class="flex justify-end">
+            <Button :disabled="isArchived" @click="billOpen = true">
+              <Receipt class="size-4" />
+              {{ t('utilityBill.open') }}
+            </Button>
+          </div>
+          <UtilityStats :property-id="store.id" />
+          <UtilityList :property-id="store.id" />
+          <UtilityBillDialog v-model:open="billOpen" :property-id="store.id" />
+        </div>
+      </template>
       <template #positions>
         <div
           v-if="positions.length === 0"

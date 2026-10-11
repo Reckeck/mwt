@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ArrowLeft, FolderInput, FolderPlus } from 'lucide-vue-next'
 
+import { DepositTermsForm } from '@/features/deposit-terms'
+import { LoyaltyForm } from '@/features/loyalty-edit'
 import { EnvelopeManager } from '@/features/envelope-manage'
 import { StoreCreateDialog } from '@/features/store-create'
 import {
@@ -16,7 +18,6 @@ import {
 } from '@/features/store-edit'
 import { StoreMoveDialog } from '@/features/store-move'
 import { AutomationList } from '@/widgets/automation-list'
-import { PropertySummaryCard, UtilityList } from '@/widgets/utility-list'
 import { bindingLabel, kindInfo, useWalletCatalog } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button, buttonVariants } from '@/shared/ui/button'
@@ -62,12 +63,19 @@ const tabs = computed(() => {
   const current = store.value
   if (!current) return []
   const list = [{ value: 'general', label: t('walletSettings.general') }]
-  list.push({ value: 'accounts', label: isRoot.value ? t('walletSettings.accounts') : t('walletSettings.envelopes') })
+  // Sub-accounts and envelopes make no sense for a kind that takes no sub-accounts (a home, a car).
+  const takesChildren = (kindInfo(catalog.data.value, current.kind)?.sub_types.length ?? 0) > 0
+  if (takesChildren) {
+    list.push({ value: 'accounts', label: isRoot.value ? t('walletSettings.accounts') : t('walletSettings.envelopes') })
+  }
   list.push({ value: 'automations', label: t('walletSettings.automations') })
   if (current.kind === 'exchange' && isRoot.value) list.push({ value: 'exchange', label: t('walletSettings.exchange') })
   if (current.kind === 'property' && isRoot.value) {
     list.push({ value: 'property', label: t('walletSettings.property') })
-    list.push({ value: 'utilities', label: t('walletSettings.utilities') })
+  }
+  if (current.kind === 'loyalty') list.push({ value: 'loyalty', label: t('walletSettings.loyalty') })
+  if (current.sub_type === 'savings' || current.sub_type === 'deposit' || current.sub_type === 'pds') {
+    list.push({ value: 'deposit', label: t('walletSettings.deposit') })
   }
   if (current.kind === 'liability' || current.sub_type === 'credit_card') {
     list.push({ value: 'terms', label: t('walletSettings.terms') })
@@ -106,7 +114,7 @@ const money = (value: string) => formatMoney(value, { currency: overview.data.va
   </div>
   <div v-else-if="!store" class="py-16 text-center text-sm text-destructive">{{ t('wallet.notFound') }}</div>
 
-  <div v-else class="mx-auto flex w-full max-w-3xl flex-col gap-6">
+  <div v-else class="mx-auto flex w-full max-w-3xl flex-col gap-4">
     <div class="flex items-center gap-3">
       <RouterLink
         :to="{ name: 'wallet', params: { id: store.id } }"
@@ -179,11 +187,13 @@ const money = (value: string) => formatMoney(value, { currency: overview.data.va
         <AutomationList :store-id="store.id" :presets="presets" />
       </template>
 
-      <template #utilities>
-        <div class="flex flex-col gap-4">
-          <PropertySummaryCard :property-id="store.id" />
-          <UtilityList :property-id="store.id" />
-        </div>
+
+      <template #loyalty>
+        <Card><LoyaltyForm :store="store" /></Card>
+      </template>
+
+      <template #deposit>
+        <Card><DepositTermsForm :store="store" /></Card>
       </template>
 
       <template #exchange>

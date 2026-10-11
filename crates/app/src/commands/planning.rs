@@ -6,8 +6,9 @@ use tauri::{AppHandle, State};
 
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
-    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdatePriceAlertInput,
+    AdjustPointsInput, AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput,
+    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, UpdateAutomationInput,
+    UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput,
     UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use trade_core::model::planning::{
@@ -15,8 +16,9 @@ use trade_core::model::planning::{
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
-    BudgetStatus, DailyBudget, GoalCalendar, GoalProgress, MonthSummary, PropertySummary,
-    UnlockedVault, UpcomingItem, UtilityPaymentDraft, UtilityTrend,
+    BudgetStatus, CashbackReport, DailyBudget, DepositReport, GoalCalendar, GoalProgress,
+    InterestTaxReport, MonthSummary, PayUtilityBillInput, PropertySummary, UnlockedVault,
+    UpcomingItem, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -300,6 +302,109 @@ pub async fn get_upcoming(
     })
 }
 
+// -- savings, deposits, ПДС ---------------------------------------------------------
+
+#[tauri::command]
+pub async fn set_deposit_terms(
+    input: SetDepositTermsInput,
+    state: State<'_, AppState>,
+) -> Result<trade_core::model::store::Store, String> {
+    with_vault_mut(&state, |vault| {
+        vault.set_deposit_terms(&input.store_id, input.terms)
+    })
+}
+
+/// Rate, interest earned and ahead, ПДС co-financing of one account (today in the user's zone).
+#[tauri::command]
+pub async fn get_deposit_report(
+    store_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DepositReport, String> {
+    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    with_vault(&state, |vault| vault.deposit_report(&store_id, today))
+}
+
+/// НДФЛ on deposit interest for a year (this one by default).
+#[tauri::command]
+pub async fn get_interest_tax(
+    year: Option<i32>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<InterestTaxReport, String> {
+    use chrono::Datelike;
+    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    with_vault(&state, |vault| {
+        Ok(vault.interest_tax(year.unwrap_or(today.year())))
+    })
+}
+
+/// Fetch the Bank of Russia key rate since the start of last year and cache
+/// it. Returns how many rate changes are known.
+#[tauri::command]
+pub async fn refresh_key_rates(state: State<'_, AppState>) -> Result<u32, String> {
+    use chrono::Datelike;
+    let today = chrono::Utc::now().date_naive();
+    let from = chrono::NaiveDate::from_ymd_opt(today.year() - 1, 1, 1).unwrap_or(today);
+    let points = state
+        .pricing
+        .fetch_key_rates(from, today)
+        .await
+        .map_err(err_to_string)?;
+    with_vault_mut(&state, |vault| {
+        vault.apply_key_rates(&points);
+        vault.persist()?;
+        Ok(vault.doc.key_rates.len() as u32)
+    })
+}
+
+// -- bonuses and cashback -----------------------------------------------------------
+
+#[tauri::command]
+pub async fn set_loyalty_info(
+    input: SetLoyaltyInfoInput,
+    state: State<'_, AppState>,
+) -> Result<trade_core::model::store::Store, String> {
+    with_vault_mut(&state, |vault| {
+        vault.set_loyalty_info(&input.store_id, input.info)
+    })
+}
+
+#[tauri::command]
+pub async fn adjust_points(
+    input: AdjustPointsInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    with_vault_mut(&state, |vault| {
+        vault.adjust_points(
+            &input.store_id,
+            input.delta,
+            &input.comment,
+            input.source_store_id,
+            input.timestamp,
+        )
+    })
+}
+
+/// Cashback and bonus points of this month (`period = "month"`) or this year.
+#[tauri::command]
+pub async fn get_cashback_report(
+    period: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<CashbackReport, String> {
+    use chrono::Datelike;
+    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    let from = if period.as_deref() == Some("year") {
+        format!("{}-01-01T00:00:00Z", today.year())
+    } else {
+        format!("{}-01T00:00:00Z", today.format("%Y-%m"))
+    };
+    with_vault(&state, |vault| {
+        Ok(vault.cashback_report(&from, "9999-12-31T23:59:59Z"))
+    })
+}
+
 // -- utilities (plan §7.5) ---------------------------------------------------------
 
 #[tauri::command]
@@ -338,6 +443,46 @@ pub async fn add_meter_reading(
     with_vault_mut(&state, |vault| {
         vault.add_meter_reading(&input.item_id, input.value, &input.period)
     })
+}
+
+#[tauri::command]
+pub async fn update_meter_reading(
+    input: UpdateMeterReadingInput,
+    state: State<'_, AppState>,
+) -> Result<MeterReading, String> {
+    with_vault_mut(&state, |vault| {
+        vault.update_meter_reading(&input.id, input.value, &input.period)
+    })
+}
+
+/// Every active utility of a property for one month (`YYYY-MM`, default: this month).
+#[tauri::command]
+pub async fn get_utility_bill(
+    property_id: String,
+    period: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<UtilityBill, String> {
+    let zone = current_zone(&app);
+    let period = period.unwrap_or_else(|| {
+        trade_core::calendar::month_key(
+            trade_core::calendar::Calendar::new(&zone).date_of(now_secs()),
+        )
+    });
+    with_vault(&state, |vault| {
+        vault.utility_bill(&property_id, &period, &zone)
+    })
+}
+
+/// Pay a month's bill at once: readings plus one payment per line, all or nothing.
+#[tauri::command]
+pub async fn pay_utility_bill(
+    input: PayUtilityBillInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<Transaction>, String> {
+    let zone = current_zone(&app);
+    with_vault_mut(&state, |vault| vault.pay_utility_bill(input, &zone))
 }
 
 #[tauri::command]

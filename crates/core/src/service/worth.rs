@@ -89,13 +89,13 @@ impl UnlockedVault {
         if currency.is_empty() {
             return Err(Error::InvalidInput("choose a currency".into()));
         }
-        let held_in_property =
-            self.doc.holdings.iter().any(|holding| {
-                holding.asset.key() == asset_key
-                    && self.doc.stores.iter().any(|store| {
-                        store.id == holding.store_id && store.kind == StoreKind::Property
-                    })
-            });
+        let held_in_property = self.doc.holdings.iter().any(|holding| {
+            holding.asset.key() == asset_key
+                && self.doc.stores.iter().any(|store| {
+                    store.id == holding.store_id
+                        && matches!(store.kind, StoreKind::Property | StoreKind::Loyalty)
+                })
+        });
         if !held_in_property {
             return Err(Error::InvalidInput(
                 "a hand-set price is only for property held in a property wallet".into(),
@@ -143,7 +143,7 @@ impl UnlockedVault {
         {
             let value = holding.quantity * self.price_usd_for(&holding.asset.key()) * fx;
             match kinds.get(holding.store_id.as_str()) {
-                Some(StoreKind::Property) => out.non_financial += value,
+                Some(StoreKind::Property | StoreKind::Loyalty) => out.non_financial += value,
                 Some(StoreKind::Liability) => {
                     *loans.entry(holding.store_id.as_str()).or_default() += value
                 }

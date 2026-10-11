@@ -7,5 +7,6 @@ export const KIND_COLORS: Record<StoreKind, string> = {
   crypto: '#f59e0b',
   exchange: '#eab308',
   property: '#7c3aed',
+  loyalty: '#db2777',
   liability: '#dc2626',
 }

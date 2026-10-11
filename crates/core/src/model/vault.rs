@@ -188,6 +188,22 @@ impl Drop for ExchangeKeys {
     }
 }
 
+/// What an import stages.
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportKind {
+    /// A trade fill; becomes a spot or futures trade.
+    #[default]
+    Fill,
+    /// A move between the exchange's own accounts; becomes a transfer
+    /// between the matching sub-accounts.
+    Transfer,
+    /// A payout of an Earn product; becomes income on the Earn sub-account.
+    EarnIncome,
+}
+
 /// A staged Bybit fill awaiting user confirmation before becoming a trade.
 ///
 /// Fills land here first and never touch `transactions` until the user
@@ -227,6 +243,13 @@ pub struct PendingImport {
     /// Realized PnL of a closing futures fill. Bybit's execution list does not
     /// carry it, so the import leaves it empty; the user can fill it in.
     pub closed_pnl: Option<Amount>,
+    #[serde(default)]
+    pub kind: ImportKind,
+    /// Transfer: Bybit account types, e.g. `FUND` → `UNIFIED`.
+    #[serde(default)]
+    pub from_account: Option<String>,
+    #[serde(default)]
+    pub to_account: Option<String>,
 }
 
 impl PendingImport {
@@ -279,13 +302,112 @@ impl PendingImport {
                 .and_then(|raw| Amount::parse(raw).ok())
                 .filter(|size| size.is_positive()),
             closed_pnl: None,
+            kind: ImportKind::Fill,
+            from_account: None,
+            to_account: None,
         })
+    }
+
+    /// Stage a move between the user's own Bybit accounts. The amount sits on
+    /// both sides (`*_sold` leaves `from_account`, `*_bought` reaches `to_account`).
+    pub fn from_transfer(store_id: &str, row: &crate::exchange::InterTransfer) -> Option<Self> {
+        let id = row.transfer_id.trim();
+        let amount = Amount::parse(row.amount.trim())
+            .ok()
+            .filter(|value| value.is_positive())?;
+        let coin = row.coin.trim().to_ascii_uppercase();
+        if id.is_empty() || coin.is_empty() {
+            return None;
+        }
+        Some(Self {
+            exec_id: format!("transfer:{id}"),
+            store_id: store_id.to_string(),
+            category: "transfer".into(),
+            symbol: coin.clone(),
+            side: String::new(),
+            asset_bought: coin.clone(),
+            qty_bought: amount,
+            asset_sold: coin,
+            qty_sold: amount,
+            price: Amount::ZERO,
+            occurred_at: millis_to_iso(&row.timestamp),
+            comment: format!("Bybit: {} → {}", row.from_account_type, row.to_account_type),
+            kind: ImportKind::Transfer,
+            from_account: Some(row.from_account_type.trim().to_ascii_uppercase()),
+            to_account: Some(row.to_account_type.trim().to_ascii_uppercase()),
+            ..Self::default()
+        })
+    }
+
+    /// Stage an Earn payout as income of the Earn account.
+    pub fn from_earn_yield(store_id: &str, row: &crate::exchange::EarnYield) -> Option<Self> {
+        let amount = Amount::parse(row.amount.trim())
+            .ok()
+            .filter(|value| value.is_positive())?;
+        let coin = row.coin.trim().to_ascii_uppercase();
+        let id = if row.id.trim().is_empty() {
+            format!("{}:{}:{}", row.product_id, row.created_at, row.amount)
+        } else {
+            row.id.trim().to_string()
+        };
+        if coin.is_empty() {
+            return None;
+        }
+        Some(Self {
+            exec_id: format!("earn:{id}"),
+            store_id: store_id.to_string(),
+            category: "earn".into(),
+            symbol: coin.clone(),
+            side: String::new(),
+            asset_bought: coin,
+            qty_bought: amount,
+            occurred_at: millis_to_iso(&row.created_at),
+            comment: "Bybit Earn".into(),
+            kind: ImportKind::EarnIncome,
+            to_account: Some(crate::exchange::bybit::ACCOUNT_EARN.into()),
+            ..Self::default()
+        })
+    }
+
+    /// Everything one Bybit sweep stages for an exchange wallet: fills,
+    /// moves between its accounts and Earn payouts. Rows that cannot be read
+    /// are dropped, never guessed at.
+    pub fn bybit_batch(
+        root_id: &str,
+        fills: &[crate::exchange::Execution],
+        transfers: &[crate::exchange::InterTransfer],
+        yields: &[crate::exchange::EarnYield],
+    ) -> Vec<Self> {
+        fills
+            .iter()
+            .filter_map(|exec| Self::from_execution(root_id, exec.category_hint(), exec))
+            .chain(
+                transfers
+                    .iter()
+                    .filter_map(|row| Self::from_transfer(root_id, row)),
+            )
+            .chain(
+                yields
+                    .iter()
+                    .filter_map(|row| Self::from_earn_yield(root_id, row)),
+            )
+            .collect()
     }
 
     /// Assets referenced by this fill, for the staging UI summary.
     pub fn symbols(&self) -> [String; 2] {
         [self.asset_sold.clone(), self.asset_bought.clone()]
     }
+}
+
+/// Bybit millisecond timestamps as RFC3339; empty when unreadable.
+fn millis_to_iso(raw: &str) -> String {
+    raw.trim()
+        .parse::<i64>()
+        .ok()
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .map(|moment| moment.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_default()
 }
 
 fn nonempty(raw: String) -> String {
@@ -337,6 +459,9 @@ pub struct VaultDoc {
     /// Due dates and notes of debts with contacts.
     #[serde(default)]
     pub debt_terms: Vec<crate::model::contact::DebtTerms>,
+    /// Bank of Russia key rate history, for the deposit-interest tax limit.
+    #[serde(default)]
+    pub key_rates: Vec<crate::model::deposit::KeyRatePoint>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -379,6 +504,7 @@ impl Default for VaultDoc {
             manual_prices: Vec::new(),
             envelopes: Vec::new(),
             debt_terms: Vec::new(),
+            key_rates: Vec::new(),
         }
     }
 }

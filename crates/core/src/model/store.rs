@@ -20,18 +20,21 @@ pub enum StoreKind {
     Exchange,
     /// Non-financial property valued by hand: a flat, a car, a collection.
     Property,
+    /// A bonus or loyalty programme: points with a value per point.
+    Loyalty,
     /// Money owed: a mortgage, a loan. Its balance is negative.
     Liability,
 }
 
 impl StoreKind {
     /// Sidebar order.
-    pub const ALL: [StoreKind; 6] = [
+    pub const ALL: [StoreKind; 7] = [
         Self::Cash,
         Self::Bank,
         Self::Crypto,
         Self::Exchange,
         Self::Property,
+        Self::Loyalty,
         Self::Liability,
     ];
 
@@ -53,10 +56,11 @@ impl StoreKind {
         use SubType::*;
         match self {
             Self::Cash => &[Pocket],
-            Self::Bank => &[Card, Account, Deposit, Savings, CreditCard],
+            Self::Bank => &[Card, Account, Deposit, Savings, Pds, CreditCard],
             Self::Crypto => &[Token],
-            Self::Exchange => &[Spot, Futures, Earn, Pair],
-            Self::Property | Self::Liability => &[],
+            // Bybit's own split first: Funding, Unified Trading, Earn.
+            Self::Exchange => &[Funding, Unified, Earn, Spot, Futures, Pair],
+            Self::Property | Self::Loyalty | Self::Liability => &[],
         }
     }
 
@@ -69,6 +73,7 @@ impl StoreKind {
             Self::Crypto => &[DcaBuy, StakingReward],
             Self::Exchange => &[DcaBuy, MarketTransfer],
             Self::Property => &[RentIncome, PropertyTax, Insurance, Utilities],
+            Self::Loyalty => &[],
             Self::Liability => &[LoanPayment],
         }
     }
@@ -77,6 +82,8 @@ impl StoreKind {
     pub fn default_purpose(self) -> Purpose {
         match self {
             Self::Cash | Self::Bank => Purpose::Everyday,
+            // Points are kept, not spent from the daily budget.
+            Self::Loyalty => Purpose::Savings,
             Self::Crypto | Self::Exchange | Self::Property | Self::Liability => Purpose::Investment,
         }
     }
@@ -107,11 +114,18 @@ pub enum SubType {
     CreditCard,
     /// One token on one network.
     Token,
+    /// Программа долгосрочных сбережений: savings with state co-financing.
+    Pds,
     Spot,
     Futures,
     Earn,
     /// A trading pair such as BTCUSDT: holds both sides, converts both ways.
     Pair,
+    /// An exchange's funding account (Bybit «Финансовый счёт»): deposits,
+    /// withdrawals, P2P, transfers between accounts — coins only.
+    Funding,
+    /// A unified trading account (Bybit UTA): spot and derivatives together.
+    Unified,
 }
 
 impl SubType {
@@ -121,6 +135,8 @@ impl SubType {
             Self::Spot => BindingShape::Market(MarketKind::Spot),
             Self::Futures => BindingShape::Market(MarketKind::Futures),
             Self::Earn => BindingShape::Market(MarketKind::Earn),
+            Self::Funding => BindingShape::Market(MarketKind::Funding),
+            Self::Unified => BindingShape::Market(MarketKind::Unified),
             Self::Pair => BindingShape::Pair,
             _ => BindingShape::Asset,
         }
@@ -128,7 +144,7 @@ impl SubType {
 
     pub fn default_purpose(self) -> Option<Purpose> {
         match self {
-            Self::Deposit | Self::Savings => Some(Purpose::Savings),
+            Self::Deposit | Self::Savings | Self::Pds => Some(Purpose::Savings),
             Self::Card | Self::CreditCard | Self::Account | Self::Pocket => Some(Purpose::Everyday),
             _ => None,
         }
@@ -145,6 +161,8 @@ pub enum MarketKind {
     Spot,
     Futures,
     Earn,
+    Funding,
+    Unified,
 }
 
 /// The binding shape a sub-account type expects (see [`Binding`]).
@@ -187,9 +205,12 @@ impl Binding {
             Self::Any => true,
             Self::Asset(bound) => same_asset(bound, asset),
             Self::Pair { base, quote } => same_asset(base, asset) || same_asset(quote, asset),
-            Self::Market(MarketKind::Spot | MarketKind::Earn) => !asset.is_derivative(),
-            // Margin can be any coin (inverse contracts), positions are perps.
-            Self::Market(MarketKind::Futures) => true,
+            Self::Market(MarketKind::Spot | MarketKind::Earn | MarketKind::Funding) => {
+                !asset.is_derivative()
+            }
+            // Margin can be any coin (inverse contracts), positions are perps;
+            // a unified account holds coins and positions side by side.
+            Self::Market(MarketKind::Futures | MarketKind::Unified) => true,
         }
     }
 }
@@ -262,6 +283,36 @@ pub enum PropertyCategory {
     Other,
 }
 
+/// A bonus programme: its points and what one point is worth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct LoyaltyInfo {
+    /// Ticker of the points, unique among the user's programmes (`СПАСИБО`, `МИЛИ`).
+    pub points_symbol: String,
+    /// What one point is worth in `currency`.
+    pub point_value: crate::Amount,
+    pub currency: String,
+    /// `YYYY-MM-DD` the next batch of points burns, if the programme has one.
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    #[serde(default)]
+    pub expiring_points: Option<crate::Amount>,
+}
+
+impl LoyaltyInfo {
+    /// The asset the programme's points are booked as.
+    pub fn asset(&self, programme: &str) -> AssetRef {
+        let symbol = self.points_symbol.trim().to_uppercase();
+        AssetRef {
+            symbol: symbol.clone(),
+            name: programme.to_string(),
+            coingecko_id: None,
+            chain: None,
+            contract: None,
+            quote: symbol,
+        }
+    }
+}
+
 /// What a property is. Its value comes from manual prices; expenses
 /// (utilities) point at it through `UtilityItem.property_id`.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -274,6 +325,10 @@ pub struct PropertyInfo {
     pub purchased_at: Option<String>,
     pub purchase_price: Option<crate::Amount>,
     pub currency: String,
+    /// Day of the month the utilities are usually paid (1–31), all at once.
+    #[serde(default)]
+    #[ts(optional)]
+    pub utilities_pay_day: Option<u8>,
 }
 
 #[derive(
@@ -404,6 +459,14 @@ pub struct Store {
     /// Exchange wallets only (top level).
     #[serde(default)]
     pub exchange: Option<ExchangeProfile>,
+    /// Loyalty wallets: the programme's points and what a point is worth.
+    #[serde(default)]
+    #[ts(optional)]
+    pub loyalty: Option<LoyaltyInfo>,
+    /// Savings accounts, term deposits and ПДС: rate history and terms.
+    #[serde(default)]
+    #[ts(optional)]
+    pub deposit: Option<crate::model::deposit::DepositTerms>,
 }
 
 impl Store {

@@ -4,6 +4,7 @@
 pub mod category;
 pub mod chain;
 pub mod contact;
+pub mod deposit;
 pub mod enrichment;
 #[cfg(test)]
 pub mod fixtures;

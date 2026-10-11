@@ -235,6 +235,17 @@ pub struct TxCommonInput {
     /// Manual USD price of the main asset (the one received, for two-asset kinds).
     pub price_usd: Option<Amount>,
     pub fx_override: Option<Amount>,
+    /// Manual price of one unit in `price_currency`; turned into `price_usd`
+    /// at the rate of the transaction's moment before saving.
+    #[serde(default)]
+    pub price: Option<Amount>,
+    /// Lowercase code `price` is in; empty means the base currency.
+    #[serde(default)]
+    pub price_currency: Option<String>,
+    /// Set by the service when `price` was given in the base currency.
+    #[serde(default)]
+    #[ts(skip)]
+    pub price_base: Option<Amount>,
 }
 
 impl TxCommonInput {
@@ -255,7 +266,7 @@ impl TxCommonInput {
     fn stamp(&self) -> PriceStamp {
         PriceStamp {
             price_usd: self.price_usd,
-            price_base: None,
+            price_base: self.price_base,
             fx_override: self.fx_override,
         }
     }
@@ -397,6 +408,20 @@ fn text(raw: &Option<String>) -> Option<String> {
 
 impl TransactionInput {
     /// Build the domain transaction. Rules are checked by the service, not here.
+    /// The fields every kind shares.
+    pub fn common_mut(&mut self) -> &mut TxCommonInput {
+        match self {
+            Self::Topup { common, .. }
+            | Self::Payment { common, .. }
+            | Self::Transfer { common, .. }
+            | Self::Convert { common, .. }
+            | Self::TradeSpot { common, .. }
+            | Self::TradeFutures { common, .. }
+            | Self::Defi { common, .. }
+            | Self::AssetSell { common, .. } => common,
+        }
+    }
+
     pub fn to_transaction(&self) -> Transaction {
         match self {
             Self::Topup {
@@ -835,6 +860,81 @@ pub struct CachedPrice {
     pub ts: String,
 }
 
+/// Set up a bonus programme.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetLoyaltyInfoInput {
+    pub store_id: String,
+    pub info: crate::model::store::LoyaltyInfo,
+}
+
+/// Credit (positive) or spend (negative) points of a programme.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct AdjustPointsInput {
+    pub store_id: String,
+    pub delta: Amount,
+    pub comment: String,
+    /// The card whose purchases earned the points.
+    pub source_store_id: Option<String>,
+    /// RFC3339; empty means now.
+    pub timestamp: Option<String>,
+}
+
+/// Set or clear the interest terms of a savings account, deposit or ПДС.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetDepositTermsInput {
+    pub store_id: String,
+    pub terms: Option<crate::model::deposit::DepositTerms>,
+}
+
+/// Create the missing Funding / Unified / Earn sub-accounts of a Bybit wallet.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct CreateBybitAccountsInput {
+    pub store_id: String,
+    /// Names in the UI language, for the ones that get created.
+    pub funding_name: String,
+    pub unified_name: String,
+    pub earn_name: String,
+}
+
+/// One coin of one exchange account: the exchange's figure next to the ledger's.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ExchangeCoinRow {
+    pub coin: String,
+    pub exchange: Amount,
+    pub ledger: Amount,
+    /// `exchange − ledger`: what imports have not explained yet.
+    pub diff: Amount,
+}
+
+/// A Bybit account (`FUND`, `UNIFIED`, `EARN`) and the sub-account standing for it.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ExchangeAccountBalance {
+    pub account: String,
+    /// `None` when the wallet has no sub-account of that kind yet.
+    pub store_id: Option<String>,
+    pub rows: Vec<ExchangeCoinRow>,
+}
+
+/// Make sure the FX cache has a rate of each currency for a day, fetching from
+/// the public sources (and earlier days) what it lacks.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct EnsureFxInput {
+    /// Lowercase codes; USD and unknown codes are ignored.
+    pub currencies: Vec<String>,
+    /// `YYYY-MM-DD` (UTC); empty or absent means today.
+    #[serde(default)]
+    pub date: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct EnsureFxOutput {
+    /// Rates fetched just now; a point's `ts` is the day its source had, which
+    /// may be before the day asked for.
+    pub points: Vec<crate::model::vault::FxPoint>,
+    /// Currencies no source had within the look-back window.
+    pub missing: Vec<String>,
+}
+
 /// Convert an amount between two currency codes at a moment (plan D20).
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct ConvertAmountInput {
@@ -1037,6 +1137,15 @@ pub struct UpdateUtilityInput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct MeterReadingInput {
     pub item_id: String,
+    pub value: Amount,
+    /// `YYYY-MM`.
+    pub period: String,
+}
+
+/// Correct a recorded meter reading.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateMeterReadingInput {
+    pub id: String,
     pub value: Amount,
     /// `YYYY-MM`.
     pub period: String,
