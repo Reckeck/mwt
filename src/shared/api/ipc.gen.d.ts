@@ -241,6 +241,12 @@ type AutomationRejectedEvent = { run_id: string, automation_id: string, name: st
 type AutomationRun = { id: string, automation_id: string, planned_at: string, processed_at: string, outcome: AutomationOutcome, };
 
 /**
+ * What the automations would do over the next days, worked out on a copy
+ * of the vault: nothing is written.
+ */
+type AutomationSimulation = { from: string, until: string, runs: Array<SimulatedRun>, balances: Array<SimulatedBalance>, created: number, rejected: number, };
+
+/**
  * What a sub-account is locked to. A top-level wallet is always `Any`.
  */
 type Binding = "any" | { "asset": AssetRef } | { "pair": { base: AssetRef, quote: AssetRef, } } | { "market": MarketKind };
@@ -2146,6 +2152,29 @@ type ShortcutSupport = { global_keys: boolean,
  * The running executable with `--quick-add`.
  */
 launch_command: string, };
+
+/**
+ * Emulate the automations ahead: one of them, or all.
+ */
+type SimulateAutomationsInput = { automation_id: string | null, 
+/**
+ * How many days ahead, 1–366.
+ */
+days: number, };
+
+/**
+ * One balance the emulated runs change.
+ */
+type SimulatedBalance = { store_id: string, asset: AssetRef, before: Amount, after: Amount, };
+
+/**
+ * One planned date as the emulation saw it.
+ */
+type SimulatedRun = { automation_id: string, automation_name: string, planned_at: string, outcome: AutomationOutcome, 
+/**
+ * The operation it would create.
+ */
+transaction: Transaction | null, };
 
 /**
  * Put a reminder off until a moment (RFC3339).

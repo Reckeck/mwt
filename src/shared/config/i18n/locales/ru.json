@@ -1664,5 +1664,18 @@
   "reminder.finishSeries": "Завершить серию",
   "reminder.seriesFinished": "Серия завершена",
   "tour.planningReminders.repeat.title": "Повтор напоминаний",
-  "tour.planningReminders.repeat.body": "Укажите, как часто повторять: «выполнено» перенесёт напоминание на следующую дату, а меню «Ещё» отложит его или завершит серию."
+  "tour.planningReminders.repeat.body": "Укажите, как часто повторять: «выполнено» перенесёт напоминание на следующую дату, а меню «Ещё» отложит его или завершит серию.",
+  "simulation.open": "Проверить",
+  "simulation.openOne": "Проверить эту автоматизацию",
+  "simulation.title": "Проверка автоматизаций",
+  "simulation.titleFor": "Проверка: {name}",
+  "simulation.hint": "Автоматизации прогоняются на копии vault по дням, как это сделал бы планировщик. Ничего не записывается — можно проверять что угодно.",
+  "simulation.days": "{count} дней",
+  "simulation.running": "Проверяю…",
+  "simulation.created": "Создастся: {count}",
+  "simulation.rejected": "Отклонится: {count}",
+  "simulation.nothing": "За этот срок автоматизации ничего не сделают.",
+  "simulation.balances": "Балансы: сейчас → в конце срока",
+  "tour.planningAutomations.simulate.title": "Проверка без риска",
+  "tour.planningAutomations.simulate.body": "«Проверить» прогоняет автоматизации наперёд на копии vault: видно, что создастся, где не хватит денег и какими станут балансы. Ничего не записывается."
 }

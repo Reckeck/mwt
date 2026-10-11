@@ -208,6 +208,7 @@ JSON без шифрования — там нет ничего секретно
 | `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; обработанные даты остаются обработанными |
 | `delete_automation` | `id` | `()` — вместе с историей запусков; созданные операции остаются |
 | `run_automation` | `id` | `Transaction` «сейчас»; не хватает средств — `INSUFFICIENT_FUNDS` с суммами |
+| `simulate_automations` | `SimulateAutomationsInput { automation_id?, days (1–366) }` | `AutomationSimulation { from, until, runs[{ automation_id, automation_name, planned_at, outcome, transaction? }], balances[{ store_id, asset, before, after }], created, rejected }` — эмуляция: автоматизации прогоняются по дням на копии vault (`UnlockedVault::sandbox`, ничего не пишет) с теми же проверками денег и правил, что у планировщика; с `automation_id` в ответе только её запуски |
 | `list_automation_runs` | `automation_id?` | `Vec<AutomationRun>`, новые первыми |
 | `retry_automation_run` | `run_id` | `Transaction`: баланс проверяется на текущий момент, дата операции — сейчас |
 | `skip_automation_run` | `run_id` | `AutomationRun` с `Skipped` |

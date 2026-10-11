@@ -48,6 +48,41 @@ pub struct AutomationPass {
     pub skipped: usize,
 }
 
+/// Longest emulation: a year ahead.
+pub const MAX_SIMULATION_DAYS: u32 = 366;
+
+/// One planned date as the emulation saw it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct SimulatedRun {
+    pub automation_id: String,
+    pub automation_name: String,
+    pub planned_at: String,
+    pub outcome: AutomationOutcome,
+    /// The operation it would create.
+    pub transaction: Option<Transaction>,
+}
+
+/// One balance the emulated runs change.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct SimulatedBalance {
+    pub store_id: String,
+    pub asset: AssetRef,
+    pub before: Amount,
+    pub after: Amount,
+}
+
+/// What the automations would do over the next days, worked out on a copy
+/// of the vault: nothing is written.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct AutomationSimulation {
+    pub from: String,
+    pub until: String,
+    pub runs: Vec<SimulatedRun>,
+    pub balances: Vec<SimulatedBalance>,
+    pub created: u32,
+    pub rejected: u32,
+}
+
 /// One planned date that is due.
 #[derive(Debug, Clone, PartialEq)]
 struct DueRun {
@@ -403,6 +438,108 @@ impl UnlockedVault {
     /// checked at the planned moment; a shortfall records a rejected run and
     /// creates nothing. Only the newest [`MAX_CATCH_UP`] dates are created;
     /// older ones are recorded as skipped.
+    /// Emulate the automations over the next `days` (one of them, or all):
+    /// day by day on a sandbox copy, so each run sees the balance the earlier
+    /// ones left, exactly as the scheduler would. The vault is not touched.
+    pub fn simulate_automations(
+        &self,
+        automation_id: Option<&str>,
+        days: u32,
+        now: i64,
+        zone: &str,
+    ) -> Result<AutomationSimulation> {
+        if let Some(id) = automation_id
+            && !self.doc.automations.iter().any(|item| item.id == id)
+        {
+            return Err(Error::Missing(format!("automation {id}")));
+        }
+        let days = days.clamp(1, MAX_SIMULATION_DAYS);
+        let mut sandbox = self.sandbox();
+        let known: HashSet<String> = sandbox
+            .doc
+            .automation_runs
+            .iter()
+            .map(|run| run.id.clone())
+            .collect();
+        let before = sandbox.doc.holdings.clone();
+        for day in 0..=i64::from(days) {
+            sandbox.run_due_automations(now + day * 86_400, zone)?;
+        }
+        let wanted = |id: &str| automation_id.is_none_or(|only| only == id);
+        let mut out = AutomationSimulation {
+            from: calendar::iso(now),
+            until: calendar::iso(now + i64::from(days) * 86_400),
+            ..AutomationSimulation::default()
+        };
+        let mut touched: HashSet<(String, String)> = HashSet::new();
+        for run in sandbox
+            .doc
+            .automation_runs
+            .iter()
+            .filter(|run| !known.contains(&run.id) && wanted(&run.automation_id))
+        {
+            let transaction = match &run.outcome {
+                AutomationOutcome::Created { tx_id } => sandbox
+                    .doc
+                    .transactions
+                    .iter()
+                    .find(|tx| &tx.meta().id == tx_id)
+                    .cloned(),
+                _ => None,
+            };
+            match &run.outcome {
+                AutomationOutcome::Created { .. } => out.created += 1,
+                AutomationOutcome::Rejected { .. } => out.rejected += 1,
+                AutomationOutcome::Skipped => {}
+            }
+            if let Some(tx) = &transaction {
+                for leg in tx.legs() {
+                    touched.insert((leg.store_id.clone(), leg.asset.key()));
+                }
+            }
+            out.runs.push(SimulatedRun {
+                automation_id: run.automation_id.clone(),
+                automation_name: sandbox
+                    .doc
+                    .automations
+                    .iter()
+                    .find(|item| item.id == run.automation_id)
+                    .map(|item| item.name.clone())
+                    .unwrap_or_default(),
+                planned_at: run.planned_at.clone(),
+                outcome: run.outcome.clone(),
+                transaction,
+            });
+        }
+        out.runs
+            .sort_by(|left, right| left.planned_at.cmp(&right.planned_at));
+        let quantity = |holdings: &[crate::model::store::Holding], key: &(String, String)| {
+            holdings
+                .iter()
+                .find(|holding| holding.store_id == key.0 && holding.asset.key() == key.1)
+                .map(|holding| (holding.asset.clone(), holding.quantity))
+        };
+        let mut balances: Vec<SimulatedBalance> = touched
+            .iter()
+            .filter_map(|key| {
+                let after = quantity(&sandbox.doc.holdings, key);
+                let was = quantity(&before, key);
+                let asset = after.as_ref().or(was.as_ref())?.0.clone();
+                Some(SimulatedBalance {
+                    store_id: key.0.clone(),
+                    asset,
+                    before: was.map_or(Amount::ZERO, |(_, value)| value),
+                    after: after.map_or(Amount::ZERO, |(_, value)| value),
+                })
+            })
+            .collect();
+        balances.sort_by(|left, right| {
+            (&left.store_id, &left.asset.symbol).cmp(&(&right.store_id, &right.asset.symbol))
+        });
+        out.balances = balances;
+        Ok(out)
+    }
+
     pub fn run_due_automations(&mut self, now: i64, zone: &str) -> Result<AutomationPass> {
         let cal = Calendar::new(zone);
         let mut due = self.due_runs(now, &cal);
@@ -697,6 +834,64 @@ mod tests {
                 AutomationOutcome::Skipped => "skipped",
             })
             .collect()
+    }
+
+    /// Emulation runs on a copy: what would happen is reported, nothing of it
+    /// reaches the vault, and a later real run is unaffected.
+    #[test]
+    fn an_emulation_reports_the_runs_and_writes_nothing() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let salary = monthly(&mut vault, "Salary", 10, salary_draft(&card, "1000"));
+        let rent = monthly(&mut vault, "Rent", 5, rent_draft(&card, "800"));
+        let before = vault.doc.clone();
+        let now = secs("2026-01-01T00:00:00Z");
+
+        let all = vault.simulate_automations(None, 50, now, "UTC").unwrap();
+        // Jan 5 rent: nothing yet. Jan 10 salary. Feb 5 rent. Feb 10 salary.
+        assert_eq!(all.runs.len(), 4);
+        assert_eq!((all.created, all.rejected), (3, 1));
+        assert!(
+            all.runs
+                .windows(2)
+                .all(|pair| pair[0].planned_at <= pair[1].planned_at)
+        );
+        let balance = all
+            .balances
+            .iter()
+            .find(|row| row.store_id == card)
+            .unwrap();
+        assert_eq!(
+            (balance.before, balance.after),
+            (amount("0"), amount("1200"))
+        );
+
+        let only_rent = vault
+            .simulate_automations(Some(&rent.id), 50, now, "UTC")
+            .unwrap();
+        assert!(
+            only_rent
+                .runs
+                .iter()
+                .all(|run| run.automation_id == rent.id)
+        );
+        assert_eq!(
+            only_rent.runs.len(),
+            2,
+            "the salary still runs, it is just not listed"
+        );
+
+        assert_eq!(vault.doc, before, "the vault is untouched");
+        let pass = vault
+            .run_due_automations(secs("2026-02-20T12:00:00Z"), "UTC")
+            .unwrap();
+        assert_eq!(pass.created.len(), 3);
+        assert!(
+            vault
+                .simulate_automations(Some("nope"), 10, now, "UTC")
+                .is_err()
+        );
+        let _ = salary;
     }
 
     #[test]

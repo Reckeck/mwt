@@ -2,10 +2,11 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ChevronDown, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, FlaskConical, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AutomationDialog, AutomationRunActions } from '@/features/automation-edit'
+import { AutomationSimulationDialog } from '@/features/automation-simulate'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -73,6 +74,14 @@ function openEdit(automation: Automation) {
   dialogOpen.value = true
 }
 
+/* --- «Проверить»: emulate ahead without writing anything --- */
+const simulateOpen = ref(false)
+const simulated = ref<Automation | null>(null)
+function openSimulation(automation: Automation | null) {
+  simulated.value = automation
+  simulateOpen.value = true
+}
+
 function refresh() {
   for (const queryKey of [...PLANNING_KEYS, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
 }
@@ -110,10 +119,16 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
       <p class="text-sm text-muted-foreground">
         {{ props.storeId || props.readonly ? t('automation.intro') : t('automation.introWallet') }}
       </p>
-      <Button v-if="!props.readonly" variant="outline" @click="openNew()">
-        <Plus class="size-4" />
-        {{ t('automation.new') }}
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button v-if="shown.length" variant="outline" data-tour="automation-simulate" @click="openSimulation(null)">
+          <FlaskConical class="size-4" />
+          {{ t('simulation.open') }}
+        </Button>
+        <Button v-if="!props.readonly" variant="outline" @click="openNew()">
+          <Plus class="size-4" />
+          {{ t('automation.new') }}
+        </Button>
+      </div>
     </div>
 
     <!-- Ready-made automations of this kind of wallet: one click, a few fields. -->
@@ -144,6 +159,16 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
             <p class="text-sm tabular-nums">{{ templateLine(automation) }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-8 text-muted-foreground"
+              :title="t('simulation.openOne')"
+              :aria-label="t('simulation.openOne')"
+              @click="openSimulation(automation)"
+            >
+              <FlaskConical class="size-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -208,5 +233,10 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
     </Card>
 
     <AutomationDialog v-model:open="dialogOpen" :automation="editing" :store-id="props.storeId" :preset="preset" />
+    <AutomationSimulationDialog
+      v-model:open="simulateOpen"
+      :automation-id="simulated?.id ?? null"
+      :name="simulated?.name ?? ''"
+    />
   </div>
 </template>

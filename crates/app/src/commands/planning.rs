@@ -7,18 +7,19 @@ use tauri::{AppHandle, State};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput,
-    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SnoozeReminderInput,
-    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
-    UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
+    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput,
+    SnoozeReminderInput, UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput,
+    UpdateMeterReadingInput, UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput,
+    UtilityInput,
 };
 use trade_core::model::planning::{
     Automation, AutomationRun, Budget, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
-    BudgetStatus, CashbackReport, DailyBudget, DepositReport, GoalCalendar, GoalProgress,
-    InterestTaxReport, MonthSummary, PayUtilityBillInput, PropertySummary, UnlockedVault,
-    UpcomingItem, UtilityBill, UtilityPaymentDraft, UtilityTrend,
+    AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport, GoalCalendar,
+    GoalProgress, InterestTaxReport, MonthSummary, PayUtilityBillInput, PropertySummary,
+    UnlockedVault, UpcomingItem, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -77,6 +78,25 @@ pub async fn delete_automation(id: String, state: State<'_, AppState>) -> Result
 #[tauri::command]
 pub async fn run_automation(id: String, state: State<'_, AppState>) -> Result<Transaction, String> {
     with_vault_mut(&state, |vault| vault.run_automation(&id, now_secs()))
+}
+
+/// What the automations would do over the next days, worked out on a sandbox
+/// copy of the vault: nothing is written.
+#[tauri::command]
+pub async fn simulate_automations(
+    input: SimulateAutomationsInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AutomationSimulation, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| {
+        vault.simulate_automations(
+            input.automation_id.as_deref(),
+            input.days,
+            now_secs(),
+            &zone,
+        )
+    })
 }
 
 #[tauri::command]

@@ -49,7 +49,8 @@ mod worth;
 pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
 pub use automations::{
-    AutomationDraft, AutomationPass, MAX_CATCH_UP, describe_reject, planned_dates,
+    AutomationDraft, AutomationPass, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance,
+    SimulatedRun, describe_reject, planned_dates,
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
@@ -154,6 +155,9 @@ pub struct UnlockedVault {
     password: Zeroizing<String>,
     /// Released when the vault is locked (dropped).
     _lock: crate::storage::VaultLock,
+    /// A sandbox copy: it runs every rule like the real vault but never
+    /// writes the file (see [`Self::sandbox`]).
+    sandbox: bool,
 }
 
 impl UnlockedVault {
@@ -169,6 +173,7 @@ impl UnlockedVault {
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
+            sandbox: false,
         };
         vault.ensure_cash_wallet("Cash")?;
         Ok(vault)
@@ -190,6 +195,7 @@ impl UnlockedVault {
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
+            sandbox: false,
         };
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
@@ -219,8 +225,27 @@ impl UnlockedVault {
         &self.base_currency
     }
 
-    /// Persist the current document (encrypt + atomic write).
+    /// A copy of the vault in memory for emulation: every operation and rule
+    /// works on it as on the real one, but nothing is ever written, so trying
+    /// things out cannot break the user's data.
+    pub fn sandbox(&self) -> UnlockedVault {
+        UnlockedVault {
+            path: self.path.clone(),
+            fmt: self.fmt,
+            doc: self.doc.clone(),
+            base_currency: self.base_currency.clone(),
+            password: Zeroizing::new(String::new()),
+            _lock: crate::storage::VaultLock::detached(),
+            sandbox: true,
+        }
+    }
+
+    /// Persist the current document (encrypt + atomic write); a sandbox
+    /// writes nothing.
     pub fn persist(&self) -> Result<()> {
+        if self.sandbox {
+            return Ok(());
+        }
         VaultFile::save(&self.path, &self.password, &self.doc, self.fmt)
     }
 
