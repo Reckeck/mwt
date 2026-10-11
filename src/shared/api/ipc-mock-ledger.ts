@@ -195,6 +195,7 @@ export function mockTransactionFrom(
   input: TransactionInput,
   priceOf: (symbol: string) => number,
   keep?: { id: string; origin: TxOrigin },
+  balanceOf: (storeId: string, symbol: string) => number = () => 0,
 ): Transaction {
   // The mock has no FX: a typed price is taken as USD whatever its currency.
   const priced = (symbol: string) =>
@@ -337,6 +338,16 @@ export function mockTransactionFrom(
         },
       }
       break
+    case 'adjustment': {
+      const lines = input.lines
+        .map((line) => {
+          const before = String(balanceOf(input.store_id, line.asset.symbol))
+          return { asset: asset(line.asset), before, after: line.actual, price: noStamp }
+        })
+        .filter((line) => Number(line.after) !== Number(line.before))
+      if (!lines.length) throw { code: 'INVALID_INPUT', message: 'nothing to correct: the balances already match' }
+      return { adjustment: { meta: base, store_id: input.store_id, lines, fee: null } }
+    }
   }
   categorize(tx)
   check(tx)

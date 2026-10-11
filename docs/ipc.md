@@ -81,6 +81,7 @@ Frontend парсит код и показывает локализованно�
 | `preview_transaction` | `PreviewTransactionInput { transaction, replaces? }` | `TxPreview { changes[{store_id, store_name, asset, before, after, delta_base}], base_currency, flow, warnings[], error? }` — ничего не пишет; `replaces` — id редактируемой операции, её эффект вычитается; отказ валидации приходит в `error` строкой `CODE: message` |
 | `update_transaction` | `UpdateTransactionInput { id, transaction: TransactionInput }` | `Transaction` — `id` и `origin` сохраняются, холдинги пересчитываются |
 | `delete_transaction` | `id` | `()` |
+| `get_adjustment_draft` | `AdjustmentDraftInput { store_id, at?, replaces? }` | `AdjustmentDraft { store_id, at, lines[AdjustmentLine { asset, before, after = before, price }] }` — что счёт держит по учёту на момент `at` (пусто — сейчас), без операции `replaces`; экран «Сверка с реальностью». Сама корректировка — `add_transaction` с `TransactionInput { type: "adjustment", common, store_id, lines[{ asset, actual }] }` |
 | `transaction_kinds_for_store_kind` | `kind: StoreKind` | `TransactionKinds { verbs[], special[], default }` (значения — `TxKind`) |
 
 `TransactionInput` — `{ type: "topup" | "payment" | "transfer" | "convert" | "trade_spot" | "trade_futures" | "defi" | "asset_sell", common, …поля вида }`.

@@ -1,11 +1,11 @@
 //! Transactions: what the user did with money, and the bookkeeping legs it
 //! implies.
 //!
-//! Persisted in the vault, which release builds write with bincode. bincode is
-//! not self-describing, so every enum here is externally tagged and nothing
-//! uses `#[serde(tag)]`, `untagged`, `flatten` or `serde_json::Value`. Adding
-//! or removing a field breaks existing release files — the schema is frozen
-//! deliberately (plan D11).
+//! Persisted in the vault. Every enum here is externally tagged and nothing
+//! uses `#[serde(tag)]`, `untagged`, `flatten` or `serde_json::Value`, so the
+//! legacy bincode files of payload v1 stay readable. A new variant goes last;
+//! renaming or removing a field or variant needs a payload version bump with
+//! a migration (see `storage`).
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -155,6 +155,9 @@ pub enum LegRole {
     Fee,
     /// Realized profit or loss settled by the exchange (futures close).
     Pnl,
+    /// A correction to what is really there: moves the balance, is neither
+    /// income nor spending, and never realizes a profit.
+    Adjustment,
 }
 
 /// One bookkeeping effect on one `(store, asset)` pair.
@@ -473,6 +476,36 @@ pub struct AssetSellTx {
 }
 
 /// Kind of a transaction, without its data — what a store accepts, what a form shows.
+/// One asset of a correction: what the ledger held and what is really there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct AdjustmentLine {
+    pub asset: AssetRef,
+    /// The ledger balance just before the correction.
+    pub before: Amount,
+    /// The real balance the user counted.
+    pub after: Amount,
+    #[serde(default)]
+    pub price: PriceStamp,
+}
+
+impl AdjustmentLine {
+    /// What the correction adds (negative: takes away).
+    pub fn delta(&self) -> Amount {
+        self.after - self.before
+    }
+}
+
+/// «Синхронизация с реальностью»: the balances of one account set to what is
+/// really there. `before` is worked out from the ledger when it is saved.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct AdjustmentTx {
+    pub meta: TxMeta,
+    pub store_id: String,
+    pub lines: Vec<AdjustmentLine>,
+    /// Always `None`: a correction costs nothing. Kept for the shared shape.
+    pub fee: Option<Fee>,
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
 )]
@@ -486,6 +519,7 @@ pub enum TxKind {
     TradeFutures,
     Defi,
     AssetSell,
+    Adjustment,
 }
 
 impl TxKind {
@@ -498,6 +532,7 @@ impl TxKind {
         TxKind::TradeFutures,
         TxKind::Defi,
         TxKind::AssetSell,
+        TxKind::Adjustment,
     ];
 
     /// The four everyday verbs; the rest are specialised.
@@ -518,7 +553,13 @@ impl TxKind {
             Self::TradeFutures => "trade_futures",
             Self::Defi => "defi",
             Self::AssetSell => "asset_sell",
+            Self::Adjustment => "adjustment",
         }
+    }
+
+    /// Kinds entered in the operation form; a correction has its own screen.
+    pub fn in_form(self) -> bool {
+        !matches!(self, Self::Adjustment)
     }
 }
 
@@ -526,12 +567,20 @@ impl TxKind {
 pub fn allowed_kinds(kind: StoreKind) -> &'static [TxKind] {
     use TxKind::*;
     match kind {
-        StoreKind::Cash | StoreKind::Bank => &[Topup, Payment, Transfer, Convert],
-        StoreKind::Exchange => &[Topup, Payment, Transfer, Convert, TradeSpot, TradeFutures],
-        StoreKind::Crypto => &[Topup, Payment, Transfer, Convert, Defi],
+        StoreKind::Cash | StoreKind::Bank => &[Topup, Payment, Transfer, Convert, Adjustment],
+        StoreKind::Exchange => &[
+            Topup,
+            Payment,
+            Transfer,
+            Convert,
+            TradeSpot,
+            TradeFutures,
+            Adjustment,
+        ],
+        StoreKind::Crypto => &[Topup, Payment, Transfer, Convert, Defi, Adjustment],
         StoreKind::Property => &[Topup, AssetSell],
-        StoreKind::Loyalty => &[Topup, Payment, Transfer],
-        StoreKind::Liability => &[Payment, Transfer],
+        StoreKind::Loyalty => &[Topup, Payment, Transfer, Adjustment],
+        StoreKind::Liability => &[Payment, Transfer, Adjustment],
     }
 }
 
@@ -557,6 +606,7 @@ pub enum Transaction {
     TradeFutures(TradeFuturesTx),
     Defi(DefiTx),
     AssetSell(AssetSellTx),
+    Adjustment(AdjustmentTx),
 }
 
 macro_rules! each_variant {
@@ -570,6 +620,7 @@ macro_rules! each_variant {
             Transaction::TradeFutures($tx) => $body,
             Transaction::Defi($tx) => $body,
             Transaction::AssetSell($tx) => $body,
+            Transaction::Adjustment($tx) => $body,
         }
     };
 }
@@ -585,6 +636,7 @@ impl Transaction {
             Self::TradeFutures(_) => TxKind::TradeFutures,
             Self::Defi(_) => TxKind::Defi,
             Self::AssetSell(_) => TxKind::AssetSell,
+            Self::Adjustment(_) => TxKind::Adjustment,
         }
     }
 
@@ -723,6 +775,20 @@ impl Transaction {
                 }
                 push_fee(&mut legs, Some(&tx.store_id), &tx.fee);
             }
+            Self::Adjustment(tx) => {
+                for line in &tx.lines {
+                    let delta = line.delta();
+                    if !delta.is_zero() {
+                        legs.push(Leg::new(
+                            &tx.store_id,
+                            &line.asset,
+                            delta,
+                            LegRole::Adjustment,
+                            &line.price,
+                        ));
+                    }
+                }
+            }
         }
         legs
     }
@@ -775,6 +841,7 @@ impl Transaction {
             Self::TradeFutures(tx) => Some(&tx.store_id),
             Self::Defi(tx) => Some(&tx.store_id),
             Self::AssetSell(tx) => Some(&tx.store_id),
+            Self::Adjustment(tx) => Some(&tx.store_id),
         }
     }
 
@@ -871,6 +938,12 @@ impl Transaction {
             }
             Self::AssetSell(tx) => {
                 out.push((tx.currency.clone(), &mut tx.price));
+                &mut tx.fee
+            }
+            Self::Adjustment(tx) => {
+                for line in &mut tx.lines {
+                    out.push((line.asset.clone(), &mut line.price));
+                }
                 &mut tx.fee
             }
         };

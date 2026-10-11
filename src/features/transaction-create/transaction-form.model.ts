@@ -327,6 +327,9 @@ export function formToInput(form: TransactionFormState): TransactionInput | null
         currency: ident(form.currency),
         proceeds_to: text(form.proceedsTo),
       }
+    // A correction has its own screen (`AdjustmentDialog`).
+    case 'adjustment':
+      return null
   }
 }
 

@@ -20,6 +20,63 @@ source_store_id: string | null,
  */
 timestamp: string | null, };
 
+/**
+ * What the correction screen opens with.
+ */
+type AdjustmentDraft = { store_id: string, 
+/**
+ * RFC3339 moment the balances are for.
+ */
+at: string, 
+/**
+ * Every asset the account holds then; `after` starts equal to `before`.
+ */
+lines: Array<AdjustmentLine>, };
+
+/**
+ * What the correction screen opens with: every asset of the account and
+ * its ledger balance at `at`.
+ */
+type AdjustmentDraftInput = { store_id: string, 
+/**
+ * RFC3339; empty = now.
+ */
+at: string | null, 
+/**
+ * The correction being edited: left out of the balances.
+ */
+replaces: string | null, };
+
+/**
+ * Kind of a transaction, without its data — what a store accepts, what a form shows.
+ * One asset of a correction: what the ledger held and what is really there.
+ */
+type AdjustmentLine = { asset: AssetRef, 
+/**
+ * The ledger balance just before the correction.
+ */
+before: Amount, 
+/**
+ * The real balance the user counted.
+ */
+after: Amount, price: PriceStamp, };
+
+/**
+ * One asset of a correction: the balance really there. What the ledger
+ * held is worked out when it is saved.
+ */
+type AdjustmentLineInput = { asset: AssetIdent, actual: Amount, };
+
+/**
+ * «Синхронизация с реальностью»: the balances of one account set to what is
+ * really there. `before` is worked out from the ledger when it is saved.
+ */
+type AdjustmentTx = { meta: TxMeta, store_id: string, lines: Array<AdjustmentLine>, 
+/**
+ * Always `None`: a correction costs nothing. Kept for the shared shape.
+ */
+fee: Fee | null, };
+
 type AlertCondition = "above" | "below";
 
 type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
@@ -1293,7 +1350,7 @@ source_store_id?: string, };
 /**
  * What a leg represents inside its transaction.
  */
-type LegRole = "principal" | "fee" | "pnl";
+type LegRole = "principal" | "fee" | "pnl" | "adjustment";
 
 type LiabilityKind = "mortgage" | "loan" | "credit_card" | "installment" | "other";
 
@@ -2391,7 +2448,7 @@ type TradeSpotTx = { meta: TxMeta, store_id: string, sold: TradeSide, bought: Tr
 /**
  * One thing the user did with money.
  */
-type Transaction = { "topup": TopupTx } | { "payment": PaymentTx } | { "transfer": TransferTx } | { "convert": ConvertTx } | { "trade_spot": TradeSpotTx } | { "trade_futures": TradeFuturesTx } | { "defi": DefiTx } | { "asset_sell": AssetSellTx };
+type Transaction = { "topup": TopupTx } | { "payment": PaymentTx } | { "transfer": TransferTx } | { "convert": ConvertTx } | { "trade_spot": TradeSpotTx } | { "trade_futures": TradeFuturesTx } | { "defi": DefiTx } | { "asset_sell": AssetSellTx } | { "adjustment": AdjustmentTx };
 
 /**
  * The transaction an automation creates. `meta.id`, `meta.timestamp`,
@@ -2410,7 +2467,7 @@ venue: string,
 /**
  * Contract symbol, e.g. `BTCUSDT`.
  */
-symbol: string, settle: AssetIdent, direction: FuturesDirection, action: FuturesAction, quantity: Amount, fill_price: Amount, leverage: Amount | null, fee: FeeInput | null, closed_pnl: Amount | null, order_id: string | null, category: FuturesCategory, } | { "type": "defi", common: TxCommonInput, store_id: string, action: DefiAction, asset: AssetIdent, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: FeeInput | null, } | { "type": "asset_sell", common: TxCommonInput, store_id: string, asset: AssetIdent, unit_price: Amount, quantity: Amount, currency: AssetIdent, proceeds_to: string | null, fee: FeeInput | null, };
+symbol: string, settle: AssetIdent, direction: FuturesDirection, action: FuturesAction, quantity: Amount, fill_price: Amount, leverage: Amount | null, fee: FeeInput | null, closed_pnl: Amount | null, order_id: string | null, category: FuturesCategory, } | { "type": "defi", common: TxCommonInput, store_id: string, action: DefiAction, asset: AssetIdent, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: FeeInput | null, } | { "type": "asset_sell", common: TxCommonInput, store_id: string, asset: AssetIdent, unit_price: Amount, quantity: Amount, currency: AssetIdent, proceeds_to: string | null, fee: FeeInput | null, } | { "type": "adjustment", common: TxCommonInput, store_id: string, lines: Array<AdjustmentLineInput>, };
 
 /**
  * Which transaction kinds a wallet of one kind accepts, split the way the
@@ -2531,10 +2588,7 @@ needs_manual_network: boolean, explorer_url: string | null,
  */
 occurred_at: string | null, status: string | null, asset_in: string | null, amount_in: string | null, asset_out: string | null, amount_out: string | null, fee: string | null, fee_asset: string | null, };
 
-/**
- * Kind of a transaction, without its data — what a store accepts, what a form shows.
- */
-type TxKind = "topup" | "payment" | "transfer" | "convert" | "trade_spot" | "trade_futures" | "defi" | "asset_sell";
+type TxKind = "topup" | "payment" | "transfer" | "convert" | "trade_spot" | "trade_futures" | "defi" | "asset_sell" | "adjustment";
 
 /**
  * What one transaction cost beyond what it moved.

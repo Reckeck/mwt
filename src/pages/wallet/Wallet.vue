@@ -15,6 +15,7 @@ import {
   Goal as GoalIcon,
   Receipt,
   Repeat,
+  Scale,
 } from 'lucide-vue-next'
 
 import { AssetRevalueButton } from '@/features/asset-revalue'
@@ -27,6 +28,7 @@ import { GoalDialog } from '@/features/goal-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
+import { AdjustmentDialog } from '@/features/store-adjust'
 import { UtilityBillDialog } from '@/features/utility-bill'
 import { DepositSummary } from '@/widgets/deposit-summary'
 import { ExchangeBalances } from '@/widgets/exchange-balances'
@@ -143,6 +145,7 @@ function pnlTone(value: string): string {
 
 /* --- dialogs + tabs: one dialog per action, never one inside another --- */
 const transactionOpen = ref(false)
+const adjustOpen = ref(false)
 const calculatorOpen = ref(false)
 /** Plan handed from the calculator to the transaction form. */
 const plan = ref<CalculatorPlan | null>(null)
@@ -304,6 +307,17 @@ function openWallet(created: Store) {
           <Button size="sm" :disabled="isArchived" @click="openTransaction">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
+          </Button>
+          <Button
+            v-if="store.kind !== 'property'"
+            variant="outline"
+            size="sm"
+            :disabled="isArchived"
+            data-tour="wallet-adjust"
+            @click="adjustOpen = true"
+          >
+            <Scale class="size-4" />
+            {{ t('adjustment.open') }}
           </Button>
           <Button v-if="canAddChild" variant="outline" size="sm" @click="subWalletOpen = true">
             <FolderPlus class="size-4" />
@@ -519,6 +533,7 @@ function openWallet(created: Store) {
     </template>
 
     <TransactionCreateDialog v-model:open="transactionOpen" :store-id="storeId" :disabled="isArchived" :plan="plan" />
+    <AdjustmentDialog v-model:open="adjustOpen" :store-id="storeId" />
     <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" @apply="onApplyPlan" />
 
     <GoalDialog v-model:open="goalOpen" :store-id="storeId" />

@@ -18,6 +18,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'tour-help', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
   wallet: [
+    { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
     { target: 'exchange-terminal', key: 'wallet.terminal', side: 'top' },

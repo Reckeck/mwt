@@ -8,6 +8,7 @@ export const KIND_COLORS: Record<TxKind, string> = {
   trade_futures: '#ea580c',
   defi: '#0891b2',
   asset_sell: '#64748b',
+  adjustment: '#a3a3a3',
 }
 
 /** Edge look per kind: a lane's own sequence is quiet, moves between lanes are not. */

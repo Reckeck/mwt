@@ -509,7 +509,33 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
     case 'transaction_kinds_for_store_kind':
       return resolve(mockKindsFor(args?.kind as StoreKind))
     case 'add_transaction':
-      return resolve(mockPush(mockTransactionFrom(args?.input as TransactionInput, priceOf)))
+      return resolve(mockPush(mockTransactionFrom(args?.input as TransactionInput, priceOf, undefined, mockBalanceOf)))
+    case 'get_adjustment_draft': {
+      const input = body as AdjustmentDraftInput
+      const totals = new Map<string, { asset: AssetRef; total: number }>()
+      for (const tx of mockTransactions) {
+        if (txId(tx) === input.replaces) continue
+        for (const leg of txLegs(tx)) {
+          if (leg.store_id !== input.store_id) continue
+          const entry = totals.get(leg.asset.symbol) ?? { asset: leg.asset, total: 0 }
+          entry.total += Number(leg.amount)
+          totals.set(leg.asset.symbol, entry)
+        }
+      }
+      const lines = [...totals.values()]
+        .filter((entry) => entry.total !== 0)
+        .map((entry) => ({
+          asset: entry.asset,
+          before: String(entry.total),
+          after: String(entry.total),
+          price: { price_usd: null, price_base: null, fx_override: null },
+        }))
+      return resolve({
+        store_id: input.store_id,
+        at: input.at || new Date().toISOString(),
+        lines,
+      } satisfies AdjustmentDraft)
+    }
     case 'preview_transaction':
       return resolve(mockPreview(body as PreviewTransactionInput))
     case 'update_transaction': {
@@ -517,7 +543,9 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       const index = mockTransactions.findIndex((tx) => txId(tx) === input.id)
       if (index < 0) throw { code: 'MISSING', message: 'transaction' }
       const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin }
-      mockTransactions[index] = mockTransactionFrom(input.transaction, priceOf, kept)
+      mockTransactions[index] = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
+        mockBalanceOf(storeId, symbol, input.id),
+      )
       return resolve(mockTransactions[index])
     }
     case 'delete_transaction': {
@@ -1422,6 +1450,15 @@ function mockFilterTxs(storeIds: string[] | null): Transaction[] {
 function mockPush(tx: Transaction): Transaction {
   mockTransactions.push(tx)
   return tx
+}
+
+/** Ledger balance of one asset in one store, leaving out the transaction being edited. */
+function mockBalanceOf(storeId: string, symbol: string, exclude?: string): number {
+  return mockTransactions
+    .filter((tx) => txId(tx) !== exclude)
+    .flatMap((tx) => txLegs(tx))
+    .filter((leg) => leg.store_id === storeId && leg.asset.symbol === symbol)
+    .reduce((sum, leg) => sum + Number(leg.amount), 0)
 }
 
 /** Fill the demo history once every helper above is defined. */

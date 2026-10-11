@@ -18,10 +18,10 @@ use crate::model::store::{
     SubType,
 };
 use crate::model::transaction::{
-    AccountRef, AssetSellTx, ConvertSide, ConvertTx, DebtEffect, DefiAction, DefiTx, Fee,
-    FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Liquidity, PaymentTx,
-    PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind,
-    TxMeta, allowed_kinds, default_kind,
+    AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, ConvertSide, ConvertTx, DebtEffect,
+    DefiAction, DefiTx, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails,
+    Liquidity, PaymentTx, PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction,
+    TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
 };
 use crate::model::vault::DailyBudgetMode;
 use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
@@ -397,6 +397,31 @@ pub enum TransactionInput {
         proceeds_to: Option<String>,
         fee: Option<FeeInput>,
     },
+    /// Set the balances of one account to what is really there.
+    Adjustment {
+        common: TxCommonInput,
+        store_id: String,
+        lines: Vec<AdjustmentLineInput>,
+    },
+}
+
+/// One asset of a correction: the balance really there. What the ledger
+/// held is worked out when it is saved.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AdjustmentLineInput {
+    pub asset: AssetIdent,
+    pub actual: Amount,
+}
+
+/// What the correction screen opens with: every asset of the account and
+/// its ledger balance at `at`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AdjustmentDraftInput {
+    pub store_id: String,
+    /// RFC3339; empty = now.
+    pub at: Option<String>,
+    /// The correction being edited: left out of the balances.
+    pub replaces: Option<String>,
 }
 
 fn text(raw: &Option<String>) -> Option<String> {
@@ -418,7 +443,8 @@ impl TransactionInput {
             | Self::TradeSpot { common, .. }
             | Self::TradeFutures { common, .. }
             | Self::Defi { common, .. }
-            | Self::AssetSell { common, .. } => common,
+            | Self::AssetSell { common, .. }
+            | Self::Adjustment { common, .. } => common,
         }
     }
 
@@ -605,6 +631,25 @@ impl TransactionInput {
                 fee: fee_of(fee),
                 price: common.stamp(),
             }),
+            Self::Adjustment {
+                common,
+                store_id,
+                lines,
+            } => Transaction::Adjustment(AdjustmentTx {
+                meta: common.meta(),
+                store_id: store_id.clone(),
+                lines: lines
+                    .iter()
+                    .map(|line| AdjustmentLine {
+                        asset: line.asset.to_asset(),
+                        // Filled in from the ledger when it is saved.
+                        before: Amount::ZERO,
+                        after: line.actual,
+                        price: PriceStamp::default(),
+                    })
+                    .collect(),
+                fee: None,
+            }),
         }
     }
 }
@@ -646,7 +691,7 @@ impl TransactionKinds {
             special: allowed
                 .iter()
                 .copied()
-                .filter(|tx_kind| !tx_kind.is_verb())
+                .filter(|tx_kind| !tx_kind.is_verb() && tx_kind.in_form())
                 .collect(),
             default: default_kind(kind),
         }
