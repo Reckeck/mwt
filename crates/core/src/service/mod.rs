@@ -1007,6 +1007,49 @@ impl UnlockedVault {
         Ok(tx)
     }
 
+    /// Save several operations as one movement of money (an exchange split
+    /// between recipients, a P2P deal): all join one chain — `flow_id`, or a
+    /// new one — and either all are saved or none is.
+    pub fn add_linked_transactions(
+        &mut self,
+        txs: Vec<Transaction>,
+        flow_id: Option<&str>,
+    ) -> Result<Vec<Transaction>> {
+        if txs.is_empty() {
+            return Err(Error::InvalidInput("nothing to save".into()));
+        }
+        let flow = flow_id
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let backup = self.doc.clone();
+        let result = (|| -> Result<Vec<Transaction>> {
+            let mut saved = Vec::with_capacity(txs.len());
+            for mut tx in txs {
+                tx.meta_mut().flow_id = Some(flow.clone());
+                tx.meta_mut().id = uuid::Uuid::new_v4().to_string();
+                self.prepare_transaction(&mut tx)?;
+                self.doc.transactions.push(tx.clone());
+                // The next one sees this one's balances, as if saved in turn.
+                self.recompute_holdings();
+                saved.push(tx);
+            }
+            Ok(saved)
+        })();
+        match result {
+            Ok(saved) => {
+                self.persist()?;
+                Ok(saved)
+            }
+            Err(err) => {
+                self.doc = backup;
+                self.recompute_holdings();
+                Err(err)
+            }
+        }
+    }
+
     /// Replace a transaction entirely. Its id and origin are kept: an edit
     /// changes what happened, not where the record came from.
     pub fn update_transaction(&mut self, id: &str, mut tx: Transaction) -> Result<Transaction> {
@@ -3968,6 +4011,39 @@ mod import_tests {
         assert_eq!(vault.unified_account_of(&store), ids[1]);
         // Trades on the wallet or any of its accounts go to the unified one.
         assert_eq!(vault.unified_account_of(ids[1].as_deref().unwrap()), ids[1]);
+    }
+
+    #[test]
+    fn linked_operations_share_a_chain_and_fail_together() {
+        use crate::service::test_support::{amount, empty_vault, holding_of, income, usd};
+        let (_dir, mut vault) = empty_vault();
+        let cash = vault.doc.stores[0].id.clone();
+        let saved = vault
+            .add_linked_transactions(
+                vec![income(&cash, "10", "a"), income(&cash, "5", "b")],
+                None,
+            )
+            .unwrap();
+        assert_eq!(saved.len(), 2);
+        let flow = saved[0].meta().flow_id.clone();
+        assert!(flow.is_some());
+        assert_eq!(saved[1].meta().flow_id, flow);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("15"));
+
+        let mut broken = income(&cash, "1", "c");
+        broken.meta_mut().categories = vec!["no-such-category".into()];
+        let before = vault.doc.transactions.len();
+        assert!(
+            vault
+                .add_linked_transactions(vec![income(&cash, "3", "d"), broken], None)
+                .is_err()
+        );
+        assert_eq!(
+            vault.doc.transactions.len(),
+            before,
+            "none of them is saved"
+        );
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("15"));
     }
 
     #[test]

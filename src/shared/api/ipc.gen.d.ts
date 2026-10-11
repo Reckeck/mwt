@@ -8,6 +8,15 @@ type Amount = string; // rust_decimal money — always a decimal string
 type AccountRef = { "store": string } | { "contact": { contact_id: string, account_id: string | null, } } | { "raw": string };
 
 /**
+ * Several operations saved as one chain: all or none.
+ */
+type AddLinkedTransactionsInput = { transactions: Array<TransactionInput>, 
+/**
+ * Join this chain; `None` starts a new one.
+ */
+flow_id: string | null, };
+
+/**
  * Credit (positive) or spend (negative) points of a programme.
  */
 type AdjustPointsInput = { store_id: string, delta: Amount, comment: string, 

@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Star } from 'lucide-vue-next'
+import { Search, Star } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
+import { Checkbox } from '@/shared/ui/checkbox'
+import { Switch } from '@/shared/ui/switch'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
@@ -54,6 +56,15 @@ watch(open, (isOpen) => {
   active.value = goal?.active ?? true
 })
 
+/** The wallet list is long: a search narrows it, the chosen ones stay on top. */
+const storeSearch = ref('')
+const shownNodes = computed(() => {
+  const needle = storeSearch.value.trim().toLowerCase()
+  return liveNodes.value
+    .filter((node) => !needle || node.path.join(' ').toLowerCase().includes(needle))
+    .sort((left, right) => Number(storeIds.value.includes(right.store.id)) - Number(storeIds.value.includes(left.store.id)))
+})
+
 function toggleStore(id: string) {
   storeIds.value = storeIds.value.includes(id)
     ? storeIds.value.filter((entry) => entry !== id)
@@ -99,20 +110,18 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.goal ? t('goal.edit') : t('goal.new')" size="lg">
-    <form id="goal-form" class="@container grid gap-4" @submit.prevent="valid && save.mutate()">
-      <div class="grid gap-3 @sm:grid-cols-[1fr_9rem_8rem]">
-        <div class="grid gap-1.5">
-          <Label for="goal-name">{{ t('goal.name') }}</Label>
-          <Input id="goal-name" v-model="name" :placeholder="t('goal.namePlaceholder')" />
-        </div>
+    <form id="goal-form" class="@container grid gap-5" @submit.prevent="valid && save.mutate()">
+      <div class="grid gap-1.5">
+        <Label for="goal-name">{{ t('goal.name') }}</Label>
+        <Input id="goal-name" v-model="name" :placeholder="t('goal.namePlaceholder')" />
+      </div>
+
+      <div class="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_11rem]">
         <div class="grid gap-1.5">
           <Label for="goal-target">{{ t('goal.target') }}</Label>
           <AmountInput id="goal-target" v-model="target" />
         </div>
-        <div class="grid gap-1.5">
-          <Label for="goal-currency">{{ t('goal.currency') }}</Label>
-          <CurrencyPicker id="goal-currency" v-model="currency" />
-        </div>
+        <CurrencyPicker id="goal-currency" v-model="currency" :label="t('goal.currency')" />
       </div>
 
       <div class="grid items-start gap-3 @sm:grid-cols-3">
@@ -123,6 +132,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="goal-deadline">{{ t('goal.deadline') }}</Label>
           <Input id="goal-deadline" v-model="deadline" type="date" />
+          <p class="text-xs text-muted-foreground">{{ t('goal.optional') }}</p>
         </div>
         <div class="grid gap-1.5">
           <Label for="goal-commitment">{{ t('goal.commitment') }}</Label>
@@ -139,7 +149,7 @@ const save = useMutation({
             type="button"
             :aria-pressed="priority === level"
             :aria-label="String(level)"
-            class="rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             @click="priority = level"
           >
             <Star class="size-5" :class="level <= priority ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'" />
@@ -147,26 +157,47 @@ const save = useMutation({
         </div>
       </div>
 
-      <div class="grid gap-1.5">
-        <Label>{{ t('goal.stores') }}</Label>
+      <div class="grid gap-2" data-tour="goal-stores">
+        <div class="flex items-baseline justify-between gap-2">
+          <Label>{{ t('goal.stores') }}</Label>
+          <span class="text-xs text-muted-foreground">{{ t('goal.storesChosen', { count: storeIds.length }) }}</span>
+        </div>
         <p class="text-xs text-muted-foreground">{{ t('goal.storesHint') }}</p>
-        <div class="grid max-h-48 gap-1 overflow-y-auto rounded-md border border-border p-2">
-          <label v-for="node in liveNodes" :key="node.store.id" class="flex items-center gap-2 text-sm">
+        <div class="overflow-hidden rounded-md border border-border">
+          <div class="relative border-b border-border">
+            <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              type="checkbox"
-              class="size-4 accent-primary"
-              :checked="storeIds.includes(node.store.id)"
-              @change="toggleStore(node.store.id)"
+              v-model="storeSearch"
+              type="search"
+              class="h-9 w-full bg-transparent pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground"
+              :placeholder="t('goal.storesSearch')"
+              :aria-label="t('goal.storesSearch')"
             />
-            {{ node.path.join(' › ') }}
-          </label>
+          </div>
+          <div class="grid max-h-52 gap-0.5 overflow-y-auto p-1">
+            <div
+              v-for="node in shownNodes"
+              :key="node.store.id"
+              class="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm hover:bg-accent"
+            >
+              <Checkbox
+                :id="`goal-store-${node.store.id}`"
+                :model-value="storeIds.includes(node.store.id)"
+                @update:model-value="toggleStore(node.store.id)"
+              />
+              <label :for="`goal-store-${node.store.id}`" class="min-w-0 flex-1 cursor-pointer truncate">
+                {{ node.path.join(' › ') }}
+              </label>
+            </div>
+            <p v-if="!shownNodes.length" class="px-2 py-3 text-center text-xs text-muted-foreground">{{ t('tx.side.noMatches') }}</p>
+          </div>
         </div>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="active" type="checkbox" class="size-4 accent-primary" />
-        {{ t('goal.active') }}
-      </label>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="goal-active">{{ t('goal.active') }}</Label>
+        <Switch id="goal-active" v-model="active" />
+      </div>
     </form>
 
     <template #footer>

@@ -9,4 +9,18 @@ export interface AccountRefPickerProps {
   excludeStoreId?: string | null
   /** Label of the empty choice; without it a side is required. */
   emptyLabel?: string
+  /** `id` of the trigger, for an outer `<Label for>`. */
+  id?: string
+}
+
+/** One row of the list: a title on top, the details under it. */
+export interface AccountOption {
+  /** `store:<id>`, `contact:<id>`, `contact:<id>:<account>`, `raw` or `''`. */
+  value: string
+  title: string
+  detail: string
+  /** Heading the row sits under. */
+  group: string
+  /** Lower-case text the search looks in. */
+  haystack: string
 }

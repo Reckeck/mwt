@@ -26,6 +26,9 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
 
 import { AccountRefPicker } from './ui/account-ref-picker'
+import { SplitRows } from './ui/split-rows'
+import { useAccountAsset } from './model/use-account-asset'
+import { parseDecimal } from '@/shared/lib/decimal'
 import { CategorySelect } from '@/features/category-select'
 import type { TransactionFormProps } from './transaction-form.types'
 import {
@@ -34,7 +37,10 @@ import {
   emptyForm,
   formFromTransaction,
   formToInput,
+  formToInputs,
   isFormComplete,
+  isLinked,
+  missingFields,
   pricedAsset,
   toIsoTimestamp,
 } from './transaction-form.model'
@@ -220,6 +226,84 @@ function swapSides() {
     form.toAmount = amount
   }
 }
+
+/* --- the asset a side starts with, so it is not picked twice --- */
+const fromAccount = useAccountAsset(computed(() => form.from))
+const toAccount = useAccountAsset(computed(() => form.to))
+/** What the form set by itself; a value the user picked is never replaced. */
+const autoSet: Partial<Record<'fromAsset' | 'toAsset' | 'asset' | 'soldAsset', AssetRef>> = {}
+function autoFill(key: 'fromAsset' | 'toAsset' | 'asset' | 'soldAsset', value: AssetRef | null) {
+  if (editing.value || !value) return
+  const current = form[key]
+  if (current && current !== autoSet[key]) return
+  autoSet[key] = value
+  form[key] = value
+}
+// The account money leaves gives its first asset.
+watch(
+  () => [fromAccount.main.value, form.kind] as const,
+  ([main, kind]) => {
+    if (kind === 'convert') autoFill('fromAsset', main)
+    if (kind === 'transfer') autoFill('asset', main)
+  },
+  { immediate: true },
+)
+// Money arriving on a bank or cash account arrives in its currency.
+watch(
+  () => [toAccount.currency.value, form.kind] as const,
+  ([currency, kind]) => {
+    if (kind === 'convert' && toAccount.moneyOnly.value) autoFill('toAsset', currency)
+  },
+  { immediate: true },
+)
+watch(
+  () => [overview.data.value?.positions[0]?.asset ?? null, form.kind] as const,
+  ([main, kind]) => {
+    if (kind === 'trade_spot') autoFill('soldAsset', main)
+  },
+  { immediate: true },
+)
+
+/* --- the rate and the received amount follow each other --- */
+let autoToAmount = ''
+watch(
+  () => [form.fromAmount, form.rate] as const,
+  ([give, rate]) => {
+    if (form.kind !== 'convert' || editing.value) return
+    const amount = Number(parseDecimal(give) ?? Number.NaN)
+    const price = Number(parseDecimal(rate) ?? Number.NaN)
+    if (!(amount > 0 && price > 0)) return
+    if (form.toAmount.trim() && form.toAmount !== autoToAmount) return
+    autoToAmount = String(Number((amount * price).toFixed(8)))
+    form.toAmount = autoToAmount
+  },
+)
+/** «1 USDT = 92.5 RUB» from the two amounts, when no rate was typed. */
+const impliedRate = computed(() => {
+  if (form.kind !== 'convert' || form.rate.trim()) return ''
+  const give = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
+  const got = Number(parseDecimal(form.toAmount) ?? Number.NaN)
+  if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return ''
+  const rate = got / give
+  return `1 ${form.fromAsset.symbol} = ${Number(rate.toPrecision(8))} ${form.toAsset.symbol}`
+})
+
+/* --- P2P: the money goes to a person and comes back from them --- */
+function pickConvertMode(value: unknown) {
+  if (value !== 'direct' && value !== 'p2p') return
+  form.convertMode = value
+  // Through someone, both ends are your own accounts.
+  if (value === 'p2p' && form.to && !('store' in form.to)) form.to = null
+}
+
+/** What is still missing, said under the form. */
+const missing = computed(() => (props.template || props.disabled ? [] : missingFields(form)))
+const linked = computed(() => !props.template && isLinked(form))
+const giveLeft = computed(() => {
+  if (form.kind !== 'convert' || !form.extra.length) return ''
+  const total = form.extra.reduce((sum, row) => sum + Number(parseDecimal(row.give) ?? 0), Number(parseDecimal(form.fromAmount) ?? 0))
+  return form.fromAsset ? `${Number(total.toFixed(8))} ${form.fromAsset.symbol}` : ''
+})
 
 // A conversion defaults to staying on this wallet (a bank's currency exchange).
 watch(
@@ -558,7 +642,15 @@ const preview = useQuery({
 const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
 
 const save = useMutation({
-  mutationFn: () => {
+  mutationFn: async () => {
+    if (linked.value && !props.transaction) {
+      const inputs = formToInputs(form)
+      if (!inputs) throw { code: 'INVALID_INPUT', message: t('form.assetRequired') }
+      const saved = await call<Transaction[]>('add_linked_transactions', {
+        input: { transactions: inputs, flow_id: form.flowId.trim() || null } satisfies AddLinkedTransactionsInput,
+      })
+      return saved[0]
+    }
     const input = formToInput(form)
     if (!input) throw { code: 'INVALID_INPUT', message: t('form.assetRequired') }
     return props.transaction
@@ -566,7 +658,13 @@ const save = useMutation({
       : call<Transaction>('add_transaction', { input })
   },
   onSuccess: (tx) => {
-    toast.success(editing.value ? t('tx.updated') : t('form.saved'))
+    toast.success(
+      editing.value
+        ? t('tx.updated')
+        : linked.value
+          ? t('tx.split.saved', { count: form.extra.length + 1 })
+          : t('form.saved'),
+    )
     for (const queryKey of STALE_KEYS) void queryClient.invalidateQueries({ queryKey })
     if (!editing.value) Object.assign(form, emptyForm(props.storeId, form.kind), { kind: form.kind, asset: form.asset })
     lookup.reset()
@@ -667,6 +765,7 @@ const verbLabel = (kind: TxKind) =>
         <Label>{{ form.kind === 'topup' ? t('tx.field.fromWhom') : t('tx.field.toWhom') }}</Label>
         <AccountRefPicker v-model="form.counterpart" :stores="false" :empty-label="t('tx.side.unspecified')" />
       </div>
+      <SplitRows v-if="form.kind === 'topup' && !props.template && !isProperty" v-model="form.extra" kind="topup" mode="direct" />
     </template>
 
     <!-- Transfer: one asset between two places -->
@@ -701,18 +800,39 @@ const verbLabel = (kind: TxKind) =>
       </div>
     </template>
 
-    <!-- Convert: give one asset, receive another -->
+    <!-- Convert: give one asset, receive another — straight or through someone (P2P) -->
     <template v-else-if="form.kind === 'convert'">
+      <ToggleGroup
+        v-if="!props.template"
+        type="single"
+        variant="outline"
+        size="sm"
+        class="w-fit"
+        :spacing="1"
+        :model-value="form.convertMode"
+        :aria-label="t('tx.p2p.mode')"
+        data-tour="tx-convert-mode"
+        @update:model-value="pickConvertMode"
+      >
+        <ToggleGroupItem value="direct">{{ t('tx.p2p.direct') }}</ToggleGroupItem>
+        <ToggleGroupItem value="p2p">{{ t('tx.p2p.through') }}</ToggleGroupItem>
+      </ToggleGroup>
+      <p v-if="form.convertMode === 'p2p'" class="text-xs text-muted-foreground">{{ t('tx.p2p.hint') }}</p>
+
       <div class="grid gap-3 @sm:grid-cols-3">
         <div class="grid gap-1.5">
-          <Label>{{ t('tx.field.give') }}</Label>
-          <AccountRefPicker v-model="form.from" />
+          <Label>{{ form.convertMode === 'p2p' ? t('tx.p2p.from') : t('tx.field.give') }}</Label>
+          <AccountRefPicker v-model="form.from" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
         </div>
         <AssetInput v-model="form.fromAsset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
-          <Label for="tx-from-amount">{{ t('form.amount') }}</Label>
+          <Label for="tx-from-amount">{{ form.extra.length ? t('tx.split.giveMain') : t('form.amount') }}</Label>
           <AmountInput id="tx-from-amount" v-model="form.fromAmount" />
         </div>
+      </div>
+      <div v-if="form.convertMode === 'p2p'" class="grid gap-1.5">
+        <Label>{{ t('tx.p2p.via') }}</Label>
+        <AccountRefPicker v-model="form.via" :stores="false" />
       </div>
       <div class="flex justify-center">
         <Button type="button" variant="ghost" size="icon" :title="t('tx.field.swap')" :aria-label="t('tx.field.swap')" @click="swapSides">
@@ -721,8 +841,8 @@ const verbLabel = (kind: TxKind) =>
       </div>
       <div class="grid gap-3 @sm:grid-cols-3">
         <div class="grid gap-1.5">
-          <Label>{{ t('tx.field.receive') }}</Label>
-          <AccountRefPicker v-model="form.to" />
+          <Label>{{ form.convertMode === 'p2p' ? t('tx.p2p.receiveTo') : t('tx.field.receive') }}</Label>
+          <AccountRefPicker v-model="form.to" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
         </div>
         <AssetInput v-model="form.toAsset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
@@ -730,11 +850,18 @@ const verbLabel = (kind: TxKind) =>
           <AmountInput id="tx-to-amount" v-model="form.toAmount" />
         </div>
       </div>
+      <p v-if="toAccount.moneyOnly.value && form.toAsset" class="text-xs text-muted-foreground">
+        {{ t('tx.toCurrencyHint', { code: form.toAsset.symbol }) }}
+      </p>
       <div class="grid gap-1.5">
         <Label for="tx-rate">{{ t('tx.field.rate') }}</Label>
-        <AmountInput id="tx-rate" v-model="form.rate" />
-        <p class="text-xs text-muted-foreground">{{ t('tx.field.rateHint') }}</p>
+        <AmountInput id="tx-rate" v-model="form.rate" :placeholder="impliedRate" />
+        <p class="text-xs text-muted-foreground">{{ impliedRate || t('tx.field.rateHint') }}</p>
       </div>
+      <template v-if="!props.template">
+        <SplitRows v-model="form.extra" kind="convert" :mode="form.convertMode" :give-asset="form.fromAsset" />
+        <p v-if="giveLeft" class="text-xs text-muted-foreground">{{ t('tx.split.giveTotal', { total: giveLeft }) }}</p>
+      </template>
     </template>
 
     <!-- Spot trade -->
@@ -943,6 +1070,14 @@ const verbLabel = (kind: TxKind) =>
         <Textarea id="tx-comment" v-model="form.comment" rows="1" :placeholder="t('form.commentHint')" />
       </div>
     </div>
+
+    <p
+      v-if="missing.length"
+      class="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+      data-tour="tx-missing"
+    >
+      {{ t('tx.missing.title') }}: {{ missing.map((key) => t(`tx.missing.${key}`)).join(', ') }}
+    </p>
 
     <TxPreviewCard
       v-if="debouncedDraft"

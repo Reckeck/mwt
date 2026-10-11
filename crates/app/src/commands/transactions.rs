@@ -1,8 +1,8 @@
 use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{
-    AdjustmentDraftInput, PreviewTransactionInput, TransactionInput, TransactionKinds,
-    UpdateTransactionInput,
+    AddLinkedTransactionsInput, AdjustmentDraftInput, PreviewTransactionInput, TransactionInput,
+    TransactionKinds, UpdateTransactionInput,
 };
 use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
@@ -110,6 +110,34 @@ pub async fn update_transaction(
             .map_err(err_to_string)?
     };
     enrich_in_background(&app, saved.meta().id.clone());
+    Ok(saved)
+}
+
+/// Several operations as one chain (an exchange split between recipients,
+/// a P2P deal): all saved, or none.
+#[tauri::command]
+pub async fn add_linked_transactions(
+    input: AddLinkedTransactionsInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<Transaction>, String> {
+    let saved = {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_mut().unwrap();
+        let mut txs = Vec::with_capacity(input.transactions.len());
+        for mut draft in input.transactions {
+            vault
+                .resolve_input_price(&mut draft)
+                .map_err(err_to_string)?;
+            txs.push(draft.to_transaction());
+        }
+        vault
+            .add_linked_transactions(txs, input.flow_id.as_deref())
+            .map_err(err_to_string)?
+    };
+    for tx in &saved {
+        enrich_in_background(&app, tx.meta().id.clone());
+    }
     Ok(saved)
 }
 
