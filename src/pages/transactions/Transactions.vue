@@ -93,7 +93,7 @@ function rowActions(tx: Transaction): UiAction[] {
 </script>
 
 <template>
-  <div class="grid gap-6 @container">
+  <div class="grid gap-4 @container">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <TransactionFilterBar v-model="filter" />
 

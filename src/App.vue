@@ -21,6 +21,8 @@ useLocale()
 // rendered. Vault settings, by contrast, need an unlocked vault and load later.
 if (!settingsStore.appLoaded) {
   settingsStore.loadApp().catch(() => {})
+  // Pickers open instantly when the catalog is already here; the backend serves a fresh cache without the network.
+  settingsStore.loadCurrencies().catch(() => {})
 }
 
 router.beforeEach(async (to) => {

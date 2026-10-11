@@ -66,7 +66,7 @@ const createOpen = ref(false)
 </script>
 
 <template>
-  <Card v-if="!hidden && !allDone && tree.isSuccess.value">
+  <Card size="sm" v-if="!hidden && !allDone && tree.isSuccess.value">
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <p class="font-medium">{{ t('onboarding.title') }}</p>

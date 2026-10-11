@@ -55,7 +55,7 @@ function openWallet(created: Store) {
 </script>
 
 <template>
-  <div class="grid gap-6 @container">
+  <div class="grid gap-4 @container">
     <div class="flex items-center justify-between gap-4">
       <p class="text-sm text-muted-foreground">{{ t('stores.title') }}</p>
       <Button @click="createDialogOpen = true">

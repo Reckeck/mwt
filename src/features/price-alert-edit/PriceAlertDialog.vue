@@ -4,16 +4,16 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { AssetInput } from '@/entities/asset'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
-import { useSettingsStore } from '@/shared/store/settings'
 
 import type { PriceAlertDialogProps } from './price-alert-edit.types'
 
@@ -22,7 +22,6 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
-const settings = useSettingsStore()
 
 const asset = ref<AssetRef | null>(null)
 const condition = ref<AlertCondition>('above')
@@ -84,13 +83,11 @@ const save = useMutation({
         </div>
         <div class="grid gap-1.5">
           <Label for="alert-price">{{ t('alert.price') }}</Label>
-          <Input id="alert-price" v-model="price" inputmode="decimal" />
+          <AmountInput id="alert-price" v-model="price" />
         </div>
         <div class="grid gap-1.5">
           <Label for="alert-currency">{{ t('alert.currency') }}</Label>
-          <Select id="alert-currency" v-model="currency">
-            <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-          </Select>
+          <CurrencyPicker id="alert-currency" v-model="currency" />
         </div>
       </div>
       <label class="flex items-center gap-2 text-sm">

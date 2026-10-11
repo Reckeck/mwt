@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { formatMoney } from '@/shared/lib/format'
@@ -22,7 +23,7 @@ const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.use
 </script>
 
 <template>
-  <Card v-if="statuses.data.value?.length">
+  <Card size="sm" v-if="statuses.data.value?.length">
     <template #header>
       <RouterLink :to="{ name: 'planning-budgets' }" class="text-sm text-muted-foreground hover:text-foreground">
         {{ t('budget.dashboardTitle') }}
@@ -45,5 +46,9 @@ const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.use
         </div>
       </li>
     </ul>
+  </Card>
+  <Card size="sm" v-else-if="statuses.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <Card size="sm" v-else>
+    <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
   </Card>
 </template>

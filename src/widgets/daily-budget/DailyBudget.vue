@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 
@@ -21,7 +22,7 @@ const unset = computed(
 </script>
 
 <template>
-  <Card v-if="data">
+  <Card size="sm" v-if="data">
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm text-muted-foreground">{{ t('dailyBudget.title') }}</p>
@@ -67,4 +68,6 @@ const unset = computed(
       </dl>
     </div>
   </Card>
+  <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

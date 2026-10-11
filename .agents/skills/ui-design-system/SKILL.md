@@ -24,9 +24,9 @@ button/input, and drop any `@lucide/vue` it adds — the project uses
 formGap: 1.5      // label → input
 formFieldGap: 4   // field → field
 formSectionGap: 6 // section → section
-cardPadding: 4    // p-4
-cardPaddingLg: 6  // p-6
-sectionGap: 6     // gap-6
+cardPadding: 3    // p-3 (Card size="md": p-3 sm:p-4)
+cardPaddingLg: 4  // p-4
+sectionGap: 4     // gap-4
 btnGap: 2
 inputGap: 2
 iconSize: 4       // 16px

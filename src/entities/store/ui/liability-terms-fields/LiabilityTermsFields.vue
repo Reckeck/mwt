@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -35,17 +36,16 @@ function setDay(raw: string | number) {
     </div>
     <div class="grid gap-1.5">
       <Label for="liability-rate">{{ t('liability.rate') }}</Label>
-      <Input id="liability-rate" inputmode="decimal" :model-value="text(terms.rate)" @update:model-value="(value) => setAmount('rate', value)" />
+      <AmountInput id="liability-rate" :model-value="text(terms.rate)" @update:model-value="(value) => setAmount('rate', value)" />
     </div>
     <div class="grid gap-1.5">
       <Label for="liability-limit">{{ t('liability.limit') }}</Label>
-      <Input id="liability-limit" inputmode="decimal" :model-value="text(terms.limit)" @update:model-value="(value) => setAmount('limit', value)" />
+      <AmountInput id="liability-limit" :model-value="text(terms.limit)" @update:model-value="(value) => setAmount('limit', value)" />
     </div>
     <div class="grid gap-1.5">
       <Label for="liability-payment">{{ t('liability.monthlyPayment') }}</Label>
-      <Input
+      <AmountInput
         id="liability-payment"
-        inputmode="decimal"
         :model-value="text(terms.monthly_payment)"
         @update:model-value="(value) => setAmount('monthly_payment', value)"
       />

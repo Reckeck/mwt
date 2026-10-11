@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { parseError } from '@/shared/api/ipc'
@@ -77,20 +78,19 @@ function saveRate() {
     <div class="grid gap-4">
       <div class="grid gap-1.5">
         <Label for="savings-rate">{{ t('settings.savingsRate') }}</Label>
-        <Input id="savings-rate" v-model="percent" inputmode="decimal" class="w-32" @change="saveRate" />
+        <AmountInput id="savings-rate" v-model="percent" class="w-32" @change="saveRate" />
         <p class="text-xs text-muted-foreground">{{ t('settings.savingsRateHint') }}</p>
       </div>
 
       <div class="grid gap-1.5">
         <Label for="budget-currency">{{ t('settings.budgetCurrency') }}</Label>
-        <Select
+        <CurrencyPicker
           id="budget-currency"
+          allow-empty
+          :placeholder="t('settings.budgetCurrencyBase', { currency: settings.baseCurrency.toUpperCase() })"
           :model-value="settings.vault?.budget_currency ?? ''"
           @update:model-value="(value) => persist({ budget_currency: String(value) })"
-        >
-          <option value="">{{ t('settings.budgetCurrencyBase', { currency: settings.baseCurrency.toUpperCase() }) }}</option>
-          <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-        </Select>
+        />
         <p class="text-xs text-muted-foreground">{{ t('settings.budgetCurrencyHint') }}</p>
       </div>
 

@@ -5,11 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Star } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -106,13 +107,11 @@ const save = useMutation({
         </div>
         <div class="grid gap-1.5">
           <Label for="goal-target">{{ t('goal.target') }}</Label>
-          <Input id="goal-target" v-model="target" inputmode="decimal" />
+          <AmountInput id="goal-target" v-model="target" />
         </div>
         <div class="grid gap-1.5">
           <Label for="goal-currency">{{ t('goal.currency') }}</Label>
-          <Select id="goal-currency" v-model="currency">
-            <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-          </Select>
+          <CurrencyPicker id="goal-currency" v-model="currency" />
         </div>
       </div>
 
@@ -127,7 +126,7 @@ const save = useMutation({
         </div>
         <div class="grid gap-1.5">
           <Label for="goal-commitment">{{ t('goal.commitment') }}</Label>
-          <Input id="goal-commitment" v-model="commitment" inputmode="decimal" :placeholder="t('goal.optional')" />
+          <AmountInput id="goal-commitment" v-model="commitment" :placeholder="t('goal.optional')" />
         </div>
       </div>
 

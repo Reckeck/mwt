@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
@@ -43,7 +44,7 @@ const weekday = (date: string) =>
 </script>
 
 <template>
-  <Card v-if="current.data.value">
+  <Card size="sm" v-if="current.data.value">
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <RouterLink :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground hover:text-foreground">
@@ -68,4 +69,6 @@ const weekday = (date: string) =>
       </div>
     </div>
   </Card>
+  <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

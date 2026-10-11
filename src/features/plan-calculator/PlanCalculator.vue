@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AssetInput } from '@/entities/asset'
-import { Input } from '@/shared/ui/input'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call, parseError } from '@/shared/api/ipc'
@@ -203,29 +203,29 @@ defineExpose({ canApply, apply })
       <AssetInput v-if="mode === 'converter'" v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />
       <div v-else class="grid gap-1.5">
         <Label>{{ t('calc.targetPrice') }}</Label>
-        <Input v-model="targetPrice" inputmode="decimal" :placeholder="t('calc.targetPriceHint')" />
+        <AmountInput v-model="targetPrice" :placeholder="t('calc.targetPriceHint')" />
       </div>
     </div>
 
     <div class="grid gap-3 @sm:grid-cols-3">
       <div class="grid gap-1.5">
         <Label>{{ t(mode === 'converter' ? 'calc.amount' : 'calc.quantity') }}</Label>
-        <Input v-model="amount" inputmode="decimal" :placeholder="t('calc.amountHint')" />
+        <AmountInput v-model="amount" :placeholder="t('calc.amountHint')" />
       </div>
       <div class="grid gap-1.5">
         <Label>{{ t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice') }}</Label>
-        <Input v-model="priceIn" inputmode="decimal" placeholder="0" />
+        <AmountInput v-model="priceIn" placeholder="0" />
       </div>
       <div class="grid gap-1.5">
         <Label>{{ t(mode === 'converter' ? 'calc.priceOut' : 'calc.stopPrice') }}</Label>
-        <Input v-if="mode === 'converter'" v-model="priceOut" inputmode="decimal" placeholder="0" />
-        <Input v-else v-model="stopPrice" inputmode="decimal" :placeholder="t('calc.stopPriceHint')" />
+        <AmountInput v-if="mode === 'converter'" v-model="priceOut" placeholder="0" />
+        <AmountInput v-else v-model="stopPrice" :placeholder="t('calc.stopPriceHint')" />
       </div>
     </div>
 
     <div class="grid gap-1.5">
       <Label>{{ t('calc.feePct') }}</Label>
-      <Input v-model="feePct" inputmode="decimal" placeholder="0.1" class="max-w-28" />
+      <AmountInput v-model="feePct" placeholder="0.1" class="max-w-28" />
     </div>
 
     <p v-if="impliedRate && mode === 'converter'" class="text-xs text-muted-foreground">

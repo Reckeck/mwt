@@ -24,7 +24,7 @@ const tab = computed({
 </script>
 
 <template>
-  <div class="grid gap-6 @container">
+  <div class="grid gap-4 @container">
     <Tabs v-model="tab" :tabs="tabs" />
     <RouterView />
   </div>

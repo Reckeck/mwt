@@ -42,7 +42,7 @@ const filter = reactive<ReportFilter>({
 </script>
 
 <template>
-  <div class="grid gap-6 @container">
+  <div class="grid gap-4 @container">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <Tabs v-model="tab" :tabs="tabs" />
       <ReportExportButton :kind="kind" :filter="filter" />

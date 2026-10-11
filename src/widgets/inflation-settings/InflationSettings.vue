@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -27,7 +27,6 @@ watch(
   { immediate: true, deep: true },
 )
 
-const free = computed(() => settings.allCurrencies.filter((code) => !rows.value.some(([known]) => known === code)))
 const adding = ref('')
 
 async function persist() {
@@ -67,9 +66,8 @@ function remove(index: number) {
     <div class="grid gap-2">
       <div v-for="(row, index) in rows" :key="row[0]" class="flex items-center gap-2">
         <span class="w-16 text-sm font-medium uppercase">{{ row[0] }}</span>
-        <Input
+        <AmountInput
           v-model="row[1]"
-          inputmode="decimal"
           class="w-24"
           :aria-label="t('inflation.rateFor', { currency: row[0].toUpperCase() })"
           @change="persist"
@@ -86,10 +84,9 @@ function remove(index: number) {
         </Button>
       </div>
       <div class="flex items-center gap-2">
-        <Select v-model="adding" class="w-32" :aria-label="t('inflation.add')">
-          <option value="" disabled>{{ t('inflation.pick') }}</option>
-          <option v-for="code in free" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-        </Select>
+        <div class="w-48">
+          <CurrencyPicker v-model="adding" :kinds="['fiat']" :placeholder="t('inflation.pick')" />
+        </div>
         <Button variant="outline" size="sm" :disabled="!adding" @click="add">
           <Plus class="size-4" />
           {{ t('inflation.add') }}

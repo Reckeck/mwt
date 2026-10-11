@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
-import { CurrencySelect } from '@/entities/currency'
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -13,6 +14,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+const queryClient = useQueryClient()
 
 /** Currency staged in the picker, waiting for the Add button. */
 const pickedFavorite = ref('')
@@ -59,7 +61,8 @@ async function persist(patch: Partial<UpdateAppSettingsInput>) {
     toast.success(t('settings.saved'))
   } catch (err) {
     toast.error(t('settings.saveFailed'), { description: parseError(err).message })
-    await settingsStore.loadVault().catch(() => {
+    // These are app settings: re-read them, not the vault's.
+    await settingsStore.loadApp().catch(() => {
       /* the error above is the one worth showing */
     })
   }
@@ -80,15 +83,17 @@ async function onLocaleChange(next: string) {
   }
 }
 
-function onBaseCurrencyChange(next: string) {
+/** Every figure in the base currency changes with it; nothing cached may survive. */
+async function onBaseCurrencyChange(next: string) {
   if (!next || next === settingsStore.baseCurrency) return
-  void persist({ base_currency: next })
+  await persist({ base_currency: next })
+  await queryClient.invalidateQueries()
 }
 
 function addFavorite() {
   const code = pickedFavorite.value.trim().toLowerCase()
   if (!code) return
-  if (favorites.value.includes(code.toUpperCase())) {
+  if (code === settingsStore.baseCurrency || favorites.value.some((entry) => entry.toLowerCase() === code)) {
     pickedFavorite.value = ''
     return
   }
@@ -104,7 +109,7 @@ function removeFavorite(code: string) {
 </script>
 
 <template>
-  <div class="grid gap-6">
+  <div class="grid gap-4">
     <!-- Theme -->
     <div class="grid gap-1.5">
       <Label>{{ t('settings.theme.title') }}</Label>
@@ -137,7 +142,7 @@ function removeFavorite(code: string) {
     </div>
 
     <!-- Base currency -->
-    <CurrencySelect
+    <CurrencyPicker
       :label="t('settings.baseCurrency')"
       :model-value="settingsStore.baseCurrency"
       @update:model-value="onBaseCurrencyChange"
@@ -164,7 +169,7 @@ function removeFavorite(code: string) {
         </span>
       </div>
       <div class="flex items-end gap-2">
-        <CurrencySelect
+        <CurrencyPicker
           v-model="pickedFavorite"
           class="flex-1"
           :placeholder="t('settings.favoriteCurrencyPlaceholder')"

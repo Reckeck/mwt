@@ -4,11 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
@@ -116,13 +117,11 @@ const save = useMutation({
         </div>
         <div class="grid gap-1.5">
           <Label for="budget-limit">{{ t('budget.limit') }}</Label>
-          <Input id="budget-limit" v-model="limit" inputmode="decimal" />
+          <AmountInput id="budget-limit" v-model="limit" />
         </div>
         <div class="grid gap-1.5">
           <Label for="budget-currency">{{ t('budget.currency') }}</Label>
-          <Select id="budget-currency" v-model="currency">
-            <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-          </Select>
+          <CurrencyPicker id="budget-currency" v-model="currency" />
         </div>
       </div>
 

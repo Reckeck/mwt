@@ -38,7 +38,7 @@ const ICONS = {
 </script>
 
 <template>
-  <Card>
+  <Card size="sm">
     <template #header>
       <p class="text-sm text-muted-foreground">{{ t('upcoming.title') }}</p>
     </template>

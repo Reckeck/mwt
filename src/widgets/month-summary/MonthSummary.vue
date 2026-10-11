@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 
@@ -27,7 +28,7 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <Card v-if="data">
+  <Card size="sm" v-if="data">
     <template #header>
       <p class="text-sm text-muted-foreground">{{ t('monthSummary.title') }}</p>
     </template>
@@ -48,4 +49,6 @@ const rows = computed(() => {
       {{ t('monthSummary.moves', { in: money(data.budget_in), out: money(data.budget_out) }) }}
     </p>
   </Card>
+  <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>
