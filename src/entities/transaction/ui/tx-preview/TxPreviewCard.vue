@@ -36,9 +36,16 @@ const flowText = computed(() => {
   return t(`txPreview.flow.${flow}`)
 })
 
+/**
+ * A refusal is shown only when it is about money (binding, funds, limits); a
+ * missing comment or category is the form's own business while it is filled in.
+ */
+const MONEY_CODES = new Set(['BINDING_MISMATCH', 'INSUFFICIENT_FUNDS', 'ARCHIVED', 'WALLET_NOT_APPLICABLE'])
 const errorText = computed(() => {
   const raw = props.preview?.error
-  return raw ? codeErrorMessage(parseError(raw), t) : null
+  if (!raw) return null
+  const parsed = parseError(raw)
+  return MONEY_CODES.has(parsed.code) ? codeErrorMessage(parsed, t) : null
 })
 
 const warningTexts = computed(() =>
@@ -54,7 +61,7 @@ const warningTexts = computed(() =>
 <template>
   <section
     v-if="props.preview && (rows.length || errorText)"
-    class="grid gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm"
+    class="sticky bottom-0 z-10 grid gap-2 rounded-md border border-border bg-card/95 p-3 text-sm shadow-[0_-8px_16px_-12px_rgba(0,0,0,0.5)] backdrop-blur"
     :aria-busy="props.loading"
     data-tour="tx-preview"
   >

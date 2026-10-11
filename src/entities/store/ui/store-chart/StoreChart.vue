@@ -33,7 +33,8 @@ const axisColor = chartAxisColor(resolved)
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
   tooltip: { trigger: 'axis' },
-  grid: { left: 56, right: 24, top: 16, bottom: 32, containLabel: true },
+  // containLabel already reserves room for the axis labels; extra margins only add empty space.
+  grid: { left: 4, right: 12, top: 12, bottom: 4, containLabel: true },
   xAxis: {
     type: 'time',
     axisLabel: { color: axisColor.value },
