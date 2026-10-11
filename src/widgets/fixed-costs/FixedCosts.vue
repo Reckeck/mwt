@@ -40,9 +40,7 @@ const totals = computed(() => {
   <Card v-if="active.length">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <RouterLink :to="{ name: 'planning-utilities' }" class="text-sm text-muted-foreground hover:text-foreground">
-          {{ t('utilities.dashboardTitle') }}
-        </RouterLink>
+        <span class="text-sm text-muted-foreground">{{ t('utilities.dashboardTitle') }}</span>
         <span class="text-sm tabular-nums">
           {{ totals.map(([currency, sum]) => formatMoney(sum, { decimals: 0, currency })).join(' + ') }}
         </span>
@@ -50,10 +48,14 @@ const totals = computed(() => {
     </template>
     <ul class="grid gap-1.5 text-sm">
       <li v-for="row in rows" :key="row.item.id" class="flex items-center justify-between gap-2">
-        <span class="flex min-w-0 items-center gap-1.5 truncate">
+        <!-- A bill lives in its property: the row opens that property's utilities. -->
+        <RouterLink
+          :to="{ name: 'wallet-settings', params: { id: row.item.property_id }, query: { tab: 'utilities' } }"
+          class="flex min-w-0 items-center gap-1.5 truncate hover:underline"
+        >
           <CircleAlert v-if="row.anomaly" class="size-3.5 shrink-0 text-destructive" :aria-label="t('utilities.anomaly')" />
           {{ row.item.name }}
-        </span>
+        </RouterLink>
         <span class="shrink-0 tabular-nums text-muted-foreground">
           {{ formatMoney(row.amount, { decimals: 0, currency: row.item.currency }) }}
         </span>

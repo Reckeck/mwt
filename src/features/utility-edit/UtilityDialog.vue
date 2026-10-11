@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -11,7 +12,6 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
-import { categoryLabel } from '@/shared/lib/categories'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -20,7 +20,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { UTILITY_KINDS, type UtilityKindName } from './utility-edit.constants'
 import type { UtilityDialogProps } from './utility-edit.types'
 
-const props = withDefaults(defineProps<UtilityDialogProps>(), { item: null })
+const props = withDefaults(defineProps<UtilityDialogProps>(), { item: null, propertyId: '' })
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
@@ -29,8 +29,8 @@ const settings = useSettingsStore()
 
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
-const fixed = computed(() => (categories.data.value ?? []).filter((entry) => !entry.archived && entry.group === 'fixed'))
+/** Bills belong to a property; only top-level property wallets qualify. */
+const properties = computed(() => nodes.value.filter((node) => node.store.kind === 'property' && !node.store.parent_id))
 const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })
 
 const name = ref('')
@@ -43,6 +43,7 @@ const dueDay = ref('1')
 const automationId = ref('')
 const currency = ref('')
 const storeId = ref('')
+const propertyId = ref('')
 const category = ref('utilities')
 const active = ref(true)
 
@@ -60,6 +61,7 @@ watch(open, (isOpen) => {
   automationId.value = 'housing' in current ? (current.housing.automation_id ?? '') : ''
   currency.value = item?.currency ?? (settings.vault?.budget_currency || settings.baseCurrency)
   storeId.value = item?.store_id ?? ''
+  propertyId.value = item?.property_id || props.propertyId || properties.value[0]?.store.id || ''
   category.value = item?.category ?? (kind.value === 'housing' ? 'rent_mortgage' : 'utilities')
   active.value = item?.active ?? true
 })
@@ -84,7 +86,9 @@ const utilityKind = computed<UtilityKind | null>(() => {
       }
     : null
 })
-const valid = computed(() => name.value.trim() !== '' && utilityKind.value !== null && currency.value !== '')
+const valid = computed(
+  () => name.value.trim() !== '' && utilityKind.value !== null && currency.value !== '' && propertyId.value !== '',
+)
 
 const save = useMutation({
   mutationFn: () => {
@@ -93,6 +97,7 @@ const save = useMutation({
       active: active.value,
       kind: utilityKind.value as UtilityKind,
       currency: currency.value,
+      property_id: propertyId.value,
       store_id: storeId.value || null,
       category: category.value,
     }
@@ -168,15 +173,21 @@ const save = useMutation({
             <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
           </Select>
         </div>
+        <div v-if="!props.propertyId" class="grid gap-1.5">
+          <Label for="utility-property">{{ t('utilities.property') }}</Label>
+          <Select id="utility-property" v-model="propertyId">
+            <option value="" disabled>{{ t('utilities.pickProperty') }}</option>
+            <option v-for="node in properties" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
+          </Select>
+          <p v-if="!properties.length" class="text-xs text-muted-foreground">{{ t('utilities.noProperty') }}</p>
+        </div>
         <div class="grid gap-1.5">
           <Label for="utility-store">{{ t('utilities.store') }}</Label>
           <StoreNodeSelect id="utility-store" v-model="storeId" :nodes="nodes" :empty-label="t('utilities.anyStore')" />
         </div>
         <div class="grid gap-1.5">
           <Label for="utility-category">{{ t('utilities.category') }}</Label>
-          <Select id="utility-category" v-model="category">
-            <option v-for="entry in fixed" :key="entry.key" :value="entry.key">{{ categoryLabel(entry, t) }}</option>
-          </Select>
+          <CategorySelect id="utility-category" v-model="category" :groups="['fixed']" />
         </div>
       </div>
       <label class="flex items-center gap-2 text-sm">

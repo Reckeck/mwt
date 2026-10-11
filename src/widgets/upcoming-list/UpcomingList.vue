@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Bell, CalendarClock, CircleAlert, Home, Landmark } from 'lucide-vue-next'
+import { Bell, CalendarClock, CircleAlert, HandCoins, Home, Landmark } from 'lucide-vue-next'
 
 import { AutomationRunActions } from '@/features/automation-edit'
 import { Card } from '@/shared/ui/card'
@@ -33,6 +33,7 @@ const ICONS = {
   loan_payment: Landmark,
   reminder: Bell,
   rejected_run: CircleAlert,
+  debt: HandCoins,
 } as const
 </script>
 

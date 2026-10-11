@@ -20,7 +20,7 @@ import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { SCHEDULE_KINDS, type ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
 
-const props = withDefaults(defineProps<AutomationDialogProps>(), { automation: null, storeId: '' })
+const props = withDefaults(defineProps<AutomationDialogProps>(), { automation: null, storeId: '', preset: null })
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [automation: Automation] }>()
 
@@ -46,12 +46,12 @@ const template = computed(() => (props.automation?.template as Transaction | und
 watch(open, (isOpen) => {
   if (!isOpen) return
   const automation = props.automation
-  name.value = automation?.name ?? ''
+  name.value = automation?.name ?? (props.preset ? t(`preset.${props.preset.preset}`) : '')
   active.value = automation?.active ?? true
   storeId.value =
     (template.value && txLegs(template.value)[0]?.store_id) ||
     props.storeId ||
-    (liveNodes.value.find((node) => node.store.in_budget) ?? liveNodes.value[0])?.store.id ||
+    (liveNodes.value.find((node) => node.store.purpose === 'everyday') ?? liveNodes.value[0])?.store.id ||
     ''
   const schedule = automation?.schedule ?? { monthly: { day: new Date().getDate() } }
   if ('monthly' in schedule) {
@@ -77,6 +77,13 @@ const schedule = computed<Schedule | null>(() => {
   return Number.isInteger(value) && value >= 1 ? { every_n_days: { days: value } } : null
 })
 
+/** What a preset starts the template as. */
+const initialTx = computed(() =>
+  props.preset && !props.automation
+    ? { kind: props.preset.tx_kind, categories: props.preset.category ? [props.preset.category] : [] }
+    : null,
+)
+
 const form = ref<InstanceType<typeof TransactionForm> | null>(null)
 const valid = computed(
   () => name.value.trim() !== '' && schedule.value !== null && startsAt.value !== '' && Boolean(form.value?.valid),
@@ -89,6 +96,7 @@ const save = useMutation({
     const input: AutomationInput = {
       name: name.value.trim(),
       active: active.value,
+      preset: props.automation?.preset ?? props.preset?.preset ?? null,
       schedule: schedule.value,
       starts_at: dateInputToIso(startsAt.value),
       template: templateInput,
@@ -108,7 +116,11 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.automation ? t('automation.edit') : t('automation.new')" size="lg">
+  <Dialog
+    v-model:open="open"
+    :title="props.automation ? t('automation.edit') : props.preset ? t(`preset.${props.preset.preset}`) : t('automation.new')"
+    size="lg"
+  >
     <div class="@container grid gap-4">
       <div class="grid gap-3 @sm:grid-cols-2">
         <div class="grid gap-1.5">
@@ -164,6 +176,7 @@ const save = useMutation({
         ref="form"
         :store-id="storeId"
         :transaction="template"
+        :initial="initialTx"
         template
         @submit="valid && save.mutate()"
       />

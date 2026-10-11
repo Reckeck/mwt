@@ -35,7 +35,7 @@ const steps = computed(() => [
     done: stores.value.some((node) => node.store.kind === 'liability') || (balances.data.value?.length ?? 0) > 0,
     to: { name: 'stores' },
   },
-  { key: 'savings', done: Number(settings.vault?.savings_rate ?? 0.1) !== 0.1, to: { name: 'settings' } },
+  { key: 'savings', done: Number(settings.vault?.savings_rate ?? 0.1) !== 0.1, to: { name: 'dashboard', query: { settings: 'budget' } } },
   { key: 'operation', done: (txs.data.value?.length ?? 0) > 0, to: { name: 'stores' } },
   { key: 'salary', done: (automations.data.value?.length ?? 0) > 0, to: { name: 'planning-automations' } },
   { key: 'goal', done: (goals.data.value?.length ?? 0) > 0, to: { name: 'planning-goals' } },
