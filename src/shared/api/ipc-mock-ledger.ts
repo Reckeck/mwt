@@ -122,10 +122,9 @@ export function mockKindsFor(kind: StoreKind): TransactionKinds {
   switch (kind) {
     case 'exchange':
       return { verbs, special: ['trade_spot', 'trade_futures'], default: 'trade_spot' }
-    case 'hot_wallet':
-    case 'cold_wallet':
+    case 'crypto':
       return { verbs, special: ['defi'], default: 'transfer' }
-    case 'asset':
+    case 'property':
       return { verbs: ['topup'], special: ['asset_sell'], default: 'topup' }
     case 'liability':
       return { verbs: ['payment', 'transfer'], special: [], default: 'transfer' }

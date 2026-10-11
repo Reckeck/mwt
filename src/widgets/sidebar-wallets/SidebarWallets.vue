@@ -3,9 +3,24 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { ChevronRight, Plus } from 'lucide-vue-next'
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  ChevronsDownUp,
+  Copy,
+  ExternalLink,
+  FolderPlus,
+  Plus,
+  Repeat,
+  Settings2,
+} from 'lucide-vue-next'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { toast } from 'vue-sonner'
 
 import { StoreCreateDialog } from '@/features/store-create'
+import { TransactionCreateDialog } from '@/features/transaction-create'
+import { bindingLabel, useWalletCatalog } from '@/entities/store'
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -21,9 +36,11 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/shared/ui/sidebar'
-import { call, onEvent } from '@/shared/api/ipc'
+import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
+import { call, onEvent, parseError } from '@/shared/api/ipc'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { formatMoney } from '@/shared/lib/format'
-import { getStoreIcon } from '@/shared/lib/store-icons'
+import { getStoreIcon, storeIcon } from '@/shared/lib/store-icons'
 import { STORE_TREE_QUERY_KEY, storeAncestorIds } from '@/shared/lib/store-tree'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -90,42 +107,170 @@ function toggle(id: string) {
   }
 }
 
+/* --- groups: one per wallet kind, in the catalog's order; empty kinds stay hidden --- */
+const catalog = useWalletCatalog()
+
+const groups = computed(() =>
+  (catalog.data.value?.kinds ?? [])
+    .map((info) => ({
+      info,
+      nodes: roots.value.filter((node) => node.store.kind === info.kind),
+    }))
+    .filter((group) => group.nodes.length > 0),
+)
+
+function groupTotal(nodes: StoreTreeNode[]): string {
+  const sum = nodes.filter((node) => !node.store.archived).reduce((acc, node) => acc + Number(node.subtree_base), 0)
+  if (!sum) return ''
+  return formatMoney(sum, { currency: settings.baseCurrency, decimals: 0 })
+}
+
+/** A kind takes another wallet unless it is capped (cash) and the cap is reached. */
+function canAddOfKind(info: WalletKindInfo, count: number): boolean {
+  return info.user_creatable && (info.max_roots === null || count < info.max_roots)
+}
+
 /* --- a new wallet opens in place, then the app goes to it --- */
 const createOpen = ref(false)
+const createKind = ref<StoreKind | null>(null)
+
+function openCreate(kind: StoreKind | null) {
+  createKind.value = kind
+  createOpen.value = true
+}
 
 function openWallet(created: Store) {
   void router.push({ name: 'wallet', params: { id: created.id } })
 }
+
+/* --- right-click menus: everything one can do with a wallet, without opening it --- */
+const queryClient = useQueryClient()
+const subParent = ref<Store | null>(null)
+const subOpen = computed({
+  get: () => subParent.value !== null,
+  set: (value: boolean) => {
+    if (!value) subParent.value = null
+  },
+})
+const txStore = ref('')
+const txOpen = computed({
+  get: () => txStore.value !== '',
+  set: (value: boolean) => {
+    if (!value) txStore.value = ''
+  },
+})
+
+const archive = useMutation({
+  mutationFn: ({ id, archived }: { id: string; archived: boolean }) => call('archive_store', { id, archived }),
+  onSuccess: (_result, { archived }) => {
+    toast.success(archived ? t('wallet.archived') : t('wallet.unarchived'))
+    for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
+  },
+  onError: (err) => toast.error(t('wallet.archiveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
+async function copyName(name: string) {
+  try {
+    await navigator.clipboard.writeText(name)
+    toast.success(t('contacts.copied'))
+  } catch {
+    toast.error(t('contacts.copyFailed'))
+  }
+}
+
+function walletActions(node: StoreTreeNode): UiAction[] {
+  const store = node.store
+  const isCash = store.kind === 'cash' && !store.parent_id
+  const settingsTo = (tab: string) => () =>
+    void router.push({ name: 'wallet-settings', params: { id: store.id }, query: { tab } })
+  return [
+    { id: 'open', label: t('actions.open'), icon: ExternalLink, run: () => void router.push({ name: 'wallet', params: { id: store.id } }) },
+    { id: 'tx', label: t('wallet.addOperation'), icon: Plus, disabled: store.archived ? t('wallet.archivedHint') : false, run: () => (txStore.value = store.id) },
+    { id: 'sub', label: t('stores.newSubAccountShort'), icon: FolderPlus, hidden: Boolean(store.parent_id) || !node.can_add_child, run: () => (subParent.value = store) },
+    { id: 'settings', label: t('walletSettings.nav'), icon: Settings2, separated: true, run: settingsTo('general') },
+    { id: 'automations', label: t('walletSettings.automations'), icon: Repeat, run: settingsTo('automations') },
+    { id: 'copy', label: t('actions.copyName'), icon: Copy, run: () => void copyName(store.name) },
+    {
+      id: 'archive',
+      label: store.archived ? t('stores.unarchive') : t('stores.archive'),
+      icon: store.archived ? ArchiveRestore : Archive,
+      destructive: !store.archived,
+      separated: true,
+      disabled: isCash ? t('errors.CASH_LOCKED') : false,
+      run: () => archive.mutate({ id: store.id, archived: !store.archived }),
+    },
+  ]
+}
+
+function groupActions(info: WalletKindInfo, count: number): UiAction[] {
+  return [
+    {
+      id: 'add',
+      label: t('stores.addOfKind', { kind: t(`stores.kind.${info.kind}`) }),
+      icon: Plus,
+      hidden: !canAddOfKind(info, count),
+      run: () => openCreate(info.kind),
+    },
+    { id: 'collapse', label: t('actions.collapseAll'), icon: ChevronsDownUp, run: collapseAll },
+  ]
+}
+
+function collapseAll() {
+  expanded.value = new Set()
+  try {
+    localStorage.setItem(EXPANDED_KEY, '[]')
+  } catch {
+    // Storage blocked: nothing to remember.
+  }
+}
 </script>
 
 <template>
-  <SidebarGroup>
-    <SidebarGroupLabel>{{ t('nav.wallets') }}</SidebarGroupLabel>
-    <SidebarGroupAction :title="t('nav.addWallet')" @click="createOpen = true">
+  <template v-if="tree.isPending.value">
+    <SidebarGroup>
+      <SidebarGroupLabel>{{ t('nav.wallets') }}</SidebarGroupLabel>
+      <SidebarMenu>
+        <SidebarMenuItem v-for="index in 3" :key="index">
+          <SidebarMenuSkeleton show-icon />
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarGroup>
+  </template>
+
+  <SidebarGroup v-for="group in groups" :key="group.info.kind" :data-tour="`sidebar-group-${group.info.kind}`">
+    <ContextMenu :actions="groupActions(group.info, group.nodes.length)">
+      <SidebarGroupLabel class="flex items-center gap-2">
+        <span class="min-w-0 flex-1 truncate">{{ t(`stores.group.${group.info.kind}`) }}</span>
+        <span v-if="groupTotal(group.nodes)" class="shrink-0 tabular-nums" :class="canAddOfKind(group.info, group.nodes.length) && 'mr-6'">
+          {{ groupTotal(group.nodes) }}
+        </span>
+      </SidebarGroupLabel>
+    </ContextMenu>
+    <SidebarGroupAction
+      v-if="canAddOfKind(group.info, group.nodes.length)"
+      :title="t('stores.addOfKind', { kind: t(`stores.kind.${group.info.kind}`) })"
+      @click="openCreate(group.info.kind)"
+    >
       <Plus />
-      <span class="sr-only">{{ t('nav.addWallet') }}</span>
+      <span class="sr-only">{{ t('stores.addOfKind', { kind: t(`stores.kind.${group.info.kind}`) }) }}</span>
     </SidebarGroupAction>
 
     <SidebarGroupContent>
       <SidebarMenu>
-        <template v-if="tree.isPending.value">
-          <SidebarMenuItem v-for="index in 3" :key="index">
-            <SidebarMenuSkeleton show-icon />
-          </SidebarMenuItem>
-        </template>
-
-        <SidebarMenuItem v-for="node in roots" :key="node.store.id">
-          <SidebarMenuButton
-            as-child
-            :is-active="activeId === node.store.id"
-            :tooltip="node.store.name"
-            :class="cn(node.store.archived && 'opacity-50')"
-          >
-            <RouterLink :to="{ name: 'wallet', params: { id: node.store.id } }">
-              <component :is="getStoreIcon(node.store.kind)" :style="{ color: node.store.color }" />
-              <span>{{ node.store.name }}</span>
-            </RouterLink>
-          </SidebarMenuButton>
+        <SidebarMenuItem v-for="node in group.nodes" :key="node.store.id">
+          <ContextMenu :actions="walletActions(node)">
+            <SidebarMenuButton
+              as-child
+              :is-active="activeId === node.store.id"
+              :tooltip="node.store.name"
+              :class="cn(node.store.archived && 'opacity-50')"
+            >
+              <RouterLink :to="{ name: 'wallet', params: { id: node.store.id } }">
+                <component :is="getStoreIcon(node.store.kind)" :style="{ color: node.store.color }" />
+                <span>{{ node.store.name }}</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </ContextMenu>
 
           <!-- A parent keeps its rolled-up total, shifted left of the chevron. -->
           <SidebarMenuBadge v-if="nodeTotal(node)" :class="cn('tabular-nums', node.children.length && 'right-8')">
@@ -142,66 +287,46 @@ function openWallet(created: Store) {
 
           <SidebarMenuSub v-if="node.children.length && expanded.has(node.store.id)">
             <SidebarMenuSubItem v-for="child in node.children" :key="child.store.id">
-              <div class="flex items-center">
-                <SidebarMenuSubButton
-                  as-child
-                  :is-active="activeId === child.store.id"
-                  :class="cn('min-w-0 flex-1', child.store.archived && 'opacity-50')"
-                >
-                  <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
-                    <component :is="getStoreIcon(child.store.kind)" :style="{ color: child.store.color }" />
-                    <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
-                    <span v-if="nodeTotal(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {{ nodeTotal(child) }}
-                    </span>
-                  </RouterLink>
-                </SidebarMenuSubButton>
-                <button
-                  v-if="child.children.length"
-                  type="button"
-                  class="flex size-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-                  :title="child.store.name"
-                  :aria-expanded="expanded.has(child.store.id)"
-                  @click="toggle(child.store.id)"
-                >
-                  <ChevronRight
-                    :class="cn('size-4 transition-transform', expanded.has(child.store.id) && 'rotate-90')"
-                  />
-                </button>
-              </div>
-
-              <!-- Third level: the deepest the tree goes. -->
-              <SidebarMenuSub v-if="child.children.length && expanded.has(child.store.id)" class="mr-0 pr-0">
-                <SidebarMenuSubItem v-for="leaf in child.children" :key="leaf.store.id">
-                  <SidebarMenuSubButton
-                    as-child
-                    size="sm"
-                    :is-active="activeId === leaf.store.id"
-                    :class="cn(leaf.store.archived && 'opacity-50')"
+              <ContextMenu :actions="walletActions(child)">
+              <SidebarMenuSubButton
+                as-child
+                :is-active="activeId === child.store.id"
+                :class="cn(child.store.archived && 'opacity-50')"
+              >
+                <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
+                  <component :is="storeIcon(child.store)" :style="{ color: child.store.color }" />
+                  <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
+                  <span
+                    v-if="bindingLabel(child.store.binding) && !child.store.name.includes(bindingLabel(child.store.binding))"
+                    class="shrink-0 text-[10px] uppercase text-muted-foreground"
                   >
-                    <RouterLink :to="{ name: 'wallet', params: { id: leaf.store.id } }">
-                      <component :is="getStoreIcon(leaf.store.kind)" :style="{ color: leaf.store.color }" />
-                      <span class="min-w-0 flex-1 truncate">{{ leaf.store.name }}</span>
-                      <span v-if="nodeTotal(leaf)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {{ nodeTotal(leaf) }}
-                      </span>
-                    </RouterLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
+                    {{ bindingLabel(child.store.binding) }}
+                  </span>
+                  <span v-if="nodeTotal(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {{ nodeTotal(child) }}
+                  </span>
+                </RouterLink>
+              </SidebarMenuSubButton>
+              </ContextMenu>
             </SidebarMenuSubItem>
           </SidebarMenuSub>
         </SidebarMenuItem>
-
-        <SidebarMenuItem v-if="tree.isSuccess.value && !roots.length">
-          <SidebarMenuButton :tooltip="t('nav.addWallet')" @click="createOpen = true">
-            <Plus />
-            <span>{{ t('nav.addWallet') }}</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroupContent>
-
-    <StoreCreateDialog v-model:open="createOpen" @created="openWallet" />
   </SidebarGroup>
+
+  <SidebarGroup v-if="tree.isSuccess.value">
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton :tooltip="t('nav.addWallet')" data-tour="sidebar-add-wallet" @click="openCreate(null)">
+          <Plus />
+          <span>{{ t('nav.addWallet') }}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  </SidebarGroup>
+
+  <StoreCreateDialog v-model:open="createOpen" :kind="createKind" @created="openWallet" />
+  <StoreCreateDialog v-model:open="subOpen" :parent="subParent" @created="openWallet" />
+  <TransactionCreateDialog v-if="txStore" v-model:open="txOpen" :store-id="txStore" />
 </template>

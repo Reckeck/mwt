@@ -88,6 +88,94 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve({})
     case 'list_stores':
       return resolve(mockStores)
+    case 'get_wallet_catalog':
+      return resolve(mockWalletCatalog())
+    case 'list_envelopes': {
+      const storeId = args?.storeId ? String(args.storeId) : null
+      return resolve(mockEnvelopes.filter((entry) => !storeId || entry.store_id === storeId).map(mockEnvelopeView))
+    }
+    case 'create_envelope': {
+      const draft = body as EnvelopeDraft
+      const envelope: Envelope = {
+        id: crypto.randomUUID(),
+        store_id: draft.store_id,
+        name: draft.name.trim(),
+        asset: draft.asset,
+        allocated: '0',
+        target: draft.target,
+        goal_id: draft.goal_id,
+        created_at: new Date().toISOString(),
+      }
+      mockEnvelopes.push(envelope)
+      return resolve(envelope)
+    }
+    case 'update_envelope': {
+      const input = body as UpdateEnvelopeInput
+      const envelope = mockEnvelopes.find((entry) => entry.id === input.id)
+      if (!envelope) throw { code: 'MISSING', message: 'envelope' }
+      Object.assign(envelope, { name: input.draft.name, target: input.draft.target, goal_id: input.draft.goal_id })
+      return resolve(envelope)
+    }
+    case 'fund_envelope': {
+      const input = body as FundEnvelopeInput
+      const envelope = mockEnvelopes.find((entry) => entry.id === input.id)
+      if (!envelope) throw { code: 'MISSING', message: 'envelope' }
+      const view = mockEnvelopeView(envelope)
+      const amount = Number(input.amount)
+      if (amount > 0 && Number(view.free) < amount)
+        throw { code: 'INSUFFICIENT_FUNDS', message: `only ${view.free} is free` }
+      if (Number(envelope.allocated) + amount < 0) throw { code: 'INVALID_INPUT', message: 'the envelope holds less' }
+      envelope.allocated = String(Number(envelope.allocated) + amount)
+      return resolve(envelope)
+    }
+    case 'move_between_envelopes': {
+      const input = body as MoveEnvelopeInput
+      const from = mockEnvelopes.find((entry) => entry.id === input.from)
+      const to = mockEnvelopes.find((entry) => entry.id === input.to)
+      if (!from || !to) throw { code: 'MISSING', message: 'envelope' }
+      from.allocated = String(Number(from.allocated) - Number(input.amount))
+      to.allocated = String(Number(to.allocated) + Number(input.amount))
+      return resolve({})
+    }
+    case 'delete_envelope': {
+      const index = mockEnvelopes.findIndex((entry) => entry.id === String(args?.id))
+      if (index >= 0) mockEnvelopes.splice(index, 1)
+      return resolve({})
+    }
+    case 'get_terminal_state': {
+      const store = mockStore(String(args?.storeId ?? ''))
+      if (!store?.exchange) throw { code: 'PROVIDER_REQUIRED', message: 'choose the exchange first' }
+      return resolve(store.exchange.terminal)
+    }
+    case 'update_terminal_state': {
+      const input = body as UpdateTerminalStateInput
+      const store = mockStore(input.store_id)
+      if (!store?.exchange) throw { code: 'PROVIDER_REQUIRED', message: 'choose the exchange first' }
+      const terminal = store.exchange.terminal
+      const patch = input.patch
+      if (patch.watchlist) terminal.watchlist = [...new Set(patch.watchlist.map((entry) => entry.toUpperCase()))]
+      if (patch.active_symbol) terminal.active_symbol = patch.active_symbol.toUpperCase()
+      if (patch.timeframe) terminal.timeframe = patch.timeframe
+      if (patch.indicators) terminal.indicators = patch.indicators
+      if (patch.layout) terminal.layout = patch.layout
+      return resolve(terminal)
+    }
+    case 'save_terminal_drawings': {
+      const input = body as SaveTerminalDrawingsInput
+      const store = mockStore(input.store_id)
+      if (!store?.exchange) throw { code: 'PROVIDER_REQUIRED', message: 'choose the exchange first' }
+      const symbol = input.symbol.toUpperCase()
+      if (!input.json.trim() || input.json.trim() === '[]') delete store.exchange.terminal.drawings[symbol]
+      else store.exchange.terminal.drawings[symbol] = input.json
+      return resolve({})
+    }
+    case 'set_import_interval': {
+      const input = body as SetImportIntervalInput
+      const store = mockStore(input.store_id)
+      if (!store?.exchange) throw { code: 'PROVIDER_REQUIRED', message: 'choose the exchange first' }
+      store.exchange.import_interval_sec = input.interval_sec
+      return resolve({})
+    }
     case 'get_store_tree':
       return resolve(mockTree())
     case 'store_move_targets':
@@ -115,12 +203,16 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         parent_id: input.parent_id ?? null,
         contact_id: input.contact_id ?? null,
         liability: input.liability ?? null,
-        // Like the backend: a sub-account starts with its parent's flag, a wallet with its kind's.
-        in_budget:
-          input.in_budget ??
-          (input.parent_id
-            ? (mockStore(input.parent_id)?.in_budget ?? false)
-            : input.kind === 'cash' || input.kind === 'bank'),
+        sub_type: input.sub_type ?? null,
+        binding: input.binding ?? (input.sub_type ? mockMarketBinding(input.sub_type) : 'any'),
+        // Like the backend: the sub-account type's purpose, else the parent's, else the kind's.
+        purpose: input.purpose ?? mockDefaultPurpose(input),
+        custody: input.kind === 'crypto' && !input.parent_id ? (input.custody ?? 'hot') : null,
+        property: input.property ?? null,
+        secured_by: input.secured_by ?? null,
+        exchange: input.provider
+          ? { provider: input.provider, import_interval_sec: 900, terminal: mockTerminal() }
+          : null,
       }
       mockStores.push(store)
       return resolve(store)
@@ -137,8 +229,17 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         note: input.note,
         liability: input.liability,
         contact_id: input.contact_id,
+        secured_by: input.secured_by,
       })
-      if (input.in_budget !== null && input.in_budget !== undefined) store.in_budget = input.in_budget
+      if (input.purpose) store.purpose = input.purpose
+      if (input.binding) store.binding = input.binding
+      if (input.custody) store.custody = input.custody
+      if (input.property) store.property = input.property
+      if (input.provider) {
+        store.exchange = store.exchange
+          ? { ...store.exchange, provider: input.provider }
+          : { provider: input.provider, import_interval_sec: 900, terminal: mockTerminal() }
+      }
       return resolve(store)
     }
     case 'archive_store': {
@@ -206,6 +307,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.inflation) mockAppSettings.inflation = input.inflation
       if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
         mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
+      if (input.completed_tours) mockAppSettings.completed_tours = [...new Set(input.completed_tours)]
       return resolve(mockAppSettings)
     }
     case 'set_quick_add_shortcut': {
@@ -339,6 +441,27 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       const input = body as ContactTurnoverInput
       return resolve(mockTurnover(mockTransactions, input.contact_id, input.account_id, txLegs))
     }
+    case 'list_debt_terms': {
+      const contactId = args?.contactId ? String(args.contactId) : null
+      return resolve(mockDebtTerms.filter((entry) => !contactId || entry.contact_id === contactId))
+    }
+    case 'set_debt_terms': {
+      const draft = body as DebtTermsDraft
+      const asset = draft.asset.toUpperCase()
+      const kept = mockDebtTerms.filter((entry) => !(entry.contact_id === draft.contact_id && entry.asset === asset))
+      mockDebtTerms.splice(0, mockDebtTerms.length, ...kept)
+      if (!draft.due_at && !draft.note.trim()) return resolve(null)
+      const terms: DebtTerms = {
+        id: crypto.randomUUID(),
+        contact_id: draft.contact_id,
+        asset,
+        due_at: draft.due_at || null,
+        note: draft.note.trim(),
+        created_at: new Date().toISOString(),
+      }
+      mockDebtTerms.push(terms)
+      return resolve(terms)
+    }
     case 'get_contact_balances':
       return resolve(mockContactBalances(mockTransactions))
     case 'get_net_worth':
@@ -354,6 +477,8 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve(mockKindsFor(args?.kind as StoreKind))
     case 'add_transaction':
       return resolve(mockPush(mockTransactionFrom(args?.input as TransactionInput, priceOf)))
+    case 'preview_transaction':
+      return resolve(mockPreview(body as PreviewTransactionInput))
     case 'update_transaction': {
       const input = body as UpdateTransactionInput
       const index = mockTransactions.findIndex((tx) => txId(tx) === input.id)
@@ -669,7 +794,6 @@ const mockSettings: Settings = {
   dashboard_widgets: [],
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
-  bybit_import_interval_sec: 900,
   savings_rate: '0.10',
   daily_budget_mode: 'month',
   budget_currency: '',
@@ -685,6 +809,7 @@ const mockAppSettings: AppSettings = {
   inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },
   enrichment_opt_in: null,
   quick_add_shortcut: null,
+  completed_tours: [],
 }
 
 const mockCurrencies: SupportedCurrencies = {
@@ -705,7 +830,7 @@ function demoTransactions(): Transaction[] {
     price_usd: null,
     fx_override: null,
   })
-  const [binance, ledger, futures, bank] = mockStores
+  const [, binance, ledger, futures, bank] = mockStores
   const btc = { symbol: 'BTC', name: 'Bitcoin', coingecko_id: 'bitcoin', chain: 'bitcoin' as Chain, contract: null }
   const usdt = { symbol: 'USDT', name: 'Tether', coingecko_id: 'tether', chain: null, contract: null }
   const rub = { symbol: 'RUB', name: 'Рубль', coingecko_id: null, chain: 'fiat' as Chain, contract: null }
@@ -809,15 +934,179 @@ const newStore = (name: string, kind: StoreKind, color: string, parent: string |
   parent_id: parent,
   contact_id: null,
   liability: null,
-  in_budget: kind === 'cash' || kind === 'bank',
+  sub_type: null,
+  binding: 'any',
+  purpose: kind === 'cash' || kind === 'bank' ? 'everyday' : 'investment',
+  custody: kind === 'crypto' ? 'cold' : null,
+  property: null,
+  secured_by: null,
+  exchange: kind === 'exchange' ? { provider: 'bybit', import_interval_sec: 900, terminal: mockTerminal() } : null,
 })
 
+const mockEnvelopes: Envelope[] = []
+const mockDebtTerms: DebtTerms[] = []
+
+function mockEnvelopeView(envelope: Envelope): EnvelopeView {
+  const held = mockOwnPositions(envelope.store_id)
+    .filter((position) => position.asset.symbol.toUpperCase() === envelope.asset.symbol.toUpperCase())
+    .reduce((sum, position) => sum + Number(position.quantity), 0)
+  const earmarked = mockEnvelopes
+    .filter((entry) => entry.store_id === envelope.store_id && entry.asset.symbol === envelope.asset.symbol)
+    .reduce((sum, entry) => sum + Number(entry.allocated), 0)
+  const free = held - earmarked
+  const target = Number(envelope.target ?? 0)
+  return {
+    envelope,
+    free: String(free),
+    pct: target ? (Number(envelope.allocated) / target) * 100 : null,
+    short: free < 0,
+  }
+}
+
+/** Mirrors `AutomationPreset::tx_kind` / `category` in Rust. */
+function mockPresets(names: AutomationPreset[]): PresetInfo[] {
+  const kinds: Record<AutomationPreset, TxKind> = {
+    expense: 'payment',
+    top_up: 'transfer',
+    salary: 'topup',
+    card_payment: 'payment',
+    to_savings: 'transfer',
+    deposit_interest: 'topup',
+    dca_buy: 'convert',
+    staking_reward: 'topup',
+    market_transfer: 'transfer',
+    rent_income: 'topup',
+    property_tax: 'payment',
+    insurance: 'payment',
+    utilities: 'payment',
+    loan_payment: 'transfer',
+  }
+  const categories: Partial<Record<AutomationPreset, string>> = {
+    salary: 'salary',
+    deposit_interest: 'deposit_interest',
+    staking_reward: 'income_other',
+    rent_income: 'income_other',
+    to_savings: 'savings',
+    dca_buy: 'trading',
+    market_transfer: 'transfer',
+    top_up: 'transfer',
+    loan_payment: 'loan_payment',
+    property_tax: 'taxes',
+    insurance: 'insurance',
+    utilities: 'utilities',
+  }
+  return names.map((preset) => ({ preset, tx_kind: kinds[preset], category: categories[preset] ?? null }))
+}
+
+/** Mirrors `WalletCatalog::build` in Rust. */
+function mockWalletCatalog(): WalletCatalog {
+  const sub = (sub_type: SubType, shape: BindingShapeName, purpose: Purpose | null = null): SubTypeInfo => ({
+    sub_type,
+    shape,
+    default_purpose: purpose,
+    credit: sub_type === 'credit_card',
+  })
+  return {
+    kinds: [
+      {
+        kind: 'cash',
+        presets: mockPresets(['expense', 'top_up']),
+        max_roots: 1,
+        user_creatable: false,
+        default_purpose: 'everyday',
+        sub_types: [sub('pocket', 'asset', 'everyday')],
+      },
+      {
+        kind: 'bank',
+        presets: mockPresets(['salary', 'card_payment', 'to_savings', 'deposit_interest']),
+        max_roots: null,
+        user_creatable: true,
+        default_purpose: 'everyday',
+        sub_types: [
+          sub('card', 'asset', 'everyday'),
+          sub('account', 'asset', 'everyday'),
+          sub('deposit', 'asset', 'savings'),
+          sub('savings', 'asset', 'savings'),
+          sub('credit_card', 'asset', 'everyday'),
+        ],
+      },
+      {
+        kind: 'crypto',
+        presets: mockPresets(['dca_buy', 'staking_reward']),
+        max_roots: null,
+        user_creatable: true,
+        default_purpose: 'investment',
+        sub_types: [sub('token', 'asset')],
+      },
+      {
+        kind: 'exchange',
+        presets: mockPresets(['dca_buy', 'market_transfer']),
+        max_roots: null,
+        user_creatable: true,
+        default_purpose: 'investment',
+        sub_types: [sub('spot', 'market'), sub('futures', 'market'), sub('earn', 'market'), sub('pair', 'pair')],
+      },
+      {
+        kind: 'property',
+        presets: mockPresets(['rent_income', 'property_tax', 'insurance', 'utilities']),
+        max_roots: null,
+        user_creatable: true,
+        default_purpose: 'investment',
+        sub_types: [],
+      },
+      {
+        kind: 'liability',
+        presets: mockPresets(['loan_payment']),
+        max_roots: null,
+        user_creatable: true,
+        default_purpose: 'investment',
+        sub_types: [],
+      },
+    ],
+    providers: [
+      { provider: 'bybit', supported: true },
+      { provider: 'binance', supported: false },
+      { provider: 'okx', supported: false },
+    ],
+  }
+}
+
+function mockTerminal(): TerminalState {
+  return {
+    watchlist: ['BTCUSDT', 'ETHUSDT'],
+    active_symbol: null,
+    timeframe: '1h',
+    indicators: [],
+    drawings: {},
+    layout: { show_watchlist: true, watchlist_width: 240 },
+  }
+}
+
+function mockMarketBinding(subType: SubType): Binding {
+  if (subType === 'spot' || subType === 'futures' || subType === 'earn') return { market: subType }
+  return 'any'
+}
+
+function mockDefaultPurpose(input: CreateStoreInput): Purpose {
+  if (input.sub_type === 'deposit' || input.sub_type === 'savings') return 'savings'
+  if (input.sub_type && ['card', 'credit_card', 'account', 'pocket'].includes(input.sub_type)) return 'everyday'
+  const parent = input.parent_id ? mockStore(input.parent_id) : undefined
+  if (parent) return parent.purpose
+  return input.kind === 'cash' || input.kind === 'bank' ? 'everyday' : 'investment'
+}
+
 const mockStores: Store[] = [
-  newStore('Binance', 'exchange', '#f0b90b', null, 'Фьючи'),
-  newStore('Ledger', 'cold_wallet', '#3b82f6'),
+  newStore('Наличные', 'cash', '#16a34a'),
+  newStore('Bybit', 'exchange', '#f0b90b', null, 'Фьючи'),
+  newStore('Ledger', 'crypto', '#3b82f6'),
 ]
 // A sub-account, so the wallet tree has something to show in the browser.
-mockStores.push(newStore('Binance Futures', 'exchange', '#f0b90b', mockStores[0].id))
+mockStores.push({
+  ...newStore('Futures', 'exchange', '#f0b90b', mockStores[1].id),
+  sub_type: 'futures',
+  binding: { market: 'futures' },
+  exchange: null,
+})
 mockStores.push(newStore('Тинькофф', 'bank', '#facc15'))
 
 const mockTransactions: Transaction[] = []
@@ -854,8 +1143,8 @@ function seedMock() {
   if (!mockTransactions.length) mockTransactions.push(...demoTransactions())
 }
 
-/** Mirrors `MAX_STORE_DEPTH` in Rust: a root is depth 0, so three levels. */
-const MOCK_MAX_DEPTH = 2
+/** Mirrors `MAX_STORE_DEPTH` in Rust: a root is depth 0, so two levels. */
+const MOCK_MAX_DEPTH = 1
 
 const mockStore = (id: string) => mockStores.find((candidate) => candidate.id === id)
 const mockChildren = (id: string) => mockStores.filter((candidate) => candidate.parent_id === id)
@@ -927,6 +1216,44 @@ function mockOwnPositions(storeId: string): StorePosition[] {
       }
     })
     .sort((left, right) => Number(right.value_base) - Number(left.value_base))
+}
+
+/** Like `preview_transaction` in Rust: net legs per store and asset, nothing written. */
+function mockPreview(input: PreviewTransactionInput): TxPreview {
+  const draft = mockTransactionFrom(input.transaction, priceOf)
+  const replaced = input.replaces ? mockTransactions.find((tx) => txId(tx) === input.replaces) : undefined
+  const deltas = new Map<string, { storeId: string; asset: AssetRef; delta: number }>()
+  const add = (legs: ReturnType<typeof txLegs>, sign: number) => {
+    for (const leg of legs) {
+      const key = `${leg.store_id}:${leg.asset.symbol.toUpperCase()}`
+      const row = deltas.get(key) ?? { storeId: leg.store_id, asset: leg.asset, delta: 0 }
+      row.delta += sign * Number(leg.amount)
+      deltas.set(key, row)
+    }
+  }
+  add(txLegs(draft), 1)
+  if (replaced) add(txLegs(replaced), -1)
+  const changes = [...deltas.values()]
+    .filter((row) => row.delta !== 0)
+    .map((row) => {
+      const held = mockOwnPositions(row.storeId).find(
+        (position) => position.asset.symbol.toUpperCase() === row.asset.symbol.toUpperCase(),
+      )
+      const before = Number(held?.quantity ?? 0)
+      return {
+        store_id: row.storeId,
+        store_name: mockStore(row.storeId)?.name ?? '',
+        asset: row.asset,
+        before: String(before),
+        after: String(before + row.delta),
+        delta_base: String(row.delta * priceOf(row.asset.symbol)),
+      }
+    })
+  const warnings: PreviewWarning[] = changes
+    .filter((change) => Number(change.after) < 0 && mockStore(change.store_id)?.kind !== 'liability')
+    .map((change) => ({ kind: 'negative_balance', store_id: change.store_id, asset: change.asset }))
+  const flow: FlowClass = 'payment' in draft ? 'daily' : 'topup' in draft ? 'income' : 'ignored'
+  return { changes, base_currency: mockSummary.base_currency, flow, warnings, error: null }
 }
 
 const sumValue = (positions: StorePosition[]) => positions.reduce((acc, row) => acc + Number(row.value_usd), 0)
@@ -1155,12 +1482,13 @@ const mockSummary: PortfolioSummary = {
     { label: 'Ethereum', value_usd: '15000', value_base: '15000', pct: 35.7 },
   ],
   by_store: [
-    { store_id: mockStores[0].id, name: 'Binance', value_usd: '30000', value_base: '30000', pct: 71 },
-    { store_id: mockStores[1].id, name: 'Ledger', value_usd: '12000', value_base: '12000', pct: 29 },
+    { store_id: mockStores[1].id, name: 'Binance', value_usd: '30000', value_base: '30000', pct: 71 },
+    { store_id: mockStores[2].id, name: 'Ledger', value_usd: '12000', value_base: '12000', pct: 29 },
   ],
   assets_base: '42050',
   liabilities_base: '0',
   net_worth_base: '42050',
+  prices_as_of: new Date(Date.now() - 5 * 60_000).toISOString(),
 }
 
 function mockNetWorth(): NetWorth {
@@ -1252,6 +1580,8 @@ function mockVaultDoc(): VaultDoc {
     meter_readings: [],
     enrichments: [],
     manual_prices: [],
+    envelopes: mockEnvelopes,
+    debt_terms: mockDebtTerms,
   }
 }
 
