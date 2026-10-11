@@ -2,6 +2,7 @@
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
 mod commands;
+mod notify_store;
 mod quick_add_socket;
 mod scheduler;
 mod shortcut;
@@ -24,6 +25,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // Off until the user turns it on; a start by the system comes hidden.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .plugin(shortcut::plugin())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::new())
@@ -184,6 +190,9 @@ pub fn run() {
             notifications::mark_notifications_read,
             notifications::send_test_notification,
             notifications::notification_permission,
+            notifications::get_autostart,
+            notifications::set_autostart,
+            notifications::notification_storage,
             planning::list_price_alerts,
             planning::create_price_alert,
             planning::update_price_alert,
@@ -220,6 +229,12 @@ pub fn run() {
             let state = app.state::<AppState>();
             *state.vault_path.lock().expect("vault_path lock") = default_path;
 
+            // What was scheduled to be told while the vault is locked survives a
+            // restart (encrypted with a key from the OS keyring).
+            if let Ok(mut notify) = state.notify.lock() {
+                *notify = notify_store::load(app.handle());
+            }
+
             // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
             scheduler::spawn(app.handle().clone());
 
@@ -232,6 +247,12 @@ pub fn run() {
 
             // Create system tray with context menu
             tray::create(app)?;
+            // Started with the system: stay in the tray, remind from there.
+            if std::env::args().any(|arg| arg == "--hidden")
+                && let Some(window) = app.get_webview_window("main")
+            {
+                let _ = window.hide();
+            }
             quick_add_socket::listen(app.handle().clone());
             Ok(())
         })

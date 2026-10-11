@@ -65,6 +65,15 @@ const askPermission = useMutation({
   mutationFn: () => call<string>('notification_permission', { request: true }),
   onSuccess: () => void permission.refetch(),
 })
+/* --- while the vault is locked, and after a reboot --- */
+const storage = useQuery({ queryKey: ['notification-storage'], queryFn: () => call<string>('notification_storage') })
+const autostart = useQuery({ queryKey: ['autostart'], queryFn: () => call<boolean>('get_autostart') })
+const setAutostart = useMutation({
+  mutationFn: (enabled: boolean) => call<boolean>('set_autostart', { enabled }),
+  onSuccess: () => void autostart.refetch(),
+  onError: (err) => toast.error(t('settings.saveFailed'), { description: parseError(err).message }),
+})
+
 const test = useMutation({
   mutationFn: () => call('send_test_notification'),
   onError: (err) => toast.error(t('notices.testFailed'), { description: parseError(err).message }),
@@ -124,6 +133,27 @@ const test = useMutation({
           <BellRing class="size-4" />
           {{ t('notices.test') }}
         </Button>
+      </div>
+    </div>
+
+    <div class="grid gap-3 rounded-lg border border-border p-4" data-tour="notification-locked">
+      <div class="grid gap-0.5">
+        <p class="text-sm font-medium">{{ t('notices.locked') }}</p>
+        <p class="text-xs text-muted-foreground">
+          {{ storage.data.value === 'keyring' ? t('notices.lockedKeyring') : t('notices.lockedMemory') }}
+        </p>
+      </div>
+      <div class="flex items-center justify-between gap-3">
+        <div class="grid gap-0.5">
+          <Label for="notice-autostart">{{ t('notices.autostart') }}</Label>
+          <p class="text-xs text-muted-foreground">{{ t('notices.autostartHint') }}</p>
+        </div>
+        <Switch
+          id="notice-autostart"
+          :model-value="autostart.data.value ?? false"
+          :disabled="setAutostart.isPending.value"
+          @update:model-value="(value) => setAutostart.mutate(Boolean(value))"
+        />
       </div>
     </div>
 

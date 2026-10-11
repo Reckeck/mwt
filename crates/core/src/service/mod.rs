@@ -38,6 +38,7 @@ mod ledger;
 mod losses;
 mod loyalty;
 mod notifications;
+mod notify_snapshot;
 mod preview;
 mod rates;
 mod reports;
@@ -68,6 +69,7 @@ pub use losses::{
 };
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use notifications::{notice, notice_title};
+pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use rates::RateBook;
 pub use reports::{

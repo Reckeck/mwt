@@ -403,6 +403,13 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve({})
     case 'notification_permission':
       return resolve('granted')
+    case 'notification_storage':
+      return resolve('memory')
+    case 'get_autostart':
+      return resolve(mockAutostart)
+    case 'set_autostart':
+      mockAutostart = Boolean(args?.enabled)
+      return resolve(mockAutostart)
     case 'update_settings': {
       const input = body as UpdateSettingsInput
       const settings = mockSettings
@@ -1539,6 +1546,7 @@ function mockFilterTxs(storeIds: string[] | null): Transaction[] {
 
 /** The notification log of the browser mock. */
 const mockNotices: NoticeRecord[] = []
+let mockAutostart = false
 
 function mockPush(tx: Transaction): Transaction {
   mockTransactions.push(tx)

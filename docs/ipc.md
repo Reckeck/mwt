@@ -251,6 +251,8 @@ JSON без шифрования — там нет ничего секретно
 | `mark_notifications_read` | `keys?: Vec<String>` | `()` — отметить прочитанными названные или все |
 | `send_test_notification` | — | `()` — показать пробное уведомление (системное — даже если они выключены) |
 | `notification_permission` | `request: bool` | `"granted" \| "denied" \| "prompt"` — разрешает ли система уведомления; `request` — спросить |
+| `notification_storage` | — | `"keyring" \| "memory"` — где живёт расписание уведомлений для заблокированного vault: зашифрованный файл с ключом в системной связке ключей или только память |
+| `get_autostart` / `set_autostart` | — / `enabled: bool` | `bool` — запуск при входе в систему (`tauri-plugin-autostart`, аргумент `--hidden`: окно не показывается, приложение в трее) |
 | `dev_dump_vault` | — | `DevDumpVaultOutput { json }` — расшифрованный `VaultDoc` одним pretty-JSON (только DEV-экран) |
 | `dev_export_vault` | — | `Option<String>` — путь записанного файла, `None` если пользователь закрыл диалог. Нативный save-диалог + запись делает Rust: webview не умеет скачивать файлы (`URL.createObjectURL` + `<a download>` в WebKitGTK не работает) |
 | `vault_schema` | — | `serde_json::Value` — JSON Schema `VaultDoc` из `schemars` (для подсказок в редакторе; форма документа живёт только в Rust) |

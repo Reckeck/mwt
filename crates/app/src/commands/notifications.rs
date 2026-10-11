@@ -2,6 +2,7 @@
 //! notice and whether the system lets the app show any.
 
 use tauri::{AppHandle, State};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
@@ -69,4 +70,35 @@ pub async fn notification_permission(app: AppHandle, request: bool) -> Result<St
         _ => "prompt",
     }
     .into())
+}
+
+/// Whether the app starts with the system, hidden in the tray.
+#[tauri::command]
+pub async fn get_autostart(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|err| err.to_string())
+}
+
+/// Start with the system (hidden in the tray, so reminders come after a
+/// reboot) or not.
+#[tauri::command]
+pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    let launcher = app.autolaunch();
+    if enabled {
+        launcher.enable().map_err(|err| err.to_string())?;
+    } else {
+        launcher.disable().map_err(|err| err.to_string())?;
+    }
+    launcher.is_enabled().map_err(|err| err.to_string())
+}
+
+/// Whether notices of a locked vault survive a restart (a keyring answered)
+/// or are kept in memory only.
+#[tauri::command]
+pub async fn notification_storage(state: State<'_, AppState>) -> Result<String, String> {
+    let persistent = state
+        .notify
+        .lock()
+        .map(|notify| notify.persistent)
+        .unwrap_or(false);
+    Ok(if persistent { "keyring" } else { "memory" }.into())
 }

@@ -39,6 +39,10 @@ tauri-plugin-window-state = "2.5.0"
 tauri-plugin-notification = "2"
 iana-time-zone = "0.1"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native", "windows-native"] }
+chacha20poly1305.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
