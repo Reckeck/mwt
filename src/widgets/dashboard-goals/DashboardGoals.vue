@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { CircleAlert } from 'lucide-vue-next'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 
@@ -15,7 +16,7 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
 </script>
 
 <template>
-  <Card v-if="progress.data.value?.length">
+  <Card size="sm" v-if="progress.data.value?.length">
     <template #header>
       <RouterLink :to="{ name: 'planning-goals' }" class="text-sm text-muted-foreground hover:text-foreground">
         {{ t('goal.dashboardTitle') }}
@@ -38,5 +39,9 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
         </p>
       </li>
     </ul>
+  </Card>
+  <Card size="sm" v-else-if="progress.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <Card size="sm" v-else>
+    <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
   </Card>
 </template>

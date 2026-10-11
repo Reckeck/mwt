@@ -5,11 +5,11 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Tag } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -77,15 +77,11 @@ const reset = useMutation({
       <div class="grid grid-cols-[1fr_8rem] gap-3">
         <div class="grid gap-1.5">
           <Label for="revalue-price">{{ t('tx.field.unitPrice') }}</Label>
-          <Input id="revalue-price" v-model="price" inputmode="decimal" />
+          <AmountInput id="revalue-price" v-model="price" />
         </div>
         <div class="grid gap-1.5">
           <Label for="revalue-currency">{{ t('tx.field.currency') }}</Label>
-          <Select id="revalue-currency" v-model="currency">
-            <option v-for="code in settings.allCurrencies.length ? settings.allCurrencies : [settings.baseCurrency]" :key="code" :value="code">
-              {{ code.toUpperCase() }}
-            </option>
-          </Select>
+          <CurrencyPicker id="revalue-currency" v-model="currency" />
         </div>
       </div>
       <p class="text-xs text-muted-foreground">{{ t('asset.revalueHint') }}</p>

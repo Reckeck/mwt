@@ -4,10 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -138,18 +140,18 @@ const save = useMutation({
         </div>
         <div class="grid gap-1.5">
           <Label for="utility-tariff">{{ t('utilities.tariff', { unit }) }}</Label>
-          <Input id="utility-tariff" v-model="tariff" inputmode="decimal" />
+          <AmountInput id="utility-tariff" v-model="tariff" />
         </div>
       </div>
       <div v-else class="grid gap-3 @sm:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="utility-amount">{{ kind === 'housing' ? t('utilities.rent') : t('utilities.amount') }}</Label>
-          <Input id="utility-amount" v-model="amount" inputmode="decimal" />
+          <AmountInput id="utility-amount" v-model="amount" />
         </div>
         <template v-if="kind === 'housing'">
           <div class="grid gap-1.5">
             <Label for="utility-deposit">{{ t('utilities.deposit') }}</Label>
-            <Input id="utility-deposit" v-model="deposit" inputmode="decimal" :placeholder="t('goal.optional')" />
+            <AmountInput id="utility-deposit" v-model="deposit" :placeholder="t('goal.optional')" />
           </div>
           <div class="grid gap-1.5">
             <Label for="utility-due">{{ t('utilities.dueDay') }}</Label>
@@ -169,9 +171,7 @@ const save = useMutation({
       <div class="grid gap-3 @sm:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="utility-currency">{{ t('utilities.currency') }}</Label>
-          <Select id="utility-currency" v-model="currency">
-            <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-          </Select>
+          <CurrencyPicker id="utility-currency" v-model="currency" />
         </div>
         <div v-if="!props.propertyId" class="grid gap-1.5">
           <Label for="utility-property">{{ t('utilities.property') }}</Label>

@@ -54,7 +54,8 @@ const { t } = useI18n()
       <PinOff class="size-3.5" />
     </button>
     <!-- Every widget adapts to its cell through container queries. -->
-    <div class="@container min-h-0 flex-1 overflow-auto [&>*]:h-full">
+    <!-- min-h, not h: a widget taller than its cell scrolls inside the frame instead of spilling out of its card. -->
+    <div class="@container min-h-0 flex-1 overflow-auto [&>*]:min-h-full">
       <slot />
     </div>
   </div>

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { STATUS_CLASSES } from '@/widgets/spending-calendar'
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
@@ -23,7 +24,7 @@ const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? [
 </script>
 
 <template>
-  <Card v-if="calendar.data.value">
+  <Card size="sm" v-if="calendar.data.value">
     <template #header>
       <RouterLink :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground capitalize hover:text-foreground">
         {{ t('miniCalendar.title', { month: title }) }}
@@ -43,4 +44,6 @@ const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? [
       </div>
     </div>
   </Card>
+  <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

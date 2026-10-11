@@ -15,7 +15,7 @@ const summary = useQuery({
 </script>
 
 <template>
-  <Card>
+  <Card size="sm">
     <template #header>
       <p class="text-sm text-muted-foreground">{{ t('store.assets') }}</p>
     </template>

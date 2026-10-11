@@ -28,7 +28,7 @@ function openDetails(id: string) {
 </script>
 
 <template>
-  <div class="grid gap-6">
+  <div class="grid gap-4">
     <TransactionFilterBar v-model="filter" id-prefix="graph-filter" />
     <TxGraphView :filter="filter" @open="openDetails" />
     <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />

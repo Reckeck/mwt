@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { formatMoney } from '@/shared/lib/format'
@@ -49,7 +50,7 @@ const option = computed<ChartOption>(() => ({
 </script>
 
 <template>
-  <Card v-if="worth.data.value">
+  <Card size="sm" v-if="worth.data.value">
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <RouterLink :to="{ name: 'analytics-networth' }" class="text-sm text-muted-foreground hover:text-foreground">
@@ -72,4 +73,6 @@ const option = computed<ChartOption>(() => ({
       </dl>
     </div>
   </Card>
+  <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

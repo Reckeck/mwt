@@ -41,7 +41,7 @@ function pctWidth(value: string | number | null | undefined): string {
 </script>
 
 <template>
-  <Card>
+  <Card size="sm">
     <template #header>
       <p class="font-medium">{{ t(props.by === 'chain' ? 'store.byChain' : 'store.byStore') }}</p>
     </template>

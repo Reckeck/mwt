@@ -63,7 +63,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
 </script>
 
 <template>
-  <div class="grid gap-6">
+  <div class="grid gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-sm text-muted-foreground">{{ t('goal.intro') }}</p>
       <Button @click="openNew">

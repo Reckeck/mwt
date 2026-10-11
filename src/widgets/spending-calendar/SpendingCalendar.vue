@@ -69,7 +69,7 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
 </script>
 
 <template>
-  <div class="grid items-start gap-6 @4xl:grid-cols-[1fr_20rem]">
+  <div class="grid items-start gap-4 @4xl:grid-cols-[1fr_20rem]">
     <div class="grid gap-4">
       <Card>
         <template #header>

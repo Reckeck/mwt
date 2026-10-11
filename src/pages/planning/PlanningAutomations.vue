@@ -5,7 +5,7 @@ import { UpcomingList } from '@/widgets/upcoming-list'
 
 <template>
   <!-- An overview: automations are created on their wallet, here they are only watched. -->
-  <div class="grid items-start gap-6 @4xl:grid-cols-[1fr_22rem]">
+  <div class="grid items-start gap-4 @4xl:grid-cols-[1fr_22rem]">
     <AutomationList readonly />
     <UpcomingList :days="45" :limit="12" />
   </div>

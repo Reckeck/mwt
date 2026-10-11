@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { call, parseError } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
@@ -37,9 +38,8 @@ const save = useMutation({
 <template>
   <form class="flex flex-wrap items-center gap-2" @submit.prevent="value.trim() && save.mutate()">
     <Input v-model="period" type="month" class="h-8 w-36" :aria-label="t('utilities.period')" />
-    <Input
+    <AmountInput
       v-model="value"
-      inputmode="decimal"
       class="h-8 w-28"
       :placeholder="t('utilities.reading')"
       :aria-label="t('utilities.reading')"

@@ -7,6 +7,7 @@ import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -125,10 +126,9 @@ const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals:
           {{ t('envelope.short', { free: qty(view.free, view.envelope.asset.symbol) }) }}
         </p>
         <div class="flex flex-wrap items-center gap-2">
-          <Input
+          <AmountInput
             v-model="amounts[view.envelope.id]"
             class="h-8 w-32"
-            inputmode="decimal"
             :placeholder="t('envelope.amount')"
             :aria-label="t('envelope.amount')"
           />
@@ -166,7 +166,7 @@ const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals:
         </div>
         <div class="grid gap-1.5">
           <Label for="envelope-target">{{ t('envelope.target') }}</Label>
-          <Input id="envelope-target" v-model="target" inputmode="decimal" />
+          <AmountInput id="envelope-target" v-model="target" />
         </div>
         <Button type="submit" :disabled="!name.trim() || !pickedAsset || create.isPending.value">
           <Plus class="size-4" />

@@ -3,13 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { useSettingsStore } from '@/shared/store/settings'
 
 import type { ReportFilterBarProps } from './report-filter.types'
 
@@ -17,7 +17,6 @@ const props = defineProps<ReportFilterBarProps>()
 const filter = defineModel<ReportFilter>({ required: true })
 
 const { t } = useI18n()
-const settings = useSettingsStore()
 
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
@@ -79,15 +78,15 @@ const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation
     </div>
     <div class="grid gap-1.5">
       <Label for="report-currency">{{ t('report.filter.currency') }}</Label>
-      <Select
-        id="report-currency"
-        class="w-44"
-        :model-value="filter.currency ?? ''"
-        @update:model-value="(value) => (filter.currency = String(value) || null)"
-      >
-        <option value="">{{ t('report.filter.budgetCurrency') }}</option>
-        <option v-for="code in settings.allCurrencies" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-      </Select>
+      <div class="w-44">
+        <CurrencyPicker
+          id="report-currency"
+          allow-empty
+          :placeholder="t('report.filter.budgetCurrency')"
+          :model-value="filter.currency ?? ''"
+          @update:model-value="(value) => (filter.currency = String(value) || null)"
+        />
+      </div>
     </div>
     <label v-if="props.kind !== 'inflation'" class="flex h-9 items-center gap-2 text-sm">
       <input v-model="filter.real_terms" type="checkbox" class="size-4 accent-primary" />

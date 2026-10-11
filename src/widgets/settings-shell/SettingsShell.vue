@@ -143,7 +143,7 @@ watch(
           </header>
 
           <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-5 @container">
-            <div class="mx-auto grid max-w-3xl gap-8">
+            <div class="mx-auto grid max-w-3xl gap-6">
               <section
                 v-for="section in activeTab.sections"
                 :key="section.id"

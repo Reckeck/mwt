@@ -48,6 +48,12 @@ export const useSettingsStore = defineStore('settings', {
       if (!catalog) return []
       return [...new Set([...catalog.fiat, ...catalog.crypto])].sort()
     },
+    /** Fiat codes, lowercase; kept apart from crypto so pickers can group and filter. */
+    fiatCurrencies: (state): string[] => [...(state.currencies?.fiat ?? [])].sort(),
+    cryptoCurrencies: (state): string[] => {
+      const fiat = new Set(state.currencies?.fiat ?? [])
+      return [...(state.currencies?.crypto ?? [])].filter((code) => !fiat.has(code)).sort()
+    },
 
     // -- vault-scoped --
 
