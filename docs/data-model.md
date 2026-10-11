@@ -88,17 +88,18 @@ vault: они переживают открытие другого хранил�
 
 ## Store / StoreKind
 
-`Store { id, name, kind, color, archived, note, parent_id?, sub_type?, binding, purpose, contact_id?, liability?, custody?, property?, secured_by?, exchange? }`.
+`Store { id, name, kind, color, archived, note, parent_id?, sub_type?, binding, purpose, contact_id?, liability?, custody?, property?, secured_by?, exchange?, loyalty?, deposit? }`.
 
 `kind` — тип кошелька, по нему сгруппирован сайдбар и выбираются настройки:
 
 | Тип | Что это | Корней | Субсчета (`sub_type`) | Назначение по умолчанию |
 |---|---|---|---|---|
 | `cash` | наличные | ровно один, создаётся вместе с vault, не архивируется и не удаляется (`CASH_LOCKED`) | `pocket` | `everyday` |
-| `bank` | банк | сколько угодно | `card`, `account`, `deposit`, `savings`, `credit_card` | `everyday` |
+| `bank` | банк | сколько угодно | `card`, `account`, `deposit`, `savings`, `pds`, `credit_card` | `everyday` |
 | `crypto` | свой кошелёк (`custody: hot \| cold`) | сколько угодно | `token` | `investment` |
-| `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `spot`, `futures`, `earn`, `pair` | `investment` |
-| `property` | имущество (`property: PropertyInfo`) | сколько угодно | — | `investment` |
+| `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `funding`, `unified`, `earn`, `spot`, `futures`, `pair` | `investment` |
+| `property` | имущество (`property: PropertyInfo`, `utilities_pay_day?`) | сколько угодно | — | `investment` |
+| `loyalty` | бонусная программа (`loyalty: LoyaltyInfo { points_symbol, point_value, currency, expires_at?, expiring_points? }`) | сколько угодно | — | `savings` (в капитале — нефинансовые активы) |
 | `liability` | кредит (`liability: LiabilityTerms`, `secured_by` — объект в залоге) | сколько угодно | — | — (в бюджет не входит никогда) |
 
 Каталог правил отдаёт `get_wallet_catalog` (`WalletCatalog::build` в `ipc_contract.rs`) —
@@ -112,6 +113,15 @@ vault: они переживают открытие другого хранил�
   `pair { base, quote }` (обе монеты, обмен в обе стороны), `market(spot | futures | earn)`.
   У корня — `any`. Операция с чужим активом получает `BINDING_MISMATCH` (V15);
   смена привязки отклоняется, если проведённые операции в неё не влезут.
+- `deposit: DepositTerms { rates[{ from, rate }], capitalization, opened_at?, term_months?, auto_accrue, pds? }` —
+  у субсчетов `savings`/`deposit`/`pds`; ставки — история, проценты считаются по дням
+  по фактическому балансу (`service/interest.rs`); `pds: PdsTerms { first_contribution_at, income_bracket }`
+  — софинансирование ПДС (до 36 000 ₽ в год, 10 лет). `VaultDoc.key_rates` — кэш ключевой ставки ЦБ.
+- `market(funding | unified)` — счета Bybit: «Финансовый» (только монеты) и «Единый
+  торговый» (монеты и деривативы); импорт раскладывает сделки, переводы и Earn по ним.
+- `TxMeta.utility_item_id?` — платёж привязан к счёту ЖКХ (старые матчатся по
+  комментарию и категории); `KindDetails.source_store_id?` — карта, за покупки
+  по которой пришёл кэшбэк или баллы.
 - `liability: LiabilityTerms { kind, rate?, limit?, due_day?, monthly_payment? }` —
   у `liability` и у субсчёта `credit_card`; `limit` ограничивает кредитку для автоматики.
 - `exchange: ExchangeProfile { provider, import_interval_sec, terminal: TerminalState }` —

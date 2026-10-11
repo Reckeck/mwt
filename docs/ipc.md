@@ -13,7 +13,7 @@ Frontend парсит код и показывает локализованно�
 
 | Событие | Payload | Когда |
 |---|---|---|
-| `prices-updated` | `RefreshResult` | после `refresh_all` |
+| `prices-updated` | `RefreshResult` | после `refresh_all` и `ensure_fx` (если что-то найдено) |
 | `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
@@ -36,14 +36,14 @@ Frontend парсит код и показывает локализованно�
 | `create_vault` | `CreateVaultInput { path, password, cash_name? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя) |
 | `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo` |
 | `lock_vault_cmd` | — | `()` |
-| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()` |
+| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; текущий пароль проверяется расшифровкой файла (`SECRET` при ошибке), `.bak` не пишется |
 
 ### vault recents (`crates/app/src/commands/vault_recents.rs`)
 | Команда | Вход | Выход |
 |---|---|---|
 | `recent_vaults` | — | `Vec<RecentVault>` |
 | `forget_recent_vault` | `SelectVaultInput { path }` | `()` (убирает из списка, файл не трогает) |
-| `pick_vault_file` | `save: bool` | `Option<String>` (путь, либо `null` если диалог закрыт) |
+| `pick_vault_file` | `save: bool` | `Option<String>` (путь, либо `null` если диалог закрыт); при `save` к имени без `.wallet` расширение дописывается |
 
 ### stores
 | `list_stores` | — | `Vec<Store>` (плоско) |
@@ -120,6 +120,7 @@ Frontend парсит код и показывает локализованно�
 ### pricing
 | `search_assets` | `query` | `Vec<AssetSearchHit { symbol, name, coingecko_id?, chain?, contract?, rank }>` |
 | `refresh_all` | — | `RefreshResult { prices, fx, restamped, updated_at }` + событие; `restamped` — сколько сторон операций получили цену |
+| `ensure_fx` | `EnsureFxInput { currencies, date? }` | `EnsureFxOutput { points, missing }`; добирает курсы на день (UTC) из open.er-api → Frankfurter/ECB → ЦБ РФ, откатываясь до 7 дней назад; при находке — `prices-updated` |
 | `open_explorer` | `url` | `()` (default browser) |
 | `get_cached_price` | `AssetPriceInput { symbol, coingecko_id?, chain?, contract?, at? }` | `CachedPrice { price_usd, ts }` — курс, ближайший к `at` (пусто = сейчас); `ts` — когда снят курс, пусто — курса нет |
 | `convert_amount` | `ConvertAmountInput { from, to, amount, at? }` | `ConvertedAmount { amount? }` — по курсу на `at`, кросс через USD; `null`, если курса нет |
@@ -223,6 +224,16 @@ JSON без шифрования — там нет ничего секретно
 | `get_property_summary` | `storeId` | `PropertySummary { value_base, debt_base, equity_base, utilities_month_base, loan_month_base, monthly_cost_base, utility_count }` — долг по кредитам с `secured_by` на объект |
 | `get_meter_trend` | `item_id` | `UtilityTrend { months[{ period, reading?, consumption?, amount }], average?, delta_pct?, forecast?, anomaly, monthly }` — среднее за 6 месяцев со счётом, прогноз — линейная регрессия, аномалия — > 1.5× среднего прежних |
 | `get_utility_payment_draft` | `item_id`, `period?` (по умолчанию текущий месяц) | `UtilityPaymentDraft { transaction (payment), consumption?, includes_deposit }` — форма «Оплатить» открывается с ним; комментарий = название счёта, категория счёта |
+| `update_meter_reading` | `UpdateMeterReadingInput { id, value, period }` | `MeterReading` — исправить показание; те же правила монотонности, id сохраняется, при отказе старое значение остаётся |
+| `get_utility_bill` | `property_id`, `period?` | `UtilityBill { pay_day?, due_at, lines[{ item, previous_reading?, reading?, consumption?, amount?, paid, includes_deposit }] }` — счёт ЖКХ объекта за месяц; `amount = null` у счётчика без показания |
+| `pay_utility_bill` | `PayUtilityBillInput { property_id, period, store_id, timestamp?, lines[{ item_id, amount, reading? }] }` | `Vec<Transaction>` — показания + по платежу на строку с `meta.utility_item_id`; всё или ничего |
+| `set_deposit_terms` | `SetDepositTermsInput { store_id, terms? }` | `Store` — ставки (история), капитализация, срок, автоначисление, ПДС; только сабсчета `savings`/`deposit`/`pds` банка |
+| `get_deposit_report` | `store_id` | `DepositReport { balance, rate?, accrued_month, accrued_year, posted_year, projected_year, matures_at?, at_maturity?, pds? }` — проценты по дням по фактическому балансу |
+| `get_interest_tax` | `year?` | `InterestTaxReport { max_key_rate?, limit?, income, taxable, tax, remaining_free? }` — НДФЛ 13% сверх 1 000 000 ₽ × макс. ключевая ставка на 1-е числа года |
+| `refresh_key_rates` | — | `u32` — ключевая ставка ЦБ РФ (SOAP `DailyInfo.KeyRate`) с начала прошлого года в `VaultDoc.key_rates` |
+| `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов |
+| `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
+| `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |
 | `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
 
 ### settings (vault)
@@ -250,14 +261,18 @@ JSON без шифрования — там нет ничего секретно
 ### Bybit import — staging (D2.4)
 | `import_bybit_history` | `ImportBybitHistoryInput { store_id, category?, limit? }` | `ImportBybitHistoryOutput { staged, notice? }` — скачивает сделки и **кладёт их в staging**, операции не создаёт |
 | `list_pending_imports` | — | `ListPendingImportsOutput { imports: Vec<PendingImport> }` (новые сверху) |
-| `confirm_pending_imports` | `ConfirmPendingImportsInput { exec_ids }` (пусто = все) | `ConfirmPendingImportsOutput { confirmed }` — спот → `TradeSpot`, linear/inverse → `TradeFutures` (комиссия в валюте расчёта); на субсчёт из ключа; не прошедшая проверку остаётся в staging |
+| `confirm_pending_imports` | `ConfirmPendingImportsInput { exec_ids }` (пусто = все) | `ConfirmPendingImportsOutput { confirmed }` — `kind = fill`: спот → `TradeSpot`, linear/inverse → `TradeFutures` (комиссия в валюте расчёта), на субсчёт из ключа, иначе Unified; `transfer` → `Transfer` между субсчетами Funding/Unified/Earn; `earn_income` → `Topup` (`deposit_interest`) на Earn; не прошедшая проверку остаётся в staging |
 | `discard_pending_imports` | `DiscardPendingImportsInput { exec_ids }` (пусто = все) | `DiscardPendingImportsOutput { discarded }` |
+| `create_bybit_accounts` | `CreateBybitAccountsInput { store_id, funding_name, unified_name, earn_name }` | `Vec<String>` — субсчета Funding / Unified / Earn (недостающие создаются) |
+| `bybit_balances` | `store_id` | `Vec<ExchangeAccountBalance { account, store_id?, rows[{ coin, exchange, ledger, diff }] }>` — балансы FUND/UNIFIED/EARN по API рядом с учётом субсчёта |
 
 Инварианты блока:
 - **Ни одна команда не создаёт операции сама.** Только `confirm_pending_imports`;
   фоновый опрос (`ExchangeProfile.import_interval_sec` у каждой биржи, `0` = выкл) кладёт сделки в
   `pending_imports` и шлёт событие — пользователь решает сам.
-- Дедупликация по `execId` (`PendingImport.exec_id`), поэтому повторный импорт
+- Импорт берёт сделки, внутренние переводы (`/v5/asset/transfer/query-inter-transfer-list`) и доход Earn (`/v5/earn/yield`); категория сделки ставится по запросу, а не угадывается по символу.
+- Ключ ищется у кошелька и его родителей; чужой ключ не подставляется.
+- Дедупликация по `execId` (`PendingImport.exec_id`; у переводов `transfer:<id>`, у Earn `earn:<id>`), поэтому повторный импорт
   и перезапуски фонового опроса не создают дублей.
 - Мусорные сделки (нет `execId`, нечитаемые количество/цена, нулевое
   количество) отбрасываются на границе и в staging не попадают.
