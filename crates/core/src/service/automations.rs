@@ -12,8 +12,8 @@ use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, next_month};
 use crate::error::{Error, Result};
 use crate::model::planning::{
-    Automation, AutomationOutcome, AutomationRun, MAX_AUTOMATION_RUNS, RejectReason, Schedule,
-    TransactionDraft,
+    Automation, AutomationOutcome, AutomationPreset, AutomationRun, MAX_AUTOMATION_RUNS,
+    RejectReason, Schedule, TransactionDraft,
 };
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::{PriceStamp, Transaction, TxOrigin};
@@ -31,6 +31,7 @@ pub const MAX_CATCH_UP: usize = 24;
 pub struct AutomationDraft {
     pub name: String,
     pub active: bool,
+    pub preset: Option<AutomationPreset>,
     pub schedule: Schedule,
     pub starts_at: String,
     pub template: TransactionDraft,
@@ -221,6 +222,7 @@ impl UnlockedVault {
             id: uuid::Uuid::new_v4().to_string(),
             name: draft.name.trim().to_string(),
             active: draft.active,
+            preset: draft.preset,
             schedule: draft.schedule,
             starts_at: draft.starts_at,
             template: draft.template,
@@ -244,6 +246,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("automation {id}")))?;
         automation.name = draft.name.trim().to_string();
         automation.active = draft.active;
+        automation.preset = draft.preset;
         automation.schedule = draft.schedule;
         automation.starts_at = draft.starts_at;
         automation.template = draft.template;
@@ -676,6 +679,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: name.into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::Monthly { day },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template,
@@ -785,6 +789,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: "Pocket money".into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::EveryNDays { days: 1 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: salary_draft(&card, "1"),
@@ -938,6 +943,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: "Bill".into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::Monthly { day: 1 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Payment(bill),

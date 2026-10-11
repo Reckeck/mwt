@@ -807,7 +807,7 @@ impl UnlockedVault {
                     }
                     let value = Self::value_at(&book, asset, *qty, &ctx.currency, *cutoff);
                     match kinds.get(store_id.as_str()) {
-                        Some(StoreKind::Asset) => point.non_financial += value,
+                        Some(StoreKind::Property) => point.non_financial += value,
                         Some(StoreKind::Liability) => {
                             *loans.entry(store_id.as_str()).or_default() += value;
                         }
@@ -1738,7 +1738,7 @@ mod tests {
     #[test]
     fn portfolio_shares_add_up_to_a_hundred() {
         let (_dir, mut vault, card) = vault_with_card();
-        let wallet = store(&mut vault, "Cold", StoreKind::ColdWallet, None);
+        let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
         vault
             .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
             .unwrap();

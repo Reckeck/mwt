@@ -535,7 +535,7 @@ mod tests {
         let (dir, mut vault) = empty_vault();
         vault.set_base_currency("usd");
         let card = store(&mut vault, "RUB card", StoreKind::Bank, None);
-        let wallet = store(&mut vault, "Wallet", StoreKind::HotWallet, None);
+        let wallet = store(&mut vault, "Wallet", StoreKind::Crypto, None);
         let baht = store(&mut vault, "THB card", StoreKind::Bank, None);
         let mut seed = income_of(&card, rub(), "20000", "0.01", "salary");
         seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();

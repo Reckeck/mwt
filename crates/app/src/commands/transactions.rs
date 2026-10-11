@@ -1,10 +1,12 @@
 use tauri::{AppHandle, State};
 
-use trade_core::ipc_contract::{TransactionInput, TransactionKinds, UpdateTransactionInput};
+use trade_core::ipc_contract::{
+    PreviewTransactionInput, TransactionInput, TransactionKinds, UpdateTransactionInput,
+};
 use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
 
-use trade_core::service::{TxFilter, TxGraph};
+use trade_core::service::{TxFilter, TxGraph, TxPreview};
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
@@ -66,6 +68,20 @@ pub async fn add_transaction(
     };
     enrich_in_background(&app, saved.meta().id.clone());
     Ok(saved)
+}
+
+/// What a draft would do to every touched position; writes nothing. A draft
+/// that would be refused still previews, with the refusal in `error`.
+#[tauri::command]
+pub async fn preview_transaction(
+    input: PreviewTransactionInput,
+    state: State<'_, AppState>,
+) -> Result<TxPreview, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().preview_transaction(
+        input.transaction.to_transaction(),
+        input.replaces.as_deref(),
+    ))
 }
 
 /// Replace a transaction with an edited version; its id and origin are kept.

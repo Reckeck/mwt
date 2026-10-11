@@ -94,26 +94,19 @@ pub async fn set_quick_add_shortcut(
 /// Currencies the base/favourite pickers may offer.
 ///
 /// Goes to the network first, then to the last successfully fetched catalog,
-/// then to a built-in list — see [`build_currency_catalog`]. The `notice` says
-/// when the built-in list was used so the UI can flag it as possibly
-/// incomplete.
+/// then to a built-in list — see [`build_currency_catalog`]. The `notice` is set
+/// only when no provider answered, so the UI can flag the list as possibly
+/// stale or incomplete.
 #[tauri::command]
 pub async fn get_supported_currencies(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<CurrencyCatalogOutput, String> {
     let dir = config_dir(&app);
-    let cached = trade_core::appconfig::load_currencies(&dir);
-    let catalog = build_currency_catalog(&dir, &state.pricing).await;
-    let notice = match &cached {
-        // Nothing was ever fetched, so this is the built-in list.
-        None => Some("builtin"),
-        Some(previous) if *previous == catalog => Some("cached"),
-        _ => None,
-    };
+    let (catalog, source) = build_currency_catalog(&dir, &state.pricing).await;
     Ok(CurrencyCatalogOutput {
         catalog,
-        notice: notice.map(str::to_string),
+        notice: source.notice().map(str::to_string),
     })
 }
 

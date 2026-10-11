@@ -36,11 +36,77 @@ pub enum TransactionDraft {
     Convert(ConvertTx),
 }
 
+/// A ready-made automation a wallet offers: it decides the operation kind and
+/// the category, the user fills in only the amount and the date.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPreset {
+    /// A regular spending (rent of a parking spot, a subscription).
+    Expense,
+    /// Topping the wallet up from another one of yours.
+    TopUp,
+    Salary,
+    CardPayment,
+    ToSavings,
+    DepositInterest,
+    /// Dollar-cost averaging: buy the same amount on a schedule.
+    DcaBuy,
+    StakingReward,
+    /// Moving money between exchange accounts (spot ↔ futures).
+    MarketTransfer,
+    RentIncome,
+    PropertyTax,
+    Insurance,
+    Utilities,
+    LoanPayment,
+}
+
+impl AutomationPreset {
+    pub fn tx_kind(self) -> crate::model::transaction::TxKind {
+        use crate::model::transaction::TxKind;
+        match self {
+            Self::Salary | Self::DepositInterest | Self::StakingReward | Self::RentIncome => {
+                TxKind::Topup
+            }
+            Self::TopUp | Self::ToSavings | Self::MarketTransfer | Self::LoanPayment => {
+                TxKind::Transfer
+            }
+            Self::DcaBuy => TxKind::Convert,
+            Self::Expense
+            | Self::CardPayment
+            | Self::PropertyTax
+            | Self::Insurance
+            | Self::Utilities => TxKind::Payment,
+        }
+    }
+
+    /// Category key the operation gets, from the default set.
+    pub fn category(self) -> Option<&'static str> {
+        match self {
+            Self::Salary => Some("salary"),
+            Self::DepositInterest => Some("deposit_interest"),
+            Self::StakingReward => Some("income_other"),
+            Self::RentIncome => Some("income_other"),
+            Self::ToSavings => Some("savings"),
+            Self::DcaBuy => Some("trading"),
+            Self::MarketTransfer | Self::TopUp => Some("transfer"),
+            Self::LoanPayment => Some("loan_payment"),
+            Self::PropertyTax => Some("taxes"),
+            Self::Insurance => Some("insurance"),
+            Self::Utilities => Some("utilities"),
+            Self::Expense | Self::CardPayment => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Automation {
     pub id: String,
     pub name: String,
     pub active: bool,
+    /// The ready-made kind it was created from, for the wallet's list.
+    #[serde(default)]
+    pub preset: Option<AutomationPreset>,
     pub schedule: Schedule,
     /// First planned date, RFC3339.
     pub starts_at: String,
@@ -200,6 +266,10 @@ pub struct UtilityItem {
     pub active: bool,
     pub kind: UtilityKind,
     pub currency: String,
+    /// The property (a top-level `property` wallet) the bill belongs to.
+    #[serde(default)]
+    pub property_id: String,
+    /// The wallet the bill is paid from.
     pub store_id: Option<String>,
     /// Category key.
     pub category: String,
@@ -213,4 +283,22 @@ pub struct MeterReading {
     /// YYYY-MM.
     pub period: String,
     pub recorded_at: String,
+}
+
+/// An envelope: a named, earmarked part of one asset's balance in one store
+/// («отпуск», «налоги»). Nothing physically moves — the store still holds the
+/// money; envelopes only mark how much of it is spoken for.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct Envelope {
+    pub id: String,
+    pub store_id: String,
+    pub name: String,
+    pub asset: AssetRef,
+    /// How much is earmarked now, in `asset`.
+    pub allocated: Amount,
+    /// What the envelope is filling up to, in `asset`.
+    pub target: Option<Amount>,
+    /// A goal whose progress is this envelope.
+    pub goal_id: Option<String>,
+    pub created_at: String,
 }

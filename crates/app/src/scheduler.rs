@@ -12,7 +12,7 @@
 //!
 //! The vault guard is never held across `.await` (AGENTS.md rule 3).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -34,7 +34,8 @@ const ALERT_REFRESH_SEC: u64 = 5 * 60;
 /// What the scheduler remembers between ticks.
 #[derive(Default)]
 struct Memory {
-    last_bybit: Option<Instant>,
+    /// Last import poll per exchange store.
+    last_bybit: HashMap<String, Instant>,
     last_alert_refresh: Option<Instant>,
     announced_reminders: HashSet<String>,
 }
@@ -79,10 +80,10 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
 
 // -- 1. Bybit import -------------------------------------------------------------
 
-/// Poll Bybit on the interval from `settings.bybit_import_interval_sec`
-/// (`0` disables it) and stage any new fills for the user to confirm.
+/// Poll each exchange on its own interval (`ExchangeProfile.import_interval_sec`,
+/// `0` disables it) and stage any new fills for the user to confirm.
 fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
-    let (interval_sec, configured) = {
+    let due: Vec<(String, String, String)> = {
         let state = app.state::<AppState>();
         let Ok(guard) = state.vault.lock() else {
             return;
@@ -90,23 +91,26 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        (
-            vault.doc.settings.bybit_import_interval_sec,
-            !vault.doc.exchanges.bybit.is_empty(),
-        )
+        vault
+            .import_schedule()
+            .into_iter()
+            .filter(|(store_id, interval, _, _)| {
+                let interval = Duration::from_secs(u64::from(*interval));
+                memory
+                    .last_bybit
+                    .get(store_id)
+                    .is_none_or(|previous| previous.elapsed() >= interval)
+            })
+            .map(|(store_id, _, key, secret)| (store_id, key, secret))
+            .collect()
     };
-    if interval_sec == 0 || !configured {
+    if due.is_empty() {
         return;
     }
-    let interval = Duration::from_secs(u64::from(interval_sec));
-    if memory
-        .last_bybit
-        .is_some_and(|previous| previous.elapsed() < interval)
-    {
-        return;
+    for (store_id, _, _) in &due {
+        memory.last_bybit.insert(store_id.clone(), Instant::now());
     }
-    memory.last_bybit = Some(Instant::now());
-    let Ok(staged) = tauri::async_runtime::block_on(poll_bybit_once(app)) else {
+    let Ok(staged) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
         return;
     };
     if staged > 0 {
@@ -117,29 +121,13 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     }
 }
 
-/// One polling pass over every store that has a Bybit key. Returns how many
-/// fills were newly staged.
-async fn poll_bybit_once(app: &AppHandle) -> Result<u32, String> {
+/// One polling pass over the given `(store_id, api_key, api_secret)` keys.
+/// Returns how many fills were newly staged.
+async fn poll_bybit_once(
+    app: &AppHandle,
+    keys: Vec<(String, String, String)>,
+) -> Result<u32, String> {
     let state = app.state::<AppState>();
-    let keys: Vec<(String, String, String)> = {
-        let guard = state.vault.lock().map_err(|err| err.to_string())?;
-        let vault = guard.as_ref().ok_or("REQUIRES_UNLOCK: vault is locked")?;
-        vault
-            .doc
-            .exchanges
-            .bybit
-            .iter()
-            .filter(|entry| !entry.api_key.is_empty() && !entry.api_secret.is_empty())
-            .map(|entry| {
-                (
-                    entry.store_id.clone(),
-                    entry.api_key.clone(),
-                    entry.api_secret.clone(),
-                )
-            })
-            .collect()
-    };
-
     let client = trade_core::exchange::BybitClient::default();
     let mut staged_total = 0u32;
 

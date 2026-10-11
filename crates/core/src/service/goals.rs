@@ -454,9 +454,13 @@ impl UnlockedVault {
                 } else {
                     alloc_usd / scope_usd
                 };
-                let saved = book
-                    .convert(alloc_usd, "usd", &goal.currency, now)
-                    .unwrap_or(Amount::ZERO);
+                // A goal backed by envelopes is exactly what they earmark.
+                let saved = self
+                    .envelope_saved_for_goal(&goal.id, &goal.currency, now)
+                    .unwrap_or_else(|| {
+                        book.convert(alloc_usd, "usd", &goal.currency, now)
+                            .unwrap_or(Amount::ZERO)
+                    });
                 let contributed =
                     self.contributions(&scope, &goal.currency, i64::MIN, i64::MAX) * share;
                 let start = cal.date_of_iso(&goal.starts_at).unwrap_or(today);
@@ -698,7 +702,7 @@ mod tests {
     fn crypto_goal_contributed_stays_while_saved_follows_the_rate() {
         let (_dir, mut vault) = empty_vault();
         vault.set_base_currency("usd");
-        let wallet = store(&mut vault, "Cold", StoreKind::ColdWallet, None);
+        let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
         let mut buy = income_of(&wallet, btc(), "1", "50000", "bought");
         at(&mut buy, "2026-01-10T00:00:00Z");
         vault.add_transaction(buy).unwrap();

@@ -40,6 +40,8 @@ pub enum UpcomingKind {
     Reminder,
     /// A rejected automation run waiting for «Повторить / Пропустить».
     RejectedRun,
+    /// A debt with a contact falls due (overdue ones stay listed).
+    Debt,
 }
 
 /// One thing on the agenda.
@@ -436,6 +438,48 @@ impl UnlockedVault {
             });
         }
 
+        // Debts with a due date and something still open; overdue ones too.
+        let balances = self.contact_balances();
+        for terms in &self.doc.debt_terms {
+            let Some(due) = terms.due_at.as_deref() else {
+                continue;
+            };
+            let Ok(date) = chrono::NaiveDate::parse_from_str(due, "%Y-%m-%d") else {
+                continue;
+            };
+            let open = balances.iter().find(|row| {
+                row.contact_id == terms.contact_id
+                    && row.asset.symbol.eq_ignore_ascii_case(&terms.asset)
+            });
+            let Some(row) = open else { continue };
+            let net = row.receivable - row.payable;
+            if net.is_zero() {
+                continue;
+            }
+            let secs = cal.at_local(date, AUTOMATION_HOUR);
+            if secs >= horizon {
+                continue;
+            }
+            let name = self
+                .doc
+                .contacts
+                .iter()
+                .find(|contact| contact.id == terms.contact_id)
+                .map(|contact| contact.name.clone())
+                .unwrap_or_default();
+            out.push(UpcomingItem {
+                kind: UpcomingKind::Debt,
+                source_id: terms.contact_id.clone(),
+                at: calendar::iso(secs),
+                date: due.to_string(),
+                title: name,
+                store_id: None,
+                amount: Some(net),
+                asset: Some(row.asset.clone()),
+                shortfall: None,
+            });
+        }
+
         // Rejected runs wait for «Повторить / Пропустить».
         for run in &self.doc.automation_runs {
             let AutomationOutcome::Rejected { .. } = &run.outcome else {
@@ -493,6 +537,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: "Rent".into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::Monthly { day: 15 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Payment(rent),
@@ -505,6 +550,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: "Salary".into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::Monthly { day: 20 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Topup(salary),

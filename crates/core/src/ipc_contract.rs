@@ -13,7 +13,10 @@ use crate::model::planning::{
     AlertCondition, BudgetPeriod, BudgetTarget, Schedule, TransactionDraft,
 };
 use crate::model::store::StoreScope;
-use crate::model::store::{AssetRef, LiabilityTerms, StoreKind};
+use crate::model::store::{
+    AssetRef, Binding, Custody, ExchangeProvider, LiabilityTerms, PropertyInfo, Purpose, StoreKind,
+    SubType,
+};
 use crate::model::transaction::{
     AccountRef, AssetSellTx, ConvertSide, ConvertTx, DebtEffect, DefiAction, DefiTx, Fee,
     FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Liquidity, PaymentTx,
@@ -29,6 +32,9 @@ use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, Pric
 pub struct CreateVaultInput {
     pub path: String,
     pub password: String,
+    /// Name of the cash wallet every vault starts with, in the user's language.
+    #[serde(default)]
+    pub cash_name: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -67,20 +73,77 @@ pub struct VaultStatus {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct CreateStoreInput {
     pub name: String,
+    /// Ignored for a sub-account: it always has its wallet's kind.
     pub kind: StoreKind,
     pub color: String,
     pub note: String,
     #[serde(default)]
     pub parent_id: Option<String>,
-    /// `None` = the default: by kind for a wallet, the parent's for a sub-account.
+    /// Sub-accounts: the template, from `StoreKind::sub_types`.
     #[serde(default)]
-    pub in_budget: Option<bool>,
-    /// Loan terms; only for `liability`.
+    pub sub_type: Option<SubType>,
+    /// Sub-accounts: what it is locked to; market types fill it themselves.
+    #[serde(default)]
+    pub binding: Option<Binding>,
+    /// `None` = the default of the sub-account type, else of the kind.
+    #[serde(default)]
+    pub purpose: Option<Purpose>,
+    /// Loan terms; for `liability` wallets and credit cards.
     #[serde(default)]
     pub liability: Option<LiabilityTerms>,
     /// Contact the wallet belongs to; top-level only.
     #[serde(default)]
     pub contact_id: Option<String>,
+    #[serde(default)]
+    pub custody: Option<Custody>,
+    #[serde(default)]
+    pub property: Option<PropertyInfo>,
+    #[serde(default)]
+    pub secured_by: Option<String>,
+    /// Exchange wallets: which exchange it is.
+    #[serde(default)]
+    pub provider: Option<ExchangeProvider>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateEnvelopeInput {
+    pub id: String,
+    pub draft: crate::service::EnvelopeDraft,
+}
+
+/// `amount > 0` earmarks from the free balance, `< 0` releases.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct FundEnvelopeInput {
+    pub id: String,
+    pub amount: Amount,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct MoveEnvelopeInput {
+    pub from: String,
+    pub to: String,
+    pub amount: Amount,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetImportIntervalInput {
+    pub store_id: String,
+    /// Seconds; `0` turns the background import off.
+    pub interval_sec: u32,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateTerminalStateInput {
+    pub store_id: String,
+    pub patch: crate::service::TerminalPatch,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SaveTerminalDrawingsInput {
+    pub store_id: String,
+    pub symbol: String,
+    /// The chart drawing manager's JSON export; empty or `[]` removes it.
+    pub json: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -91,11 +154,26 @@ pub struct UpdateStoreInput {
     pub note: String,
     /// `None` keeps the current value.
     #[serde(default)]
-    pub in_budget: Option<bool>,
+    pub purpose: Option<Purpose>,
+    /// Sub-accounts; `None` keeps the current binding. Refused when booked
+    /// operations would no longer fit.
+    #[serde(default)]
+    pub binding: Option<Binding>,
     #[serde(default)]
     pub liability: Option<LiabilityTerms>,
     #[serde(default)]
     pub contact_id: Option<String>,
+    /// `None` keeps the current value.
+    #[serde(default)]
+    pub custody: Option<Custody>,
+    /// `None` keeps the current value.
+    #[serde(default)]
+    pub property: Option<PropertyInfo>,
+    #[serde(default)]
+    pub secured_by: Option<String>,
+    /// `None` keeps the current exchange.
+    #[serde(default)]
+    pub provider: Option<ExchangeProvider>,
 }
 
 /// Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
@@ -510,6 +588,13 @@ pub struct UpdateTransactionInput {
     pub transaction: TransactionInput,
 }
 
+/// A draft to preview; `replaces` is the id of the transaction being edited.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct PreviewTransactionInput {
+    pub transaction: TransactionInput,
+    pub replaces: Option<String>,
+}
+
 /// Which transaction kinds a wallet of one kind accepts, split the way the
 /// form presents them, with the kind to pre-select.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -537,6 +622,108 @@ impl TransactionKinds {
                 .collect(),
             default: default_kind(kind),
         }
+    }
+}
+
+// -- wallet catalog -------------------------------------------------------------
+
+/// Binding shape of a sub-account type, as the creation form needs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingShapeName {
+    Asset,
+    Pair,
+    Market,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SubTypeInfo {
+    pub sub_type: SubType,
+    pub shape: BindingShapeName,
+    pub default_purpose: Option<Purpose>,
+    /// Carries loan terms (a credit card).
+    pub credit: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct PresetInfo {
+    pub preset: crate::model::planning::AutomationPreset,
+    pub tx_kind: TxKind,
+    pub category: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct WalletKindInfo {
+    pub kind: StoreKind,
+    pub presets: Vec<PresetInfo>,
+    pub max_roots: Option<u32>,
+    pub user_creatable: bool,
+    pub default_purpose: Purpose,
+    pub sub_types: Vec<SubTypeInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ExchangeProviderInfo {
+    pub provider: ExchangeProvider,
+    /// The app can connect to it; others are shown as «soon».
+    pub supported: bool,
+}
+
+/// What every wallet kind allows, in sidebar order. Static domain data, so the
+/// UI never duplicates these rules.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct WalletCatalog {
+    pub kinds: Vec<WalletKindInfo>,
+    pub providers: Vec<ExchangeProviderInfo>,
+}
+
+impl WalletCatalog {
+    pub fn build() -> Self {
+        use crate::model::store::BindingShape;
+        let kinds = StoreKind::ALL
+            .iter()
+            .map(|&kind| WalletKindInfo {
+                kind,
+                presets: kind
+                    .automation_presets()
+                    .iter()
+                    .map(|&preset| PresetInfo {
+                        preset,
+                        tx_kind: preset.tx_kind(),
+                        category: preset.category().map(str::to_string),
+                    })
+                    .collect(),
+                max_roots: kind.max_roots().map(|max| max as u32),
+                user_creatable: kind.user_creatable(),
+                default_purpose: kind.default_purpose(),
+                sub_types: kind
+                    .sub_types()
+                    .iter()
+                    .map(|&sub_type| SubTypeInfo {
+                        sub_type,
+                        shape: match sub_type.binding_shape() {
+                            BindingShape::Asset => BindingShapeName::Asset,
+                            BindingShape::Pair => BindingShapeName::Pair,
+                            BindingShape::Market(_) => BindingShapeName::Market,
+                        },
+                        default_purpose: sub_type.default_purpose(),
+                        credit: sub_type.is_credit(),
+                    })
+                    .collect(),
+            })
+            .collect();
+        let providers = [
+            ExchangeProvider::Bybit,
+            ExchangeProvider::Binance,
+            ExchangeProvider::Okx,
+        ]
+        .into_iter()
+        .map(|provider| ExchangeProviderInfo {
+            provider,
+            supported: provider.supported(),
+        })
+        .collect();
+        Self { kinds, providers }
     }
 }
 
@@ -670,6 +857,8 @@ pub struct ConvertedAmount {
 pub struct AutomationInput {
     pub name: String,
     pub active: bool,
+    #[serde(default)]
+    pub preset: Option<crate::model::planning::AutomationPreset>,
     pub schedule: Schedule,
     /// RFC3339, the first planned date.
     pub starts_at: String,
@@ -692,6 +881,7 @@ impl AutomationInput {
         Ok(AutomationDraft {
             name: self.name.clone(),
             active: self.active,
+            preset: self.preset,
             schedule: self.schedule,
             starts_at: self.starts_at.clone(),
             template,
@@ -814,6 +1004,8 @@ pub struct UtilityInput {
     pub active: bool,
     pub kind: crate::model::planning::UtilityKind,
     pub currency: String,
+    /// The property the bill belongs to.
+    pub property_id: String,
     pub store_id: Option<String>,
     /// Category key of the payments.
     pub category: String,
@@ -826,6 +1018,7 @@ impl From<UtilityInput> for crate::service::UtilityDraft {
             active: input.active,
             kind: input.kind,
             currency: input.currency,
+            property_id: input.property_id,
             store_id: input.store_id.filter(|id| !id.trim().is_empty()),
             category: input.category,
         }
@@ -880,8 +1073,6 @@ pub struct UpdateSettingsInput {
     pub dashboard_widgets: Option<Vec<crate::model::vault::DashboardWidgetCfg>>,
     pub fx_refresh_interval_sec: Option<u32>,
     pub minimize_to_tray: Option<bool>,
-    /// Background Bybit poll interval; `0` disables it (D2.4).
-    pub bybit_import_interval_sec: Option<u32>,
     /// Share of income planned for savings, 0..1.
     pub savings_rate: Option<Amount>,
     pub daily_budget_mode: Option<DailyBudgetMode>,

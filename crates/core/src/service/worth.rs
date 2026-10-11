@@ -89,14 +89,13 @@ impl UnlockedVault {
         if currency.is_empty() {
             return Err(Error::InvalidInput("choose a currency".into()));
         }
-        let held_in_property = self.doc.holdings.iter().any(|holding| {
-            holding.asset.key() == asset_key
-                && self
-                    .doc
-                    .stores
-                    .iter()
-                    .any(|store| store.id == holding.store_id && store.kind == StoreKind::Asset)
-        });
+        let held_in_property =
+            self.doc.holdings.iter().any(|holding| {
+                holding.asset.key() == asset_key
+                    && self.doc.stores.iter().any(|store| {
+                        store.id == holding.store_id && store.kind == StoreKind::Property
+                    })
+            });
         if !held_in_property {
             return Err(Error::InvalidInput(
                 "a hand-set price is only for property held in a property wallet".into(),
@@ -144,7 +143,7 @@ impl UnlockedVault {
         {
             let value = holding.quantity * self.price_usd_for(&holding.asset.key()) * fx;
             match kinds.get(holding.store_id.as_str()) {
-                Some(StoreKind::Asset) => out.non_financial += value,
+                Some(StoreKind::Property) => out.non_financial += value,
                 Some(StoreKind::Liability) => {
                     *loans.entry(holding.store_id.as_str()).or_default() += value
                 }
@@ -192,7 +191,7 @@ impl UnlockedVault {
         self.doc
             .stores
             .iter()
-            .any(|store| store.id == id && store.in_budget)
+            .any(|store| store.id == id && store.in_budget())
     }
 
     fn store_kind(&self, id: &str) -> Option<StoreKind> {
@@ -358,7 +357,7 @@ mod tests {
                 "",
                 None,
                 StoreExtras {
-                    in_budget: Some(false),
+                    purpose: Some(crate::model::store::Purpose::Investment),
                     ..StoreExtras::default()
                 },
             )
@@ -466,7 +465,7 @@ mod tests {
     #[test]
     fn derivatives_never_count_in_value() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         vault.doc.price_cache.push(crate::model::vault::PricePoint {
             asset_key: AssetRef::perp("bybit", "BTCUSDT").key(),
             value_usd: amount("60000"),
@@ -509,7 +508,7 @@ mod tests {
     fn fees_do_not_fake_a_profit() {
         let (_dir, mut vault) = setup();
         vault.set_base_currency("usd");
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let mut deposit = income(&store, "1000", "in");
         at(&mut deposit, "2026-01-01T00:00:00Z");
         vault.add_transaction(deposit).unwrap();

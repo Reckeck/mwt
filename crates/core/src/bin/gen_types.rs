@@ -27,6 +27,18 @@ fn main() {
     export!(
         trade_core::model::store::StoreKind,
         trade_core::model::store::Store,
+        trade_core::model::store::SubType,
+        trade_core::model::store::Binding,
+        trade_core::model::store::MarketKind,
+        trade_core::model::store::Purpose,
+        trade_core::model::store::Custody,
+        trade_core::model::store::PropertyInfo,
+        trade_core::model::store::PropertyCategory,
+        trade_core::model::store::ExchangeProfile,
+        trade_core::model::store::ExchangeProvider,
+        trade_core::model::store::TerminalState,
+        trade_core::model::store::TerminalLayout,
+        trade_core::model::store::IndicatorCfg,
         trade_core::model::store::Holding,
         trade_core::model::transaction::Transaction,
         trade_core::model::transaction::TxKind,
@@ -112,6 +124,27 @@ fn main() {
         trade_core::ipc_contract::TradeSideInput,
         trade_core::ipc_contract::TransactionInput,
         trade_core::ipc_contract::UpdateTransactionInput,
+        trade_core::ipc_contract::PreviewTransactionInput,
+        trade_core::ipc_contract::SetImportIntervalInput,
+        trade_core::ipc_contract::UpdateTerminalStateInput,
+        trade_core::ipc_contract::SaveTerminalDrawingsInput,
+        trade_core::service::TerminalPatch,
+        trade_core::service::DebtTermsDraft,
+        trade_core::model::contact::DebtTerms,
+        trade_core::service::PropertySummary,
+        trade_core::ipc_contract::WalletCatalog,
+        trade_core::ipc_contract::WalletKindInfo,
+        trade_core::ipc_contract::PresetInfo,
+        trade_core::model::planning::AutomationPreset,
+        trade_core::ipc_contract::SubTypeInfo,
+        trade_core::ipc_contract::BindingShapeName,
+        trade_core::ipc_contract::ExchangeProviderInfo,
+        trade_core::service::EnvelopeDraft,
+        trade_core::service::EnvelopeView,
+        trade_core::model::planning::Envelope,
+        trade_core::ipc_contract::UpdateEnvelopeInput,
+        trade_core::ipc_contract::FundEnvelopeInput,
+        trade_core::ipc_contract::MoveEnvelopeInput,
         trade_core::ipc_contract::UpdateContactInput,
         trade_core::ipc_contract::ContactTurnoverInput,
         trade_core::ipc_contract::CreateCategoryInput,
@@ -212,6 +245,9 @@ fn main() {
         trade_core::service::RealizedPnl,
         trade_core::service::NetWorth,
         trade_core::service::FlowClass,
+        trade_core::service::TxPreview,
+        trade_core::service::PositionChange,
+        trade_core::service::PreviewWarning,
         trade_core::service::ContactDraft,
         trade_core::service::ContactTurnover,
         trade_core::service::TurnoverRow,
@@ -264,7 +300,10 @@ fn main() {
         let content = fs::read_to_string(out_dir.join(&file)).expect("read export file");
         for line in content.lines() {
             let trimmed = line.trim_start();
-            if trimmed.starts_with("import") || trimmed.starts_with("// This file was generated") {
+            // Only real import statements: a field such as `import_interval_sec`
+            // also starts with "import".
+            let is_import = trimmed.starts_with("import ") || trimmed.starts_with("import{");
+            if is_import || trimmed.starts_with("// This file was generated") {
                 continue;
             }
             let exported = trimmed

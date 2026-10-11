@@ -1,10 +1,23 @@
 use tauri::State;
 
-use trade_core::ipc_contract::{CreateStoreInput, MoveStoreInput, UpdateStoreInput};
+use trade_core::ipc_contract::{
+    CreateStoreInput, FundEnvelopeInput, MoveEnvelopeInput, MoveStoreInput, UpdateEnvelopeInput,
+    UpdateStoreInput, WalletCatalog,
+};
+use trade_core::model::planning::Envelope;
 use trade_core::model::store::Store;
-use trade_core::service::{StoreExtras, StoreMoveTargets, StoreOverview, StoreTreeNode};
+use trade_core::service::{
+    EnvelopeDraft, EnvelopeView, StoreExtras, StoreMoveTargets, StoreOverview, StoreTreeNode,
+};
 
 use crate::commands::{AppState, err_to_string, require_vault};
+
+/// What every wallet kind allows (sub-account types, limits, exchanges).
+/// Pure: needs no vault.
+#[tauri::command]
+pub async fn get_wallet_catalog() -> Result<WalletCatalog, String> {
+    Ok(WalletCatalog::build())
+}
 
 #[tauri::command]
 pub async fn list_stores(state: State<'_, AppState>) -> Result<Vec<Store>, String> {
@@ -27,9 +40,15 @@ pub async fn create_store(
             &input.note,
             input.parent_id,
             StoreExtras {
-                in_budget: input.in_budget,
+                purpose: input.purpose,
                 liability: input.liability,
                 contact_id: input.contact_id,
+                sub_type: input.sub_type,
+                binding: input.binding,
+                custody: input.custody,
+                property: input.property,
+                secured_by: input.secured_by,
+                provider: input.provider,
             },
         )
         .map_err(err_to_string)
@@ -49,9 +68,15 @@ pub async fn update_store(
             &input.color,
             &input.note,
             StoreExtras {
-                in_budget: input.in_budget,
+                purpose: input.purpose,
                 liability: input.liability,
                 contact_id: input.contact_id,
+                sub_type: None,
+                binding: input.binding,
+                custody: input.custody,
+                property: input.property,
+                secured_by: input.secured_by,
+                provider: input.provider,
             },
         )
         .map_err(err_to_string)
@@ -122,5 +147,80 @@ pub async fn get_store_overview(
         .as_ref()
         .unwrap()
         .store_overview(&store_id, include_children.unwrap_or(true))
+        .map_err(err_to_string)
+}
+
+// -- envelopes ---------------------------------------------------------------
+
+/// Envelopes of one store, or of every store when `store_id` is absent.
+#[tauri::command]
+pub async fn list_envelopes(
+    store_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Vec<EnvelopeView>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().envelopes(store_id.as_deref()))
+}
+
+#[tauri::command]
+pub async fn create_envelope(
+    input: EnvelopeDraft,
+    state: State<'_, AppState>,
+) -> Result<Envelope, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .create_envelope(input)
+        .map_err(err_to_string)
+}
+
+#[tauri::command]
+pub async fn update_envelope(
+    input: UpdateEnvelopeInput,
+    state: State<'_, AppState>,
+) -> Result<Envelope, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .update_envelope(&input.id, input.draft)
+        .map_err(err_to_string)
+}
+
+/// Earmark more (`amount > 0`) or release (`amount < 0`).
+#[tauri::command]
+pub async fn fund_envelope(
+    input: FundEnvelopeInput,
+    state: State<'_, AppState>,
+) -> Result<Envelope, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .fund_envelope(&input.id, input.amount)
+        .map_err(err_to_string)
+}
+
+#[tauri::command]
+pub async fn move_between_envelopes(
+    input: MoveEnvelopeInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .move_between_envelopes(&input.from, &input.to, input.amount)
+        .map_err(err_to_string)
+}
+
+#[tauri::command]
+pub async fn delete_envelope(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .delete_envelope(&id)
         .map_err(err_to_string)
 }

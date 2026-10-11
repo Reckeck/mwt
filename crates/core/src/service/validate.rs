@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use crate::Amount;
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, WalletRule};
 use crate::model::category::CategoryGroup;
 use crate::model::store::{Store, StoreKind};
 use crate::model::transaction::{
@@ -81,7 +81,7 @@ impl UnlockedVault {
         }
     }
 
-    fn live_store(&self, id: &str) -> Result<&Store> {
+    pub(crate) fn live_store(&self, id: &str) -> Result<&Store> {
         match self.doc.stores.iter().find(|store| store.id == id) {
             Some(store) if store.archived => Err(Error::Archived(id.into())),
             Some(store) => Ok(store),
@@ -138,16 +138,13 @@ impl UnlockedVault {
                 return Err(invalid("the banknotes do not add up to the amount"));
             }
         }
-        if details.unit_price.is_some() && store.kind != StoreKind::Asset {
+        if details.unit_price.is_some() && store.kind != StoreKind::Property {
             return Err(invalid("a unit price is only for property"));
         }
         if let Some(price) = details.unit_price {
             positive(price, "the unit price")?;
         }
-        let crypto = matches!(
-            store.kind,
-            StoreKind::Exchange | StoreKind::HotWallet | StoreKind::ColdWallet
-        );
+        let crypto = matches!(store.kind, StoreKind::Exchange | StoreKind::Crypto);
         if (details.network.is_some()
             || details
                 .tx_hash
@@ -209,11 +206,15 @@ impl UnlockedVault {
             .filter(|leg| leg.role == LegRole::Principal)
         {
             let store = self.live_store(&leg.store_id)?;
+            // V15: a sub-account holds only what it is bound to.
+            if !store.binding.admits(&leg.asset) {
+                return Err(Error::WalletRule(WalletRule::BindingMismatch));
+            }
             match store.kind {
                 StoreKind::Cash | StoreKind::Bank if !leg.asset.is_fiat() => {
                     return Err(invalid("cash and bank accounts hold only fiat"));
                 }
-                StoreKind::Asset if leg.asset.coingecko_id.is_some() || leg.asset.is_fiat() => {
+                StoreKind::Property if leg.asset.coingecko_id.is_some() || leg.asset.is_fiat() => {
                     return Err(invalid("a property wallet holds things, not money"));
                 }
                 _ => {}
@@ -232,7 +233,7 @@ impl UnlockedVault {
                 }
                 let store = self.live_store(&inner.store_id)?;
                 Self::check_details(store, &inner.details, inner.amount)?;
-                if store.kind == StoreKind::Asset && inner.details.unit_price.is_none() {
+                if store.kind == StoreKind::Property && inner.details.unit_price.is_none() {
                     return Err(invalid("buying property needs a unit price"));
                 }
             }
@@ -450,11 +451,11 @@ mod tests {
     #[test]
     fn a_kind_must_fit_the_store() {
         let (_dir, mut vault) = setup();
-        let cold = vault.doc.stores[1].id.clone();
+        let cold = vault.doc.stores[2].id.clone();
         assert!(
             rejected(vault.add_transaction(trade(&cold, "1", "1", "x"))).contains("not possible")
         );
-        let flat = store(&mut vault, "Flat", StoreKind::Asset, None);
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
         assert!(rejected(vault.add_transaction(payment(&flat, "1", "x"))).contains("not possible"));
     }
 
@@ -474,7 +475,7 @@ mod tests {
     #[test]
     fn categories_must_fit_the_verb() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let mut bare = payment(&store, "1", "x");
         bare.meta_mut().categories.clear();
         assert!(rejected(vault.add_transaction(bare)).contains("choose a category"));
@@ -496,7 +497,7 @@ mod tests {
             rejected(vault.add_transaction(transfer_between(raw("a"), raw("b"), usd(), "1")))
                 .contains("must be your wallet")
         );
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let mut convert = Transaction::Convert(ConvertTx {
             meta: meta("fx", &[]),
             from: ConvertSide {
@@ -525,7 +526,7 @@ mod tests {
     #[test]
     fn contact_accounts_are_checked() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let contact = vault
             .create_contact(ContactDraft {
                 name: "Mom".into(),
@@ -581,7 +582,7 @@ mod tests {
     #[test]
     fn futures_fields_are_checked() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let futures = |action: FuturesAction, pnl: Option<&str>| {
             Transaction::TradeFutures(TradeFuturesTx {
                 meta: meta("perp", &[]),
@@ -616,7 +617,7 @@ mod tests {
     #[test]
     fn dates_are_checked() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let mut later = income(&store, "1", "x");
         at(&mut later, "2999-01-01T00:00:00Z");
         assert!(rejected(vault.add_transaction(later)).contains("future"));
@@ -629,7 +630,7 @@ mod tests {
     #[test]
     fn debt_direction_must_match_the_sides() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let contact = vault
             .create_contact(ContactDraft {
                 name: "Ann".into(),
@@ -656,7 +657,7 @@ mod tests {
     #[test]
     fn rules_fill_empty_categories_in_order() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let late = vault
             .create_categorization_rule("такси", "transport")
             .unwrap();

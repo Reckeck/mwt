@@ -518,8 +518,8 @@ pub fn allowed_kinds(kind: StoreKind) -> &'static [TxKind] {
     match kind {
         StoreKind::Cash | StoreKind::Bank => &[Topup, Payment, Transfer, Convert],
         StoreKind::Exchange => &[Topup, Payment, Transfer, Convert, TradeSpot, TradeFutures],
-        StoreKind::HotWallet | StoreKind::ColdWallet => &[Topup, Payment, Transfer, Convert, Defi],
-        StoreKind::Asset => &[Topup, AssetSell],
+        StoreKind::Crypto => &[Topup, Payment, Transfer, Convert, Defi],
+        StoreKind::Property => &[Topup, AssetSell],
         StoreKind::Liability => &[Payment, Transfer],
     }
 }
@@ -529,8 +529,8 @@ pub fn default_kind(kind: StoreKind) -> TxKind {
     match kind {
         StoreKind::Cash | StoreKind::Bank => TxKind::Payment,
         StoreKind::Exchange => TxKind::TradeSpot,
-        StoreKind::HotWallet | StoreKind::ColdWallet | StoreKind::Liability => TxKind::Transfer,
-        StoreKind::Asset => TxKind::Topup,
+        StoreKind::Crypto | StoreKind::Liability => TxKind::Transfer,
+        StoreKind::Property => TxKind::Topup,
     }
 }
 
@@ -1122,9 +1122,9 @@ mod tests {
             StoreKind::Cash,
             StoreKind::Bank,
             StoreKind::Exchange,
-            StoreKind::HotWallet,
-            StoreKind::ColdWallet,
-            StoreKind::Asset,
+            StoreKind::Crypto,
+            StoreKind::Crypto,
+            StoreKind::Property,
             StoreKind::Liability,
         ] {
             assert!(
@@ -1132,7 +1132,7 @@ mod tests {
                 "{kind:?}"
             );
         }
-        assert!(!allowed_kinds(StoreKind::Asset).contains(&TxKind::Payment));
+        assert!(!allowed_kinds(StoreKind::Property).contains(&TxKind::Payment));
         assert!(!allowed_kinds(StoreKind::Liability).contains(&TxKind::Topup));
         assert!(allowed_kinds(StoreKind::Exchange).contains(&TxKind::TradeFutures));
     }
