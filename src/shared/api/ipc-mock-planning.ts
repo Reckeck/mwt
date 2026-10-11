@@ -537,6 +537,7 @@ export function mockPlanning(
         muted: false,
         user_edited: false,
         snoozed_until: null,
+        source_key: '',
       }
       reminders.push(reminder)
       return reminder

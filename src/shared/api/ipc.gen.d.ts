@@ -2002,7 +2002,13 @@ user_edited: boolean,
 /**
  * Put off until this moment (RFC3339); it is not due before.
  */
-snoozed_until: string | null, };
+snoozed_until: string | null, 
+/**
+ * An automatic reminder: the schedule it was last placed by (the day,
+ * how far ahead, the time). Only a changed schedule moves it again, so a
+ * sync never undoes «done».
+ */
+source_key: string, };
 
 type ReminderInput = { text: string, 
 /**

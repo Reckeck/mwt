@@ -67,6 +67,11 @@ impl Calendar {
         wall.and_utc().timestamp()
     }
 
+    /// `date` at `hour:minute` local time, as Unix seconds.
+    pub fn at_local_hm(&self, date: NaiveDate, hour: u32, minute: u32) -> i64 {
+        self.at_local(date, hour) + i64::from(minute.min(59)) * 60
+    }
+
     /// Local midnight that starts `date`.
     pub fn start_of(&self, date: NaiveDate) -> i64 {
         self.at_local(date, 0)

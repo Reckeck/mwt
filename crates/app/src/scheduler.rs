@@ -337,16 +337,24 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
 
 fn reminders_tick(app: &AppHandle, memory: &mut Memory) {
     let state = app.state::<AppState>();
-    let due = {
-        let Ok(guard) = state.vault.lock() else {
-            return;
-        };
-        let Some(vault) = guard.as_ref() else {
-            return;
-        };
-        vault.due_reminders(now_secs())
-    };
     let ru = russian(app);
+    let zone = current_zone(app);
+    let (due, synced) = {
+        let Ok(mut guard) = state.vault.lock() else {
+            return;
+        };
+        let Some(vault) = guard.as_mut() else {
+            return;
+        };
+        // Automatic reminders follow the data: a new loan, a moved payment day.
+        let synced = vault
+            .sync_auto_reminders(now_secs(), &zone, ru)
+            .unwrap_or(false);
+        (vault.due_reminders(now_secs()), synced)
+    };
+    if synced {
+        let _ = app.emit("reminders-changed", serde_json::json!({}));
+    }
     for reminder in due {
         if !memory.announced_reminders.insert(reminder.id.clone()) {
             continue;

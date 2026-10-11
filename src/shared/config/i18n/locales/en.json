@@ -1655,7 +1655,7 @@
   "reminder.autoEditHint": "This is an automatic reminder: after an edit its time stays yours and the sync leaves it alone.",
   "reminder.doneRepeatHint": "Done: move it to the next date",
   "reminder.auto": "Auto",
-  "reminder.autoHint": "Created automatically from the app's data",
+  "reminder.autoHint": "Made from the data: a loan, rent, utilities, a deposit, a debt, a goal or a tax. It moves when the day changes and closes the month once the payment is booked.",
   "reminder.more": "More",
   "reminder.snooze.10m": "Snooze for 10 minutes",
   "reminder.snooze.1h": "Snooze for an hour",
@@ -1663,6 +1663,12 @@
   "reminder.snoozed": "Will remind {when}",
   "reminder.finishSeries": "End the series",
   "reminder.seriesFinished": "Series ended",
+  "reminder.filter": "Which reminders",
+  "reminder.filterAll": "All",
+  "reminder.filterMine": "Mine",
+  "reminder.filterAuto": "Auto",
+  "reminder.openSource": "Open where it comes from",
+  "reminder.mute": "Stop reminding",
   "tour.planningReminders.repeat.title": "Repeating reminders",
   "tour.planningReminders.repeat.body": "Choose how often it repeats: «done» moves it to the next date, and the «More» menu snoozes it or ends the series.",
   "simulation.open": "Try it out",
@@ -1677,5 +1683,7 @@
   "simulation.nothing": "The automations do nothing in this time.",
   "simulation.balances": "Balances: now → at the end",
   "tour.planningAutomations.simulate.title": "Try without risk",
-  "tour.planningAutomations.simulate.body": "«Try it out» runs the automations ahead on a copy of the vault: what would be created, where money would run short and what the balances would be. Nothing is written."
+  "tour.planningAutomations.simulate.body": "«Try it out» runs the automations ahead on a copy of the vault: what would be created, where money would run short and what the balances would be. Nothing is written.",
+  "tour.planningReminders.filter.title": "Yours and automatic",
+  "tour.planningReminders.filter.body": "The app reminds you of loan, rent and utility payments, deposits ending, debts, goals and taxes by itself: those are «Auto». Edit or stop one in the «More» menu; switch whole kinds on and off in Settings → Notifications."
 }
