@@ -1734,5 +1734,10 @@
   "notices.catHint.budget": "A limit nearly used up or exceeded",
   "notices.catHint.price_alert": "A price crossed its threshold",
   "notices.catHint.automation": "Created or rejected by an automation",
-  "notices.catHint.bybit_import": "New exchange operations to confirm"
+  "notices.catHint.bybit_import": "New exchange operations to confirm",
+  "notices.locked": "While the vault is locked",
+  "notices.lockedKeyring": "Reminders, due dates and price alerts keep coming: a 60-day schedule is kept encrypted with a key from the system keyring and survives a restart. At unlock everything shown goes into the log without repeats.",
+  "notices.lockedMemory": "The system keyring is not available, so the schedule is kept in memory only: while the app runs, notices come with the vault locked, but after a restart only once it is unlocked.",
+  "notices.autostart": "Start when you log in",
+  "notices.autostartHint": "The app starts hidden in the tray, so reminders come after a reboot too."
 }

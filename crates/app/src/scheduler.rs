@@ -40,8 +40,10 @@ struct Memory {
     /// Last import poll per exchange store.
     last_bybit: HashMap<String, Instant>,
     last_alert_refresh: Option<Instant>,
-    announced_reminders: HashSet<String>,
 }
+
+/// How often the snapshot for a locked vault is taken while it is open.
+const SNAPSHOT_REFRESH_SEC: u64 = 60;
 
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || {
@@ -49,13 +51,16 @@ pub fn spawn(app: AppHandle) {
         loop {
             std::thread::sleep(Duration::from_secs(SCHEDULER_TICK_SEC));
             if !is_unlocked(&app) {
-                memory.announced_reminders.clear();
+                locked_tick(&app);
                 continue;
             }
+            // First take in what was told while locked, so nothing repeats.
+            merge_locked(&app);
             bybit_tick(&app, &mut memory);
             automations_tick(&app);
             alerts_tick(&app, &mut memory);
             reminders_tick(&app, &mut memory);
+            snapshot_tick(&app, false);
         }
     });
 }
@@ -118,6 +123,176 @@ fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
         vault.log_notices(records).unwrap_or_default()
     };
     deliver(app, fresh, false);
+}
+
+// -- 0. Notices while the vault is locked ---------------------------------------
+
+/// Take a fresh snapshot of the notices ahead (every minute, or now with
+/// `force`) and keep it, encrypted.
+pub fn snapshot_tick(app: &AppHandle, force: bool) {
+    let state = app.state::<AppState>();
+    let due = state.notify.lock().is_ok_and(|notify| {
+        force
+            || notify
+                .last_snapshot
+                .is_none_or(|last| last.elapsed() >= Duration::from_secs(SNAPSHOT_REFRESH_SEC))
+    });
+    if !due {
+        return;
+    }
+    let ru = russian(app);
+    let zone = current_zone(app);
+    let snapshot = {
+        let Ok(guard) = state.vault.lock() else {
+            return;
+        };
+        let Some(vault) = guard.as_ref() else {
+            return;
+        };
+        vault.notification_snapshot(now_secs(), &zone, ru)
+    };
+    if let Ok(mut notify) = state.notify.lock() {
+        notify.snapshot = Some(snapshot);
+        notify.last_snapshot = Some(Instant::now());
+        crate::notify_store::save(app, &mut notify);
+    }
+}
+
+/// Merge what was shown while locked into the vault's log (same vault only).
+fn merge_locked(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let (vault_id, shown, fired) = {
+        let Ok(mut notify) = state.notify.lock() else {
+            return;
+        };
+        if notify.shown.is_empty() && notify.fired_alerts.is_empty() {
+            return;
+        }
+        (
+            notify
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.vault_id.clone())
+                .unwrap_or_default(),
+            std::mem::take(&mut notify.shown),
+            std::mem::take(&mut notify.fired_alerts),
+        )
+    };
+    {
+        let Ok(mut guard) = state.vault.lock() else {
+            return;
+        };
+        let Some(vault) = guard.as_mut() else {
+            return;
+        };
+        if vault.doc.id == vault_id {
+            let _ = vault.apply_locked_deliveries(shown, &fired);
+        }
+    }
+    if let Ok(mut notify) = state.notify.lock() {
+        crate::notify_store::save(app, &mut notify);
+    }
+    let _ = app.emit("reminders-changed", serde_json::json!({}));
+}
+
+/// The vault is locked: remind from the snapshot, check alerts against fresh
+/// prices every few minutes. Nothing here can read the vault.
+fn locked_tick(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let ru = russian(app);
+    let now = now_secs();
+    let (fresh, system, alert_assets) = {
+        let Ok(mut notify) = state.notify.lock() else {
+            return;
+        };
+        let Some(snapshot) = notify.snapshot.clone() else {
+            return;
+        };
+        let shown: HashSet<String> = notify
+            .shown
+            .iter()
+            .map(|record| record.key.clone())
+            .collect();
+        let fresh = snapshot.due(now, &shown);
+        notify.shown.extend(fresh.iter().cloned());
+        let check_alerts = !snapshot.alerts.is_empty()
+            && notify
+                .last_alert_check
+                .is_none_or(|last| last.elapsed() >= Duration::from_secs(ALERT_REFRESH_SEC));
+        if check_alerts {
+            notify.last_alert_check = Some(Instant::now());
+        }
+        let assets: Vec<_> = if check_alerts {
+            snapshot
+                .alerts
+                .iter()
+                .map(|alert| alert.asset.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !fresh.is_empty() {
+            crate::notify_store::save(app, &mut notify);
+        }
+        (fresh, snapshot.system, assets)
+    };
+    show_locked(app, fresh, system);
+    if alert_assets.is_empty() {
+        return;
+    }
+    let Ok(prices) = tauri::async_runtime::block_on(state.pricing.fetch_prices(&alert_assets))
+    else {
+        return;
+    };
+    let usd: HashMap<String, trade_core::Amount> = prices
+        .into_iter()
+        .map(|point| (point.asset_key, point.value_usd))
+        .collect();
+    let hits = {
+        let Ok(mut notify) = state.notify.lock() else {
+            return;
+        };
+        let Some(snapshot) = notify.snapshot.clone() else {
+            return;
+        };
+        let fired: HashSet<String> = notify
+            .fired_alerts
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect();
+        let hits = snapshot.alert_hits(&usd, &fired, ru);
+        for (alert_id, record) in &hits {
+            notify
+                .fired_alerts
+                .push((alert_id.clone(), record.at.clone()));
+            notify.shown.push(record.clone());
+        }
+        if !hits.is_empty() {
+            crate::notify_store::save(app, &mut notify);
+        }
+        hits
+    };
+    show_locked(
+        app,
+        hits.into_iter().map(|(_, record)| record).collect(),
+        system,
+    );
+}
+
+/// Show notices without the vault: the window gets them, the system too
+/// unless the user turned system notices off.
+fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
+    for record in records {
+        let _ = app.emit("notification", &record);
+        if system {
+            let _ = app
+                .notification()
+                .builder()
+                .title(&record.title)
+                .body(&record.body)
+                .show();
+        }
+    }
 }
 
 // -- 1. Bybit import -------------------------------------------------------------

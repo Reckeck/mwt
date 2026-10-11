@@ -31,6 +31,8 @@ pub struct AppState {
     pub vault: Mutex<Option<UnlockedVault>>,
     pub pricing: PricingService,
     pub vault_path: Mutex<PathBuf>,
+    /// Notices told while the vault is locked (see `notify_store`).
+    pub notify: Mutex<crate::notify_store::NotifyMemory>,
 }
 
 impl AppState {
@@ -39,6 +41,7 @@ impl AppState {
             vault: Mutex::new(None),
             pricing: PricingService::default(),
             vault_path: Mutex::new(PathBuf::new()),
+            notify: Mutex::new(crate::notify_store::NotifyMemory::default()),
         }
     }
 }
