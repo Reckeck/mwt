@@ -101,7 +101,7 @@ vault: они переживают открытие другого хранил�
 | `cash` | наличные | ровно один, создаётся вместе с vault, не архивируется и не удаляется (`CASH_LOCKED`) | `pocket` | `everyday` |
 | `bank` | банк | сколько угодно | `card`, `account`, `deposit`, `savings`, `pds`, `credit_card` | `everyday` |
 | `crypto` | свой кошелёк (`custody: hot \| cold`) | сколько угодно | `token` | `investment` |
-| `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `funding`, `unified`, `earn`, `spot`, `futures`, `pair` | `investment` |
+| `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `funding`, `unified`, `earn`; прежние `spot`, `futures`, `pair` остаются валидными, но новыми не предлагаются (`StoreKind::admits_sub_type`). Спот и фьючерсы ведутся на `unified`: форма операции и импорт кладут сделку туда | `investment` |
 | `property` | имущество (`property: PropertyInfo`, `utilities_pay_day?`) | сколько угодно | — | `investment` |
 | `loyalty` | бонусная программа (`loyalty: LoyaltyInfo { points_symbol, point_value, currency, expires_at?, expiring_points? }`) | сколько угодно | — | `savings` (в капитале — нефинансовые активы) |
 | `liability` | кредит (`liability: LiabilityTerms`, `secured_by` — объект в залоге) | сколько угодно | — | — (в бюджет не входит никогда) |

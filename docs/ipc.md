@@ -264,7 +264,7 @@ JSON без шифрования — там нет ничего секретно
 | `list_pending_imports` | — | `ListPendingImportsOutput { imports: Vec<PendingImport> }` (новые сверху) |
 | `confirm_pending_imports` | `ConfirmPendingImportsInput { exec_ids }` (пусто = все) | `ConfirmPendingImportsOutput { confirmed }` — `kind = fill`: спот → `TradeSpot`, linear/inverse → `TradeFutures` (комиссия в валюте расчёта), на субсчёт из ключа, иначе Unified; `transfer` → `Transfer` между субсчетами Funding/Unified/Earn; `earn_income` → `Topup` (`deposit_interest`) на Earn; не прошедшая проверку остаётся в staging |
 | `discard_pending_imports` | `DiscardPendingImportsInput { exec_ids }` (пусто = все) | `DiscardPendingImportsOutput { discarded }` |
-| `create_bybit_accounts` | `CreateBybitAccountsInput { store_id, funding_name, unified_name, earn_name }` | `Vec<String>` — субсчета Funding / Unified / Earn (недостающие создаются) |
+| `create_bybit_accounts` | `CreateBybitAccountsInput { store_id, funding_name, unified_name, earn_name, detect }` | `Vec<String>` — субсчета Funding / Unified / Earn (недостающие создаются). `detect`: сперва спросить у Bybit балансы и создать только счета, где есть монеты (Unified — всегда); без сети создаются все три. Фронт вызывает его с `detect` сразу после `set_exchange_key` (настройки биржи и мастер создания биржи) |
 | `bybit_balances` | `store_id` | `Vec<ExchangeAccountBalance { account, store_id?, rows[{ coin, exchange, ledger, diff }] }>` — балансы FUND/UNIFIED/EARN по API рядом с учётом субсчёта |
 
 Инварианты блока:

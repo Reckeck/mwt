@@ -121,6 +121,41 @@ watch(
   { immediate: true },
 )
 
+/**
+ * Spot and futures live on the exchange's Unified Trading account: a trade
+ * entered on the wallet itself or on its funding or earn account is booked
+ * there. An older spot or futures sub-account keeps its own trades.
+ */
+const unifiedAccount = computed(() => {
+  const store = contextStore.value
+  if (store?.kind !== 'exchange') return null
+  const market = typeof store.binding === 'object' && 'market' in store.binding ? store.binding.market : null
+  if (market === 'spot' || market === 'futures' || market === 'unified') return null
+  const rootId = store.parent_id ?? store.id
+  return (
+    nodes.value.find(
+      (node) =>
+        node.store.parent_id === rootId &&
+        !node.store.archived &&
+        typeof node.store.binding === 'object' &&
+        'market' in node.store.binding &&
+        node.store.binding.market === 'unified',
+    )?.store ?? null
+  )
+})
+const tradeOnUnified = computed(
+  () => !editing.value && Boolean(unifiedAccount.value) && ['trade_spot', 'trade_futures'].includes(form.kind),
+)
+watch(
+  [tradeOnUnified, () => form.storeId],
+  ([onUnified]) => {
+    if (editing.value) return
+    const target = onUnified && unifiedAccount.value ? unifiedAccount.value.id : props.storeId
+    if (form.storeId !== target) form.storeId = target
+  },
+  { immediate: true },
+)
+
 /** The kind always has a value: pressing the active one again is ignored. */
 function pickKind(value: unknown) {
   if (typeof value === 'string' && value) form.kind = value as TxKind
@@ -581,6 +616,10 @@ const verbLabel = (kind: TxKind) =>
     >
       <ToggleGroupItem v-for="entry in offered" :key="entry" :value="entry">{{ verbLabel(entry) }}</ToggleGroupItem>
     </ToggleGroup>
+
+    <p v-if="tradeOnUnified && unifiedAccount" class="text-xs text-muted-foreground">
+      {{ t('tx.tradeOnUnified', { name: unifiedAccount.name }) }}
+    </p>
 
     <!-- Topup · Payment · DeFi: one asset on this wallet -->
     <template v-if="form.kind === 'topup' || form.kind === 'payment' || form.kind === 'defi'">

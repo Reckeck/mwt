@@ -299,12 +299,27 @@ fn import_notice(message: &str) -> &'static str {
 }
 
 /// Give a Bybit wallet its Funding, Unified Trading and Earn sub-accounts;
-/// the ones already there are kept. Returns the wallet's sub-account ids.
+/// the ones already there are kept. With `detect`, Bybit is asked which of
+/// them hold anything first (the unified one is always created). Returns the
+/// wallet's sub-account ids.
 #[tauri::command]
 pub async fn create_bybit_accounts(
     input: CreateBybitAccountsInput,
     state: State<'_, AppState>,
 ) -> Result<Vec<String>, String> {
+    let mut wanted = [true; 3];
+    if input.detect {
+        let key = {
+            let guard = require_vault(&state).map_err(err_to_string)?;
+            bybit_key_for(guard.as_ref().unwrap(), &input.store_id)
+                .map(|entry| (entry.api_key.clone(), entry.api_secret.clone()))
+        };
+        if let Some((api_key, api_secret)) = key
+            && let Ok(balances) = BybitClient::default().balances(&api_key, &api_secret).await
+        {
+            wanted = trade_core::exchange::bybit::accounts_in_use(&balances);
+        }
+    }
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     let names = [
@@ -313,8 +328,8 @@ pub async fn create_bybit_accounts(
         input.earn_name.trim(),
     ];
     vault
-        .ensure_bybit_accounts(&input.store_id, names)
-        .map(Vec::from)
+        .ensure_bybit_accounts_for(&input.store_id, names, wanted)
+        .map(|ids| ids.into_iter().flatten().collect())
         .map_err(err_to_string)
 }
 

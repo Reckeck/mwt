@@ -51,17 +51,31 @@ impl StoreKind {
         !matches!(self, Self::Cash)
     }
 
-    /// Sub-account types a wallet of this kind offers.
+    /// Sub-account types a new sub-account of this kind is offered as.
     pub fn sub_types(self) -> &'static [SubType] {
         use SubType::*;
         match self {
             Self::Cash => &[Pocket],
-            Self::Bank => &[Card, Account, Deposit, Savings, Pds, CreditCard],
+            // A card is a bank account: one type for both.
+            Self::Bank => &[Card, Deposit, Savings, Pds, CreditCard],
             Self::Crypto => &[Token],
-            // Bybit's own split first: Funding, Unified Trading, Earn.
-            Self::Exchange => &[Funding, Unified, Earn, Spot, Futures, Pair],
+            // Bybit's own split: Funding, Unified Trading (spot and
+            // derivatives together), Earn.
+            Self::Exchange => &[Funding, Unified, Earn],
             Self::Property | Self::Loyalty | Self::Liability => &[],
         }
+    }
+
+    /// Every sub-account type a wallet of this kind may hold: what it offers
+    /// plus the older types it used to offer (a separate account next to the
+    /// card, spot and futures next to the unified account, a pair).
+    pub fn admits_sub_type(self, sub_type: SubType) -> bool {
+        use SubType::*;
+        self.sub_types().contains(&sub_type)
+            || matches!(
+                (self, sub_type),
+                (Self::Bank, Account) | (Self::Exchange, Spot | Futures | Pair)
+            )
     }
 
     /// Ready-made automations a wallet of this kind offers.

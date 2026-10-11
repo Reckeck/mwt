@@ -948,6 +948,10 @@ pub struct CreateBybitAccountsInput {
     pub funding_name: String,
     pub unified_name: String,
     pub earn_name: String,
+    /// Ask Bybit which accounts hold anything and create only those (the
+    /// unified one always); without the network all three are created.
+    #[serde(default)]
+    pub detect: bool,
 }
 
 /// One coin of one exchange account: the exchange's figure next to the ledger's.

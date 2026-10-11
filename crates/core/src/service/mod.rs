@@ -511,7 +511,7 @@ impl UnlockedVault {
         binding: Option<&Binding>,
     ) -> Result<(SubType, Binding)> {
         let sub_type = sub_type.ok_or(Error::WalletRule(WalletRule::BindingRequired))?;
-        if !kind.sub_types().contains(&sub_type) {
+        if !kind.admits_sub_type(sub_type) {
             return Err(Error::WalletRule(WalletRule::SubTypeNotAllowed));
         }
         let binding = match (sub_type.binding_shape(), binding) {
@@ -1927,6 +1927,18 @@ impl UnlockedVault {
         store_id: &str,
         names: [&str; 3],
     ) -> Result<[String; 3]> {
+        let ids = self.ensure_bybit_accounts_for(store_id, names, [true; 3])?;
+        Ok(ids.map(Option::unwrap_or_default))
+    }
+
+    /// [`Self::ensure_bybit_accounts`] for the accounts `wanted`
+    /// (funding, unified, earn); the others are left alone.
+    pub fn ensure_bybit_accounts_for(
+        &mut self,
+        store_id: &str,
+        names: [&str; 3],
+        wanted: [bool; 3],
+    ) -> Result<[Option<String>; 3]> {
         use crate::model::store::MarketKind;
         let root = self
             .find_store(store_id)
@@ -1935,21 +1947,21 @@ impl UnlockedVault {
         if root.kind != StoreKind::Exchange || root.parent_id.is_some() {
             return Err(Error::InvalidInput("not an exchange wallet".into()));
         }
-        let wanted = [
+        let accounts = [
             (SubType::Funding, MarketKind::Funding),
             (SubType::Unified, MarketKind::Unified),
             (SubType::Earn, MarketKind::Earn),
         ];
-        let mut ids: [String; 3] = Default::default();
-        for (index, (sub_type, market)) in wanted.into_iter().enumerate() {
+        let mut ids: [Option<String>; 3] = Default::default();
+        for (index, (sub_type, market)) in accounts.into_iter().enumerate() {
             let existing = self
                 .children_of(store_id)
                 .into_iter()
                 .find(|child| !child.archived && child.binding == Binding::Market(market))
                 .map(|child| child.id.clone());
             ids[index] = match existing {
-                Some(id) => id,
-                None => {
+                Some(id) => Some(id),
+                None if wanted[index] => Some(
                     self.create_store_with(
                         names[index],
                         StoreKind::Exchange,
@@ -1962,11 +1974,19 @@ impl UnlockedVault {
                             ..StoreExtras::default()
                         },
                     )?
-                    .id
-                }
+                    .id,
+                ),
+                None => None,
             };
         }
         Ok(ids)
+    }
+
+    /// The live Unified Trading account of an exchange wallet: where spot and
+    /// futures trades are booked.
+    pub fn unified_account_of(&self, store_id: &str) -> Option<String> {
+        let root = self.root_of(store_id);
+        self.bybit_account_store(&root, crate::exchange::bybit::ACCOUNT_UNIFIED)
     }
 
     /// What each Bybit account holds per the API next to what the ledger
@@ -3810,6 +3830,46 @@ mod import_tests {
         let again = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
         assert_eq!(first, again);
         assert_eq!(vault.children_of(&store).len(), 3);
+    }
+
+    /// Keys of a wallet that only trades: the unified account is created, the
+    /// empty funding and earn accounts are not.
+    #[test]
+    fn bybit_accounts_follow_what_the_exchange_holds() {
+        use crate::exchange::bybit::{CoinBalance, accounts_in_use};
+        let balances = vec![
+            ("FUND".to_string(), Vec::new()),
+            (
+                "UNIFIED".to_string(),
+                vec![CoinBalance {
+                    coin: "USDT".into(),
+                    amount: "10".into(),
+                }],
+            ),
+            ("EARN".to_string(), Vec::new()),
+        ];
+        let wanted = accounts_in_use(&balances);
+        assert_eq!(wanted, [false, true, false]);
+
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[1].id.clone();
+        let ids = vault
+            .ensure_bybit_accounts_for(&store, ACCOUNT_NAMES, wanted)
+            .unwrap();
+        assert!(ids[0].is_none() && ids[2].is_none());
+        assert_eq!(vault.children_of(&store).len(), 1);
+        assert_eq!(vault.unified_account_of(&store), ids[1]);
+        // Trades on the wallet or any of its accounts go to the unified one.
+        assert_eq!(vault.unified_account_of(ids[1].as_deref().unwrap()), ids[1]);
+    }
+
+    #[test]
+    fn legacy_sub_account_types_stay_valid_but_are_no_longer_offered() {
+        assert!(!StoreKind::Exchange.sub_types().contains(&SubType::Spot));
+        assert!(StoreKind::Exchange.admits_sub_type(SubType::Spot));
+        assert!(!StoreKind::Bank.sub_types().contains(&SubType::Account));
+        assert!(StoreKind::Bank.admits_sub_type(SubType::Account));
+        assert!(!StoreKind::Bank.admits_sub_type(SubType::Token));
     }
 
     /// Moves between Bybit accounts become transfers between the matching
