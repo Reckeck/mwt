@@ -41,7 +41,7 @@ const totals = computed(() => {
   <Card size="sm" v-if="active.length">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <span class="text-sm text-muted-foreground">{{ t('utilities.dashboardTitle') }}</span>
+        <span data-widget-title class="text-sm text-muted-foreground">{{ t('utilities.dashboardTitle') }}</span>
         <span class="text-sm tabular-nums">
           {{ totals.map(([currency, sum]) => formatMoney(sum, { decimals: 0, currency })).join(' + ') }}
         </span>

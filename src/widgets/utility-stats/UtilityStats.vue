@@ -101,7 +101,7 @@ const option = computed<ChartOption>(() => ({
   <Card size="sm">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">{{ t('utilityStats.title') }}</p>
+        <p data-widget-title class="text-sm text-muted-foreground">{{ t('utilityStats.title') }}</p>
         <span v-if="lastTwo.last" class="flex items-baseline gap-1.5 text-sm font-semibold">
           <Money :amount="lastTwo.last.value" :currency="currency" :decimals="0" />
           <span

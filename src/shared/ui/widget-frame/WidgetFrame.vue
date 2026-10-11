@@ -54,8 +54,12 @@ const { t } = useI18n()
       <PinOff class="size-3.5" />
     </button>
     <!-- Every widget adapts to its cell through container queries. -->
-    <!-- min-h, not h: a widget taller than its cell scrolls inside the frame instead of spilling out of its card. -->
-    <div class="@container min-h-0 flex-1 overflow-auto [&>*]:min-h-full">
+    <!-- min-h, not h: a widget taller than its cell scrolls inside the frame instead of spilling out of its card.
+         The frame already names the widget: a title the widget marks with `data-widget-title` is hidden,
+         and a card header left with nothing else goes too (its body then gets the top padding back). -->
+    <div
+      class="@container min-h-0 flex-1 overflow-auto [&>*]:min-h-full [&_[data-widget-title]]:hidden [&_[data-card-header]:has(>[data-widget-title]:only-child)]:hidden [&_[data-card-header]:has(>[data-widget-title]:only-child)+*]:pt-3"
+    >
       <slot />
     </div>
   </div>

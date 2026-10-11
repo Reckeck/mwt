@@ -40,7 +40,7 @@ const ICONS = {
 <template>
   <Card size="sm">
     <template #header>
-      <p class="text-sm text-muted-foreground">{{ t('upcoming.title') }}</p>
+      <p data-widget-title class="text-sm text-muted-foreground">{{ t('upcoming.title') }}</p>
     </template>
     <p v-if="upcoming.isSuccess.value && !items.length" class="text-sm text-muted-foreground">{{ t('upcoming.empty') }}</p>
     <ul class="grid gap-2">

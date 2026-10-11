@@ -17,7 +17,7 @@ const summary = useQuery({
 <template>
   <Card size="sm">
     <template #header>
-      <p class="text-sm text-muted-foreground">{{ t('store.assets') }}</p>
+      <p data-widget-title class="text-sm text-muted-foreground">{{ t('store.assets') }}</p>
     </template>
     <div class="flex flex-wrap gap-1.5">
       <Badge v-for="asset in summary.data.value?.assets ?? []" :key="asset.asset.symbol" variant="secondary">

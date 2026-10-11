@@ -59,7 +59,7 @@ const payOpen = computed({
 <template>
   <Card size="sm">
     <template #header>
-      <p class="text-sm text-muted-foreground">{{ t('utilitiesDue.title') }}</p>
+      <p data-widget-title class="text-sm text-muted-foreground">{{ t('utilitiesDue.title') }}</p>
     </template>
     <Skeleton v-if="tree.isPending.value || items.isPending.value" class="h-20 w-full" />
     <p v-else-if="!rows.length" class="text-sm text-muted-foreground">{{ t('utilities.noProperty') }}</p>

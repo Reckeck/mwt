@@ -25,7 +25,7 @@ const unset = computed(
   <Card size="sm" v-if="data">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">{{ t('dailyBudget.title') }}</p>
+        <p data-widget-title class="text-sm text-muted-foreground">{{ t('dailyBudget.title') }}</p>
         <span class="text-xs text-muted-foreground">{{ t(`settings.dailyBudget.${data.mode}`) }}</span>
       </div>
     </template>
@@ -40,7 +40,7 @@ const unset = computed(
       <div>
         <p class="text-xs text-muted-foreground">{{ t('dailyBudget.leftToday') }}</p>
         <p
-          class="text-3xl font-semibold tabular-nums"
+          class="text-2xl font-semibold tabular-nums @xs:text-3xl"
           :class="Number(data.left_today) < 0 && 'text-destructive'"
         >
           {{ money(data.left_today) }}

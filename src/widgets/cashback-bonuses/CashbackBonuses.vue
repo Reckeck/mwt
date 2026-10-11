@@ -26,7 +26,7 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
   <Card size="sm">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">{{ t('cashback.title') }}</p>
+        <p data-widget-title class="text-sm text-muted-foreground">{{ t('cashback.title') }}</p>
         <ToggleGroup v-model="period" type="single" size="sm" variant="outline" :aria-label="t('cashback.title')">
           <ToggleGroupItem value="month" class="h-6 px-2 text-xs">{{ t('cashback.month') }}</ToggleGroupItem>
           <ToggleGroupItem value="year" class="h-6 px-2 text-xs">{{ t('cashback.year') }}</ToggleGroupItem>
@@ -36,7 +36,7 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
     <Skeleton v-if="report.isPending.value" class="h-20 w-full" />
     <div v-else-if="data" class="grid gap-3 text-sm">
       <div class="flex items-baseline justify-between gap-2">
-        <Money :amount="total" :currency="data.base_currency" class="text-2xl font-semibold" />
+        <Money :amount="total" :currency="data.base_currency" class="text-xl font-semibold @xs:text-2xl" />
         <span class="text-xs text-muted-foreground">
           {{ t('cashback.cashback') }} <Money :amount="data.cashback_base" :currency="data.base_currency" :convert="false" />
           · {{ t('cashback.points') }} <Money :amount="data.points_base" :currency="data.base_currency" :convert="false" />

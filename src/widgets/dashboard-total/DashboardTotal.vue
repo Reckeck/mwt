@@ -23,11 +23,11 @@ const hasDebts = computed(() => Number(summary.data.value?.liabilities_base ?? 0
 <template>
   <Card size="sm">
     <template #header>
-      <p class="text-sm text-muted-foreground">{{ t('netWorth.title') }}</p>
+      <p data-widget-title class="text-sm text-muted-foreground">{{ t('netWorth.title') }}</p>
     </template>
     <div class="grid gap-3">
       <div>
-        <p class="text-2xl font-bold">
+        <p class="text-xl font-bold @xs:text-2xl">
           <Money :amount="summary.data.value?.net_worth_base ?? '0'" :currency="currency" />
         </p>
       </div>

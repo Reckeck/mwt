@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { CircleAlert } from 'lucide-vue-next'
 
+import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
@@ -18,7 +19,7 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
 <template>
   <Card size="sm" v-if="progress.data.value?.length">
     <template #header>
-      <RouterLink :to="{ name: 'planning-goals' }" class="text-sm text-muted-foreground hover:text-foreground">
+      <RouterLink data-widget-title :to="{ name: 'planning-goals' }" class="text-sm text-muted-foreground hover:text-foreground">
         {{ t('goal.dashboardTitle') }}
       </RouterLink>
     </template>
@@ -42,6 +43,11 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
   </Card>
   <Card size="sm" v-else-if="progress.isPending.value"><Skeleton class="h-24 w-full" /></Card>
   <Card size="sm" v-else>
-    <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
+    <div class="flex flex-col items-start gap-2">
+      <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
+      <RouterLink :to="{ name: 'planning-goals' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
+        {{ t('goal.new') }}
+      </RouterLink>
+    </div>
   </Card>
 </template>

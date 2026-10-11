@@ -39,7 +39,7 @@ const used = computed(() => {
   <Card size="sm">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">{{ t('interestTax.title', { year: tax.data.value?.year ?? '' }) }}</p>
+        <p data-widget-title class="text-sm text-muted-foreground">{{ t('interestTax.title', { year: tax.data.value?.year ?? '' }) }}</p>
         <span v-if="tax.data.value?.max_key_rate" class="text-xs text-muted-foreground">
           {{ t('deposit.keyRate', { rate: tax.data.value.max_key_rate }) }}
         </span>

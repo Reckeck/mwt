@@ -26,7 +26,7 @@ const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? [
 <template>
   <Card size="sm" v-if="calendar.data.value">
     <template #header>
-      <RouterLink :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground capitalize hover:text-foreground">
+      <RouterLink data-widget-title :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground capitalize hover:text-foreground">
         {{ t('miniCalendar.title', { month: title }) }}
       </RouterLink>
     </template>

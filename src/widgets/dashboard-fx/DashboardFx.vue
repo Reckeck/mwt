@@ -58,7 +58,7 @@ async function refresh() {
   <Card size="sm">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">{{ t('store.fxRate') }}</p>
+        <p data-widget-title class="text-sm text-muted-foreground">{{ t('store.fxRate') }}</p>
         <!-- An icon button keeps this header as tall as its neighbours'. -->
         <Button
           variant="ghost"
