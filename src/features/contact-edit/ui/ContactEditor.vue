@@ -131,7 +131,7 @@ const inlineInput =
         <li
           v-for="(account, index) in props.contact.accounts"
           :key="account.id || index"
-          class="group grid items-center gap-2 rounded-md border border-border p-2 @lg:grid-cols-[8.5rem_1fr_10rem_auto]"
+          class="group grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,10rem)_auto] items-center gap-2 rounded-md border border-border p-2"
           :class="!account.active && 'opacity-60'"
         >
           <Select

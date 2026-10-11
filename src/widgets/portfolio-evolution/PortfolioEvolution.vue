@@ -21,7 +21,7 @@ const history = useQuery({
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
   tooltip: { trigger: 'axis' },
-  grid: { left: 48, right: 24, top: 24, bottom: 32, containLabel: true },
+  grid: { left: 4, right: 12, top: 24, bottom: 4, containLabel: true },
   xAxis: {
     type: 'time',
     axisLabel: { color: axisColor.value },

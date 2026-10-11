@@ -68,15 +68,21 @@ const summary = useQuery({
 /* --- guided tours: «?» starts the page's tour; a first visit starts it once --- */
 const tour = useTour()
 const routeTour = computed(() => String(route.name ?? ''))
+let tourTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   routeTour,
   (id) => {
+    // A pending tour belongs to the screen that scheduled it, never to the next one.
+    clearTimeout(tourTimer)
     if (!tour.hasTour(id)) return
     // Let the page render its widgets before pointing at them.
-    setTimeout(() => tour.autoStart(id), 1200)
+    tourTimer = setTimeout(() => {
+      if (routeTour.value === id && !document.querySelector('[role="dialog"]')) tour.autoStart(id)
+    }, 1200)
   },
   { immediate: true },
 )
+onUnmounted(() => clearTimeout(tourTimer))
 
 function openSettings(tab = 'general') {
   void router.push({ query: settingsQuery(route.query, tab) })

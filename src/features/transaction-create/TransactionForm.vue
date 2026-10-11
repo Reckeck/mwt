@@ -433,9 +433,11 @@ watch(
 /* --- before/after preview --- */
 // Serialized so the debounce and the query key change only when the draft does.
 const draftKey = computed(() => {
-  if (props.template || !isFormComplete(form)) return null
+  if (props.template) return null
+  // As soon as the money side is known: the comment and categories do not move balances.
   const input = formToInput(form)
-  return input ? JSON.stringify(input) : null
+  if (!input || !('amount' in input ? Number(input.amount) > 0 : true)) return null
+  return JSON.stringify(input)
 })
 const debouncedDraft = refDebounced(draftKey, 300)
 const preview = useQuery({
