@@ -488,6 +488,7 @@ impl UnlockedVault {
             value,
             period,
             recorded_at: now_iso(),
+            day: None,
         };
         self.doc.meter_readings.push(reading.clone());
         Ok(reading)

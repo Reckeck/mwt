@@ -31,7 +31,7 @@
 |---|---|
 | Shell | Tauri 2 (Rust), плагины opener/fs/dialog |
 | Core | Чистый Rust (cargo workspace `crates/core`), без зависимости от Tauri |
-| Хранение | JSON (dev) / bincode (release), атомарная запись (tmp + fsync + rename) |
+| Хранение | JSON (dev) / MessagePack (release), версии с миграцией, атомарная запись (tmp + fsync + rename) |
 | FE | Vue 3.5 + Vite 8 + TypeScript, Pinia, TanStack Query, shadcn-vue (Reka UI) + Tailwind v4, vue-echarts, vue-i18n |
 | Toolchain | mise (node/pnpm/rust), команды см. `mise run` |
 

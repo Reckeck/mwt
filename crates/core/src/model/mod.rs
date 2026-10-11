@@ -8,6 +8,7 @@ pub mod deposit;
 pub mod enrichment;
 #[cfg(test)]
 pub mod fixtures;
+pub mod notify;
 pub mod planning;
 pub mod store;
 pub mod transaction;

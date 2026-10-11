@@ -34,9 +34,12 @@ mise артефакты окажутся в `target/`, и сборка пойд�
   читается в `App.vue` через `get_app_settings`). Всё доменное, включая кэш цен
   и FX, — внутри зашифрованного vault. Базовая валюта после open/create
   проталкивается в vault через `sync_base_currency`.
-- **Формат снапшота.** `SnapshotFormat::for_profile()`: JSON в debug, bincode в
-  release — это формат *записи*; при чтении формат берётся из байта
-  `payload_fmt` в 55-байтном заголовке.
+- **Формат снапшота.** `SnapshotFormat::for_profile()`: JSON в debug,
+  MessagePack (`Pack`) в release — это формат *записи*; при чтении формат
+  берётся из байта `payload_fmt` в 55-байтном заголовке. Старый bincode
+  (`Bin`) только читается. `UnlockedVault::open` мигрирует старую версию
+  схемы (`storage::decode_versioned`), кладёт `<vault>.vN.bak` и сразу
+  переписывает файл.
 - **Цены.** Команда снимает нужные данные под мьютексом, отпускает его, делает
   `PricingService::fetch_*` (сеть), снова берёт мьютекс и вызывает
   `apply_*`; затем шлёт событие `prices-updated`, на которое фронт

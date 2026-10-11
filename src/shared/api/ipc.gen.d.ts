@@ -491,7 +491,11 @@ exec_ids: Array<string>, };
 
 type ConfirmPendingImportsOutput = { confirmed: number, };
 
-type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, };
+type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, 
+/**
+ * Group the directory lists it under («Семья», «P2P»); empty = by kind.
+ */
+group: string, };
 
 /**
  * One saved account of a contact: an IBAN, a card, a USDT address.
@@ -1378,7 +1382,13 @@ type MeterReading = { id: string, item_id: string, value: Amount,
 /**
  * YYYY-MM.
  */
-period: string, recorded_at: string, };
+period: string, recorded_at: string, 
+/**
+ * Day of the month the meter was read (1–31); `None` = the month's end.
+ * A month may hold several readings: moving out on the 15th and the
+ * next flat's first reading the same day.
+ */
+day: number | null, };
 
 type MeterReadingInput = { item_id: string, value: Amount, 
 /**
@@ -1473,6 +1483,63 @@ type NetworthReport = { meta: ReportMeta,
  * Value at the end of each month (today for this month).
  */
 points: Array<NetworthPoint>, };
+
+/**
+ * A kind of notice. Each one can be turned off and told ahead of time.
+ */
+type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax";
+
+/**
+ * One category's switches.
+ */
+type NoticeCategoryCfg = { category: NoticeCategory, enabled: boolean, 
+/**
+ * How many days before the date the notice comes; 0 = on the day.
+ */
+lead_days: number, 
+/**
+ * Whether reminders of this kind are created from the data by themselves.
+ */
+auto_reminders: boolean, };
+
+/**
+ * A notice that was shown.
+ */
+type NoticeRecord = { 
+/**
+ * Source and occurrence, e.g. `reminder:<id>:2026-11-01T07:00:00Z`.
+ */
+key: string, category: NoticeCategory, title: string, body: string, 
+/**
+ * In-app route the notice opens, e.g. `/planning/reminders`.
+ */
+link: string | null, 
+/**
+ * RFC3339: when it was due.
+ */
+at: string, 
+/**
+ * RFC3339: when it was shown.
+ */
+delivered_at: string, read: boolean, };
+
+type NotificationSettings = { 
+/**
+ * Show notices from the system as well as inside the app.
+ */
+system: boolean, 
+/**
+ * While the vault is locked: «Платёж по кредиту» without the name and the sum.
+ */
+hide_details_when_locked: boolean, 
+/**
+ * `HH:MM`, local: when automatic reminders are due.
+ */
+default_time: string, 
+/**
+ * One entry per category; a missing one has its defaults.
+ */
+categories: Array<NoticeCategoryCfg>, };
 
 /**
  * What a new wallet already holds. Booked as a top-up in the service
@@ -1815,13 +1882,57 @@ restamped: number, updated_at: string, };
 
 type RejectReason = { "insufficient_funds": { store_id: string, asset: AssetRef, required: Amount, available: Amount, } } | { "credit_limit_exceeded": { store_id: string, limit: Amount, required: Amount, } } | { "invalid": { message: string, } };
 
-type Reminder = { id: string, text: string, due_at: string, done: boolean, };
+type Reminder = { id: string, text: string, 
+/**
+ * RFC3339: the date and the time it is due.
+ */
+due_at: string, done: boolean, 
+/**
+ * A repeating reminder moves to its next date when done instead of
+ * staying done.
+ */
+repeat: ReminderRepeat | null, 
+/**
+ * Set on a reminder the app keeps in step with its source.
+ */
+source: ReminderSource | null, 
+/**
+ * An automatic reminder the user turned off; it is kept so it is not
+ * created again.
+ */
+muted: boolean, 
+/**
+ * The user changed the time of an automatic reminder: the sync keeps it.
+ */
+user_edited: boolean, 
+/**
+ * Put off until this moment (RFC3339); it is not due before.
+ */
+snoozed_until: string | null, };
 
 type ReminderInput = { text: string, 
 /**
  * RFC3339.
  */
 due_at: string, };
+
+/**
+ * «Every `every` `unit`s»: a monthly bill is `{ every: 1, unit: month }`.
+ */
+type ReminderRepeat = { every: number, unit: RepeatUnit, };
+
+type ReminderSource = { kind: ReminderSourceKind, id: string, };
+
+/**
+ * What an automatic reminder is made from (plan §15). Its `id` is the id of
+ * the store, utility item, contact debt or goal it follows.
+ */
+type ReminderSourceKind = "loan_payment" | "credit_card_payment" | "rent" | "utilities" | "meter_readings" | "deposit_end" | "pds_contribution" | "loyalty_expiry" | "debt" | "goal_saving" | "goal_deadline" | "property_tax" | "interest_tax";
+
+/**
+ * Unit of a reminder's repeat interval.
+ */
+type RepeatUnit = "day" | "week" | "month" | "year";
 
 /**
  * What every report is asked for.
@@ -1928,7 +2039,11 @@ savings_rate: Amount, daily_budget_mode: DailyBudgetMode,
 /**
  * Currency of budgets and month totals; empty = the base currency.
  */
-budget_currency: string, };
+budget_currency: string, 
+/**
+ * What to be told about and how far ahead.
+ */
+notifications: NotificationSettings, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -2771,7 +2886,11 @@ debt_terms: Array<DebtTerms>,
 /**
  * Bank of Russia key rate history, for the deposit-interest tax limit.
  */
-key_rates: Array<KeyRatePoint>, };
+key_rates: Array<KeyRatePoint>, 
+/**
+ * Notices already shown, newest last (payload v2).
+ */
+notification_log: Array<NoticeRecord>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

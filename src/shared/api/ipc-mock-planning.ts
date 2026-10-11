@@ -90,7 +90,14 @@ export function seedUtilityDemo(propertyId: string) {
     const month = new Date(now.getFullYear(), now.getMonth() - back, 1)
     const period = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
     value += 180 + back * 15
-    readings.push({ id: uuid(), item_id: power.id, value: String(value), period, recorded_at: month.toISOString() })
+    readings.push({
+      id: uuid(),
+      item_id: power.id,
+      value: String(value),
+      period,
+      recorded_at: month.toISOString(),
+      day: null,
+    })
   }
 }
 
@@ -479,7 +486,17 @@ export function mockPlanning(
       return [...reminders].sort((left, right) => left.due_at.localeCompare(right.due_at))
     case 'create_reminder': {
       const input = body as ReminderInput
-      const reminder: Reminder = { id: uuid(), text: input.text, due_at: input.due_at, done: false }
+      const reminder: Reminder = {
+        id: uuid(),
+        text: input.text,
+        due_at: input.due_at,
+        done: false,
+        repeat: null,
+        source: null,
+        muted: false,
+        user_edited: false,
+        snoozed_until: null,
+      }
       reminders.push(reminder)
       return reminder
     }
@@ -542,7 +559,7 @@ export function mockPlanning(
       return {}
     case 'add_meter_reading': {
       const input = body as MeterReadingInput
-      const reading: MeterReading = { id: uuid(), ...input, recorded_at: iso(now()) }
+      const reading: MeterReading = { id: uuid(), day: null, ...input, recorded_at: iso(now()) }
       const index = readings.findIndex((entry) => entry.item_id === input.item_id && entry.period === input.period)
       if (index >= 0) readings.splice(index, 1)
       readings.push(reading)
@@ -613,6 +630,7 @@ export function mockPlanning(
             value: line.reading,
             period: input.period,
             recorded_at: iso(now()),
+            day: null,
           })
         }
         const code = item.currency.toUpperCase()

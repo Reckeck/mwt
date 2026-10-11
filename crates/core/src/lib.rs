@@ -30,22 +30,19 @@ pub const VAULT_CONTAINER_VERSION: u32 = 1;
 /// Version of the plaintext *payload* schema (`VaultDoc`), stored in the
 /// document's own `version` field.
 ///
-/// # DO NOT BUMP THIS WITHOUT THE USER'S EXPLICIT PERMISSION
+/// Older versions are read and migrated on open (`storage::decode_versioned`),
+/// after the untouched file is copied to `<vault>.v<N>.bak`; a version from the
+/// future is refused. From v2 the payload carries field names (JSON or
+/// MessagePack), so a field added with `#[serde(default)]` needs no bump.
 ///
-/// This constant is deliberately pinned at `1`. Previous versions of this
-/// codebase bumped it every time `VaultDoc` gained a field, which meant every
-/// schema tweak silently locked users out of their own vault: `storage::decode`
-/// rejects any `version` it does not recognize, and there was no migration to
-/// fall back on. The user has decided that schema changes ship without a
-/// version bump — additive fields are handled with `#[serde(default)]` instead
-/// (see the `vault-crypto` skill).
-///
-/// If you believe a bump is genuinely unavoidable — a change that cannot be
-/// made backward compatible — stop and ask the user first. Do not edit this
-/// number on your own initiative.
+/// Bump only for a change older files cannot be read with (a renamed or
+/// re-typed field, a removed variant): freeze the current shape in
+/// `storage::vN`, add the migration step and tests for both formats. The user
+/// allowed bumps with a migration on 2026-10-11 and prefers them to hacks
+/// around a broken format; a bump without a migration is never acceptable.
 ///
 /// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
 /// encrypted envelope and only moves when the on-disk bytes change.
-pub const VAULT_FORMAT_VERSION: u32 = 1;
+pub const VAULT_FORMAT_VERSION: u32 = 2;
 /// Magic bytes prefix of a TradeApp vault file.
 pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";
