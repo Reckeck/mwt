@@ -49,7 +49,7 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
     providers/        # router/, query/ — инфраструктурные провайдеры
     styles.css        # глобальные стили (Tailwind v4, base)
   pages/              # экраны, по одному на маршрут app/providers/router; ТОЛЬКО композиция
-    dashboard/ stores/ wallet/ transactions/ planning/ analytics/ directory/ trading/ settings/ unlock/ app-shell/
+    dashboard/ stores/ wallet/ wallet-settings/ transactions/ planning/ analytics/ directory/ unlock/ app-shell/
   widgets/            # композитные блоки страниц (store-header, dashboard-total, sidebar-wallets, …)
   features/           # пользовательские действия (vault-unlock, store-create, price-refresh, …)
   entities/           # бизнес-сущности: store/, transaction/, asset/, currency/

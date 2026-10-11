@@ -229,3 +229,37 @@ When editing UI code:
 - **Buttons** — use standard variants from `shared/ui/button`
 6. **No nested modals** — refactor to tabs/steps
 7. **Run `mise run check`** before committing (lint + typecheck + tests)
+
+## 9. Interaction patterns (wallets redesign)
+
+### Right-click menus
+- Every block an action applies to has a context menu: `shared/ui/context-menu`
+  (`ContextMenu` + `UiAction[]`). The same list feeds the «⋯» button
+  (`shared/ui/action-menu`), so the two never drift apart.
+- Order: open / navigate → main actions → copy → configure → dangerous.
+  Dangerous items are `destructive: true` (red text **and** red icon, red-tinted
+  highlight — `MENU_ITEM_DESTRUCTIVE_CLASS`), always last, after a separator.
+  Ordinary icons stay muted.
+- An unavailable action is shown disabled with the reason (`disabled: 'string'`);
+  only actions that do not apply to the object at all are `hidden`.
+- The WebView's native menu is suppressed globally except in inputs, textareas
+  and CodeMirror (copy/paste stays).
+
+### Dashboard grid
+- `grid-layout-plus`, 12 columns, 40 px rows, vertical compaction: no gaps.
+- `shared/ui/widget-frame`: the header is the drag handle; «Hide header» pins the
+  widget (static, not resizable). Widget content is a `@container`, so cards adapt
+  to their cell through container queries.
+- One registry: `widgets/dashboard-registry` (id, title, description, component,
+  sizes). The floating «+» opens `widgets/dashboard-catalog` with live,
+  scaled-down previews.
+
+### Settings window
+- `widgets/settings-shell`: a dialog inset 120 px (16 px on narrow screens), tabs
+  on the left; the active tab lists its sections, hover or click scrolls to one,
+  scrolling highlights it. Deep link: `?settings=<tab>&section=<id>`.
+
+### Guided tours
+- `shared/lib/tour` on `driver.js`: steps point at `[data-tour="…"]`, missing
+  elements are skipped. A tour auto-starts once per screen; «?» in the header
+  replays it. Finished tours live in `AppSettings.completed_tours`.
