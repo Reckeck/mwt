@@ -14,12 +14,14 @@ import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
+import { connectBybit } from './connect-bybit'
 import type { ExchangeKeyFormProps } from './exchange-key.types'
 import { useExchangeKeyStatus } from './useExchangeKeyStatus'
 
 const props = defineProps<ExchangeKeyFormProps>()
 
 const { t } = useI18n()
+const queryClient = useQueryClient()
 
 const { status, hasKey, hint } = useExchangeKeyStatus(
   computed(() => props.storeId),
@@ -33,12 +35,15 @@ const busy = ref(false)
 async function save() {
   busy.value = true
   try {
-    await call('set_exchange_key', {
-      input: { store_id: props.storeId, api_key: apiKey.value, api_secret: apiSecret.value },
+    const count = await connectBybit(props.storeId, apiKey.value, apiSecret.value, {
+      funding: t('subType.funding'),
+      unified: t('subType.unified'),
+      earn: t('subType.earn'),
     })
     apiKey.value = ''
     apiSecret.value = ''
-    toast.success(t('wallet.bybit.keySaved'))
+    toast.success(t('wallet.bybit.keySaved'), { description: t('wallet.bybit.accountsReady', { count }) })
+    for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
     await status.refetch()
   } catch (err) {
     toast.error(t('wallet.bybit.keySaveFailed'), { description: parseError(err).message })
@@ -82,7 +87,6 @@ const setTargets = useMutation({
 })
 
 /* --- Bybit's own split: Funding, Unified Trading, Earn --- */
-const queryClient = useQueryClient()
 const ACCOUNTS = ['funding', 'unified', 'earn'] as const
 const accounts = computed(() =>
   ACCOUNTS.map((market) => ({
@@ -101,6 +105,7 @@ const createAccounts = useMutation({
         funding_name: t('subType.funding'),
         unified_name: t('subType.unified'),
         earn_name: t('subType.earn'),
+        detect: false,
       } satisfies CreateBybitAccountsInput,
     }),
   onSuccess: () => {

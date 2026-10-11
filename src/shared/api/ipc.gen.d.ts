@@ -636,7 +636,12 @@ type CreateBybitAccountsInput = { store_id: string,
 /**
  * Names in the UI language, for the ones that get created.
  */
-funding_name: string, unified_name: string, earn_name: string, };
+funding_name: string, unified_name: string, earn_name: string, 
+/**
+ * Ask Bybit which accounts hold anything and create only those (the
+ * unified one always); without the network all three are created.
+ */
+detect: boolean, };
 
 type CreateCategoryInput = { 
 /**

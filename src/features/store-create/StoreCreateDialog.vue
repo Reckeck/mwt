@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { connectBybit } from '@/features/exchange-key'
 import { AssetInput } from '@/entities/asset'
 import { CurrencyPicker } from '@/entities/currency'
 import {
@@ -59,6 +60,10 @@ const color = ref(DEFAULT_STORE_COLOR)
 const terms = ref<LiabilityTerms>(emptyLiabilityTerms())
 const custody = ref<Custody>('hot')
 const provider = ref<ExchangeProvider | null>(null)
+/** Optional read-only Bybit key: with it the exchange gets its accounts right away. */
+const apiKey = ref('')
+const apiSecret = ref('')
+const withKey = computed(() => provider.value === 'bybit' && apiKey.value.trim() !== '' && apiSecret.value.trim() !== '')
 const propertyCategory = ref<PropertyCategory>('flat')
 const securedBy = ref('')
 const currency = ref('')
@@ -143,6 +148,8 @@ watch(open, (isOpen) => {
   terms.value = emptyLiabilityTerms()
   custody.value = 'hot'
   provider.value = null
+  apiKey.value = ''
+  apiSecret.value = ''
   propertyCategory.value = 'flat'
   securedBy.value = ''
   currency.value = settings.baseCurrency.toLowerCase()
@@ -182,13 +189,13 @@ const canGoBack = computed(() => step.value === 'details' && (isSub.value || !pr
 const valid = computed(() => {
   if (!name.value.trim() || !openingValid.value) return false
   if (isSub.value) return subInfo.value !== null && (subInfo.value.shape === 'market' || binding.value !== null)
-  if (kind.value === 'exchange') return provider.value !== null
+  if (kind.value === 'exchange') return provider.value !== null && !apiKey.value.trim() === !apiSecret.value.trim()
   return true
 })
 
 const createStore = useMutation({
-  mutationFn: () =>
-    call<Store>('create_store', {
+  mutationFn: async () => {
+    const store = await call<Store>('create_store', {
       input: {
         name: name.value.trim(),
         kind: kind.value,
@@ -219,7 +226,22 @@ const createStore = useMutation({
             ? { asset: openingAsset.value, amount: openingAmountValue.value }
             : null,
       } satisfies CreateStoreInput,
-    }),
+    })
+    if (!isSub.value && kind.value === 'exchange' && withKey.value) {
+      try {
+        const count = await connectBybit(store.id, apiKey.value.trim(), apiSecret.value.trim(), {
+          funding: t('subType.funding'),
+          unified: t('subType.unified'),
+          earn: t('subType.earn'),
+        })
+        toast.success(t('wallet.bybit.keySaved'), { description: t('wallet.bybit.accountsReady', { count }) })
+      } catch (err) {
+        // The wallet exists; the key can be added again in its settings.
+        toast.error(t('wallet.bybit.keySaveFailed'), { description: parseError(err).message })
+      }
+    }
+    return store
+  },
   onSuccess: (store) => {
     toast.success(props.parent ? t('stores.subAccountCreated') : t('stores.created'), { description: store.name })
     for (const queryKey of [['stores'], ['store'], ['summary'], ['net-worth'], ['transactions'], ['history']]) {
@@ -311,6 +333,20 @@ const cardClass =
           </div>
         </div>
       </template>
+
+      <fieldset v-if="!isSub && kind === 'exchange' && provider === 'bybit'" class="grid gap-3" data-tour="store-bybit-key">
+        <p class="text-xs text-muted-foreground">{{ t('storeWizard.bybitKeyHint') }}</p>
+        <div class="grid gap-3 @sm:grid-cols-2">
+          <div class="grid gap-1.5">
+            <Label for="store-bybit-key">{{ t('wallet.bybit.apiKey') }}</Label>
+            <Input id="store-bybit-key" v-model="apiKey" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="grid gap-1.5">
+            <Label for="store-bybit-secret">{{ t('wallet.bybit.apiSecret') }}</Label>
+            <Input id="store-bybit-secret" v-model="apiSecret" type="password" autocomplete="new-password" spellcheck="false" />
+          </div>
+        </div>
+      </fieldset>
 
       <div class="grid grid-cols-[1fr_auto] gap-4">
         <div class="grid gap-1.5">

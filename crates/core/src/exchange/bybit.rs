@@ -487,6 +487,18 @@ impl BybitClient {
 }
 
 /// Bybit account types a sub-account can stand for.
+/// Which of the Bybit accounts (funding, unified, earn) a key's balances show
+/// in use. Trading always needs the unified account, so it is always wanted;
+/// the others only when they hold something.
+pub fn accounts_in_use(balances: &[(String, Vec<CoinBalance>)]) -> [bool; 3] {
+    let holds = |account: &str| {
+        balances
+            .iter()
+            .any(|(name, coins)| name == account && !coins.is_empty())
+    };
+    [holds(ACCOUNT_FUND), true, holds(ACCOUNT_EARN)]
+}
+
 pub const ACCOUNT_FUND: &str = "FUND";
 pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
 /// Not a Bybit transfer account type: Earn products, as this app names them.

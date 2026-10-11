@@ -734,6 +734,8 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         ['unified', 'unified', input.unified_name],
         ['earn', 'earn', input.earn_name],
       ]
+      // The mock's Bybit holds coins in the unified account only.
+      const used = (market: MarketKind) => !input.detect || market === 'unified'
       const ids = wanted.map(([subType, market, name]) => {
         const known = mockStores.find(
           (store) =>
@@ -743,6 +745,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
             store.binding.market === market,
         )
         if (known) return known.id
+        if (!used(market)) return ''
         const created: Store = {
           ...newStore(name, 'exchange', root.color, root.id),
           sub_type: subType,
@@ -752,7 +755,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         mockStores.push(created)
         return created.id
       })
-      return resolve(ids)
+      return resolve(ids.filter(Boolean))
     }
     case 'bybit_balances':
       return resolve(
