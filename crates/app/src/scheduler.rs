@@ -3,8 +3,9 @@
 //! soft-fails — a pass that cannot run leaves everything as it was and the
 //! next tick tries again.
 //!
-//! 1. Bybit import on `bybit_import_interval_sec` — fills are staged, never
-//!    written as transactions.
+//! 1. Bybit import, each exchange on its own
+//!    `ExchangeProfile.import_interval_sec` — fills are staged, never written
+//!    as transactions.
 //! 2. Automations on every tick (`run_due_automations`).
 //! 3. Price alerts: prices of their assets refreshed at most every
 //!    [`ALERT_REFRESH_SEC`], then `check_alerts`.
