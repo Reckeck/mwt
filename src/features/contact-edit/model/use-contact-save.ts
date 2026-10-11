@@ -12,6 +12,7 @@ export function draftOf(contact: Contact, patch: Partial<ContactDraft> = {}): Co
     kind: contact.kind,
     note: contact.note,
     accounts: contact.accounts.map((account) => ({ ...account })),
+    group: contact.group,
     ...patch,
   }
 }

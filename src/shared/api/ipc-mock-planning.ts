@@ -501,7 +501,7 @@ export function mockPlanning(
         text: input.text,
         due_at: input.due_at,
         done: false,
-        repeat: null,
+        repeat: input.repeat ?? null,
         source: null,
         muted: false,
         user_edited: false,
@@ -513,14 +513,46 @@ export function mockPlanning(
     case 'update_reminder': {
       const input = body as UpdateReminderInput
       const current = reminders.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
-      return replace(reminders, input.id, { ...current, ...input.reminder })
+      return replace(reminders, input.id, {
+        ...current,
+        ...input.reminder,
+        repeat: input.reminder.repeat ?? null,
+        snoozed_until: null,
+      })
     }
     case 'delete_reminder':
       remove(reminders, String(args?.id))
       return {}
     case 'set_reminder_done': {
       const reminder = reminders.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
-      reminder.done = Boolean(args?.done)
+      reminder.snoozed_until = null
+      if (args?.done && reminder.repeat) {
+        // Like `next_occurrence`: counted from the due date, past now.
+        const anchor = new Date(reminder.due_at)
+        const { every, unit } = reminder.repeat
+        for (let count = 1; count < 10_000; count += 1) {
+          const next = new Date(anchor)
+          if (unit === 'day') next.setUTCDate(anchor.getUTCDate() + every * count)
+          if (unit === 'week') next.setUTCDate(anchor.getUTCDate() + every * count * 7)
+          if (unit === 'month') next.setUTCMonth(anchor.getUTCMonth() + every * count)
+          if (unit === 'year') next.setUTCFullYear(anchor.getUTCFullYear() + every * count)
+          if (next.getTime() > Date.now()) {
+            reminder.due_at = next.toISOString()
+            break
+          }
+        }
+      } else reminder.done = Boolean(args?.done)
+      return reminder
+    }
+    case 'finish_reminder_series': {
+      const reminder = reminders.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
+      Object.assign(reminder, { repeat: null, done: true, snoozed_until: null })
+      return reminder
+    }
+    case 'snooze_reminder': {
+      const input = body as SnoozeReminderInput
+      const reminder = reminders.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
+      reminder.snoozed_until = input.until
       return reminder
     }
     case 'list_price_alerts':

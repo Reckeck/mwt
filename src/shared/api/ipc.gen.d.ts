@@ -587,7 +587,11 @@ type ContactBalance = { contact_id: string, asset: AssetRef, receivable: Amount,
 /**
  * What the UI sends to create or edit a contact. Accounts without an id are new.
  */
-type ContactDraft = { name: string, kind: ContactKind, note: string, accounts: Array<ContactAccount>, };
+type ContactDraft = { name: string, kind: ContactKind, note: string, accounts: Array<ContactAccount>, 
+/**
+ * Directory group («Семья», «P2P»); empty = grouped by kind.
+ */
+group: string, };
 
 type ContactKind = "person" | "company" | "exchanger";
 
@@ -1996,9 +2000,13 @@ snoozed_until: string | null, };
 
 type ReminderInput = { text: string, 
 /**
- * RFC3339.
+ * RFC3339: the date and the time.
  */
-due_at: string, };
+due_at: string, 
+/**
+ * `None` = once.
+ */
+repeat: ReminderRepeat | null, };
 
 /**
  * «Every `every` `unit`s»: a monthly bill is `{ every: 1, unit: month }`.
@@ -2138,6 +2146,11 @@ type ShortcutSupport = { global_keys: boolean,
  * The running executable with `--quick-add`.
  */
 launch_command: string, };
+
+/**
+ * Put a reminder off until a moment (RFC3339).
+ */
+type SnoozeReminderInput = { id: string, until: string, };
 
 /**
  * A "store"/"platform" (хранилище) — a portfolio container.

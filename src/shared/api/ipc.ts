@@ -491,7 +491,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         name: input.name.trim(),
         kind: input.kind,
         note: input.note,
-        group: '',
+        group: input.group.trim(),
         accounts: input.accounts.map((account) => ({
           ...account,
           id: account.id || crypto.randomUUID(),
@@ -511,6 +511,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         name: input.contact.name.trim(),
         kind: input.contact.kind,
         note: input.contact.note,
+        group: input.contact.group.trim(),
         accounts: input.contact.accounts.map((account) => ({
           ...account,
           id: account.id || crypto.randomUUID(),

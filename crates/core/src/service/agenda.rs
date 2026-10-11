@@ -11,7 +11,7 @@ use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, first_of_month, next_month};
 use crate::error::{Error, Result};
 use crate::model::planning::{
-    AlertCondition, AutomationOutcome, PriceAlert, Reminder, UtilityKind,
+    AlertCondition, AutomationOutcome, PriceAlert, Reminder, ReminderRepeat, UtilityKind,
 };
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
@@ -20,6 +20,31 @@ use crate::pricing::history::{secs_or_now, unix_secs};
 
 use super::UnlockedVault;
 use super::automations::{draft_to_transaction, outflow, planned_dates};
+
+/// How many dates of one repeating reminder the agenda lists at most.
+const MAX_REPEATS_LISTED: usize = 60;
+
+/// When a reminder is due: its date, or the end of its snooze if later.
+pub(crate) fn reminder_secs(reminder: &Reminder) -> i64 {
+    let due = secs_or_now(&reminder.due_at);
+    reminder
+        .snoozed_until
+        .as_deref()
+        .map_or(due, |until| due.max(secs_or_now(until)))
+}
+
+/// The first date of a repeat after both `due_at` and `now`, RFC3339.
+pub(crate) fn next_occurrence(repeat: ReminderRepeat, due_at: &str, now: i64) -> Option<String> {
+    let anchor = chrono::DateTime::parse_from_rfc3339(due_at)
+        .ok()?
+        .with_timezone(&chrono::Utc);
+    // Counted from the due date each time, so the 31st stays the 31st; a
+    // long-forgotten daily reminder is far behind: step until past now.
+    (1..100_000)
+        .map_while(|count| repeat.nth(anchor, count))
+        .find(|at| at.timestamp() > now)
+        .map(|at| at.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+}
 
 /// What an alert is: everything the user edits.
 #[derive(Debug, Clone, PartialEq)]
@@ -86,27 +111,93 @@ impl UnlockedVault {
         Ok(())
     }
 
-    pub fn create_reminder(&mut self, text: &str, due_at: &str) -> Result<Reminder> {
+    pub fn create_reminder(
+        &mut self,
+        text: &str,
+        due_at: &str,
+        repeat: Option<ReminderRepeat>,
+    ) -> Result<Reminder> {
         Self::check_reminder(text, due_at)?;
-        let reminder = Reminder::new(text, due_at);
+        let reminder = Reminder {
+            repeat: repeat.map(Self::clean_repeat),
+            ..Reminder::new(text, due_at)
+        };
         self.doc.reminders.push(reminder.clone());
         self.persist()?;
         Ok(reminder)
     }
 
-    pub fn update_reminder(&mut self, id: &str, text: &str, due_at: &str) -> Result<Reminder> {
+    /// Edit what and when. An automatic reminder edited by hand keeps its
+    /// time from then on: the sync no longer moves it.
+    pub fn update_reminder(
+        &mut self,
+        id: &str,
+        text: &str,
+        due_at: &str,
+        repeat: Option<ReminderRepeat>,
+    ) -> Result<Reminder> {
         Self::check_reminder(text, due_at)?;
         let reminder = self.find_reminder_mut(id)?;
         reminder.text = text.trim().to_string();
         reminder.due_at = due_at.to_string();
+        reminder.repeat = repeat.map(Self::clean_repeat);
+        reminder.snoozed_until = None;
+        if reminder.source.is_some() {
+            reminder.user_edited = true;
+        }
         let out = reminder.clone();
         self.persist()?;
         Ok(out)
     }
 
+    fn clean_repeat(repeat: ReminderRepeat) -> ReminderRepeat {
+        ReminderRepeat {
+            every: repeat.every.clamp(1, 999),
+            ..repeat
+        }
+    }
+
+    /// Done. A repeating reminder is not closed but moves on to its next date
+    /// after now — «paid this month» leaves next month's in place.
     pub fn set_reminder_done(&mut self, id: &str, done: bool) -> Result<Reminder> {
+        let now = calendar::now_secs();
         let reminder = self.find_reminder_mut(id)?;
-        reminder.done = done;
+        reminder.snoozed_until = None;
+        match (done, reminder.repeat) {
+            (true, Some(repeat)) => {
+                reminder.due_at = next_occurrence(repeat, &reminder.due_at, now)
+                    .ok_or_else(|| Error::InvalidInput("the reminder has no next date".into()))?;
+                reminder.done = false;
+            }
+            _ => reminder.done = done,
+        }
+        let out = reminder.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Stop a repeating reminder: it is done for good.
+    pub fn finish_reminder_series(&mut self, id: &str) -> Result<Reminder> {
+        let reminder = self.find_reminder_mut(id)?;
+        reminder.repeat = None;
+        reminder.done = true;
+        reminder.snoozed_until = None;
+        if reminder.source.is_some() {
+            // An automatic one must not come back with the next sync.
+            reminder.muted = true;
+        }
+        let out = reminder.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Put a reminder off: it is not due before `until`.
+    pub fn snooze_reminder(&mut self, id: &str, until: &str) -> Result<Reminder> {
+        if unix_secs(until).is_none() {
+            return Err(Error::InvalidInput("choose when to remind again".into()));
+        }
+        let reminder = self.find_reminder_mut(id)?;
+        reminder.snoozed_until = Some(until.to_string());
         let out = reminder.clone();
         self.persist()?;
         Ok(out)
@@ -129,11 +220,11 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("reminder {id}")))
     }
 
-    /// Open reminders whose time has come.
+    /// Open reminders whose time has come (a snoozed one when its snooze ends).
     pub fn due_reminders(&self, now: i64) -> Vec<Reminder> {
         self.reminders()
             .into_iter()
-            .filter(|reminder| !reminder.done && secs_or_now(&reminder.due_at) <= now)
+            .filter(|reminder| !reminder.done && !reminder.muted && reminder_secs(reminder) <= now)
             .collect()
     }
 
@@ -428,23 +519,38 @@ impl UnlockedVault {
             }
         }
 
-        // Reminders: overdue ones too.
-        for reminder in self.doc.reminders.iter().filter(|item| !item.done) {
-            let secs = secs_or_now(&reminder.due_at);
-            if secs >= horizon {
-                continue;
+        // Reminders: overdue ones too, and every repeat within the horizon.
+        for reminder in self
+            .doc
+            .reminders
+            .iter()
+            .filter(|item| !item.done && !item.muted)
+        {
+            let mut at = calendar::iso(reminder_secs(reminder));
+            for _ in 0..MAX_REPEATS_LISTED {
+                let secs = secs_or_now(&at);
+                if secs >= horizon {
+                    break;
+                }
+                out.push(UpcomingItem {
+                    kind: UpcomingKind::Reminder,
+                    source_id: reminder.id.clone(),
+                    at: at.clone(),
+                    date: cal.date_of(secs).format("%Y-%m-%d").to_string(),
+                    title: reminder.text.clone(),
+                    store_id: None,
+                    amount: None,
+                    asset: None,
+                    shortfall: None,
+                });
+                let Some(next) = reminder
+                    .repeat
+                    .and_then(|repeat| next_occurrence(repeat, &at, secs))
+                else {
+                    break;
+                };
+                at = next;
             }
-            out.push(UpcomingItem {
-                kind: UpcomingKind::Reminder,
-                source_id: reminder.id.clone(),
-                at: reminder.due_at.clone(),
-                date: cal.date_of(secs).format("%Y-%m-%d").to_string(),
-                title: reminder.text.clone(),
-                store_id: None,
-                amount: None,
-                asset: None,
-                shortfall: None,
-            });
         }
 
         // Debts with a due date and something still open; overdue ones too.
@@ -636,11 +742,53 @@ mod tests {
     fn reminders_come_due_and_can_be_done() {
         let (_dir, mut vault) = empty_vault();
         let reminder = vault
-            .create_reminder("Pay the nanny", "2026-03-05T09:00:00Z")
+            .create_reminder("Pay the nanny", "2026-03-05T09:00:00Z", None)
             .unwrap();
         assert!(vault.due_reminders(secs("2026-03-04T00:00:00Z")).is_empty());
         assert_eq!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).len(), 1);
         vault.set_reminder_done(&reminder.id, true).unwrap();
         assert!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).is_empty());
+    }
+
+    #[test]
+    fn a_monthly_reminder_moves_on_when_done_and_keeps_its_day() {
+        use crate::model::planning::{ReminderRepeat, RepeatUnit};
+        let monthly = ReminderRepeat {
+            every: 1,
+            unit: RepeatUnit::Month,
+        };
+        // Long overdue: done jumps past now, not just one month on.
+        let next = next_occurrence(
+            monthly,
+            "2020-01-31T07:30:00Z",
+            secs("2020-04-15T00:00:00Z"),
+        );
+        assert_eq!(next.as_deref(), Some("2020-04-30T07:30:00Z"));
+
+        let (_dir, mut vault) = empty_vault();
+        let reminder = vault
+            .create_reminder("Rent", "2020-01-31T07:30:00Z", Some(monthly))
+            .unwrap();
+        let moved = vault.set_reminder_done(&reminder.id, true).unwrap();
+        assert!(!moved.done, "a repeating reminder stays open");
+        assert!(secs(&moved.due_at) > secs("2026-01-01T00:00:00Z"));
+        assert_eq!(&moved.due_at[11..], "07:30:00Z", "the time stays");
+
+        let finished = vault.finish_reminder_series(&reminder.id).unwrap();
+        assert!(finished.done && finished.repeat.is_none());
+    }
+
+    #[test]
+    fn a_snoozed_reminder_waits_until_its_snooze_ends() {
+        let (_dir, mut vault) = empty_vault();
+        let reminder = vault
+            .create_reminder("Call", "2026-03-05T09:00:00Z", None)
+            .unwrap();
+        vault
+            .snooze_reminder(&reminder.id, "2026-03-05T12:00:00Z")
+            .unwrap();
+        assert!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).is_empty());
+        assert_eq!(vault.due_reminders(secs("2026-03-05T12:30:00Z")).len(), 1);
+        assert!(vault.snooze_reminder(&reminder.id, "soon").is_err());
     }
 }

@@ -30,6 +30,7 @@ export const TOURS: Record<string, TourStep[]> = {
   ],
   'directory-contacts': [
     { target: 'contact-quick-create', key: 'directory.create', side: 'right' },
+    { target: 'contact-groups', key: 'directory.groups', side: 'right' },
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
   ],

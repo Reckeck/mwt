@@ -566,6 +566,7 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         let contact = vault
             .create_contact(ContactDraft {
+                group: String::new(),
                 name: "Mom".into(),
                 kind: ContactKind::Person,
                 note: String::new(),
