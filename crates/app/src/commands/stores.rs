@@ -7,7 +7,8 @@ use trade_core::ipc_contract::{
 use trade_core::model::planning::Envelope;
 use trade_core::model::store::{Store, StoreKind};
 use trade_core::service::{
-    EnvelopeDraft, EnvelopeView, StoreExtras, StoreMoveTargets, StoreOverview, StoreTreeNode,
+    EnvelopeDraft, EnvelopeView, StoreChangeInput, StoreChangePlan, StoreExtras, StoreMoveTargets,
+    StoreOverview, StoreTreeNode,
 };
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -229,5 +230,32 @@ pub async fn delete_envelope(id: String, state: State<'_, AppState>) -> Result<(
         .as_mut()
         .unwrap()
         .delete_envelope(&id)
+        .map_err(err_to_string)
+}
+
+/// What changing a wallet's kind, moving, detaching or merging an account
+/// would do: what moves along, what is split off, which operations would no
+/// longer fit. Writes nothing.
+#[tauri::command]
+pub async fn plan_store_change(
+    input: StoreChangeInput,
+    state: State<'_, AppState>,
+) -> Result<StoreChangePlan, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_mut().unwrap().plan_store_change(&input))
+}
+
+/// Make that change: refused while the plan has an error or a conflict. The
+/// vault file is copied to `.bak` first.
+#[tauri::command]
+pub async fn apply_store_change(
+    input: StoreChangeInput,
+    state: State<'_, AppState>,
+) -> Result<StoreChangePlan, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .apply_store_change(&input)
         .map_err(err_to_string)
 }

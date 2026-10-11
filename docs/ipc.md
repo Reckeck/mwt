@@ -59,6 +59,8 @@ Frontend парсит код и показывает локализованно�
 | `delete_envelope` | `id` | — |
 | `move_store` | `MoveStoreInput { id, parent_id? }` | `Store` — перенос субсчёта; `parent_id: null` = «сделать отдельным кошельком»; корень не переносится |
 | `store_move_targets` | `id` | `StoreMoveTargets { parents: Vec<StoreTreeNode> (плоско), can_detach }` — куда можно перенести |
+| `plan_store_change` | `StoreChangeInput { store_id, change: change_kind { kind } \| move_to { parent_id } \| "detach" \| merge_into { target_id } }` | `StoreChangePlan { store_id, kept[], archived[], conflicts[{ tx_id, timestamp, comment, message }], moved_transactions, error? }` — «Опасная зона → Сменить тип или перенести», ничего не пишет. Смена вида — только между `bank`/`crypto`/`exchange` и только у кошелька; субсчёт, который новый вид не держит, отделяется в архивный кошелёк прежнего вида; перенос — в кошелёк любого вида с подбором типа субсчёта (карта ↔ токен-счёт); слияние переписывает все ссылки на счёт и удаляет его |
+| `apply_store_change` | `StoreChangeInput` | `StoreChangePlan` — то же и применить: при `error` или конфликтах — `INVALID_INPUT`, иначе сначала копия vault в `.bak`, затем всё одним сохранением |
 | `archive_store` | `id, archived` | `()` — каскадно на всё поддерево; восстановление под архивным родителем — ошибка |
 | `delete_store` | `id` | `()` — только без операций и без субсчетов |
 | `get_store_overview` | `store_id, include_children?` (по умолчанию `true`) | `StoreOverview` — см. `docs/data-model.md` |

@@ -16,7 +16,7 @@ import {
   StorePropertyForm,
   StoreTermsForm,
 } from '@/features/store-edit'
-import { StoreMoveDialog } from '@/features/store-move'
+import { StoreChangeDialog } from '@/features/store-change'
 import { AutomationList } from '@/widgets/automation-list'
 import { bindingLabel, kindInfo, useWalletCatalog } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
@@ -218,6 +218,6 @@ const money = (value: string) => formatMoney(value, { currency: overview.data.va
     </Tabs>
 
     <StoreCreateDialog v-model:open="createOpen" :parent="store" :parent-path="[store.name]" />
-    <StoreMoveDialog v-if="moveTarget" v-model:open="moveOpen" :store="moveTarget" />
+    <StoreChangeDialog v-if="moveTarget" v-model:open="moveOpen" :store="moveTarget" initial="move_to" />
   </div>
 </template>
