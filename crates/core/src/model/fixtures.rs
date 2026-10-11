@@ -352,6 +352,7 @@ pub fn full_doc() -> VaultDoc {
         muted: true,
         user_edited: true,
         snoozed_until: Some("2026-03-01T10:00:00Z".into()),
+        source_key: "m25|1|09:30".into(),
     }];
     doc.price_alerts = vec![PriceAlert {
         id: "alert".into(),

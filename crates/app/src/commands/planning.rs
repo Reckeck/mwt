@@ -238,9 +238,18 @@ pub async fn get_goal_calendar(
 
 // -- reminders -------------------------------------------------------------------
 
+/// Every reminder; the automatic ones are brought in step with the data first.
 #[tauri::command]
-pub async fn list_reminders(state: State<'_, AppState>) -> Result<Vec<Reminder>, String> {
-    with_vault(&state, |vault| Ok(vault.reminders()))
+pub async fn list_reminders(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<Reminder>, String> {
+    let zone = current_zone(&app);
+    let ru = crate::scheduler::russian(&app);
+    with_vault_mut(&state, |vault| {
+        vault.sync_auto_reminders(now_secs(), &zone, ru)?;
+        Ok(vault.reminders())
+    })
 }
 
 #[tauri::command]

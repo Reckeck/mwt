@@ -25,6 +25,7 @@ use crate::storage::{SnapshotFormat, VaultFile};
 
 mod adjustments;
 mod agenda;
+mod auto_reminders;
 mod automations;
 mod budget;
 mod categories;
@@ -48,6 +49,7 @@ mod worth;
 
 pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
+pub use auto_reminders::category_of;
 pub use automations::{
     AutomationDraft, AutomationPass, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance,
     SimulatedRun, describe_reject, planned_dates,

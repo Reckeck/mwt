@@ -676,7 +676,14 @@ mod tests {
         }
         for reminder in root["reminders"].as_array_mut().unwrap() {
             let reminder = reminder.as_object_mut().unwrap();
-            for key in ["repeat", "source", "muted", "user_edited", "snoozed_until"] {
+            for key in [
+                "repeat",
+                "source",
+                "muted",
+                "user_edited",
+                "snoozed_until",
+                "source_key",
+            ] {
                 reminder.remove(key);
             }
         }

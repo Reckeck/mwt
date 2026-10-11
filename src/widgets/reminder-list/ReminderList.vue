@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { AlarmClock, MoreVertical, Pencil, Plus, Repeat, Trash2 } from 'lucide-vue-next'
+import { AlarmClock, ExternalLink, MoreVertical, Pencil, Plus, Repeat, Trash2 } from 'lucide-vue-next'
+import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { ReminderDialog } from '@/features/reminder-edit'
@@ -10,6 +11,8 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { onEvent } from '@/shared/api/ipc'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call, parseError } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
@@ -20,9 +23,14 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const reminders = useQuery({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
-/** Open ones first, by time; done ones after. */
+/** «Мои» are written by the user, «Авто» are made from the data. */
+const show = ref<'all' | 'mine' | 'auto'>('all')
+/** Open ones first, by time; done ones after. Muted automatic ones are hidden. */
 const list = computed(() =>
-  [...(reminders.data.value ?? [])].sort(
+  [...(reminders.data.value ?? [])]
+    .filter((reminder) => !(reminder.source && reminder.muted))
+    .filter((reminder) => show.value === 'all' || (show.value === 'auto') === Boolean(reminder.source))
+    .sort(
     (left, right) => Number(left.done) - Number(right.done) || left.due_at.localeCompare(right.due_at),
   ),
 )
@@ -32,6 +40,26 @@ const dueOf = (reminder: Reminder) =>
 const overdue = (reminder: Reminder) => !reminder.done && new Date(dueOf(reminder)).getTime() < Date.now()
 const repeatLabel = (repeat: ReminderRepeat) =>
   `${t('reminder.every')} ${repeat.every > 1 ? `${repeat.every} ` : ''}${t(`reminder.unit.${repeat.unit}`, repeat.every)}`
+
+// The scheduler made or moved automatic reminders.
+void onEvent('reminders-changed', () => void queryClient.invalidateQueries({ queryKey: ['reminders'] }))
+
+/** Where an automatic reminder comes from: the wallet, the goal, the contact. */
+function sourceLink(source: ReminderSource): RouteLocationRaw | null {
+  switch (source.kind) {
+    case 'goal_saving':
+    case 'goal_deadline':
+      return { name: 'planning-goals' }
+    case 'debt':
+      return { name: 'directory-contacts' }
+    case 'rent':
+    case 'property_tax':
+    case 'interest_tax':
+      return null
+    default:
+      return { name: 'wallet', params: { id: source.id } }
+  }
+}
 
 function refresh() {
   for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
@@ -104,6 +132,20 @@ function openEdit(reminder: Reminder) {
       </Button>
     </div>
 
+    <ToggleGroup
+      v-model="show"
+      type="single"
+      variant="outline"
+      size="sm"
+      class="w-fit"
+      :aria-label="t('reminder.filter')"
+      data-tour="reminder-filter"
+    >
+      <ToggleGroupItem value="all">{{ t('reminder.filterAll') }}</ToggleGroupItem>
+      <ToggleGroupItem value="mine">{{ t('reminder.filterMine') }}</ToggleGroupItem>
+      <ToggleGroupItem value="auto">{{ t('reminder.filterAuto') }}</ToggleGroupItem>
+    </ToggleGroup>
+
     <div
       v-if="reminders.isSuccess.value && !list.length"
       class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
@@ -135,6 +177,15 @@ function openEdit(reminder: Reminder) {
           <Badge v-if="reminder.source" variant="secondary" class="shrink-0" :title="t('reminder.autoHint')">
             {{ t('reminder.auto') }}
           </Badge>
+          <RouterLink
+            v-if="reminder.source && sourceLink(reminder.source)"
+            :to="sourceLink(reminder.source) ?? '/'"
+            class="shrink-0 text-muted-foreground hover:text-foreground"
+            :title="t('reminder.openSource')"
+            :aria-label="t('reminder.openSource')"
+          >
+            <ExternalLink class="size-3.5" />
+          </RouterLink>
         </span>
         <span class="shrink-0 text-xs tabular-nums" :class="overdue(reminder) ? 'text-destructive' : 'text-muted-foreground'">
           <AlarmClock v-if="reminder.snoozed_until && dueOf(reminder) === reminder.snoozed_until" class="mr-1 inline size-3" />
@@ -161,9 +212,9 @@ function openEdit(reminder: Reminder) {
             <AlarmClock class="size-4 shrink-0" />
             {{ t(`reminder.snooze.${choice}`) }}
           </DropdownMenuItem>
-          <DropdownMenuItem v-if="reminder.repeat" value="finish" @select="finish.mutate(reminder)">
+          <DropdownMenuItem v-if="reminder.repeat || reminder.source" value="finish" @select="finish.mutate(reminder)">
             <Repeat class="size-4 shrink-0" />
-            {{ t('reminder.finishSeries') }}
+            {{ reminder.source ? t('reminder.mute') : t('reminder.finishSeries') }}
           </DropdownMenuItem>
         </DropdownMenu>
         <Button

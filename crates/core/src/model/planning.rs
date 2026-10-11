@@ -302,6 +302,11 @@ pub struct Reminder {
     /// Put off until this moment (RFC3339); it is not due before.
     #[serde(default)]
     pub snoozed_until: Option<String>,
+    /// An automatic reminder: the schedule it was last placed by (the day,
+    /// how far ahead, the time). Only a changed schedule moves it again, so a
+    /// sync never undoes «done».
+    #[serde(default)]
+    pub source_key: String,
 }
 
 impl Reminder {
@@ -316,6 +321,7 @@ impl Reminder {
             muted: false,
             user_edited: false,
             snoozed_until: None,
+            source_key: String::new(),
         }
     }
 }
