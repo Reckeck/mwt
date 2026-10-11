@@ -1,8 +1,8 @@
 use tauri::{AppHandle, Emitter, State};
 
 use trade_core::ipc_contract::{
-    AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount,
-    GetCandlesInput, GetCandlesOutput, RefreshResult,
+    AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount, EnsureFxInput,
+    EnsureFxOutput, GetCandlesInput, GetCandlesOutput, RefreshResult,
 };
 use trade_core::pricing::AssetSearchHit;
 
@@ -82,11 +82,28 @@ pub async fn refresh_all(
         .fetch_prices(&assets)
         .await
         .map_err(crate::commands::err_to_string)?;
-    let fx = state
-        .pricing
-        .fetch_fx()
-        .await
-        .map_err(crate::commands::err_to_string)?;
+    // The latest table first; when that provider is down, the dated sources
+    // (ECB, ЦБ РФ, walking back a few days) still cover the tracked currencies.
+    let fx = match state.pricing.fetch_fx().await {
+        Ok(fx) => fx,
+        Err(err) => {
+            let tracked: Vec<String> = {
+                let guard = require_vault(&state).map_err(err_to_string)?;
+                guard
+                    .as_ref()
+                    .unwrap()
+                    .fx_currencies_in_use()
+                    .into_iter()
+                    .collect()
+            };
+            let today = chrono::Utc::now().date_naive();
+            let fallback = state.pricing.fetch_fx_on(&tracked, today, today).await;
+            if fallback.is_empty() {
+                return Err(err_to_string(err));
+            }
+            fallback
+        }
+    };
 
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
@@ -104,6 +121,64 @@ pub async fn refresh_all(
     };
     let _ = app.emit("prices-updated", &result);
     Ok(result)
+}
+
+/// Fetch the rates of `currencies` for a day that the cache lacks (today by
+/// default), from the public sources with a walk back to earlier days, cache
+/// them and emit `prices-updated` when anything was found.
+///
+/// The fetched points are also returned: a currency the vault does not track
+/// keeps only its latest rate, so an older day would not survive in the cache.
+#[tauri::command]
+pub async fn ensure_fx(
+    input: EnsureFxInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<EnsureFxOutput, String> {
+    let today = chrono::Utc::now().date_naive();
+    let date = match input
+        .date
+        .as_deref()
+        .map(str::trim)
+        .filter(|raw| !raw.is_empty())
+    {
+        Some(raw) => chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+            .map_err(|_| format!("INVALID_INPUT: bad date {raw}"))?
+            .min(today),
+        None => today,
+    };
+    let wanted = {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_ref()
+            .unwrap()
+            .fx_missing_on(&input.currencies, date)
+    };
+    if wanted.is_empty() {
+        return Ok(EnsureFxOutput::default());
+    }
+    let points = state.pricing.fetch_fx_on(&wanted, date, today).await;
+    let missing: Vec<String> = wanted
+        .into_iter()
+        .filter(|code| !points.iter().any(|point| &point.currency == code))
+        .collect();
+    if !points.is_empty() {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_mut().unwrap();
+        vault.apply_fx(&points);
+        let restamped = vault.restamp_missing();
+        let _ = vault.persist();
+        let _ = app.emit(
+            "prices-updated",
+            &RefreshResult {
+                prices: 0,
+                fx: points.len(),
+                restamped,
+                updated_at: trade_core::model::vault::now_iso(),
+            },
+        );
+    }
+    Ok(EnsureFxOutput { points, missing })
 }
 
 /// Open a URL (typically an explorer tx link) in the default browser.

@@ -93,7 +93,8 @@ pub async fn set_quick_add_shortcut(
 
 /// Currencies the base/favourite pickers may offer.
 ///
-/// Goes to the network first, then to the last successfully fetched catalog,
+/// Serves a cached catalog younger than a day as is; otherwise goes to the
+/// network first, then to the last successfully fetched catalog,
 /// then to a built-in list — see [`build_currency_catalog`]. The `notice` is set
 /// only when no provider answered, so the UI can flag the list as possibly
 /// stale or incomplete.

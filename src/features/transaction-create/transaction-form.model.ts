@@ -23,6 +23,8 @@ export interface TransactionFormState {
   debt: DebtEffect | null
   network: Chain | ''
   txHash: string
+  /** Cashback: the card whose purchases earned it. */
+  sourceStoreId: string
   /** Property bought (topup on an `asset` store): price of one unit, base currency. */
   unitPrice: string
 
@@ -73,7 +75,9 @@ export interface TransactionFormState {
   /** `datetime-local` value; empty = now. */
   timestamp: string
   contactId: string
-  priceUsd: string
+  price: string
+  /** Code `price` is typed in; `''` means the base currency. */
+  priceCurrency: string
   flowId: string
 }
 
@@ -98,6 +102,7 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     debt: null,
     network: '',
     txHash: '',
+    sourceStoreId: '',
     unitPrice: '',
     fromAsset: null,
     fromAmount: '',
@@ -133,7 +138,8 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     comment: '',
     timestamp: '',
     contactId: '',
-    priceUsd: '',
+    price: '',
+    priceCurrency: '',
     flowId: '',
   }
 }
@@ -187,6 +193,12 @@ export function pricedAsset(form: TransactionFormState): AssetRef | null {
   }
 }
 
+/** A stored stamp back into the form: the base-currency price when it was typed so, else USD. */
+function stampToPrice(stamp: PriceStamp): Pick<TransactionFormState, 'price' | 'priceCurrency'> {
+  if (stamp.price_base) return { price: stamp.price_base, priceCurrency: '' }
+  return { price: stamp.price_usd ?? '', priceCurrency: stamp.price_usd ? 'usd' : '' }
+}
+
 function common(form: TransactionFormState): TxCommonInput {
   return {
     timestamp: toIsoTimestamp(form.timestamp),
@@ -194,8 +206,11 @@ function common(form: TransactionFormState): TxCommonInput {
     categories: [...form.categories],
     flow_id: text(form.flowId),
     contact_id: text(form.contactId),
-    price_usd: text(form.priceUsd),
+    // The backend turns `price` into USD at the rate of the operation's moment.
+    price_usd: null,
     fx_override: null,
+    price: text(form.price),
+    price_currency: text(form.priceCurrency),
   }
 }
 
@@ -205,6 +220,7 @@ function details(form: TransactionFormState): KindDetails {
     unit_price: text(form.unitPrice),
     network: form.network || null,
     tx_hash: text(form.txHash),
+    source_store_id: (form.categories.includes('cashback') && text(form.sourceStoreId)) || undefined,
   }
 }
 
@@ -356,8 +372,9 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         counterpart: record.from,
         network: record.details.network ?? '',
         txHash: record.details.tx_hash ?? '',
+        sourceStoreId: record.details.source_store_id ?? '',
         unitPrice: record.details.unit_price ?? '',
-        priceUsd: record.price.price_usd ?? '',
+        ...stampToPrice(record.price),
       })
       break
     }
@@ -370,7 +387,7 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         counterpart: record.to,
         network: record.details.network ?? '',
         txHash: record.details.tx_hash ?? '',
-        priceUsd: record.price.price_usd ?? '',
+        ...stampToPrice(record.price),
       })
       break
     }
@@ -384,7 +401,7 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         debt: record.debt,
         network: record.network ?? '',
         txHash: record.tx_hash ?? '',
-        priceUsd: record.price.price_usd ?? '',
+        ...stampToPrice(record.price),
       })
       break
     }
@@ -398,7 +415,7 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         toAsset: record.to.asset,
         toAmount: record.to.amount,
         rate: record.rate_override ?? '',
-        priceUsd: record.to.price.price_usd ?? '',
+        ...stampToPrice(record.to.price),
       })
       break
     }
@@ -412,7 +429,7 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         boughtQty: record.bought.qty,
         liquidity: record.liquidity ?? '',
         orderId: record.order_id ?? '',
-        priceUsd: record.bought.price.price_usd ?? '',
+        ...stampToPrice(record.bought.price),
       })
       break
     }
@@ -446,7 +463,7 @@ export function formFromTransaction(tx: Transaction, storeId: string): Transacti
         poolId: record.pool_id ?? '',
         network: record.network ?? '',
         txHash: record.tx_hash ?? '',
-        priceUsd: record.price.price_usd ?? '',
+        ...stampToPrice(record.price),
       })
       break
     }
