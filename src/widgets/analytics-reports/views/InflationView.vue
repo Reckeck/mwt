@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { Card } from '@/shared/ui/card'
@@ -15,6 +15,7 @@ import { categoryChart, num } from './chart'
 const props = defineProps<{ report: InflationReport }>()
 
 const { t } = useI18n()
+const route = useRoute()
 const axisColor = chartAxisColor(useTheme().resolved)
 
 const option = computed<ChartOption>(() => ({
@@ -44,7 +45,7 @@ const option = computed<ChartOption>(() => ({
         </p>
         <p class="text-xs text-muted-foreground">
           {{ t('report.inflation.reference') }}
-          <RouterLink :to="{ name: 'settings' }" class="underline">{{ t('report.inflation.settings') }}</RouterLink>
+          <RouterLink :to="{ query: { ...route.query, settings: 'inflation' } }" class="underline">{{ t('report.inflation.settings') }}</RouterLink>
         </p>
       </div>
     </Card>

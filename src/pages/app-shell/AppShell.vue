@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useIntervalFn, useNow } from '@vueuse/core'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff } from 'lucide-vue-next'
+import { BookUser, CircleHelp, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import { AppSettingsDialog } from '@/widgets/app-settings'
+import { SettingsShell } from '@/widgets/settings-shell'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { QuickAddDialog } from '@/features/quick-add'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
@@ -31,10 +32,12 @@ import {
 } from '@/shared/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { call, onEvent, parseError } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatAsOf, formatDate, formatMoney } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { settingsQuery } from '@/shared/lib/settings-link'
+import { useTour } from '@/shared/lib/tour'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
@@ -48,7 +51,6 @@ const queryClient = useQueryClient()
 
 useTheme()
 
-const settingsOpen = ref(false)
 const quickAddOpen = ref(false)
 
 // The system-wide shortcut (Settings) brings the window up and lands here.
@@ -63,13 +65,29 @@ const summary = useQuery({
   staleTime: 60_000,
 })
 
+/* --- guided tours: «?» starts the page's tour; a first visit starts it once --- */
+const tour = useTour()
+const routeTour = computed(() => String(route.name ?? ''))
+watch(
+  routeTour,
+  (id) => {
+    if (!tour.hasTour(id)) return
+    // Let the page render its widgets before pointing at them.
+    setTimeout(() => tour.autoStart(id), 1200)
+  },
+  { immediate: true },
+)
+
+function openSettings(tab = 'general') {
+  void router.push({ query: settingsQuery(route.query, tab) })
+}
+
 const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
   { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
   { name: 'analytics-cashflow', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
   { name: 'directory-contacts', icon: BookUser, key: 'nav.directory', prefix: '/directory' },
-  { name: 'settings', icon: Settings, key: 'nav.settings' },
 ]
 
 /** A wallet page carries its own name and parents; the shell only says where you are. */
@@ -91,14 +109,37 @@ const netWorth = computed(() => {
   }
 })
 
+/** Prices older than this are flagged next to the net worth. */
+const STALE_PRICES_MS = 60 * 60_000
+
 const isOnline = ref(navigator.onLine)
+const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 60_000) })
+// Only a real age is reported; "offline" stays a separate, honest signal.
+const stalePrices = computed(() => {
+  const asOf = summary.data.value?.prices_as_of
+  if (!asOf) return null
+  const age = now.value.getTime() - new Date(asOf).getTime()
+  return age > STALE_PRICES_MS ? formatAsOf(asOf) : null
+})
 const markOnline = () => (isOnline.value = true)
 const markOffline = () => (isOnline.value = false)
+/**
+ * The WebView's own menu (Reload, Inspect…) is not the app's: every block has
+ * its own right-click menu. Text fields keep the native one for copy and paste.
+ */
+function blockNativeMenu(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('input, textarea, [contenteditable="true"], .cm-editor')) return
+  event.preventDefault()
+}
+
 onMounted(() => {
+  window.addEventListener('contextmenu', blockNativeMenu)
   window.addEventListener('online', markOnline)
   window.addEventListener('offline', markOffline)
 })
 onUnmounted(() => {
+  window.removeEventListener('contextmenu', blockNativeMenu)
   window.removeEventListener('online', markOnline)
   window.removeEventListener('offline', markOffline)
 })
@@ -215,6 +256,13 @@ async function lock() {
                   </RouterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <!-- Settings open over the page, not instead of it. -->
+              <SidebarMenuItem>
+                <SidebarMenuButton :tooltip="t('nav.settings')" :is-active="typeof route.query.settings === 'string'" @click="openSettings()">
+                  <Settings />
+                  <span>{{ t('nav.settings') }}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -248,6 +296,10 @@ async function lock() {
           <WifiOff class="size-3" />
           {{ t('app.offline') }}
         </Badge>
+        <Badge v-else-if="stalePrices" variant="secondary" class="gap-1" :title="t('app.pricesStaleHint')">
+          <Clock class="size-3" />
+          {{ t('app.pricesAsOf', { time: stalePrices }) }}
+        </Badge>
 
         <Tooltip v-if="netWorth">
           <TooltipTrigger as-child>
@@ -262,12 +314,25 @@ async function lock() {
         </Button>
 
         <Button
+          v-if="tour.hasTour(routeTour)"
+          variant="ghost"
+          size="icon"
+          class="shrink-0"
+          :aria-label="t('tour.start')"
+          :title="t('tour.start')"
+          data-tour="tour-help"
+          @click="tour.start(routeTour)"
+        >
+          <CircleHelp class="size-4" />
+        </Button>
+        <Button
           variant="ghost"
           size="icon"
           class="shrink-0"
           :aria-label="t('settings.appTitle')"
           :title="t('settings.appTitle')"
-          @click="settingsOpen = true"
+          data-tour="open-settings"
+          @click="openSettings()"
         >
           <Settings class="size-4" />
         </Button>
@@ -280,7 +345,7 @@ async function lock() {
       </div>
     </SidebarInset>
 
-    <AppSettingsDialog v-model:open="settingsOpen" />
+    <SettingsShell />
     <QuickAddDialog v-model:open="quickAddOpen" />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
