@@ -48,9 +48,9 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     descriptionKey: 'dashboard.widgetHint.onboarding',
     component: OnboardingChecklist,
     w: 12,
-    h: 4,
+    h: 6,
     minW: 6,
-    minH: 3,
+    minH: 5,
   },
   {
     id: 'dailyBudget',
@@ -68,9 +68,9 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     descriptionKey: 'dashboard.widgetHint.monthSummary',
     component: MonthSummary,
     w: 4,
-    h: 5,
+    h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: 'upcoming',
@@ -101,7 +101,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     w: 4,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: 'fx',
@@ -211,7 +211,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     w: 6,
     h: 5,
     minW: 3,
-    minH: 3,
+    minH: 4,
   },
   {
     id: 'byChain',

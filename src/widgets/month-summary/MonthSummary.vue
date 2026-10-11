@@ -30,7 +30,7 @@ const rows = computed(() => {
 <template>
   <Card size="sm" v-if="data">
     <template #header>
-      <p class="text-sm text-muted-foreground">{{ t('monthSummary.title') }}</p>
+      <p data-widget-title class="text-sm text-muted-foreground">{{ t('monthSummary.title') }}</p>
     </template>
     <dl class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm tabular-nums">
       <template v-for="row in rows" :key="row.key">

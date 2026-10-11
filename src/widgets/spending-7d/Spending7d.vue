@@ -47,7 +47,7 @@ const weekday = (date: string) =>
   <Card size="sm" v-if="current.data.value">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <RouterLink :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground hover:text-foreground">
+        <RouterLink data-widget-title :to="{ name: 'transactions-calendar' }" class="text-sm text-muted-foreground hover:text-foreground">
           {{ t('spending7d.title') }}
         </RouterLink>
         <span class="text-sm tabular-nums">

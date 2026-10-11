@@ -19,7 +19,7 @@ const rest = computed(() => {
 
 <template>
   <div :class="cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', cls)" v-bind="rest">
-    <div v-if="$slots.header" :class="cn('flex flex-col gap-1', pad.section, pad.header)">
+    <div v-if="$slots.header" data-card-header :class="cn('flex flex-col gap-1', pad.section, pad.header)">
       <slot name="header" />
     </div>
     <!-- Only the section right under another one drops its top padding;

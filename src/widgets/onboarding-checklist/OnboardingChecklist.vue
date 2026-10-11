@@ -68,7 +68,8 @@ const createOpen = ref(false)
 <template>
   <Card size="sm" v-if="!hidden && !allDone && tree.isSuccess.value">
     <template #header>
-      <div class="flex items-center justify-between gap-2">
+      <!-- In a dashboard frame the whole row goes: the frame names the widget and removes it. -->
+      <div data-widget-title class="flex items-center justify-between gap-2">
         <p class="font-medium">{{ t('onboarding.title') }}</p>
         <Button variant="ghost" size="icon" class="size-8" :title="t('onboarding.hide')" :aria-label="t('onboarding.hide')" @click="hide">
           <X class="size-4" />
