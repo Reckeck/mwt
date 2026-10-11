@@ -46,6 +46,15 @@ export function formatDateTime(iso: string | null | undefined): string {
   }).format(date)
 }
 
+/** Time only when the moment is today, date and time otherwise. */
+export function formatAsOf(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  if (date.toDateString() !== new Date().toDateString()) return formatDateTime(iso)
+  return new Intl.DateTimeFormat(activeLocale.value, { hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
 export function useMoney() {
   return {
     money: (value: string | number | null | undefined, opts?: { decimals?: number; currency?: string }) =>
