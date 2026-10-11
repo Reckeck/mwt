@@ -9,7 +9,8 @@ mod tray;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
-    losses, planning, portfolio, pricing, settings, stores, transactions, vault_recents,
+    losses, notifications, planning, portfolio, pricing, settings, stores, transactions,
+    vault_recents,
 };
 use tauri::Manager;
 
@@ -179,6 +180,10 @@ pub fn run() {
             planning::set_reminder_done,
             planning::finish_reminder_series,
             planning::snooze_reminder,
+            notifications::list_notifications,
+            notifications::mark_notifications_read,
+            notifications::send_test_notification,
+            notifications::notification_permission,
             planning::list_price_alerts,
             planning::create_price_alert,
             planning::update_price_alert,

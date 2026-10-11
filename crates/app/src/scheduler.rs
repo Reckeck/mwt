@@ -22,7 +22,9 @@ use tauri_plugin_notification::NotificationExt;
 use trade_core::appconfig::{Locale, load_settings};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::AutomationRejectedEvent;
+use trade_core::model::notify::{NoticeCategory, NoticeRecord};
 use trade_core::model::planning::{AlertCondition, AutomationOutcome, RejectReason};
+use trade_core::service::{notice, notice_title};
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string};
@@ -75,8 +77,47 @@ pub fn russian(app: &AppHandle) -> bool {
     }
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str) {
-    let _ = app.notification().builder().title(title).body(body).show();
+/// Show notices: each goes to the window as a `notification` event (the bell
+/// and a toast) and, when the user wants them, to the system as well.
+/// `force` shows a system notice even when those are off (the test button).
+pub fn deliver(app: &AppHandle, records: Vec<NoticeRecord>, force: bool) {
+    if records.is_empty() {
+        return;
+    }
+    let system = force || {
+        let state = app.state::<AppState>();
+        state.vault.lock().ok().is_none_or(|guard| {
+            guard
+                .as_ref()
+                .is_none_or(|vault| vault.doc.settings.notifications.system)
+        })
+    };
+    for record in records {
+        let _ = app.emit("notification", &record);
+        if system {
+            let _ = app
+                .notification()
+                .builder()
+                .title(&record.title)
+                .body(&record.body)
+                .show();
+        }
+    }
+}
+
+/// Log notices shown by a job (so they are never repeated) and show the new ones.
+fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
+    let fresh = {
+        let state = app.state::<AppState>();
+        let Ok(mut guard) = state.vault.lock() else {
+            return;
+        };
+        let Some(vault) = guard.as_mut() else {
+            return;
+        };
+        vault.log_notices(records).unwrap_or_default()
+    };
+    deliver(app, fresh, false);
 }
 
 // -- 1. Bybit import -------------------------------------------------------------
@@ -118,6 +159,22 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
         let _ = app.emit(
             "bybit-import-pending",
             serde_json::json!({ "staged": staged }),
+        );
+        let ru = russian(app);
+        record_and_deliver(
+            app,
+            vec![notice(
+                NoticeCategory::BybitImport,
+                format!("bybit:{}", now_secs()),
+                notice_title(NoticeCategory::BybitImport, ru),
+                if ru {
+                    format!("Новых операций на подтверждение: {staged}")
+                } else {
+                    format!("New operations to confirm: {staged}")
+                },
+                Some("transactions".into()),
+                trade_core::model::vault::now_iso(),
+            )],
         );
     }
 }
@@ -199,12 +256,21 @@ fn automations_tick(app: &AppHandle) {
             "automation-created",
             serde_json::json!({ "tx_ids": pass.created }),
         );
-        let title = if ru {
-            "Созданы автоматические операции"
-        } else {
-            "Automatic transactions created"
-        };
-        notify(app, title, &pass.created.len().to_string());
+        record_and_deliver(
+            app,
+            vec![notice(
+                NoticeCategory::Automation,
+                format!("automation-created:{}", pass.created[0]),
+                notice_title(NoticeCategory::Automation, ru),
+                if ru {
+                    format!("Созданы автоматические операции: {}", pass.created.len())
+                } else {
+                    format!("Automatic transactions created: {}", pass.created.len())
+                },
+                Some("planning-automations".into()),
+                trade_core::model::vault::now_iso(),
+            )],
+        );
     }
     if pass.skipped > 0 {
         let _ = app.emit(
@@ -227,7 +293,16 @@ fn automations_tick(app: &AppHandle) {
         let _ = app.emit("automation-rejected", &event);
         let date = run.planned_at.get(..10).unwrap_or_default();
         let (title, body) = rejected_text(ru, &name, date, reason);
-        notify(app, &title, &body);
+        let mut record = notice(
+            NoticeCategory::Automation,
+            format!("automation-rejected:{}", run.id),
+            &title,
+            body,
+            Some("planning-automations".into()),
+            run.planned_at.clone(),
+        );
+        record.title = title;
+        record_and_deliver(app, vec![record]);
     }
 }
 
@@ -307,39 +382,45 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
         vault.check_alerts(now_secs()).unwrap_or_default()
     };
     let ru = russian(app);
-    for alert in fired {
-        let _ = app.emit("price-alert", serde_json::json!({ "alert_id": alert.id }));
-        let word = match (alert.condition, ru) {
-            (AlertCondition::Above, true) => "выше",
-            (AlertCondition::Below, true) => "ниже",
-            (AlertCondition::Above, false) => "above",
-            (AlertCondition::Below, false) => "below",
-        };
-        let body = format!(
-            "{} {word} {} {}",
-            alert.asset.symbol,
-            alert.price,
-            alert.currency.to_uppercase()
-        );
-        notify(
-            app,
-            if ru {
-                "Ценовой алерт"
-            } else {
-                "Price alert"
-            },
-            &body,
-        );
-    }
+    let records = fired
+        .into_iter()
+        .map(|alert| {
+            let _ = app.emit("price-alert", serde_json::json!({ "alert_id": alert.id }));
+            let word = match (alert.condition, ru) {
+                (AlertCondition::Above, true) => "выше",
+                (AlertCondition::Below, true) => "ниже",
+                (AlertCondition::Above, false) => "above",
+                (AlertCondition::Below, false) => "below",
+            };
+            notice(
+                NoticeCategory::PriceAlert,
+                format!(
+                    "alert:{}:{}",
+                    alert.id,
+                    alert.triggered_at.clone().unwrap_or_default()
+                ),
+                notice_title(NoticeCategory::PriceAlert, ru),
+                format!(
+                    "{} {word} {} {}",
+                    alert.asset.symbol,
+                    alert.price,
+                    alert.currency.to_uppercase()
+                ),
+                Some("planning-alerts".into()),
+                trade_core::model::vault::now_iso(),
+            )
+        })
+        .collect();
+    record_and_deliver(app, records);
 }
 
 // -- 4. Reminders ----------------------------------------------------------------
 
-fn reminders_tick(app: &AppHandle, memory: &mut Memory) {
+fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
     let state = app.state::<AppState>();
     let ru = russian(app);
     let zone = current_zone(app);
-    let (due, synced) = {
+    let (fresh, synced) = {
         let Ok(mut guard) = state.vault.lock() else {
             return;
         };
@@ -350,24 +431,18 @@ fn reminders_tick(app: &AppHandle, memory: &mut Memory) {
         let synced = vault
             .sync_auto_reminders(now_secs(), &zone, ru)
             .unwrap_or(false);
-        (vault.due_reminders(now_secs()), synced)
+        // Reminders whose time came, money that will run short, budgets.
+        let fresh = vault.due_notices(now_secs(), &zone, ru).unwrap_or_default();
+        (fresh, synced)
     };
     if synced {
         let _ = app.emit("reminders-changed", serde_json::json!({}));
     }
-    for reminder in due {
-        if !memory.announced_reminders.insert(reminder.id.clone()) {
-            continue;
-        }
-        let _ = app.emit("reminder-due", serde_json::json!({ "id": reminder.id }));
-        notify(
-            app,
-            if ru {
-                "Напоминание"
-            } else {
-                "Reminder"
-            },
-            &reminder.text,
-        );
+    if fresh
+        .iter()
+        .any(|record| record.key.starts_with("reminder:"))
+    {
+        let _ = app.emit("reminder-due", serde_json::json!({}));
     }
+    deliver(app, fresh, false);
 }

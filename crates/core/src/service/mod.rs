@@ -37,6 +37,7 @@ mod interest;
 mod ledger;
 mod losses;
 mod loyalty;
+mod notifications;
 mod preview;
 mod rates;
 mod reports;
@@ -66,6 +67,7 @@ pub use losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
 };
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
+pub use notifications::{notice, notice_title};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use rates::RateBook;
 pub use reports::{
@@ -333,6 +335,23 @@ impl UnlockedVault {
         }
         if let Some(currency) = input.budget_currency {
             settings.budget_currency = currency.trim().to_lowercase();
+        }
+        if let Some(mut notifications) = input.notifications {
+            for cfg in &mut notifications.categories {
+                cfg.lead_days = cfg.lead_days.min(90);
+            }
+            let valid_time =
+                notifications
+                    .default_time
+                    .split_once(':')
+                    .is_some_and(|(hour, minute)| {
+                        hour.parse::<u32>().is_ok_and(|hour| hour < 24)
+                            && minute.parse::<u32>().is_ok_and(|minute| minute < 60)
+                    });
+            if !valid_time {
+                notifications.default_time = "10:00".into();
+            }
+            settings.notifications = notifications;
         }
         let out = settings.clone();
         self.persist()?;

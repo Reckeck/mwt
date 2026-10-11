@@ -19,7 +19,9 @@ Frontend парсит код и показывает локализованно�
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
 | `automation-skipped` | `{ count }` | после долгого перерыва старые даты сверх 24 записаны как пропущенные |
 | `price-alert` | `{ alert_id }` | сработал ценовой алерт (один раз) |
-| `reminder-due` | `{ id }` | наступило время напоминания (один раз за сессию) |
+| `reminder-due` | `{}` | наступило время напоминаний — обновить их список |
+| `reminders-changed` | `{}` | синхронизация создала или сдвинула авто-напоминания |
+| `notification` | `NoticeRecord { key, category, title, body, link?, at, delivered_at, read }` | показано уведомление (напоминание, алерт, нехватка денег, бюджет, автоматизация, импорт Bybit): колокольчик и тост. `link` — имя маршрута или `wallet:<id>`. Каждый `key` показывается один раз за всё время — журнал в vault |
 | `enrichment-ready` | `{ tx_id }` | обозреватель вернул данные по хешу операции; находка ждёт «Применить / Отклонить» |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
@@ -244,7 +246,11 @@ JSON без шифрования — там нет ничего секретно
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — только vault-scoped поля |
-| `update_settings` | `UpdateSettingsInput` | `Settings` (`savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, пусто — базовая). Логика — в core (`UnlockedVault::update_settings`) |
+| `update_settings` | `UpdateSettingsInput` | `Settings` (`savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, пусто — базовая). Логика — в core (`UnlockedVault::update_settings`); `notifications: NotificationSettings { system, hide_details_when_locked, default_time, categories[{ category, enabled, lead_days (0–90), auto_reminders }] }` |
+| `list_notifications` | — | `Vec<NoticeRecord>` — журнал показанных уведомлений, новые сверху (не больше 500) |
+| `mark_notifications_read` | `keys?: Vec<String>` | `()` — отметить прочитанными названные или все |
+| `send_test_notification` | — | `()` — показать пробное уведомление (системное — даже если они выключены) |
+| `notification_permission` | `request: bool` | `"granted" \| "denied" \| "prompt"` — разрешает ли система уведомления; `request` — спросить |
 | `dev_dump_vault` | — | `DevDumpVaultOutput { json }` — расшифрованный `VaultDoc` одним pretty-JSON (только DEV-экран) |
 | `dev_export_vault` | — | `Option<String>` — путь записанного файла, `None` если пользователь закрыл диалог. Нативный save-диалог + запись делает Rust: webview не умеет скачивать файлы (`URL.createObjectURL` + `<a download>` в WebKitGTK не работает) |
 | `vault_schema` | — | `serde_json::Value` — JSON Schema `VaultDoc` из `schemars` (для подсказок в редакторе; форма документа живёт только в Rust) |

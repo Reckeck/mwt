@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { Bug, Cpu, FolderTree, Landmark, Percent, Radar, Settings2 } from 'lucide-vue-next'
+import { Bell, Bug, Cpu, FolderTree, Landmark, Percent, Radar, Settings2 } from 'lucide-vue-next'
 
 export interface SettingsSection {
   id: string
@@ -26,6 +26,12 @@ export const SETTINGS_TABS: SettingsTab[] = [
       { id: 'quick-add', titleKey: 'settingsShell.section.quickAdd' },
       { id: 'tours', titleKey: 'settingsShell.section.tours' },
     ],
+  },
+  {
+    id: 'notifications',
+    titleKey: 'settingsShell.tab.notifications',
+    icon: Bell,
+    sections: [{ id: 'notifications', titleKey: 'settingsShell.section.notifications' }],
   },
   {
     id: 'vault',

@@ -381,6 +381,28 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       return resolve({ total_base: '1234.56', fees_base: '4.5', legs: [] })
     case 'get_settings':
       return resolve(mockSettings)
+    // --- notifications ---
+    case 'list_notifications':
+      return resolve([...mockNotices].reverse())
+    case 'mark_notifications_read': {
+      const keys = args?.keys as string[] | null
+      for (const record of mockNotices) if (!keys || keys.includes(record.key)) record.read = true
+      return resolve({})
+    }
+    case 'send_test_notification':
+      mockNotices.push({
+        key: `test:${Date.now()}`,
+        category: 'reminder',
+        title: 'Напоминание',
+        body: 'Уведомления работают',
+        link: null,
+        at: new Date().toISOString(),
+        delivered_at: new Date().toISOString(),
+        read: false,
+      })
+      return resolve({})
+    case 'notification_permission':
+      return resolve('granted')
     case 'update_settings': {
       const input = body as UpdateSettingsInput
       const settings = mockSettings
@@ -1514,6 +1536,9 @@ function mockFilterTxs(storeIds: string[] | null): Transaction[] {
     : mockTransactions
   return [...list].sort((left, right) => timestampOf(right).localeCompare(timestampOf(left)))
 }
+
+/** The notification log of the browser mock. */
+const mockNotices: NoticeRecord[] = []
 
 function mockPush(tx: Transaction): Transaction {
   mockTransactions.push(tx)

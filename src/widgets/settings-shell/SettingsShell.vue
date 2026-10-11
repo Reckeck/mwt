@@ -11,6 +11,7 @@ import { CategorizationRules } from '@/widgets/categorization-rules'
 import { CategoryManager } from '@/widgets/category-manager'
 import { EnrichmentSettings } from '@/widgets/enrichment-settings'
 import { InflationSettings } from '@/widgets/inflation-settings'
+import { NotificationSettings } from '@/widgets/notification-settings'
 import { QuickAddSettings } from '@/widgets/quick-add-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
@@ -156,6 +157,7 @@ watch(
                 <AppSettingsPanel v-if="section.id === 'app'" />
                 <QuickAddSettings v-else-if="section.id === 'quick-add'" />
                 <TourSettings v-else-if="section.id === 'tours'" />
+                <NotificationSettings v-else-if="section.id === 'notifications'" />
                 <VaultSettings v-else-if="section.id === 'vault'" />
                 <BudgetSettings v-else-if="section.id === 'budget'" />
                 <CategoryManager v-else-if="section.id === 'categories'" />

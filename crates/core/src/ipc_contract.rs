@@ -1282,6 +1282,9 @@ pub struct UpdateSettingsInput {
     pub daily_budget_mode: Option<DailyBudgetMode>,
     /// Empty string = follow the base currency.
     pub budget_currency: Option<String>,
+    /// What to be told about and how far ahead.
+    #[serde(default)]
+    pub notifications: Option<crate::model::notify::NotificationSettings>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------
