@@ -135,12 +135,9 @@ pub async fn change_password(
     input: ChangePasswordInput,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    if input.new_password.is_empty() {
-        return Err("INVALID_INPUT: new password must not be empty".into());
-    }
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     vault
-        .change_password(&input.new_password)
+        .change_password(&input.current_password, &input.new_password)
         .map_err(crate::commands::err_to_string)
 }
