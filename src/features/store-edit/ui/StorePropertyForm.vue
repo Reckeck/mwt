@@ -2,8 +2,9 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { CurrencySelect } from '@/entities/currency'
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -24,6 +25,8 @@ const area = ref('')
 const purchasedAt = ref('')
 const purchasePrice = ref('')
 const currency = ref('')
+/** Day of the month all utilities are paid; empty — no fixed day. */
+const payDay = ref('')
 
 watch(
   () => props.store,
@@ -35,6 +38,7 @@ watch(
     purchasedAt.value = info?.purchased_at ?? ''
     purchasePrice.value = info?.purchase_price ?? ''
     currency.value = info?.currency || settings.baseCurrency.toLowerCase()
+    payDay.value = info?.utilities_pay_day ? String(info.utilities_pay_day) : ''
   },
   { immediate: true },
 )
@@ -51,6 +55,7 @@ function submit() {
         purchased_at: purchasedAt.value || null,
         purchase_price: purchasePrice.value.trim() || null,
         currency: currency.value,
+        utilities_pay_day: payDay.value ? Math.min(31, Math.max(1, Number(payDay.value))) : undefined,
       },
     }),
   )
@@ -68,7 +73,7 @@ function submit() {
       </div>
       <div class="grid gap-1.5">
         <Label for="property-area">{{ t('property.area') }}</Label>
-        <Input id="property-area" v-model="area" inputmode="decimal" />
+        <AmountInput id="property-area" v-model="area" />
       </div>
     </div>
     <div class="grid gap-1.5">
@@ -82,9 +87,13 @@ function submit() {
       </div>
       <div class="grid gap-1.5">
         <Label for="property-price">{{ t('property.purchasePrice') }}</Label>
-        <Input id="property-price" v-model="purchasePrice" inputmode="decimal" />
+        <AmountInput id="property-price" v-model="purchasePrice" />
       </div>
-      <CurrencySelect v-model="currency" :label="t('form.currency')" />
+      <CurrencyPicker v-model="currency" :label="t('form.currency')" />
+    </div>
+    <div class="grid gap-1.5 @md:w-1/3">
+      <Label for="property-pay-day">{{ t('utilities.payDay') }}</Label>
+      <Input id="property-pay-day" v-model="payDay" type="number" min="1" max="31" :placeholder="t('utilities.payDayHint')" />
     </div>
     <div>
       <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>

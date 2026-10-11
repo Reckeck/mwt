@@ -6,6 +6,7 @@ import { useQueries, useQuery } from '@tanstack/vue-query'
 import { CircleAlert } from 'lucide-vue-next'
 
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 
@@ -37,7 +38,7 @@ const totals = computed(() => {
 </script>
 
 <template>
-  <Card v-if="active.length">
+  <Card size="sm" v-if="active.length">
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <span class="text-sm text-muted-foreground">{{ t('utilities.dashboardTitle') }}</span>
@@ -50,7 +51,7 @@ const totals = computed(() => {
       <li v-for="row in rows" :key="row.item.id" class="flex items-center justify-between gap-2">
         <!-- A bill lives in its property: the row opens that property's utilities. -->
         <RouterLink
-          :to="{ name: 'wallet-settings', params: { id: row.item.property_id }, query: { tab: 'utilities' } }"
+          :to="{ name: 'wallet', params: { id: row.item.property_id }, query: { tab: 'utilities' } }"
           class="flex min-w-0 items-center gap-1.5 truncate hover:underline"
         >
           <CircleAlert v-if="row.anomaly" class="size-3.5 shrink-0 text-destructive" :aria-label="t('utilities.anomaly')" />
@@ -62,5 +63,9 @@ const totals = computed(() => {
       </li>
     </ul>
     <p class="mt-2 text-xs text-muted-foreground">{{ t('utilities.dashboardHint') }}</p>
+  </Card>
+  <Card size="sm" v-else-if="items.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <Card size="sm" v-else>
+    <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
   </Card>
 </template>

@@ -42,6 +42,10 @@ pub struct UtilityMonth {
     pub consumption: Option<Amount>,
     /// The bill in the item's currency: consumption × tariff, or what was paid.
     pub amount: Amount,
+    /// Metered: the reading's id, to correct it.
+    pub reading_id: Option<String>,
+    /// The payments booked for this month, to open and edit them.
+    pub payments: Vec<Transaction>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -123,6 +127,57 @@ pub struct PropertySummary {
     pub loan_month_base: Amount,
     pub monthly_cost_base: Amount,
     pub utility_count: u32,
+}
+
+/// One line of a month's utility bill.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct UtilityBillLine {
+    pub item: UtilityItem,
+    /// Metered: last month's reading, the base of this month's consumption.
+    pub previous_reading: Option<Amount>,
+    /// Metered: this month's reading, when already entered.
+    pub reading: Option<Amount>,
+    pub consumption: Option<Amount>,
+    /// The suggested amount; `None` for a meter still waiting for its reading.
+    pub amount: Option<Amount>,
+    /// Already paid for this month, in the item's currency.
+    pub paid: Amount,
+    pub includes_deposit: bool,
+}
+
+/// Every active utility of a property for one month, to be paid at once.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct UtilityBill {
+    pub property_id: String,
+    pub period: String,
+    /// The property's usual payment day.
+    pub pay_day: Option<u8>,
+    /// The date the payments get: the pay day of that month, or today when
+    /// the month is the current one and the day has passed. RFC3339.
+    pub due_at: String,
+    pub lines: Vec<UtilityBillLine>,
+}
+
+/// One line the user confirmed in the bill dialog.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct PayUtilityLine {
+    pub item_id: String,
+    pub amount: Amount,
+    /// Metered: the reading to record for the month.
+    pub reading: Option<Amount>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct PayUtilityBillInput {
+    pub property_id: String,
+    /// `YYYY-MM`.
+    pub period: String,
+    /// The store the money leaves; an item's own store wins when it has one.
+    pub store_id: String,
+    /// RFC3339; empty means the bill's `due_at`.
+    #[serde(default)]
+    pub timestamp: Option<String>,
+    pub lines: Vec<PayUtilityLine>,
 }
 
 impl UnlockedVault {
@@ -349,6 +404,52 @@ impl UnlockedVault {
         value: Amount,
         period: &str,
     ) -> Result<MeterReading> {
+        let reading = self.insert_reading(item_id, value, period)?;
+        self.persist()?;
+        Ok(reading)
+    }
+
+    /// Correct a reading: its value and, if moved, its month. The same rules
+    /// as a new one apply against every other reading of the meter.
+    pub fn update_meter_reading(
+        &mut self,
+        id: &str,
+        value: Amount,
+        period: &str,
+    ) -> Result<MeterReading> {
+        let index = self
+            .doc
+            .meter_readings
+            .iter()
+            .position(|reading| reading.id == id)
+            .ok_or_else(|| Error::Missing(format!("reading {id}")))?;
+        let old = self.doc.meter_readings.remove(index);
+        match self.insert_reading(&old.item_id, value, period) {
+            Ok(mut reading) => {
+                // Same reading, corrected: it keeps its identity.
+                reading.id = old.id.clone();
+                if let Some(stored) = self.doc.meter_readings.iter_mut().find(|stored| {
+                    stored.item_id == reading.item_id && stored.period == reading.period
+                }) {
+                    stored.id = old.id;
+                }
+                self.persist()?;
+                Ok(reading)
+            }
+            Err(err) => {
+                self.doc.meter_readings.insert(index, old);
+                Err(err)
+            }
+        }
+    }
+
+    /// Validate and store a reading without writing the file.
+    fn insert_reading(
+        &mut self,
+        item_id: &str,
+        value: Amount,
+        period: &str,
+    ) -> Result<MeterReading> {
         let item = self.utility_item(item_id)?;
         if !matches!(item.kind, UtilityKind::Metered { .. }) {
             return Err(Error::InvalidInput(
@@ -389,7 +490,6 @@ impl UnlockedVault {
             recorded_at: now_iso(),
         };
         self.doc.meter_readings.push(reading.clone());
-        self.persist()?;
         Ok(reading)
     }
 
@@ -412,24 +512,36 @@ impl UnlockedVault {
             .collect()
     }
 
-    /// Payments made for an item — the ones «Записать расход» created carry
-    /// its name as the comment and its category — by period, in its currency.
+    /// Payments made for an item: linked to it, or — from before the link —
+    /// with its name as the comment, its category and its store.
+    fn item_payments<'doc>(
+        &'doc self,
+        item: &'doc UtilityItem,
+    ) -> impl Iterator<Item = &'doc PaymentTx> + 'doc {
+        self.doc.transactions.iter().filter_map(move |tx| {
+            let Transaction::Payment(payment) = tx else {
+                return None;
+            };
+            let linked = match payment.meta.utility_item_id.as_deref() {
+                Some(id) => id == item.id,
+                None => {
+                    payment.meta.comment.trim() == item.name
+                        && payment.meta.categories.contains(&item.category)
+                        && item
+                            .store_id
+                            .as_ref()
+                            .is_none_or(|id| *id == payment.store_id)
+                }
+            };
+            linked.then_some(payment)
+        })
+    }
+
+    /// The item's payments by period, in its currency.
     fn paid_by_month(&self, item: &UtilityItem, cal: &Calendar) -> BTreeMap<String, Amount> {
         let book = self.rate_book();
         let mut out: BTreeMap<String, Amount> = BTreeMap::new();
-        for tx in &self.doc.transactions {
-            let Transaction::Payment(payment) = tx else {
-                continue;
-            };
-            if payment.meta.comment.trim() != item.name
-                || !payment.meta.categories.contains(&item.category)
-                || item
-                    .store_id
-                    .as_ref()
-                    .is_some_and(|id| *id != payment.store_id)
-            {
-                continue;
-            }
+        for payment in self.item_payments(item) {
             let secs = secs_or_now(&payment.meta.timestamp);
             let amount = if payment.asset.symbol.eq_ignore_ascii_case(&item.currency) {
                 payment.amount
@@ -448,13 +560,37 @@ impl UnlockedVault {
         out
     }
 
+    /// The item's payment transactions by period.
+    fn payments_by_month(
+        &self,
+        item: &UtilityItem,
+        cal: &Calendar,
+    ) -> BTreeMap<String, Vec<Transaction>> {
+        let mut out: BTreeMap<String, Vec<Transaction>> = BTreeMap::new();
+        for payment in self.item_payments(item) {
+            let secs = secs_or_now(&payment.meta.timestamp);
+            out.entry(calendar::month_key(cal.date_of(secs)))
+                .or_default()
+                .push(Transaction::Payment(payment.clone()));
+        }
+        out
+    }
+
     // -- trend --------------------------------------------------------------------
 
     /// Bills by month with the average, change, forecast and anomaly (plan §7.5).
     pub fn meter_trend(&self, item_id: &str, zone: &str) -> Result<UtilityTrend> {
         let item = self.utility_item(item_id)?.clone();
         let cal = Calendar::new(zone);
-        let months: Vec<UtilityMonth> = match &item.kind {
+        let mut payments = self.payments_by_month(&item, &cal);
+        let reading_ids: BTreeMap<String, String> = self
+            .doc
+            .meter_readings
+            .iter()
+            .filter(|reading| reading.item_id == item.id)
+            .map(|reading| (reading.period.clone(), reading.id.clone()))
+            .collect();
+        let mut months: Vec<UtilityMonth> = match &item.kind {
             UtilityKind::Metered { tariff, .. } => {
                 let readings = self.readings_of(&item.id);
                 let mut previous: Option<Amount> = None;
@@ -469,6 +605,8 @@ impl UnlockedVault {
                             consumption,
                             amount: consumption
                                 .map_or(Amount::ZERO, |used| (used * *tariff).round(2)),
+                            reading_id: reading_ids.get(period).cloned(),
+                            payments: Vec::new(),
                         }
                     })
                     .collect()
@@ -483,6 +621,9 @@ impl UnlockedVault {
                 })
                 .collect(),
         };
+        for month in &mut months {
+            month.payments = payments.remove(&month.period).unwrap_or_default();
+        }
         let billed: Vec<Amount> = months
             .iter()
             .filter(|month| month.amount.is_positive())
@@ -585,6 +726,7 @@ impl UnlockedVault {
         let code = item.currency.to_uppercase();
         let mut meta = TxMeta::new(&item.name);
         meta.categories = vec![item.category.clone()];
+        meta.utility_item_id = Some(item.id.clone());
         // Dated today when the month is this one, else inside that month.
         let last_day = calendar::next_month(month) - chrono::Duration::days(1);
         let day = cal
@@ -607,6 +749,160 @@ impl UnlockedVault {
             consumption,
             includes_deposit,
         })
+    }
+
+    // -- the whole bill -------------------------------------------------------------
+
+    /// The month's bill of a property: every active item with its suggested
+    /// amount, meters with their previous reading (plan: «всё платится в один день»).
+    pub fn utility_bill(&self, property_id: &str, period: &str, zone: &str) -> Result<UtilityBill> {
+        let property = self
+            .doc
+            .stores
+            .iter()
+            .find(|store| store.id == property_id)
+            .ok_or_else(|| Error::Missing(format!("store {property_id}")))?;
+        let pay_day = property
+            .property
+            .as_ref()
+            .and_then(|info| info.utilities_pay_day);
+        let month = calendar::parse_month(period)
+            .ok_or_else(|| Error::InvalidInput(format!("month {period}: expected YYYY-MM")))?;
+        let period = calendar::month_key(month);
+        let cal = Calendar::new(zone);
+        let items: Vec<UtilityItem> = self
+            .doc
+            .utility_items
+            .iter()
+            .filter(|item| item.property_id == property_id && item.active)
+            .cloned()
+            .collect();
+        let mut lines = Vec::with_capacity(items.len());
+        for item in items {
+            let paid = self
+                .paid_by_month(&item, &cal)
+                .get(&period)
+                .copied()
+                .unwrap_or(Amount::ZERO);
+            let mut line = UtilityBillLine {
+                item: item.clone(),
+                previous_reading: None,
+                reading: None,
+                consumption: None,
+                amount: None,
+                paid,
+                includes_deposit: false,
+            };
+            if let UtilityKind::Metered { .. } = item.kind {
+                let readings = self.readings_of(&item.id);
+                line.previous_reading = readings
+                    .range(..period.clone())
+                    .next_back()
+                    .map(|(_, value)| *value);
+                line.reading = readings.get(&period).copied();
+            }
+            if let Ok(draft) = self.utility_payment_draft(&item.id, &period, zone)
+                && let Transaction::Payment(payment) = &draft.transaction
+            {
+                line.amount = Some(payment.amount);
+                line.consumption = draft.consumption;
+                line.includes_deposit = draft.includes_deposit;
+            }
+            lines.push(line);
+        }
+        let last_day = calendar::next_month(month) - chrono::Duration::days(1);
+        let today = cal.date_of(calendar::now_secs());
+        let day = match pay_day {
+            Some(day) => {
+                let wanted =
+                    first_of_month(month) + chrono::Duration::days(i64::from(day.clamp(1, 31)) - 1);
+                wanted.min(last_day)
+            }
+            None => today.clamp(first_of_month(month), last_day),
+        };
+        Ok(UtilityBill {
+            property_id: property_id.to_string(),
+            period,
+            pay_day,
+            due_at: calendar::iso(cal.at_local(day, 12)),
+            lines,
+        })
+    }
+
+    /// Pay a month's bill in one go: record the meter readings, then one
+    /// payment per line, linked to its item. All or nothing — a line that
+    /// fails leaves the vault as it was.
+    pub fn pay_utility_bill(
+        &mut self,
+        input: PayUtilityBillInput,
+        zone: &str,
+    ) -> Result<Vec<Transaction>> {
+        let bill = self.utility_bill(&input.property_id, &input.period, zone)?;
+        let timestamp = input
+            .timestamp
+            .clone()
+            .filter(|raw| !raw.trim().is_empty())
+            .unwrap_or_else(|| bill.due_at.clone());
+        let backup = self.doc.clone();
+        let result = (|| -> Result<Vec<Transaction>> {
+            let mut saved = Vec::new();
+            for line in &input.lines {
+                if !line.amount.is_positive() {
+                    continue;
+                }
+                let item = self.utility_item(&line.item_id)?.clone();
+                if item.property_id != input.property_id {
+                    return Err(Error::InvalidInput(format!(
+                        "{} belongs to another property",
+                        item.name
+                    )));
+                }
+                if let Some(reading) = line.reading {
+                    self.insert_reading(&item.id, reading, &bill.period)?;
+                }
+                let store_id = item
+                    .store_id
+                    .clone()
+                    .filter(|id| !id.is_empty())
+                    .unwrap_or_else(|| input.store_id.clone());
+                if store_id.trim().is_empty() {
+                    return Err(Error::InvalidInput(format!(
+                        "{}: pick the store to pay from",
+                        item.name
+                    )));
+                }
+                let code = item.currency.to_uppercase();
+                let mut meta = TxMeta::new(&item.name);
+                meta.categories = vec![item.category.clone()];
+                meta.utility_item_id = Some(item.id.clone());
+                meta.timestamp = timestamp.clone();
+                let mut tx = Transaction::Payment(PaymentTx {
+                    meta,
+                    store_id,
+                    asset: AssetRef::fiat(&code, &code),
+                    amount: line.amount,
+                    fee: None,
+                    to: None,
+                    details: KindDetails::default(),
+                    price: PriceStamp::default(),
+                });
+                self.prepare_transaction(&mut tx)?;
+                self.doc.transactions.push(tx.clone());
+                saved.push(tx);
+            }
+            Ok(saved)
+        })();
+        match result {
+            Ok(saved) => {
+                self.recompute_holdings();
+                self.persist()?;
+                Ok(saved)
+            }
+            Err(err) => {
+                self.doc = backup;
+                Err(err)
+            }
+        }
     }
 }
 
@@ -763,5 +1059,156 @@ mod tests {
         assert_eq!(summary.utility_count, 1);
         assert_eq!(summary.utilities_month_base, amount("30"));
         assert_eq!(summary.monthly_cost_base, amount("30"));
+    }
+
+    /// A funded card and a flat with a meter and a fixed bill.
+    fn flat_with_bills(vault: &mut UnlockedVault) -> (String, UtilityItem, UtilityItem, String) {
+        let card = store(vault, "Card", StoreKind::Bank, None);
+        let mut seed = income_of(
+            &card,
+            AssetRef::fiat("RUB", "RUB"),
+            "100000",
+            "0.01",
+            "salary",
+        );
+        seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
+        vault.add_transaction(seed).unwrap();
+        let meter = metered(vault);
+        let flat = meter.property_id.clone();
+        let internet = vault
+            .create_utility_item(UtilityDraft {
+                name: "Internet".into(),
+                active: true,
+                kind: UtilityKind::Static {
+                    amount: amount("700"),
+                },
+                currency: "rub".into(),
+                property_id: flat.clone(),
+                store_id: None,
+                category: "utilities".into(),
+            })
+            .unwrap();
+        (flat, meter, internet, card)
+    }
+
+    #[test]
+    fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
+        let (_dir, mut vault) = empty_vault();
+        let (flat, meter, internet, card) = flat_with_bills(&mut vault);
+        vault
+            .add_meter_reading(&meter.id, amount("1000"), "2026-01")
+            .unwrap();
+
+        let bill = vault.utility_bill(&flat, "2026-02", "UTC").unwrap();
+        assert_eq!(bill.lines.len(), 2);
+        let meter_line = bill
+            .lines
+            .iter()
+            .find(|line| line.item.id == meter.id)
+            .unwrap();
+        assert_eq!(meter_line.previous_reading, Some(amount("1000")));
+        assert_eq!(meter_line.amount, None, "no reading for February yet");
+
+        let paid = vault
+            .pay_utility_bill(
+                PayUtilityBillInput {
+                    property_id: flat.clone(),
+                    period: "2026-02".into(),
+                    store_id: card,
+                    timestamp: Some("2026-02-10T12:00:00Z".into()),
+                    lines: vec![
+                        PayUtilityLine {
+                            item_id: meter.id.clone(),
+                            amount: amount("500"),
+                            reading: Some(amount("1100")),
+                        },
+                        PayUtilityLine {
+                            item_id: internet.id.clone(),
+                            amount: amount("700"),
+                            reading: None,
+                        },
+                    ],
+                },
+                "UTC",
+            )
+            .unwrap();
+        assert_eq!(paid.len(), 2);
+        assert!(paid.iter().all(|tx| tx.meta().utility_item_id.is_some()));
+        // The comment no longer has to match: the link counts.
+        let after = vault.utility_bill(&flat, "2026-02", "UTC").unwrap();
+        let internet_line = after
+            .lines
+            .iter()
+            .find(|line| line.item.id == internet.id)
+            .unwrap();
+        assert_eq!(internet_line.paid, amount("700"));
+        let meter_line = after
+            .lines
+            .iter()
+            .find(|line| line.item.id == meter.id)
+            .unwrap();
+        assert_eq!(meter_line.reading, Some(amount("1100")));
+    }
+
+    #[test]
+    fn a_failing_line_leaves_the_vault_untouched() {
+        let (_dir, mut vault) = empty_vault();
+        let (flat, meter, internet, card) = flat_with_bills(&mut vault);
+        vault
+            .add_meter_reading(&meter.id, amount("1000"), "2026-01")
+            .unwrap();
+        let before = vault.doc.transactions.len();
+        let result = vault.pay_utility_bill(
+            PayUtilityBillInput {
+                property_id: flat,
+                period: "2026-02".into(),
+                store_id: card,
+                timestamp: None,
+                lines: vec![
+                    PayUtilityLine {
+                        item_id: internet.id,
+                        amount: amount("700"),
+                        reading: None,
+                    },
+                    // Below last month's reading: refused.
+                    PayUtilityLine {
+                        item_id: meter.id.clone(),
+                        amount: amount("1"),
+                        reading: Some(amount("900")),
+                    },
+                ],
+            },
+            "UTC",
+        );
+        assert!(result.is_err());
+        assert_eq!(vault.doc.transactions.len(), before);
+        assert_eq!(vault.doc.meter_readings.len(), 1);
+    }
+
+    #[test]
+    fn a_reading_can_be_corrected_within_the_meter_rules() {
+        let (_dir, mut vault) = empty_vault();
+        let item = metered(&mut vault);
+        vault
+            .add_meter_reading(&item.id, amount("1000"), "2026-01")
+            .unwrap();
+        let feb = vault
+            .add_meter_reading(&item.id, amount("1200"), "2026-02")
+            .unwrap();
+        let fixed = vault
+            .update_meter_reading(&feb.id, amount("1150"), "2026-02")
+            .unwrap();
+        assert_eq!(fixed.id, feb.id);
+        assert_eq!(vault.readings_of(&item.id)["2026-02"], amount("1150"));
+        assert!(
+            vault
+                .update_meter_reading(&feb.id, amount("900"), "2026-02")
+                .is_err()
+        );
+        assert_eq!(
+            vault.readings_of(&item.id)["2026-02"],
+            amount("1150"),
+            "a refused fix keeps the old value"
+        );
     }
 }
