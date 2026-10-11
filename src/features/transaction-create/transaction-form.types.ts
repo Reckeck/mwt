@@ -65,19 +65,13 @@ export interface TransactionEditDialogProps {
 export type ConvertMode = 'direct' | 'p2p'
 
 /**
- * One more recipient of an exchange or a top-up. Each becomes its own
- * operation; together with the main one they are saved as one chain.
+ * One more account the money lands on (the first one is the form's own
+ * «to»). Each becomes its own operation; all are saved as one chain.
  */
 export interface SplitRow {
   id: string
-  /** P2P: who the money goes through. */
-  via: AccountRef | null
   /** Where it arrives. */
   to: AccountRef | null
-  /** Exchange: what arrives there. */
-  asset: AssetRef | null
-  /** Exchange: what this recipient gets of the given asset. */
-  give: string
-  /** What arrives: the exchange's received amount, the top-up's amount. */
+  /** How much arrives there. */
   receive: string
 }
