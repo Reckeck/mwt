@@ -380,28 +380,43 @@ export function formToInputs(form: TransactionFormState): TransactionInput[] | n
   const main = formToInput(form)
   if (!main) return null
   if (!isLinked(form)) return [main]
+  if (main.type === 'convert') return splitConvert(form, main)
   const out: TransactionInput[] = [main]
   for (const row of form.extra) {
-    if (main.type === 'convert') {
-      if (!row.to || !row.asset || !form.from || !form.fromAsset) return null
-      const p2p = form.convertMode === 'p2p'
-      out.push({
-        ...main,
-        common: p2p
-          ? {
-              ...main.common,
-              contact_id: viaContact(row.via) ?? main.common.contact_id,
-              comment: viaComment(row.via, form.comment.trim()),
-            }
-          : main.common,
-        from: { account: form.from, asset: ident(form.fromAsset), amount: row.give.trim() },
-        to: { account: row.to, asset: ident(row.asset), amount: row.receive.trim() },
-        rate_override: null,
-      })
-    } else if (main.type === 'topup') {
-      if (!row.to || !('store' in row.to)) return null
-      out.push({ ...main, store_id: row.to.store, amount: row.receive.trim() })
-    }
+    if (main.type !== 'topup' || !row.to || !('store' in row.to)) return null
+    out.push({ ...main, store_id: row.to.store, amount: row.receive.trim() })
+  }
+  return out
+}
+
+/** A decimal string with at most `places` digits after the point, no trailing zeros. */
+function trimmed(value: number, places: number): string {
+  return String(Number(value.toFixed(places)))
+}
+
+/**
+ * One exchange paid out to several accounts: one operation per account, the
+ * given amount split in proportion to what lands on each; the first takes
+ * the rounding rest so the parts add up to exactly what was given.
+ */
+function splitConvert(form: TransactionFormState, main: Extract<TransactionInput, { type: 'convert' }>) {
+  const rows = [{ to: form.to, receive: form.toAmount }, ...form.extra]
+  const received = rows.map((row) => Number(parseDecimal(row.receive) ?? Number.NaN))
+  const total = received.reduce((sum, value) => sum + value, 0)
+  const given = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
+  if (!(total > 0 && given > 0) || received.some((value) => !(value > 0))) return null
+  const places = Math.max(2, form.fromAmount.split(/[.,]/)[1]?.length ?? 0)
+  const shares = received.map((value) => Number((given * (value / total)).toFixed(places)))
+  shares[0] = Number((given - shares.slice(1).reduce((sum, value) => sum + value, 0)).toFixed(places))
+  const out: TransactionInput[] = []
+  for (const [index, row] of rows.entries()) {
+    if (!row.to) return null
+    out.push({
+      ...main,
+      from: { ...main.from, amount: trimmed(shares[index], places) },
+      to: { ...main.to, account: row.to, amount: row.receive.trim() },
+      rate_override: index === 0 ? main.rate_override : null,
+    })
   }
   return out
 }
@@ -452,15 +467,7 @@ export function missingFields(form: TransactionFormState): string[] {
       if (!form.asset) out.push('asset')
       if (blank(form.amount)) out.push('amount')
   }
-  if (SPLITTABLE.includes(form.kind)) {
-    form.extra.forEach((row) => {
-      const incomplete =
-        !row.to ||
-        blank(row.receive) ||
-        (form.kind === 'convert' && (!row.asset || blank(row.give) || (form.convertMode === 'p2p' && !row.via)))
-      if (incomplete && !out.includes('extra')) out.push('extra')
-    })
-  }
+  if (SPLITTABLE.includes(form.kind) && form.extra.some((row) => !row.to || blank(row.receive))) out.push('extra')
   return out
 }
 

@@ -9,10 +9,11 @@ import SplitRowItem from './SplitRowItem.vue'
 import type { SplitRowsProps } from './split-rows.types'
 
 /**
- * «Кому ещё»: an exchange or a top-up split between several recipients, each
- * with its own amount. Saved with the main operation as one chain.
+ * More accounts the money lands on, after the first one the form shows
+ * itself: an exchange whose counterparty pays out to several of your
+ * accounts, a top-up spread over several. Saved as one chain.
  */
-const props = withDefaults(defineProps<SplitRowsProps>(), { giveAsset: null })
+const props = defineProps<SplitRowsProps>()
 const rows = defineModel<SplitRow[]>({ required: true })
 
 const { t } = useI18n()
@@ -20,7 +21,7 @@ const { t } = useI18n()
 function add() {
   rows.value = [
     ...rows.value,
-    { id: crypto.randomUUID(), via: null, to: null, asset: null, give: '', receive: '' },
+    { id: crypto.randomUUID(), to: null, receive: '' },
   ]
 }
 
@@ -38,13 +39,12 @@ function remove(index: number) {
       :kind="props.kind"
       :mode="props.mode"
       :index="index"
-      :give-asset="props.giveAsset"
       @remove="remove(index)"
     />
     <div class="flex flex-wrap items-center gap-2">
       <Button type="button" variant="outline" size="sm" @click="add">
         <Plus class="size-4" />
-        {{ props.kind === 'convert' ? t('tx.split.addRecipient') : t('tx.split.addAccount') }}
+        {{ t('tx.split.addAccount') }}
       </Button>
       <span v-if="rows.length" class="text-xs text-muted-foreground">{{ t('tx.split.linkedHint') }}</span>
     </div>

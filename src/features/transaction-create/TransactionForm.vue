@@ -273,7 +273,8 @@ watch(
     const amount = Number(parseDecimal(give) ?? Number.NaN)
     const price = Number(parseDecimal(rate) ?? Number.NaN)
     if (!(amount > 0 && price > 0)) return
-    if (form.toAmount.trim() && form.toAmount !== autoToAmount) return
+    // With several receiving accounts each says its own amount.
+    if (form.extra.length || (form.toAmount.trim() && form.toAmount !== autoToAmount)) return
     autoToAmount = String(Number((amount * price).toFixed(8)))
     form.toAmount = autoToAmount
   },
@@ -282,7 +283,7 @@ watch(
 const impliedRate = computed(() => {
   if (form.kind !== 'convert' || form.rate.trim()) return ''
   const give = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
-  const got = Number(parseDecimal(form.toAmount) ?? Number.NaN)
+  const got = receivedTotal.value
   if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return ''
   const rate = got / give
   return `1 ${form.fromAsset.symbol} = ${Number(rate.toPrecision(8))} ${form.toAsset.symbol}`
@@ -299,17 +300,18 @@ function pickConvertMode(value: unknown) {
 /** What is still missing, said under the form. */
 const missing = computed(() => (props.template || props.disabled ? [] : missingFields(form)))
 const linked = computed(() => !props.template && isLinked(form))
-const giveLeft = computed(() => {
-  if (form.kind !== 'convert' || !form.extra.length) return ''
-  const total = form.extra.reduce((sum, row) => sum + Number(parseDecimal(row.give) ?? 0), Number(parseDecimal(form.fromAmount) ?? 0))
-  return form.fromAsset ? `${Number(total.toFixed(8))} ${form.fromAsset.symbol}` : ''
-})
+/** Everything the exchange brings in, over all receiving accounts. */
+const receivedTotal = computed(() =>
+  [form.toAmount, ...form.extra.map((row) => row.receive)].reduce(
+    (sum, value) => sum + Number(parseDecimal(value) ?? 0),
+    0,
+  ),
+)
 
-// A conversion defaults to staying on this wallet (a bank's currency exchange).
+// The first account an exchange lands on is there to pick, not picked for you.
 watch(
   () => form.kind,
   (kind) => {
-    if (kind === 'convert' && !form.to) form.to = { store: props.storeId }
     if (kind === 'transfer' && form.to && 'store' in form.to && form.to.store === props.storeId) form.to = null
   },
   { immediate: true },
@@ -765,7 +767,10 @@ const verbLabel = (kind: TxKind) =>
         <Label>{{ form.kind === 'topup' ? t('tx.field.fromWhom') : t('tx.field.toWhom') }}</Label>
         <AccountRefPicker v-model="form.counterpart" :stores="false" :empty-label="t('tx.side.unspecified')" />
       </div>
-      <SplitRows v-if="form.kind === 'topup' && !props.template && !isProperty" v-model="form.extra" kind="topup" mode="direct" />
+      <div v-if="form.kind === 'topup' && !props.template && !isProperty" class="grid gap-1.5">
+        <p v-if="form.extra.length" class="text-xs text-muted-foreground">{{ t('tx.split.topupHint') }}</p>
+        <SplitRows v-model="form.extra" kind="topup" mode="direct" />
+      </div>
     </template>
 
     <!-- Transfer: one asset between two places -->
@@ -826,7 +831,7 @@ const verbLabel = (kind: TxKind) =>
         </div>
         <AssetInput v-model="form.fromAsset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
-          <Label for="tx-from-amount">{{ form.extra.length ? t('tx.split.giveMain') : t('form.amount') }}</Label>
+          <Label for="tx-from-amount">{{ t('form.amount') }}</Label>
           <AmountInput id="tx-from-amount" v-model="form.fromAmount" />
         </div>
       </div>
@@ -839,16 +844,24 @@ const verbLabel = (kind: TxKind) =>
           <ArrowUpDown class="size-4" />
         </Button>
       </div>
-      <div class="grid gap-3 @sm:grid-cols-3">
+      <!-- What arrives, and the accounts it lands on: the counterparty may pay
+           out to several of them; each row is an account and its amount. -->
+      <div class="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_14rem]">
         <div class="grid gap-1.5">
           <Label>{{ form.convertMode === 'p2p' ? t('tx.p2p.receiveTo') : t('tx.field.receive') }}</Label>
+          <p class="text-xs text-muted-foreground">{{ t('tx.split.receiveHint') }}</p>
+        </div>
+        <AssetInput v-model="form.toAsset" :label="t('tx.split.receiveAsset')" />
+      </div>
+      <div class="grid gap-2" data-tour="tx-split">
+        <div class="grid items-start gap-2 @sm:grid-cols-[minmax(0,1fr)_10rem_2rem]">
           <AccountRefPicker v-model="form.to" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
+          <AmountInput id="tx-to-amount" v-model="form.toAmount" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
         </div>
-        <AssetInput v-model="form.toAsset" :label="t('form.asset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-to-amount">{{ t('form.amount') }}</Label>
-          <AmountInput id="tx-to-amount" v-model="form.toAmount" />
-        </div>
+        <SplitRows v-if="!props.template" v-model="form.extra" kind="convert" :mode="form.convertMode" />
+        <p v-if="form.extra.length && form.toAsset" class="text-xs text-muted-foreground">
+          {{ t('tx.split.receivedTotal', { total: `${Number(receivedTotal.toFixed(8))} ${form.toAsset.symbol}` }) }}
+        </p>
       </div>
       <p v-if="toAccount.moneyOnly.value && form.toAsset" class="text-xs text-muted-foreground">
         {{ t('tx.toCurrencyHint', { code: form.toAsset.symbol }) }}
@@ -858,10 +871,6 @@ const verbLabel = (kind: TxKind) =>
         <AmountInput id="tx-rate" v-model="form.rate" :placeholder="impliedRate" />
         <p class="text-xs text-muted-foreground">{{ impliedRate || t('tx.field.rateHint') }}</p>
       </div>
-      <template v-if="!props.template">
-        <SplitRows v-model="form.extra" kind="convert" :mode="form.convertMode" :give-asset="form.fromAsset" />
-        <p v-if="giveLeft" class="text-xs text-muted-foreground">{{ t('tx.split.giveTotal', { total: giveLeft }) }}</p>
-      </template>
     </template>
 
     <!-- Spot trade -->
