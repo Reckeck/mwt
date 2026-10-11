@@ -176,6 +176,8 @@ pub fn run() {
             planning::update_reminder,
             planning::delete_reminder,
             planning::set_reminder_done,
+            planning::finish_reminder_series,
+            planning::snooze_reminder,
             planning::list_price_alerts,
             planning::create_price_alert,
             planning::update_price_alert,

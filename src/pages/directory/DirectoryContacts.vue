@@ -2,7 +2,16 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Archive, ArchiveRestore, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Copy, Search } from 'lucide-vue-next'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDownLeft,
+  ArrowRightLeft,
+  ArrowUpRight,
+  ChevronDown,
+  Copy,
+  Search,
+} from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { ContactArchive, ContactEditor, ContactQuickCreate } from '@/features/contact-edit'
@@ -53,6 +62,7 @@ const list = computed(() => {
       (contact) =>
         !needle ||
         contact.name.toLowerCase().includes(needle) ||
+        contact.group.toLowerCase().includes(needle) ||
         contact.accounts.some((account) => account.value.toLowerCase().includes(needle)),
     )
     .filter((contact) => {
@@ -62,6 +72,34 @@ const list = computed(() => {
     })
     .sort((left, right) => Number(left.archived) - Number(right.archived) || left.name.localeCompare(right.name))
 })
+
+/**
+ * The list in sections: the user's own groups by name first, then the
+ * contacts without one by kind (people, companies, exchangers).
+ */
+const sections = computed(() => {
+  const named = new Map<string, Contact[]>()
+  const byKind = new Map<ContactKind, Contact[]>()
+  for (const contact of list.value) {
+    const group = contact.group.trim()
+    if (group) named.set(group, [...(named.get(group) ?? []), contact])
+    else byKind.set(contact.kind, [...(byKind.get(contact.kind) ?? []), contact])
+  }
+  return [
+    ...[...named.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([title, entries]) => ({ key: `group:${title}`, title, entries })),
+    ...(['person', 'company', 'exchanger'] as ContactKind[])
+      .filter((kind) => byKind.has(kind))
+      .map((kind) => ({ key: `kind:${kind}`, title: t(`contacts.section.${kind}`), entries: byKind.get(kind) ?? [] })),
+  ]
+})
+const collapsed = ref<string[]>([])
+function toggleSection(key: string) {
+  collapsed.value = collapsed.value.includes(key)
+    ? collapsed.value.filter((entry) => entry !== key)
+    : [...collapsed.value, key]
+}
 
 const selected = computed(() => list.value.find((contact) => contact.id === selectedId.value) ?? list.value[0] ?? null)
 const selectedBalances = computed(() =>
@@ -176,34 +214,50 @@ function contactActions(contact: Contact): UiAction[] {
       <p v-if="contacts.isSuccess.value && !list.length" class="px-1 py-4 text-sm text-muted-foreground">
         {{ contacts.data.value?.length ? t('contacts.nothingFound') : t('contacts.empty') }}
       </p>
-      <ul class="grid gap-0.5">
-        <li v-for="contact in list" :key="contact.id">
-          <ContextMenu :actions="contactActions(contact)">
+      <div class="grid gap-2" data-tour="contact-groups">
+        <section v-for="section in sections" :key="section.key" class="grid gap-0.5">
           <button
             type="button"
-            :class="
-              cn(
-                'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                selected?.id === contact.id && 'bg-accent',
-                contact.archived && 'opacity-60',
-              )
-            "
-            @click="selectedId = contact.id"
+            class="flex items-center justify-between gap-2 px-3 py-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            :aria-expanded="!collapsed.includes(section.key)"
+            @click="toggleSection(section.key)"
           >
-            <span class="min-w-0 truncate font-medium">{{ contact.name }}</span>
-            <span class="flex shrink-0 flex-col items-end text-xs tabular-nums">
-              <span
-                v-for="row in netOf(contact.id)"
-                :key="row.symbol"
-                :class="row.net > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'"
-              >
-                {{ row.net > 0 ? '+' : '−' }}{{ formatMoney(Math.abs(row.net), { decimals: 0, currency: row.symbol }) }}
-              </span>
+            <span class="flex items-center gap-1">
+              <ChevronDown class="size-3.5 transition-transform" :class="collapsed.includes(section.key) && '-rotate-90'" />
+              {{ section.title }}
             </span>
+            <span class="tabular-nums">{{ section.entries.length }}</span>
           </button>
-          </ContextMenu>
-        </li>
-      </ul>
+          <ul v-show="!collapsed.includes(section.key)" class="grid gap-0.5">
+            <li v-for="contact in section.entries" :key="contact.id">
+              <ContextMenu :actions="contactActions(contact)">
+                <button
+                  type="button"
+                  :class="
+                    cn(
+                      'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      selected?.id === contact.id && 'bg-accent',
+                      contact.archived && 'opacity-60',
+                    )
+                  "
+                  @click="selectedId = contact.id"
+                >
+                  <span class="min-w-0 truncate font-medium">{{ contact.name }}</span>
+                  <span class="flex shrink-0 flex-col items-end text-xs tabular-nums">
+                    <span
+                      v-for="row in netOf(contact.id)"
+                      :key="row.symbol"
+                      :class="row.net > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'"
+                    >
+                      {{ row.net > 0 ? '+' : '−' }}{{ formatMoney(Math.abs(row.net), { decimals: 0, currency: row.symbol }) }}
+                    </span>
+                  </span>
+                </button>
+              </ContextMenu>
+            </li>
+          </ul>
+        </section>
+      </div>
     </aside>
 
     <div v-if="selected" class="grid gap-4">

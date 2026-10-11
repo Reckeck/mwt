@@ -111,7 +111,7 @@ Frontend парсит код и показывает локализованно�
 | Команда | Вход | Выход |
 |---|---|---|
 | `list_contacts` | — | `Vec<Contact>` |
-| `create_contact` | `ContactDraft { name, kind, note, accounts }` | `Contact` (реквизиты без `id` — новые, активные) |
+| `create_contact` | `ContactDraft { name, kind, note, accounts, group }` (`group` — группа в справочнике, пусто — по виду) | `Contact` (реквизиты без `id` — новые, активные) |
 | `update_contact` | `UpdateContactInput { id, contact: ContactDraft }` | `Contact` (убранный реквизит с операциями становится неактивным) |
 | `archive_contact` | `id, archived` | `()` |
 | `delete_contact` | `id` | `()` — только если на контакт ничего не ссылается |
@@ -218,8 +218,10 @@ JSON без шифрования — там нет ничего секретно
 | `list_goals` / `create_goal` / `update_goal` / `delete_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
 | `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating }>` |
 | `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
-| `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder` |
-| `set_reminder_done` | `id, done` | `Reminder` |
+| `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at (RFC3339: дата и время), repeat?: { every, unit: day\|week\|month\|year } }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder { …, repeat?, source?, muted, user_edited, snoozed_until? }`; правка снимает откладывание, у авто-напоминания ставит `user_edited` |
+| `set_reminder_done` | `id, done` | `Reminder` — у повторяющегося «выполнено» не закрывает, а переносит `due_at` на первую дату серии после «сейчас» (отсчёт от исходной даты: 31-е остаётся 31-м, в коротком месяце — последний день) |
+| `finish_reminder_series` | `id` | `Reminder` — завершить серию: `repeat = None`, `done`; авто-напоминание ещё и `muted`, чтобы синхронизация его не вернула |
+| `snooze_reminder` | `SnoozeReminderInput { id, until }` | `Reminder` — не наступает раньше `until` (`snoozed_until`) |
 | `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active, store_id? }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново. `store_id` — биржа, из терминала которой заведён алерт (только корневой кошелёк `exchange`, иначе `INVALID_INPUT`) |
 | `list_utility_items` / `create_utility_item` / `update_utility_item` / `delete_utility_item` | `UtilityInput { name, active, kind: metered{ unit, tariff } \| static{ amount } \| housing{ amount, deposit?, due_day, automation_id? }, currency, property_id, store_id?, category }` / `UpdateUtilityInput { id, item }` / `id` | `UtilityItem` — ЖКХ всегда принадлежит имуществу (`property_id` — корневой кошелёк `property`, иначе `MISSING`); удаление уносит показания, платежи остаются |
 | `add_meter_reading` | `MeterReadingInput { item_id, value, period (YYYY-MM), day? }` | `MeterReading`; `day` — день месяца (1–31, `None` = конец месяца), в месяце может быть несколько показаний (переезд); показание за тот же месяц и день заменяется; меньше более раннего или больше более позднего — `INVALID_INPUT` |

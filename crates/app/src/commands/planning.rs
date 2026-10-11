@@ -7,9 +7,9 @@ use tauri::{AppHandle, State};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput,
-    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, UpdateAutomationInput,
-    UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput,
-    UpdateReminderInput, UpdateUtilityInput, UtilityInput,
+    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SnoozeReminderInput,
+    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
+    UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use trade_core::model::planning::{
     Automation, AutomationRun, Budget, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
@@ -229,7 +229,7 @@ pub async fn create_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| {
-        vault.create_reminder(&input.text, &input.due_at)
+        vault.create_reminder(&input.text, &input.due_at, input.repeat)
     })
 }
 
@@ -239,7 +239,12 @@ pub async fn update_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| {
-        vault.update_reminder(&input.id, &input.reminder.text, &input.reminder.due_at)
+        vault.update_reminder(
+            &input.id,
+            &input.reminder.text,
+            &input.reminder.due_at,
+            input.reminder.repeat,
+        )
     })
 }
 
@@ -255,6 +260,26 @@ pub async fn set_reminder_done(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| vault.set_reminder_done(&id, done))
+}
+
+/// Stop a repeating reminder for good.
+#[tauri::command]
+pub async fn finish_reminder_series(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Reminder, String> {
+    with_vault_mut(&state, |vault| vault.finish_reminder_series(&id))
+}
+
+/// Put a reminder off until a moment.
+#[tauri::command]
+pub async fn snooze_reminder(
+    input: SnoozeReminderInput,
+    state: State<'_, AppState>,
+) -> Result<Reminder, String> {
+    with_vault_mut(&state, |vault| {
+        vault.snooze_reminder(&input.id, &input.until)
+    })
 }
 
 // -- price alerts ----------------------------------------------------------------

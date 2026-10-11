@@ -1695,6 +1695,7 @@ mod tests {
             .unwrap();
         let friend = vault
             .create_contact(ContactDraft {
+                group: String::new(),
                 name: "Friend".into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),

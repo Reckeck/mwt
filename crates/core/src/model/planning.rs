@@ -228,12 +228,24 @@ impl ReminderRepeat {
         self,
         from: chrono::DateTime<chrono::Utc>,
     ) -> Option<chrono::DateTime<chrono::Utc>> {
-        let every = u32::from(self.every.max(1));
+        self.nth(from, 1)
+    }
+
+    /// The `count`-th occurrence after `anchor`, counted from the anchor
+    /// itself so the 31st stays the 31st after a short month.
+    pub fn nth(
+        self,
+        anchor: chrono::DateTime<chrono::Utc>,
+        count: u32,
+    ) -> Option<chrono::DateTime<chrono::Utc>> {
+        let steps = u32::from(self.every.max(1)).checked_mul(count)?;
         match self.unit {
-            RepeatUnit::Day => from.checked_add_days(chrono::Days::new(u64::from(every))),
-            RepeatUnit::Week => from.checked_add_days(chrono::Days::new(u64::from(every) * 7)),
-            RepeatUnit::Month => from.checked_add_months(chrono::Months::new(every)),
-            RepeatUnit::Year => from.checked_add_months(chrono::Months::new(every * 12)),
+            RepeatUnit::Day => anchor.checked_add_days(chrono::Days::new(u64::from(steps))),
+            RepeatUnit::Week => anchor.checked_add_days(chrono::Days::new(u64::from(steps) * 7)),
+            RepeatUnit::Month => anchor.checked_add_months(chrono::Months::new(steps)),
+            RepeatUnit::Year => {
+                anchor.checked_add_months(chrono::Months::new(steps.checked_mul(12)?))
+            }
         }
     }
 }

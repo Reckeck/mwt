@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useQuery } from '@tanstack/vue-query'
 import { ClipboardPaste, Copy, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -9,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
+import { call } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { detectDetail } from '@/shared/lib/detect-detail'
 
@@ -24,14 +26,29 @@ const save = useContactSave(() => props.contact.id)
 /* --- fields edited in place; each saves when it loses focus --- */
 const name = ref('')
 const note = ref('')
+const group = ref('')
 watch(
   () => props.contact,
   (contact) => {
     name.value = contact.name
     note.value = contact.note
+    group.value = contact.group
   },
   { immediate: true },
 )
+
+/** Groups already in use, offered as the user types. */
+const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })
+const groups = computed(() =>
+  [...new Set((contacts.data.value ?? []).map((contact) => contact.group.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  ),
+)
+const groupListId = computed(() => `contact-groups-${props.contact.id}`)
+
+function commitGroup() {
+  if (group.value.trim() !== props.contact.group) save.mutate(draftOf(props.contact, { group: group.value.trim() }))
+}
 
 function commitName() {
   const next = name.value.trim()
@@ -114,6 +131,20 @@ const inlineInput =
       >
         <option v-for="entry in CONTACT_KINDS" :key="entry" :value="entry">{{ t(`contactKind.${entry}`) }}</option>
       </Select>
+      <Input
+        v-model="group"
+        class="h-8 w-40"
+        :list="groupListId"
+        :placeholder="t('contacts.group')"
+        :aria-label="t('contacts.group')"
+        :title="t('contacts.groupHint')"
+        data-tour="contact-group"
+        @blur="commitGroup"
+        @keydown.enter="($event.target as HTMLInputElement).blur()"
+      />
+      <datalist :id="groupListId">
+        <option v-for="entry in groups" :key="entry" :value="entry" />
+      </datalist>
     </div>
 
     <Textarea

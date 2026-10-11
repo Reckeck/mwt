@@ -49,6 +49,9 @@ pub struct ContactDraft {
     pub kind: ContactKind,
     pub note: String,
     pub accounts: Vec<ContactAccount>,
+    /// Directory group («Семья», «P2P»); empty = grouped by kind.
+    #[serde(default)]
+    pub group: String,
 }
 
 impl UnlockedVault {
@@ -126,7 +129,7 @@ impl UnlockedVault {
             note: draft.note.trim().to_string(),
             archived: false,
             created_at: now_iso(),
-            group: String::new(),
+            group: draft.group.trim().to_string(),
         };
         self.doc.contacts.push(contact.clone());
         self.persist()?;
@@ -164,6 +167,7 @@ impl UnlockedVault {
         contact.kind = draft.kind;
         contact.note = draft.note.trim().to_string();
         contact.accounts = accounts;
+        contact.group = draft.group.trim().to_string();
         let out = contact.clone();
         self.persist()?;
         Ok(out)
@@ -380,6 +384,7 @@ mod tests {
     fn ann(vault: &mut UnlockedVault) -> Contact {
         vault
             .create_contact(ContactDraft {
+                group: String::new(),
                 name: "Ann".into(),
                 kind: ContactKind::Person,
                 note: String::new(),

@@ -834,6 +834,7 @@ mod tests {
         vault.add_transaction(inner).unwrap();
         let friend = vault
             .create_contact(crate::service::ContactDraft {
+                group: String::new(),
                 name: "Friend".into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),

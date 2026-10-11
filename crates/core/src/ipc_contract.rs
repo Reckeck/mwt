@@ -1126,8 +1126,18 @@ pub struct UpdateGoalInput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct ReminderInput {
     pub text: String,
-    /// RFC3339.
+    /// RFC3339: the date and the time.
     pub due_at: String,
+    /// `None` = once.
+    #[serde(default)]
+    pub repeat: Option<crate::model::planning::ReminderRepeat>,
+}
+
+/// Put a reminder off until a moment (RFC3339).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SnoozeReminderInput {
+    pub id: String,
+    pub until: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

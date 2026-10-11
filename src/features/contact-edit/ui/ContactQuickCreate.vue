@@ -19,7 +19,7 @@ const name = ref('')
 /** A contact starts as just a name; everything else is filled in its card. */
 const create = useMutation({
   mutationFn: () =>
-    call<Contact>('create_contact', { input: { name: name.value.trim(), kind: 'person', note: '', accounts: [] } }),
+    call<Contact>('create_contact', { input: { name: name.value.trim(), kind: 'person', note: '', accounts: [], group: '' } }),
   onSuccess: (contact) => {
     name.value = ''
     void queryClient.invalidateQueries({ queryKey: ['contacts'] })
