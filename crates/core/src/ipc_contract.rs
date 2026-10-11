@@ -1559,3 +1559,73 @@ pub struct GetCandlesInput {
 pub struct GetCandlesOutput {
     pub candles: Vec<CandlePoint>,
 }
+
+// -- node workflows (plan §16) -------------------------------------------------
+
+/// Create (`id` empty) or update a workflow.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SaveWorkflowInput {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub workflow: crate::service::WorkflowDraft,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetWorkflowActiveInput {
+    pub id: String,
+    pub active: bool,
+}
+
+/// Emulate a graph — saved or still in the editor — on a copy of the vault.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct DryRunWorkflowInput {
+    /// The graph as JSON.
+    pub graph: String,
+    #[serde(default)]
+    pub workflow_id: Option<String>,
+    /// The trigger to start from; a manual one, else the first, by default.
+    #[serde(default)]
+    pub trigger_node: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct RunWorkflowInput {
+    pub id: String,
+    #[serde(default)]
+    pub trigger_node: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ListWorkflowRunsInput {
+    #[serde(default)]
+    pub workflow_id: Option<String>,
+    /// Newest first, 100 by default.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct RestoreWorkflowVersionInput {
+    pub id: String,
+    pub saved_at: String,
+}
+
+/// Set a variable by hand; `value` is a `WfValue` in JSON.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetWorkflowVarInput {
+    pub scope: crate::workflow::VarScope,
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct DeleteWorkflowVarInput {
+    pub scope: crate::workflow::VarScope,
+    pub name: String,
+}
+
+/// A graph and what is wrong with it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ValidateWorkflowInput {
+    pub graph: String,
+}

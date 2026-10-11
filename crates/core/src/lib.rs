@@ -16,6 +16,7 @@ pub mod pricing;
 pub mod service;
 pub mod storage;
 pub mod txinfo;
+pub mod workflow;
 
 pub use amount::Amount;
 pub use error::{Error, Result};

@@ -1,0 +1,1556 @@
+//! The node catalog: every node there is, its ports, their types and its
+//! parameters, with titles, descriptions and help in Russian and English.
+//! The editor draws nodes from it and the executor runs by it, so a new node
+//! is added here and in `nodes/*` only.
+
+use std::sync::OnceLock;
+
+use serde::Serialize;
+
+use super::types::PortType;
+
+/// A text in both languages.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, ts_rs::TS)]
+#[ts(rename = "LocalizedText")]
+pub struct Text {
+    pub ru: &'static str,
+    pub en: &'static str,
+}
+
+const fn txt(ru: &'static str, en: &'static str) -> Text {
+    Text { ru, en }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeGroup {
+    Trigger,
+    Data,
+    Logic,
+    Variable,
+    Action,
+    List,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+pub struct PortDef {
+    pub name: &'static str,
+    #[serde(rename = "type")]
+    pub ty: PortType,
+    pub label: Text,
+}
+
+/// What kind of field edits a parameter.
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum ParamKind {
+    Number,
+    Text,
+    LongText,
+    Bool,
+    /// One of the user's wallets (a store id).
+    Store,
+    /// A wallet, a contact or text (`AccountRef`).
+    Account,
+    Asset,
+    Currency,
+    Category,
+    /// A day of the month, 1–31.
+    Day,
+    /// 0 = Monday … 6 = Sunday.
+    Weekday,
+    /// `HH:MM`.
+    Time,
+    Date,
+    Budget,
+    Goal,
+    Select {
+        options: Vec<(&'static str, Text)>,
+    },
+    /// Recipients of «Распределить»: `[{ account, share }]`.
+    Targets,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+pub struct ParamDef {
+    pub name: &'static str,
+    pub kind: ParamKind,
+    pub label: Text,
+    /// JSON of the default value.
+    #[ts(type = "unknown")]
+    pub default: serde_json::Value,
+    /// An input of the same name exists: the field can be «taken from a wire».
+    pub wirable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+pub struct NodeDef {
+    pub kind: &'static str,
+    pub group: NodeGroup,
+    pub title: Text,
+    pub description: Text,
+    /// Longer help: what it does, an example, common mistakes.
+    pub help: Text,
+    pub inputs: Vec<PortDef>,
+    pub outputs: Vec<PortDef>,
+    pub params: Vec<ParamDef>,
+    /// Hidden in the simple mode of the editor.
+    pub advanced: bool,
+    /// Words the search finds it by, besides its title.
+    pub keywords: Vec<&'static str>,
+}
+
+impl NodeDef {
+    pub fn is_trigger(&self) -> bool {
+        self.group == NodeGroup::Trigger
+    }
+
+    pub fn input(&self, name: &str) -> Option<&PortDef> {
+        self.inputs.iter().find(|port| port.name == name)
+    }
+
+    pub fn output(&self, name: &str) -> Option<&PortDef> {
+        self.outputs.iter().find(|port| port.name == name)
+    }
+
+    pub fn param(&self, name: &str) -> Option<&ParamDef> {
+        self.params.iter().find(|param| param.name == name)
+    }
+
+    /// Whether the node takes part in the flow (has a flow input or output).
+    pub fn has_flow(&self) -> bool {
+        self.inputs
+            .iter()
+            .chain(&self.outputs)
+            .any(|port| port.ty == PortType::Flow)
+    }
+}
+
+fn port(name: &'static str, ty: PortType, label: Text) -> PortDef {
+    PortDef { name, ty, label }
+}
+
+fn flow_in() -> PortDef {
+    port("in", PortType::Flow, txt("Вход", "In"))
+}
+
+fn flow_out() -> PortDef {
+    port("out", PortType::Flow, txt("Дальше", "Next"))
+}
+
+fn error_out() -> PortDef {
+    port("error", PortType::Flow, txt("Ошибка", "Error"))
+}
+
+fn param(name: &'static str, kind: ParamKind, label: Text, default: serde_json::Value) -> ParamDef {
+    ParamDef {
+        name,
+        kind,
+        label,
+        default,
+        wirable: false,
+    }
+}
+
+/// A parameter that also has an input of the same name and type.
+fn wired(
+    name: &'static str,
+    kind: ParamKind,
+    ty: PortType,
+    label: Text,
+    default: serde_json::Value,
+    inputs: &mut Vec<PortDef>,
+) -> ParamDef {
+    inputs.push(port(name, ty, label));
+    ParamDef {
+        name,
+        kind,
+        label,
+        default,
+        wirable: true,
+    }
+}
+
+fn select(options: &[(&'static str, Text)]) -> ParamKind {
+    ParamKind::Select {
+        options: options.to_vec(),
+    }
+}
+
+const CONDITIONS: [(&str, Text); 2] = [
+    ("above", txt("выше или равно", "at or above")),
+    ("below", txt("ниже или равно", "at or below")),
+];
+
+use serde_json::json;
+
+#[allow(clippy::too_many_lines, clippy::vec_init_then_push)]
+fn build() -> Vec<NodeDef> {
+    use NodeGroup::*;
+    use PortType as Ty;
+    let mut out = Vec::new();
+
+    // -- triggers -------------------------------------------------------------
+    out.push(NodeDef {
+        kind: "trigger.manual",
+        group: Trigger,
+        title: txt("Запуск вручную", "Run by hand"),
+        description: txt(
+            "Схема запускается кнопкой «Запустить» в редакторе или в списке.",
+            "The workflow runs from the «Run» button in the editor or the list.",
+        ),
+        help: txt(
+            "Удобно для разовых действий и чтобы проверить схему. Пример: «Запуск вручную» → «Распределить» остаток карты по конвертам.",
+            "Handy for one-off actions and to try a workflow out. Example: «Run by hand» → «Distribute» a card's balance into envelopes.",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("at", Ty::Date, txt("Когда", "When"))],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["кнопка", "вручную", "manual", "button", "start"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.schedule",
+        group: Trigger,
+        title: txt("По расписанию", "On a schedule"),
+        description: txt(
+            "Каждый день, неделю или месяц в заданное время.",
+            "Every day, week or month at a set time.",
+        ),
+        help: txt(
+            "«Каждый месяц, 10-е, 09:00» — для зарплаты и платежей; «каждую неделю, пятница» — для DCA. Пропущенные, пока vault был заблокирован, даты выполнятся при разблокировке (не больше 12).",
+            "«Every month, the 10th, 09:00» for a salary or payments; «every week, Friday» for DCA. Dates missed while the vault was locked run at unlock (12 at most).",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("at", Ty::Date, txt("Когда", "When"))],
+        params: vec![
+            param(
+                "every",
+                select(&[
+                    ("day", txt("каждый день", "every day")),
+                    ("week", txt("каждую неделю", "every week")),
+                    ("month", txt("каждый месяц", "every month")),
+                ]),
+                txt("Как часто", "How often"),
+                json!("month"),
+            ),
+            param("interval", ParamKind::Number, txt("Через сколько", "Every how many"), json!("1")),
+            param("day", ParamKind::Day, txt("День месяца", "Day of the month"), json!(1)),
+            param("weekday", ParamKind::Weekday, txt("День недели", "Weekday"), json!(4)),
+            param("time", ParamKind::Time, txt("Время", "Time"), json!("09:00")),
+        ],
+        advanced: false,
+        keywords: vec!["расписание", "время", "каждый", "cron", "schedule", "daily", "weekly", "monthly"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.transaction",
+        group: Trigger,
+        title: txt("Добавлена операция", "Operation added"),
+        description: txt(
+            "Срабатывает на новую операцию, подходящую под фильтр.",
+            "Fires on a new operation that matches the filter.",
+        ),
+        help: txt(
+            "Фильтр сужает: вид, кошелёк, категория, сумма от, текст в комментарии. Пример: категория «Зарплата» → «Распределить» 10 % в накопления. Операции, созданные схемами, по умолчанию не запускают её — так не бывает бесконечных цепочек.",
+            "The filter narrows it: kind, wallet, category, minimum amount, text in the comment. Example: category «Salary» → «Distribute» 10% into savings. Operations made by workflows do not fire it by default, so chains never loop.",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            flow_out(),
+            port("transaction", Ty::Transaction, txt("Операция", "Operation")),
+            port("amount", Ty::Money, txt("Сумма", "Amount")),
+            port("account", Ty::Account, txt("Счёт", "Account")),
+            port("category", Ty::Category, txt("Категория", "Category")),
+        ],
+        params: vec![
+            param(
+                "tx_kind",
+                select(&[
+                    ("any", txt("любая", "any")),
+                    ("topup", txt("пополнение", "top-up")),
+                    ("payment", txt("оплата", "payment")),
+                    ("transfer", txt("перевод", "transfer")),
+                    ("convert", txt("обмен", "exchange")),
+                    ("trade_spot", txt("спот-сделка", "spot trade")),
+                ]),
+                txt("Вид", "Kind"),
+                json!("any"),
+            ),
+            param("store", ParamKind::Store, txt("Кошелёк (с субсчетами)", "Wallet (with sub-accounts)"), json!(null)),
+            param("category", ParamKind::Category, txt("Категория", "Category"), json!(null)),
+            param("min_amount", ParamKind::Number, txt("Сумма от", "Amount from"), json!(null)),
+            param("text", ParamKind::Text, txt("Текст в комментарии", "Text in the comment"), json!("")),
+            param(
+                "include_workflows",
+                ParamKind::Bool,
+                txt("И операции схем", "Workflows' operations too"),
+                json!(false),
+            ),
+        ],
+        advanced: false,
+        keywords: vec!["операция", "новая", "зарплата", "трата", "transaction", "income", "on add"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.balance",
+        group: Trigger,
+        title: txt("Баланс пересёк порог", "Balance crossed a threshold"),
+        description: txt(
+            "Когда баланс счёта становится выше или ниже порога.",
+            "When an account's balance goes above or below a threshold.",
+        ),
+        help: txt(
+            "Срабатывает один раз при пересечении, не на каждой проверке. Пример: баланс карты ниже 5 000 ₽ → уведомление и перевод с накопительного.",
+            "Fires once per crossing, not on every check. Example: card balance below 5 000 ₽ → a notice and a transfer from savings.",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("balance", Ty::Money, txt("Баланс", "Balance"))],
+        params: vec![
+            param("store", ParamKind::Store, txt("Счёт", "Account"), json!(null)),
+            param("asset", ParamKind::Asset, txt("Актив", "Asset"), json!(null)),
+            param("condition", select(&CONDITIONS), txt("Условие", "Condition"), json!("below")),
+            param("value", ParamKind::Number, txt("Порог", "Threshold"), json!("0")),
+        ],
+        advanced: false,
+        keywords: vec!["баланс", "остаток", "порог", "мало", "balance", "low", "threshold"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.price",
+        group: Trigger,
+        title: txt("Цена пересекла порог", "Price crossed a threshold"),
+        description: txt(
+            "Когда цена актива в выбранной валюте выше или ниже порога.",
+            "When an asset's price in a currency is above or below a threshold.",
+        ),
+        help: txt(
+            "Цены обновляются раз в несколько минут, пока приложение открыто. Срабатывает один раз при пересечении.",
+            "Prices refresh every few minutes while the app is open. Fires once per crossing.",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("price", Ty::Money, txt("Цена", "Price"))],
+        params: vec![
+            param("asset", ParamKind::Asset, txt("Актив", "Asset"), json!(null)),
+            param("condition", select(&CONDITIONS), txt("Условие", "Condition"), json!("above")),
+            param("value", ParamKind::Number, txt("Порог", "Threshold"), json!("0")),
+            param("currency", ParamKind::Currency, txt("Валюта", "Currency"), json!("usd")),
+        ],
+        advanced: false,
+        keywords: vec!["цена", "курс", "алерт", "price", "alert"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.event",
+        group: Trigger,
+        title: txt("Событие схемы", "Workflow event"),
+        description: txt(
+            "Срабатывает, когда другая схема отправила событие с этим именем.",
+            "Fires when another workflow sends an event with this name.",
+        ),
+        help: txt(
+            "Так одна схема продолжает другую: «Отправить событие „ипотека-оплачена“» → здесь «Событие схемы „ипотека-оплачена“». Данные события приходят в выход «Данные».",
+            "This is how one workflow continues another: «Send event “mortgage-paid”» → here «Workflow event “mortgage-paid”». The event's data comes out of «Data».",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("payload", Ty::Any, txt("Данные", "Data"))],
+        params: vec![param("name", ParamKind::Text, txt("Имя события", "Event name"), json!(""))],
+        advanced: true,
+        keywords: vec!["событие", "сигнал", "event", "signal"],
+    });
+
+    // -- data -----------------------------------------------------------------
+    let mut inputs = Vec::new();
+    let params = vec![
+        wired(
+            "account",
+            ParamKind::Account,
+            Ty::Account,
+            txt("Счёт", "Account"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "asset",
+            ParamKind::Asset,
+            Ty::Asset,
+            txt("Актив", "Asset"),
+            json!(null),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "data.balance",
+        group: Data,
+        title: txt("Баланс счёта", "Account balance"),
+        description: txt("Сколько актива на счёте сейчас.", "How much of an asset an account holds now."),
+        help: txt(
+            "Счёт с субсчетами считается целиком. Без актива — баланс в базовой валюте по всем активам.",
+            "An account with sub-accounts counts whole. Without an asset: the balance in the base currency over all assets.",
+        ),
+        inputs,
+        outputs: vec![port("value", Ty::Money, txt("Баланс", "Balance"))],
+        params,
+        advanced: false,
+        keywords: vec!["баланс", "остаток", "сколько", "balance", "holdings"],
+    });
+    let mut inputs = Vec::new();
+    let params = vec![
+        wired(
+            "asset",
+            ParamKind::Asset,
+            Ty::Asset,
+            txt("Актив", "Asset"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "currency",
+            ParamKind::Currency,
+            Ty::Currency,
+            txt("Валюта", "Currency"),
+            json!("usd"),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "data.price",
+        group: Data,
+        title: txt("Цена актива", "Asset price"),
+        description: txt(
+            "Последняя известная цена актива в валюте.",
+            "The latest known price of an asset in a currency.",
+        ),
+        help: txt(
+            "Берётся из кэша цен; без сети — последняя сохранённая.",
+            "From the price cache; offline, the last one saved.",
+        ),
+        inputs,
+        outputs: vec![port("price", Ty::Money, txt("Цена", "Price"))],
+        params,
+        advanced: false,
+        keywords: vec!["цена", "курс", "стоимость", "price", "quote"],
+    });
+    let mut inputs = Vec::new();
+    let params = vec![
+        wired(
+            "from",
+            ParamKind::Currency,
+            Ty::Currency,
+            txt("Из", "From"),
+            json!("usd"),
+            &mut inputs,
+        ),
+        wired(
+            "to",
+            ParamKind::Currency,
+            Ty::Currency,
+            txt("В", "To"),
+            json!("rub"),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "data.fx",
+        group: Data,
+        title: txt("Курс валют", "Exchange rate"),
+        description: txt(
+            "Сколько единиц «В» за одну «Из».",
+            "How many «To» for one «From».",
+        ),
+        help: txt("Из кэша курсов.", "From the FX cache."),
+        inputs,
+        outputs: vec![port("rate", Ty::Number, txt("Курс", "Rate"))],
+        params,
+        advanced: false,
+        keywords: vec!["курс", "валюта", "fx", "rate", "exchange"],
+    });
+    out.push(NodeDef {
+        kind: "data.constant",
+        group: Data,
+        title: txt("Значение", "Value"),
+        description: txt("Число, сумма, текст, счёт или актив, заданные здесь.", "A number, an amount, text, an account or an asset set here."),
+        help: txt(
+            "Для порогов и сумм, которые используются в нескольких местах; общую для всех схем величину лучше держать в переменной.",
+            "For thresholds and sums used in several places; a value shared by all workflows is better kept in a variable.",
+        ),
+        inputs: vec![],
+        outputs: vec![port("value", Ty::Any, txt("Значение", "Value"))],
+        params: vec![
+            param(
+                "value_type",
+                select(&[
+                    ("number", txt("число", "number")),
+                    ("money", txt("сумма", "amount")),
+                    ("text", txt("текст", "text")),
+                    ("bool", txt("да/нет", "yes/no")),
+                    ("account", txt("счёт", "account")),
+                    ("asset", txt("актив", "asset")),
+                    ("category", txt("категория", "category")),
+                ]),
+                txt("Тип", "Type"),
+                json!("number"),
+            ),
+            param("number", ParamKind::Number, txt("Число", "Number"), json!("0")),
+            param("currency", ParamKind::Currency, txt("Валюта суммы", "Currency"), json!("rub")),
+            param("text", ParamKind::Text, txt("Текст", "Text"), json!("")),
+            param("bool", ParamKind::Bool, txt("Да/нет", "Yes/no"), json!(true)),
+            param("account", ParamKind::Account, txt("Счёт", "Account"), json!(null)),
+            param("asset", ParamKind::Asset, txt("Актив", "Asset"), json!(null)),
+            param("category", ParamKind::Category, txt("Категория", "Category"), json!(null)),
+        ],
+        advanced: false,
+        keywords: vec!["значение", "константа", "число", "value", "constant", "number"],
+    });
+    out.push(NodeDef {
+        kind: "data.sum",
+        group: Data,
+        title: txt("Сумма операций за период", "Sum over a period"),
+        description: txt(
+            "Доходы, траты или всё за текущий день, неделю, месяц или год, в базовой валюте.",
+            "Income, spending or everything for the current day, week, month or year, in the base currency.",
+        ),
+        help: txt(
+            "Те же цифры, что в отчётах: переводы между своими счетами и корректировки не считаются.",
+            "The same figures as the reports: moves between your own accounts and corrections do not count.",
+        ),
+        inputs: vec![],
+        outputs: vec![port("total", Ty::Money, txt("Итого", "Total"))],
+        params: vec![
+            param(
+                "period",
+                select(&[
+                    ("day", txt("сегодня", "today")),
+                    ("week", txt("эта неделя", "this week")),
+                    ("month", txt("этот месяц", "this month")),
+                    ("year", txt("этот год", "this year")),
+                ]),
+                txt("Период", "Period"),
+                json!("month"),
+            ),
+            param(
+                "flow",
+                select(&[
+                    ("income", txt("доходы", "income")),
+                    ("expense", txt("траты", "spending")),
+                ]),
+                txt("Что", "What"),
+                json!("expense"),
+            ),
+            param("category", ParamKind::Category, txt("Категория", "Category"), json!(null)),
+        ],
+        advanced: false,
+        keywords: vec!["сумма", "итого", "траты", "доход", "месяц", "sum", "total", "spent"],
+    });
+    out.push(NodeDef {
+        kind: "data.budget",
+        group: Data,
+        title: txt("Остаток бюджета", "Budget left"),
+        description: txt(
+            "Сколько осталось по лимиту в текущем периоде.",
+            "What is left of a limit this period.",
+        ),
+        help: txt(
+            "Выберите лимит из «Планирование → Лимиты».",
+            "Pick a limit from «Planning → Limits».",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            port("remaining", Ty::Money, txt("Осталось", "Left")),
+            port("used", Ty::Number, txt("Израсходовано, %", "Used, %")),
+        ],
+        params: vec![param(
+            "budget",
+            ParamKind::Budget,
+            txt("Лимит", "Limit"),
+            json!(null),
+        )],
+        advanced: false,
+        keywords: vec!["бюджет", "лимит", "budget", "limit"],
+    });
+    out.push(NodeDef {
+        kind: "data.goal",
+        group: Data,
+        title: txt("Прогресс цели", "Goal progress"),
+        description: txt(
+            "Сколько накоплено и сколько осталось.",
+            "What is saved and what is left.",
+        ),
+        help: txt(
+            "Выберите цель из «Планирование → Цели».",
+            "Pick a goal from «Planning → Goals».",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            port("saved", Ty::Money, txt("Накоплено", "Saved")),
+            port("left", Ty::Money, txt("Осталось", "Left")),
+            port("pct", Ty::Number, txt("Процент", "Percent")),
+        ],
+        params: vec![param(
+            "goal",
+            ParamKind::Goal,
+            txt("Цель", "Goal"),
+            json!(null),
+        )],
+        advanced: false,
+        keywords: vec!["цель", "накопления", "goal", "saving"],
+    });
+    out.push(NodeDef {
+        kind: "data.now",
+        group: Data,
+        title: txt("Сейчас", "Now"),
+        description: txt(
+            "Текущие дата, день месяца и день недели.",
+            "The current date, day of month and weekday.",
+        ),
+        help: txt(
+            "День недели: 0 — понедельник … 6 — воскресенье.",
+            "Weekday: 0 is Monday … 6 is Sunday.",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            port("now", Ty::Date, txt("Дата", "Date")),
+            port("day", Ty::Number, txt("День месяца", "Day of month")),
+            port("weekday", Ty::Number, txt("День недели", "Weekday")),
+        ],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["сейчас", "дата", "сегодня", "now", "today", "date"],
+    });
+    out.push(NodeDef {
+        kind: "data.tx_fields",
+        group: Data,
+        title: txt("Разобрать операцию", "Split an operation"),
+        description: txt("Сумма, актив, счёт, категория, комментарий и дата операции.", "An operation's amount, asset, account, category, comment and date."),
+        help: txt(
+            "Подключите выход «Операция» триггера или действия, чтобы взять её поля по отдельности.",
+            "Wire an «Operation» output of a trigger or an action to take its fields one by one.",
+        ),
+        inputs: vec![port("transaction", Ty::Transaction, txt("Операция", "Operation"))],
+        outputs: vec![
+            port("amount", Ty::Money, txt("Сумма", "Amount")),
+            port("asset", Ty::Asset, txt("Актив", "Asset")),
+            port("account", Ty::Account, txt("Счёт", "Account")),
+            port("category", Ty::Category, txt("Категория", "Category")),
+            port("comment", Ty::Text, txt("Комментарий", "Comment")),
+            port("date", Ty::Date, txt("Дата", "Date")),
+        ],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["разобрать", "поля", "операция", "fields", "split", "parse"],
+    });
+
+    let mut inputs = Vec::new();
+    let date = wired(
+        "date",
+        ParamKind::Date,
+        Ty::Date,
+        txt("Дата (пусто — сегодня)", "Date (empty: today)"),
+        json!(null),
+        &mut inputs,
+    );
+    out.push(NodeDef {
+        kind: "data.workday",
+        group: Data,
+        title: txt("Рабочий день?", "Working day?"),
+        description: txt(
+            "Рабочий ли день, выходной или праздник, и ближайший рабочий день.",
+            "Whether a day is a working day, a weekend or a holiday, and the next working day.",
+        ),
+        help: txt(
+            "Без подключённой даты проверяет сегодняшний день. Календарь «Россия» знает выходные и государственные праздники (1–8 января, 23 февраля, 8 марта, 1 и 9 мая, 12 июня, 4 ноября). Переносы выходных правительство объявляет каждый год: добавьте их сами — дни отдыха в «Ещё выходные», рабочие субботы в «Рабочие дни». Даты пишите через запятую: 2026-01-09, 2026-12-31. Пример: «По расписанию» 10-го → «Рабочий день?» → «Ветвление»: нет — перенести платёж на «Ближайший рабочий».",
+            "Without a wired date it checks today. The «Russia» calendar knows weekends and public holidays (January 1–8, February 23, March 8, May 1 and 9, June 12, November 4). Day-off transfers are announced every year, so add them yourself: rest days in «Extra days off», working Saturdays in «Working days». Write dates with commas: 2026-01-09, 2026-12-31. Example: «On a schedule» on the 10th → «Working day?» → «Branch»: no, move the payment to «Next working day».",
+        ),
+        inputs,
+        outputs: vec![
+            port("workday", Ty::Bool, txt("Рабочий", "Working")),
+            port("weekend", Ty::Bool, txt("Выходной (суббота/воскресенье)", "Weekend")),
+            port("holiday", Ty::Bool, txt("Праздник", "Holiday")),
+            port("next_workday", Ty::Date, txt("Ближайший рабочий", "Next working day")),
+        ],
+        params: vec![
+            date,
+            param(
+                "calendar",
+                select(&[
+                    ("ru", txt("Россия: выходные и праздники", "Russia: weekends and holidays")),
+                    ("weekends", txt("только выходные", "weekends only")),
+                ]),
+                txt("Календарь", "Calendar"),
+                json!("ru"),
+            ),
+            param(
+                "weekend",
+                select(&[
+                    ("sat_sun", txt("суббота и воскресенье", "Saturday and Sunday")),
+                    ("sun", txt("только воскресенье", "Sunday only")),
+                    ("fri_sat", txt("пятница и суббота", "Friday and Saturday")),
+                ]),
+                txt("Выходные дни недели", "Weekend days"),
+                json!("sat_sun"),
+            ),
+            param("extra_off", ParamKind::Text, txt("Ещё выходные (даты)", "Extra days off (dates)"), json!("")),
+            param("extra_work", ParamKind::Text, txt("Рабочие дни (переносы)", "Working days (transfers)"), json!("")),
+        ],
+        advanced: false,
+        keywords: vec!["рабочий", "выходной", "праздник", "будни", "перенос", "workday", "weekend", "holiday", "business day"],
+    });
+
+    // -- logic and math -----------------------------------------------------------
+    out.push(NodeDef {
+        kind: "logic.compare",
+        group: Logic,
+        title: txt("Сравнение", "Compare"),
+        description: txt("Сравнивает A и B: больше, меньше, равно.", "Compares A and B: greater, less, equal."),
+        help: txt(
+            "Суммы в разных валютах сравнить нельзя — сначала «Конвертировать». Если B не подключено, берётся значение из поля.",
+            "Amounts in different currencies cannot be compared: «Convert» first. If B is not wired, the field's value is used.",
+        ),
+        inputs: vec![
+            port("a", Ty::Any, txt("A", "A")),
+            port("b", Ty::Any, txt("B", "B")),
+        ],
+        outputs: vec![port("result", Ty::Bool, txt("Да/нет", "Yes/no"))],
+        params: vec![
+            param(
+                "op",
+                select(&[
+                    ("gt", txt("A > B", "A > B")),
+                    ("gte", txt("A ≥ B", "A ≥ B")),
+                    ("lt", txt("A < B", "A < B")),
+                    ("lte", txt("A ≤ B", "A ≤ B")),
+                    ("eq", txt("A = B", "A = B")),
+                    ("ne", txt("A ≠ B", "A ≠ B")),
+                    ("contains", txt("A содержит B", "A contains B")),
+                ]),
+                txt("Как", "How"),
+                json!("gt"),
+            ),
+            param("b", ParamKind::Number, txt("B, если не подключено", "B when not wired"), json!("0")),
+        ],
+        advanced: false,
+        keywords: vec!["если", "больше", "меньше", "равно", "сравнить", "if", "compare", "greater", "less", ">", "<"],
+    });
+    for (kind, title, ru_desc, en_desc) in [
+        (
+            "logic.and",
+            txt("И", "And"),
+            "Да, когда да оба.",
+            "Yes when both are yes.",
+        ),
+        (
+            "logic.or",
+            txt("ИЛИ", "Or"),
+            "Да, когда да хотя бы одно.",
+            "Yes when at least one is yes.",
+        ),
+    ] {
+        out.push(NodeDef {
+            kind,
+            group: Logic,
+            title,
+            description: txt(ru_desc, en_desc),
+            help: txt(
+                "Соединяйте условия «Сравнения».",
+                "Joins conditions from «Compare».",
+            ),
+            inputs: vec![
+                port("a", Ty::Bool, txt("A", "A")),
+                port("b", Ty::Bool, txt("B", "B")),
+            ],
+            outputs: vec![port("result", Ty::Bool, txt("Да/нет", "Yes/no"))],
+            params: vec![],
+            advanced: false,
+            keywords: vec!["и", "или", "and", "or", "both"],
+        });
+    }
+    out.push(NodeDef {
+        kind: "logic.not",
+        group: Logic,
+        title: txt("НЕ", "Not"),
+        description: txt("Да становится нет и наоборот.", "Yes becomes no and back."),
+        help: txt("Переворачивает условие.", "Turns a condition around."),
+        inputs: vec![port("a", Ty::Bool, txt("A", "A"))],
+        outputs: vec![port("result", Ty::Bool, txt("Да/нет", "Yes/no"))],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["не", "наоборот", "not"],
+    });
+    out.push(NodeDef {
+        kind: "logic.branch",
+        group: Logic,
+        title: txt("Ветвление", "Branch"),
+        description: txt("Если условие да — по одной ветке, иначе по другой.", "If the condition is yes, one way, else the other."),
+        help: txt(
+            "Пример: «Сравнение» баланс ≥ платежа → «да»: перевод на кредит; «нет»: уведомление «не хватает».",
+            "Example: «Compare» balance ≥ payment → «yes»: transfer to the loan; «no»: a «not enough» notice.",
+        ),
+        inputs: vec![flow_in(), port("condition", Ty::Bool, txt("Условие", "Condition"))],
+        outputs: vec![
+            port("true", Ty::Flow, txt("Да", "Yes")),
+            port("false", Ty::Flow, txt("Нет", "No")),
+        ],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["если", "иначе", "условие", "ветка", "if", "else", "branch"],
+    });
+    out.push(NodeDef {
+        kind: "logic.guard",
+        group: Logic,
+        title: txt("Защита", "Guard"),
+        description: txt(
+            "Продолжает, только если условие да; иначе останавливает с причиной.",
+            "Goes on only if the condition is yes; otherwise stops with a reason.",
+        ),
+        help: txt(
+            "Причина попадёт в журнал — видно, почему схема ничего не сделала.",
+            "The reason goes to the journal, so you see why the workflow did nothing.",
+        ),
+        inputs: vec![
+            flow_in(),
+            port("condition", Ty::Bool, txt("Условие", "Condition")),
+        ],
+        outputs: vec![flow_out()],
+        params: vec![param(
+            "reason",
+            ParamKind::Text,
+            txt("Причина остановки", "Reason to stop"),
+            json!(""),
+        )],
+        advanced: false,
+        keywords: vec!["защита", "проверка", "только если", "guard", "check"],
+    });
+    out.push(NodeDef {
+        kind: "logic.math",
+        group: Logic,
+        title: txt("Математика", "Math"),
+        description: txt("Сложить, вычесть, умножить, разделить, процент, мин, макс.", "Add, subtract, multiply, divide, percent, min, max."),
+        help: txt(
+            "«% от»: B процентов от A — 10 % от зарплаты. Валюта суммы сохраняется; две суммы в разных валютах складывать нельзя.",
+            "«% of»: B percent of A — 10% of the salary. An amount keeps its currency; two amounts in different currencies cannot be added.",
+        ),
+        inputs: vec![
+            port("a", Ty::Any, txt("A", "A")),
+            port("b", Ty::Any, txt("B", "B")),
+        ],
+        outputs: vec![port("result", Ty::Any, txt("Результат", "Result"))],
+        params: vec![
+            param(
+                "op",
+                select(&[
+                    ("add", txt("A + B", "A + B")),
+                    ("sub", txt("A − B", "A − B")),
+                    ("mul", txt("A × B", "A × B")),
+                    ("div", txt("A ÷ B", "A ÷ B")),
+                    ("percent", txt("B % от A", "B% of A")),
+                    ("min", txt("меньшее", "smaller")),
+                    ("max", txt("большее", "larger")),
+                ]),
+                txt("Действие", "Operation"),
+                json!("percent"),
+            ),
+            param("b", ParamKind::Number, txt("B, если не подключено", "B when not wired"), json!("10")),
+            param("round", ParamKind::Number, txt("Знаков после запятой", "Decimal places"), json!("2")),
+        ],
+        advanced: false,
+        keywords: vec!["процент", "сумма", "плюс", "минус", "умножить", "разделить", "math", "percent", "%", "+", "-"],
+    });
+    let mut inputs = vec![port("amount", Ty::Money, txt("Сумма", "Amount"))];
+    let params = vec![wired(
+        "currency",
+        ParamKind::Currency,
+        Ty::Currency,
+        txt("В валюту", "Into"),
+        json!("rub"),
+        &mut inputs,
+    )];
+    out.push(NodeDef {
+        kind: "logic.convert",
+        group: Logic,
+        title: txt("Конвертировать", "Convert"),
+        description: txt(
+            "Сумма в другой валюте по текущему курсу.",
+            "An amount in another currency at the current rate.",
+        ),
+        help: txt(
+            "Нужна, чтобы сравнить или сложить суммы в разных валютах.",
+            "Needed to compare or add amounts in different currencies.",
+        ),
+        inputs,
+        outputs: vec![port("result", Ty::Money, txt("Сумма", "Amount"))],
+        params,
+        advanced: false,
+        keywords: vec![
+            "конвертировать",
+            "валюта",
+            "перевести в",
+            "convert",
+            "currency",
+        ],
+    });
+    out.push(NodeDef {
+        kind: "logic.text",
+        group: Logic,
+        title: txt("Собрать текст", "Build text"),
+        description: txt(
+            "Текст по шаблону: {a}, {b}, {c} заменяются входами.",
+            "Text from a template: {a}, {b}, {c} are replaced by the inputs.",
+        ),
+        help: txt(
+            "Пример: «Пополнение {a} с карты {b}» — для комментария операции или уведомления.",
+            "Example: «Top-up of {a} from card {b}» — for an operation's comment or a notice.",
+        ),
+        inputs: vec![
+            port("a", Ty::Any, txt("{a}", "{a}")),
+            port("b", Ty::Any, txt("{b}", "{b}")),
+            port("c", Ty::Any, txt("{c}", "{c}")),
+        ],
+        outputs: vec![port("text", Ty::Text, txt("Текст", "Text"))],
+        params: vec![param(
+            "template",
+            ParamKind::LongText,
+            txt("Шаблон", "Template"),
+            json!("{a}"),
+        )],
+        advanced: false,
+        keywords: vec![
+            "текст",
+            "шаблон",
+            "сообщение",
+            "text",
+            "template",
+            "message",
+        ],
+    });
+    out.push(NodeDef {
+        kind: "logic.throttle",
+        group: Logic,
+        title: txt("Не чаще раза в", "At most once in"),
+        description: txt(
+            "Пропускает дальше, только если с прошлого раза прошло N часов.",
+            "Lets through only if N hours passed since last time.",
+        ),
+        help: txt(
+            "Против повторов: уведомление «мало денег» не чаще раза в сутки.",
+            "Against repeats: a «money is low» notice at most once a day.",
+        ),
+        inputs: vec![flow_in()],
+        outputs: vec![
+            flow_out(),
+            port("skipped", Ty::Flow, txt("Пропущено", "Skipped")),
+        ],
+        params: vec![param(
+            "hours",
+            ParamKind::Number,
+            txt("Часов", "Hours"),
+            json!("24"),
+        )],
+        advanced: false,
+        keywords: vec!["раз в", "частота", "повтор", "throttle", "once", "debounce"],
+    });
+
+    // -- variables ----------------------------------------------------------------
+    let scope = || {
+        param(
+            "scope",
+            select(&[
+                ("workflow", txt("этой схемы", "this workflow")),
+                ("global", txt("общая", "shared")),
+            ]),
+            txt("Где", "Where"),
+            json!("workflow"),
+        )
+    };
+    out.push(NodeDef {
+        kind: "var.get",
+        group: Variable,
+        title: txt("Получить переменную", "Get a variable"),
+        description: txt("Значение, сохранённое раньше этой или любой схемой.", "A value saved before by this or any workflow."),
+        help: txt(
+            "Общие переменные видны всем схемам: «Доля накоплений = 10 %» меняется в одном месте. Их список — во вкладке «Переменные».",
+            "Shared variables are seen by every workflow: «Savings share = 10%» changes in one place. They are listed under «Variables».",
+        ),
+        inputs: vec![],
+        outputs: vec![port("value", Ty::Any, txt("Значение", "Value"))],
+        params: vec![param("name", ParamKind::Text, txt("Имя", "Name"), json!("")), scope()],
+        advanced: false,
+        keywords: vec!["переменная", "получить", "variable", "get"],
+    });
+    out.push(NodeDef {
+        kind: "var.set",
+        group: Variable,
+        title: txt("Записать переменную", "Set a variable"),
+        description: txt(
+            "Сохраняет значение между запусками.",
+            "Keeps a value between runs.",
+        ),
+        help: txt(
+            "Например, дату последнего пополнения.",
+            "For instance, the date of the last top-up.",
+        ),
+        inputs: vec![flow_in(), port("value", Ty::Any, txt("Значение", "Value"))],
+        outputs: vec![flow_out()],
+        params: vec![
+            param("name", ParamKind::Text, txt("Имя", "Name"), json!("")),
+            scope(),
+        ],
+        advanced: false,
+        keywords: vec![
+            "переменная",
+            "записать",
+            "сохранить",
+            "variable",
+            "set",
+            "save",
+        ],
+    });
+    out.push(NodeDef {
+        kind: "var.add",
+        group: Variable,
+        title: txt("Увеличить переменную", "Increase a variable"),
+        description: txt(
+            "Прибавляет к числу в переменной.",
+            "Adds to the number in a variable.",
+        ),
+        help: txt(
+            "Счётчик: сколько раз купил BTC.",
+            "A counter: how many times BTC was bought.",
+        ),
+        inputs: vec![
+            flow_in(),
+            port("delta", Ty::Number, txt("На сколько", "By")),
+        ],
+        outputs: vec![flow_out(), port("value", Ty::Number, txt("Стало", "Now"))],
+        params: vec![
+            param("name", ParamKind::Text, txt("Имя", "Name"), json!("")),
+            param(
+                "delta",
+                ParamKind::Number,
+                txt("На сколько, если не подключено", "By, when not wired"),
+                json!("1"),
+            ),
+            scope(),
+        ],
+        advanced: false,
+        keywords: vec!["счётчик", "увеличить", "прибавить", "counter", "increment"],
+    });
+
+    // -- actions ------------------------------------------------------------------
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        param(
+            "tx_kind",
+            select(&[
+                ("topup", txt("пополнение", "top-up")),
+                ("payment", txt("оплата", "payment")),
+                ("transfer", txt("перевод", "transfer")),
+                ("convert", txt("обмен", "exchange")),
+            ]),
+            txt("Вид", "Kind"),
+            json!("transfer"),
+        ),
+        wired(
+            "account",
+            ParamKind::Account,
+            Ty::Account,
+            txt(
+                "Счёт (откуда / куда пополнить)",
+                "Account (from / to top up)",
+            ),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "to",
+            ParamKind::Account,
+            Ty::Account,
+            txt("Куда / кому", "To / whom"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "asset",
+            ParamKind::Asset,
+            Ty::Asset,
+            txt("Актив", "Asset"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "amount",
+            ParamKind::Number,
+            Ty::Number,
+            txt("Сумма", "Amount"),
+            json!("0"),
+            &mut inputs,
+        ),
+        wired(
+            "to_asset",
+            ParamKind::Asset,
+            Ty::Asset,
+            txt("Обмен: получаю", "Exchange: receive"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "to_amount",
+            ParamKind::Number,
+            Ty::Number,
+            txt("Обмен: сколько получаю", "Exchange: how much"),
+            json!("0"),
+            &mut inputs,
+        ),
+        wired(
+            "category",
+            ParamKind::Category,
+            Ty::Category,
+            txt("Категория", "Category"),
+            json!(null),
+            &mut inputs,
+        ),
+        wired(
+            "comment",
+            ParamKind::Text,
+            Ty::Text,
+            txt("Комментарий", "Comment"),
+            json!(""),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.transaction",
+        group: Action,
+        title: txt("Создать операцию", "Create an operation"),
+        description: txt("Пополнение, оплата, перевод или обмен.", "A top-up, payment, transfer or exchange."),
+        help: txt(
+            "Проходит те же проверки, что операция из формы. Если денег не хватит или правило нарушено — выход «Ошибка» (или запуск отклоняется). Перед узлом «Ждать подтверждения» операция ждёт вашего «да» в очереди.",
+            "Goes through the same checks as an operation from the form. Not enough money or a broken rule takes the «Error» way (or rejects the run). After a «Wait for confirmation» node it waits for your yes in the queue.",
+        ),
+        inputs,
+        outputs: vec![
+            flow_out(),
+            error_out(),
+            port("transaction", Ty::Transaction, txt("Операция", "Operation")),
+            port("reason", Ty::Text, txt("Причина ошибки", "Error reason")),
+        ],
+        params,
+        advanced: false,
+        keywords: vec!["операция", "перевод", "оплата", "пополнить", "купить", "transaction", "transfer", "pay", "buy"],
+    });
+    let mut inputs = vec![flow_in(), port("amount", Ty::Money, txt("Сумма", "Amount"))];
+    let params = vec![
+        wired(
+            "from",
+            ParamKind::Account,
+            Ty::Account,
+            txt("Откуда", "From"),
+            json!(null),
+            &mut inputs,
+        ),
+        param(
+            "targets",
+            ParamKind::Targets,
+            txt("Куда и сколько", "Where and how much"),
+            json!([]),
+        ),
+        param(
+            "mode",
+            select(&[
+                ("percent", txt("доли в %", "shares in %")),
+                ("fixed", txt("фиксированные суммы", "fixed amounts")),
+            ]),
+            txt("Как делить", "How to split"),
+            json!("percent"),
+        ),
+        param(
+            "category",
+            ParamKind::Category,
+            txt("Категория", "Category"),
+            json!(null),
+        ),
+        param(
+            "comment",
+            ParamKind::Text,
+            txt("Комментарий", "Comment"),
+            json!(""),
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.distribute",
+        group: Action,
+        title: txt("Распределить", "Distribute"),
+        description: txt(
+            "Делит сумму между счетами по долям или суммам — переводами одной цепочкой.",
+            "Splits an amount between accounts by shares or sums: transfers in one chain.",
+        ),
+        help: txt(
+            "Пример: зарплата → 10 % «Накопительный», 5 % «Отпуск». Остаток от округления уходит последнему. Все переводы сохраняются вместе или ни один.",
+            "Example: salary → 10% «Savings», 5% «Holiday». The rounding rest goes to the last one. All transfers are saved together or none.",
+        ),
+        inputs,
+        outputs: vec![flow_out(), error_out(), port("created", Ty::List, txt("Операции", "Operations"))],
+        params,
+        advanced: false,
+        keywords: vec!["распределить", "разделить", "доли", "процент", "distribute", "split", "share"],
+    });
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        wired(
+            "text",
+            ParamKind::LongText,
+            Ty::Text,
+            txt("Текст", "Text"),
+            json!(""),
+            &mut inputs,
+        ),
+        param(
+            "title",
+            ParamKind::Text,
+            txt("Заголовок", "Title"),
+            json!(""),
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.notify",
+        group: Action,
+        title: txt("Уведомление", "Notification"),
+        description: txt(
+            "Показывает уведомление — в колокольчике и в системе.",
+            "Shows a notice, in the bell and from the system.",
+        ),
+        help: txt(
+            "Текст можно собрать из данных узлом «Собрать текст».",
+            "Build the text from data with «Build text».",
+        ),
+        inputs,
+        outputs: vec![flow_out()],
+        params,
+        advanced: false,
+        keywords: vec![
+            "уведомление",
+            "сообщить",
+            "notify",
+            "notification",
+            "message",
+        ],
+    });
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        wired(
+            "text",
+            ParamKind::LongText,
+            Ty::Text,
+            txt("Текст", "Text"),
+            json!(""),
+            &mut inputs,
+        ),
+        param(
+            "days",
+            ParamKind::Number,
+            txt("Через сколько дней", "In how many days"),
+            json!("0"),
+        ),
+        param(
+            "time",
+            ParamKind::Time,
+            txt("Время", "Time"),
+            json!("10:00"),
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.reminder",
+        group: Action,
+        title: txt("Создать напоминание", "Create a reminder"),
+        description: txt(
+            "Напоминание на дату и время.",
+            "A reminder for a date and time.",
+        ),
+        help: txt(
+            "Оно появится в «Напоминаниях» и придёт уведомлением.",
+            "It shows in «Reminders» and arrives as a notice.",
+        ),
+        inputs,
+        outputs: vec![flow_out()],
+        params,
+        advanced: false,
+        keywords: vec!["напоминание", "напомнить", "reminder", "remind"],
+    });
+    out.push(NodeDef {
+        kind: "action.confirm",
+        group: Action,
+        title: txt("Ждать подтверждения", "Wait for confirmation"),
+        description: txt(
+            "Операции после этого узла не создаются сразу, а ждут вашего «да» в очереди.",
+            "Operations after this node are not made at once but wait for your yes in the queue.",
+        ),
+        help: txt(
+            "По умолчанию схема делает всё сразу. Поставьте этот узел перед операциями, которые хотите проверить; очередь — во вкладке «Очередь».",
+            "By default a workflow acts at once. Put this node before the operations you want to check; the queue is under «Queue».",
+        ),
+        inputs: vec![flow_in()],
+        outputs: vec![flow_out()],
+        params: vec![],
+        advanced: false,
+        keywords: vec!["подтверждение", "проверить", "очередь", "confirm", "approve", "queue"],
+    });
+    out.push(NodeDef {
+        kind: "action.stop",
+        group: Action,
+        title: txt("Стоп", "Stop"),
+        description: txt(
+            "Останавливает запуск с причиной.",
+            "Stops the run with a reason.",
+        ),
+        help: txt(
+            "Причина видна в журнале.",
+            "The reason shows in the journal.",
+        ),
+        inputs: vec![flow_in()],
+        outputs: vec![],
+        params: vec![param(
+            "reason",
+            ParamKind::Text,
+            txt("Причина", "Reason"),
+            json!(""),
+        )],
+        advanced: false,
+        keywords: vec!["стоп", "остановить", "конец", "stop", "end"],
+    });
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        param(
+            "name",
+            ParamKind::Text,
+            txt("Имя события", "Event name"),
+            json!(""),
+        ),
+        wired(
+            "payload",
+            ParamKind::Text,
+            Ty::Any,
+            txt("Данные", "Data"),
+            json!(""),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.emit",
+        group: Action,
+        title: txt("Отправить событие", "Send an event"),
+        description: txt(
+            "Запускает схемы с триггером «Событие схемы» с тем же именем.",
+            "Runs workflows with a «Workflow event» trigger of the same name.",
+        ),
+        help: txt(
+            "Цепочка событий не глубже 5: схема не может бесконечно запускать сама себя.",
+            "An event chain goes no deeper than 5: a workflow cannot run itself forever.",
+        ),
+        inputs,
+        outputs: vec![flow_out()],
+        params,
+        advanced: true,
+        keywords: vec![
+            "событие",
+            "сигнал",
+            "запустить схему",
+            "event",
+            "emit",
+            "signal",
+        ],
+    });
+    let mut inputs = vec![flow_in()];
+    let params = vec![wired(
+        "hours",
+        ParamKind::Number,
+        Ty::Number,
+        txt("Часов", "Hours"),
+        json!("24"),
+        &mut inputs,
+    )];
+    out.push(NodeDef {
+        kind: "action.wait",
+        group: Action,
+        title: txt("Подождать", "Wait"),
+        description: txt("Продолжает запуск через N часов.", "Continues the run after N hours."),
+        help: txt(
+            "Запуск засыпает и сохраняется в vault; если vault заблокирован, продолжится при разблокировке. Данные, вычисленные до узла, сохраняются.",
+            "The run sleeps and is kept in the vault; if the vault is locked it goes on at unlock. Data worked out before the node is kept.",
+        ),
+        inputs,
+        outputs: vec![flow_out()],
+        params,
+        advanced: true,
+        keywords: vec!["подождать", "пауза", "через", "задержка", "wait", "delay", "later"],
+    });
+
+    // -- lists --------------------------------------------------------------------
+    out.push(NodeDef {
+        kind: "list.accounts",
+        group: List,
+        title: txt("Список счетов", "List of accounts"),
+        description: txt(
+            "Счета кошелька (или все кошельки).",
+            "A wallet's accounts (or every wallet).",
+        ),
+        help: txt(
+            "Подключите к «Для каждого», чтобы пройти по счетам.",
+            "Wire into «For each» to go through the accounts.",
+        ),
+        inputs: vec![],
+        outputs: vec![port("items", Ty::List, txt("Счета", "Accounts"))],
+        params: vec![param(
+            "store",
+            ParamKind::Store,
+            txt("Кошелёк (пусто — все)", "Wallet (empty: all)"),
+            json!(null),
+        )],
+        advanced: true,
+        keywords: vec!["счета", "список", "accounts", "list"],
+    });
+    out.push(NodeDef {
+        kind: "list.goals",
+        group: List,
+        title: txt("Список целей", "List of goals"),
+        description: txt(
+            "Активные цели: имя, накоплено, осталось.",
+            "Active goals: name, saved, left.",
+        ),
+        help: txt(
+            "Каждая — запись с полями name, saved, left, pct.",
+            "Each is a record with fields name, saved, left, pct.",
+        ),
+        inputs: vec![],
+        outputs: vec![port("items", Ty::List, txt("Цели", "Goals"))],
+        params: vec![],
+        advanced: true,
+        keywords: vec!["цели", "список", "goals", "list"],
+    });
+    out.push(NodeDef {
+        kind: "list.for_each",
+        group: List,
+        title: txt("Для каждого", "For each"),
+        description: txt(
+            "Выполняет ветку «Каждый» для каждого элемента списка, потом — «Готово».",
+            "Runs the «Each» branch for every item, then «Done».",
+        ),
+        help: txt(
+            "Не больше 200 элементов за запуск.",
+            "At most 200 items per run.",
+        ),
+        inputs: vec![flow_in(), port("items", Ty::List, txt("Список", "List"))],
+        outputs: vec![
+            port("each", Ty::Flow, txt("Каждый", "Each")),
+            port("done", Ty::Flow, txt("Готово", "Done")),
+            port("item", Ty::Any, txt("Элемент", "Item")),
+            port("index", Ty::Number, txt("Номер", "Index")),
+        ],
+        params: vec![],
+        advanced: true,
+        keywords: vec![
+            "для каждого",
+            "цикл",
+            "перебрать",
+            "for each",
+            "loop",
+            "foreach",
+        ],
+    });
+    out.push(NodeDef {
+        kind: "list.count",
+        group: List,
+        title: txt("Количество", "Count"),
+        description: txt("Сколько элементов в списке.", "How many items a list has."),
+        help: txt("Пустой список — 0.", "An empty list is 0."),
+        inputs: vec![port("items", Ty::List, txt("Список", "List"))],
+        outputs: vec![port("count", Ty::Number, txt("Количество", "Count"))],
+        params: vec![],
+        advanced: true,
+        keywords: vec!["количество", "сколько", "count", "length"],
+    });
+    out.push(NodeDef {
+        kind: "list.field",
+        group: List,
+        title: txt("Поле записи", "Record field"),
+        description: txt(
+            "Берёт поле из записи (элемента списка).",
+            "Takes a field of a record (a list item).",
+        ),
+        help: txt(
+            "Имена полей видны в справке узла, который отдал запись.",
+            "Field names are in the help of the node that gave the record.",
+        ),
+        inputs: vec![port("record", Ty::Any, txt("Запись", "Record"))],
+        outputs: vec![port("value", Ty::Any, txt("Значение", "Value"))],
+        params: vec![param(
+            "field",
+            ParamKind::Text,
+            txt("Поле", "Field"),
+            json!("name"),
+        )],
+        advanced: true,
+        keywords: vec!["поле", "запись", "field", "record", "property"],
+    });
+
+    out
+}
+
+static CATALOG: OnceLock<Vec<NodeDef>> = OnceLock::new();
+
+/// Every node there is.
+pub fn catalog() -> &'static [NodeDef] {
+    CATALOG.get_or_init(build)
+}
+
+pub fn node_def(kind: &str) -> Option<&'static NodeDef> {
+    catalog().iter().find(|def| def.kind == kind)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn every_node_is_described_once_and_its_ports_are_unique() {
+        let mut kinds = HashSet::new();
+        for def in catalog() {
+            assert!(kinds.insert(def.kind), "{} twice", def.kind);
+            assert!(
+                !def.title.ru.is_empty() && !def.title.en.is_empty(),
+                "{}",
+                def.kind
+            );
+            assert!(!def.help.ru.is_empty(), "{} has no help", def.kind);
+            let mut ports = HashSet::new();
+            for port in def.inputs.iter() {
+                assert!(
+                    ports.insert(format!("in:{}", port.name)),
+                    "{} input {}",
+                    def.kind,
+                    port.name
+                );
+            }
+            for port in def.outputs.iter() {
+                assert!(
+                    ports.insert(format!("out:{}", port.name)),
+                    "{} output {}",
+                    def.kind,
+                    port.name
+                );
+            }
+            for param in &def.params {
+                if param.wirable {
+                    assert!(
+                        def.input(param.name).is_some(),
+                        "{} wirable {} has no input",
+                        def.kind,
+                        param.name
+                    );
+                }
+            }
+            if def.is_trigger() {
+                assert!(
+                    def.output("out").is_some(),
+                    "{} trigger without out",
+                    def.kind
+                );
+            }
+        }
+    }
+}

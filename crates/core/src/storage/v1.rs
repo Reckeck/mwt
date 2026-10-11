@@ -186,6 +186,12 @@ impl From<VaultDocV1> for VaultDoc {
             debt_terms: old.debt_terms,
             key_rates: old.key_rates,
             notification_log: Vec::new(),
+            workflows: Vec::new(),
+            workflow_runs: Vec::new(),
+            workflow_vars: Vec::new(),
+            workflow_queue: Vec::new(),
+            workflow_state: Vec::new(),
+            workflow_waits: Vec::new(),
         }
     }
 }

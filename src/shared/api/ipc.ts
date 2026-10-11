@@ -2054,6 +2054,12 @@ function mockVaultDoc(): VaultDoc {
     debt_terms: mockDebtTerms,
     key_rates: [],
     notification_log: [],
+    workflows: [],
+    workflow_runs: [],
+    workflow_vars: [],
+    workflow_queue: [],
+    workflow_state: [],
+    workflow_waits: [],
   }
 }
 

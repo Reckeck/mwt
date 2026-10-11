@@ -58,6 +58,7 @@ pub fn spawn(app: AppHandle) {
             merge_locked(&app);
             bybit_tick(&app, &mut memory);
             automations_tick(&app);
+            workflows_tick(&app);
             alerts_tick(&app, &mut memory);
             reminders_tick(&app, &mut memory);
             snapshot_tick(&app, false);
@@ -393,6 +394,39 @@ async fn poll_bybit_once(
     }
 
     Ok(staged_total)
+}
+
+// -- 2b. Node workflows ------------------------------------------------------------
+
+/// Fire the workflows whose triggers are due and show what they told.
+fn workflows_tick(app: &AppHandle) {
+    let zone = current_zone(app);
+    let pass = {
+        let state = app.state::<AppState>();
+        let Ok(mut guard) = state.vault.lock() else {
+            return;
+        };
+        let Some(vault) = guard.as_mut() else {
+            return;
+        };
+        let Ok(pass) = vault.run_due_workflows(now_secs(), &zone) else {
+            return;
+        };
+        pass
+    };
+    if !pass.created.is_empty() {
+        let _ = app.emit(
+            "automation-created",
+            serde_json::json!({ "tx_ids": pass.created }),
+        );
+    }
+    if !pass.runs.is_empty() {
+        let _ = app.emit(
+            "workflows-ran",
+            serde_json::json!({ "runs": pass.runs.len(), "queued": pass.queued }),
+        );
+    }
+    deliver(app, pass.notices, false);
 }
 
 // -- 2. Automations --------------------------------------------------------------
