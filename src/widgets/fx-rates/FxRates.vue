@@ -6,6 +6,7 @@ import { ArrowLeftRight } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -58,7 +59,7 @@ const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximum
 </script>
 
 <template>
-  <div class="grid items-start gap-6 @4xl:grid-cols-[1fr_22rem]">
+  <div class="grid items-start gap-4 @4xl:grid-cols-[1fr_22rem]">
     <Card>
       <template #header>
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -114,7 +115,7 @@ const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximum
         <div class="grid grid-cols-2 gap-2">
           <div class="grid gap-1.5">
             <Label for="convert-amount">{{ t('rates.amount') }}</Label>
-            <Input id="convert-amount" v-model="amount" inputmode="decimal" />
+            <AmountInput id="convert-amount" v-model="amount" />
           </div>
           <div class="grid gap-1.5">
             <Label for="convert-date">{{ t('rates.date') }}</Label>

@@ -69,6 +69,11 @@ pub enum Error {
     /// A query would return more than the UI can draw; narrow the filter.
     #[error("too large: {0}")]
     TooLarge(String),
+
+    /// No exchange rate of this currency is known for the moment asked; the
+    /// UI fetches one (`ensure_fx`) or asks for the price in another currency.
+    #[error("no exchange rate for {0}")]
+    FxMissing(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -164,6 +169,7 @@ impl Error {
             Error::IncompatibleVault(_) => "INCOMPATIBLE_VAULT",
             Error::InsufficientFunds(_) => "INSUFFICIENT_FUNDS",
             Error::TooLarge(_) => "TOO_LARGE",
+            Error::FxMissing(_) => "FX_MISSING",
         }
     }
 }

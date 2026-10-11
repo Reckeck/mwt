@@ -3,7 +3,8 @@
 //! Provider chain (all free, no keys):
 //!   crypto spot:  CoinGecko (keyless) -> CoinCap -> Binance ticker
 //!   tokens (ERC-20 etc.): CoinGecko `/simple/token_price/{platform}`
-//!   fiat FX:      open.er-api.com -> (fallback) Frankfurt/ECB
+//!   fiat FX:      open.er-api.com (latest); by date: Frankfurter/ECB -> ЦБ РФ,
+//!                 walking back up to a week (see [`fx_sources`])
 //!
 //! Rate limits are mitigated server-side by batching (one call per asset
 //! group) and client-side by an aggressive refresh cadence driven from the
@@ -11,7 +12,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub mod fx_sources;
 pub mod history;
+pub mod key_rate;
 
 use reqwest::Client;
 use reqwest::header::{ACCEPT, USER_AGENT};

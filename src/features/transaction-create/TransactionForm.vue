@@ -7,8 +7,10 @@ import { ArrowUpDown } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AssetInput } from '@/entities/asset'
+import { CurrencyPicker } from '@/entities/currency'
 import { TxPreviewCard } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -64,6 +66,8 @@ const tree = useQuery({
 })
 
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
+/** Cards and accounts a cashback can come from. */
+const cashbackSources = computed(() => nodes.value.filter((node) => !node.store.archived && node.store.kind === 'bank'))
 const contextStore = computed(() => nodes.value.find((node) => node.store.id === props.storeId)?.store ?? null)
 const storeKind = computed(() => contextStore.value?.kind ?? null)
 const isProperty = computed(() => storeKind.value === 'property')
@@ -244,18 +248,69 @@ const quote = useQuery({
       },
     })
   },
-  enabled: computed(() => !props.template && Boolean(priced.value) && !form.priceUsd.trim()),
+  enabled: computed(() => !props.template && Boolean(priced.value) && !form.price.trim()),
 })
+
+/** The currency the price field is in: the user's pick, else the base currency. */
+const priceCode = computed(() => (form.priceCurrency || settings.baseCurrency).toLowerCase())
+
+/**
+ * The currency the rate hint speaks: the price field's, unless that is the
+ * asset itself (1 RUB = 1 RUB says nothing) — then the base currency, or USD
+ * when the asset is the base currency.
+ */
+const hintCode = computed(() => {
+  const asset = priced.value?.symbol.toLowerCase() ?? ''
+  if (asset !== priceCode.value) return priceCode.value
+  const base = settings.baseCurrency.toLowerCase()
+  return asset === base ? 'usd' : base
+})
+
+/** The cached USD quote, shown in the hint's currency. */
+const quoteInCurrency = useQuery({
+  queryKey: computed(() => ['convert', quote.data.value?.price_usd, hintCode.value, form.timestamp]),
+  queryFn: () =>
+    call<ConvertedAmount>('convert_amount', {
+      input: {
+        from: 'usd',
+        to: hintCode.value,
+        amount: quote.data.value?.price_usd ?? '0',
+        at: toIsoTimestamp(form.timestamp),
+      } satisfies ConvertAmountInput,
+    }),
+  enabled: computed(() => Boolean(quote.data.value?.ts) && hintCode.value !== 'usd'),
+})
+
+/**
+ * A price in a currency without a rate on the operation's day could not be
+ * saved; fetch that day's rate (or the last published one) ahead of time.
+ */
+const ensuredFx = new Set<string>()
+watch(
+  [priceCode, () => form.timestamp, () => form.price],
+  ([code, stamp, price]) => {
+    if (props.template || code === 'usd' || (!price.trim() && !priced.value)) return
+    const day = (toIsoTimestamp(stamp) ?? new Date().toISOString()).slice(0, 10)
+    const key = `${code}@${day}`
+    if (ensuredFx.has(key)) return
+    ensuredFx.add(key)
+    void call<EnsureFxOutput>('ensure_fx', { input: { currencies: [code], date: day } satisfies EnsureFxInput }).catch(() => {
+      /* offline: the backend answers FX_MISSING on save, with a clear message */
+    })
+  },
+)
 /** Which day's rate an empty price field stands for — or that there is none yet. */
 const rateHint = computed(() => {
   const data = quote.data.value
   // A dollar is always worth a dollar; saying so is noise.
-  if (!priced.value || priced.value.symbol.toUpperCase() === 'USD' || form.priceUsd.trim() || !data) return ''
+  if (!priced.value || priced.value.symbol.toLowerCase() === hintCode.value || form.price.trim() || !data) return ''
   if (!data.ts) return t('tx.rate.none')
-  const price = Number(data.price_usd)
+  const converted = hintCode.value === 'usd' ? data.price_usd : quoteInCurrency.data.value?.amount
+  if (!converted) return ''
+  const price = Number(converted)
   return t('tx.rate.at', {
     date: formatDateTime(data.ts),
-    price: formatMoney(price, { decimals: price < 1 ? 6 : 2, currency: 'usd' }),
+    price: `1 ${priced.value.symbol.toUpperCase()} = ${formatMoney(price, { decimals: price < 1 ? 6 : 2, currency: hintCode.value })}`,
   })
 })
 
@@ -309,17 +364,17 @@ const overrunText = computed(() =>
 
 // Moving an operation to another date re-prices it there, unless the price
 // was changed by hand in this edit.
-const loadedPrice = form.priceUsd
+const loadedPrice = form.price
 watch(
   () => form.timestamp,
   () => {
-    if (editing.value && form.priceUsd === loadedPrice) form.priceUsd = ''
+    if (editing.value && form.price === loadedPrice) form.price = ''
   },
 )
 
 /* --- assistants: tx-hash inspection and recent Bybit fills (never override typed values) --- */
 /** Text fields an assistant may fill. */
-type FillableField = 'feeAmount' | 'priceUsd' | 'amount' | 'comment' | 'soldQty' | 'boughtQty' | 'symbol' | 'quantity' | 'fillPrice'
+type FillableField = 'feeAmount' | 'price' | 'amount' | 'comment' | 'soldQty' | 'boughtQty' | 'symbol' | 'quantity' | 'fillPrice'
 
 function fillIfEmpty(key: FillableField, value: string | null | undefined) {
   if (!value?.trim() || form[key].trim()) return
@@ -345,7 +400,10 @@ watch(
   (hints) => {
     for (const hint of hints) {
       if (hint.field === 'fee') fillIfEmpty('feeAmount', hint.value)
-      if (hint.field === 'price') fillIfEmpty('priceUsd', hint.value)
+      if (hint.field === 'price' && !form.price.trim()) {
+        form.price = hint.value
+        form.priceCurrency = 'usd'
+      }
       if (hint.field === 'qtyBought' || hint.field === 'qtySold') fillIfEmpty('amount', hint.value)
     }
   },
@@ -401,7 +459,11 @@ async function applyFill(exec: BybitExecution) {
   }
   fillIfEmpty('soldQty', fill.qty_sold)
   fillIfEmpty('boughtQty', fill.qty_bought)
-  fillIfEmpty('priceUsd', fill.price)
+  // Exchange fills are quoted in USD(T).
+  if (!form.price.trim() && fill.price) {
+    form.price = fill.price
+    form.priceCurrency = 'usd'
+  }
   form.liquidity = exec.is_maker ? 'maker' : 'taker'
   const [sold, bought] = await Promise.all([resolveAsset(fill.asset_sold), resolveAsset(fill.asset_bought)])
   if (!form.soldAsset && sold) form.soldAsset = sold
@@ -425,7 +487,8 @@ watch(
       form.asset = plan.from
       form.amount = plan.amount
     }
-    form.priceUsd = plan.price
+    form.price = plan.price
+    form.priceCurrency = 'usd'
   },
   { immediate: true },
 )
@@ -527,7 +590,7 @@ const verbLabel = (kind: TxKind) =>
         <AssetInput v-else v-model="form.asset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
           <Label for="tx-amount">{{ isProperty ? t('tx.field.units') : t('form.amount') }}</Label>
-          <Input id="tx-amount" v-model="form.amount" inputmode="decimal" :placeholder="t('form.amountHint')" />
+          <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
         </div>
       </div>
       <p
@@ -538,7 +601,7 @@ const verbLabel = (kind: TxKind) =>
       </p>
       <div v-if="isProperty && form.kind === 'topup'" class="grid gap-1.5">
         <Label for="tx-unit-price">{{ t('tx.field.unitPrice') }}</Label>
-        <Input id="tx-unit-price" v-model="form.unitPrice" inputmode="decimal" />
+        <AmountInput id="tx-unit-price" v-model="form.unitPrice" />
         <p class="text-xs text-muted-foreground">{{ t('tx.field.unitPriceHint') }}</p>
       </div>
       <div v-if="form.kind === 'defi'" class="grid gap-3 @sm:grid-cols-3">
@@ -571,7 +634,7 @@ const verbLabel = (kind: TxKind) =>
         <AssetInput v-model="form.asset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
           <Label for="tx-amount">{{ t('form.amount') }}</Label>
-          <Input id="tx-amount" v-model="form.amount" inputmode="decimal" :placeholder="t('form.amountHint')" />
+          <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
         </div>
       </div>
       <div class="grid items-end gap-3 @sm:grid-cols-[1fr_auto_1fr]">
@@ -607,7 +670,7 @@ const verbLabel = (kind: TxKind) =>
         <AssetInput v-model="form.fromAsset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
           <Label for="tx-from-amount">{{ t('form.amount') }}</Label>
-          <Input id="tx-from-amount" v-model="form.fromAmount" inputmode="decimal" />
+          <AmountInput id="tx-from-amount" v-model="form.fromAmount" />
         </div>
       </div>
       <div class="flex justify-center">
@@ -623,12 +686,12 @@ const verbLabel = (kind: TxKind) =>
         <AssetInput v-model="form.toAsset" :label="t('form.asset')" />
         <div class="grid gap-1.5">
           <Label for="tx-to-amount">{{ t('form.amount') }}</Label>
-          <Input id="tx-to-amount" v-model="form.toAmount" inputmode="decimal" />
+          <AmountInput id="tx-to-amount" v-model="form.toAmount" />
         </div>
       </div>
       <div class="grid gap-1.5">
         <Label for="tx-rate">{{ t('tx.field.rate') }}</Label>
-        <Input id="tx-rate" v-model="form.rate" inputmode="decimal" />
+        <AmountInput id="tx-rate" v-model="form.rate" />
         <p class="text-xs text-muted-foreground">{{ t('tx.field.rateHint') }}</p>
       </div>
     </template>
@@ -639,12 +702,12 @@ const verbLabel = (kind: TxKind) =>
         <AssetInput v-model="form.soldAsset" :label="t('form.sellAsset')" />
         <div class="grid gap-1.5">
           <Label for="tx-sold">{{ t('form.sellQty') }}</Label>
-          <Input id="tx-sold" v-model="form.soldQty" inputmode="decimal" />
+          <AmountInput id="tx-sold" v-model="form.soldQty" />
         </div>
         <AssetInput v-model="form.boughtAsset" :label="t('form.buyAsset')" />
         <div class="grid gap-1.5">
           <Label for="tx-bought">{{ t('form.buyQty') }}</Label>
-          <Input id="tx-bought" v-model="form.boughtQty" inputmode="decimal" />
+          <AmountInput id="tx-bought" v-model="form.boughtQty" />
         </div>
       </div>
       <div class="grid gap-3 @sm:grid-cols-2">
@@ -686,15 +749,15 @@ const verbLabel = (kind: TxKind) =>
         </div>
         <div class="grid gap-1.5">
           <Label for="tx-qty">{{ t('tx.field.quantity') }}</Label>
-          <Input id="tx-qty" v-model="form.quantity" inputmode="decimal" />
+          <AmountInput id="tx-qty" v-model="form.quantity" />
         </div>
         <div class="grid gap-1.5">
           <Label for="tx-fill">{{ t('tx.field.price') }}</Label>
-          <Input id="tx-fill" v-model="form.fillPrice" inputmode="decimal" />
+          <AmountInput id="tx-fill" v-model="form.fillPrice" />
         </div>
         <div class="grid gap-1.5">
           <Label for="tx-leverage">{{ t('tx.field.leverage') }}</Label>
-          <Input id="tx-leverage" v-model="form.leverage" inputmode="decimal" />
+          <AmountInput id="tx-leverage" v-model="form.leverage" />
         </div>
         <AssetInput v-model="form.settle" :label="t('tx.field.settle')" />
         <div class="grid gap-1.5">
@@ -706,7 +769,7 @@ const verbLabel = (kind: TxKind) =>
         </div>
         <div v-if="form.action === 'close'" class="grid gap-1.5">
           <Label for="tx-pnl">{{ t('tx.field.closedPnl') }}</Label>
-          <Input id="tx-pnl" v-model="form.closedPnl" inputmode="decimal" />
+          <AmountInput id="tx-pnl" v-model="form.closedPnl" />
         </div>
       </div>
     </template>
@@ -723,11 +786,11 @@ const verbLabel = (kind: TxKind) =>
         </div>
         <div class="grid gap-1.5">
           <Label for="tx-sell-qty">{{ t('tx.field.units') }}</Label>
-          <Input id="tx-sell-qty" v-model="form.sellQty" inputmode="decimal" />
+          <AmountInput id="tx-sell-qty" v-model="form.sellQty" />
         </div>
         <div class="grid gap-1.5">
           <Label for="tx-sell-price">{{ t('tx.field.unitPrice') }}</Label>
-          <Input id="tx-sell-price" v-model="form.sellPrice" inputmode="decimal" />
+          <AmountInput id="tx-sell-price" v-model="form.sellPrice" />
         </div>
         <AssetInput v-model="form.currency" :label="t('tx.field.currency')" />
       </div>
@@ -794,16 +857,27 @@ const verbLabel = (kind: TxKind) =>
     <div class="grid items-start gap-3 @sm:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="tx-fee">{{ t('form.fee') }}</Label>
-        <Input id="tx-fee" v-model="form.feeAmount" inputmode="decimal" placeholder="0" />
+        <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0" />
       </div>
-      <div v-if="!props.template && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid gap-1.5">
-        <Label for="tx-price">{{ t('form.priceUsd') }}</Label>
-        <Input id="tx-price" v-model="form.priceUsd" inputmode="decimal" :placeholder="t('form.priceHint')" />
+      <div v-if="!props.template && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid min-w-0 gap-1.5">
+        <Label for="tx-price">{{ t('form.price') }}</Label>
+        <AmountInput id="tx-price" v-model="form.price" :placeholder="t('form.priceHint')">
+          <template #suffix>
+            <div class="w-20">
+              <CurrencyPicker
+                v-model="form.priceCurrency"
+                compact
+                :placeholder="settings.baseCurrency.toUpperCase()"
+                class="[&_button]:h-7 [&_button]:border-0 [&_button]:shadow-none"
+              />
+            </div>
+          </template>
+        </AmountInput>
         <p v-if="rateHint" class="text-xs text-muted-foreground">{{ rateHint }}</p>
       </div>
-      <div v-if="!props.template" class="grid gap-1.5">
+      <div v-if="!props.template" class="grid min-w-0 gap-1.5">
         <Label for="tx-date">{{ t('form.date') }}</Label>
-        <Input id="tx-date" v-model="form.timestamp" type="datetime-local" />
+        <Input id="tx-date" v-model="form.timestamp" type="datetime-local" class="min-w-0 px-2" />
       </div>
     </div>
 
@@ -813,6 +887,15 @@ const verbLabel = (kind: TxKind) =>
       <p v-if="form.kind === 'topup' || form.kind === 'payment'" class="text-xs text-muted-foreground">
         {{ t('tx.field.categoryHint') }}
       </p>
+    </div>
+
+    <!-- Cashback: which card's purchases earned it, for the cashback-by-card report. -->
+    <div v-if="form.kind === 'topup' && form.categories.includes('cashback')" class="grid gap-1.5">
+      <Label for="tx-cashback-source">{{ t('loyalty.source') }}</Label>
+      <Select id="tx-cashback-source" v-model="form.sourceStoreId">
+        <option value="">{{ t('loyalty.noSource') }}</option>
+        <option v-for="node in cashbackSources" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
+      </Select>
     </div>
 
     <div class="grid gap-3 @sm:grid-cols-2">

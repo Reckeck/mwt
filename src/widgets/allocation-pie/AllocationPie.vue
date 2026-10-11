@@ -32,7 +32,7 @@ const option = computed<ChartOption>(() => ({
       avoidLabelOverlap: true,
       itemStyle: { borderRadius: 6, borderColor: 'transparent', borderWidth: 2 },
       label: { color: axisColor.value, formatter: '{b}\n{d}%' },
-      data: slices.value.map((row) => ({ name: row.label, value: Number(row.value_usd) })),
+      data: slices.value.map((row) => ({ name: row.label, value: Number(row.value_base) })),
     },
   ],
 }))

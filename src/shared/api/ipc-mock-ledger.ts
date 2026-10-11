@@ -194,7 +194,9 @@ export function mockTransactionFrom(
   priceOf: (symbol: string) => number,
   keep?: { id: string; origin: TxOrigin },
 ): Transaction {
-  const priced = (symbol: string) => input.common.price_usd ?? (priceOf(symbol) ? String(priceOf(symbol)) : null)
+  // The mock has no FX: a typed price is taken as USD whatever its currency.
+  const priced = (symbol: string) =>
+    input.common.price_usd ?? input.common.price ?? (priceOf(symbol) ? String(priceOf(symbol)) : null)
   const base = meta(input.common, keep?.id, keep?.origin)
   let tx: Transaction
   switch (input.type) {

@@ -251,6 +251,61 @@ impl UnlockedVault {
         out
     }
 
+    /// Turn a price typed in any currency into the USD price the ledger keeps,
+    /// at the rate of the transaction's moment (the last one at or before it,
+    /// else the first after). A price in the base currency is also kept as is.
+    ///
+    /// Fails with `FX_MISSING` when the currency has no rate at all: guessing 1
+    /// would silently store rubles as dollars.
+    pub fn resolve_input_price(
+        &self,
+        input: &mut crate::ipc_contract::TransactionInput,
+    ) -> crate::Result<()> {
+        let common = input.common_mut();
+        let Some(price) = common.price.take() else {
+            return Ok(());
+        };
+        let base = self.base_and_fx().0;
+        let currency = common
+            .price_currency
+            .as_deref()
+            .map(|code| code.trim().to_lowercase())
+            .filter(|code| !code.is_empty())
+            .unwrap_or_else(|| base.clone());
+        let secs = secs_or_now(common.timestamp.as_deref().unwrap_or_default());
+        let rate = self
+            .rate_book()
+            .fx_at(&currency, secs)
+            .filter(|rate| rate.is_positive())
+            .ok_or_else(|| crate::Error::FxMissing(currency.clone()))?;
+        common.price_usd = Some(price / rate);
+        if currency == base {
+            common.price_base = Some(price);
+        }
+        Ok(())
+    }
+
+    /// Which of `currencies` have no cached rate taken on `date` (UTC day).
+    /// USD never needs one.
+    pub fn fx_missing_on(&self, currencies: &[String], date: chrono::NaiveDate) -> Vec<String> {
+        let day = date.format("%Y-%m-%d").to_string();
+        let mut out: Vec<String> = currencies
+            .iter()
+            .map(|code| code.trim().to_lowercase())
+            .filter(|code| !code.is_empty() && code != "usd")
+            .filter(|code| {
+                !self.doc.fx_cache.iter().any(|point| {
+                    &point.currency == code
+                        && point.ts.starts_with(&day)
+                        && point.per_usd.is_positive()
+                })
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// Add a fetched FX table to the cache. Does not persist: the refresh
     /// that fetched it writes once at the end.
     pub fn apply_fx(&mut self, fresh: &[FxPoint]) {
@@ -463,5 +518,60 @@ mod tests {
         assert_eq!(quote.price_usd, amount("0.0125"));
         assert_eq!(quote.ts, "2026-01-01T00:00:00Z");
         assert_eq!(vault.cached_quote(&btc(), ""), CachedPrice::default());
+    }
+
+    #[test]
+    fn fx_missing_on_checks_the_calendar_day() {
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        vault.apply_fx(&[fx("rub", "90", "2026-10-09T12:00:00Z")]);
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+        let wanted = ["rub".to_string(), "EUR".to_string(), "usd".to_string()];
+        assert_eq!(vault.fx_missing_on(&wanted, day), vec!["eur".to_string()]);
+        let next = day.succ_opt().unwrap();
+        assert_eq!(
+            vault.fx_missing_on(&wanted, next),
+            vec!["eur".to_string(), "rub".to_string()]
+        );
+    }
+
+    fn priced_payment(
+        price: &str,
+        currency: &str,
+        ts: &str,
+    ) -> crate::ipc_contract::TransactionInput {
+        serde_json::from_value(serde_json::json!({
+            "type": "payment",
+            "common": {
+                "timestamp": ts, "comment": "", "categories": [], "flow_id": null, "contact_id": null,
+                "price_usd": null, "fx_override": null, "price": price, "price_currency": currency,
+            },
+            "store_id": "s", "asset": {"symbol": "BTC", "name": "", "coingecko_id": null, "chain": null, "contract": null},
+            "amount": "1", "fee": null, "to": null,
+            "details": {"cash_breakdown": null, "unit_price": null, "network": null, "tx_hash": null},
+        }))
+        .unwrap()
+    }
+
+    /// A price typed in rubles is stored as USD at the rate of the moment,
+    /// and kept as is when rubles are the base currency.
+    #[test]
+    fn a_price_in_any_currency_becomes_usd_at_the_moment_rate() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("rub");
+        vault.apply_fx(&[
+            fx("rub", "80", "2026-01-01T00:00:00Z"),
+            fx("rub", "100", "2026-06-01T00:00:00Z"),
+        ]);
+        let mut input = priced_payment("8000", "rub", "2026-02-01T00:00:00Z");
+        vault.resolve_input_price(&mut input).unwrap();
+        let common = input.common_mut();
+        assert_eq!(common.price_usd, Some(amount("100")));
+        assert_eq!(common.price_base, Some(amount("8000")));
+        assert_eq!(common.price, None);
+
+        let mut unknown = priced_payment("10", "thb", "2026-02-01T00:00:00Z");
+        assert!(
+            matches!(vault.resolve_input_price(&mut unknown), Err(crate::Error::FxMissing(code)) if code == "thb")
+        );
     }
 }

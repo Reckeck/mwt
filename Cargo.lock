@@ -4764,6 +4764,7 @@ dependencies = [
 name = "trade-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "iana-time-zone",
  "reqwest 0.12.28",
  "schemars 1.2.2",

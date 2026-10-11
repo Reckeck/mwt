@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { BookUser, CircleHelp, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { Money } from '@/entities/currency'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { QuickAddDialog } from '@/features/quick-add'
@@ -30,9 +31,8 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from '@/shared/ui/sidebar'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { call, onEvent, parseError } from '@/shared/api/ipc'
-import { formatAsOf, formatDate, formatMoney } from '@/shared/lib/format'
+import { formatAsOf, formatDate } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -105,15 +105,6 @@ const pageTitle = computed(() =>
 const vaultPath = computed(() => vault.status?.path ?? '')
 const vaultFile = computed(() => vaultPath.value.split(/[\\/]/).pop() ?? '')
 
-const netWorth = computed(() => {
-  const data = summary.data.value
-  if (!data) return null
-  return {
-    base: formatMoney(data.total_base, { currency: data.base_currency, decimals: 2 }),
-    usd: formatMoney(data.total_usd, { currency: 'usd', decimals: 2 }),
-    sameCurrency: data.base_currency.toLowerCase() === 'usd',
-  }
-})
 
 /** Prices older than this are flagged next to the net worth. */
 const STALE_PRICES_MS = 60 * 60_000
@@ -307,12 +298,9 @@ async function lock() {
           {{ t('app.pricesAsOf', { time: stalePrices }) }}
         </Badge>
 
-        <Tooltip v-if="netWorth">
-          <TooltipTrigger as-child>
-            <span class="hidden text-sm font-medium tabular-nums sm:inline">{{ netWorth.base }}</span>
-          </TooltipTrigger>
-          <TooltipContent v-if="!netWorth.sameCurrency" side="bottom">≈ {{ netWorth.usd }}</TooltipContent>
-        </Tooltip>
+        <span v-if="summary.data.value" class="hidden text-sm font-medium sm:inline">
+          <Money :amount="summary.data.value.total_base" :currency="summary.data.value.base_currency" :decimals="2" />
+        </span>
 
         <Button size="sm" class="shrink-0" :title="t('quickAdd.title')" @click="quickAddOpen = true">
           <Plus class="size-4" />
@@ -344,7 +332,7 @@ async function lock() {
         </Button>
       </header>
 
-      <div class="@container min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <div class="@container min-h-0 flex-1 overflow-y-auto p-3 md:p-4">
         <!-- Keyed by path: /stores/a → /stores/b reuses the page component, and its
              queries and child widgets would otherwise keep showing wallet a. -->
         <RouterView :key="route.path" />

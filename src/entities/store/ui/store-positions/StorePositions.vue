@@ -63,7 +63,7 @@ function toneOf(value: string): string {
               {{ position.avg_cost ? money(position.avg_cost) : '—' }}
             </td>
             <td class="py-2 text-right tabular-nums text-muted-foreground">
-              {{ Number(position.price_usd) > 0 ? money(position.price_usd) : '—' }}
+              {{ Number(position.price_base) > 0 ? money(position.price_base) : '—' }}
             </td>
             <td class="py-2 text-right font-medium tabular-nums">{{ money(position.value_base) }}</td>
             <td class="py-2 text-right tabular-nums" :class="cn(toneOf(position.unrealized_base))">

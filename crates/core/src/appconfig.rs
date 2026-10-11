@@ -20,6 +20,10 @@ pub const SETTINGS_FILE: &str = "app_settings.json";
 /// Cache of the currency catalog fetched from the public providers.
 pub const CURRENCIES_FILE: &str = "currencies.json";
 
+/// A cached catalog younger than this is served without asking the network:
+/// currency lists change rarely, and the pickers should open instantly.
+pub const CURRENCIES_FRESH_FOR: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
 /// Portfolio base until the user picks another one.
 pub const DEFAULT_BASE_CURRENCY: &str = "usd";
 
@@ -348,6 +352,8 @@ pub fn save_currencies(config_dir: &Path, catalog: &SupportedCurrencies) -> Resu
 pub enum CatalogSource {
     /// At least one provider answered just now.
     Network,
+    /// A recent successful fetch, reused without a network round trip.
+    Fresh,
     /// Every provider failed; the last successful fetch was reused.
     Cache,
     /// Nothing was ever fetched; the built-in list.
@@ -358,7 +364,7 @@ impl CatalogSource {
     /// Machine code for the UI notice; `None` when the list is fresh.
     pub fn notice(self) -> Option<&'static str> {
         match self {
-            Self::Network => None,
+            Self::Network | Self::Fresh => None,
             Self::Cache => Some("cached"),
             Self::Builtin => Some("builtin"),
         }
@@ -380,6 +386,11 @@ pub async fn build_currency_catalog(
     pricing: &crate::pricing::PricingService,
 ) -> (SupportedCurrencies, CatalogSource) {
     let cached = load_currencies(config_dir);
+    if let Some(catalog) = cached.as_ref()
+        && is_fresh(&currencies_path(config_dir), CURRENCIES_FRESH_FOR)
+    {
+        return (catalog.clone(), CatalogSource::Fresh);
+    }
     let fiat = match pricing.fx_rates().await {
         Ok(rates) => {
             let mut codes: Vec<String> = rates.into_keys().collect();
@@ -396,6 +407,15 @@ pub async fn build_currency_catalog(
         let _ = save_currencies(config_dir, &catalog);
     }
     (catalog, source)
+}
+
+/// Whether a file was written less than `max_age` ago; unknown mtime is stale.
+fn is_fresh(path: &Path, max_age: std::time::Duration) -> bool {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age < max_age)
 }
 
 /// Combine this run's fetch results with the cache. A half that failed is

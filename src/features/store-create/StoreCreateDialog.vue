@@ -6,7 +6,7 @@ import { ArrowLeft, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AssetInput } from '@/entities/asset'
-import { CurrencySelect } from '@/entities/currency'
+import { CurrencyPicker } from '@/entities/currency'
 import {
   LiabilityTermsFields,
   emptyLiabilityTerms,
@@ -16,6 +16,7 @@ import {
 } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -279,7 +280,7 @@ const cardClass =
             {{ props.parent?.kind === 'crypto' ? t('binding.token') : t('binding.currency') }}
           </Label>
           <AssetInput v-if="props.parent?.kind === 'crypto'" v-model="token" />
-          <CurrencySelect v-else v-model="currency" />
+          <CurrencyPicker v-else v-model="currency" />
         </div>
         <div v-else-if="subInfo.shape === 'pair'" class="grid gap-1.5">
           <Label for="store-binding-pair">{{ t('binding.pair') }}</Label>
@@ -353,14 +354,13 @@ const cardClass =
       <fieldset v-if="offersOpening" class="grid gap-1.5" data-tour="store-opening">
         <Label for="store-opening-amount">{{ t('storeWizard.opening') }}</Label>
         <div class="grid grid-cols-[1fr_10rem] gap-2">
-          <Input
+          <AmountInput
             id="store-opening-amount"
             v-model="openingAmount"
-            inputmode="decimal"
             autocomplete="off"
             :placeholder="t('storeWizard.openingPlaceholder')"
           />
-          <CurrencySelect v-if="openingPicker === 'currency'" v-model="openingCurrency" />
+          <CurrencyPicker v-if="openingPicker === 'currency'" v-model="openingCurrency" />
           <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" />
           <Select v-else-if="openingPicker === 'side' && pair" v-model="openingSide" :aria-label="t('binding.pair')">
             <option value="base">{{ pair.base }}</option>
