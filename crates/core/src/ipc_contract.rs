@@ -1199,6 +1199,9 @@ pub struct MeterReadingInput {
     pub value: Amount,
     /// `YYYY-MM`.
     pub period: String,
+    /// Day of the month (1–31); `None` = the month's end.
+    #[serde(default)]
+    pub day: Option<u8>,
 }
 
 /// Correct a recorded meter reading.
@@ -1208,6 +1211,9 @@ pub struct UpdateMeterReadingInput {
     pub value: Amount,
     /// `YYYY-MM`.
     pub period: String,
+    /// Day of the month (1–31); `None` = the month's end.
+    #[serde(default)]
+    pub day: Option<u8>,
 }
 
 /// Payload of `automation-rejected`: one run the scheduler could not create.

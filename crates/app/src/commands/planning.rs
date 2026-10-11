@@ -441,7 +441,7 @@ pub async fn add_meter_reading(
     state: State<'_, AppState>,
 ) -> Result<MeterReading, String> {
     with_vault_mut(&state, |vault| {
-        vault.add_meter_reading(&input.item_id, input.value, &input.period)
+        vault.add_meter_reading(&input.item_id, input.value, &input.period, input.day)
     })
 }
 
@@ -451,7 +451,7 @@ pub async fn update_meter_reading(
     state: State<'_, AppState>,
 ) -> Result<MeterReading, String> {
     with_vault_mut(&state, |vault| {
-        vault.update_meter_reading(&input.id, input.value, &input.period)
+        vault.update_meter_reading(&input.id, input.value, &input.period, input.day)
     })
 }
 

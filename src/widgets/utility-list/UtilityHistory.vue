@@ -9,6 +9,7 @@ import { TransactionEditDialog } from '@/features/transaction-edit'
 import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call, parseError } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
@@ -35,14 +36,23 @@ function refresh() {
 /* --- correcting a reading --- */
 const editing = ref<string | null>(null)
 const draft = ref('')
-function startEdit(month: UtilityMonth) {
-  editing.value = month.reading_id
-  draft.value = month.reading ?? ''
+/** Day of the month as typed; empty = the month's end. */
+const draftDay = ref('')
+function startEdit(reading: MeterReading) {
+  editing.value = reading.id
+  draft.value = reading.value
+  draftDay.value = reading.day ? String(reading.day) : ''
 }
+const dayOf = (raw: string): number | null => (raw.trim() ? Number(raw) : null)
 const saveReading = useMutation({
-  mutationFn: (month: UtilityMonth) =>
+  mutationFn: (reading: MeterReading) =>
     call<MeterReading>('update_meter_reading', {
-      input: { id: month.reading_id ?? '', value: draft.value, period: month.period } satisfies UpdateMeterReadingInput,
+      input: {
+        id: reading.id,
+        value: draft.value,
+        period: reading.period,
+        day: dayOf(draftDay.value),
+      } satisfies UpdateMeterReadingInput,
     }),
   onSuccess: () => {
     toast.success(t('utilities.readingSaved'))
@@ -82,8 +92,24 @@ const txOpen = computed({
           <span class="capitalize">{{ monthLabel(month.period) }}</span>
           <Money :amount="month.amount" :currency="props.item.currency" :convert="false" class="font-medium" />
         </div>
-        <div v-if="month.reading_id" class="flex items-center gap-2 text-xs text-muted-foreground">
-          <template v-if="editing === month.reading_id">
+        <p v-if="month.consumption" class="text-xs text-muted-foreground tabular-nums">
+          {{ t('utilities.consumption') }}: {{ month.consumption }} {{ unit }}
+        </p>
+        <div
+          v-for="reading in month.readings"
+          :key="reading.id"
+          class="flex items-center gap-2 text-xs text-muted-foreground"
+        >
+          <template v-if="editing === reading.id">
+            <Input
+              v-model="draftDay"
+              type="number"
+              min="1"
+              max="31"
+              class="h-7 w-16 px-2"
+              :placeholder="t('utilities.dayShort')"
+              :aria-label="t('utilities.day')"
+            />
             <AmountInput v-model="draft" class="h-7 w-32" :aria-label="t('utilities.reading')" />
             <Button
               variant="ghost"
@@ -91,7 +117,7 @@ const txOpen = computed({
               class="size-7"
               :aria-label="t('actions.save')"
               :disabled="!draft || saveReading.isPending.value"
-              @click="saveReading.mutate(month)"
+              @click="saveReading.mutate(reading)"
             >
               <Check class="size-3.5" />
             </Button>
@@ -101,15 +127,15 @@ const txOpen = computed({
           </template>
           <template v-else>
             <span class="tabular-nums">
-              {{ t('utilities.reading') }}: {{ month.reading }} {{ unit }}
-              <template v-if="month.consumption"> · {{ t('utilities.consumption') }} {{ month.consumption }}</template>
+              {{ reading.day ? t('utilities.readingOnDay', { day: reading.day }) : t('utilities.readingAtEnd') }}:
+              {{ reading.value }} {{ unit }}
             </span>
             <Button
               variant="ghost"
               size="icon"
               class="size-6"
               :aria-label="t('utilityHistory.editReading')"
-              @click="startEdit(month)"
+              @click="startEdit(reading)"
             >
               <Pencil class="size-3" />
             </Button>
@@ -117,7 +143,7 @@ const txOpen = computed({
               :label="t('utilityHistory.deleteReading')"
               :confirm-label="t('actions.confirmDelete')"
               class="size-6"
-              @confirm="removeReading.mutate(month.reading_id)"
+              @confirm="removeReading.mutate(reading.id)"
             >
               <Trash2 class="size-3" />
             </ConfirmButton>

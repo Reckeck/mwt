@@ -1451,7 +1451,11 @@ type MeterReadingInput = { item_id: string, value: Amount,
 /**
  * `YYYY-MM`.
  */
-period: string, };
+period: string, 
+/**
+ * Day of the month (1–31); `None` = the month's end.
+ */
+day: number | null, };
 
 /**
  * Totals of one calendar month in the budget currency.
@@ -1625,7 +1629,11 @@ type PayUtilityLine = { item_id: string, amount: Amount,
 /**
  * Metered: the reading to record for the month.
  */
-reading: Amount | null, };
+reading: Amount | null, 
+/**
+ * Metered: the day of the month the meter was read; `None` = its end.
+ */
+reading_day: number | null, };
 
 /**
  * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
@@ -2733,7 +2741,11 @@ type UpdateMeterReadingInput = { id: string, value: Amount,
 /**
  * `YYYY-MM`.
  */
-period: string, };
+period: string, 
+/**
+ * Day of the month (1–31); `None` = the month's end.
+ */
+day: number | null, };
 
 type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, };
 
@@ -2874,7 +2886,11 @@ reading_id: string | null,
 /**
  * The payments booked for this month, to open and edit them.
  */
-payments: Array<Transaction>, };
+payments: Array<Transaction>, 
+/**
+ * Metered: every reading of the month, oldest first, with its day.
+ */
+readings: Array<MeterReading>, };
 
 /**
  * A payment the form opens with, for one month of one item.
