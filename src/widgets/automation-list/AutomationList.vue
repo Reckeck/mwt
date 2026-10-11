@@ -17,6 +17,10 @@ import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txKind, txLegs } from '@/shared/lib/transactions'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
+import type { AutomationListProps } from './automation-list.types'
+
+const props = withDefaults(defineProps<AutomationListProps>(), { storeId: '', presets: () => [] })
+
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
@@ -37,19 +41,35 @@ function templateLine(automation: Automation): string {
   return `${t(`tx.kind.${txKind(tx)}`)} · ${formatMoney(leg.amount, { currency: leg.asset.symbol })} · ${storeName(leg.store_id)}`
 }
 
+/** On a wallet: only the automations that move money in or out of it (or its sub-accounts). */
+const scopeIds = computed(() => {
+  if (!props.storeId) return null
+  const node = flattenStoreTree(tree.data.value ?? []).find((entry) => entry.store.id === props.storeId)
+  return new Set([props.storeId, ...(node?.children.map((child) => child.store.id) ?? [])])
+})
+const shown = computed(() =>
+  (automations.data.value ?? []).filter((automation) => {
+    const ids = scopeIds.value
+    return !ids || txLegs(automation.template as Transaction).some((leg) => ids.has(leg.store_id))
+  }),
+)
+
 const runsOf = (id: string) => (runs.data.value ?? []).filter((run) => run.automation_id === id)
 const pending = (id: string) => runsOf(id).filter((run) => typeof run.outcome === 'object' && 'rejected' in run.outcome)
 
 const expanded = ref<string | null>(null)
 const dialogOpen = ref(false)
 const editing = ref<Automation | null>(null)
+const preset = ref<PresetInfo | null>(null)
 
-function openNew() {
+function openNew(from: PresetInfo | null = null) {
   editing.value = null
+  preset.value = from
   dialogOpen.value = true
 }
 function openEdit(automation: Automation) {
   editing.value = automation
+  preset.value = null
   dialogOpen.value = true
 }
 
@@ -81,16 +101,26 @@ function outcomeText(run: AutomationRun): string {
   return rejectText(run.outcome.rejected.reason, t, storeName)
 }
 
-const empty = computed(() => automations.isSuccess.value && !automations.data.value?.length)
+const empty = computed(() => automations.isSuccess.value && !shown.value.length)
 </script>
 
 <template>
   <div class="grid gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted-foreground">{{ t('automation.intro') }}</p>
-      <Button @click="openNew">
+      <p class="text-sm text-muted-foreground">
+        {{ props.storeId || props.readonly ? t('automation.intro') : t('automation.introWallet') }}
+      </p>
+      <Button v-if="!props.readonly" variant="outline" @click="openNew()">
         <Plus class="size-4" />
         {{ t('automation.new') }}
+      </Button>
+    </div>
+
+    <!-- Ready-made automations of this kind of wallet: one click, a few fields. -->
+    <div v-if="props.presets.length && !props.readonly" class="flex flex-wrap gap-2" data-tour="automation-presets">
+      <Button v-for="entry in props.presets" :key="entry.preset" size="sm" variant="secondary" @click="openNew(entry)">
+        <Plus class="size-4" />
+        {{ t(`preset.${entry.preset}`) }}
       </Button>
     </div>
 
@@ -98,12 +128,13 @@ const empty = computed(() => automations.isSuccess.value && !automations.data.va
       {{ t('automation.empty') }}
     </div>
 
-    <Card v-for="automation in automations.data.value ?? []" :key="automation.id">
+    <Card v-for="automation in shown" :key="automation.id">
       <div class="grid gap-3">
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div class="grid min-w-0 gap-1">
             <div class="flex flex-wrap items-center gap-2">
               <p class="truncate font-medium">{{ automation.name }}</p>
+              <Badge v-if="automation.preset" variant="secondary">{{ t(`preset.${automation.preset}`) }}</Badge>
               <Badge v-if="!automation.active" variant="outline">{{ t('automation.paused') }}</Badge>
               <Badge v-if="pending(automation.id).length" variant="destructive">
                 {{ t('automation.pendingRuns', { count: pending(automation.id).length }) }}
@@ -176,6 +207,6 @@ const empty = computed(() => automations.isSuccess.value && !automations.data.va
       </div>
     </Card>
 
-    <AutomationDialog v-model:open="dialogOpen" :automation="editing" />
+    <AutomationDialog v-model:open="dialogOpen" :automation="editing" :store-id="props.storeId" :preset="preset" />
   </div>
 </template>

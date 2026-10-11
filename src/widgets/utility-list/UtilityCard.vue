@@ -43,7 +43,7 @@ const payStore = computed(() => {
   const own = draft.value && 'payment' in draft.value.transaction ? draft.value.transaction.payment.store_id : ''
   if (own) return own
   const nodes = flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived)
-  return (nodes.find((node) => node.store.in_budget) ?? nodes[0])?.store.id ?? ''
+  return (nodes.find((node) => node.store.purpose === 'everyday') ?? nodes[0])?.store.id ?? ''
 })
 const prepare = useMutation({
   mutationFn: () => call<UtilityPaymentDraft>('get_utility_payment_draft', { itemId: props.item.id, period: null }),
