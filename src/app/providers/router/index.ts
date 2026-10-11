@@ -32,6 +32,12 @@ export const router = createRouter({
           meta: { i18n: 'nav.wallets' },
         },
         {
+          path: 'stores/:id/settings',
+          name: 'wallet-settings',
+          component: () => import('@/pages/wallet-settings').then((page) => page.WalletSettings),
+          meta: { i18n: 'walletSettings.nav' },
+        },
+        {
           path: 'transactions',
           component: () => import('@/pages/transactions').then((page) => page.TransactionsSection),
           children: [
@@ -166,12 +172,6 @@ export const router = createRouter({
               meta: { i18n: 'nav.planning' },
             },
             {
-              path: 'utilities',
-              name: 'planning-utilities',
-              component: () => import('@/pages/planning').then((page) => page.PlanningUtilities),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
               path: 'reminders',
               name: 'planning-reminders',
               component: () => import('@/pages/planning').then((page) => page.PlanningReminders),
@@ -186,10 +186,10 @@ export const router = createRouter({
           ],
         },
         {
+          // The settings window opens over any page; old links land on the dashboard with it open.
           path: 'settings',
           name: 'settings',
-          component: () => import('@/pages/settings').then((page) => page.Settings),
-          meta: { i18n: 'nav.settings' },
+          redirect: { name: 'dashboard', query: { settings: 'general' } },
         },
       ],
     },

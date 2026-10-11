@@ -32,12 +32,23 @@ import { cn } from '@/shared/lib/utils'
 import { CHART_TIMEFRAMES, DRAWING_TOOLS, INDICATORS, type IndicatorKey } from './trading-chart.constants'
 import type { TradingChartProps } from './trading-chart.types'
 
-const props = withDefaults(defineProps<TradingChartProps>(), { limit: 500 })
+const props = withDefaults(defineProps<TradingChartProps>(), {
+  limit: 500,
+  savedDrawings: () => ({}),
+  timeframe: '1h',
+  indicators: () => ['sma'],
+})
+const emit = defineEmits<{
+  /** A symbol's drawings changed: the owner stores the export (an exchange terminal keeps it in the vault). */
+  drawings: [symbol: string, json: string]
+  timeframe: [label: string]
+  indicators: [keys: IndicatorKey[]]
+}>()
 
 const { t } = useI18n()
 const { resolved: theme } = useTheme()
 
-const tf = ref(60)
+const tf = ref(minutesOf(props.timeframe))
 const chartEl = ref<HTMLDivElement | null>(null)
 const loading = ref(false)
 const error = ref<AppError | null>(null)
@@ -48,11 +59,20 @@ const stream = ref<'connecting' | 'live' | 'down'>('down')
 const legend = ref<{ time: string; open: number; high: number; low: number; close: number; volume: number } | null>(
   null,
 )
-const indicators = ref<IndicatorKey[]>(['sma'])
+const indicators = ref<IndicatorKey[]>([...props.indicators])
 const activeTool = ref<DrawingKind | null>(null)
 const magnet = ref(true)
 const drawingCount = ref(0)
 const undoStack = ref<string[]>([])
+
+/** Inverse of `tfLabel`: "4h" → 240, "15m" → 15; unknown labels fall back to an hour. */
+function minutesOf(label: string): number {
+  const match = /^(\d+)([mhd])$/.exec(label.trim())
+  if (!match) return 60
+  const amount = Number(match[1])
+  const minutes = match[2] === 'd' ? amount * 1440 : match[2] === 'h' ? amount * 60 : amount
+  return (CHART_TIMEFRAMES as readonly number[]).includes(minutes) ? minutes : 60
+}
 
 const tfLabel = (min: number): string => {
   if (min === 60) return '1h'
@@ -85,7 +105,6 @@ let wsAttempts = 0
 /** Guard so importJSON/clear do not feed back into persistence. */
 let applying = false
 
-const drawKey = computed(() => `tradeapp.drawings.${props.symbol}`)
 
 const UP = '#26a69a'
 const DOWN = '#ef5350'
@@ -459,16 +478,19 @@ function connectStream() {
 
 // --- drawings ---------------------------------------------------------------
 
-function persist(key: string) {
+function persist() {
   if (applying || !drawings) return
-  localStorage.setItem(key, drawings.exportJSON())
+  emit('drawings', props.symbol, drawings.exportJSON())
 }
 
-function loadDrawings(key: string) {
+function loadDrawings() {
   if (!drawings) return
   applying = true
   try {
-    drawings.importJSON(localStorage.getItem(key) ?? '[]')
+    drawings.clear()
+    drawings.importJSON(props.savedDrawings[props.symbol.toUpperCase()] ?? '[]')
+  } catch {
+    // A broken export must not take the chart down; it just opens empty.
   } finally {
     applying = false
   }
@@ -483,20 +505,21 @@ function initDrawings() {
   drawings.on('add', (drawing) => {
     undoStack.value.push(drawing.id)
     drawingCount.value = drawings?.drawings().length ?? 0
-    persist(drawKey.value)
+    persist()
   })
   drawings.on('remove', (drawing) => {
     undoStack.value = undoStack.value.filter((id) => id !== drawing.id)
     drawingCount.value = drawings?.drawings().length ?? 0
-    persist(drawKey.value)
+    persist()
   })
   drawings.on('change', () => {
     drawingCount.value = drawings?.drawings().length ?? 0
+    persist()
   })
   drawings.on('tool', () => {
     activeTool.value = drawings?.tool() ?? null
   })
-  loadDrawings(drawKey.value)
+  loadDrawings()
 }
 
 /** A single-choice group emits '' when the active item is pressed again: that means "no tool". */
@@ -522,7 +545,7 @@ function clearDrawings() {
   }
   undoStack.value = []
   drawingCount.value = 0
-  persist(drawKey.value)
+  persist()
 }
 
 /** The timeframe always has a value: pressing the active one again is ignored. */
@@ -604,9 +627,8 @@ watch(activeLocale, (locale) => {
 
 watch(
   () => props.symbol,
-  (_next, prev) => {
-    if (prev) localStorage.setItem(`tradeapp.drawings.${prev}`, drawings?.exportJSON() ?? '[]')
-    loadDrawings(drawKey.value)
+  () => {
+    loadDrawings()
     load()
     wsAttempts = 0
     connectStream()
@@ -614,13 +636,17 @@ watch(
 )
 
 watch(tf, () => {
+  emit('timeframe', tfLabel(tf.value))
   drawings?.setInterval(tfLabel(tf.value))
   load()
   wsAttempts = 0
   connectStream()
 })
 
-watch(indicators, setIndicatorSeries)
+watch(indicators, (keys) => {
+  emit('indicators', [...keys])
+  setIndicatorSeries()
+})
 
 watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
 </script>

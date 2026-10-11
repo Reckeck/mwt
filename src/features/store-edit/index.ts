@@ -1,2 +1,6 @@
-export { default as StoreEditDialog } from './StoreEditDialog.vue'
+export { default as StoreGeneralForm } from './ui/StoreGeneralForm.vue'
+export { default as StoreTermsForm } from './ui/StoreTermsForm.vue'
+export { default as StorePropertyForm } from './ui/StorePropertyForm.vue'
+export { default as StoreExchangeForm } from './ui/StoreExchangeForm.vue'
+export { default as StoreDangerZone } from './ui/StoreDangerZone.vue'
 export * from './store-edit.types'

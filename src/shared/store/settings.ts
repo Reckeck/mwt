@@ -96,6 +96,7 @@ export const useSettingsStore = defineStore('settings', {
           timezone: patch.timezone ?? null,
           inflation: patch.inflation ?? null,
           enrichment_opt_in: patch.enrichment_opt_in ?? null,
+          completed_tours: patch.completed_tours ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },
@@ -117,7 +118,6 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     dashboard_widgets: patch.dashboard_widgets ?? null,
     fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
     minimize_to_tray: patch.minimize_to_tray ?? null,
-    bybit_import_interval_sec: patch.bybit_import_interval_sec ?? null,
     savings_rate: patch.savings_rate ?? null,
     daily_budget_mode: patch.daily_budget_mode ?? null,
     budget_currency: patch.budget_currency ?? null,

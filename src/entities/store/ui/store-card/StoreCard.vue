@@ -52,7 +52,7 @@ const deleteBlocker = computed(() => {
               {{ store.name }}
             </RouterLink>
             <p class="truncate text-xs text-muted-foreground">
-              {{ t(`stores.kind.${store.kind}`) }}<template v-if="store.in_budget"> · {{ t('stores.inBudgetBadge') }}</template>
+              {{ t(`stores.kind.${store.kind}`) }}<template v-if="store.purpose === 'everyday' && store.kind !== 'liability'"> · {{ t('purpose.inBudgetBadge') }}</template>
             </p>
           </div>
         </div>

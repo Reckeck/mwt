@@ -107,7 +107,9 @@ function groupOf(tx: Transaction, ctx: PlanningMockContext): CategoryGroup | nul
 
 /** Money value of a transaction in USD by its principal legs on budget stores. */
 function flowValue(tx: Transaction, ctx: PlanningMockContext, incoming: boolean): number {
-  const inBudget = new Set(ctx.stores.filter((store) => store.in_budget).map((store) => store.id))
+  const inBudget = new Set(
+    ctx.stores.filter((store) => store.purpose === 'everyday' && store.kind !== 'liability').map((store) => store.id),
+  )
   return txLegs(tx)
     .filter((leg) => leg.role === 'principal' && inBudget.has(leg.store_id))
     .filter((leg) => Number(leg.amount) > 0 === incoming)
@@ -311,6 +313,7 @@ export function mockPlanning(
         id: uuid(),
         name: input.name.trim() || fail('name the automation'),
         active: input.active,
+        preset: input.preset ?? null,
         schedule: input.schedule,
         starts_at: input.starts_at,
         template: draftOf(ctx.transactionFrom(input.template, input.starts_at)),
@@ -497,6 +500,23 @@ export function mockPlanning(
     case 'delete_meter_reading':
       remove(readings, String(args?.id))
       return {}
+    case 'get_property_summary': {
+      const storeId = String(args?.storeId ?? '')
+      const own = utilities.filter((item) => item.active && item.property_id === storeId)
+      const monthly = own.reduce((sum, item) => sum + Number(utilityTrend(item).monthly), 0)
+      const summary: PropertySummary = {
+        store_id: storeId,
+        base_currency: 'usd',
+        value_base: '0',
+        debt_base: '0',
+        equity_base: '0',
+        utilities_month_base: String(monthly),
+        loan_month_base: '0',
+        monthly_cost_base: String(monthly),
+        utility_count: own.length,
+      }
+      return summary
+    }
     case 'get_meter_trend': {
       const item = utilities.find((entry) => entry.id === args?.itemId) ?? fail('not found', 'MISSING')
       return utilityTrend(item)
