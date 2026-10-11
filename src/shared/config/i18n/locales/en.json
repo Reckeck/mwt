@@ -1406,5 +1406,10 @@
   "tx.duplicate": "Duplicate",
   "tx.copyId": "Copy the ID",
   "tx.deleteConfirmTitle": "Delete the operation?",
-  "tx.deleteConfirmHint": "It disappears from the history and balances are recalculated. This cannot be undone."
+  "tx.deleteConfirmHint": "It disappears from the history and balances are recalculated. This cannot be undone.",
+  "storeWizard.opening": "Opening balance",
+  "storeWizard.openingPlaceholder": "0 — optional",
+  "storeWizard.openingHint": "What is already there. Booked as one «Opening balance» operation — neither income nor spending.",
+  "storeWizard.openingInvalid": "Enter a positive amount and an asset",
+  "categories.default.opening_balance": "Opening balance"
 }

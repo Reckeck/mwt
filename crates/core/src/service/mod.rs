@@ -86,6 +86,16 @@ pub struct StoreExtras {
     pub secured_by: Option<String>,
     /// Exchange wallets; `None` on update keeps the current exchange.
     pub provider: Option<ExchangeProvider>,
+    /// Create only: money already there, booked as one top-up.
+    pub opening: Option<OpeningBalance>,
+}
+
+/// What a new wallet already holds. Booked as a top-up in the service
+/// category `opening_balance`, so it is neither income nor spending.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct OpeningBalance {
+    pub asset: AssetRef,
+    pub amount: Amount,
 }
 
 /// A partial update of an exchange terminal; `None` keeps the field.
@@ -580,6 +590,20 @@ impl UnlockedVault {
         store.secured_by = extras.secured_by;
         store.parent_id = parent_id;
         self.doc.stores.push(store.clone());
+        // Validated before anything is written, so a bad opening balance
+        // leaves no half-created wallet behind.
+        if let Some(opening) = extras.opening.filter(|opening| !opening.amount.is_zero()) {
+            if matches!(kind, StoreKind::Property | StoreKind::Liability) {
+                self.doc.stores.pop();
+                return Err(Error::WalletRule(WalletRule::NotApplicable));
+            }
+            let mut tx = opening_topup(&store.id, opening);
+            if let Err(err) = self.prepare_transaction(&mut tx) {
+                self.doc.stores.pop();
+                return Err(err);
+            }
+            self.doc.transactions.push(tx);
+        }
         self.recompute_holdings();
         self.persist()?;
         Ok(store)
@@ -2293,6 +2317,22 @@ fn default_sub_extras(kind: StoreKind) -> StoreExtras {
     }
 }
 
+/// The top-up that records a new wallet's opening balance.
+fn opening_topup(store_id: &str, opening: OpeningBalance) -> Transaction {
+    let mut meta = TxMeta::new("Opening balance");
+    meta.categories = vec!["opening_balance".to_string()];
+    Transaction::Topup(crate::model::transaction::TopupTx {
+        meta,
+        store_id: store_id.to_string(),
+        asset: opening.asset,
+        amount: opening.amount,
+        fee: None,
+        from: None,
+        details: crate::model::transaction::KindDetails::default(),
+        price: PriceStamp::default(),
+    })
+}
+
 fn flatten_tree(nodes: Vec<StoreTreeNode>) -> Vec<StoreTreeNode> {
     let mut out = Vec::new();
     for mut node in nodes {
@@ -2896,6 +2936,46 @@ mod tests {
     }
 
     // -- wallet rules -----------------------------------------------------------
+
+    #[test]
+    fn an_opening_balance_is_one_service_topup_or_nothing() {
+        let (_dir, mut vault) = empty_vault();
+        let opening = |raw: &str, asset: AssetRef| StoreExtras {
+            opening: Some(OpeningBalance {
+                asset,
+                amount: amount(raw),
+            }),
+            ..StoreExtras::default()
+        };
+        let bank = vault
+            .create_store_with("Bank", StoreKind::Bank, "", "", None, opening("250", usd()))
+            .unwrap();
+        assert_eq!(holding_of(&vault, &bank.id, &usd()), amount("250"));
+        let tx = vault.doc.transactions.last().unwrap();
+        assert_eq!(tx.meta().categories, vec!["opening_balance"]);
+        // not income: the opening balance stays out of the budget
+        assert_eq!(vault.classify_flow(tx), FlowClass::Ignored);
+
+        // a bank holds only fiat: the whole create is refused, nothing remains
+        let stores = vault.doc.stores.len();
+        assert!(
+            vault
+                .create_store_with("Bad", StoreKind::Bank, "", "", None, opening("1", btc()))
+                .is_err()
+        );
+        assert_eq!(vault.doc.stores.len(), stores);
+        assert_eq!(
+            rule(vault.create_store_with(
+                "Flat",
+                StoreKind::Property,
+                "",
+                "",
+                None,
+                opening("1", usd())
+            )),
+            WalletRule::NotApplicable
+        );
+    }
 
     #[test]
     fn the_vault_has_one_cash_wallet_that_stays() {

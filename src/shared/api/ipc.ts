@@ -215,6 +215,33 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
           : null,
       }
       mockStores.push(store)
+      // Like the backend: the opening balance is one top-up in a service category.
+      if (input.opening && Number(input.opening.amount) > 0) {
+        const { quote: _quote, ...asset } = input.opening.asset
+        mockPush(
+          mockTransactionFrom(
+            {
+              type: 'topup',
+              common: {
+                timestamp: new Date().toISOString(),
+                comment: 'Opening balance',
+                categories: ['opening_balance'],
+                flow_id: null,
+                contact_id: null,
+                price_usd: null,
+                fx_override: null,
+              },
+              store_id: store.id,
+              asset,
+              amount: input.opening.amount,
+              fee: null,
+              from: null,
+              details: { cash_breakdown: null, unit_price: null, network: null, tx_hash: null },
+            },
+            priceOf,
+          ),
+        )
+      }
       return resolve(store)
     }
     case 'update_store': {
@@ -1220,7 +1247,30 @@ function mockOwnPositions(storeId: string): StorePosition[] {
 
 /** Like `preview_transaction` in Rust: net legs per store and asset, nothing written. */
 function mockPreview(input: PreviewTransactionInput): TxPreview {
-  const draft = mockTransactionFrom(input.transaction, priceOf)
+  // Like the backend: a draft that would be refused (no category, no comment)
+  // still previews its balances, with the refusal reported in `error`.
+  let error: string | null = null
+  let draft: Transaction
+  try {
+    draft = mockTransactionFrom(input.transaction, priceOf)
+  } catch (err) {
+    const failure = err as { code?: string; message?: string }
+    error = `${failure.code ?? 'INVALID_INPUT'}: ${failure.message ?? ''}`
+    const common = input.transaction.common
+    const patched = {
+      ...input.transaction,
+      common: {
+        ...common,
+        comment: common.comment || 'preview',
+        categories: common.categories.length ? common.categories : ['other'],
+      },
+    } as TransactionInput
+    try {
+      draft = mockTransactionFrom(patched, priceOf)
+    } catch {
+      return { changes: [], base_currency: mockSummary.base_currency, flow: 'ignored', warnings: [], error }
+    }
+  }
   const replaced = input.replaces ? mockTransactions.find((tx) => txId(tx) === input.replaces) : undefined
   const deltas = new Map<string, { storeId: string; asset: AssetRef; delta: number }>()
   const add = (legs: ReturnType<typeof txLegs>, sign: number) => {
@@ -1253,7 +1303,7 @@ function mockPreview(input: PreviewTransactionInput): TxPreview {
     .filter((change) => Number(change.after) < 0 && mockStore(change.store_id)?.kind !== 'liability')
     .map((change) => ({ kind: 'negative_balance', store_id: change.store_id, asset: change.asset }))
   const flow: FlowClass = 'payment' in draft ? 'daily' : 'topup' in draft ? 'income' : 'ignored'
-  return { changes, base_currency: mockSummary.base_currency, flow, warnings, error: null }
+  return { changes, base_currency: mockSummary.base_currency, flow, warnings, error }
 }
 
 const sumValue = (positions: StorePosition[]) => positions.reduce((acc, row) => acc + Number(row.value_usd), 0)

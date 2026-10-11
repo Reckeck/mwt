@@ -568,7 +568,11 @@ contact_id: string | null, custody: Custody | null, property: PropertyInfo | nul
 /**
  * Exchange wallets: which exchange it is.
  */
-provider: ExchangeProvider | null, };
+provider: ExchangeProvider | null, 
+/**
+ * Money the wallet already holds; booked as one opening top-up.
+ */
+opening: OpeningBalance | null, };
 
 type CreateVaultInput = { path: string, password: string, 
 /**
@@ -1265,6 +1269,12 @@ type NetworthReport = { meta: ReportMeta,
  * Value at the end of each month (today for this month).
  */
 points: Array<NetworthPoint>, };
+
+/**
+ * What a new wallet already holds. Booked as a top-up in the service
+ * category `opening_balance`, so it is neither income nor spending.
+ */
+type OpeningBalance = { asset: AssetRef, amount: Amount, };
 
 /**
  * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).

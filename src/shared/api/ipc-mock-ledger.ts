@@ -61,7 +61,7 @@ const GROUPS: Array<[CategoryGroup, string[]]> = [
     ],
   ],
   ['savings', ['savings']],
-  ['service', ['trading', 'fee', 'transfer', 'exchange']],
+  ['service', ['trading', 'fee', 'transfer', 'exchange', 'opening_balance']],
 ]
 
 /** Same defaults as `default_categories()` in Rust. */

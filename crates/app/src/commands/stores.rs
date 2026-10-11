@@ -49,6 +49,7 @@ pub async fn create_store(
                 property: input.property,
                 secured_by: input.secured_by,
                 provider: input.provider,
+                opening: input.opening,
             },
         )
         .map_err(err_to_string)
@@ -77,6 +78,7 @@ pub async fn update_store(
                 property: input.property,
                 secured_by: input.secured_by,
                 provider: input.provider,
+                opening: None,
             },
         )
         .map_err(err_to_string)

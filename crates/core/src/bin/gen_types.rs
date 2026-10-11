@@ -129,6 +129,7 @@ fn main() {
         trade_core::ipc_contract::UpdateTerminalStateInput,
         trade_core::ipc_contract::SaveTerminalDrawingsInput,
         trade_core::service::TerminalPatch,
+        trade_core::service::OpeningBalance,
         trade_core::service::DebtTermsDraft,
         trade_core::model::contact::DebtTerms,
         trade_core::service::PropertySummary,

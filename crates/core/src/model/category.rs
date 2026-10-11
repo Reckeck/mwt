@@ -101,7 +101,10 @@ pub fn default_categories() -> Vec<Category> {
             ],
         ),
         (Savings, &["savings"]),
-        (Service, &["trading", "fee", "transfer", "exchange"]),
+        (
+            Service,
+            &["trading", "fee", "transfer", "exchange", "opening_balance"],
+        ),
     ];
     groups
         .iter()

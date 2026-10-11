@@ -66,6 +66,35 @@ const pairText = ref('')
 
 const pair = computed(() => parsePairSymbol(pairText.value))
 
+/* --- optional opening balance: what the wallet already holds --- */
+const openingAmount = ref('')
+const openingCurrency = ref('')
+const openingToken = ref<AssetRef | null>(null)
+const openingSide = ref<'base' | 'quote'>('quote')
+
+/** Property is valued by purchase and a loan by its terms: no opening balance there. */
+const offersOpening = computed(() => !['property', 'liability'].includes(kind.value))
+
+/** Which asset the opening balance is in, from the binding or the picker. */
+const openingAsset = computed<AssetRef | null>(() => {
+  const current = binding.value
+  if (current && typeof current === 'object' && 'asset' in current) return current.asset
+  if (current && typeof current === 'object' && 'pair' in current) return current.pair[openingSide.value]
+  if (kind.value === 'bank' || kind.value === 'cash') return openingCurrency.value ? fiatRef(openingCurrency.value) : null
+  return openingToken.value
+})
+/** The binding fixes the asset; otherwise the user picks it. */
+const openingPicker = computed<'none' | 'currency' | 'asset' | 'side'>(() => {
+  const current = binding.value
+  if (current && typeof current === 'object' && 'asset' in current) return 'none'
+  if (current && typeof current === 'object' && 'pair' in current) return 'side'
+  return kind.value === 'bank' || kind.value === 'cash' ? 'currency' : 'asset'
+})
+const openingAmountValue = computed(() => openingAmount.value.trim().replace(',', '.'))
+const openingValid = computed(
+  () => !openingAmountValue.value || (Number(openingAmountValue.value) > 0 && openingAsset.value !== null),
+)
+
 const properties = useQuery({
   queryKey: STORE_TREE_QUERY_KEY,
   queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
@@ -119,6 +148,10 @@ watch(open, (isOpen) => {
   token.value = null
   pairText.value = ''
   subType.value = null
+  openingAmount.value = ''
+  openingCurrency.value = settings.baseCurrency.toLowerCase()
+  openingToken.value = null
+  openingSide.value = 'quote'
   if (props.parent) {
     kind.value = props.parent.kind
     color.value = props.parent.color
@@ -146,7 +179,7 @@ function pickSubType(value: SubType) {
 const canGoBack = computed(() => step.value === 'details' && (isSub.value || !props.kind))
 
 const valid = computed(() => {
-  if (!name.value.trim()) return false
+  if (!name.value.trim() || !openingValid.value) return false
   if (isSub.value) return subInfo.value !== null && (subInfo.value.shape === 'market' || binding.value !== null)
   if (kind.value === 'exchange') return provider.value !== null
   return true
@@ -180,11 +213,15 @@ const createStore = useMutation({
             : null,
         secured_by: kind.value === 'liability' && securedBy.value ? securedBy.value : null,
         provider: !isSub.value && kind.value === 'exchange' ? provider.value : null,
+        opening:
+          offersOpening.value && openingAmountValue.value && openingAsset.value
+            ? { asset: openingAsset.value, amount: openingAmountValue.value }
+            : null,
       } satisfies CreateStoreInput,
     }),
   onSuccess: (store) => {
     toast.success(props.parent ? t('stores.subAccountCreated') : t('stores.created'), { description: store.name })
-    for (const queryKey of [['stores'], ['store'], ['summary'], ['net-worth']]) {
+    for (const queryKey of [['stores'], ['store'], ['summary'], ['net-worth'], ['transactions'], ['history']]) {
       void queryClient.invalidateQueries({ queryKey })
     }
     open.value = false
@@ -311,6 +348,32 @@ const cardClass =
           </option>
         </Select>
       </div>
+
+      <!-- Optional: money already there, so the new wallet does not start at zero. -->
+      <fieldset v-if="offersOpening" class="grid gap-1.5" data-tour="store-opening">
+        <Label for="store-opening-amount">{{ t('storeWizard.opening') }}</Label>
+        <div class="grid grid-cols-[1fr_10rem] gap-2">
+          <Input
+            id="store-opening-amount"
+            v-model="openingAmount"
+            inputmode="decimal"
+            autocomplete="off"
+            :placeholder="t('storeWizard.openingPlaceholder')"
+          />
+          <CurrencySelect v-if="openingPicker === 'currency'" v-model="openingCurrency" />
+          <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" />
+          <Select v-else-if="openingPicker === 'side' && pair" v-model="openingSide" :aria-label="t('binding.pair')">
+            <option value="base">{{ pair.base }}</option>
+            <option value="quote">{{ pair.quote }}</option>
+          </Select>
+          <span v-else-if="openingAsset" class="flex h-9 items-center px-1 text-sm text-muted-foreground">
+            {{ openingAsset.symbol }}
+          </span>
+        </div>
+        <p class="text-xs" :class="openingValid ? 'text-muted-foreground' : 'text-destructive'">
+          {{ openingValid ? t('storeWizard.openingHint') : t('storeWizard.openingInvalid') }}
+        </p>
+      </fieldset>
 
       <template v-if="kind === 'liability' || subInfo?.credit">
         <LiabilityTermsFields v-model="terms" />
