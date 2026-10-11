@@ -13,7 +13,7 @@ import { Input } from '@/shared/ui/input'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call, parseError } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
-import { LEDGER_KEYS } from '@/shared/lib/planning'
+import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 /**
@@ -36,22 +36,22 @@ function refresh() {
 /* --- correcting a reading --- */
 const editing = ref<string | null>(null)
 const draft = ref('')
-/** Day of the month as typed; empty = the month's end. */
-const draftDay = ref('')
+/** The reading's date; moving it to another month moves the reading there. */
+const draftDate = ref('')
+const draftParts = computed(() => readingDateParts(draftDate.value))
 function startEdit(reading: MeterReading) {
   editing.value = reading.id
   draft.value = reading.value
-  draftDay.value = reading.day ? String(reading.day) : ''
+  draftDate.value = readingDate(reading)
 }
-const dayOf = (raw: string): number | null => (raw.trim() ? Number(raw) : null)
 const saveReading = useMutation({
   mutationFn: (reading: MeterReading) =>
     call<MeterReading>('update_meter_reading', {
       input: {
         id: reading.id,
         value: draft.value,
-        period: reading.period,
-        day: dayOf(draftDay.value),
+        period: draftParts.value?.period ?? reading.period,
+        day: draftParts.value?.day ?? reading.day,
       } satisfies UpdateMeterReadingInput,
     }),
   onSuccess: () => {
@@ -101,22 +101,14 @@ const txOpen = computed({
           class="flex items-center gap-2 text-xs text-muted-foreground"
         >
           <template v-if="editing === reading.id">
-            <Input
-              v-model="draftDay"
-              type="number"
-              min="1"
-              max="31"
-              class="h-7 w-16 px-2"
-              :placeholder="t('utilities.dayShort')"
-              :aria-label="t('utilities.day')"
-            />
+            <Input v-model="draftDate" type="date" class="h-7 w-36 px-2" :aria-label="t('utilities.day')" />
             <AmountInput v-model="draft" class="h-7 w-32" :aria-label="t('utilities.reading')" />
             <Button
               variant="ghost"
               size="icon"
               class="size-7"
               :aria-label="t('actions.save')"
-              :disabled="!draft || saveReading.isPending.value"
+              :disabled="!draft || !draftParts || saveReading.isPending.value"
               @click="saveReading.mutate(reading)"
             >
               <Check class="size-3.5" />

@@ -1083,6 +1083,8 @@ impl UnlockedVault {
     // -- holdings recomputation ---------------------------------------------
 
     fn recompute_holdings(&mut self) {
+        // A correction keeps the real balance; its difference follows history.
+        self.rebase_adjustments();
         // key: (store_id, asset_key) -> (quantity, avg_cost)
         let mut qty: HashMap<(String, String), Amount> = HashMap::new();
         let mut cost: HashMap<(String, String), Amount> = HashMap::new();

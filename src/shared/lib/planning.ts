@@ -69,6 +69,19 @@ export function localDate(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+/** A meter reading's date (`YYYY-MM-DD`) as the month and day it is stored under. */
+export function readingDateParts(value: string): { period: string; day: number } | null {
+  const match = /^(\d{4}-\d{2})-(\d{2})$/.exec(value)
+  return match ? { period: match[1], day: Number(match[2]) } : null
+}
+
+/** The `date` input value of a stored reading; a dayless one sits at its month's end. */
+export function readingDate(reading: Pick<MeterReading, 'period' | 'day'>): string {
+  const [year, month] = reading.period.split('-').map(Number)
+  const day = reading.day ?? new Date(year, month, 0).getDate()
+  return `${reading.period}-${String(day).padStart(2, '0')}`
+}
+
 /** A `date` input value (local midnight) as RFC3339 UTC. */
 export function dateInputToIso(value: string): string {
   const parsed = new Date(`${value}T00:00`)

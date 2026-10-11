@@ -38,13 +38,18 @@ const ICONS = {
 </script>
 
 <template>
-  <Card size="sm">
+  <!-- min-w-0 / minmax(0,1fr): a truncated title must not widen the card past its column. -->
+  <Card size="sm" class="min-w-0">
     <template #header>
       <p data-widget-title class="text-sm text-muted-foreground">{{ t('upcoming.title') }}</p>
     </template>
     <p v-if="upcoming.isSuccess.value && !items.length" class="text-sm text-muted-foreground">{{ t('upcoming.empty') }}</p>
-    <ul class="grid gap-2">
-      <li v-for="item in items" :key="`${item.kind}-${item.source_id}-${item.at}`" class="grid gap-1 text-sm">
+    <ul class="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <li
+        v-for="item in items"
+        :key="`${item.kind}-${item.source_id}-${item.at}`"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm"
+      >
         <div class="flex items-center gap-2">
           <component
             :is="ICONS[item.kind]"
@@ -52,7 +57,7 @@ const ICONS = {
             :class="item.kind === 'rejected_run' ? 'text-destructive' : 'text-muted-foreground'"
           />
           <span class="w-20 shrink-0 text-xs tabular-nums text-muted-foreground">{{ formatDate(item.date) }}</span>
-          <span class="min-w-0 flex-1 truncate">
+          <span class="min-w-0 flex-1 truncate" :title="item.title">
             {{ item.kind === 'rejected_run' ? t('upcoming.notCreated', { name: item.title }) : item.title }}
           </span>
           <span

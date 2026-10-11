@@ -700,6 +700,88 @@ mod tests {
     }
 
     #[test]
+    fn a_second_sync_with_nothing_new_changes_nothing() {
+        let (_dir, mut vault) = empty_vault();
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
+        if let Some(found) = vault.doc.stores.iter_mut().find(|known| known.id == flat) {
+            found.property = Some(PropertyInfo {
+                utilities_pay_day: Some(17),
+                ..PropertyInfo::default()
+            });
+        }
+        for (name, kind) in [
+            (
+                "Rent",
+                UtilityKind::Housing {
+                    amount: amount("12000"),
+                    deposit: None,
+                    due_day: 17,
+                    automation_id: None,
+                },
+            ),
+            (
+                "Power",
+                UtilityKind::Metered {
+                    unit: "kWh".into(),
+                    tariff: amount("5"),
+                },
+            ),
+        ] {
+            vault
+                .create_utility_item(UtilityDraft {
+                    name: name.into(),
+                    active: true,
+                    kind,
+                    currency: "thb".into(),
+                    property_id: flat.clone(),
+                    store_id: None,
+                    category: "utilities".into(),
+                })
+                .unwrap();
+        }
+        let power = vault.doc.utility_items[1].id.clone();
+        vault
+            .add_meter_reading(&power, amount("2531.5"), "2026-10", Some(5))
+            .unwrap();
+        let now = secs_or_now("2026-10-12T05:00:00Z");
+        assert!(
+            vault
+                .sync_auto_reminders(now, "Asia/Bangkok", true)
+                .unwrap()
+        );
+        for round in 0..3 {
+            assert!(
+                !vault
+                    .sync_auto_reminders(now + round * 30, "Asia/Bangkok", true)
+                    .unwrap(),
+                "round {round}: {:#?}",
+                vault.doc.reminders
+            );
+        }
+    }
+
+    #[test]
+    fn a_deleted_automatic_reminder_does_not_come_back() {
+        let (_dir, mut vault) = empty_vault();
+        loan(&mut vault, 25);
+        let now = secs_or_now("2026-03-10T08:00:00Z");
+        vault.sync_auto_reminders(now, "UTC", false).unwrap();
+        let reminder = auto(&vault, ReminderSourceKind::LoanPayment)[0].clone();
+        vault.delete_reminder(&reminder.id).unwrap();
+        vault.sync_auto_reminders(now, "UTC", false).unwrap();
+        let kept = auto(&vault, ReminderSourceKind::LoanPayment);
+        assert_eq!(kept.len(), 1, "not made again");
+        assert!(kept[0].muted && kept[0].done);
+
+        // A reminder of the user's own is removed for real.
+        let own = vault
+            .create_reminder("call the bank", "2026-03-12T10:00:00Z", None)
+            .unwrap();
+        vault.delete_reminder(&own.id).unwrap();
+        assert!(vault.reminders().iter().all(|known| known.id != own.id));
+    }
+
+    #[test]
     fn a_payment_made_closes_the_month() {
         let (_dir, mut vault) = empty_vault();
         let id = loan(&mut vault, 25);

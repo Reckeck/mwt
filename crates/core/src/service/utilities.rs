@@ -491,7 +491,18 @@ impl UnlockedVault {
         if value.is_negative() {
             return Err(Error::InvalidInput("a reading cannot be negative".into()));
         }
-        let key = (period.clone(), day.unwrap_or(u8::MAX));
+        // No day given means the month's end; it is stored as that day so the
+        // reading keeps its place whenever it was entered.
+        let day = day.or_else(|| u8::try_from(calendar::days_in_month(month)).ok());
+        let reading = MeterReading {
+            id: uuid::Uuid::new_v4().to_string(),
+            item_id: item_id.to_string(),
+            value,
+            period,
+            recorded_at: now_iso(),
+            day,
+        };
+        let key = reading.sort_key();
         let readings = self.readings_of(item_id);
         if let Some(before) = readings
             .iter()
@@ -512,17 +523,10 @@ impl UnlockedVault {
                 after.value
             )));
         }
-        self.doc.meter_readings.retain(|reading| {
-            !(reading.item_id == item_id && reading.period == period && reading.day == day)
-        });
-        let reading = MeterReading {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_id: item_id.to_string(),
-            value,
-            period,
-            recorded_at: now_iso(),
-            day,
-        };
+        // One reading per meter per day: a second one that day corrects it.
+        self.doc
+            .meter_readings
+            .retain(|stored| !(stored.item_id == item_id && stored.sort_key() == key));
         self.doc.meter_readings.push(reading.clone());
         Ok(reading)
     }
@@ -573,6 +577,28 @@ impl UnlockedVault {
             previous_end = Some(last.value);
         }
         out
+    }
+
+    /// The month a meter is billed for in `period`: its own readings, else the
+    /// latest month read before it that has a consumption and no payment from
+    /// then on — a meter read in September is paid in October, once.
+    fn billable_month(
+        &self,
+        item_id: &str,
+        period: &str,
+        paid: &BTreeMap<String, Amount>,
+    ) -> Option<MonthReadings> {
+        let mut monthly = self.monthly_readings(item_id);
+        if let Some(month) = monthly.remove(period) {
+            return Some(month);
+        }
+        monthly
+            .range(..period.to_string())
+            .next_back()
+            .filter(|(read, month)| {
+                month.start.is_some() && paid.range((*read).clone()..).next().is_none()
+            })
+            .map(|(_, month)| month.clone())
     }
 
     /// Payments made for an item: linked to it, or — from before the link —
@@ -752,11 +778,10 @@ impl UnlockedVault {
         let mut includes_deposit = false;
         let amount = match &item.kind {
             UtilityKind::Metered { tariff, .. } => {
-                let month = self
-                    .monthly_readings(&item.id)
-                    .remove(&period)
-                    .ok_or_else(|| Error::InvalidInput(format!("no meter reading for {period}")))?;
-                let used = month.consumption().unwrap_or(Amount::ZERO);
+                let used = self
+                    .billable_month(&item.id, &period, &paid)
+                    .and_then(|month| month.consumption())
+                    .unwrap_or(Amount::ZERO);
                 consumption = Some(used);
                 (used * *tariff).round(2)
             }
@@ -847,25 +872,34 @@ impl UnlockedVault {
                 paid,
                 includes_deposit: false,
             };
+            let mut unread = false;
             if let UtilityKind::Metered { .. } = item.kind {
-                let monthly = self.monthly_readings(&item.id);
-                match monthly.get(&period) {
-                    // The month is read: it runs from its start to its end.
+                let paid_months = self.paid_by_month(&item, &cal);
+                match self.billable_month(&item.id, &period, &paid_months) {
+                    // Read (this month or an unpaid one before): start to end.
                     Some(month) if month.start.is_some() => {
                         line.previous_reading = month.start;
                         line.reading = Some(month.end);
                     }
-                    // Only a starting reading (moved in this month): it is the base.
-                    Some(month) => line.previous_reading = Some(month.end),
+                    // Only a starting reading (the first one, or moved in this
+                    // month): it is the base, the reading is entered here.
+                    Some(month) => {
+                        unread = true;
+                        line.previous_reading = Some(month.end);
+                    }
                     None => {
-                        line.previous_reading = monthly
+                        // Not read yet: the reading is entered on the bill itself.
+                        unread = true;
+                        line.previous_reading = self
+                            .monthly_readings(&item.id)
                             .range(..period.clone())
                             .next_back()
                             .map(|(_, month)| month.end);
                     }
                 }
             }
-            if let Ok(draft) = self.utility_payment_draft(&item.id, &period, zone)
+            if !unread
+                && let Ok(draft) = self.utility_payment_draft(&item.id, &period, zone)
                 && let Transaction::Payment(payment) = &draft.transaction
             {
                 line.amount = Some(payment.amount);
@@ -1025,6 +1059,49 @@ mod tests {
         );
         let trend = vault.meter_trend(&item.id, "UTC").unwrap();
         assert_eq!(trend.months[1].amount, amount("750"));
+    }
+
+    #[test]
+    fn a_month_without_a_reading_bills_the_last_unpaid_one() {
+        let (_dir, mut vault) = empty_vault();
+        let (flat, item, _internet, card) = flat_with_bills(&mut vault);
+        // Nothing read yet: an empty draft, not an error.
+        let empty = vault
+            .utility_payment_draft(&item.id, "2026-03", "UTC")
+            .unwrap();
+        assert_eq!(empty.consumption, Some(Amount::ZERO));
+        vault
+            .add_meter_reading(&item.id, amount("1000"), "2026-01", None)
+            .unwrap();
+        vault
+            .add_meter_reading(&item.id, amount("1150"), "2026-02", None)
+            .unwrap();
+        // Read in February, paid in March.
+        let draft = vault
+            .utility_payment_draft(&item.id, "2026-03", "UTC")
+            .unwrap();
+        assert_eq!(draft.consumption, Some(amount("150")));
+        // The month's bill picks up the same readings.
+        let bill = vault.utility_bill(&flat, "2026-03", "UTC").unwrap();
+        let line = bill
+            .lines
+            .iter()
+            .find(|line| line.item.id == item.id)
+            .unwrap();
+        assert_eq!(line.previous_reading, Some(amount("1000")));
+        assert_eq!(line.reading, Some(amount("1150")));
+        assert_eq!(line.amount, Some(amount("750")));
+        let mut paid = draft.transaction;
+        if let Transaction::Payment(payment) = &mut paid {
+            payment.store_id = card;
+        }
+        paid.meta_mut().timestamp = "2026-02-20T12:00:00Z".into();
+        vault.add_transaction(paid).unwrap();
+        // February is paid: March has nothing left to bill.
+        let after = vault
+            .utility_payment_draft(&item.id, "2026-03", "UTC")
+            .unwrap();
+        assert_eq!(after.consumption, Some(Amount::ZERO));
     }
 
     #[test]
@@ -1365,5 +1442,53 @@ mod tests {
             .add_meter_reading(&item.id, amount("120"), "2026-10", Some(20))
             .unwrap();
         assert_eq!(vault.readings_of(&item.id).len(), 2);
+    }
+
+    #[test]
+    fn a_reading_without_a_day_does_not_block_a_later_one() {
+        let (_dir, mut vault) = empty_vault();
+        let item = metered(&mut vault);
+        // Entered on the 5th without a day, as the old form did.
+        vault.doc.meter_readings.push(MeterReading {
+            id: "old".into(),
+            item_id: item.id.clone(),
+            value: amount("2531.5"),
+            period: "2026-10".into(),
+            recorded_at: "2026-10-05T09:00:00Z".into(),
+            day: None,
+        });
+        vault
+            .add_meter_reading(&item.id, amount("2540"), "2026-10", Some(12))
+            .unwrap();
+        vault
+            .add_meter_reading(&item.id, amount("2552"), "2026-10", Some(20))
+            .unwrap();
+        assert!(
+            vault
+                .add_meter_reading(&item.id, amount("2530"), "2026-10", Some(8))
+                .is_err(),
+            "the 8th still cannot be below the 5th"
+        );
+        let values: Vec<String> = vault
+            .readings_of(&item.id)
+            .iter()
+            .map(|reading| reading.value.to_string())
+            .collect();
+        assert_eq!(values, ["2531.5", "2540", "2552"]);
+    }
+
+    #[test]
+    fn a_second_reading_the_same_day_corrects_the_first() {
+        let (_dir, mut vault) = empty_vault();
+        let item = metered(&mut vault);
+        vault
+            .add_meter_reading(&item.id, amount("100"), "2026-10", Some(12))
+            .unwrap();
+        vault
+            .add_meter_reading(&item.id, amount("101"), "2026-10", Some(12))
+            .unwrap();
+        let readings = vault.readings_of(&item.id);
+        assert_eq!(readings.len(), 1);
+        assert_eq!(readings[0].value, amount("101"));
     }
 }

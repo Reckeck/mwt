@@ -203,7 +203,13 @@ impl UnlockedVault {
         Ok(out)
     }
 
+    /// Delete a reminder. An automatic one is muted rather than removed: its
+    /// source would make it again with the next sync, and a muted one stays
+    /// gone (and hidden) until the source itself is gone.
     pub fn delete_reminder(&mut self, id: &str) -> Result<()> {
+        if self.find_reminder_mut(id)?.source.is_some() {
+            return self.finish_reminder_series(id).map(|_| ());
+        }
         let before = self.doc.reminders.len();
         self.doc.reminders.retain(|reminder| reminder.id != id);
         if self.doc.reminders.len() == before {
