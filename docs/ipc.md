@@ -33,7 +33,7 @@ Frontend парсит код и показывает локализованно�
 | Команда | Вход | Выход |
 |---|---|---|
 | `vault_status` | — | `VaultStatus { exists, unlocked, path, format }` |
-| `create_vault` | `CreateVaultInput { path, password }` | `VaultInfo` |
+| `create_vault` | `CreateVaultInput { path, password, cash_name? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя) |
 | `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo` |
 | `lock_vault_cmd` | — | `()` |
 | `change_password` | `ChangePasswordInput { current_password, new_password }` | `()` |
@@ -48,8 +48,15 @@ Frontend парсит код и показывает локализованно�
 ### stores
 | `list_stores` | — | `Vec<Store>` (плоско) |
 | `get_store_tree` | — | `Vec<StoreTreeNode { store, depth, path, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children }>` — дерево с суммами; источник для сайдбара, страницы «Кошельки» и выбора узла |
-| `create_store` | `CreateStoreInput { name, kind, color, note, parent_id?, in_budget?, liability?, contact_id? }` | `Store` (правила дерева R1–R5; `in_budget: null` — по умолчанию; `liability` только для `liability`; `contact_id` только у корня) |
-| `update_store` | `UpdateStoreInput { id, name, color, note, in_budget?, liability?, contact_id? }` | `Store` (место в дереве не меняет; имя уникально среди соседей; `in_budget: null` — не менять) |
+| `get_wallet_catalog` | — | `WalletCatalog { kinds[{kind, max_roots, user_creatable, default_purpose, sub_types[{sub_type, shape, default_purpose, credit}]}], providers[{provider, supported}] }` — правила типов кошельков, без vault |
+| `create_store` | `CreateStoreInput { name, kind, color, note, parent_id?, sub_type?, binding?, purpose?, liability?, contact_id?, custody?, property?, secured_by?, provider? }` | `Store`. Субсчёт: одного типа с родителем, глубина 1, `sub_type` из каталога, `binding` нужной формы (рынок подставляется сам). Корень: тип `user_creatable`, `cash` — ровно один. Коды: `CASH_SINGLETON`, `WALLET_NOT_CREATABLE`, `SUB_TYPE_NOT_ALLOWED`, `BINDING_REQUIRED`, `BINDING_MISMATCH`, `WALLET_NOT_APPLICABLE` |
+| `update_store` | `UpdateStoreInput { id, name, color, note, purpose?, binding?, liability?, contact_id?, custody?, property?, secured_by?, provider? }` | `Store` (место в дереве не меняет; `null` в `purpose`/`binding`/`custody`/`property`/`provider` — не менять; смена привязки отклоняется, если проведённые операции в неё не влезут) |
+| `list_envelopes` | `storeId?` | `EnvelopeView[] { envelope, free, pct?, short }` |
+| `create_envelope` | `EnvelopeDraft { store_id, name, asset, target?, goal_id? }` | `Envelope` — актив должен подходить к привязке кошелька |
+| `update_envelope` | `UpdateEnvelopeInput { id, draft }` | `Envelope` |
+| `fund_envelope` | `FundEnvelopeInput { id, amount }` | `Envelope` — `>0` откладывает из свободного остатка (`INSUFFICIENT_FUNDS`, если не хватает), `<0` возвращает |
+| `move_between_envelopes` | `MoveEnvelopeInput { from, to, amount }` | — (один кошелёк и актив) |
+| `delete_envelope` | `id` | — |
 | `move_store` | `MoveStoreInput { id, parent_id? }` | `Store` — перенос субсчёта; `parent_id: null` = «сделать отдельным кошельком»; корень не переносится |
 | `store_move_targets` | `id` | `StoreMoveTargets { parents: Vec<StoreTreeNode> (плоско), can_detach }` — куда можно перенести |
 | `archive_store` | `id, archived` | `()` — каскадно на всё поддерево; восстановление под архивным родителем — ошибка |
@@ -71,6 +78,7 @@ Frontend парсит код и показывает локализованно�
 | `list_transactions` | `filter?: TxFilter { scope: StoreScope, kinds[], contact_id?, flow_id?, from?, to?, hide_internal, text? }` | `Vec<Transaction>` — новые сверху. `from`/`to` — `YYYY-MM-DD` включительно, по часовому поясу из настроек; `hide_internal` убирает переводы и обмены внутри одного кошелька верхнего уровня; `text` ищет по комментарию, категориям, активам, кошелькам, контактам и хешу. Без `filter` — все операции |
 | `get_tx_graph` | `filter?: TxFilter, collapsed?: string[]` | `TxGraph { currency, lanes[], nodes[], edges[], columns }`. Дорожка — кошелёк в порядке дерева; узел — операция на дорожке (`column` — порядковый номер по времени, `lane` — индекс дорожки, `value` — сумма в базовой валюте на момент операции); рёбра `seq` / `transfer` / `convert` / `flow` всегда идут вперёд по времени. `collapsed` — кошельки, чьи субсчета сворачиваются в их дорожку. Больше 2000 узлов → `TOO_LARGE` |
 | `add_transaction` | `TransactionInput` | `Transaction` — после автокатегоризации и проверок V1–V14 |
+| `preview_transaction` | `PreviewTransactionInput { transaction, replaces? }` | `TxPreview { changes[{store_id, store_name, asset, before, after, delta_base}], base_currency, flow, warnings[], error? }` — ничего не пишет; `replaces` — id редактируемой операции, её эффект вычитается; отказ валидации приходит в `error` строкой `CODE: message` |
 | `update_transaction` | `UpdateTransactionInput { id, transaction: TransactionInput }` | `Transaction` — `id` и `origin` сохраняются, холдинги пересчитываются |
 | `delete_transaction` | `id` | `()` |
 | `transaction_kinds_for_store_kind` | `kind: StoreKind` | `TransactionKinds { verbs[], special[], default }` (значения — `TxKind`) |
@@ -105,7 +113,9 @@ Frontend парсит код и показывает локализованно�
 | `archive_contact` | `id, archived` | `()` |
 | `delete_contact` | `id` | `()` — только если на контакт ничего не ссылается |
 | `get_contact_turnover` | `ContactTurnoverInput { contact_id, account_id? }` | `ContactTurnover { rows[{ asset, sent, received }], sent_base, received_base, tx_count }` |
-| `get_contact_balances` | — | `Vec<ContactBalance { contact_id, asset, receivable, payable }>` — личные долги |
+| `get_contact_balances` | — | `Vec<ContactBalance { contact_id, asset, receivable, payable }>` — личные долги (сумма считается из переводов с `debt`) |
+| `list_debt_terms` | `contactId?` | `DebtTerms[] { id, contact_id, asset, due_at?, note }` — только срок и заметка, суммы в них нет |
+| `set_debt_terms` | `DebtTermsDraft { contact_id, asset, due_at?, note }` | `DebtTerms \| null` — заменяет условия долга контакта в этом активе; пустые срок и заметка удаляют их. Просроченный и близкий срок попадает в `get_upcoming` (`kind: debt`) |
 
 ### pricing
 | `search_assets` | `query` | `Vec<AssetSearchHit { symbol, name, coingecko_id?, chain?, contract?, rank }>` |
@@ -116,7 +126,7 @@ Frontend парсит код и показывает локализованно�
 | `get_candles` | `GetCandlesInput { symbol, interval_min, limit≤1000 }` | `GetCandlesOutput { candles: Vec<CandlePoint { ts, open, high, low, close, volume }> }` (Binance klines, **без vault**) |
 
 ### portfolio
-| `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store, assets_base, liabilities_base, net_worth_base }` (деривативы не входят) |
+| `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store, assets_base, liabilities_base, net_worth_base, prices_as_of? }` (деривативы не входят; `prices_as_of` — время самой свежей цены/курса в кэше) |
 | `get_net_worth` | — | `NetWorth { base_currency, financial, non_financial, receivables, liabilities, payables, net }` |
 | `set_manual_price` | `SetManualPriceInput { asset_key, unit_price, currency }` | `ManualPrice` — оценка имущества в узле `asset`, на всю историю |
 | `clear_manual_price` | `asset_key` | `()` — назад к цене покупки |
@@ -132,7 +142,7 @@ Frontend парсит код и показывает локализованно�
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
 | `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation?, enrichment_opt_in? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
 | `set_quick_add_shortcut` | `shortcut?: string` (`CmdOrCtrl+Shift+Space`; пусто/`null` — выключить) | `AppSettings`. Сначала регистрирует глобальное сочетание, сохраняет только при успехе; не удалось (занято, неверный формат, нет глобальных клавиш) → `SHORTCUT_FAILED`, прежнее сочетание восстанавливается. Срабатывание показывает окно и шлёт событие `quick-add` |
-| `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice`: `builtin` — встроенный список (сеть недоступна и промаха не было), `cached` — последний успешный запрос, `null` — провайдеры ответили сейчас |
+| `get_supported_currencies` | — | `CurrencyCatalogOutput { catalog: { fiat[], crypto[] }, notice? }`. `notice` ставится, только если ни один провайдер не ответил: `cached` — взят последний успешный список, `builtin` — встроенный (сеть ещё ни разу не отвечала); `null` — провайдеры ответили сейчас, даже если список не изменился |
 
 Файлы: `app_settings.json` и `currencies.json` в `app_config_dir`, обычный
 JSON без шифрования — там нет ничего секретного. Логика типов, нормализации и
@@ -190,7 +200,7 @@ JSON без шифрования — там нет ничего секретно
 | Команда | Вход | Выход |
 |---|---|---|
 | `list_automations` | — | `Vec<Automation>` по имени |
-| `create_automation` | `AutomationInput { name, active, schedule, starts_at, template: TransactionInput }` | `Automation`. Шаблон — один из четырёх глаголов и проходит те же проверки, что операция |
+| `create_automation` | `AutomationInput { name, active, preset?, schedule, starts_at, template: TransactionInput }` (пресеты по типу кошелька — в `get_wallet_catalog`) | `Automation`. Шаблон — один из четырёх глаголов и проходит те же проверки, что операция |
 | `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; обработанные даты остаются обработанными |
 | `delete_automation` | `id` | `()` — вместе с историей запусков; созданные операции остаются |
 | `run_automation` | `id` | `Transaction` «сейчас»; не хватает средств — `INSUFFICIENT_FUNDS` с суммами |
@@ -207,16 +217,17 @@ JSON без шифрования — там нет ничего секретно
 | `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder` |
 | `set_reminder_done` | `id, done` | `Reminder` |
 | `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново |
-| `list_utility_items` / `create_utility_item` / `update_utility_item` / `delete_utility_item` | `UtilityInput { name, active, kind: metered{ unit, tariff } \| static{ amount } \| housing{ amount, deposit?, due_day, automation_id? }, currency, store_id?, category }` / `UpdateUtilityInput { id, item }` / `id` | `UtilityItem`; удаление уносит показания, платежи остаются |
+| `list_utility_items` / `create_utility_item` / `update_utility_item` / `delete_utility_item` | `UtilityInput { name, active, kind: metered{ unit, tariff } \| static{ amount } \| housing{ amount, deposit?, due_day, automation_id? }, currency, property_id, store_id?, category }` / `UpdateUtilityInput { id, item }` / `id` | `UtilityItem` — ЖКХ всегда принадлежит имуществу (`property_id` — корневой кошелёк `property`, иначе `MISSING`); удаление уносит показания, платежи остаются |
 | `add_meter_reading` | `MeterReadingInput { item_id, value, period (YYYY-MM) }` | `MeterReading`; показание за тот же месяц заменяется; меньше прошлого или больше следующего — `INVALID_INPUT` |
 | `delete_meter_reading` | `id` | `()` |
+| `get_property_summary` | `storeId` | `PropertySummary { value_base, debt_base, equity_base, utilities_month_base, loan_month_base, monthly_cost_base, utility_count }` — долг по кредитам с `secured_by` на объект |
 | `get_meter_trend` | `item_id` | `UtilityTrend { months[{ period, reading?, consumption?, amount }], average?, delta_pct?, forecast?, anomaly, monthly }` — среднее за 6 месяцев со счётом, прогноз — линейная регрессия, аномалия — > 1.5× среднего прежних |
 | `get_utility_payment_draft` | `item_id`, `period?` (по умолчанию текущий месяц) | `UtilityPaymentDraft { transaction (payment), consumption?, includes_deposit }` — форма «Оплатить» открывается с ним; комментарий = название счёта, категория счёта |
 | `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — только vault-scoped поля |
-| `update_settings` | `UpdateSettingsInput` | `Settings` (в т.ч. `bybit_import_interval_sec`: `0` — выкл, иначе клампится в 60..86400; `savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, пусто — базовая). Логика — в core (`UnlockedVault::update_settings`) |
+| `update_settings` | `UpdateSettingsInput` | `Settings` (`savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, пусто — базовая). Логика — в core (`UnlockedVault::update_settings`) |
 | `dev_dump_vault` | — | `DevDumpVaultOutput { json }` — расшифрованный `VaultDoc` одним pretty-JSON (только DEV-экран) |
 | `dev_export_vault` | — | `Option<String>` — путь записанного файла, `None` если пользователь закрыл диалог. Нативный save-диалог + запись делает Rust: webview не умеет скачивать файлы (`URL.createObjectURL` + `<a download>` в WebKitGTK не работает) |
 | `vault_schema` | — | `serde_json::Value` — JSON Schema `VaultDoc` из `schemars` (для подсказок в редакторе; форма документа живёт только в Rust) |
@@ -229,6 +240,10 @@ JSON без шифрования — там нет ничего секретно
 | `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit?, store_id? }` | `BybitExecutionsResult { executions[], notice? }` |
 | `exchange_key_status` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyStatus { configured, hint?, spot_store_id?, futures_store_id? }` |
 | `set_exchange_key` | `SetExchangeKeyInput { store_id, api_key, api_secret }` | `ExchangeKeyStatus` (субсчета прежнего ключа сохраняются) |
+| `set_import_interval` | `SetImportIntervalInput { store_id, interval_sec }` | — интервал фонового импорта конкретной биржи (`0` — выкл, иначе 60..86400) |
+| `get_terminal_state` | `storeId` | `TerminalState { watchlist, active_symbol?, timeframe, indicators, drawings{symbol→json}, layout }` — терминал хранится в самой бирже; без выбранной биржи `PROVIDER_REQUIRED` |
+| `update_terminal_state` | `UpdateTerminalStateInput { store_id, patch: TerminalPatch }` | `TerminalState` — меняются только переданные поля |
+| `save_terminal_drawings` | `SaveTerminalDrawingsInput { store_id, symbol, json }` | — пустой экспорт удаляет рисунки символа; больше 256 КБ — `TOO_LARGE` |
 | `set_exchange_targets` | `SetExchangeTargetsInput { store_id, spot_store_id?, futures_store_id? }` | `ExchangeKeyStatus` — куда записывать спот и фьючерсы; только биржевые субсчета этого кошелька |
 | `clear_exchange_key` | `ClearExchangeKeyInput { store_id }` | `ExchangeKeyStatus` |
 
@@ -240,7 +255,7 @@ JSON без шифрования — там нет ничего секретно
 
 Инварианты блока:
 - **Ни одна команда не создаёт операции сама.** Только `confirm_pending_imports`;
-  фоновый опрос (`bybit_import_interval_sec`, `0` = выкл) кладёт сделки в
+  фоновый опрос (`ExchangeProfile.import_interval_sec` у каждой биржи, `0` = выкл) кладёт сделки в
   `pending_imports` и шлёт событие — пользователь решает сам.
 - Дедупликация по `execId` (`PendingImport.exec_id`), поэтому повторный импорт
   и перезапуски фонового опроса не создают дублей.

@@ -22,13 +22,16 @@
 | `contacts` | `Vec<Contact>` | внешние стороны и их реквизиты |
 | `categorization_rules` | `Vec<CategorizationRule>` | «текст → категория» |
 | `manual_prices` | `Vec<ManualPrice>` | ручная оценка имущества |
-| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | типы фаз 3–7, определены заранее ради одного разлома схемы; пока пустые |
+| `envelopes` | `Vec<Envelope>` | конверты (см. выше) |
+| `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
+| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества |
 
 ### Settings — только vault-scoped
 
-`display_decimals` (по умолчанию 8), `dashboard_widgets`,
-`fx_refresh_interval_sec` (300), `minimize_to_tray` (true),
-`bybit_import_interval_sec` (900; `0` — выкл), `savings_rate` (доля дохода
+`display_decimals` (по умолчанию 8), `dashboard_widgets` (сетка из 12 колонок:
+`DashboardWidgetCfg { id, col, row, width, height, pinned, store_id? }`; виджета нет в списке —
+его нет на дашборде; `pinned` — заголовок скрыт, позиция и размер закреплены),
+`fx_refresh_interval_sec` (300), `minimize_to_tray` (true), `savings_rate` (доля дохода
 на накопления, 0..1, по умолчанию `0.10`), `daily_budget_mode` (`month` —
 месяц с переносом остатка, по умолчанию; `until_income` — до следующего
 дохода), `budget_currency` (пусто = базовая валюта).
@@ -85,40 +88,68 @@ vault: они переживают открытие другого хранил�
 
 ## Store / StoreKind
 
-`Store { id, name, kind, color, archived, note, parent_id?, contact_id?, liability?, in_budget }`,
-где `kind` — один из: `exchange`, `hot_wallet`, `cold_wallet`, `bank`, `cash`,
-`asset` (имущество с ручной оценкой: квартира, машина), `liability` (кредит,
-ипотека, кредитка — баланс отрицательный). Хранилище можно архивировать.
+`Store { id, name, kind, color, archived, note, parent_id?, sub_type?, binding, purpose, contact_id?, liability?, custody?, property?, secured_by?, exchange? }`.
 
-- `in_budget` — траты и доходы узла попадают в бюджет. По умолчанию у корня —
-  `cash`/`bank` да, остальные нет; субсчёт берёт значение родителя (D22).
+`kind` — тип кошелька, по нему сгруппирован сайдбар и выбираются настройки:
+
+| Тип | Что это | Корней | Субсчета (`sub_type`) | Назначение по умолчанию |
+|---|---|---|---|---|
+| `cash` | наличные | ровно один, создаётся вместе с vault, не архивируется и не удаляется (`CASH_LOCKED`) | `pocket` | `everyday` |
+| `bank` | банк | сколько угодно | `card`, `account`, `deposit`, `savings`, `credit_card` | `everyday` |
+| `crypto` | свой кошелёк (`custody: hot \| cold`) | сколько угодно | `token` | `investment` |
+| `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `spot`, `futures`, `earn`, `pair` | `investment` |
+| `property` | имущество (`property: PropertyInfo`) | сколько угодно | — | `investment` |
+| `liability` | кредит (`liability: LiabilityTerms`, `secured_by` — объект в залоге) | сколько угодно | — | — (в бюджет не входит никогда) |
+
+Каталог правил отдаёт `get_wallet_catalog` (`WalletCatalog::build` в `ipc_contract.rs`) —
+фронт их не дублирует.
+
+- `purpose: everyday | savings | investment | transit` заменил флаг `in_budget`:
+  в дневной бюджет попадает только `everyday` (`Store::in_budget()`); `transit` не
+  входит и в капитал. Субсчёт берёт назначение своего шаблона (вклад —
+  `savings`), иначе родителя.
+- `binding` — жёсткая привязка субсчёта: `asset(AssetRef)` (валюта или токен),
+  `pair { base, quote }` (обе монеты, обмен в обе стороны), `market(spot | futures | earn)`.
+  У корня — `any`. Операция с чужим активом получает `BINDING_MISMATCH` (V15);
+  смена привязки отклоняется, если проведённые операции в неё не влезут.
 - `liability: LiabilityTerms { kind, rate?, limit?, due_day?, monthly_payment? }` —
-  только у `liability`; `limit` ограничивает кредитку для автоматики.
+  у `liability` и у субсчёта `credit_card`; `limit` ограничивает кредитку для автоматики.
+- `exchange: ExchangeProfile { provider, import_interval_sec, terminal: TerminalState }` —
+  биржа, её фоновый импорт и **весь терминал** (вотчлист, активный символ,
+  таймфрейм, индикаторы, рисунки по символам ≤ 256 КБ, раскладка). Ключи — отдельно,
+  в `VaultDoc.exchanges`, и ставятся только после выбора `provider` (`PROVIDER_REQUIRED`).
 - `contact_id` — чей это счёт (банк, обменник); только у корня (R10).
 
-### Дерево: кошелёк → субсчёт → субсчёт
+### Дерево: кошелёк → субсчёт
 
-`parent_id = None` — кошелёк (корень), иначе субсчёт. Глубина ограничена
-`MAX_STORE_DEPTH = 2` (корень — глубина 0), то есть **три уровня**. У узла с
-субсчетами есть и свои средства и операции («Основной» в UI).
+`parent_id = None` — кошелёк (корень), иначе субсчёт. `MAX_STORE_DEPTH = 1`:
+**два уровня**. Субсчёт всегда одного типа с родителем и обязан иметь
+`sub_type` из каталога и привязку нужной формы. У узла с субсчетами есть и свои
+средства и операции («Основной» в UI).
 
-Правила проверяются при записи (`validate_placement` в `service.rs`); чтение
-терпимо: vault, отредактированный руками, всё равно открывается.
+Правила проверяются при записи (`validate_placement`, `check_sub_account` в
+`service/mod.rs`); чтение терпимо.
 
 | # | Правило | Код ошибки |
 |---|---|---|
 | R1 | Родитель существует | `MISSING` |
-| R2 | Узел не вкладывается в себя и в своё поддерево | `STORE_CYCLE` |
-| R3 | `depth(родитель) + 1 + высота(поддерева узла) ≤ 2` | `STORE_TOO_DEEP` |
+| R2 | Узел не вкладывается в себя | `STORE_CYCLE` |
+| R3 | Субсчёт не содержит субсчетов | `STORE_TOO_DEEP` |
 | R4 | Родитель не архивирован | `STORE_PARENT_ARCHIVED` |
 | R5 | Имя уникально среди соседей (без учёта регистра и пробелов по краям); корни — среди корней | `STORE_NAME_TAKEN` |
-| R6 | Корень не становится субсчётом (`move_store`) | `STORE_ROOT_MOVE` |
+| R6 | Корень не становится субсчётом; субсчёт не становится корнем | `STORE_ROOT_MOVE` / `WALLET_NOT_APPLICABLE` |
+| R7 | Субсчёт переносится только в кошелёк своего типа | `SUB_TYPE_NOT_ALLOWED` |
 | R8 | Архивация — каскадом вниз; восстановление — тоже, но не под архивным родителем | `STORE_RESTORE_PARENT_FIRST` |
-| R9 | Удаление — только без операций и без субсчетов | `INVALID_INPUT` |
+| R9 | Удаление — только без операций и без субсчетов; наличные — никогда | `INVALID_INPUT` / `CASH_LOCKED` |
 
-Тип и цвет субсчёта по умолчанию берутся от родителя — это решает UI, core тип не
-навязывает. Место узла меняет только `move_store`; `update_store` правит имя,
-цвет и заметку.
+### Конверты
+
+`VaultDoc.envelopes: Vec<Envelope { id, store_id, name, asset, allocated, target?, goal_id?, created_at }>` —
+виртуальная разметка баланса: деньги не двигаются, часть остатка актива в
+кошельке помечается как занятая. Откладывать можно только из свободного
+остатка (`INSUFFICIENT_FUNDS`); трата, залезающая в конверты, разрешена, но
+предпросмотр предупреждает (`PreviewWarning::IntoEnvelopes`), а конверт
+показывается как `short`. Цель, связанная с конвертом, считает прогресс по нему.
 
 ### StoreScope — область отчёта
 
@@ -194,8 +225,8 @@ Realized PnL: продажей считается только исходяща�
 |---|---|---|---|
 | `cash`, `bank` | все четыре | — | Оплатить |
 | `exchange` | все четыре | спот, фьючерсы | спот |
-| `hot_wallet`, `cold_wallet` | все четыре | DeFi | Перевести |
-| `asset` | Пополнить («Приобрести») | продажа | Пополнить |
+| `crypto` | все четыре | DeFi | Перевести |
+| `property` | Пополнить («Приобрести») | продажа | Пополнить |
 | `liability` | Оплатить, Перевести | — | Перевести |
 
 ### Валидация (V1–V14)
@@ -328,8 +359,10 @@ Realized PnL: продажей считается только исходяща�
 ## Ключи бирж (VaultDoc.exchanges)
 
 `ExchangeKeys` получил `spot_store_id?` и `futures_store_id?` — субсчета, на
-которые записываются подтверждённые спот- и фьючерсные сделки (по умолчанию —
-сам кошелёк ключа). `PendingImport` хранит `is_maker`, `closed_size`,
+которые записываются подтверждённые спот- и фьючерсные сделки; если они не
+заданы — живой субсчёт с привязкой `market(spot)` / `market(futures)`, иначе сам
+кошелёк ключа. Интервал фонового опроса — у каждой биржи свой
+(`ExchangeProfile.import_interval_sec`). `PendingImport` хранит `is_maker`, `closed_size`,
 `closed_pnl`; фьючерсная сделка с `closed_size > 0` — закрытие позиции.
 
 В `VaultDoc` добавлено поле `exchanges: Exchanges` (схема версии **1**, формат
