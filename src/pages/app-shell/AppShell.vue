@@ -11,6 +11,8 @@ import { Money } from '@/entities/currency'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { QuickAddDialog } from '@/features/quick-add'
+import { NotificationBell } from '@/widgets/notification-bell'
+import { noticeReminderId, noticeRoute } from '@/shared/lib/notice-link'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -143,9 +145,8 @@ onUnmounted(() => {
 
 // The background poller never writes transactions, it only stages fills —
 // tell the user there is something to confirm on the exchange wallet.
-void onEvent<{ staged: number }>('bybit-import-pending', (payload) => {
+void onEvent<{ staged: number }>('bybit-import-pending', () => {
   void queryClient.invalidateQueries({ queryKey: ['pending-imports'] })
-  toast.info(t('import.pendingEvent'), { description: String(payload.staged) })
 })
 
 // A refresh that priced operations saved without a price changes their
@@ -162,12 +163,7 @@ function refreshPlanning() {
   for (const queryKey of [...PLANNING_KEYS, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
 }
 
-void onEvent<{ tx_ids: string[] }>('automation-created', (payload) => {
-  refreshPlanning()
-  toast.success(t('automation.event.created', { count: payload.tx_ids.length }), {
-    action: { label: t('automation.event.open'), onClick: () => void router.push({ name: 'transactions' }) },
-  })
-})
+void onEvent<{ tx_ids: string[] }>('automation-created', () => refreshPlanning())
 
 void onEvent<AutomationRejectedEvent>('automation-rejected', (payload) => {
   refreshPlanning()
@@ -202,14 +198,38 @@ void onEvent<{ tx_id: string }>('enrichment-ready', () => {
 
 void onEvent<{ alert_id: string }>('price-alert', () => {
   void queryClient.invalidateQueries({ queryKey: ['price-alerts'] })
-  toast.info(t('alert.event'))
 })
 
-void onEvent<{ id: string }>('reminder-due', (payload) => {
-  void queryClient.invalidateQueries({ queryKey: ['reminders'] })
-  void call<Reminder[]>('list_reminders').then((list) => {
-    const reminder = list.find((entry) => entry.id === payload.id)
-    if (reminder) toast.info(t('reminder.event'), { description: reminder.text })
+void onEvent('reminder-due', () => void queryClient.invalidateQueries({ queryKey: ['reminders'] }))
+
+/**
+ * Every notice the backend shows also lands here: into the bell and as a
+ * toast with what can be done right away — open it, mark a reminder done or
+ * put it off. A rejected automation has its own toast with «retry / skip».
+ */
+void onEvent<NoticeRecord>('notification', (record) => {
+  void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+  if (record.key.startsWith('automation-rejected:')) return
+  const target = noticeRoute(record.link)
+  const reminderId = noticeReminderId(record.key)
+  const settle = (cmd: 'set_reminder_done' | 'snooze_reminder') => {
+    const args =
+      cmd === 'set_reminder_done'
+        ? { id: reminderId, done: true }
+        : { input: { id: reminderId, until: new Date(Date.now() + 10 * 60_000).toISOString() } }
+    void call(cmd, args)
+      .then(() => void queryClient.invalidateQueries({ queryKey: ['reminders'] }))
+      .catch((err) => toast.error(t('reminder.saveFailed'), { description: codeErrorMessage(parseError(err), t) }))
+  }
+  toast.info(record.title, {
+    description: record.body,
+    duration: reminderId ? 60_000 : 8_000,
+    action: reminderId
+      ? { label: t('reminder.done'), onClick: () => settle('set_reminder_done') }
+      : target
+        ? { label: t('actions.open'), onClick: () => void router.push(target) }
+        : undefined,
+    cancel: reminderId ? { label: t('reminder.snooze.10m'), onClick: () => settle('snooze_reminder') } : undefined,
   })
 })
 
@@ -319,6 +339,7 @@ void onEvent('toggle-lock', () => void lock())
           <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
         </Button>
 
+        <NotificationBell />
         <Button
           v-if="tour.hasTour(routeTour)"
           variant="ghost"

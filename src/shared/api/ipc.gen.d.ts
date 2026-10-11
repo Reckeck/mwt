@@ -2874,7 +2874,11 @@ savings_rate: Amount | null, daily_budget_mode: DailyBudgetMode | null,
 /**
  * Empty string = follow the base currency.
  */
-budget_currency: string | null, };
+budget_currency: string | null, 
+/**
+ * What to be told about and how far ahead.
+ */
+notifications: NotificationSettings | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

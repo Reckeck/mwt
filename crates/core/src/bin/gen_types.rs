@@ -128,6 +128,7 @@ fn main() {
         trade_core::ipc_contract::AdjustmentDraftInput,
         trade_core::ipc_contract::SnoozeReminderInput,
         trade_core::ipc_contract::SimulateAutomationsInput,
+        trade_core::model::notify::NoticeRecord,
         trade_core::service::AutomationSimulation,
         trade_core::ipc_contract::SetImportIntervalInput,
         trade_core::ipc_contract::UpdateTerminalStateInput,

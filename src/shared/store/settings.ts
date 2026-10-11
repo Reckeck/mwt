@@ -127,5 +127,6 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     savings_rate: patch.savings_rate ?? null,
     daily_budget_mode: patch.daily_budget_mode ?? null,
     budget_currency: patch.budget_currency ?? null,
+    notifications: patch.notifications ?? null,
   }
 }
