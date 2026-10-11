@@ -28,22 +28,31 @@ const readings: MeterReading[] = []
 
 /** Bills by month of a metered item: consumption × tariff. */
 function utilityTrend(item: UtilityItem): UtilityTrend {
+  const sortKey = (entry: MeterReading) => `${entry.period}-${String(entry.day ?? 99).padStart(2, '0')}`
   const own = readings
     .filter((entry) => entry.item_id === item.id)
-    .sort((left, right) => left.period.localeCompare(right.period))
+    .sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
   const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
   const paid = paymentsOf(item)
+  // Like `monthly_readings` in Rust: a month runs from the last reading
+  // before it, the first month of a meter from its own first reading.
+  const periods = [...new Set(own.map((entry) => entry.period))]
   const months: UtilityMonth[] =
     'metered' in item.kind
-      ? own.map((entry, index) => {
-          const consumption = index ? Number(entry.value) - Number(own[index - 1].value) : null
+      ? periods.map((period, index) => {
+          const group = own.filter((entry) => entry.period === period)
+          const last = group[group.length - 1]
+          const before = index ? own.filter((entry) => entry.period === periods[index - 1]).at(-1) : undefined
+          const start = before ?? (group.length > 1 ? group[0] : undefined)
+          const consumption = start ? Number(last.value) - Number(start.value) : null
           return {
-            period: entry.period,
-            reading: entry.value,
+            period,
+            reading: last.value,
             consumption: consumption === null ? null : String(consumption),
             amount: money((consumption ?? 0) * tariff),
-            reading_id: entry.id,
-            payments: paid.get(entry.period) ?? [],
+            reading_id: last.id,
+            payments: paid.get(period) ?? [],
+            readings: group,
           }
         })
       : [...paid.entries()]
@@ -55,6 +64,7 @@ function utilityTrend(item: UtilityItem): UtilityTrend {
             amount: money(payments.reduce((sum, tx) => sum + ('payment' in tx ? Number(tx.payment.amount) : 0), 0)),
             reading_id: null,
             payments,
+            readings: [],
           }))
   const billed = months.map((month) => Number(month.amount)).filter((value) => value > 0)
   const average = billed.length ? billed.reduce((sum, value) => sum + value, 0) / billed.length : null
@@ -559,7 +569,7 @@ export function mockPlanning(
       return {}
     case 'add_meter_reading': {
       const input = body as MeterReadingInput
-      const reading: MeterReading = { id: uuid(), day: null, ...input, recorded_at: iso(now()) }
+      const reading: MeterReading = { id: uuid(), ...input, day: input.day ?? null, recorded_at: iso(now()) }
       const index = readings.findIndex((entry) => entry.item_id === input.item_id && entry.period === input.period)
       if (index >= 0) readings.splice(index, 1)
       readings.push(reading)
@@ -571,7 +581,7 @@ export function mockPlanning(
     case 'update_meter_reading': {
       const input = body as UpdateMeterReadingInput
       const reading = readings.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
-      Object.assign(reading, { value: input.value, period: input.period })
+      Object.assign(reading, { value: input.value, period: input.period, day: input.day ?? null })
       return reading
     }
     case 'get_utility_bill': {
@@ -630,7 +640,7 @@ export function mockPlanning(
             value: line.reading,
             period: input.period,
             recorded_at: iso(now()),
-            day: null,
+            day: line.reading_day ?? null,
           })
         }
         const code = item.currency.toUpperCase()

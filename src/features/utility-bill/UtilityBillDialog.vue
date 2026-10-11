@@ -60,6 +60,11 @@ interface Row {
 const rows = ref<Row[]>([])
 const storeId = ref('')
 const when = ref('')
+/** Day the meters were read; empty = the month's end. */
+const readingDay = ref('')
+watch(open, (isOpen) => {
+  if (isOpen) readingDay.value = ''
+})
 
 watch(
   () => bill.data.value,
@@ -121,6 +126,7 @@ const pay = useMutation({
           item_id: row.line.item.id,
           amount: row.amount,
           reading: 'metered' in row.line.item.kind && row.reading && row.reading !== row.line.reading ? row.reading : null,
+          reading_day: readingDay.value.trim() ? Number(readingDay.value) : null,
         })),
       } satisfies PayUtilityBillInput,
     }),
@@ -158,6 +164,21 @@ const pay = useMutation({
             <option v-for="node in payable" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
           </Select>
         </div>
+      </div>
+
+      <div v-if="rows.some((row) => 'metered' in row.line.item.kind)" class="grid gap-1.5 @sm:max-w-80">
+        <Label for="bill-reading-day">{{ t('utilityBill.readingDay') }}</Label>
+        <Input
+          id="bill-reading-day"
+          v-model="readingDay"
+          type="number"
+          min="1"
+          max="31"
+          class="w-24"
+          :placeholder="t('utilities.dayShort')"
+          data-tour="utility-reading-day"
+        />
+        <p class="text-xs text-muted-foreground">{{ t('utilityBill.readingDayHint') }}</p>
       </div>
 
       <p v-if="bill.isSuccess.value && !rows.length" class="text-sm text-muted-foreground">{{ t('utilities.empty') }}</p>
