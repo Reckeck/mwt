@@ -155,6 +155,7 @@ pub fn run() {
             planning::update_automation,
             planning::delete_automation,
             planning::run_automation,
+            planning::simulate_automations,
             planning::list_automation_runs,
             planning::retry_automation_run,
             planning::skip_automation_run,

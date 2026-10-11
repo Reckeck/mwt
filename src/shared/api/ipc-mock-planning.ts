@@ -492,6 +492,37 @@ export function mockPlanning(
       })
       return { year, currency: ctx.budgetCurrency, months } satisfies GoalCalendar
     }
+    case 'simulate_automations': {
+      // A thin stand-in for the sandbox run: monthly automations, every run created.
+      const input = body as SimulateAutomationsInput
+      const until = Date.now() + input.days * 86_400_000
+      const runs: SimulatedRun[] = []
+      for (const automation of automations.filter((item) => !input.automation_id || item.id === input.automation_id)) {
+        if (!('monthly' in automation.schedule)) continue
+        const at = new Date()
+        at.setDate(automation.schedule.monthly.day)
+        at.setHours(9, 0, 0, 0)
+        if (at.getTime() < Date.now()) at.setMonth(at.getMonth() + 1)
+        for (; at.getTime() <= until; at.setMonth(at.getMonth() + 1)) {
+          runs.push({
+            automation_id: automation.id,
+            automation_name: automation.name,
+            planned_at: at.toISOString(),
+            outcome: { created: { tx_id: uuid() } },
+            transaction: automation.template as Transaction,
+          })
+        }
+      }
+      runs.sort((left, right) => left.planned_at.localeCompare(right.planned_at))
+      return {
+        from: iso(now()),
+        until: new Date(until).toISOString(),
+        runs,
+        balances: [],
+        created: runs.length,
+        rejected: 0,
+      } satisfies AutomationSimulation
+    }
     case 'list_reminders':
       return [...reminders].sort((left, right) => left.due_at.localeCompare(right.due_at))
     case 'create_reminder': {

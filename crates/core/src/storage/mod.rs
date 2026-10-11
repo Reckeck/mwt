@@ -294,6 +294,15 @@ pub struct VaultLock {
 }
 
 impl VaultLock {
+    /// A lock that holds nothing: for a sandbox copy of a vault that never
+    /// touches the file.
+    pub fn detached() -> Self {
+        Self {
+            path: PathBuf::new(),
+            owned: false,
+        }
+    }
+
     pub fn acquire(vault: &Path) -> Result<Self> {
         let mut name = vault.file_name().unwrap_or_default().to_os_string();
         name.push(".lock");

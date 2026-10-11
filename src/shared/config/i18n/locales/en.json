@@ -1664,5 +1664,18 @@
   "reminder.finishSeries": "End the series",
   "reminder.seriesFinished": "Series ended",
   "tour.planningReminders.repeat.title": "Repeating reminders",
-  "tour.planningReminders.repeat.body": "Choose how often it repeats: «done» moves it to the next date, and the «More» menu snoozes it or ends the series."
+  "tour.planningReminders.repeat.body": "Choose how often it repeats: «done» moves it to the next date, and the «More» menu snoozes it or ends the series.",
+  "simulation.open": "Try it out",
+  "simulation.openOne": "Try this automation out",
+  "simulation.title": "Automations, tried out",
+  "simulation.titleFor": "Try out: {name}",
+  "simulation.hint": "The automations run day by day on a copy of the vault, as the scheduler would run them. Nothing is written, so try anything.",
+  "simulation.days": "{count} days",
+  "simulation.running": "Trying out…",
+  "simulation.created": "Would be created: {count}",
+  "simulation.rejected": "Would be rejected: {count}",
+  "simulation.nothing": "The automations do nothing in this time.",
+  "simulation.balances": "Balances: now → at the end",
+  "tour.planningAutomations.simulate.title": "Try without risk",
+  "tour.planningAutomations.simulate.body": "«Try it out» runs the automations ahead on a copy of the vault: what would be created, where money would run short and what the balances would be. Nothing is written."
 }

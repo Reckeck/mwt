@@ -1133,6 +1133,15 @@ pub struct ReminderInput {
     pub repeat: Option<crate::model::planning::ReminderRepeat>,
 }
 
+/// Emulate the automations ahead: one of them, or all.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SimulateAutomationsInput {
+    #[serde(default)]
+    pub automation_id: Option<String>,
+    /// How many days ahead, 1–366.
+    pub days: u32,
+}
+
 /// Put a reminder off until a moment (RFC3339).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SnoozeReminderInput {
