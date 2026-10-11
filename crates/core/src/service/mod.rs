@@ -15,8 +15,9 @@ use crate::model::store::{
     StoreScope, SubType, TerminalLayout, TerminalState,
 };
 use crate::model::transaction::{
-    Fee, FuturesAction, FuturesCategory, FuturesDirection, Leg, LegRole, Liquidity, PriceStamp,
-    TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TxMeta, TxOrigin,
+    AccountRef, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Leg, LegRole,
+    Liquidity, PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction,
+    TransferTx, TxMeta, TxOrigin,
 };
 use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
 use crate::pricing::history::secs_or_now;
@@ -30,8 +31,10 @@ mod contacts;
 mod enrichment;
 mod envelopes;
 mod goals;
+mod interest;
 mod ledger;
 mod losses;
+mod loyalty;
 mod preview;
 mod rates;
 mod reports;
@@ -49,12 +52,14 @@ pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use interest::{DepositReport, InterestTaxReport, PdsReport};
 pub use ledger::{
     GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph,
 };
 pub use losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
 };
+pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use rates::RateBook;
 pub use reports::{
@@ -64,7 +69,8 @@ pub use reports::{
     ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
 };
 pub use utilities::{
-    PropertySummary, UtilityDraft, UtilityMonth, UtilityPaymentDraft, UtilityTrend,
+    PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill, UtilityBillLine,
+    UtilityDraft, UtilityMonth, UtilityPaymentDraft, UtilityTrend,
 };
 pub use worth::{FlowClass, NetWorth};
 
@@ -211,7 +217,19 @@ impl UnlockedVault {
         Self::open(path, password)
     }
 
-    pub fn change_password(&mut self, new_password: &str) -> Result<()> {
+    /// Re-encrypt the vault under a new password.
+    ///
+    /// The current password is checked against the file on disk (decryption is
+    /// the verifier), so an unlocked but unattended session cannot be re-keyed
+    /// by whoever sits down at it. No `.bak` is written on purpose: a copy that
+    /// still opens with the old password would defeat changing a leaked one.
+    pub fn change_password(&mut self, current_password: &str, new_password: &str) -> Result<()> {
+        if new_password.is_empty() {
+            return Err(Error::InvalidInput(
+                "the new password must not be empty".into(),
+            ));
+        }
+        VaultFile::open(&self.path, current_password)?;
         self.password = Zeroizing::new(new_password.to_string());
         self.persist()
     }
@@ -978,7 +996,11 @@ impl UnlockedVault {
 
     // -- analytics ----------------------------------------------------------
 
-    /// Base currency code (never empty) and its cached FX rate.
+    /// Base currency code (never empty) and its **latest** cached FX rate.
+    ///
+    /// The cache keeps history sorted oldest first, so the first match used to
+    /// be the oldest rate ever seen. With no rate at all the factor is 1; the
+    /// summary reports that through `base_fx_as_of: None`.
     fn base_and_fx(&self) -> (String, Amount) {
         let base = self.base_currency.to_ascii_lowercase();
         let base = if base.is_empty() {
@@ -987,13 +1009,24 @@ impl UnlockedVault {
             base
         };
         let fx = self
-            .doc
-            .fx_cache
-            .iter()
-            .find(|point| point.currency == base)
-            .map(|point| point.per_usd)
+            .per_usd(&base)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));
         (base, fx)
+    }
+
+    /// Timestamp of the base currency's latest rate; `None` when it was never
+    /// fetched (USD needs no rate and reports `Some("")`).
+    pub(crate) fn base_fx_as_of(&self) -> Option<String> {
+        let base = self.base_and_fx().0;
+        if base == "usd" {
+            return Some(String::new());
+        }
+        self.doc
+            .fx_cache
+            .iter()
+            .filter(|point| point.currency == base && !point.per_usd.is_zero())
+            .map(|point| point.ts.clone())
+            .max()
     }
 
     /// Current USD price of one unit: a hand-set price (property), fiat
@@ -1081,6 +1114,7 @@ impl UnlockedVault {
                     quantity: holding.quantity,
                     avg_cost: holding.avg_cost,
                     price_usd,
+                    price_base: price_usd * fx,
                     value_usd,
                     value_base: value_usd * fx,
                     unrealized_base,
@@ -1242,7 +1276,10 @@ impl UnlockedVault {
             subtree_usd,
             subtree_base: subtree_usd * ctx.fx,
             own_tx_count: ctx.tx_count.get(&store.id).copied().unwrap_or(0),
-            can_add_child: depth < MAX_STORE_DEPTH && !store.archived,
+            // A kind without sub-account types (property, cash) cannot take one.
+            can_add_child: depth < MAX_STORE_DEPTH
+                && !store.archived
+                && !store.kind.sub_types().is_empty(),
             children,
         }
     }
@@ -1378,10 +1415,14 @@ impl UnlockedVault {
                     quantity: Amount::ZERO,
                     price_usd: price,
                     value_usd: Amount::ZERO,
+                    price_base: price * fx,
+                    value_base: Amount::ZERO,
                 });
             st.quantity += holding.quantity;
             st.price_usd = price;
             st.value_usd += value_usd;
+            st.price_base = price * fx;
+            st.value_base += value_usd * fx;
 
             let chain_key = holding
                 .asset
@@ -1407,6 +1448,7 @@ impl UnlockedVault {
         let worth = self.net_worth();
         PortfolioSummary {
             prices_as_of: self.prices_as_of(),
+            base_fx_as_of: self.base_fx_as_of(),
             assets_base: worth.financial + worth.non_financial + worth.receivables,
             liabilities_base: worth.liabilities + worth.payables,
             net_worth_base: worth.net,
@@ -1787,6 +1829,11 @@ impl UnlockedVault {
     /// spot or futures on the exchange key, else the wallet's live sub-account
     /// bound to that market, else the key's own store.
     fn import_target(&self, imp: &PendingImport) -> String {
+        if imp.kind == crate::model::vault::ImportKind::EarnIncome {
+            return self
+                .bybit_account_store(&imp.store_id, crate::exchange::bybit::ACCOUNT_EARN)
+                .unwrap_or_else(|| imp.store_id.clone());
+        }
         let futures = imp.category != "spot";
         let market = if futures {
             crate::model::store::MarketKind::Futures
@@ -1805,6 +1852,10 @@ impl UnlockedVault {
                     keys.spot_store_id.clone()
                 }
             })
+            // Bybit trades spot and derivatives in one unified account.
+            .or_else(|| {
+                self.bybit_account_store(&imp.store_id, crate::exchange::bybit::ACCOUNT_UNIFIED)
+            })
             .or_else(|| {
                 self.children_of(&imp.store_id)
                     .into_iter()
@@ -1812,6 +1863,146 @@ impl UnlockedVault {
                     .map(|child| child.id.clone())
             })
             .unwrap_or_else(|| imp.store_id.clone())
+    }
+
+    /// The Bybit key that serves a store: its own, else its wallet's — a
+    /// sub-account never borrows another wallet's key.
+    pub fn bybit_key_for(&self, store_id: &str) -> Option<&crate::model::vault::ExchangeKeys> {
+        let mut current = self.find_store(store_id)?;
+        loop {
+            if let Some(keys) = self
+                .doc
+                .exchanges
+                .bybit
+                .iter()
+                .find(|keys| keys.store_id == current.id)
+            {
+                return Some(keys);
+            }
+            current = self.find_store(current.parent_id.as_deref()?)?;
+        }
+    }
+
+    /// The live sub-account of an exchange wallet that stands for a Bybit
+    /// account type: `FUND` → Funding, `UNIFIED` (and the legacy `SPOT`,
+    /// `CONTRACT`) → Unified, `EARN`/`INVESTMENT` → Earn.
+    fn bybit_account_store(&self, root_id: &str, account: &str) -> Option<String> {
+        use crate::model::store::MarketKind;
+        let market = match account.trim().to_ascii_uppercase().as_str() {
+            "FUND" => MarketKind::Funding,
+            "UNIFIED" | "SPOT" | "CONTRACT" => MarketKind::Unified,
+            "EARN" | "INVESTMENT" => MarketKind::Earn,
+            _ => return None,
+        };
+        self.children_of(root_id)
+            .into_iter()
+            .find(|child| !child.archived && child.binding == Binding::Market(market))
+            .map(|child| child.id.clone())
+    }
+
+    /// Give a Bybit wallet its three accounts — Funding, Unified Trading and
+    /// Earn — creating the ones missing. Returns the ids `(funding, unified, earn)`.
+    pub fn ensure_bybit_accounts(
+        &mut self,
+        store_id: &str,
+        names: [&str; 3],
+    ) -> Result<[String; 3]> {
+        use crate::model::store::MarketKind;
+        let root = self
+            .find_store(store_id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+        if root.kind != StoreKind::Exchange || root.parent_id.is_some() {
+            return Err(Error::InvalidInput("not an exchange wallet".into()));
+        }
+        let wanted = [
+            (SubType::Funding, MarketKind::Funding),
+            (SubType::Unified, MarketKind::Unified),
+            (SubType::Earn, MarketKind::Earn),
+        ];
+        let mut ids: [String; 3] = Default::default();
+        for (index, (sub_type, market)) in wanted.into_iter().enumerate() {
+            let existing = self
+                .children_of(store_id)
+                .into_iter()
+                .find(|child| !child.archived && child.binding == Binding::Market(market))
+                .map(|child| child.id.clone());
+            ids[index] = match existing {
+                Some(id) => id,
+                None => {
+                    self.create_store_with(
+                        names[index],
+                        StoreKind::Exchange,
+                        &root.color,
+                        "",
+                        Some(store_id.to_string()),
+                        StoreExtras {
+                            sub_type: Some(sub_type),
+                            binding: Some(Binding::Market(market)),
+                            ..StoreExtras::default()
+                        },
+                    )?
+                    .id
+                }
+            };
+        }
+        Ok(ids)
+    }
+
+    /// What each Bybit account holds per the API next to what the ledger
+    /// says its sub-account holds, coin by coin.
+    pub fn bybit_reconcile(
+        &self,
+        store_id: &str,
+        balances: &[(String, Vec<crate::exchange::CoinBalance>)],
+    ) -> Vec<crate::ipc_contract::ExchangeAccountBalance> {
+        balances
+            .iter()
+            .map(|(account, coins)| {
+                let target = self.bybit_account_store(store_id, account);
+                let ledger: HashMap<String, Amount> = target
+                    .as_deref()
+                    .map(|id| {
+                        self.doc
+                            .holdings
+                            .iter()
+                            .filter(|holding| {
+                                holding.store_id == id && !holding.asset.is_derivative()
+                            })
+                            .map(|holding| {
+                                (holding.asset.symbol.to_ascii_uppercase(), holding.quantity)
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let mut symbols: Vec<String> = coins.iter().map(|coin| coin.coin.clone()).collect();
+                symbols.extend(ledger.keys().cloned());
+                symbols.sort();
+                symbols.dedup();
+                let rows = symbols
+                    .into_iter()
+                    .map(|coin| {
+                        let exchange = coins
+                            .iter()
+                            .find(|row| row.coin == coin)
+                            .and_then(|row| Amount::parse(&row.amount).ok())
+                            .unwrap_or(Amount::ZERO);
+                        let booked = ledger.get(&coin).copied().unwrap_or(Amount::ZERO);
+                        crate::ipc_contract::ExchangeCoinRow {
+                            coin,
+                            exchange,
+                            ledger: booked,
+                            diff: exchange - booked,
+                        }
+                    })
+                    .collect();
+                crate::ipc_contract::ExchangeAccountBalance {
+                    account: account.clone(),
+                    store_id: target,
+                    rows,
+                }
+            })
+            .collect()
     }
 
     // -- exchange profile and terminal ------------------------------------------
@@ -1933,6 +2124,7 @@ impl UnlockedVault {
     /// The transaction a staged fill becomes: a spot trade, or a futures
     /// open/close for linear and inverse contracts.
     fn transaction_for_import(&self, imp: &PendingImport) -> Transaction {
+        use crate::model::vault::ImportKind;
         let mut meta = TxMeta::new(&imp.comment);
         meta.categories = vec!["trading".to_string()];
         meta.origin = TxOrigin::Import {
@@ -1940,6 +2132,43 @@ impl UnlockedVault {
         };
         if !imp.occurred_at.is_empty() {
             meta.timestamp = imp.occurred_at.clone();
+        }
+        match imp.kind {
+            ImportKind::Fill => {}
+            ImportKind::Transfer => {
+                meta.categories = vec!["transfer".to_string()];
+                let side = |account: &Option<String>| {
+                    account
+                        .as_deref()
+                        .and_then(|account| self.bybit_account_store(&imp.store_id, account))
+                        .unwrap_or_else(|| imp.store_id.clone())
+                };
+                return Transaction::Transfer(TransferTx {
+                    meta,
+                    from: AccountRef::Store(side(&imp.from_account)),
+                    to: AccountRef::Store(side(&imp.to_account)),
+                    asset: self.asset_for_import(&imp.asset_bought),
+                    amount: imp.qty_bought,
+                    fee: None,
+                    network: None,
+                    tx_hash: None,
+                    debt: None,
+                    price: PriceStamp::default(),
+                });
+            }
+            ImportKind::EarnIncome => {
+                meta.categories = vec!["deposit_interest".to_string()];
+                return Transaction::Topup(TopupTx {
+                    meta,
+                    store_id: self.import_target(imp),
+                    asset: self.asset_for_import(&imp.asset_bought),
+                    amount: imp.qty_bought,
+                    fee: None,
+                    from: None,
+                    details: KindDetails::default(),
+                    price: PriceStamp::default(),
+                });
+            }
         }
         let store_id = self.import_target(imp);
         let is_buy = imp.side.eq_ignore_ascii_case("buy");
@@ -2136,6 +2365,9 @@ pub struct AssetStat {
     pub quantity: Amount,
     pub price_usd: Amount,
     pub value_usd: Amount,
+    /// One unit in the base currency at the latest rate.
+    pub price_base: Amount,
+    pub value_base: Amount,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -2165,6 +2397,8 @@ pub struct StorePosition {
     /// Weighted average cost per unit in the base currency, if known.
     pub avg_cost: Option<Amount>,
     pub price_usd: Amount,
+    /// One unit in the base currency at the latest rate.
+    pub price_base: Amount,
     pub value_usd: Amount,
     pub value_base: Amount,
     /// `(price_base − avg_cost) × |quantity|`; zero when `avg_cost` is unknown.
@@ -2360,6 +2594,9 @@ pub struct PortfolioSummary {
     /// When the freshest fetched price or FX rate was stored, RFC3339; `None`
     /// before the first successful refresh.
     pub prices_as_of: Option<String>,
+    /// When the base currency's rate was taken; `None` means no rate is known
+    /// and every `*_base` figure is really USD. Empty for a USD base.
+    pub base_fx_as_of: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -3231,6 +3468,65 @@ mod tests {
         assert_eq!(last.value_usd, amount("150"));
     }
 
+    // -- base currency rate ----------------------------------------------------
+
+    /// The FX cache keeps history oldest first; the summary must use the newest
+    /// rate, and say when no rate is known at all.
+    #[test]
+    fn summary_uses_the_latest_base_rate() {
+        let dir = tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("fx.wallet"), "pw").unwrap();
+        vault.set_base_currency("rub");
+        assert_eq!(vault.portfolio_summary().base_fx_as_of, None);
+        let point = |rate: &str, ts: &str| crate::model::vault::FxPoint {
+            currency: "rub".into(),
+            per_usd: amount(rate),
+            ts: ts.into(),
+            source: "test".into(),
+        };
+        vault.apply_fx(&[point("80", "2026-01-01T00:00:00Z")]);
+        vault.apply_fx(&[point("95", "2026-03-01T00:00:00Z")]);
+        let summary = vault.portfolio_summary();
+        assert_eq!(summary.fx_per_usd, amount("95"));
+        assert_eq!(
+            summary.base_fx_as_of.as_deref(),
+            Some("2026-03-01T00:00:00Z")
+        );
+    }
+
+    // -- password ------------------------------------------------------------
+
+    #[test]
+    fn change_password_rekeys_the_file() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pw.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        vault.change_password("old", "new").unwrap();
+        assert!(UnlockedVault::open(path.clone(), "new").is_ok());
+        assert!(matches!(
+            UnlockedVault::open(path, "old"),
+            Err(Error::Secret)
+        ));
+    }
+
+    #[test]
+    fn change_password_rejects_a_wrong_current_one() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pw.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        let before = std::fs::read(&path).unwrap();
+        assert!(matches!(
+            vault.change_password("nope", "new"),
+            Err(Error::Secret)
+        ));
+        assert!(matches!(
+            vault.change_password("old", ""),
+            Err(Error::InvalidInput(_))
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(UnlockedVault::open(path, "old").is_ok());
+    }
+
     // -- analytics -----------------------------------------------------------
 
     /// Fixture: two bank stores, each holding a known USD balance.
@@ -3432,6 +3728,7 @@ mod import_tests {
             exec_time: "1700000000000".into(),
             is_maker: false,
             closed_size: None,
+            category: String::new(),
         }
     }
 
@@ -3481,6 +3778,110 @@ mod import_tests {
             1
         );
         assert_eq!(vault.pending_imports().len(), 2);
+    }
+
+    const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
+
+    #[test]
+    fn bybit_accounts_are_created_once() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[1].id.clone();
+        let first = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
+        let again = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
+        assert_eq!(first, again);
+        assert_eq!(vault.children_of(&store).len(), 3);
+    }
+
+    /// Moves between Bybit accounts become transfers between the matching
+    /// sub-accounts, Earn payouts income on Earn, fills land on Unified.
+    #[test]
+    fn bybit_imports_are_routed_by_account() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[1].id.clone();
+        let [funding, unified, earn] = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
+        let usdt = AssetRef::fiat("USDT", "USDT");
+        let mut seed =
+            crate::service::test_support::income_of(&funding, usdt, "100", "1", "salary");
+        seed.meta_mut().timestamp = "2023-01-01T00:00:00Z".into();
+        vault.add_transaction(seed).unwrap();
+
+        let transfer = PendingImport::from_transfer(
+            &store,
+            &crate::exchange::InterTransfer {
+                transfer_id: "t1".into(),
+                coin: "usdt".into(),
+                amount: "40".into(),
+                from_account_type: "FUND".into(),
+                to_account_type: "UNIFIED".into(),
+                timestamp: "1700000000000".into(),
+                status: "SUCCESS".into(),
+            },
+        )
+        .unwrap();
+        let payout = PendingImport::from_earn_yield(
+            &store,
+            &crate::exchange::EarnYield {
+                id: "y1".into(),
+                coin: "USDT".into(),
+                product_id: "p".into(),
+                amount: "0.5".into(),
+                created_at: "1700000000000".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            vault
+                .stage_imports(vec![transfer, payout, staged(&store, "e1", "buy")])
+                .unwrap(),
+            3
+        );
+        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 3);
+
+        let moved = vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.tag() == "transfer")
+            .unwrap();
+        let Transaction::Transfer(moved) = moved else {
+            panic!()
+        };
+        assert_eq!(moved.from, AccountRef::Store(funding.clone()));
+        assert_eq!(moved.to, AccountRef::Store(unified.clone()));
+        let income = vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.tag() == "topup" && tx.meta().categories == ["deposit_interest"])
+            .unwrap();
+        let Transaction::Topup(income) = income else {
+            panic!()
+        };
+        assert_eq!(income.store_id, earn);
+        let trade = vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.tag() == "trade_spot")
+            .unwrap();
+        let Transaction::TradeSpot(trade) = trade else {
+            panic!()
+        };
+        assert_eq!(trade.store_id, unified);
+
+        // The API says Funding holds 70; the ledger has 60 left after the move.
+        let report = vault.bybit_reconcile(
+            &store,
+            &[(
+                "FUND".into(),
+                vec![crate::exchange::CoinBalance {
+                    coin: "USDT".into(),
+                    amount: "70".into(),
+                }],
+            )],
+        );
+        assert_eq!(report[0].store_id.as_deref(), Some(funding.as_str()));
+        assert_eq!(report[0].rows[0].diff, Amount::parse("10").unwrap());
     }
 
     /// A fill that belongs to a store which no longer exists must be dropped,
@@ -3707,6 +4108,10 @@ mod import_tests {
         let mut execution = fill("e1", "buy", "1", "100");
         assert_eq!(execution.category_hint(), "spot");
         execution.symbol = "BTCUSDT_PERP".into();
+        assert_eq!(execution.category_hint(), "linear");
+        // A USDT perpetual has no suffix: only the fetched category tells.
+        execution.symbol = "BTCUSDT".into();
+        execution.category = "linear".into();
         assert_eq!(execution.category_hint(), "linear");
     }
 }

@@ -1,10 +1,12 @@
 import type { Component } from 'vue'
 import {
   ArrowLeftRight,
+  ArrowRightLeft,
   Banknote,
   ChartCandlestick,
   Coins,
   CreditCard,
+  Gift,
   House,
   Landmark,
   PiggyBank,
@@ -27,6 +29,8 @@ export function getStoreIcon(kind: StoreKind): Component {
       return Banknote
     case 'property':
       return House
+    case 'loyalty':
+      return Gift
     case 'liability':
       return CreditCard
     default:
@@ -45,6 +49,8 @@ export function getSubTypeIcon(subType: SubType): Component {
       return Vault
     case 'savings':
       return PiggyBank
+    case 'pds':
+      return Landmark
     case 'token':
       return Coins
     case 'spot':
@@ -55,6 +61,10 @@ export function getSubTypeIcon(subType: SubType): Component {
       return Sprout
     case 'pair':
       return Repeat
+    case 'funding':
+      return ArrowRightLeft
+    case 'unified':
+      return ChartCandlestick
     default:
       return Banknote
   }

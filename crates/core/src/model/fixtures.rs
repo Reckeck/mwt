@@ -70,6 +70,7 @@ fn topup() -> TopupTx {
             unit_price: Some(amount("1")),
             network: Some(Chain::Ethereum),
             tx_hash: Some("0xabc".into()),
+            source_store_id: Some("card".into()),
         },
         price: stamp(),
     }

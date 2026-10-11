@@ -7,6 +7,19 @@ type Amount = string; // rust_decimal money — always a decimal string
  */
 type AccountRef = { "store": string } | { "contact": { contact_id: string, account_id: string | null, } } | { "raw": string };
 
+/**
+ * Credit (positive) or spend (negative) points of a programme.
+ */
+type AdjustPointsInput = { store_id: string, delta: Amount, comment: string, 
+/**
+ * The card whose purchases earned the points.
+ */
+source_store_id: string | null, 
+/**
+ * RFC3339; empty means now.
+ */
+timestamp: string | null, };
+
 type AlertCondition = "above" | "below";
 
 type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
@@ -104,7 +117,11 @@ proceeds_to: string | null, fee: Fee | null,
  */
 price: PriceStamp, };
 
-type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_usd: Amount, };
+type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_usd: Amount, 
+/**
+ * One unit in the base currency at the latest rate.
+ */
+price_base: Amount, value_base: Amount, };
 
 type Automation = { id: string, name: string, active: boolean, 
 /**
@@ -353,9 +370,28 @@ upcoming: Array<UpcomingItem>, };
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
 
 /**
+ * When earned interest joins the balance.
+ */
+type Capitalization = "none" | "daily" | "monthly" | "at_end";
+
+/**
  * One banknote line of a cash count.
  */
 type CashNote = { denomination: Amount, count: number, };
+
+/**
+ * Cashback and bonuses over a period, in the base currency.
+ */
+type CashbackReport = { base_currency: string, cashback_base: Amount, points_base: Amount, by_source: Array<CashbackSource>, programmes: Array<LoyaltyBalance>, };
+
+/**
+ * Cashback and points earned through one card or account.
+ */
+type CashbackSource = { 
+/**
+ * The card that earned it; `None` when the operation does not say.
+ */
+store_id: string | null, name: string, cashback_base: Amount, points_base: Amount, };
 
 type CashflowReport = { meta: ReportMeta, rows: Array<CashflowRow>, total: CashflowRow, };
 
@@ -532,6 +568,15 @@ rate_override: Amount | null, };
  */
 type ConvertedAmount = { amount: Amount | null, };
 
+/**
+ * Create the missing Funding / Unified / Earn sub-accounts of a Bybit wallet.
+ */
+type CreateBybitAccountsInput = { store_id: string, 
+/**
+ * Names in the UI language, for the ones that get created.
+ */
+funding_name: string, unified_name: string, earn_name: string, };
+
 type CreateCategoryInput = { 
 /**
  * Wanted key; derived from the name when empty.
@@ -707,6 +752,56 @@ type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liqu
 
 type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: AssetRef, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: Fee | null, price: PriceStamp, };
 
+/**
+ * Where an account stands and what it will earn.
+ */
+type DepositReport = { store_id: string, 
+/**
+ * Lowercase code of the account's money.
+ */
+currency: string, balance: Amount, 
+/**
+ * Rate in force today, percent; `None` before the first rate.
+ */
+rate: Amount | null, rate_since: string | null, 
+/**
+ * Interest earned this month so far, by the day.
+ */
+accrued_month: Amount, 
+/**
+ * Interest earned since the 1st of January, by the day.
+ */
+accrued_year: Amount, 
+/**
+ * Interest actually booked this year (`deposit_interest` top-ups).
+ */
+posted_year: Amount, 
+/**
+ * The next twelve months at today's rate, compounded by the terms.
+ */
+projected_year: Amount, 
+/**
+ * Term deposits: the last day and the balance then.
+ */
+matures_at: string | null, at_maturity: Amount | null, pds: PdsReport | null, };
+
+/**
+ * Terms of a savings account or a term deposit.
+ */
+type DepositTerms = { 
+/**
+ * Oldest first; the last one with `from` ≤ a day is that day's rate.
+ */
+rates: Array<RatePeriod>, capitalization: Capitalization, 
+/**
+ * Term deposits: `YYYY-MM-DD` it was opened and how long it runs.
+ */
+opened_at: string | null, term_months: number | null, 
+/**
+ * Book the month's interest as a top-up on the 1st of the next month.
+ */
+auto_accrue: boolean, pds: PdsTerms | null, };
+
 type DetailKind = "iban" | "account" | "crypto_address" | "card" | "phone" | "url" | "other";
 
 /**
@@ -732,6 +827,31 @@ type EnrichmentRecord = { id: string, tx_id: string, source: EnrichmentSource, f
 type EnrichmentSource = { "explorer": Chain } | "token_list";
 
 type EnrichmentStatus = "pending" | "applied" | "rejected";
+
+/**
+ * Make sure the FX cache has a rate of each currency for a day, fetching from
+ * the public sources (and earlier days) what it lacks.
+ */
+type EnsureFxInput = { 
+/**
+ * Lowercase codes; USD and unknown codes are ignored.
+ */
+currencies: Array<string>, 
+/**
+ * `YYYY-MM-DD` (UTC); empty or absent means today.
+ */
+date: string | null, };
+
+type EnsureFxOutput = { 
+/**
+ * Rates fetched just now; a point's `ts` is the day its source had, which
+ * may be before the day asked for.
+ */
+points: Array<FxPoint>, 
+/**
+ * Currencies no source had within the look-back window.
+ */
+missing: Array<string>, };
 
 /**
  * An envelope: a named, earmarked part of one asset's balance in one store
@@ -774,6 +894,24 @@ pct: number | null,
  * The store holds less than its envelopes earmark.
  */
 short: boolean, };
+
+/**
+ * A Bybit account (`FUND`, `UNIFIED`, `EARN`) and the sub-account standing for it.
+ */
+type ExchangeAccountBalance = { account: string, 
+/**
+ * `None` when the wallet has no sub-account of that kind yet.
+ */
+store_id: string | null, rows: Array<ExchangeCoinRow>, };
+
+/**
+ * One coin of one exchange account: the exchange's figure next to the ledger's.
+ */
+type ExchangeCoinRow = { coin: string, exchange: Amount, ledger: Amount, 
+/**
+ * `exchange − ledger`: what imports have not explained yet.
+ */
+diff: Amount, };
 
 /**
  * Whether a key is stored. The secret is never part of this response.
@@ -1043,6 +1181,16 @@ type ImportBybitHistoryOutput = { staged: number,
 notice: string | null, };
 
 /**
+ * What an import stages.
+ */
+type ImportKind = "fill" | "transfer" | "earn_income";
+
+/**
+ * Monthly income bracket of the ПДС co-financing ratio.
+ */
+type IncomeBracket = "low" | "mid" | "high";
+
+/**
  * One indicator on the terminal chart.
  */
 type IndicatorCfg = { 
@@ -1088,6 +1236,36 @@ fetched: boolean, info: TxInfo | null, hints: Array<TxFieldHint>,
 notice: string | null, };
 
 /**
+ * The tax on deposit interest for a year.
+ */
+type InterestTaxReport = { year: number, 
+/**
+ * The highest key rate on the 1st of each month of the year, percent.
+ */
+max_key_rate: Amount | null, 
+/**
+ * Tax-free interest, rubles; `None` while the key rate is unknown.
+ */
+limit: Amount | null, 
+/**
+ * Interest received this year, rubles.
+ */
+income: Amount, taxable: Amount, tax: Amount, 
+/**
+ * Interest that can still be earned tax-free.
+ */
+remaining_free: Amount | null, };
+
+/**
+ * The Bank of Russia key rate from a day on, percent.
+ */
+type KeyRatePoint = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, rate: Amount, };
+
+/**
  * Facts that only some store kinds have. Validated against `store.kind`.
  */
 type KindDetails = { 
@@ -1102,7 +1280,11 @@ unit_price: Amount | null,
 /**
  * Crypto stores only.
  */
-network: Chain | null, tx_hash: string | null, };
+network: Chain | null, tx_hash: string | null, 
+/**
+ * Cashback and bonus points: the card or account whose purchases earned them.
+ */
+source_store_id?: string, };
 
 /**
  * What a leg represents inside its transaction.
@@ -1155,6 +1337,28 @@ incomplete: number, };
 type LossRow = { month: string, fee: Amount, slippage: Amount, total: Amount, };
 
 /**
+ * One bonus programme.
+ */
+type LoyaltyBalance = { store_id: string, name: string, points_symbol: string, points: Amount, value_base: Amount, expires_at: string | null, expiring_points: Amount | null, };
+
+/**
+ * A bonus programme: its points and what one point is worth.
+ */
+type LoyaltyInfo = { 
+/**
+ * Ticker of the points, unique among the user's programmes (`СПАСИБО`, `МИЛИ`).
+ */
+points_symbol: string, 
+/**
+ * What one point is worth in `currency`.
+ */
+point_value: Amount, currency: string, 
+/**
+ * `YYYY-MM-DD` the next batch of points burns, if the programme has one.
+ */
+expires_at: string | null, expiring_points: Amount | null, };
+
+/**
  * A hand-set value of a non-financial asset; applies to its whole history
  * (plan D24), so revaluing a flat does not make the net-worth chart jump.
  */
@@ -1168,7 +1372,7 @@ asset_key: string, unit_price: Amount,
  */
 currency: string, updated_at: string, };
 
-type MarketKind = "spot" | "futures" | "earn";
+type MarketKind = "spot" | "futures" | "earn" | "funding" | "unified";
 
 type MeterReading = { id: string, item_id: string, value: Amount, 
 /**
@@ -1276,6 +1480,29 @@ points: Array<NetworthPoint>, };
  */
 type OpeningBalance = { asset: AssetRef, amount: Amount, };
 
+type PayUtilityBillInput = { property_id: string, 
+/**
+ * `YYYY-MM`.
+ */
+period: string, 
+/**
+ * The store the money leaves; an item's own store wins when it has one.
+ */
+store_id: string, 
+/**
+ * RFC3339; empty means the bill's `due_at`.
+ */
+timestamp: string | null, lines: Array<PayUtilityLine>, };
+
+/**
+ * One line the user confirmed in the bill dialog.
+ */
+type PayUtilityLine = { item_id: string, amount: Amount, 
+/**
+ * Metered: the reading to record for the month.
+ */
+reading: Amount | null, };
+
 /**
  * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
  */
@@ -1284,6 +1511,49 @@ type PaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amou
  * Who was paid; never one of the user's stores.
  */
 to: AccountRef | null, details: KindDetails, price: PriceStamp, };
+
+/**
+ * The ПДС year at a glance.
+ */
+type PdsReport = { year: number, 
+/**
+ * Put in this year (top-ups and transfers in, without interest and co-financing).
+ */
+contributions: Amount, 
+/**
+ * What the state adds for this year as things stand.
+ */
+cofinancing: Amount, 
+/**
+ * How much more to put in to get the full 36 000 ₽.
+ */
+to_full_cofinancing: Amount, 
+/**
+ * 1, 2 or 4 ₽ of contributions per 1 ₽ from the state.
+ */
+ratio: number, 
+/**
+ * The co-financing for this year arrives by this day.
+ */
+cofinancing_due: string, 
+/**
+ * The programme's state support ends after this day.
+ */
+ends_at: string, 
+/**
+ * Tax refund for this year's contributions (13 % of up to 400 000 ₽).
+ */
+deduction: Amount, };
+
+/**
+ * The long-term savings programme (ПДС): state co-financing of
+ * contributions for ten years from the first one.
+ */
+type PdsTerms = { 
+/**
+ * `YYYY-MM-DD` of the first contribution; the ten years run from it.
+ */
+first_contribution_at: string, income_bracket: IncomeBracket, };
 
 /**
  * A staged Bybit fill awaiting user confirmation before becoming a trade.
@@ -1345,7 +1615,11 @@ closed_size: Amount | null,
  * Realized PnL of a closing futures fill. Bybit's execution list does not
  * carry it, so the import leaves it empty; the user can fill it in.
  */
-closed_pnl: Amount | null, };
+closed_pnl: Amount | null, kind: ImportKind, 
+/**
+ * Transfer: Bybit account types, e.g. `FUND` → `UNIFIED`.
+ */
+from_account: string | null, to_account: string | null, };
 
 type PnlLeg = { ts: string, store_id: string, asset_key: string, 
 /**
@@ -1390,7 +1664,12 @@ liabilities_base: Amount, net_worth_base: Amount,
  * When the freshest fetched price or FX rate was stored, RFC3339; `None`
  * before the first successful refresh.
  */
-prices_as_of: string | null, };
+prices_as_of: string | null, 
+/**
+ * When the base currency's rate was taken; `None` means no rate is known
+ * and every `*_base` figure is really USD. Empty for a USD base.
+ */
+base_fx_as_of: string | null, };
 
 /**
  * One `(store, asset)` position a draft would change.
@@ -1461,7 +1740,11 @@ area: Amount | null,
 /**
  * YYYY-MM-DD.
  */
-purchased_at: string | null, purchase_price: Amount | null, currency: string, };
+purchased_at: string | null, purchase_price: Amount | null, currency: string, 
+/**
+ * Day of the month the utilities are usually paid (1–31), all at once.
+ */
+utilities_pay_day?: number, };
 
 /**
  * One property at a glance: what it is worth, what is owed on it and what
@@ -1486,6 +1769,19 @@ loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, };
  * switch: only everyday money is in the daily budget.
  */
 type Purpose = "everyday" | "savings" | "investment" | "transit";
+
+/**
+ * A rate in force from a day on.
+ */
+type RatePeriod = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+from: string, 
+/**
+ * Annual rate, percent.
+ */
+rate: Amount, };
 
 /**
  * Why a goal is marked «Пересмотреть».
@@ -1577,6 +1873,11 @@ type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number,
 type SelectVaultInput = { path: string, };
 
 /**
+ * Set or clear the interest terms of a savings account, deposit or ПДС.
+ */
+type SetDepositTermsInput = { store_id: string, terms: DepositTerms | null, };
+
+/**
  * Stores a read-only key for a specific store. Both fields are written to the
  * encrypted vault and are never echoed back to the frontend.
  */
@@ -1592,6 +1893,11 @@ type SetImportIntervalInput = { store_id: string,
  * Seconds; `0` turns the background import off.
  */
 interval_sec: number, };
+
+/**
+ * Set up a bonus programme.
+ */
+type SetLoyaltyInfoInput = { store_id: string, info: LoyaltyInfo, };
 
 type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
 
@@ -1665,7 +1971,15 @@ secured_by: string | null,
 /**
  * Exchange wallets only (top level).
  */
-exchange: ExchangeProfile | null, };
+exchange: ExchangeProfile | null, 
+/**
+ * Loyalty wallets: the programme's points and what a point is worth.
+ */
+loyalty?: LoyaltyInfo, 
+/**
+ * Savings accounts, term deposits and ПДС: rate history and terms.
+ */
+deposit?: DepositTerms, };
 
 /**
  * A direct sub-account row on the wallet page.
@@ -1693,7 +2007,7 @@ type StoreCrumb = { id: string, name: string, color: string, };
  * What kind of container a store represents. The sidebar groups wallets by
  * it, and it decides which sub-accounts, settings and automations apply.
  */
-type StoreKind = "cash" | "bank" | "crypto" | "exchange" | "property" | "liability";
+type StoreKind = "cash" | "bank" | "crypto" | "exchange" | "property" | "loyalty" | "liability";
 
 /**
  * Allowed destinations for moving a sub-account.
@@ -1762,7 +2076,11 @@ type StorePosition = { asset: AssetRef, quantity: Amount,
 /**
  * Weighted average cost per unit in the base currency, if known.
  */
-avg_cost: Amount | null, price_usd: Amount, value_usd: Amount, value_base: Amount, 
+avg_cost: Amount | null, price_usd: Amount, 
+/**
+ * One unit in the base currency at the latest rate.
+ */
+price_base: Amount, value_usd: Amount, value_base: Amount, 
 /**
  * `(price_base − avg_cost) × |quantity|`; zero when `avg_cost` is unknown.
  */
@@ -1828,7 +2146,7 @@ type StoresReport = { meta: ReportMeta, rows: Array<StoreReportRow>, };
  * A sub-account template. Which ones a wallet offers depends on its kind,
  * see [`StoreKind::sub_types`].
  */
-type SubType = "pocket" | "card" | "account" | "deposit" | "savings" | "credit_card" | "token" | "spot" | "futures" | "earn" | "pair";
+type SubType = "pocket" | "card" | "account" | "deposit" | "savings" | "credit_card" | "token" | "pds" | "spot" | "futures" | "earn" | "pair" | "funding" | "unified";
 
 type SubTypeInfo = { sub_type: SubType, shape: BindingShapeName, default_purpose: Purpose | null, 
 /**
@@ -2008,7 +2326,16 @@ categories: Array<string>, flow_id: string | null, contact_id: string | null,
 /**
  * Manual USD price of the main asset (the one received, for two-asset kinds).
  */
-price_usd: Amount | null, fx_override: Amount | null, };
+price_usd: Amount | null, fx_override: Amount | null, 
+/**
+ * Manual price of one unit in `price_currency`; turned into `price_usd`
+ * at the rate of the transaction's moment before saving.
+ */
+price: Amount | null, 
+/**
+ * Lowercase code `price` is in; empty means the base currency.
+ */
+price_currency: string | null, };
 
 /**
  * A single field suggestion for the trade form.
@@ -2122,7 +2449,12 @@ flow_id: string | null,
 /**
  * Who the operation was with or through (an exchanger, a shop, a person).
  */
-contact_id: string | null, origin: TxOrigin, };
+contact_id: string | null, origin: TxOrigin, 
+/**
+ * The utility bill (`UtilityItem.id`) this payment settles; older
+ * payments are matched by comment and category instead.
+ */
+utility_item_id?: string, };
 
 /**
  * How a transaction came to exist.
@@ -2207,6 +2539,15 @@ type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, };
 
 type UpdateGoalInput = { id: string, goal: GoalInput, };
 
+/**
+ * Correct a recorded meter reading.
+ */
+type UpdateMeterReadingInput = { id: string, value: Amount, 
+/**
+ * `YYYY-MM`.
+ */
+period: string, };
+
 type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, };
 
 type UpdateReminderInput = { id: string, reminder: ReminderInput, };
@@ -2258,6 +2599,41 @@ type UpdateTransactionInput = { id: string, transaction: TransactionInput, };
 
 type UpdateUtilityInput = { id: string, item: UtilityInput, };
 
+/**
+ * Every active utility of a property for one month, to be paid at once.
+ */
+type UtilityBill = { property_id: string, period: string, 
+/**
+ * The property's usual payment day.
+ */
+pay_day: number | null, 
+/**
+ * The date the payments get: the pay day of that month, or today when
+ * the month is the current one and the day has passed. RFC3339.
+ */
+due_at: string, lines: Array<UtilityBillLine>, };
+
+/**
+ * One line of a month's utility bill.
+ */
+type UtilityBillLine = { item: UtilityItem, 
+/**
+ * Metered: last month's reading, the base of this month's consumption.
+ */
+previous_reading: Amount | null, 
+/**
+ * Metered: this month's reading, when already entered.
+ */
+reading: Amount | null, consumption: Amount | null, 
+/**
+ * The suggested amount; `None` for a meter still waiting for its reading.
+ */
+amount: Amount | null, 
+/**
+ * Already paid for this month, in the item's currency.
+ */
+paid: Amount, includes_deposit: boolean, };
+
 type UtilityInput = { name: string, active: boolean, kind: UtilityKind, currency: string, 
 /**
  * The property the bill belongs to.
@@ -2303,7 +2679,15 @@ consumption: Amount | null,
 /**
  * The bill in the item's currency: consumption × tariff, or what was paid.
  */
-amount: Amount, };
+amount: Amount, 
+/**
+ * Metered: the reading's id, to correct it.
+ */
+reading_id: string | null, 
+/**
+ * The payments booked for this month, to open and edit them.
+ */
+payments: Array<Transaction>, };
 
 /**
  * A payment the form opens with, for one month of one item.
@@ -2365,7 +2749,11 @@ envelopes: Array<Envelope>,
 /**
  * Due dates and notes of debts with contacts.
  */
-debt_terms: Array<DebtTerms>, };
+debt_terms: Array<DebtTerms>, 
+/**
+ * Bank of Russia key rate history, for the deposit-interest tax limit.
+ */
+key_rates: Array<KeyRatePoint>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

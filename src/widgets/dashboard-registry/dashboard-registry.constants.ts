@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 
+import { CashbackBonuses } from '@/widgets/cashback-bonuses'
 import { DailyBudget } from '@/widgets/daily-budget'
 import { DashboardAllocation } from '@/widgets/dashboard-allocation'
 import { DashboardAssets } from '@/widgets/dashboard-assets'
@@ -8,6 +9,9 @@ import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
 import { FixedCosts } from '@/widgets/fixed-costs'
+import { InterestTax } from '@/widgets/interest-tax'
+import { UtilitiesDue } from '@/widgets/utilities-due'
+import { UtilityStats } from '@/widgets/utility-stats'
 import { MiniCalendar } from '@/widgets/mini-calendar'
 import { MonthSummary } from '@/widgets/month-summary'
 import { NetWorthCard } from '@/widgets/net-worth'
@@ -160,6 +164,46 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     minH: 4,
   },
   {
+    id: 'utilitiesDue',
+    titleKey: 'dashboard.widget.utilitiesDue',
+    descriptionKey: 'dashboard.widgetHint.utilitiesDue',
+    component: UtilitiesDue,
+    w: 4,
+    h: 5,
+    minW: 3,
+    minH: 4,
+  },
+  {
+    id: 'utilityStats',
+    titleKey: 'dashboard.widget.utilityStats',
+    descriptionKey: 'dashboard.widgetHint.utilityStats',
+    component: UtilityStats,
+    w: 8,
+    h: 6,
+    minW: 4,
+    minH: 5,
+  },
+  {
+    id: 'cashback',
+    titleKey: 'dashboard.widget.cashback',
+    descriptionKey: 'dashboard.widgetHint.cashback',
+    component: CashbackBonuses,
+    w: 4,
+    h: 6,
+    minW: 3,
+    minH: 4,
+  },
+  {
+    id: 'interestTax',
+    titleKey: 'dashboard.widget.interestTax',
+    descriptionKey: 'dashboard.widgetHint.interestTax',
+    component: InterestTax,
+    w: 4,
+    h: 4,
+    minW: 3,
+    minH: 3,
+  },
+  {
     id: 'fixedCosts',
     titleKey: 'dashboard.widget.fixedCosts',
     descriptionKey: 'dashboard.widgetHint.fixedCosts',
@@ -202,6 +246,7 @@ export const DEFAULT_DASHBOARD = [
   'total',
   'netWorth',
   'spending7d',
+  'utilitiesDue',
 ]
 
 export function widgetDef(id: string): DashboardWidgetDef | undefined {

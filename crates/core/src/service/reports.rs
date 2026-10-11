@@ -807,7 +807,9 @@ impl UnlockedVault {
                     }
                     let value = Self::value_at(&book, asset, *qty, &ctx.currency, *cutoff);
                     match kinds.get(store_id.as_str()) {
-                        Some(StoreKind::Property) => point.non_financial += value,
+                        Some(StoreKind::Property | StoreKind::Loyalty) => {
+                            point.non_financial += value
+                        }
                         Some(StoreKind::Liability) => {
                             *loans.entry(store_id.as_str()).or_default() += value;
                         }

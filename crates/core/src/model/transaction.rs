@@ -84,6 +84,11 @@ pub struct TxMeta {
     /// Who the operation was with or through (an exchanger, a shop, a person).
     pub contact_id: Option<String>,
     pub origin: TxOrigin,
+    /// The utility bill (`UtilityItem.id`) this payment settles; older
+    /// payments are matched by comment and category instead.
+    #[serde(default)]
+    #[ts(optional)]
+    pub utility_item_id: Option<String>,
 }
 
 impl TxMeta {
@@ -96,6 +101,7 @@ impl TxMeta {
             flow_id: None,
             contact_id: None,
             origin: TxOrigin::Manual,
+            utility_item_id: None,
         }
     }
 }
@@ -237,6 +243,10 @@ pub struct KindDetails {
     /// Crypto stores only.
     pub network: Option<Chain>,
     pub tx_hash: Option<String>,
+    /// Cashback and bonus points: the card or account whose purchases earned them.
+    #[serde(default)]
+    #[ts(optional)]
+    pub source_store_id: Option<String>,
 }
 
 impl KindDetails {
@@ -520,6 +530,7 @@ pub fn allowed_kinds(kind: StoreKind) -> &'static [TxKind] {
         StoreKind::Exchange => &[Topup, Payment, Transfer, Convert, TradeSpot, TradeFutures],
         StoreKind::Crypto => &[Topup, Payment, Transfer, Convert, Defi],
         StoreKind::Property => &[Topup, AssetSell],
+        StoreKind::Loyalty => &[Topup, Payment, Transfer],
         StoreKind::Liability => &[Payment, Transfer],
     }
 }
@@ -530,7 +541,7 @@ pub fn default_kind(kind: StoreKind) -> TxKind {
         StoreKind::Cash | StoreKind::Bank => TxKind::Payment,
         StoreKind::Exchange => TxKind::TradeSpot,
         StoreKind::Crypto | StoreKind::Liability => TxKind::Transfer,
-        StoreKind::Property => TxKind::Topup,
+        StoreKind::Property | StoreKind::Loyalty => TxKind::Topup,
     }
 }
 
