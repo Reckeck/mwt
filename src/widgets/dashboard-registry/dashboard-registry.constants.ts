@@ -8,6 +8,7 @@ import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
+import { ExchangeBalances } from '@/widgets/exchange-balances'
 import { FixedCosts } from '@/widgets/fixed-costs'
 import { InterestTax } from '@/widgets/interest-tax'
 import { UtilitiesDue } from '@/widgets/utilities-due'
@@ -36,7 +37,10 @@ export interface DashboardWidgetDef {
   h: number
   minW: number
   minH: number
-  /** Only offered when the vault has an exchange. */
+  /**
+   * Only offered when the vault has an exchange; the catalog asks which one,
+   * and the widget gets it as `storeId`.
+   */
   requires?: 'exchange'
 }
 
@@ -234,6 +238,17 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     h: 8,
     minW: 4,
     minH: 6,
+  },
+  {
+    id: 'exchangeBalances',
+    titleKey: 'dashboard.widget.exchangeBalances',
+    descriptionKey: 'dashboard.widgetHint.exchangeBalances',
+    component: ExchangeBalances,
+    w: 8,
+    h: 7,
+    minW: 6,
+    minH: 5,
+    requires: 'exchange',
   },
 ]
 

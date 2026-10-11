@@ -29,7 +29,7 @@ const tone = (diff: string) => (Number(diff) === 0 ? 'text-muted-foreground' : N
   <Card>
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="font-medium">{{ t('exchangeBalances.title') }}</p>
+        <p data-widget-title class="font-medium">{{ t('exchangeBalances.title') }}</p>
         <Button size="sm" variant="outline" :disabled="balances.isFetching.value" @click="balances.refetch()">
           <RefreshCw class="size-4" :class="balances.isFetching.value && 'animate-spin'" />
           {{ t('exchangeBalances.load') }}
