@@ -1,1 +1,1 @@
-export * from './ui/contact-card'
+export * from './ui/contact-turnover'

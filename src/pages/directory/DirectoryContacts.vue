@@ -1,16 +1,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
-import { ArrowRightLeft, Pencil, Plus } from 'lucide-vue-next'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { Archive, ArchiveRestore, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Copy, Search } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
-import { ContactArchive, ContactDialog } from '@/features/contact-edit'
+import { ContactArchive, ContactEditor, ContactQuickCreate } from '@/features/contact-edit'
+import { DebtPanel } from '@/features/debt-manage'
 import { TransactionCreateDialog } from '@/features/transaction-create'
-import { ContactCard } from '@/entities/contact'
+import { ContactTurnoverTable } from '@/entities/contact'
+import { TransactionsList } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
+import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Input } from '@/shared/ui/input'
-import { call } from '@/shared/api/ipc'
+import { Tabs } from '@/shared/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { call, parseError } from '@/shared/api/ipc'
+import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { txDebt } from '@/shared/lib/transactions'
+import { emptyTxFilter } from '@/shared/lib/tx-filter'
 import { cn } from '@/shared/lib/utils'
 
 const { t } = useI18n()
@@ -23,7 +34,16 @@ const balances = useQuery({
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
 
 const search = ref('')
+const filter = ref<'all' | 'owe_me' | 'i_owe'>('all')
 const selectedId = ref('')
+
+/** Net debt per contact and asset: positive = they owe me. */
+function netOf(contactId: string): { symbol: string; net: number }[] {
+  return (balances.data.value ?? [])
+    .filter((row) => row.contact_id === contactId)
+    .map((row) => ({ symbol: row.asset.symbol, net: Number(row.receivable) - Number(row.payable) }))
+    .filter((row) => row.net !== 0)
+}
 
 /** Matches the name and any account value, so a card number finds its owner. */
 const list = computed(() => {
@@ -35,6 +55,11 @@ const list = computed(() => {
         contact.name.toLowerCase().includes(needle) ||
         contact.accounts.some((account) => account.value.toLowerCase().includes(needle)),
     )
+    .filter((contact) => {
+      if (filter.value === 'all') return true
+      const nets = netOf(contact.id)
+      return filter.value === 'owe_me' ? nets.some((row) => row.net > 0) : nets.some((row) => row.net < 0)
+    })
     .sort((left, right) => Number(left.archived) - Number(right.archived) || left.name.localeCompare(right.name))
 })
 
@@ -50,56 +75,110 @@ const turnover = useQuery({
   enabled: computed(() => Boolean(selected.value)),
 })
 
-/** Net debt per contact, for the list badges. */
-function owes(contactId: string): string {
-  const rows = (balances.data.value ?? []).filter((row) => row.contact_id === contactId)
-  return rows
-    .map((row) => {
-      const net = Number(row.receivable) - Number(row.payable)
-      return net ? `${net > 0 ? '+' : ''}${net} ${row.asset.symbol}` : ''
-    })
-    .filter(Boolean)
-    .join(' · ')
-}
+const history = useQuery({
+  queryKey: computed(() => ['transactions', 'contact', selected.value?.id]),
+  queryFn: () =>
+    call<Transaction[]>('list_transactions', { filter: emptyTxFilter({ contact_id: selected.value?.id ?? null }) }),
+  enabled: computed(() => Boolean(selected.value)),
+})
+const debtHistory = computed(() => (history.data.value ?? []).filter((tx) => txDebt(tx) !== null))
 
-const createOpen = ref(false)
-const editOpen = ref(false)
+const detailTab = ref('debts')
+const detailTabs = computed(() => [
+  { value: 'debts', label: t('contacts.tab.debts') },
+  { value: 'history', label: t('contacts.tab.history') },
+  { value: 'turnover', label: t('contacts.tab.turnover') },
+])
+
+/* --- a transfer or a debt operation with the selected contact --- */
 const transferOpen = ref(false)
+const debtEffect = ref<DebtEffect | null>(null)
 
-/** A transfer to a contact starts from the first wallet in the budget, changeable in the form. */
+/** Operations with a contact start from the first everyday wallet, changeable in the form. */
 const transferStore = computed(() => {
   const nodes = flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived)
-  return (nodes.find((node) => node.store.in_budget) ?? nodes[0])?.store.id ?? ''
+  return (nodes.find((node) => node.store.purpose === 'everyday') ?? nodes[0])?.store.id ?? ''
 })
-const transferTo = computed<AccountRef | null>(() =>
+const counterpart = computed<AccountRef | null>(() =>
   selected.value ? { contact: { contact_id: selected.value.id, account_id: null } } : null,
 )
+
+function openTransfer(effect: DebtEffect | null) {
+  debtEffect.value = effect
+  transferOpen.value = true
+}
+
+/* --- right-click a contact in the list: the common operations without selecting it first --- */
+const queryClient = useQueryClient()
+const archive = useMutation({
+  mutationFn: (contact: Contact) => call('archive_contact', { id: contact.id, archived: !contact.archived }),
+  onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['contacts'] }),
+  onError: (err) => toast.error(t('contacts.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+
+async function copy(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast.success(t('contacts.copied'))
+  } catch {
+    toast.error(t('contacts.copyFailed'))
+  }
+}
+
+function contactActions(contact: Contact): UiAction[] {
+  const run = (effect: DebtEffect | null) => () => {
+    selectedId.value = contact.id
+    openTransfer(effect)
+  }
+  const blocked = contact.archived ? t('contacts.archivedHint') : !transferStore.value ? t('contacts.noWallet') : false
+  return [
+    { id: 'transfer', label: t('contacts.writeTransfer'), icon: ArrowRightLeft, disabled: blocked, run: run(null) },
+    { id: 'lend', label: t('debt.action.lend'), icon: ArrowUpRight, disabled: blocked, run: run('lend') },
+    { id: 'borrow', label: t('debt.action.borrow'), icon: ArrowDownLeft, disabled: blocked, run: run('borrow') },
+    {
+      id: 'copy',
+      label: t('contacts.copyAccount'),
+      icon: Copy,
+      separated: true,
+      hidden: !contact.accounts.length,
+      children: contact.accounts.map((account, index) => ({
+        id: `copy-${account.id || index}`,
+        label: `${account.label || t(`detailKind.${account.kind}`)} · ${account.value}`,
+        run: () => void copy(account.value),
+      })),
+    },
+    {
+      id: 'archive',
+      label: contact.archived ? t('stores.unarchive') : t('stores.archive'),
+      icon: contact.archived ? ArchiveRestore : Archive,
+      destructive: !contact.archived,
+      separated: true,
+      run: () => archive.mutate(contact),
+    },
+  ]
+}
 </script>
 
 <template>
-  <div class="grid gap-4 @container">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <Input v-model="search" class="h-9 w-64" :placeholder="t('contacts.search')" />
-      <Button @click="createOpen = true">
-        <Plus class="size-4" />
-        {{ t('contacts.new') }}
-      </Button>
-    </div>
+  <div class="grid items-start gap-4 @container @2xl:grid-cols-[18rem_1fr]">
+    <aside class="grid gap-2">
+      <ContactQuickCreate @created="(contact) => (selectedId = contact.id)" />
+      <div class="relative">
+        <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input v-model="search" class="h-9 pl-8" :placeholder="t('contacts.search')" :aria-label="t('contacts.search')" />
+      </div>
+      <ToggleGroup v-model="filter" type="single" variant="outline" size="sm" class="w-full" :aria-label="t('contacts.filter')">
+        <ToggleGroupItem value="all" class="flex-1">{{ t('contacts.filterAll') }}</ToggleGroupItem>
+        <ToggleGroupItem value="owe_me" class="flex-1">{{ t('contacts.filterOweMe') }}</ToggleGroupItem>
+        <ToggleGroupItem value="i_owe" class="flex-1">{{ t('contacts.filterIOwe') }}</ToggleGroupItem>
+      </ToggleGroup>
 
-    <div
-      v-if="contacts.isSuccess.value && !contacts.data.value?.length"
-      class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-8 text-center"
-    >
-      <p class="text-sm text-muted-foreground">{{ t('contacts.empty') }}</p>
-      <Button class="mt-2" @click="createOpen = true">
-        <Plus class="size-4" />
-        {{ t('contacts.new') }}
-      </Button>
-    </div>
-
-    <div v-else class="grid items-start gap-4 @2xl:grid-cols-[18rem_1fr]">
-      <ul class="grid gap-1">
+      <p v-if="contacts.isSuccess.value && !list.length" class="px-1 py-4 text-sm text-muted-foreground">
+        {{ contacts.data.value?.length ? t('contacts.nothingFound') : t('contacts.empty') }}
+      </p>
+      <ul class="grid gap-0.5">
         <li v-for="contact in list" :key="contact.id">
+          <ContextMenu :actions="contactActions(contact)">
           <button
             type="button"
             :class="
@@ -112,51 +191,65 @@ const transferTo = computed<AccountRef | null>(() =>
             @click="selectedId = contact.id"
           >
             <span class="min-w-0 truncate font-medium">{{ contact.name }}</span>
-            <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ owes(contact.id) }}</span>
+            <span class="flex shrink-0 flex-col items-end text-xs tabular-nums">
+              <span
+                v-for="row in netOf(contact.id)"
+                :key="row.symbol"
+                :class="row.net > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'"
+              >
+                {{ row.net > 0 ? '+' : '−' }}{{ formatMoney(Math.abs(row.net), { decimals: 0, currency: row.symbol }) }}
+              </span>
+            </span>
           </button>
+          </ContextMenu>
         </li>
       </ul>
+    </aside>
 
-      <ContactCard
-        v-if="selected"
-        :contact="selected"
-        :balances="selectedBalances"
-        :turnover="turnover.data.value ?? null"
-      >
-        <template #actions>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-8 text-muted-foreground"
-            :title="t('contacts.writeTransfer')"
-            :aria-label="t('contacts.writeTransfer')"
-            :disabled="!transferStore || selected.archived"
-            @click="transferOpen = true"
-          >
-            <ArrowRightLeft class="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-8 text-muted-foreground"
-            :title="t('contacts.edit')"
-            :aria-label="t('contacts.edit')"
-            @click="editOpen = true"
-          >
-            <Pencil class="size-4" />
-          </Button>
-          <ContactArchive :contact="selected" @deleted="selectedId = ''" />
+    <div v-if="selected" class="grid gap-4">
+      <Card :class="selected.archived && 'opacity-70'">
+        <template #header>
+          <div class="flex items-center justify-end gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="!transferStore || selected.archived"
+              @click="openTransfer(null)"
+            >
+              <ArrowRightLeft class="size-4" />
+              {{ t('contacts.writeTransfer') }}
+            </Button>
+            <ContactArchive :contact="selected" @deleted="selectedId = ''" />
+          </div>
         </template>
-      </ContactCard>
+        <ContactEditor :key="selected.id" :contact="selected" />
+      </Card>
+
+      <Card>
+        <Tabs v-model="detailTab" :tabs="detailTabs">
+          <template #debts>
+            <div class="grid gap-4 @container">
+              <DebtPanel :contact="selected" :balances="selectedBalances" @operation="openTransfer" />
+              <TransactionsList v-if="debtHistory.length" :transactions="debtHistory" />
+            </div>
+          </template>
+          <template #history>
+            <TransactionsList v-if="history.data.value?.length" :transactions="history.data.value" />
+            <p v-else class="text-sm text-muted-foreground">{{ t('contacts.noHistory') }}</p>
+          </template>
+          <template #turnover>
+            <ContactTurnoverTable :turnover="turnover.data.value ?? null" />
+          </template>
+        </Tabs>
+      </Card>
     </div>
 
-    <ContactDialog v-model:open="createOpen" @saved="(contact) => (selectedId = contact.id)" />
-    <ContactDialog v-model:open="editOpen" :contact="selected" />
     <TransactionCreateDialog
       v-if="transferStore"
       v-model:open="transferOpen"
       :store-id="transferStore"
-      :counterpart="transferTo"
+      :counterpart="counterpart"
+      :debt="debtEffect"
     />
   </div>
 </template>

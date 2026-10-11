@@ -9,7 +9,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call, parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
-import type { ContactArchiveProps } from './contact-edit.types'
+import type { ContactArchiveProps } from '../contact-edit.types'
 
 const props = defineProps<ContactArchiveProps>()
 const emit = defineEmits<{ deleted: [] }>()
