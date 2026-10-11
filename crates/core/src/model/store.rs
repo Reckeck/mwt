@@ -3,31 +3,226 @@ use serde::{Deserialize, Serialize};
 use crate::model::chain::Chain;
 use schemars::JsonSchema;
 
-/// What kind of container a store represents.
+/// What kind of container a store represents. The sidebar groups wallets by
+/// it, and it decides which sub-accounts, settings and automations apply.
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum StoreKind {
-    /// CEX (e.g. Binance, Bybit)
-    Exchange,
-    HotWallet,
-    ColdWallet,
-    Bank,
+    /// The single cash wallet, created with the vault.
     #[default]
     Cash,
+    Bank,
+    /// A self-custody crypto wallet (hot or cold, see [`Custody`]).
+    Crypto,
+    /// CEX (e.g. Bybit). Carries the exchange profile and its terminal.
+    Exchange,
     /// Non-financial property valued by hand: a flat, a car, a collection.
-    Asset,
-    /// Money owed: a mortgage, a loan, a credit card. Its balance is negative.
+    Property,
+    /// Money owed: a mortgage, a loan. Its balance is negative.
     Liability,
 }
 
 impl StoreKind {
-    /// Whether a new top-level store of this kind counts in the daily budget
-    /// by default (plan D22): everyday money does, investments and debts do not.
-    pub fn in_budget_by_default(self) -> bool {
-        matches!(self, Self::Cash | Self::Bank)
+    /// Sidebar order.
+    pub const ALL: [StoreKind; 6] = [
+        Self::Cash,
+        Self::Bank,
+        Self::Crypto,
+        Self::Exchange,
+        Self::Property,
+        Self::Liability,
+    ];
+
+    /// How many top-level wallets of this kind may exist.
+    pub fn max_roots(self) -> Option<usize> {
+        match self {
+            Self::Cash => Some(1),
+            _ => None,
+        }
     }
+
+    /// Whether the user creates wallets of this kind (cash comes with the vault).
+    pub fn user_creatable(self) -> bool {
+        !matches!(self, Self::Cash)
+    }
+
+    /// Sub-account types a wallet of this kind offers.
+    pub fn sub_types(self) -> &'static [SubType] {
+        use SubType::*;
+        match self {
+            Self::Cash => &[Pocket],
+            Self::Bank => &[Card, Account, Deposit, Savings, CreditCard],
+            Self::Crypto => &[Token],
+            Self::Exchange => &[Spot, Futures, Earn, Pair],
+            Self::Property | Self::Liability => &[],
+        }
+    }
+
+    /// Ready-made automations a wallet of this kind offers.
+    pub fn automation_presets(self) -> &'static [crate::model::planning::AutomationPreset] {
+        use crate::model::planning::AutomationPreset::*;
+        match self {
+            Self::Cash => &[Expense, TopUp],
+            Self::Bank => &[Salary, CardPayment, ToSavings, DepositInterest],
+            Self::Crypto => &[DcaBuy, StakingReward],
+            Self::Exchange => &[DcaBuy, MarketTransfer],
+            Self::Property => &[RentIncome, PropertyTax, Insurance, Utilities],
+            Self::Liability => &[LoanPayment],
+        }
+    }
+
+    /// What the money in a top-level wallet of this kind is for by default.
+    pub fn default_purpose(self) -> Purpose {
+        match self {
+            Self::Cash | Self::Bank => Purpose::Everyday,
+            Self::Crypto | Self::Exchange | Self::Property | Self::Liability => Purpose::Investment,
+        }
+    }
+}
+
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Custody {
+    #[default]
+    Hot,
+    Cold,
+}
+
+/// A sub-account template. Which ones a wallet offers depends on its kind,
+/// see [`StoreKind::sub_types`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SubType {
+    /// Cash in one currency.
+    Pocket,
+    Card,
+    Account,
+    Deposit,
+    Savings,
+    /// A credit card: carries [`LiabilityTerms`], may go negative.
+    CreditCard,
+    /// One token on one network.
+    Token,
+    Spot,
+    Futures,
+    Earn,
+    /// A trading pair such as BTCUSDT: holds both sides, converts both ways.
+    Pair,
+}
+
+impl SubType {
+    /// Which binding shape this template requires.
+    pub fn binding_shape(self) -> BindingShape {
+        match self {
+            Self::Spot => BindingShape::Market(MarketKind::Spot),
+            Self::Futures => BindingShape::Market(MarketKind::Futures),
+            Self::Earn => BindingShape::Market(MarketKind::Earn),
+            Self::Pair => BindingShape::Pair,
+            _ => BindingShape::Asset,
+        }
+    }
+
+    pub fn default_purpose(self) -> Option<Purpose> {
+        match self {
+            Self::Deposit | Self::Savings => Some(Purpose::Savings),
+            Self::Card | Self::CreditCard | Self::Account | Self::Pocket => Some(Purpose::Everyday),
+            _ => None,
+        }
+    }
+
+    pub fn is_credit(self) -> bool {
+        matches!(self, Self::CreditCard)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MarketKind {
+    Spot,
+    Futures,
+    Earn,
+}
+
+/// The binding shape a sub-account type expects (see [`Binding`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingShape {
+    Asset,
+    Pair,
+    Market(MarketKind),
+}
+
+/// What a sub-account is locked to. A top-level wallet is always `Any`.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Binding {
+    #[default]
+    Any,
+    /// Exactly one currency or token.
+    Asset(AssetRef),
+    /// Both sides of a pair, in either direction.
+    Pair {
+        base: AssetRef,
+        quote: AssetRef,
+    },
+    Market(MarketKind),
+}
+
+impl Binding {
+    pub fn shape(&self) -> Option<BindingShape> {
+        match self {
+            Self::Any => None,
+            Self::Asset(_) => Some(BindingShape::Asset),
+            Self::Pair { .. } => Some(BindingShape::Pair),
+            Self::Market(market) => Some(BindingShape::Market(*market)),
+        }
+    }
+
+    /// Whether `asset` may sit in a store with this binding.
+    pub fn admits(&self, asset: &AssetRef) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Asset(bound) => same_asset(bound, asset),
+            Self::Pair { base, quote } => same_asset(base, asset) || same_asset(quote, asset),
+            Self::Market(MarketKind::Spot | MarketKind::Earn) => !asset.is_derivative(),
+            // Margin can be any coin (inverse contracts), positions are perps.
+            Self::Market(MarketKind::Futures) => true,
+        }
+    }
+}
+
+/// Same asset for binding purposes: the cache key when both sides have one
+/// that identifies them, else the ticker on the same network.
+fn same_asset(left: &AssetRef, right: &AssetRef) -> bool {
+    if left.key() == right.key() {
+        return true;
+    }
+    left.symbol.eq_ignore_ascii_case(&right.symbol)
+        && (left.chain.is_none() || right.chain.is_none() || left.chain == right.chain)
+        && !left.is_derivative()
+        && !right.is_derivative()
+}
+
+/// What the money in a wallet is for. Replaces the old «count in budget»
+/// switch: only everyday money is in the daily budget.
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Purpose {
+    /// Money to live on: its spending and income are in the daily budget.
+    #[default]
+    Everyday,
+    /// Put aside: moving money here is saving, not spending.
+    Savings,
+    /// Trading and price swings never touch the budget; counted in net worth.
+    Investment,
+    /// Not the user's money (a tax reserve, a friend's cash): neither in the
+    /// budget nor in net worth.
+    Transit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -40,8 +235,8 @@ pub enum LiabilityKind {
     Other,
 }
 
-/// Terms of a `liability` store. Informational, except `limit`, which caps
-/// what an automation may charge to a credit card.
+/// Terms of a `liability` store or a credit card. Informational, except
+/// `limit`, which caps what an automation may charge to a credit card.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct LiabilityTerms {
     pub kind: LiabilityKind,
@@ -54,9 +249,120 @@ pub struct LiabilityTerms {
     pub monthly_payment: Option<crate::Amount>,
 }
 
-/// Deepest allowed node depth; a root is depth 0, so the tree has three levels:
-/// wallet → sub-account → sub-account.
-pub const MAX_STORE_DEPTH: usize = 2;
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PropertyCategory {
+    #[default]
+    Flat,
+    House,
+    Car,
+    Land,
+    Other,
+}
+
+/// What a property is. Its value comes from manual prices; expenses
+/// (utilities) point at it through `UtilityItem.property_id`.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct PropertyInfo {
+    pub category: PropertyCategory,
+    pub address: String,
+    /// Square metres, informational.
+    pub area: Option<crate::Amount>,
+    /// YYYY-MM-DD.
+    pub purchased_at: Option<String>,
+    pub purchase_price: Option<crate::Amount>,
+    pub currency: String,
+}
+
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ExchangeProvider {
+    #[default]
+    Bybit,
+    Binance,
+    Okx,
+}
+
+impl ExchangeProvider {
+    /// Whether the app can talk to this exchange yet (others show as «soon»).
+    pub fn supported(self) -> bool {
+        matches!(self, Self::Bybit)
+    }
+}
+
+/// One indicator on the terminal chart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct IndicatorCfg {
+    /// e.g. `ema`, `sma`, `rsi`.
+    pub kind: String,
+    pub period: u32,
+}
+
+/// Terminal panels' layout, as the UI left it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct TerminalLayout {
+    pub show_watchlist: bool,
+    /// Watchlist width in pixels.
+    pub watchlist_width: u32,
+}
+
+impl Default for TerminalLayout {
+    fn default() -> Self {
+        Self {
+            show_watchlist: true,
+            watchlist_width: 240,
+        }
+    }
+}
+
+/// Everything the trading terminal of one exchange remembers. It lives in the
+/// exchange wallet, so two exchanges keep two independent terminals.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct TerminalState {
+    pub watchlist: Vec<String>,
+    pub active_symbol: Option<String>,
+    pub timeframe: String,
+    pub indicators: Vec<IndicatorCfg>,
+    /// Symbol → the drawing manager's JSON export.
+    pub drawings: std::collections::BTreeMap<String, String>,
+    pub layout: TerminalLayout,
+}
+
+impl Default for TerminalState {
+    fn default() -> Self {
+        Self {
+            watchlist: vec!["BTCUSDT".into(), "ETHUSDT".into()],
+            active_symbol: None,
+            timeframe: "1h".into(),
+            indicators: Vec::new(),
+            drawings: std::collections::BTreeMap::new(),
+            layout: TerminalLayout::default(),
+        }
+    }
+}
+
+/// Upper bound on one symbol's drawings JSON; the vault is re-encrypted on
+/// every save, so a runaway chart must not bloat it.
+pub const MAX_DRAWINGS_JSON: usize = 256 * 1024;
+
+/// The exchange a wallet stands for, plus its terminal. Keys are kept apart in
+/// `VaultDoc.exchange_keys` so secrets never travel with the store.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ExchangeProfile {
+    pub provider: ExchangeProvider,
+    /// Background import interval; 0 = off.
+    pub import_interval_sec: u32,
+    #[serde(default)]
+    pub terminal: TerminalState,
+}
+
+/// Deepest allowed node depth; a root is depth 0, so the tree has two levels:
+/// wallet → sub-account.
+pub const MAX_STORE_DEPTH: usize = 1;
 
 /// A "store"/"platform" (хранилище) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).
@@ -70,17 +376,34 @@ pub struct Store {
     pub archived: bool,
     /// Free-form description shown in the UI.
     pub note: String,
-    /// Parent store ID for sub-accounts; `None` for a top-level wallet. The tree
-    /// rules (depth, unique sibling names, no cycles) are enforced on write by
-    /// the service, see `MAX_STORE_DEPTH`.
+    /// Parent store ID for sub-accounts; `None` for a top-level wallet. A
+    /// sub-account has its parent's kind, see `MAX_STORE_DEPTH`.
     #[serde(default)]
     pub parent_id: Option<String>,
+    /// Sub-account template; `None` on a top-level wallet.
+    #[serde(default)]
+    pub sub_type: Option<SubType>,
+    /// What a sub-account may hold; `Any` on a top-level wallet.
+    #[serde(default)]
+    pub binding: Binding,
+    #[serde(default)]
+    pub purpose: Purpose,
     /// Saved contact this wallet belongs to (an exchanger, a bank). Top-level only.
     pub contact_id: Option<String>,
-    /// Loan terms; only on `liability` stores.
+    /// Loan terms; on `liability` stores and credit cards.
     pub liability: Option<LiabilityTerms>,
-    /// Whether this store's income and spending count in the daily budget.
-    pub in_budget: bool,
+    /// Crypto wallets only.
+    #[serde(default)]
+    pub custody: Option<Custody>,
+    /// Property wallets only.
+    #[serde(default)]
+    pub property: Option<PropertyInfo>,
+    /// A loan secured by a property (mortgage → flat).
+    #[serde(default)]
+    pub secured_by: Option<String>,
+    /// Exchange wallets only (top level).
+    #[serde(default)]
+    pub exchange: Option<ExchangeProfile>,
 }
 
 impl Store {
@@ -90,18 +413,26 @@ impl Store {
             name: name.trim().to_string(),
             kind,
             color: color.to_string(),
-            archived: false,
-            note: String::new(),
-            parent_id: None,
-            contact_id: None,
-            liability: None,
-            in_budget: kind.in_budget_by_default(),
+            purpose: kind.default_purpose(),
+            custody: (kind == StoreKind::Crypto).then_some(Custody::Hot),
+            ..Self::default()
         }
     }
 
     pub fn with_parent(mut self, parent_id: String) -> Self {
         self.parent_id = Some(parent_id);
         self
+    }
+
+    /// Whether this store's income and spending count in the daily budget.
+    /// A loan never does: paying it off is a cost, its balance is not money.
+    pub fn in_budget(&self) -> bool {
+        self.purpose == Purpose::Everyday && self.kind != StoreKind::Liability
+    }
+
+    /// Whether the balance may go below zero by design.
+    pub fn is_debt(&self) -> bool {
+        self.kind == StoreKind::Liability || self.liability.is_some()
     }
 }
 

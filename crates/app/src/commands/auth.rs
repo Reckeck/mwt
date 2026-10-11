@@ -48,8 +48,24 @@ pub async fn create_vault(
     if input.password.is_empty() {
         return Err("INVALID_INPUT: password must not be empty".into());
     }
-    let vault = UnlockedVault::create(path.clone(), &input.password)
+    let mut vault = UnlockedVault::create(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
+    if let Some(name) = input
+        .cash_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        && let Some(cash) = vault
+            .doc
+            .stores
+            .iter()
+            .find(|store| store.kind == trade_core::model::store::StoreKind::Cash)
+            .map(|store| store.id.clone())
+    {
+        vault
+            .update_store(&cash, name, "#16a34a", "", Default::default())
+            .map_err(crate::commands::err_to_string)?;
+    }
     *state
         .vault
         .lock()

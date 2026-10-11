@@ -639,7 +639,7 @@ impl UnlockedVault {
             .doc
             .stores
             .iter()
-            .filter(|store| store.in_budget && !store.archived)
+            .filter(|store| store.in_budget() && !store.archived)
             .map(|store| store.id.as_str())
             .collect();
         self.doc
@@ -759,7 +759,7 @@ impl UnlockedVault {
     pub fn scope_in_budget(&self, scope: &StoreScope) -> bool {
         self.resolve_scope(scope)
             .iter()
-            .any(|id| self.find_store(id).is_some_and(|store| store.in_budget))
+            .any(|id| self.find_store(id).is_some_and(|store| store.in_budget()))
     }
 }
 
@@ -943,6 +943,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 name: "Salary".into(),
                 active: true,
+                preset: None,
                 schedule: Schedule::Monthly { day: 25 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Topup(salary),

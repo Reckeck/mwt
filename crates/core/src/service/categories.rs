@@ -284,7 +284,7 @@ mod vault_tests {
     #[test]
     fn renaming_keeps_transactions_and_deleting_needs_it_unused() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let coffee = vault
             .create_category(None, "Coffee", CategoryGroup::Daily)
             .unwrap();

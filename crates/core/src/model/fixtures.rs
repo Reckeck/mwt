@@ -208,7 +208,7 @@ pub fn full_doc() -> VaultDoc {
     loan.contact_id = Some("contact".into());
     let mut child = Store::new("Spot", StoreKind::Exchange, "#111");
     child.parent_id = Some(loan.id.clone());
-    doc.stores = vec![loan, child, Store::new("Flat", StoreKind::Asset, "#222")];
+    doc.stores = vec![loan, child, Store::new("Flat", StoreKind::Property, "#222")];
     doc.transactions = every_transaction();
     doc.settings.budget_currency = "thb".into();
     doc.contacts = vec![Contact {
@@ -248,6 +248,7 @@ pub fn full_doc() -> VaultDoc {
             id: format!("auto-{index}"),
             name: "Rent".into(),
             active: true,
+            preset: None,
             schedule: *schedule,
             starts_at: "2026-01-01T09:00:00Z".into(),
             template,
@@ -368,6 +369,7 @@ pub fn full_doc() -> VaultDoc {
             active: true,
             kind,
             currency: "rub".into(),
+            property_id: "flat".into(),
             store_id: Some("bank".into()),
             category: "utilities".into(),
         })

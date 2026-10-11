@@ -13,19 +13,37 @@ use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
 use schemars::JsonSchema;
 
+/// One widget on the dashboard grid (12 columns). A widget not in the list is
+/// not on the dashboard; the grid compacts upwards, so `y` is only an order.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct DashboardWidgetCfg {
     pub id: String,
-    pub visible: bool,
-    pub order: u32,
+    /// Left column, 0-based.
+    pub col: u32,
+    /// Top row; the grid compacts upwards, so it only orders.
+    pub row: u32,
+    /// Width in columns.
+    pub width: u32,
+    /// Height in rows.
+    pub height: u32,
+    /// Header hidden: the widget is locked in place and not resizable.
+    #[serde(default)]
+    pub pinned: bool,
+    /// A widget about one wallet (an exchange's chart) remembers which.
+    #[serde(default)]
+    pub store_id: Option<String>,
 }
 
 impl Default for DashboardWidgetCfg {
     fn default() -> Self {
         Self {
             id: "total".into(),
-            visible: true,
-            order: 0,
+            col: 0,
+            row: 0,
+            width: 4,
+            height: 4,
+            pinned: false,
+            store_id: None,
         }
     }
 }
@@ -53,9 +71,6 @@ pub struct Settings {
     pub fx_refresh_interval_sec: u32,
     #[serde(default = "default_minimize_to_tray")]
     pub minimize_to_tray: bool,
-    /// Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
-    #[serde(default = "default_bybit_import_interval")]
-    pub bybit_import_interval_sec: u32,
     /// Share of income planned for savings, 0..1 (plan D16).
     pub savings_rate: Amount,
     pub daily_budget_mode: DailyBudgetMode,
@@ -88,10 +103,6 @@ pub struct ManualPrice {
     pub updated_at: String,
 }
 
-fn default_bybit_import_interval() -> u32 {
-    900
-}
-
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -99,7 +110,6 @@ impl Default for Settings {
             dashboard_widgets: vec![],
             fx_refresh_interval_sec: 300,
             minimize_to_tray: true,
-            bybit_import_interval_sec: 900,
             savings_rate: Amount::parse("0.10").unwrap_or(Amount::ZERO),
             daily_budget_mode: DailyBudgetMode::Month,
             budget_currency: String::new(),
@@ -321,6 +331,12 @@ pub struct VaultDoc {
     pub meter_readings: Vec<MeterReading>,
     pub enrichments: Vec<EnrichmentRecord>,
     pub manual_prices: Vec<ManualPrice>,
+    /// Virtual envelopes: earmarked parts of a store's balance.
+    #[serde(default)]
+    pub envelopes: Vec<crate::model::planning::Envelope>,
+    /// Due dates and notes of debts with contacts.
+    #[serde(default)]
+    pub debt_terms: Vec<crate::model::contact::DebtTerms>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -361,6 +377,8 @@ impl Default for VaultDoc {
             meter_readings: Vec::new(),
             enrichments: Vec::new(),
             manual_prices: Vec::new(),
+            envelopes: Vec::new(),
+            debt_terms: Vec::new(),
         }
     }
 }
@@ -449,7 +467,7 @@ mod json_schema_tests {
         // carrying doc comments come back as `oneOf` with `const` instead of a
         // flat `enum`, so only require that the names are present somewhere.
         let store_kinds = defs["StoreKind"].to_string();
-        for kind in ["exchange", "hot_wallet", "cold_wallet", "bank", "cash"] {
+        for kind in ["exchange", "crypto", "property", "bank", "cash"] {
             assert!(store_kinds.contains(kind), "StoreKind is missing `{kind}`");
         }
         // `paper` only ever held the Strategy Lab's virtual money.

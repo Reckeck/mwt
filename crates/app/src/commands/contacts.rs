@@ -1,8 +1,8 @@
 use tauri::State;
 
 use trade_core::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
-use trade_core::model::contact::Contact;
-use trade_core::service::{ContactBalance, ContactDraft, ContactTurnover};
+use trade_core::model::contact::{Contact, DebtTerms};
+use trade_core::service::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft};
 
 use crate::commands::{AppState, err_to_string, require_vault};
 
@@ -83,4 +83,28 @@ pub async fn get_contact_balances(
 ) -> Result<Vec<ContactBalance>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     Ok(guard.as_ref().unwrap().contact_balances())
+}
+
+/// Due dates and notes of debts, of one contact or of all.
+#[tauri::command]
+pub async fn list_debt_terms(
+    contact_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Vec<DebtTerms>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().debt_terms(contact_id.as_deref()))
+}
+
+/// Set one debt's due date and note; empty both to remove them.
+#[tauri::command]
+pub async fn set_debt_terms(
+    input: DebtTermsDraft,
+    state: State<'_, AppState>,
+) -> Result<Option<DebtTerms>, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_debt_terms(input)
+        .map_err(err_to_string)
 }

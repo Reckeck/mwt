@@ -25,6 +25,8 @@ pub struct UtilityDraft {
     pub active: bool,
     pub kind: UtilityKind,
     pub currency: String,
+    /// A utility always belongs to a property.
+    pub property_id: String,
     pub store_id: Option<String>,
     pub category: String,
 }
@@ -105,7 +107,107 @@ fn next_on_line(values: &[Amount]) -> Option<Amount> {
     Some(Amount::from_f64(next.max(0.0)).round(2))
 }
 
+/// One property at a glance: what it is worth, what is owed on it and what
+/// it costs a month, all in the base currency.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct PropertySummary {
+    pub store_id: String,
+    pub base_currency: String,
+    pub value_base: Amount,
+    /// Balance of the loans secured by it, as a positive number.
+    pub debt_base: Amount,
+    pub equity_base: Amount,
+    /// Utilities a month, as far as is known (last bill, fixed amount, rent).
+    pub utilities_month_base: Amount,
+    /// Mandatory loan payments a month, from the loans' terms.
+    pub loan_month_base: Amount,
+    pub monthly_cost_base: Amount,
+    pub utility_count: u32,
+}
+
 impl UnlockedVault {
+    /// The property summary: value, debt, equity and monthly costs.
+    pub fn property_summary(&self, store_id: &str, zone: &str) -> Result<PropertySummary> {
+        let store = self
+            .find_store(store_id)
+            .filter(|store| store.kind == crate::model::store::StoreKind::Property)
+            .ok_or_else(|| Error::Missing(format!("property {store_id}")))?;
+        let (base, fx) = self.base_and_fx();
+        let now = secs_or_now(&now_iso());
+        let book = self.rate_book();
+        let value_usd = self
+            .doc
+            .holdings
+            .iter()
+            .filter(|holding| holding.store_id == store.id)
+            .fold(Amount::ZERO, |sum, holding| {
+                sum + holding.quantity * self.price_usd_for(&holding.asset.key())
+            });
+        let loans: Vec<&crate::model::store::Store> = self
+            .doc
+            .stores
+            .iter()
+            .filter(|loan| !loan.archived && loan.secured_by.as_deref() == Some(store_id))
+            .collect();
+        let debt_usd = loans.iter().fold(Amount::ZERO, |sum, loan| {
+            let balance = self
+                .doc
+                .holdings
+                .iter()
+                .filter(|holding| holding.store_id == loan.id)
+                .fold(Amount::ZERO, |acc, holding| {
+                    acc + holding.quantity * self.price_usd_for(&holding.asset.key())
+                });
+            sum - balance.min(Amount::ZERO)
+        });
+        let to_base = |amount: Amount, currency: &str| {
+            book.convert(amount, currency, &base, now)
+                .unwrap_or(Amount::ZERO)
+        };
+        let loan_month_base = loans.iter().fold(Amount::ZERO, |sum, loan| {
+            let payment = loan
+                .liability
+                .as_ref()
+                .and_then(|terms| terms.monthly_payment)
+                .unwrap_or(Amount::ZERO);
+            // A loan's currency is what it holds; an empty one is in the base currency.
+            let currency = self
+                .doc
+                .holdings
+                .iter()
+                .find(|holding| holding.store_id == loan.id)
+                .map(|holding| holding.asset.symbol.to_lowercase())
+                .unwrap_or_else(|| base.clone());
+            sum + to_base(payment, &currency)
+        });
+        let items: Vec<&UtilityItem> = self
+            .doc
+            .utility_items
+            .iter()
+            .filter(|item| item.active && item.property_id == store_id)
+            .collect();
+        let utilities_month_base = items.iter().fold(Amount::ZERO, |sum, item| {
+            let monthly = self
+                .meter_trend(&item.id, zone)
+                .map(|trend| trend.monthly)
+                .unwrap_or(Amount::ZERO);
+            sum + to_base(monthly, &item.currency)
+        });
+        let value_base = value_usd * fx;
+        let debt_base = debt_usd * fx;
+        Ok(PropertySummary {
+            store_id: store.id.clone(),
+            base_currency: base,
+            value_base,
+            debt_base,
+            equity_base: value_base - debt_base,
+            utilities_month_base,
+            loan_month_base,
+            monthly_cost_base: utilities_month_base + loan_month_base,
+            utility_count: items.len() as u32,
+        })
+    }
+
     // -- CRUD -------------------------------------------------------------------
 
     pub fn utility_items(&self) -> Vec<UtilityItem> {
@@ -128,6 +230,12 @@ impl UnlockedVault {
             .any(|category| category.key == draft.category)
         {
             return Err(Error::Missing(format!("category {}", draft.category)));
+        }
+        let is_property = self.find_store(&draft.property_id).is_some_and(|store| {
+            store.kind == crate::model::store::StoreKind::Property && store.parent_id.is_none()
+        });
+        if !is_property {
+            return Err(Error::Missing(format!("property {}", draft.property_id)));
         }
         if let Some(id) = &draft.store_id
             && self.find_store(id).is_none()
@@ -180,6 +288,7 @@ impl UnlockedVault {
             active: draft.active,
             kind: draft.kind,
             currency: draft.currency.trim().to_lowercase(),
+            property_id: draft.property_id,
             store_id: draft.store_id,
             category: draft.category,
         };
@@ -200,6 +309,7 @@ impl UnlockedVault {
         item.active = draft.active;
         item.kind = draft.kind;
         item.currency = draft.currency.trim().to_lowercase();
+        item.property_id = draft.property_id;
         item.store_id = draft.store_id;
         item.category = draft.category;
         let out = item.clone();
@@ -507,6 +617,7 @@ mod tests {
     use crate::service::test_support::*;
 
     fn metered(vault: &mut UnlockedVault) -> UtilityItem {
+        let flat = store(vault, "Flat", StoreKind::Property, None);
         vault
             .create_utility_item(UtilityDraft {
                 name: "Electricity".into(),
@@ -516,6 +627,7 @@ mod tests {
                     tariff: amount("5"),
                 },
                 currency: "rub".into(),
+                property_id: flat,
                 store_id: None,
                 category: "utilities".into(),
             })
@@ -564,6 +676,7 @@ mod tests {
         );
         seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
         vault.add_transaction(seed).unwrap();
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
         let item = vault
             .create_utility_item(UtilityDraft {
                 name: "Rent".into(),
@@ -575,6 +688,7 @@ mod tests {
                     automation_id: None,
                 },
                 currency: "rub".into(),
+                property_id: flat,
                 store_id: Some(card.clone()),
                 category: "rent_mortgage".into(),
             })
@@ -625,5 +739,29 @@ mod tests {
             .unwrap();
         let spike = vault.meter_trend(&item.id, "UTC").unwrap();
         assert!(spike.anomaly);
+    }
+
+    #[test]
+    fn a_utility_needs_a_property_and_the_summary_adds_it_up() {
+        let (_dir, mut vault) = empty_vault();
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let draft = |property_id: &str| UtilityDraft {
+            name: "Internet".into(),
+            active: true,
+            kind: UtilityKind::Static {
+                amount: amount("30"),
+            },
+            currency: "usd".into(),
+            property_id: property_id.into(),
+            store_id: None,
+            category: "utilities".into(),
+        };
+        assert!(vault.create_utility_item(draft(&bank)).is_err());
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
+        vault.create_utility_item(draft(&flat)).unwrap();
+        let summary = vault.property_summary(&flat, "UTC").unwrap();
+        assert_eq!(summary.utility_count, 1);
+        assert_eq!(summary.utilities_month_base, amount("30"));
+        assert_eq!(summary.monthly_cost_base, amount("30"));
     }
 }

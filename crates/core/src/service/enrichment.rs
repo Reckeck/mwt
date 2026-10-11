@@ -217,7 +217,7 @@ mod tests {
     /// A wallet funded with ETH and a transfer out with a hash, no fee.
     fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
         let (dir, mut vault) = empty_vault();
-        let wallet = store(&mut vault, "Hot", StoreKind::HotWallet, None);
+        let wallet = store(&mut vault, "Hot", StoreKind::Crypto, None);
         vault
             .add_transaction(income_of(&wallet, eth(), "2", "3000", "in"))
             .unwrap();

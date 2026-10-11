@@ -43,7 +43,11 @@ enrichment_opt_in: boolean | null,
  * `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
  * window manager's own bindings unless the user asks for it.
  */
-quick_add_shortcut: string | null, };
+quick_add_shortcut: string | null, 
+/**
+ * Guided tours already shown (by page), so a tour starts by itself only once.
+ */
+completed_tours: Array<string>, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -102,7 +106,11 @@ price: PriceStamp, };
 
 type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_usd: Amount, };
 
-type Automation = { id: string, name: string, active: boolean, schedule: Schedule, 
+type Automation = { id: string, name: string, active: boolean, 
+/**
+ * The ready-made kind it was created from, for the wallet's list.
+ */
+preset: AutomationPreset | null, schedule: Schedule, 
 /**
  * First planned date, RFC3339.
  */
@@ -116,7 +124,7 @@ last_planned_at: string | null, created_at: string, };
  * An automation as the form edits it. The template is an ordinary
  * transaction input of one of the four verbs.
  */
-type AutomationInput = { name: string, active: boolean, schedule: Schedule, 
+type AutomationInput = { name: string, active: boolean, preset: AutomationPreset | null, schedule: Schedule, 
 /**
  * RFC3339, the first planned date.
  */
@@ -142,6 +150,12 @@ rejected: Array<AutomationRun>,
 skipped: number, };
 
 /**
+ * A ready-made automation a wallet offers: it decides the operation kind and
+ * the category, the user fills in only the amount and the date.
+ */
+type AutomationPreset = "expense" | "top_up" | "salary" | "card_payment" | "to_savings" | "deposit_interest" | "dca_buy" | "staking_reward" | "market_transfer" | "rent_income" | "property_tax" | "insurance" | "utilities" | "loan_payment";
+
+/**
  * Payload of `automation-rejected`: one run the scheduler could not create.
  */
 type AutomationRejectedEvent = { run_id: string, automation_id: string, name: string, planned_at: string, reason: RejectReason, };
@@ -151,6 +165,16 @@ type AutomationRejectedEvent = { run_id: string, automation_id: string, name: st
  * doubles as the automation's history.
  */
 type AutomationRun = { id: string, automation_id: string, planned_at: string, processed_at: string, outcome: AutomationOutcome, };
+
+/**
+ * What a sub-account is locked to. A top-level wallet is always `Any`.
+ */
+type Binding = "any" | { "asset": AssetRef } | { "pair": { base: AssetRef, quote: AssetRef, } } | { "market": MarketKind };
+
+/**
+ * Binding shape of a sub-account type, as the creation form needs it.
+ */
+type BindingShapeName = "asset" | "pair" | "market";
 
 type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
 
@@ -516,21 +540,41 @@ key: string | null, name: string, group: CategoryGroup, };
 
 type CreateRuleInput = { pattern: string, category: string, };
 
-type CreateStoreInput = { name: string, kind: StoreKind, color: string, note: string, parent_id: string | null, 
+type CreateStoreInput = { name: string, 
 /**
- * `None` = the default: by kind for a wallet, the parent's for a sub-account.
+ * Ignored for a sub-account: it always has its wallet's kind.
  */
-in_budget: boolean | null, 
+kind: StoreKind, color: string, note: string, parent_id: string | null, 
 /**
- * Loan terms; only for `liability`.
+ * Sub-accounts: the template, from `StoreKind::sub_types`.
+ */
+sub_type: SubType | null, 
+/**
+ * Sub-accounts: what it is locked to; market types fill it themselves.
+ */
+binding: Binding | null, 
+/**
+ * `None` = the default of the sub-account type, else of the kind.
+ */
+purpose: Purpose | null, 
+/**
+ * Loan terms; for `liability` wallets and credit cards.
  */
 liability: LiabilityTerms | null, 
 /**
  * Contact the wallet belongs to; top-level only.
  */
-contact_id: string | null, };
+contact_id: string | null, custody: Custody | null, property: PropertyInfo | null, secured_by: string | null, 
+/**
+ * Exchange wallets: which exchange it is.
+ */
+provider: ExchangeProvider | null, };
 
-type CreateVaultInput = { path: string, password: string, };
+type CreateVaultInput = { path: string, password: string, 
+/**
+ * Name of the cash wallet every vault starts with, in the user's language.
+ */
+cash_name: string | null, };
 
 /**
  * Catalog of currencies the base/favourite pickers may offer.
@@ -543,6 +587,8 @@ type CurrencyCatalogOutput = { catalog: SupportedCurrencies,
  * providers answered just now.
  */
 notice: string | null, };
+
+type Custody = "hot" | "cold";
 
 /**
  * The daily budget for today (plan §7.3, D18).
@@ -594,7 +640,35 @@ manual_limit: Amount | null, };
  */
 type DailyBudgetMode = "month" | "until_income";
 
-type DashboardWidgetCfg = { id: string, visible: boolean, order: number, };
+/**
+ * One widget on the dashboard grid (12 columns). A widget not in the list is
+ * not on the dashboard; the grid compacts upwards, so `y` is only an order.
+ */
+type DashboardWidgetCfg = { id: string, 
+/**
+ * Left column, 0-based.
+ */
+col: number, 
+/**
+ * Top row; the grid compacts upwards, so it only orders.
+ */
+row: number, 
+/**
+ * Width in columns.
+ */
+width: number, 
+/**
+ * Height in rows.
+ */
+height: number, 
+/**
+ * Header hidden: the widget is locked in place and not resizable.
+ */
+pinned: boolean, 
+/**
+ * A widget about one wallet (an exchange's chart) remembers which.
+ */
+store_id: string | null, };
 
 /**
  * How one day of the calendar went against its allowance.
@@ -605,6 +679,25 @@ type DayStatus = "none" | "under" | "near" | "over" | "future";
  * Effect of a transfer on a personal debt with a contact.
  */
 type DebtEffect = "lend" | "borrow" | "repay" | "collect";
+
+/**
+ * When and why a debt with a contact is due. The amount is never stored: it
+ * is what the debt operations with the contact add up to (`DebtEffect`).
+ */
+type DebtTerms = { id: string, contact_id: string, 
+/**
+ * Ticker of the debt's asset (`USD`, `USDT`); one terms entry per asset.
+ */
+asset: string, 
+/**
+ * `YYYY-MM-DD`.
+ */
+due_at: string | null, note: string, created_at: string, };
+
+/**
+ * Due date and note for a debt with a contact in one asset.
+ */
+type DebtTermsDraft = { contact_id: string, asset: string, due_at: string | null, note: string, };
 
 type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liquidity";
 
@@ -637,6 +730,48 @@ type EnrichmentSource = { "explorer": Chain } | "token_list";
 type EnrichmentStatus = "pending" | "applied" | "rejected";
 
 /**
+ * An envelope: a named, earmarked part of one asset's balance in one store
+ * («отпуск», «налоги»). Nothing physically moves — the store still holds the
+ * money; envelopes only mark how much of it is spoken for.
+ */
+type Envelope = { id: string, store_id: string, name: string, asset: AssetRef, 
+/**
+ * How much is earmarked now, in `asset`.
+ */
+allocated: Amount, 
+/**
+ * What the envelope is filling up to, in `asset`.
+ */
+target: Amount | null, 
+/**
+ * A goal whose progress is this envelope.
+ */
+goal_id: string | null, created_at: string, };
+
+/**
+ * What creating or editing an envelope takes.
+ */
+type EnvelopeDraft = { store_id: string, name: string, asset: AssetRef, target: Amount | null, goal_id: string | null, };
+
+/**
+ * An envelope with what its store can still give it.
+ */
+type EnvelopeView = { envelope: Envelope, 
+/**
+ * Balance of the asset in the store not earmarked by any envelope; may
+ * be negative when spending ate into the envelopes.
+ */
+free: Amount, 
+/**
+ * `allocated / target` in percent, when there is a target.
+ */
+pct: number | null, 
+/**
+ * The store holds less than its envelopes earmark.
+ */
+short: boolean, };
+
+/**
  * Whether a key is stored. The secret is never part of this response.
  */
 type ExchangeKeyStatus = { configured: boolean, 
@@ -652,6 +787,24 @@ spot_store_id: string | null,
  * Sub-account futures fills are booked on; `None` = the key's own store.
  */
 futures_store_id: string | null, };
+
+/**
+ * The exchange a wallet stands for, plus its terminal. Keys are kept apart in
+ * `VaultDoc.exchange_keys` so secrets never travel with the store.
+ */
+type ExchangeProfile = { provider: ExchangeProvider, 
+/**
+ * Background import interval; 0 = off.
+ */
+import_interval_sec: number, terminal: TerminalState, };
+
+type ExchangeProvider = "bybit" | "binance" | "okx";
+
+type ExchangeProviderInfo = { provider: ExchangeProvider, 
+/**
+ * The app can connect to it; others are shown as «soon».
+ */
+supported: boolean, };
 
 /**
  * A fee paid in some asset. It is booked as its own outgoing leg, so holdings
@@ -694,6 +847,11 @@ loss: Amount,
  * `gave_value − got_value`: the loss plus how rates moved meanwhile.
  */
 difference: Amount, };
+
+/**
+ * `amount > 0` earmarks from the free balance, `< 0` releases.
+ */
+type FundEnvelopeInput = { id: string, amount: Amount, };
 
 type FuturesAction = "open" | "close";
 
@@ -880,6 +1038,15 @@ type ImportBybitHistoryOutput = { staged: number,
  */
 notice: string | null, };
 
+/**
+ * One indicator on the terminal chart.
+ */
+type IndicatorCfg = { 
+/**
+ * e.g. `ema`, `sma`, `rsi`.
+ */
+kind: string, period: number, };
+
 type InflationPoint = { month: string, 
 /**
  * What one unit of that month is worth in today's money.
@@ -941,8 +1108,8 @@ type LegRole = "principal" | "fee" | "pnl";
 type LiabilityKind = "mortgage" | "loan" | "credit_card" | "installment" | "other";
 
 /**
- * Terms of a `liability` store. Informational, except `limit`, which caps
- * what an automation may charge to a credit card.
+ * Terms of a `liability` store or a credit card. Informational, except
+ * `limit`, which caps what an automation may charge to a credit card.
  */
 type LiabilityTerms = { kind: LiabilityKind, 
 /**
@@ -996,6 +1163,8 @@ asset_key: string, unit_price: Amount,
  * Lowercase currency code of `unit_price`.
  */
 currency: string, updated_at: string, };
+
+type MarketKind = "spot" | "futures" | "earn";
 
 type MeterReading = { id: string, item_id: string, value: Amount, 
 /**
@@ -1053,6 +1222,8 @@ not_executed: number,
  * Whether every flow had a rate; a missing rate counts as zero.
  */
 complete: boolean, };
+
+type MoveEnvelopeInput = { from: string, to: string, amount: Amount, };
 
 /**
  * Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
@@ -1204,7 +1375,30 @@ assets_base: Amount,
 /**
  * Loans and what I owe people, as a positive number.
  */
-liabilities_base: Amount, net_worth_base: Amount, };
+liabilities_base: Amount, net_worth_base: Amount, 
+/**
+ * When the freshest fetched price or FX rate was stored, RFC3339; `None`
+ * before the first successful refresh.
+ */
+prices_as_of: string | null, };
+
+/**
+ * One `(store, asset)` position a draft would change.
+ */
+type PositionChange = { store_id: string, store_name: string, asset: AssetRef, before: Amount, after: Amount, 
+/**
+ * `after − before`, in base currency at the current price.
+ */
+delta_base: Amount, };
+
+type PresetInfo = { preset: AutomationPreset, tx_kind: TxKind, category: string | null, };
+
+/**
+ * A draft to preview; `replaces` is the id of the transaction being edited.
+ */
+type PreviewTransactionInput = { transaction: TransactionInput, replaces: string | null, };
+
+type PreviewWarning = { "kind": "negative_balance", store_id: string, asset: AssetRef, } | { "kind": "credit_limit", store_id: string, limit: Amount, } | { "kind": "into_envelopes", store_id: string, asset: AssetRef, earmarked: Amount, };
 
 type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, };
 
@@ -1242,6 +1436,46 @@ price_base: Amount | null,
  * Manual USD→base rate the user entered at that moment.
  */
 fx_override: Amount | null, };
+
+type PropertyCategory = "flat" | "house" | "car" | "land" | "other";
+
+/**
+ * What a property is. Its value comes from manual prices; expenses
+ * (utilities) point at it through `UtilityItem.property_id`.
+ */
+type PropertyInfo = { category: PropertyCategory, address: string, 
+/**
+ * Square metres, informational.
+ */
+area: Amount | null, 
+/**
+ * YYYY-MM-DD.
+ */
+purchased_at: string | null, purchase_price: Amount | null, currency: string, };
+
+/**
+ * One property at a glance: what it is worth, what is owed on it and what
+ * it costs a month, all in the base currency.
+ */
+type PropertySummary = { store_id: string, base_currency: string, value_base: Amount, 
+/**
+ * Balance of the loans secured by it, as a positive number.
+ */
+debt_base: Amount, equity_base: Amount, 
+/**
+ * Utilities a month, as far as is known (last bill, fixed amount, rent).
+ */
+utilities_month_base: Amount, 
+/**
+ * Mandatory loan payments a month, from the loans' terms.
+ */
+loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, };
+
+/**
+ * What the money in a wallet is for. Replaces the old «count in budget»
+ * switch: only everyday money is in the daily budget.
+ */
+type Purpose = "everyday" | "savings" | "investment" | "transit";
 
 /**
  * Why a goal is marked «Пересмотреть».
@@ -1319,6 +1553,12 @@ months: Array<string>, real_terms: boolean,
  */
 inflation_rate: Amount | null, };
 
+type SaveTerminalDrawingsInput = { store_id: string, symbol: string, 
+/**
+ * The chart drawing manager's JSON export; empty or `[]` removes it.
+ */
+json: string, };
+
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
 /**
@@ -1337,6 +1577,12 @@ type SetExchangeKeyInput = { store_id: string, api_key: string, api_secret: stri
  */
 type SetExchangeTargetsInput = { store_id: string, spot_store_id: string | null, futures_store_id: string | null, };
 
+type SetImportIntervalInput = { store_id: string, 
+/**
+ * Seconds; `0` turns the background import off.
+ */
+interval_sec: number, };
+
 type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
 
 /**
@@ -1351,10 +1597,6 @@ type Settings = {
  * Decimal places used to render balances.
  */
 display_decimals: number, dashboard_widgets: Array<DashboardWidgetCfg>, fx_refresh_interval_sec: number, minimize_to_tray: boolean, 
-/**
- * Background Bybit import interval in seconds. 0 = disabled. Default 900 (15 min).
- */
-bybit_import_interval_sec: number, 
 /**
  * Share of income planned for savings, 0..1 (plan D16).
  */
@@ -1378,23 +1620,42 @@ color: string, archived: boolean,
  */
 note: string, 
 /**
- * Parent store ID for sub-accounts; `None` for a top-level wallet. The tree
- * rules (depth, unique sibling names, no cycles) are enforced on write by
- * the service, see `MAX_STORE_DEPTH`.
+ * Parent store ID for sub-accounts; `None` for a top-level wallet. A
+ * sub-account has its parent's kind, see `MAX_STORE_DEPTH`.
  */
 parent_id: string | null, 
+/**
+ * Sub-account template; `None` on a top-level wallet.
+ */
+sub_type: SubType | null, 
+/**
+ * What a sub-account may hold; `Any` on a top-level wallet.
+ */
+binding: Binding, purpose: Purpose, 
 /**
  * Saved contact this wallet belongs to (an exchanger, a bank). Top-level only.
  */
 contact_id: string | null, 
 /**
- * Loan terms; only on `liability` stores.
+ * Loan terms; on `liability` stores and credit cards.
  */
 liability: LiabilityTerms | null, 
 /**
- * Whether this store's income and spending count in the daily budget.
+ * Crypto wallets only.
  */
-in_budget: boolean, };
+custody: Custody | null, 
+/**
+ * Property wallets only.
+ */
+property: PropertyInfo | null, 
+/**
+ * A loan secured by a property (mortgage → flat).
+ */
+secured_by: string | null, 
+/**
+ * Exchange wallets only (top level).
+ */
+exchange: ExchangeProfile | null, };
 
 /**
  * A direct sub-account row on the wallet page.
@@ -1419,9 +1680,10 @@ share: number, };
 type StoreCrumb = { id: string, name: string, color: string, };
 
 /**
- * What kind of container a store represents.
+ * What kind of container a store represents. The sidebar groups wallets by
+ * it, and it decides which sub-accounts, settings and automations apply.
  */
-type StoreKind = "exchange" | "hot_wallet" | "cold_wallet" | "bank" | "cash" | "asset" | "liability";
+type StoreKind = "cash" | "bank" | "crypto" | "exchange" | "property" | "liability";
 
 /**
  * Allowed destinations for moving a sub-account.
@@ -1553,6 +1815,18 @@ type StoreValue = { store_id: string, name: string, value_usd: Amount, value_bas
 type StoresReport = { meta: ReportMeta, rows: Array<StoreReportRow>, };
 
 /**
+ * A sub-account template. Which ones a wallet offers depends on its kind,
+ * see [`StoreKind::sub_types`].
+ */
+type SubType = "pocket" | "card" | "account" | "deposit" | "savings" | "credit_card" | "token" | "spot" | "futures" | "earn" | "pair";
+
+type SubTypeInfo = { sub_type: SubType, shape: BindingShapeName, default_purpose: Purpose | null, 
+/**
+ * Carries loan terms (a credit card).
+ */
+credit: boolean, };
+
+/**
  * Currencies the pickers may offer.
  *
  * Built from the public providers at runtime and cached on disk; see
@@ -1567,6 +1841,30 @@ fiat: Array<string>,
  * Crypto ticker symbols, lowercase.
  */
 crypto: Array<string>, };
+
+/**
+ * Terminal panels' layout, as the UI left it.
+ */
+type TerminalLayout = { show_watchlist: boolean, 
+/**
+ * Watchlist width in pixels.
+ */
+watchlist_width: number, };
+
+/**
+ * A partial update of an exchange terminal; `None` keeps the field.
+ */
+type TerminalPatch = { watchlist: Array<string> | null, active_symbol: string | null, timeframe: string | null, indicators: Array<IndicatorCfg> | null, layout: TerminalLayout | null, };
+
+/**
+ * Everything the trading terminal of one exchange remembers. It lives in the
+ * exchange wallet, so two exchanges keep two independent terminals.
+ */
+type TerminalState = { watchlist: Array<string>, active_symbol: string | null, timeframe: string, indicators: Array<IndicatorCfg>, 
+/**
+ * Symbol → the drawing manager's JSON export.
+ */
+drawings: { [key: string]: string }, layout: TerminalLayout, };
 
 type Theme = "auto" | "light" | "dark";
 
@@ -1821,6 +2119,17 @@ contact_id: string | null, origin: TxOrigin, };
  */
 type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } };
 
+type TxPreview = { changes: Array<PositionChange>, base_currency: string, 
+/**
+ * Where the draft lands in the daily budget.
+ */
+flow: FlowClass, warnings: Array<PreviewWarning>, 
+/**
+ * Validation failure as `"CODE: message"`, the same string saving would
+ * return; `None` when the draft would be accepted.
+ */
+error: string | null, };
+
 type UnlockInput = { path: string, password: string, };
 
 /**
@@ -1853,7 +2162,7 @@ amount: Amount | null, asset: AssetRef | null,
  */
 shortfall: Amount | null, };
 
-type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run";
+type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run" | "debt";
 
 /**
  * Partial update: only the fields present in the payload are touched.
@@ -1866,7 +2175,11 @@ timezone: string | null,
 /**
  * Replaces the whole inflation table.
  */
-inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null, };
+inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null, 
+/**
+ * Replaces the list of tours already shown; `[]` shows them all again.
+ */
+completed_tours: Array<string> | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 
@@ -1879,6 +2192,8 @@ type UpdateCategoryInput = { key: string,
 name: string | null, group: CategoryGroup, };
 
 type UpdateContactInput = { id: string, contact: ContactDraft, };
+
+type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, };
 
 type UpdateGoalInput = { id: string, goal: GoalInput, };
 
@@ -1893,10 +2208,6 @@ type UpdateRuleInput = { id: string, pattern: string, category: string, active: 
  */
 type UpdateSettingsInput = { display_decimals: number | null, dashboard_widgets: Array<DashboardWidgetCfg> | null, fx_refresh_interval_sec: number | null, minimize_to_tray: boolean | null, 
 /**
- * Background Bybit poll interval; `0` disables it (D2.4).
- */
-bybit_import_interval_sec: number | null, 
-/**
  * Share of income planned for savings, 0..1.
  */
 savings_rate: Amount | null, daily_budget_mode: DailyBudgetMode | null, 
@@ -1909,7 +2220,26 @@ type UpdateStoreInput = { id: string, name: string, color: string, note: string,
 /**
  * `None` keeps the current value.
  */
-in_budget: boolean | null, liability: LiabilityTerms | null, contact_id: string | null, };
+purpose: Purpose | null, 
+/**
+ * Sub-accounts; `None` keeps the current binding. Refused when booked
+ * operations would no longer fit.
+ */
+binding: Binding | null, liability: LiabilityTerms | null, contact_id: string | null, 
+/**
+ * `None` keeps the current value.
+ */
+custody: Custody | null, 
+/**
+ * `None` keeps the current value.
+ */
+property: PropertyInfo | null, secured_by: string | null, 
+/**
+ * `None` keeps the current exchange.
+ */
+provider: ExchangeProvider | null, };
+
+type UpdateTerminalStateInput = { store_id: string, patch: TerminalPatch, };
 
 /**
  * Replace a stored transaction with a new version of it.
@@ -1918,13 +2248,25 @@ type UpdateTransactionInput = { id: string, transaction: TransactionInput, };
 
 type UpdateUtilityInput = { id: string, item: UtilityInput, };
 
-type UtilityInput = { name: string, active: boolean, kind: UtilityKind, currency: string, store_id: string | null, 
+type UtilityInput = { name: string, active: boolean, kind: UtilityKind, currency: string, 
+/**
+ * The property the bill belongs to.
+ */
+property_id: string, store_id: string | null, 
 /**
  * Category key of the payments.
  */
 category: string, };
 
-type UtilityItem = { id: string, name: string, active: boolean, kind: UtilityKind, currency: string, store_id: string | null, 
+type UtilityItem = { id: string, name: string, active: boolean, kind: UtilityKind, currency: string, 
+/**
+ * The property (a top-level `property` wallet) the bill belongs to.
+ */
+property_id: string, 
+/**
+ * The wallet the bill is paid from.
+ */
+store_id: string | null, 
 /**
  * Category key.
  */
@@ -2005,7 +2347,15 @@ type VaultDoc = { version: number, id: string, created_at: string, settings: Set
 /**
  * Staged Bybit fills awaiting user confirmation (D2.4).
  */
-pending_imports: Array<PendingImport>, contacts: Array<Contact>, automations: Array<Automation>, automation_runs: Array<AutomationRun>, budgets: Array<Budget>, goals: Array<Goal>, reminders: Array<Reminder>, price_alerts: Array<PriceAlert>, categorization_rules: Array<CategorizationRule>, utility_items: Array<UtilityItem>, meter_readings: Array<MeterReading>, enrichments: Array<EnrichmentRecord>, manual_prices: Array<ManualPrice>, };
+pending_imports: Array<PendingImport>, contacts: Array<Contact>, automations: Array<Automation>, automation_runs: Array<AutomationRun>, budgets: Array<Budget>, goals: Array<Goal>, reminders: Array<Reminder>, price_alerts: Array<PriceAlert>, categorization_rules: Array<CategorizationRule>, utility_items: Array<UtilityItem>, meter_readings: Array<MeterReading>, enrichments: Array<EnrichmentRecord>, manual_prices: Array<ManualPrice>, 
+/**
+ * Virtual envelopes: earmarked parts of a store's balance.
+ */
+envelopes: Array<Envelope>, 
+/**
+ * Due dates and notes of debts with contacts.
+ */
+debt_terms: Array<DebtTerms>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 
@@ -2013,6 +2363,14 @@ type VaultInfo = { path: string, doc_version: number, id: string, created_at: st
  * What the unlock screen needs to know about the app.
  */
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
+
+/**
+ * What every wallet kind allows, in sidebar order. Static domain data, so the
+ * UI never duplicates these rules.
+ */
+type WalletCatalog = { kinds: Array<WalletKindInfo>, providers: Array<ExchangeProviderInfo>, };
+
+type WalletKindInfo = { kind: StoreKind, presets: Array<PresetInfo>, max_roots: number | null, user_creatable: boolean, default_purpose: Purpose, sub_types: Array<SubTypeInfo>, };
 
 type YearReport = { meta: ReportMeta, year: number, rows: Array<YearRow>, total: YearRow, 
 /**

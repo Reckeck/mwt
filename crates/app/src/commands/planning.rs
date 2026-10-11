@@ -15,8 +15,8 @@ use trade_core::model::planning::{
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
-    BudgetStatus, DailyBudget, GoalCalendar, GoalProgress, MonthSummary, UnlockedVault,
-    UpcomingItem, UtilityPaymentDraft, UtilityTrend,
+    BudgetStatus, DailyBudget, GoalCalendar, GoalProgress, MonthSummary, PropertySummary,
+    UnlockedVault, UpcomingItem, UtilityPaymentDraft, UtilityTrend,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -353,6 +353,17 @@ pub async fn get_meter_trend(
 ) -> Result<UtilityTrend, String> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| vault.meter_trend(&item_id, &zone))
+}
+
+/// A property's value, debt and monthly costs.
+#[tauri::command]
+pub async fn get_property_summary(
+    store_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<PropertySummary, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| vault.property_summary(&store_id, &zone))
 }
 
 /// The «Оплатить» for one month (`YYYY-MM`, default: this month).

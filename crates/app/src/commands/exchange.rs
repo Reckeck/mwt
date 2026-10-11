@@ -13,8 +13,10 @@ use trade_core::ipc_contract::{
     ConfirmPendingImportsInput, ConfirmPendingImportsOutput, DiscardPendingImportsInput,
     DiscardPendingImportsOutput, ExchangeKeyStatus, ExchangeKeyStatusInput,
     ImportBybitHistoryInput, ImportBybitHistoryOutput, InspectTxInput, InspectTxResult,
-    ListPendingImportsOutput, SetExchangeKeyInput, SetExchangeTargetsInput, TxFieldHint,
+    ListPendingImportsOutput, SaveTerminalDrawingsInput, SetExchangeKeyInput,
+    SetExchangeTargetsInput, SetImportIntervalInput, TxFieldHint, UpdateTerminalStateInput,
 };
+use trade_core::model::store::TerminalState;
 use trade_core::model::vault::{ExchangeKeys, Exchanges, PendingImport};
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
@@ -210,6 +212,62 @@ pub async fn set_exchange_targets(
         .as_mut()
         .unwrap()
         .set_exchange_targets(&input.store_id, input.spot_store_id, input.futures_store_id)
+        .map_err(err_to_string)
+}
+
+/// The exchange's own background import interval; `0` turns it off.
+#[tauri::command]
+pub async fn set_import_interval(
+    input: SetImportIntervalInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_import_interval(&input.store_id, input.interval_sec)
+        .map_err(err_to_string)
+}
+
+/// Everything the exchange's trading terminal remembers.
+#[tauri::command]
+pub async fn get_terminal_state(
+    store_id: String,
+    state: State<'_, AppState>,
+) -> Result<TerminalState, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .terminal_state(&store_id)
+        .map_err(err_to_string)
+}
+
+/// Patch the terminal: only the fields present change.
+#[tauri::command]
+pub async fn update_terminal_state(
+    input: UpdateTerminalStateInput,
+    state: State<'_, AppState>,
+) -> Result<TerminalState, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .update_terminal_state(&input.store_id, input.patch)
+        .map_err(err_to_string)
+}
+
+/// Replace one symbol's chart drawings in the exchange's terminal.
+#[tauri::command]
+pub async fn save_terminal_drawings(
+    input: SaveTerminalDrawingsInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .save_terminal_drawings(&input.store_id, &input.symbol, &input.json)
         .map_err(err_to_string)
 }
 

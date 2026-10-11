@@ -54,6 +54,9 @@ pub enum Error {
     #[error("{0}")]
     StoreTree(StoreTreeViolation),
 
+    #[error("{0}")]
+    WalletRule(WalletRule),
+
     /// The file is from before the transaction-model schema break; there is no converter.
     #[error("vault was written by an earlier version of the app: {0}")]
     IncompatibleVault(String),
@@ -84,6 +87,43 @@ pub enum StoreTreeViolation {
     RootMove,
     #[error("restore the parent store first")]
     RestoreParentFirst,
+}
+
+/// A wallet-type rule a write would break (what a kind allows, bindings, the
+/// single cash wallet). Each one has its own IPC code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum WalletRule {
+    #[error("there is only one cash wallet")]
+    CashSingleton,
+    #[error("the cash wallet cannot be archived or deleted")]
+    CashLocked,
+    #[error("this kind of wallet is created automatically")]
+    NotCreatable,
+    #[error("this sub-account type is not available for this wallet")]
+    SubTypeNotAllowed,
+    #[error("a sub-account needs a type and a binding")]
+    BindingRequired,
+    #[error("the operation does not match the sub-account binding")]
+    BindingMismatch,
+    #[error("choose the exchange first")]
+    ProviderRequired,
+    #[error("this setting does not apply to this wallet")]
+    NotApplicable,
+}
+
+impl WalletRule {
+    pub fn code(&self) -> &'static str {
+        match self {
+            WalletRule::CashSingleton => "CASH_SINGLETON",
+            WalletRule::CashLocked => "CASH_LOCKED",
+            WalletRule::NotCreatable => "WALLET_NOT_CREATABLE",
+            WalletRule::SubTypeNotAllowed => "SUB_TYPE_NOT_ALLOWED",
+            WalletRule::BindingRequired => "BINDING_REQUIRED",
+            WalletRule::BindingMismatch => "BINDING_MISMATCH",
+            WalletRule::ProviderRequired => "PROVIDER_REQUIRED",
+            WalletRule::NotApplicable => "WALLET_NOT_APPLICABLE",
+        }
+    }
 }
 
 impl StoreTreeViolation {
@@ -120,6 +160,7 @@ impl Error {
             Error::Archived(_) => "ARCHIVED",
             Error::RequiresUnlock => "REQUIRES_UNLOCK",
             Error::StoreTree(violation) => violation.code(),
+            Error::WalletRule(rule) => rule.code(),
             Error::IncompatibleVault(_) => "INCOMPATIBLE_VAULT",
             Error::InsufficientFunds(_) => "INSUFFICIENT_FUNDS",
             Error::TooLarge(_) => "TOO_LARGE",

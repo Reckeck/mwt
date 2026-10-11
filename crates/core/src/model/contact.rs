@@ -51,6 +51,20 @@ pub struct ContactAccount {
     pub active: bool,
 }
 
+/// When and why a debt with a contact is due. The amount is never stored: it
+/// is what the debt operations with the contact add up to (`DebtEffect`).
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct DebtTerms {
+    pub id: String,
+    pub contact_id: String,
+    /// Ticker of the debt's asset (`USD`, `USDT`); one terms entry per asset.
+    pub asset: String,
+    /// `YYYY-MM-DD`.
+    pub due_at: Option<String>,
+    pub note: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Contact {
     pub id: String,

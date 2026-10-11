@@ -85,6 +85,9 @@ pub struct AppSettings {
     /// window manager's own bindings unless the user asks for it.
     #[serde(default)]
     pub quick_add_shortcut: Option<String>,
+    /// Guided tours already shown (by page), so a tour starts by itself only once.
+    #[serde(default)]
+    pub completed_tours: Vec<String>,
 }
 
 /// Reference annual inflation the user starts with, percent. Rough recent
@@ -107,6 +110,7 @@ impl Default for AppSettings {
             inflation: default_inflation(),
             enrichment_opt_in: None,
             quick_add_shortcut: None,
+            completed_tours: Vec::new(),
         }
     }
 }
@@ -144,6 +148,14 @@ impl AppSettings {
         }
         if let Some(consent) = patch.enrichment_opt_in {
             self.enrichment_opt_in = Some(consent);
+        }
+        if let Some(tours) = &patch.completed_tours {
+            let mut seen = BTreeSet::new();
+            self.completed_tours = tours
+                .iter()
+                .map(|tour| tour.trim().to_string())
+                .filter(|tour| !tour.is_empty() && seen.insert(tour.clone()))
+                .collect();
         }
     }
 
@@ -220,6 +232,9 @@ pub struct UpdateAppSettingsInput {
     pub inflation: Option<BTreeMap<String, Amount>>,
     #[serde(default)]
     pub enrichment_opt_in: Option<bool>,
+    /// Replaces the list of tours already shown; `[]` shows them all again.
+    #[serde(default)]
+    pub completed_tours: Option<Vec<String>>,
 }
 
 // -- currency catalog ----------------------------------------------------------
@@ -328,6 +343,28 @@ pub fn save_currencies(config_dir: &Path, catalog: &SupportedCurrencies) -> Resu
     write_json(&currencies_path(config_dir), catalog)
 }
 
+/// Where a currency catalog came from — drives the notice next to the pickers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogSource {
+    /// At least one provider answered just now.
+    Network,
+    /// Every provider failed; the last successful fetch was reused.
+    Cache,
+    /// Nothing was ever fetched; the built-in list.
+    Builtin,
+}
+
+impl CatalogSource {
+    /// Machine code for the UI notice; `None` when the list is fresh.
+    pub fn notice(self) -> Option<&'static str> {
+        match self {
+            Self::Network => None,
+            Self::Cache => Some("cached"),
+            Self::Builtin => Some("builtin"),
+        }
+    }
+}
+
 /// Build the currency catalog for the settings pickers.
 ///
 /// Degradation ladder, in order:
@@ -341,7 +378,7 @@ pub fn save_currencies(config_dir: &Path, catalog: &SupportedCurrencies) -> Resu
 pub async fn build_currency_catalog(
     config_dir: &Path,
     pricing: &crate::pricing::PricingService,
-) -> SupportedCurrencies {
+) -> (SupportedCurrencies, CatalogSource) {
     let cached = load_currencies(config_dir);
     let fiat = match pricing.fx_rates().await {
         Ok(rates) => {
@@ -352,8 +389,24 @@ pub async fn build_currency_catalog(
         Err(_) => None,
     };
     let crypto = pricing.coin_symbols().await.ok();
-    let fetched_something = fiat.is_some() || crypto.is_some();
+    let (catalog, source) = merge_catalog(fiat, crypto, cached);
+    // Only a catalog worth remembering is written back; caching a half-empty
+    // result would freeze the gap in place on every later offline start.
+    if source == CatalogSource::Network {
+        let _ = save_currencies(config_dir, &catalog);
+    }
+    (catalog, source)
+}
 
+/// Combine this run's fetch results with the cache. A half that failed is
+/// taken from the cache; the source reflects whether the network answered at
+/// all, not whether the list changed.
+fn merge_catalog(
+    fiat: Option<Vec<String>>,
+    crypto: Option<Vec<String>>,
+    cached: Option<SupportedCurrencies>,
+) -> (SupportedCurrencies, CatalogSource) {
+    let fetched_something = fiat.is_some() || crypto.is_some();
     let mut catalog = SupportedCurrencies {
         fiat: fiat
             .or_else(|| cached.as_ref().map(|previous| previous.fiat.clone()))
@@ -365,14 +418,14 @@ pub async fn build_currency_catalog(
     catalog.normalize();
 
     if catalog.is_empty() {
-        return SupportedCurrencies::fallback();
+        return (SupportedCurrencies::fallback(), CatalogSource::Builtin);
     }
-    // Only a catalog worth remembering is written back; caching a half-empty
-    // result would freeze the gap in place on every later offline start.
-    if fetched_something {
-        let _ = save_currencies(config_dir, &catalog);
-    }
-    catalog
+    let source = if fetched_something {
+        CatalogSource::Network
+    } else {
+        CatalogSource::Cache
+    };
+    (catalog, source)
 }
 
 fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -489,6 +542,7 @@ mod tests {
             inflation: default_inflation(),
             enrichment_opt_in: Some(true),
             quick_add_shortcut: Some("CmdOrCtrl+Shift+Space".into()),
+            completed_tours: vec!["dashboard".into()],
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
@@ -545,5 +599,62 @@ mod tests {
         let catalog = SupportedCurrencies::fallback();
         assert!(!catalog.is_empty());
         assert!(catalog.all().contains(&DEFAULT_BASE_CURRENCY.to_string()));
+    }
+
+    #[test]
+    fn unchanged_fetch_is_not_reported_as_offline() {
+        let cached = SupportedCurrencies {
+            fiat: vec!["usd".into()],
+            crypto: vec!["btc".into()],
+        };
+        let (catalog, source) = merge_catalog(
+            Some(vec!["usd".into()]),
+            Some(vec!["btc".into()]),
+            Some(cached.clone()),
+        );
+        assert_eq!(catalog, cached);
+        assert_eq!(source, CatalogSource::Network);
+        assert_eq!(source.notice(), None);
+    }
+
+    #[test]
+    fn first_fetch_is_fresh_not_builtin() {
+        let (_, source) = merge_catalog(Some(vec!["eur".into()]), None, None);
+        assert_eq!(source, CatalogSource::Network);
+    }
+
+    #[test]
+    fn failed_fetch_uses_cache_then_builtin() {
+        let cached = SupportedCurrencies {
+            fiat: vec!["usd".into()],
+            crypto: Vec::new(),
+        };
+        let (catalog, source) = merge_catalog(None, None, Some(cached.clone()));
+        assert_eq!(catalog, cached);
+        assert_eq!(source.notice(), Some("cached"));
+
+        let (catalog, source) = merge_catalog(None, None, None);
+        assert_eq!(catalog, SupportedCurrencies::fallback());
+        assert_eq!(source.notice(), Some("builtin"));
+    }
+
+    #[test]
+    fn completed_tours_are_deduplicated_and_reset() {
+        let mut settings = AppSettings::default();
+        settings.apply(&UpdateAppSettingsInput {
+            completed_tours: Some(vec![
+                "dashboard".into(),
+                " dashboard ".into(),
+                "".into(),
+                "wallet".into(),
+            ]),
+            ..Default::default()
+        });
+        assert_eq!(settings.completed_tours, vec!["dashboard", "wallet"]);
+        settings.apply(&UpdateAppSettingsInput {
+            completed_tours: Some(Vec::new()),
+            ..Default::default()
+        });
+        assert!(settings.completed_tours.is_empty());
     }
 }

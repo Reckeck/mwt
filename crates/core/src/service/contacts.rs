@@ -300,6 +300,75 @@ impl UnlockedVault {
     }
 }
 
+/// Due date and note for a debt with a contact in one asset.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct DebtTermsDraft {
+    pub contact_id: String,
+    pub asset: String,
+    pub due_at: Option<String>,
+    pub note: String,
+}
+
+impl UnlockedVault {
+    pub fn debt_terms(&self, contact_id: Option<&str>) -> Vec<crate::model::contact::DebtTerms> {
+        self.doc
+            .debt_terms
+            .iter()
+            .filter(|terms| contact_id.is_none_or(|id| terms.contact_id == id))
+            .cloned()
+            .collect()
+    }
+
+    /// Set (or replace) the terms of one contact's debt in one asset; an
+    /// empty date and note removes them.
+    pub fn set_debt_terms(
+        &mut self,
+        draft: DebtTermsDraft,
+    ) -> Result<Option<crate::model::contact::DebtTerms>> {
+        if !self
+            .doc
+            .contacts
+            .iter()
+            .any(|contact| contact.id == draft.contact_id)
+        {
+            return Err(Error::Missing(format!("contact {}", draft.contact_id)));
+        }
+        let asset = draft.asset.trim().to_uppercase();
+        if asset.is_empty() {
+            return Err(Error::InvalidInput("the debt needs an asset".into()));
+        }
+        let due_at = draft
+            .due_at
+            .map(|due| due.trim().to_string())
+            .filter(|due| !due.is_empty());
+        if let Some(due) = &due_at
+            && chrono::NaiveDate::parse_from_str(due, "%Y-%m-%d").is_err()
+        {
+            return Err(Error::InvalidInput("the due date is YYYY-MM-DD".into()));
+        }
+        let note = draft.note.trim().to_string();
+        self.doc
+            .debt_terms
+            .retain(|terms| !(terms.contact_id == draft.contact_id && terms.asset == asset));
+        let out = if due_at.is_none() && note.is_empty() {
+            None
+        } else {
+            let terms = crate::model::contact::DebtTerms {
+                id: uuid::Uuid::new_v4().to_string(),
+                contact_id: draft.contact_id,
+                asset,
+                due_at,
+                note,
+                created_at: crate::model::vault::now_iso(),
+            };
+            self.doc.debt_terms.push(terms.clone());
+            Some(terms)
+        };
+        self.persist()?;
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::test_support::*;
@@ -337,7 +406,7 @@ mod tests {
         let (_dir, mut vault) = setup();
         vault.set_base_currency("usd");
         quote_usd(&mut vault);
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let contact = ann(&mut vault);
         let mine = || AccountRef::Store(store.clone());
         let theirs = || AccountRef::Contact {
@@ -377,7 +446,7 @@ mod tests {
     #[test]
     fn turnover_counts_sent_and_received_but_not_internal_moves() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let sub = vault
             .create_store("Sub", StoreKind::Exchange, "", "", Some(store.clone()))
             .unwrap()
@@ -426,7 +495,7 @@ mod tests {
     #[test]
     fn used_contacts_are_archived_and_used_accounts_deactivated() {
         let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[0].id.clone();
+        let store = vault.doc.stores[1].id.clone();
         let contact = ann(&mut vault);
         let account = contact.accounts[0].clone();
         vault
@@ -461,5 +530,33 @@ mod tests {
             })
             .unwrap();
         vault.delete_contact(&unused.id).unwrap();
+    }
+
+    #[test]
+    fn debt_terms_are_set_replaced_and_cleared() {
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        let friend = vault
+            .create_contact(ContactDraft {
+                name: "Friend".into(),
+                ..ContactDraft::default()
+            })
+            .unwrap();
+        let draft = |due: Option<&str>, note: &str| DebtTermsDraft {
+            contact_id: friend.id.clone(),
+            asset: "usd".into(),
+            due_at: due.map(str::to_string),
+            note: note.into(),
+        };
+        assert!(vault.set_debt_terms(draft(Some("31.12.2026"), "")).is_err());
+        vault
+            .set_debt_terms(draft(Some("2026-12-31"), "for the car"))
+            .unwrap();
+        vault.set_debt_terms(draft(Some("2027-01-15"), "")).unwrap();
+        let terms = vault.debt_terms(Some(&friend.id));
+        assert_eq!(terms.len(), 1);
+        assert_eq!(terms[0].asset, "USD");
+        assert_eq!(terms[0].due_at.as_deref(), Some("2027-01-15"));
+        assert!(vault.set_debt_terms(draft(None, "")).unwrap().is_none());
+        assert!(vault.debt_terms(None).is_empty());
     }
 }
