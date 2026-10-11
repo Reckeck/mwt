@@ -11,7 +11,7 @@ mod tray;
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
     losses, notifications, planning, portfolio, pricing, settings, stores, transactions,
-    vault_recents,
+    vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -158,6 +158,25 @@ pub fn run() {
             analytics::export_report_csv,
             analytics::get_calendar,
             // planning
+            workflows::workflow_node_catalog,
+            workflows::validate_workflow,
+            workflows::list_workflows,
+            workflows::get_workflow,
+            workflows::save_workflow,
+            workflows::set_workflow_active,
+            workflows::delete_workflow,
+            workflows::restore_workflow_version,
+            workflows::dry_run_workflow,
+            workflows::run_workflow_now,
+            workflows::list_workflow_runs,
+            workflows::list_workflow_queue,
+            workflows::confirm_workflow_queued,
+            workflows::discard_workflow_queued,
+            workflows::list_workflow_vars,
+            workflows::set_workflow_var,
+            workflows::delete_workflow_var,
+            workflows::export_workflow,
+            workflows::import_workflow,
             planning::list_automations,
             planning::create_automation,
             planning::update_automation,

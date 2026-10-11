@@ -1,0 +1,1029 @@
+//! Node workflows (plan §16) in the vault: saving them with their versions,
+//! firing their triggers, the confirmation queue, variables, the journal, and
+//! the vault lookups the executor (`workflow::exec`) runs on.
+
+use std::collections::BTreeMap;
+
+use chrono::{Datelike, Duration};
+
+use crate::Amount;
+use crate::calendar::{Calendar, first_of_month};
+use crate::error::{Error, Result};
+use crate::model::notify::NoticeRecord;
+use crate::model::store::AssetRef;
+use crate::model::transaction::Transaction;
+use crate::model::vault::now_iso;
+use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
+use crate::workflow::graph::Graph;
+use crate::workflow::model::{
+    GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, VarScope, Workflow,
+    WorkflowRun, WorkflowState, WorkflowVar,
+};
+use crate::workflow::nodes::triggers::{schedule_moments, tx_matches, tx_trigger_values};
+use crate::workflow::types::WfValue;
+use crate::workflow::validate::{GraphIssue, has_errors, validate};
+use crate::workflow::{catalog::node_def, graph::Node};
+
+use super::UnlockedVault;
+use super::automations::outflow;
+use super::worth::FlowClass;
+
+/// Most live runs of one workflow in an hour; more look like a loop.
+pub const MAX_RUNS_PER_HOUR: usize = 60;
+/// How deep events may chain one workflow into another.
+pub const MAX_EVENT_DEPTH: u32 = 5;
+/// The format name of an exported workflow.
+pub const EXPORT_FORMAT: &str = "trade-app-workflow";
+
+/// What the user edits of a workflow.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct WorkflowDraft {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    pub active: bool,
+    pub graph: String,
+    #[serde(default)]
+    pub react_to_workflows: bool,
+    #[serde(default)]
+    pub max_amount: Option<Amount>,
+}
+
+/// A saved workflow with what is wrong with its graph.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct SavedWorkflow {
+    pub workflow: Workflow,
+    pub issues: Vec<GraphIssue>,
+}
+
+/// What one scheduler pass did.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct WorkflowPass {
+    pub runs: Vec<WorkflowRun>,
+    /// Operations made.
+    pub created: Vec<String>,
+    /// Operations put into the confirmation queue.
+    pub queued: u32,
+    /// New notices to show.
+    pub notices: Vec<NoticeRecord>,
+}
+
+/// An exported workflow: the graph and its name, without ids or history.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct ExportedWorkflow {
+    format: String,
+    version: u32,
+    name: String,
+    #[serde(default)]
+    description: String,
+    graph: serde_json::Value,
+}
+
+fn trigger_label(kind: &str, detail: &str) -> String {
+    let short = kind.strip_prefix("trigger.").unwrap_or(kind);
+    if detail.is_empty() {
+        short.to_string()
+    } else {
+        format!("{short} {detail}")
+    }
+}
+
+fn value_of(json: &str) -> WfValue {
+    serde_json::from_str(json).unwrap_or_default()
+}
+
+impl UnlockedVault {
+    // -- lookups for the executor ------------------------------------------------
+
+    /// An asset by its symbol: one the vault holds, else a currency.
+    pub(crate) fn wf_asset(&self, symbol: &str) -> AssetRef {
+        let symbol = symbol.trim();
+        self.doc
+            .holdings
+            .iter()
+            .map(|holding| &holding.asset)
+            .find(|asset| asset.symbol.eq_ignore_ascii_case(symbol) && !asset.is_derivative())
+            .cloned()
+            .unwrap_or_else(|| AssetRef::fiat(symbol, &symbol.to_uppercase()))
+    }
+
+    /// The balance of an account with its sub-accounts: of one asset, or the
+    /// whole value in the base currency.
+    pub(crate) fn wf_balance(
+        &self,
+        store_id: &str,
+        asset: Option<&AssetRef>,
+    ) -> std::result::Result<WfValue, String> {
+        if self.find_store(store_id).is_none() {
+            return Err(format!("account {store_id} not found"));
+        }
+        match asset {
+            Some(asset) => {
+                let key = asset.key();
+                let mut ids = self.subtree_ids(store_id);
+                ids.push(store_id.to_string());
+                let quantity = self
+                    .doc
+                    .holdings
+                    .iter()
+                    .filter(|holding| ids.contains(&holding.store_id) && holding.asset.key() == key)
+                    .fold(Amount::ZERO, |sum, holding| sum + holding.quantity);
+                Ok(WfValue::money(quantity, &asset.symbol))
+            }
+            None => {
+                let overview = self
+                    .store_overview(store_id, true)
+                    .map_err(|err| err.to_string())?;
+                Ok(WfValue::money(
+                    overview.subtree_base.round(2),
+                    &overview.base_currency,
+                ))
+            }
+        }
+    }
+
+    /// Price of one unit of an asset in a currency.
+    pub(crate) fn wf_price(&self, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount> {
+        let book = self.rate_book();
+        let usd = book.price_at(&asset.key(), secs)?;
+        book.convert(usd, "usd", currency, secs)
+    }
+
+    pub(crate) fn wf_convert(
+        &self,
+        amount: Amount,
+        from: &str,
+        to: &str,
+        secs: i64,
+    ) -> Option<Amount> {
+        self.rate_book().convert(amount, from, to, secs)
+    }
+
+    /// Income or spending of the current period, in the base currency.
+    pub(crate) fn wf_sum(
+        &self,
+        period: &str,
+        flow: &str,
+        category: Option<&str>,
+        now: i64,
+        zone: &str,
+    ) -> Amount {
+        let cal = Calendar::new(zone);
+        let today = cal.date_of(now);
+        let start = match period {
+            "day" => today,
+            "week" => today - Duration::days(i64::from(today.weekday().num_days_from_monday())),
+            "year" => today.with_ordinal(1).unwrap_or(today),
+            _ => first_of_month(today),
+        };
+        let (base, _) = self.base_and_fx();
+        self.flows_between(&cal, &base, cal.start_of(start), now + 1)
+            .into_iter()
+            .filter(|item| match flow {
+                "income" => item.class == FlowClass::Income,
+                _ => matches!(item.class, FlowClass::Fixed | FlowClass::Daily),
+            })
+            .filter(|item| {
+                category.is_none_or(|key| item.categories.iter().any(|known| known == key))
+            })
+            .fold(Amount::ZERO, |sum, item| sum + item.value)
+            .round(2)
+    }
+
+    /// Live accounts under a wallet, or every live wallet: id, name and value
+    /// in the base currency.
+    pub(crate) fn wf_accounts(&self, parent: Option<&str>) -> Vec<(String, String, Amount)> {
+        self.doc
+            .stores
+            .iter()
+            .filter(|store| !store.archived && store.parent_id.as_deref() == parent)
+            .map(|store| {
+                let value = self
+                    .store_overview(&store.id, true)
+                    .map_or(Amount::ZERO, |overview| overview.subtree_base.round(2));
+                (store.id.clone(), store.name.clone(), value)
+            })
+            .collect()
+    }
+
+    /// What an operation takes out of an account, in the base currency.
+    pub(crate) fn wf_outflow_base(&self, tx: &Transaction) -> Amount {
+        let Some(out) = outflow(tx) else {
+            return Amount::ZERO;
+        };
+        let book = self.rate_book();
+        let secs = secs_or_now(&tx.meta().timestamp);
+        let (base, _) = self.base_and_fx();
+        book.price_at(&out.asset.key(), secs)
+            .and_then(|usd| book.convert(out.amount * usd, "usd", &base, secs))
+            .unwrap_or(Amount::ZERO)
+    }
+
+    /// Check money and rules, then add the operations; all of them or none.
+    /// Not persisted: the run's caller writes once.
+    pub(crate) fn wf_insert(
+        &mut self,
+        txs: Vec<Transaction>,
+    ) -> std::result::Result<Vec<Transaction>, String> {
+        let backup = self.doc.clone();
+        let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
+        let mut saved = Vec::with_capacity(txs.len());
+        for mut tx in txs {
+            if let Some(flow) = &flow {
+                tx.meta_mut().flow_id = Some(flow.clone());
+            }
+            let secs = secs_or_now(&tx.meta().timestamp);
+            let result = match self.funds_shortfall(&tx, secs) {
+                Some(reason) => Err(super::automations::describe_reject(&reason)),
+                None => self
+                    .prepare_transaction(&mut tx)
+                    .map_err(|err| err.to_string()),
+            };
+            if let Err(message) = result {
+                self.doc = backup;
+                return Err(message);
+            }
+            self.doc.transactions.push(tx.clone());
+            self.recompute_holdings();
+            saved.push(tx);
+        }
+        Ok(saved)
+    }
+
+    /// Whether the operations would be accepted, without keeping them.
+    pub(crate) fn wf_check(
+        &self,
+        txs: Vec<Transaction>,
+    ) -> std::result::Result<Vec<Transaction>, String> {
+        self.sandbox().wf_insert(txs)
+    }
+
+    fn wf_state_mut(&mut self, workflow_id: &str) -> &mut WorkflowState {
+        let index = match self
+            .doc
+            .workflow_state
+            .iter()
+            .position(|state| state.workflow_id == workflow_id)
+        {
+            Some(index) => index,
+            None => {
+                self.doc.workflow_state.push(WorkflowState {
+                    workflow_id: workflow_id.to_string(),
+                    ..WorkflowState::default()
+                });
+                self.doc.workflow_state.len() - 1
+            }
+        };
+        &mut self.doc.workflow_state[index]
+    }
+
+    pub(crate) fn wf_mark(&self, workflow_id: &str, key: &str) -> Option<String> {
+        self.doc
+            .workflow_state
+            .iter()
+            .find(|state| state.workflow_id == workflow_id)
+            .and_then(|state| state.marks.get(key).cloned())
+    }
+
+    pub(crate) fn wf_set_mark(&mut self, workflow_id: &str, key: &str, value: &str) {
+        self.wf_state_mut(workflow_id)
+            .marks
+            .insert(key.to_string(), value.to_string());
+    }
+
+    pub(crate) fn wf_var(&self, scope: &VarScope, name: &str) -> Option<WfValue> {
+        self.doc
+            .workflow_vars
+            .iter()
+            .find(|var| var.scope == *scope && var.name == name)
+            .map(|var| value_of(&var.value))
+    }
+
+    pub(crate) fn wf_set_var(&mut self, scope: VarScope, name: &str, value: &WfValue) {
+        let json = serde_json::to_string(value).unwrap_or_default();
+        let updated_at = now_iso();
+        match self
+            .doc
+            .workflow_vars
+            .iter_mut()
+            .find(|var| var.scope == scope && var.name == name)
+        {
+            Some(var) => {
+                var.value = json;
+                var.updated_at = updated_at;
+            }
+            None => self.doc.workflow_vars.push(WorkflowVar {
+                scope,
+                name: name.to_string(),
+                value: json,
+                updated_at,
+            }),
+        }
+    }
+
+    // -- CRUD -----------------------------------------------------------------------
+
+    pub fn workflows(&self) -> Vec<Workflow> {
+        self.doc.workflows.clone()
+    }
+
+    pub fn workflow(&self, id: &str) -> Result<Workflow> {
+        self.doc
+            .workflows
+            .iter()
+            .find(|workflow| workflow.id == id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("workflow {id}")))
+    }
+
+    fn check_draft(draft: &WorkflowDraft) -> Result<(Graph, Vec<GraphIssue>)> {
+        if draft.name.trim().is_empty() {
+            return Err(Error::InvalidInput("name the workflow".into()));
+        }
+        if draft.max_amount.is_some_and(|cap| !cap.is_positive()) {
+            return Err(Error::InvalidInput("the cap must be above zero".into()));
+        }
+        let graph = Graph::parse(&draft.graph)?;
+        let issues = validate(&graph);
+        if draft.active && has_errors(&issues) {
+            let first = issues
+                .first()
+                .map(|issue| issue.text_en.clone())
+                .unwrap_or_default();
+            return Err(Error::InvalidInput(format!(
+                "fix the workflow's errors before switching it on: {first}"
+            )));
+        }
+        Ok((graph, issues))
+    }
+
+    /// Create (`id` = `None`) or update a workflow. A changed graph keeps the
+    /// one before it among the versions; one switched on starts watching from now.
+    pub fn save_workflow(
+        &mut self,
+        id: Option<&str>,
+        draft: WorkflowDraft,
+        now: i64,
+    ) -> Result<SavedWorkflow> {
+        let (graph, issues) = Self::check_draft(&draft)?;
+        let graph_json = graph.to_json();
+        let stamp = crate::calendar::iso(now);
+        let (workflow, arm) = match id {
+            None => {
+                let workflow = Workflow {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    name: draft.name.trim().to_string(),
+                    description: draft.description,
+                    active: draft.active,
+                    graph: graph_json,
+                    created_at: stamp.clone(),
+                    updated_at: stamp,
+                    react_to_workflows: draft.react_to_workflows,
+                    max_amount: draft.max_amount,
+                    versions: Vec::new(),
+                };
+                self.doc.workflows.push(workflow.clone());
+                let arm = workflow.active;
+                (workflow, arm)
+            }
+            Some(id) => {
+                let workflow = self
+                    .doc
+                    .workflows
+                    .iter_mut()
+                    .find(|workflow| workflow.id == id)
+                    .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+                let arm = draft.active && !workflow.active;
+                if workflow.graph != graph_json && !workflow.graph.is_empty() {
+                    workflow.versions.push(GraphVersion {
+                        saved_at: workflow.updated_at.clone(),
+                        graph: std::mem::take(&mut workflow.graph),
+                    });
+                    let overflow = workflow.versions.len().saturating_sub(MAX_GRAPH_VERSIONS);
+                    workflow.versions.drain(..overflow);
+                }
+                workflow.name = draft.name.trim().to_string();
+                workflow.description = draft.description;
+                workflow.active = draft.active;
+                workflow.graph = graph_json;
+                workflow.updated_at = stamp;
+                workflow.react_to_workflows = draft.react_to_workflows;
+                workflow.max_amount = draft.max_amount;
+                (workflow.clone(), arm)
+            }
+        };
+        if arm {
+            self.arm_workflow(&workflow.id, &graph, now);
+        }
+        self.persist()?;
+        Ok(SavedWorkflow { workflow, issues })
+    }
+
+    /// Start watching from now: schedules count from this moment, operations
+    /// from the next one added.
+    fn arm_workflow(&mut self, workflow_id: &str, graph: &Graph, now: i64) {
+        let stamp = crate::calendar::iso(now);
+        let (index, cursor) = (
+            self.doc.transactions.len(),
+            self.doc.transactions.last().map(|tx| tx.meta().id.clone()),
+        );
+        let state = self.wf_state_mut(workflow_id);
+        state.tx_index = index;
+        state.tx_cursor = cursor;
+        for node in graph
+            .nodes
+            .iter()
+            .filter(|node| node.kind == "trigger.schedule")
+        {
+            state
+                .marks
+                .insert(format!("schedule:{}", node.id), stamp.clone());
+        }
+    }
+
+    pub fn set_workflow_active(&mut self, id: &str, active: bool, now: i64) -> Result<Workflow> {
+        let workflow = self.workflow(id)?;
+        let graph = Graph::parse(&workflow.graph)?;
+        if active && has_errors(&validate(&graph)) {
+            return Err(Error::InvalidInput(
+                "fix the workflow's errors before switching it on".into(),
+            ));
+        }
+        if active && !workflow.active {
+            self.arm_workflow(id, &graph, now);
+        }
+        let stored = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == id)
+            .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+        stored.active = active;
+        let out = stored.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Remove a workflow with its runs, own variables, queue, state and waits.
+    pub fn delete_workflow(&mut self, id: &str) -> Result<()> {
+        let before = self.doc.workflows.len();
+        self.doc.workflows.retain(|workflow| workflow.id != id);
+        if self.doc.workflows.len() == before {
+            return Err(Error::Missing(format!("workflow {id}")));
+        }
+        self.doc.workflow_runs.retain(|run| run.workflow_id != id);
+        self.doc
+            .workflow_vars
+            .retain(|var| var.scope != VarScope::Workflow(id.to_string()));
+        self.doc
+            .workflow_queue
+            .retain(|batch| batch.workflow_id != id);
+        self.doc
+            .workflow_state
+            .retain(|state| state.workflow_id != id);
+        self.doc
+            .workflow_waits
+            .retain(|wait| wait.workflow_id != id);
+        self.persist()
+    }
+
+    /// Put an earlier graph back; the current one becomes a version itself.
+    pub fn restore_workflow_version(
+        &mut self,
+        id: &str,
+        saved_at: &str,
+        now: i64,
+    ) -> Result<SavedWorkflow> {
+        let workflow = self.workflow(id)?;
+        let version = workflow
+            .versions
+            .iter()
+            .find(|version| version.saved_at == saved_at)
+            .ok_or_else(|| Error::Missing(format!("version {saved_at}")))?;
+        let graph = Graph::parse(&version.graph)?;
+        let active = workflow.active && !has_errors(&validate(&graph));
+        let draft = WorkflowDraft {
+            name: workflow.name.clone(),
+            description: workflow.description.clone(),
+            active,
+            graph: version.graph.clone(),
+            react_to_workflows: workflow.react_to_workflows,
+            max_amount: workflow.max_amount,
+        };
+        self.save_workflow(Some(id), draft, now)
+    }
+
+    pub fn export_workflow(&self, id: &str) -> Result<String> {
+        let workflow = self.workflow(id)?;
+        let graph: serde_json::Value = serde_json::from_str(&workflow.graph).unwrap_or_default();
+        serde_json::to_string_pretty(&ExportedWorkflow {
+            format: EXPORT_FORMAT.into(),
+            version: 1,
+            name: workflow.name,
+            description: workflow.description,
+            graph,
+        })
+        .map_err(|err| Error::InvalidInput(err.to_string()))
+    }
+
+    /// Add an exported workflow, switched off: it is checked before it runs.
+    pub fn import_workflow(&mut self, json: &str, now: i64) -> Result<SavedWorkflow> {
+        let exported: ExportedWorkflow = serde_json::from_str(json)
+            .map_err(|err| Error::InvalidInput(format!("not a workflow file: {err}")))?;
+        if exported.format != EXPORT_FORMAT {
+            return Err(Error::InvalidInput("not a workflow file".into()));
+        }
+        let draft = WorkflowDraft {
+            name: exported.name,
+            description: exported.description,
+            active: false,
+            graph: exported.graph.to_string(),
+            react_to_workflows: false,
+            max_amount: None,
+        };
+        self.save_workflow(None, draft, now)
+    }
+
+    // -- journal, queue, variables ---------------------------------------------------
+
+    /// Runs, newest first, of one workflow or of all.
+    pub fn workflow_runs(&self, workflow_id: Option<&str>, limit: usize) -> Vec<WorkflowRun> {
+        self.doc
+            .workflow_runs
+            .iter()
+            .rev()
+            .filter(|run| workflow_id.is_none_or(|id| run.workflow_id == id))
+            .take(limit)
+            .cloned()
+            .collect()
+    }
+
+    pub fn workflow_queue(&self) -> Vec<QueuedActions> {
+        self.doc.workflow_queue.clone()
+    }
+
+    /// Make the operations a workflow queued, all together or none.
+    pub fn confirm_queued(&mut self, id: &str) -> Result<Vec<Transaction>> {
+        let batch = self
+            .doc
+            .workflow_queue
+            .iter()
+            .find(|batch| batch.id == id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("queued {id}")))?;
+        let saved = if batch.transactions.len() == 1 {
+            let mut txs = batch.transactions;
+            vec![self.add_transaction(txs.remove(0))?]
+        } else {
+            self.add_linked_transactions(batch.transactions, None)?
+        };
+        self.doc.workflow_queue.retain(|batch| batch.id != id);
+        self.persist()?;
+        Ok(saved)
+    }
+
+    pub fn discard_queued(&mut self, id: &str) -> Result<()> {
+        let before = self.doc.workflow_queue.len();
+        self.doc.workflow_queue.retain(|batch| batch.id != id);
+        if self.doc.workflow_queue.len() == before {
+            return Err(Error::Missing(format!("queued {id}")));
+        }
+        self.persist()
+    }
+
+    pub fn workflow_vars(&self) -> Vec<WorkflowVar> {
+        self.doc.workflow_vars.clone()
+    }
+
+    /// Set a variable by hand; `value` is a `WfValue` in JSON.
+    pub fn set_workflow_var(&mut self, scope: VarScope, name: &str, value: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(Error::InvalidInput("name the variable".into()));
+        }
+        let parsed: WfValue = serde_json::from_str(value)
+            .map_err(|err| Error::InvalidInput(format!("variable value: {err}")))?;
+        self.wf_set_var(scope, name, &parsed);
+        self.persist()
+    }
+
+    pub fn delete_workflow_var(&mut self, scope: &VarScope, name: &str) -> Result<()> {
+        self.doc
+            .workflow_vars
+            .retain(|var| !(var.scope == *scope && var.name == name));
+        self.persist()
+    }
+
+    // -- running -------------------------------------------------------------------
+
+    fn context(&self, workflow: &Workflow, trigger: &Node, now: i64, zone: &str) -> RunContext {
+        let mut ctx = RunContext::new(&workflow.id, &workflow.name, &trigger.id, now, zone);
+        ctx.max_amount = workflow.max_amount;
+        ctx
+    }
+
+    /// Keep what a live run left: its journal entry, queue, wait and notices.
+    fn keep_run(&mut self, report: &RunReport, pass: &mut WorkflowPass) {
+        self.doc.workflow_runs.push(report.run.clone());
+        let overflow = self
+            .doc
+            .workflow_runs
+            .len()
+            .saturating_sub(MAX_WORKFLOW_RUNS);
+        self.doc.workflow_runs.drain(..overflow);
+        self.doc
+            .workflow_queue
+            .extend(report.queued.iter().cloned());
+        if let Some(wait) = &report.wait {
+            self.doc.workflow_waits.push(wait.clone());
+        }
+        pass.created.extend(report.run.created.iter().cloned());
+        pass.queued += report.run.queued;
+        pass.notices.extend(report.notices.iter().cloned());
+        pass.runs.push(report.run.clone());
+    }
+
+    fn runs_last_hour(&self, workflow_id: &str, now: i64) -> usize {
+        self.doc
+            .workflow_runs
+            .iter()
+            .filter(|run| run.workflow_id == workflow_id && !run.dry_run)
+            .filter(|run| unix_secs(&run.started_at).is_some_and(|secs| now - secs < 3600))
+            .count()
+    }
+
+    /// Run one trigger for real and keep the result. Returns the events sent.
+    fn fire(
+        &mut self,
+        workflow: &Workflow,
+        graph: &Graph,
+        mut ctx: RunContext,
+        pass: &mut WorkflowPass,
+    ) -> Vec<EmittedEvent> {
+        if self.runs_last_hour(&workflow.id, ctx.now) >= MAX_RUNS_PER_HOUR {
+            return Vec::new();
+        }
+        ctx.mode = RunMode::Live;
+        let report = exec::run(self, graph, &ctx);
+        self.keep_run(&report, pass);
+        report.events
+    }
+
+    /// Run a workflow now from a trigger (a «Запуск вручную» one by default).
+    pub fn run_workflow_now(
+        &mut self,
+        id: &str,
+        trigger_node: Option<&str>,
+        now: i64,
+        zone: &str,
+    ) -> Result<RunReport> {
+        let workflow = self.workflow(id)?;
+        let graph = Graph::parse(&workflow.graph)?;
+        if let Some(issue) = validate(&graph)
+            .into_iter()
+            .find(|issue| issue.level == crate::workflow::IssueLevel::Error)
+        {
+            return Err(Error::InvalidInput(issue.text_en));
+        }
+        let trigger = pick_trigger(&graph, trigger_node)?;
+        let mut ctx = self.context(&workflow, &trigger, now, zone);
+        ctx.trigger_label = trigger_label("manual", "");
+        ctx.trigger_values = self.sample_trigger_values(&trigger, now);
+        let mut pass = WorkflowPass::default();
+        let report = exec::run(self, &graph, &ctx);
+        self.keep_run(&report, &mut pass);
+        let events = report.events.clone();
+        self.run_events(events, now, zone, &mut pass);
+        self.recompute_holdings();
+        self.persist()?;
+        if !pass.notices.is_empty() {
+            self.log_notices(pass.notices)?;
+        }
+        Ok(report)
+    }
+
+    /// Emulate a graph — saved or still in the editor — on a copy of the vault.
+    pub fn dry_run_workflow(
+        &self,
+        graph_json: &str,
+        workflow_id: Option<&str>,
+        trigger_node: Option<&str>,
+        now: i64,
+        zone: &str,
+    ) -> Result<RunReport> {
+        let graph = Graph::parse(graph_json)?;
+        let trigger = pick_trigger(&graph, trigger_node)?;
+        let mut sandbox = self.sandbox();
+        let (id, name, max_amount) = match workflow_id.and_then(|id| self.workflow(id).ok()) {
+            Some(workflow) => (workflow.id, workflow.name, workflow.max_amount),
+            None => ("draft".to_string(), "Черновик".to_string(), None),
+        };
+        let mut ctx = RunContext::new(&id, &name, &trigger.id, now, zone);
+        ctx.max_amount = max_amount;
+        ctx.mode = RunMode::DryRun;
+        ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
+        ctx.trigger_values = self.sample_trigger_values(&trigger, now);
+        Ok(exec::run(&mut sandbox, &graph, &ctx))
+    }
+
+    /// What a trigger would hand on now: for an operation trigger the latest
+    /// matching operation, for thresholds the current value.
+    fn sample_trigger_values(&self, trigger: &Node, now: i64) -> BTreeMap<String, WfValue> {
+        let at = || BTreeMap::from([("at".to_string(), WfValue::Date(crate::calendar::iso(now)))]);
+        match trigger.kind.as_str() {
+            "trigger.transaction" => self
+                .doc
+                .transactions
+                .iter()
+                .rev()
+                .find(|tx| tx_matches(self, &trigger.params, tx))
+                .map(tx_trigger_values)
+                .unwrap_or_default(),
+            "trigger.balance" => self
+                .threshold_value(trigger, now)
+                .map(|(value, _)| BTreeMap::from([("balance".to_string(), value)]))
+                .unwrap_or_default(),
+            "trigger.price" => self
+                .threshold_value(trigger, now)
+                .map(|(value, _)| BTreeMap::from([("price".to_string(), value)]))
+                .unwrap_or_default(),
+            _ => at(),
+        }
+    }
+
+    /// The watched value of a threshold trigger and which side of it it is on.
+    fn threshold_value(&self, trigger: &Node, now: i64) -> Option<(WfValue, bool)> {
+        let params = &trigger.params;
+        let threshold = params
+            .get("value")
+            .and_then(crate::workflow::nodes::json_number)
+            .unwrap_or(Amount::ZERO);
+        let asset = params
+            .get("asset")
+            .filter(|value| !value.is_null())
+            .and_then(|value| match value {
+                serde_json::Value::String(symbol) => Some(self.wf_asset(symbol)),
+                other => serde_json::from_value::<AssetRef>(other.clone()).ok(),
+            });
+        let value = if trigger.kind == "trigger.price" {
+            let currency = params
+                .get("currency")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("usd")
+                .to_lowercase();
+            let price = self.wf_price(asset.as_ref()?, &currency, now)?;
+            WfValue::money(price, &currency)
+        } else {
+            let store = params
+                .get("store")
+                .and_then(crate::workflow::nodes::json_account)?;
+            self.wf_balance(store.store_id()?, asset.as_ref()).ok()?
+        };
+        let above = value.as_number()? >= threshold;
+        Some((value, above))
+    }
+
+    /// Run the workflows listening for events, as deep as `MAX_EVENT_DEPTH`.
+    fn run_events(
+        &mut self,
+        mut events: Vec<EmittedEvent>,
+        now: i64,
+        zone: &str,
+        pass: &mut WorkflowPass,
+    ) {
+        for _depth in 0..MAX_EVENT_DEPTH {
+            if events.is_empty() {
+                return;
+            }
+            let mut next = Vec::new();
+            for event in std::mem::take(&mut events) {
+                for workflow in self.active_workflows() {
+                    let Ok(graph) = Graph::parse(&workflow.graph) else {
+                        continue;
+                    };
+                    let listeners: Vec<Node> = graph
+                        .nodes
+                        .iter()
+                        .filter(|node| !node.disabled && node.kind == "trigger.event")
+                        .filter(|node| {
+                            node.params
+                                .get("name")
+                                .and_then(serde_json::Value::as_str)
+                                .is_some_and(|name| name.trim() == event.name)
+                        })
+                        .cloned()
+                        .collect();
+                    for trigger in listeners {
+                        let mut ctx = self.context(&workflow, &trigger, now, zone);
+                        ctx.trigger_label = trigger_label("event", &event.name);
+                        ctx.trigger_values =
+                            BTreeMap::from([("payload".to_string(), event.payload.clone())]);
+                        next.extend(self.fire(&workflow, &graph, ctx, pass));
+                    }
+                }
+            }
+            events = next;
+        }
+    }
+
+    fn active_workflows(&self) -> Vec<Workflow> {
+        self.doc
+            .workflows
+            .iter()
+            .filter(|workflow| workflow.active)
+            .cloned()
+            .collect()
+    }
+
+    /// Operations added since a workflow last looked, and where it is now.
+    fn new_transactions(&self, workflow_id: &str) -> (Vec<Transaction>, usize, Option<String>) {
+        let len = self.doc.transactions.len();
+        let last = self.doc.transactions.last().map(|tx| tx.meta().id.clone());
+        let Some(state) = self
+            .doc
+            .workflow_state
+            .iter()
+            .find(|state| state.workflow_id == workflow_id)
+        else {
+            return (Vec::new(), len, last);
+        };
+        let start = match &state.tx_cursor {
+            Some(cursor) => self
+                .doc
+                .transactions
+                .iter()
+                .position(|tx| tx.meta().id == *cursor)
+                .map_or(state.tx_index.min(len), |index| index + 1),
+            None => state.tx_index.min(len),
+        };
+        (self.doc.transactions[start..].to_vec(), len, last)
+    }
+
+    /// Fire every trigger that is due: waits that are over, schedules,
+    /// new operations, thresholds crossed, then the events they sent.
+    pub fn run_due_workflows(&mut self, now: i64, zone: &str) -> Result<WorkflowPass> {
+        let mut pass = WorkflowPass::default();
+        let mut events = Vec::new();
+
+        let due: Vec<_> = self
+            .doc
+            .workflow_waits
+            .iter()
+            .filter(|wait| unix_secs(&wait.resume_at).is_some_and(|secs| secs <= now))
+            .cloned()
+            .collect();
+        for wait in due {
+            self.doc.workflow_waits.retain(|known| known.id != wait.id);
+            let Ok(workflow) = self.workflow(&wait.workflow_id) else {
+                continue;
+            };
+            let Ok(graph) = Graph::parse(&workflow.graph) else {
+                continue;
+            };
+            if !workflow.active || graph.node(&wait.node_id).is_none() {
+                continue;
+            }
+            let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
+            ctx.max_amount = workflow.max_amount;
+            ctx.trigger_label = format!("{} → wait", wait.trigger);
+            ctx.resume = Some(Resume {
+                node_id: wait.node_id.clone(),
+                memo: wait.memo.clone(),
+                queue_mode: wait.queue_mode,
+            });
+            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+        }
+
+        for workflow in self.active_workflows() {
+            let Ok(graph) = Graph::parse(&workflow.graph) else {
+                continue;
+            };
+            if has_errors(&validate(&graph)) {
+                continue;
+            }
+            let triggers: Vec<Node> = graph
+                .nodes
+                .iter()
+                .filter(|node| {
+                    !node.disabled && node_def(&node.kind).is_some_and(|def| def.is_trigger())
+                })
+                .cloned()
+                .collect();
+            let (fresh, len, last) = self.new_transactions(&workflow.id);
+            for trigger in &triggers {
+                match trigger.kind.as_str() {
+                    "trigger.schedule" => {
+                        let key = format!("schedule:{}", trigger.id);
+                        let Some(after) = self
+                            .wf_mark(&workflow.id, &key)
+                            .and_then(|mark| unix_secs(&mark))
+                        else {
+                            self.wf_set_mark(&workflow.id, &key, &crate::calendar::iso(now));
+                            continue;
+                        };
+                        let (moments, _skipped) =
+                            schedule_moments(&trigger.params, &Calendar::new(zone), after, now);
+                        for moment in moments {
+                            let at = crate::calendar::iso(moment);
+                            let mut ctx = self.context(&workflow, trigger, now, zone);
+                            ctx.trigger_label = trigger_label(&trigger.kind, &at);
+                            ctx.trigger_values =
+                                BTreeMap::from([("at".to_string(), WfValue::Date(at.clone()))]);
+                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+                            self.wf_set_mark(&workflow.id, &key, &at);
+                        }
+                    }
+                    "trigger.transaction" => {
+                        let mut params = trigger.params.clone();
+                        if workflow.react_to_workflows {
+                            params
+                                .insert("include_workflows".into(), serde_json::Value::Bool(true));
+                        }
+                        let matching: Vec<&Transaction> = fresh
+                            .iter()
+                            .filter(|tx| tx_matches(self, &params, tx))
+                            .collect();
+                        for tx in matching {
+                            // A workflow never reacts to what it made itself.
+                            if matches!(&tx.meta().origin, crate::model::transaction::TxOrigin::Workflow { workflow_id, .. } if *workflow_id == workflow.id)
+                            {
+                                continue;
+                            }
+                            let mut ctx = self.context(&workflow, trigger, now, zone);
+                            ctx.trigger_label = trigger_label(&trigger.kind, &tx.meta().id);
+                            ctx.trigger_values = tx_trigger_values(tx);
+                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+                        }
+                    }
+                    "trigger.balance" | "trigger.price" => {
+                        let Some((value, above)) = self.threshold_value(trigger, now) else {
+                            continue;
+                        };
+                        let key = format!("threshold:{}", trigger.id);
+                        let side = if above { "above" } else { "below" };
+                        let previous = self.wf_mark(&workflow.id, &key);
+                        if previous.as_deref() == Some(side) {
+                            continue;
+                        }
+                        let wanted = trigger
+                            .params
+                            .get("condition")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("below");
+                        if wanted == side {
+                            let port = if trigger.kind == "trigger.price" {
+                                "price"
+                            } else {
+                                "balance"
+                            };
+                            let mut ctx = self.context(&workflow, trigger, now, zone);
+                            ctx.trigger_label = trigger_label(&trigger.kind, &value.as_text());
+                            ctx.trigger_values = BTreeMap::from([(port.to_string(), value)]);
+                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+                        }
+                        self.wf_set_mark(&workflow.id, &key, side);
+                    }
+                    _ => {}
+                }
+            }
+            // Everything up to here was looked at; what the runs added is seen next pass.
+            let state = self.wf_state_mut(&workflow.id);
+            state.tx_index = len;
+            state.tx_cursor = last;
+        }
+
+        self.run_events(events, now, zone, &mut pass);
+        self.recompute_holdings();
+        self.persist()?;
+        if !pass.notices.is_empty() {
+            pass.notices = self.log_notices(std::mem::take(&mut pass.notices))?;
+        }
+        Ok(pass)
+    }
+}
+
+/// The trigger to start from: the one named, else a manual one, else the first.
+fn pick_trigger(graph: &Graph, wanted: Option<&str>) -> Result<Node> {
+    let triggers: Vec<&Node> = graph
+        .nodes
+        .iter()
+        .filter(|node| node_def(&node.kind).is_some_and(|def| def.is_trigger()))
+        .collect();
+    if let Some(id) = wanted {
+        return triggers
+            .into_iter()
+            .find(|node| node.id == id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("trigger {id}")));
+    }
+    triggers
+        .iter()
+        .find(|node| node.kind == "trigger.manual")
+        .or_else(|| triggers.first())
+        .map(|node| (*node).clone())
+        .ok_or_else(|| Error::InvalidInput("the workflow has no trigger".into()))
+}
+
+#[cfg(test)]
+mod tests;

@@ -18,6 +18,7 @@ pub mod settings;
 pub mod stores;
 pub mod transactions;
 pub mod vault_recents;
+pub mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Mutex;

@@ -67,6 +67,8 @@ pub enum TxOrigin {
         automation_id: String,
         planned_at: String,
     },
+    /// Created by a node workflow in one of its runs.
+    Workflow { workflow_id: String, run_id: String },
 }
 
 /// Fields every transaction carries, whatever it is.

@@ -469,6 +469,21 @@ pub struct VaultDoc {
     /// Notices already shown, newest last (payload v2).
     #[serde(default)]
     pub notification_log: Vec<crate::model::notify::NoticeRecord>,
+    /// Node workflows: their graphs, runs, variables, the operations waiting
+    /// for confirmation and what their triggers last saw.
+    #[serde(default)]
+    pub workflows: Vec<crate::workflow::Workflow>,
+    #[serde(default)]
+    pub workflow_runs: Vec<crate::workflow::WorkflowRun>,
+    #[serde(default)]
+    pub workflow_vars: Vec<crate::workflow::WorkflowVar>,
+    #[serde(default)]
+    pub workflow_queue: Vec<crate::workflow::QueuedActions>,
+    #[serde(default)]
+    pub workflow_state: Vec<crate::workflow::WorkflowState>,
+    /// Runs asleep at a «Подождать» node.
+    #[serde(default)]
+    pub workflow_waits: Vec<crate::workflow::model::WorkflowWait>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -513,6 +528,12 @@ impl Default for VaultDoc {
             debt_terms: Vec::new(),
             key_rates: Vec::new(),
             notification_log: Vec::new(),
+            workflows: Vec::new(),
+            workflow_runs: Vec::new(),
+            workflow_vars: Vec::new(),
+            workflow_queue: Vec::new(),
+            workflow_state: Vec::new(),
+            workflow_waits: Vec::new(),
         }
     }
 }

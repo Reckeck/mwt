@@ -846,6 +846,8 @@ type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liqu
 
 type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: AssetRef, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: Fee | null, price: PriceStamp, };
 
+type DeleteWorkflowVarInput = { scope: VarScope, name: string, };
+
 /**
  * Where an account stands and what it will earn.
  */
@@ -913,6 +915,24 @@ type DiscardPendingImportsInput = {
 exec_ids: Array<string>, };
 
 type DiscardPendingImportsOutput = { discarded: number, };
+
+/**
+ * Emulate a graph — saved or still in the editor — on a copy of the vault.
+ */
+type DryRunWorkflowInput = { 
+/**
+ * The graph as JSON.
+ */
+graph: string, workflow_id: string | null, 
+/**
+ * The trigger to start from; a manual one, else the first, by default.
+ */
+trigger_node: string | null, };
+
+/**
+ * An event a run sent with «Отправить событие».
+ */
+type EmittedEvent = { name: string, payload: WfValue, };
 
 type EnrichmentData = { fee: Fee | null, confirmed: boolean | null, block_time: string | null, from_address: string | null, to_address: string | null, token_name: string | null, token_decimals: number | null, contract: string | null, };
 
@@ -1215,6 +1235,15 @@ source: string, target: string, kind: GraphEdgeKind, };
 type GraphEdgeKind = "seq" | "transfer" | "convert" | "flow";
 
 /**
+ * One problem of a graph, pinned to the node or the wire it is about.
+ */
+type GraphIssue = { level: IssueLevel, 
+/**
+ * Machine code: `unknown_node`, `no_trigger`, `type_mismatch`, …
+ */
+code: string, node_id: string | null, edge_id: string | null, text_ru: string, text_en: string, };
+
+/**
  * One row of the graph: a store, or a store with its sub-accounts folded in.
  */
 type GraphLane = { store_id: string, 
@@ -1251,6 +1280,8 @@ column: number,
  * What moved, in the base currency at the rate of the moment.
  */
 value: Amount, flow_id: string | null, internal: boolean, comment: string, };
+
+type GraphVersion = { saved_at: string, graph: string, };
 
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
@@ -1359,6 +1390,8 @@ income: Amount, taxable: Amount, tax: Amount,
  */
 remaining_free: Amount | null, };
 
+type IssueLevel = "error" | "warning";
+
 /**
  * The Bank of Russia key rate from a day on, percent.
  */
@@ -1424,7 +1457,18 @@ type Liquidity = "maker" | "taker";
 
 type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 
+type ListWorkflowRunsInput = { workflow_id: string | null, 
+/**
+ * Newest first, 100 by default.
+ */
+limit: number | null, };
+
 type Locale = "auto" | "en" | "ru";
+
+/**
+ * A text in both languages.
+ */
+type LocalizedText = { ru: string, en: string, };
 
 /**
  * Losses grouped by one key (a kind, a store, a contact, a chain).
@@ -1587,6 +1631,22 @@ type NetworthReport = { meta: ReportMeta,
  */
 points: Array<NetworthPoint>, };
 
+type NodeDef = { kind: string, group: NodeGroup, title: LocalizedText, description: LocalizedText, 
+/**
+ * Longer help: what it does, an example, common mistakes.
+ */
+help: LocalizedText, inputs: Array<PortDef>, outputs: Array<PortDef>, params: Array<ParamDef>, 
+/**
+ * Hidden in the simple mode of the editor.
+ */
+advanced: boolean, 
+/**
+ * Words the search finds it by, besides its title.
+ */
+keywords: Array<string>, };
+
+type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list";
+
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
  */
@@ -1649,6 +1709,21 @@ categories: Array<NoticeCategoryCfg>, };
  * category `opening_balance`, so it is neither income nor spending.
  */
 type OpeningBalance = { asset: AssetRef, amount: Amount, };
+
+type ParamDef = { name: string, kind: ParamKind, label: LocalizedText, 
+/**
+ * JSON of the default value.
+ */
+default: unknown, 
+/**
+ * An input of the same name exists: the field can be «taken from a wire».
+ */
+wirable: boolean, };
+
+/**
+ * What kind of field edits a parameter.
+ */
+type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
 type PayUtilityBillInput = { property_id: string, 
 /**
@@ -1805,6 +1880,14 @@ type PnlReport = { meta: ReportMeta, rows: Array<PnlRow>, total_realized: Amount
 
 type PnlRow = { month: string, realized: Amount, fees: Amount, };
 
+type PortDef = { name: string, type: PortType, label: LocalizedText, };
+
+/**
+ * What a port carries. Each has its colour in the editor; a wire joins only
+ * compatible ports (see [`PortType::accepts`]).
+ */
+type PortType = "flow" | "any" | "number" | "money" | "asset" | "currency" | "account" | "category" | "bool" | "text" | "date" | "duration" | "transaction" | "list" | "record";
+
 type PortfolioPoint = { 
 /**
  * `YYYY-MM-DD`.
@@ -1953,6 +2036,15 @@ loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, };
 type Purpose = "everyday" | "savings" | "investment" | "transit";
 
 /**
+ * Operations a workflow prepared behind a «Ждать подтверждения» node.
+ */
+type QueuedActions = { id: string, workflow_id: string, run_id: string, created_at: string, 
+/**
+ * What they are, in words.
+ */
+summary: string, transactions: Array<Transaction>, };
+
+/**
  * A rate in force from a day on.
  */
 type RatePeriod = { 
@@ -2095,11 +2187,43 @@ months: Array<string>, real_terms: boolean,
  */
 inflation_rate: Amount | null, };
 
+type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
+
+type RunMode = "live" | "dry_run";
+
+type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } };
+
+/**
+ * Everything a run did. The vault already holds its operations; the caller
+ * keeps the run, the queue, the notices and the wait.
+ */
+type RunReport = { run: WorkflowRun, 
+/**
+ * Operations made (or, in emulation, that would be made).
+ */
+transactions: Array<Transaction>, queued: Array<QueuedActions>, notices: Array<NoticeRecord>, events: Array<EmittedEvent>, 
+/**
+ * Data wire id → the value that went along it, for the editor.
+ */
+edge_values: { [key: string]: string }, };
+
+type RunWorkflowInput = { id: string, trigger_node: string | null, };
+
 type SaveTerminalDrawingsInput = { store_id: string, symbol: string, 
 /**
  * The chart drawing manager's JSON export; empty or `[]` removes it.
  */
 json: string, };
+
+/**
+ * Create (`id` empty) or update a workflow.
+ */
+type SaveWorkflowInput = { id: string | null, workflow: WorkflowDraft, };
+
+/**
+ * A saved workflow with what is wrong with its graph.
+ */
+type SavedWorkflow = { workflow: Workflow, issues: Array<GraphIssue>, };
 
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
@@ -2136,6 +2260,13 @@ interval_sec: number, };
 type SetLoyaltyInfoInput = { store_id: string, info: LoyaltyInfo, };
 
 type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
+
+type SetWorkflowActiveInput = { id: string, active: boolean, };
+
+/**
+ * Set a variable by hand; `value` is a `WfValue` in JSON.
+ */
+type SetWorkflowVarInput = { scope: VarScope, name: string, value: string, };
 
 /**
  * Vault-scoped settings.
@@ -2199,6 +2330,8 @@ transaction: Transaction | null, };
  * Put a reminder off until a moment (RFC3339).
  */
 type SnoozeReminderInput = { id: string, until: string, };
+
+type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
 /**
  * A "store"/"platform" (хранилище) — a portfolio container.
@@ -2527,6 +2660,15 @@ type TopupTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount
 from: AccountRef | null, details: KindDetails, price: PriceStamp, };
 
 /**
+ * One node of a run, in words.
+ */
+type TraceStep = { node_id: string, kind: string, status: StepStatus, text_ru: string, text_en: string, 
+/**
+ * Output port → its value as text.
+ */
+values: { [key: string]: string }, };
+
+/**
  * Opening or closing (part of) a futures position.
  *
  * The position is a holding of `contract` (a derivative, see
@@ -2777,7 +2919,7 @@ utility_item_id?: string, };
 /**
  * How a transaction came to exist.
  */
-type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } };
+type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } } | { "workflow": { workflow_id: string, run_id: string, } };
 
 type TxPreview = { changes: Array<PositionChange>, base_currency: string, 
 /**
@@ -3069,6 +3211,13 @@ anomaly: boolean,
 monthly: Amount, };
 
 /**
+ * A graph and what is wrong with it.
+ */
+type ValidateWorkflowInput = { graph: string, };
+
+type VarScope = "global" | { "workflow": string };
+
+/**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
  */
 type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<Category>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, 
@@ -3091,7 +3240,16 @@ key_rates: Array<KeyRatePoint>,
 /**
  * Notices already shown, newest last (payload v2).
  */
-notification_log: Array<NoticeRecord>, };
+notification_log: Array<NoticeRecord>, 
+/**
+ * Node workflows: their graphs, runs, variables, the operations waiting
+ * for confirmation and what their triggers last saw.
+ */
+workflows: Array<Workflow>, workflow_runs: Array<WorkflowRun>, workflow_vars: Array<WorkflowVar>, workflow_queue: Array<QueuedActions>, workflow_state: Array<WorkflowState>, 
+/**
+ * Runs asleep at a «Подождать» node.
+ */
+workflow_waits: Array<WorkflowWait>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 
@@ -3107,6 +3265,148 @@ type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: Vau
 type WalletCatalog = { kinds: Array<WalletKindInfo>, providers: Array<ExchangeProviderInfo>, };
 
 type WalletKindInfo = { kind: StoreKind, presets: Array<PresetInfo>, max_roots: number | null, user_creatable: boolean, default_purpose: Purpose, sub_types: Array<SubTypeInfo>, };
+
+/**
+ * A value on a data edge. Money keeps its currency so different currencies
+ * are never added up by accident.
+ */
+type WfValue = { "type": "null" } | { "type": "number", "value": Amount } | { "type": "money", "value": { amount: Amount, 
+/**
+ * Lowercase code: `rub`, `usdt`.
+ */
+currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key: string]: WfValue } };
+
+type Workflow = { id: string, name: string, description: string, active: boolean, 
+/**
+ * The graph as JSON (`Graph`): nodes, edges, comments.
+ */
+graph: string, created_at: string, updated_at: string, 
+/**
+ * Run on operations made by workflows too (off: no chains of workflows
+ * firing each other).
+ */
+react_to_workflows: boolean, 
+/**
+ * Most one run may move, in the base currency; `None` = no cap.
+ */
+max_amount: Amount | null, 
+/**
+ * Earlier graphs, newest last, to compare and restore.
+ */
+versions: Array<GraphVersion>, };
+
+/**
+ * A note or a frame on the canvas: no effect on a run.
+ */
+type WorkflowComment = { id: string, text: string, position: WorkflowPosition, width: number, height: number, color: string, };
+
+/**
+ * What the user edits of a workflow.
+ */
+type WorkflowDraft = { name: string, description: string, active: boolean, graph: string, react_to_workflows: boolean, max_amount: Amount | null, };
+
+type WorkflowEdge = { id: string, from: string, from_port: string, to: string, to_port: string, };
+
+type WorkflowGraph = { version: number, nodes: Array<WorkflowNode>, edges: Array<WorkflowEdge>, comments: Array<WorkflowComment>, };
+
+type WorkflowNode = { id: string, 
+/**
+ * Catalog kind, e.g. `trigger.schedule`.
+ */
+kind: string, 
+/**
+ * Parameter values by name; a connected input of the same name wins.
+ */
+params: Record<string, unknown>, position: WorkflowPosition, 
+/**
+ * Switched off: the flow passes through it untouched.
+ */
+disabled: boolean, 
+/**
+ * A label the user gave it.
+ */
+label: string, };
+
+/**
+ * What one scheduler pass did.
+ */
+type WorkflowPass = { runs: Array<WorkflowRun>, 
+/**
+ * Operations made.
+ */
+created: Array<string>, 
+/**
+ * Operations put into the confirmation queue.
+ */
+queued: number, 
+/**
+ * New notices to show.
+ */
+notices: Array<NoticeRecord>, };
+
+type WorkflowPosition = { x: number, y: number, };
+
+/**
+ * One run of a workflow, with its trace for the journal.
+ */
+type WorkflowRun = { id: string, workflow_id: string, 
+/**
+ * Trigger node id and what fired it, e.g. `schedule 2026-11-01`.
+ */
+trigger: string, started_at: string, outcome: RunOutcome, 
+/**
+ * Operations it created.
+ */
+created: Array<string>, 
+/**
+ * Operations it put in the confirmation queue.
+ */
+queued: number, 
+/**
+ * The run in words, step by step.
+ */
+trace: Array<TraceStep>, dry_run: boolean, };
+
+/**
+ * What a workflow's triggers last saw, so each fires once per occasion.
+ */
+type WorkflowState = { workflow_id: string, 
+/**
+ * Trigger node id → last moment it fired (RFC3339) or last side of a
+ * threshold (`above` / `below`).
+ */
+marks: { [key: string]: string }, 
+/**
+ * The last operation an «operation added» trigger looked at, and where it was.
+ */
+tx_cursor: string | null, tx_index: number, };
+
+/**
+ * A variable that outlives a run. The value is a `WfValue` in JSON.
+ */
+type WorkflowVar = { scope: VarScope, name: string, value: string, updated_at: string, };
+
+/**
+ * A run asleep at a «Подождать» node: where it goes on, when, and the data it
+ * had worked out by then.
+ */
+type WorkflowWait = { id: string, workflow_id: string, run_id: string, 
+/**
+ * The wait node; the run goes on from its «Дальше».
+ */
+node_id: string, 
+/**
+ * RFC3339.
+ */
+resume_at: string, 
+/**
+ * Node outputs computed before the wait, as JSON.
+ */
+memo: string, 
+/**
+ * Whether operations after it go to the confirmation queue.
+ */
+queue_mode: boolean, trigger: string, };
 
 type YearReport = { meta: ReportMeta, year: number, rows: Array<YearRow>, total: YearRow, 
 /**

@@ -47,6 +47,7 @@ mod store_change;
 mod test_support;
 mod utilities;
 mod validate;
+mod workflows;
 mod worth;
 
 pub use adjustments::AdjustmentDraft;
@@ -85,6 +86,7 @@ pub use utilities::{
     PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill, UtilityBillLine,
     UtilityDraft, UtilityMonth, UtilityPaymentDraft, UtilityTrend,
 };
+pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass};
 pub use worth::{FlowClass, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an

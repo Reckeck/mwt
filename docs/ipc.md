@@ -18,6 +18,7 @@ Frontend парсит код и показывает локализованно�
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
 | `automation-skipped` | `{ count }` | после долгого перерыва старые даты сверх 24 записаны как пропущенные |
+| `workflows-ran` | `{ runs, queued }` | планировщик запустил схемы (узлы); `queued` — операций ушло в очередь подтверждения. Созданные операции приходят ещё и через `automation-created` |
 | `price-alert` | `{ alert_id }` | сработал ценовой алерт (один раз) |
 | `reminder-due` | `{}` | наступило время напоминаний — обновить их список |
 | `reminders-changed` | `{}` | синхронизация создала или сдвинула авто-напоминания |
@@ -244,6 +245,32 @@ JSON без шифрования — там нет ничего секретно
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
 | `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |
 | `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
+
+### workflows — схемы из узлов (`crates/app/src/commands/workflows.rs`)
+
+Граф хранится в vault как JSON (`WorkflowGraph { version, nodes, edges, comments }`), каталог узлов — в Rust (`trade_core::workflow::catalog`). Схема с ошибками сохраняется, но не включается. Планировщик раз в тик вызывает `run_due_workflows`: дождавшиеся «Подождать», расписания (пропущенное — не больше 12), новые операции (свои операции схемы её не запускают; операции других схем — только с `include_workflows` / `react_to_workflows`), пересечения порогов баланса и цены, затем события (глубина ≤ 5). Лимиты: 500 шагов и 20 действий за запуск, 60 запусков схемы в час, `max_amount` в базовой валюте. Неудачный запуск откатывает всё, что сделал.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `workflow_node_catalog` | — | `Vec<NodeDef { kind, group, title, description, help, inputs, outputs, params, advanced, keywords }>`; тексты `{ ru, en }`; работает и без открытого vault |
+| `validate_workflow` | `ValidateWorkflowInput { graph }` | `Vec<GraphIssue { level, code, node_id?, edge_id?, text_ru, text_en }>`, ошибки первыми |
+| `list_workflows` | — | `Vec<Workflow>` |
+| `get_workflow` | `id` | `Workflow` |
+| `save_workflow` | `SaveWorkflowInput { id?, workflow: WorkflowDraft { name, description, active, graph, react_to_workflows, max_amount? } }` | `SavedWorkflow { workflow, issues }`. Изменённый граф кладёт прежний в `versions` (до 20); включение начинает следить «с этого момента» |
+| `set_workflow_active` | `SetWorkflowActiveInput { id, active }` | `Workflow`; с ошибками в графе — `INVALID_INPUT` |
+| `delete_workflow` | `id` | `()` — вместе с журналом, своими переменными, очередью, состоянием и ожиданиями; созданные операции остаются |
+| `restore_workflow_version` | `RestoreWorkflowVersionInput { id, saved_at }` | `SavedWorkflow`; текущий граф становится версией, сломанная версия возвращается выключенной |
+| `dry_run_workflow` | `DryRunWorkflowInput { graph, workflow_id?, trigger_node? }` | `RunReport { run, transactions, queued, notices, events, edge_values }` — эмуляция на копии vault, ничего не пишется; `edge_values` — значение на каждой связи данных для редактора |
+| `run_workflow_now` | `RunWorkflowInput { id, trigger_node? }` | `RunReport`; уведомления показываются, запуск попадает в журнал |
+| `list_workflow_runs` | `ListWorkflowRunsInput { workflow_id?, limit? (100) }` | `Vec<WorkflowRun>` новыми первыми, с `trace` по шагам |
+| `list_workflow_queue` | — | `Vec<QueuedActions>` — операции после узла «Ждать подтверждения» |
+| `confirm_workflow_queued` | `id` | `Vec<Transaction>` — все операции пачки вместе или ни одной |
+| `discard_workflow_queued` | `id` | `()` |
+| `list_workflow_vars` | — | `Vec<WorkflowVar { scope, name, value (WfValue JSON), updated_at }>` |
+| `set_workflow_var` | `SetWorkflowVarInput { scope, name, value }` | `()` |
+| `delete_workflow_var` | `DeleteWorkflowVarInput { scope, name }` | `()` |
+| `export_workflow` | `id` | `string` — файл `{ format: "trade-app-workflow", version, name, description, graph }` |
+| `import_workflow` | `json` | `SavedWorkflow` — новая схема, выключена |
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — только vault-scoped поля |
