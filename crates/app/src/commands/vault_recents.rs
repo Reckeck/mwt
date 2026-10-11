@@ -98,16 +98,24 @@ pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<String
     let dialog = if save {
         dialog
             .add_filter("TradeApp Vault", &["wallet"])
+            .set_file_name("vault.wallet")
             .set_title("Сохранить vault как…")
     } else {
         dialog
             .add_filter("TradeApp Vault", &["wallet"])
             .set_title("Открыть vault")
     };
-    let path = if save {
-        dialog.blocking_save_file()
-    } else {
-        dialog.blocking_pick_file()
-    };
-    Ok(path.map(|path| path.to_string()))
+    if !save {
+        return Ok(dialog.blocking_pick_file().map(|path| path.to_string()));
+    }
+    // The save dialog returns exactly what was typed; a vault always gets its extension.
+    let picked = dialog
+        .blocking_save_file()
+        .map(|path| path.into_path().map_err(|err| err.to_string()))
+        .transpose()?;
+    Ok(picked.map(|path| {
+        trade_core::storage::ensure_wallet_ext(&path)
+            .to_string_lossy()
+            .into_owned()
+    }))
 }

@@ -198,6 +198,26 @@ pub fn backup_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
+/// File extension of a vault on disk.
+pub const VAULT_EXT: &str = "wallet";
+
+/// Append `.wallet` unless the name already ends with it (any case).
+///
+/// Native save dialogs on Linux return exactly what was typed, so `my-money`
+/// would otherwise become an extension-less file the open dialog's filter hides.
+pub fn ensure_wallet_ext(path: &Path) -> PathBuf {
+    let has_ext = path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(VAULT_EXT));
+    if has_ext {
+        return path.to_path_buf();
+    }
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".");
+    name.push(VAULT_EXT);
+    path.with_file_name(name)
+}
+
 /// The default data directory for the app.
 pub fn default_data_dir(app_name: &str) -> PathBuf {
     let dir = std::env::var("TRADE_APP_DATA_DIR")
@@ -555,5 +575,19 @@ mod tests {
             .hint(),
             "****"
         );
+    }
+
+    #[test]
+    fn ensure_wallet_ext_appends_only_when_missing() {
+        let cases = [
+            ("/tmp/a", "/tmp/a.wallet"),
+            ("/tmp/a.wallet", "/tmp/a.wallet"),
+            ("/tmp/a.WALLET", "/tmp/a.WALLET"),
+            ("/tmp/a.json", "/tmp/a.json.wallet"),
+            ("/tmp/my.money", "/tmp/my.money.wallet"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(ensure_wallet_ext(Path::new(input)), PathBuf::from(expected));
+        }
     }
 }

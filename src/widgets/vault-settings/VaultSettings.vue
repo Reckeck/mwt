@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
+import { ChangePasswordDialog } from '@/features/vault-change-password'
+import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -11,6 +13,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+const passwordOpen = ref(false)
 
 /** "300" → "5 min" in the UI language; the options used to be hard-coded in Russian. */
 function duration(seconds: number): string {
@@ -88,6 +91,11 @@ function updateMinimizeToTray(event: Event) {
       </div>
 
       <p class="text-xs text-muted-foreground">{{ t('settings.autoSaveHint') }}</p>
+
+      <Button variant="outline" size="sm" class="w-fit" @click="passwordOpen = true">
+        {{ t('vault.password.open') }}
+      </Button>
     </div>
+    <ChangePasswordDialog v-model:open="passwordOpen" />
   </Card>
 </template>
