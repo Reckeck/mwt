@@ -2,11 +2,12 @@
 import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDebounceFn, useElementSize } from '@vueuse/core'
+import { useQuery } from '@tanstack/vue-query'
 import { GridItem, GridLayout, type Layout } from 'grid-layout-plus'
 import { EyeOff, LayoutGrid, Maximize2, PinOff, Plus, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import { DashboardCatalog } from '@/widgets/dashboard-catalog'
+import { type DashboardCatalogExchange, DashboardCatalog } from '@/widgets/dashboard-catalog'
 import {
   DASHBOARD_COLS,
   DASHBOARD_ROW_HEIGHT,
@@ -20,7 +21,8 @@ import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { WIDGET_DRAG_HANDLE, WidgetFrame } from '@/shared/ui/widget-frame'
-import { parseError } from '@/shared/api/ipc'
+import { call, parseError } from '@/shared/api/ipc'
+import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
@@ -106,7 +108,7 @@ function shownPinned(): Set<string> {
 }
 const storeIds = computed(() => new Map(stored.value.map((cfg) => [cfg.id, cfg.store_id ?? null])))
 
-function toCfgs(items: Layout, pinned: Set<string>): DashboardWidgetCfg[] {
+function toCfgs(items: Layout, pinned: Set<string>, bound = storeIds.value): DashboardWidgetCfg[] {
   return items.map((item) => ({
     id: String(item.i),
     col: item.x,
@@ -114,8 +116,15 @@ function toCfgs(items: Layout, pinned: Set<string>): DashboardWidgetCfg[] {
     width: item.w,
     height: item.h,
     pinned: pinned.has(String(item.i)),
-    store_id: storeIds.value.get(String(item.i)) ?? null,
+    store_id: bound.get(String(item.i)) ?? null,
   }))
+}
+
+/** A widget bound to a wallet (a trading widget to its exchange) gets it as `storeId`. */
+function widgetProps(id: string): Record<string, unknown> {
+  const def = widgetDef(id)
+  const storeId = storeIds.value.get(id)
+  return storeId ? { ...def?.props, storeId } : (def?.props ?? {})
 }
 
 watch(
@@ -195,12 +204,24 @@ function widgetActions(id: string): UiAction[] {
 /* --- catalog: a new widget lands at the bottom, the grid pulls it up into any gap --- */
 const catalogOpen = ref(false)
 const placed = computed(() => layout.value.map((item) => String(item.i)))
-const hasMore = computed(() => placed.value.length < DASHBOARD_WIDGETS.length)
 
-function add(def: DashboardWidgetDef) {
+/** Trading widgets are offered only while the vault has an exchange with a provider. */
+const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const exchanges = computed<DashboardCatalogExchange[]>(() =>
+  (tree.data.value ?? [])
+    .map((node) => node.store)
+    .filter((store) => store.kind === 'exchange' && !store.archived && store.exchange)
+    .map((store) => ({ id: store.id, name: store.name })),
+)
+
+const hasMore = computed(() =>
+  DASHBOARD_WIDGETS.some((def) => !placed.value.includes(def.id) && (!def.requires || exchanges.value.length)),
+)
+
+function add(def: DashboardWidgetDef, storeId: string | null) {
   const bottom = layout.value.reduce((max, item) => Math.max(max, item.y + item.h), 0)
   const items: Layout = [...layout.value, { i: def.id, x: 0, y: bottom, w: def.w, h: def.h }]
-  void save(toCfgs(items, pinnedIds.value))
+  void save(toCfgs(items, pinnedIds.value, new Map([...storeIds.value, [def.id, storeId]])))
 }
 </script>
 
@@ -221,7 +242,7 @@ function add(def: DashboardWidgetDef) {
           @pin="(value) => setPinned(String(item.i), value)"
           @remove="remove(String(item.i))"
         >
-          <component :is="widgetDef(String(item.i))?.component" v-bind="widgetDef(String(item.i))?.props ?? {}" />
+          <component :is="widgetDef(String(item.i))?.component" v-bind="widgetProps(String(item.i))" />
         </WidgetFrame>
       </div>
     </div>
@@ -256,7 +277,7 @@ function add(def: DashboardWidgetDef) {
           @pin="(value) => setPinned(String(item.i), value)"
           @remove="remove(String(item.i))"
         >
-          <component :is="widgetDef(String(item.i))?.component" v-bind="widgetDef(String(item.i))?.props ?? {}" />
+          <component :is="widgetDef(String(item.i))?.component" v-bind="widgetProps(String(item.i))" />
         </WidgetFrame>
       </GridItem>
     </GridLayout>
@@ -278,7 +299,7 @@ function add(def: DashboardWidgetDef) {
       <Plus class="size-5" />
     </Button>
 
-    <DashboardCatalog v-model:open="catalogOpen" :placed="placed" @add="add" />
+    <DashboardCatalog v-model:open="catalogOpen" :placed="placed" :exchanges="exchanges" @add="add" />
   </div>
 </template>
 
