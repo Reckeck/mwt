@@ -5,19 +5,41 @@ export interface TourStep {
   side?: 'top' | 'right' | 'bottom' | 'left'
 }
 
+/** The tabs, filter and content every analytics report shares; the last step says what the report is. */
+function analytics(report: string): TourStep[] {
+  return [
+    { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
+    { target: 'report-filter', key: 'analytics.filter', side: 'bottom' },
+    { target: 'section-content', key: `analytics.${report}`, side: 'top' },
+    { target: 'report-export', key: 'analytics.export', side: 'left' },
+  ]
+}
+
+/** Every planning tab starts with the tabs, then its own content. */
+function planning(own: TourStep[]): TourStep[] {
+  return [{ target: 'section-tabs', key: 'planning.tabs', side: 'bottom' }, ...own]
+}
+
 /**
  * Tours by route name. Steps whose element is not on the screen are skipped,
- * so one tour serves wallets of every kind.
+ * so one tour serves wallets of every kind. Every route has one — the
+ * `check-onboarding` gate says so (see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
+    { target: 'notification-bell', key: 'dashboard.bell', side: 'bottom' },
     { target: 'open-settings', key: 'dashboard.settings', side: 'bottom' },
     { target: 'tour-help', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
+  stores: [
+    { target: 'stores-list', key: 'stores.list', side: 'top' },
+    { target: 'stores-create', key: 'stores.create', side: 'left' },
+  ],
   wallet: [
+    { target: 'wallet-operation', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
@@ -27,11 +49,59 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-purpose', key: 'walletSettings.purpose', side: 'top' },
     { target: 'wallet-envelopes', key: 'walletSettings.envelopes', side: 'top' },
     { target: 'automation-presets', key: 'walletSettings.presets', side: 'bottom' },
+    { target: 'store-change', key: 'walletSettings.change', side: 'top' },
   ],
+  transactions: [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
+    { target: 'tx-filter', key: 'transactions.filter', side: 'bottom' },
+    { target: 'section-content', key: 'transactions.list', side: 'top' },
+  ],
+  'transactions-losses': [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
+    { target: 'section-content', key: 'transactionsLosses.content', side: 'top' },
+  ],
+  'transactions-graph': [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
+    { target: 'section-content', key: 'transactionsGraph.content', side: 'top' },
+  ],
+  'transactions-calendar': [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
+    { target: 'section-content', key: 'transactionsCalendar.content', side: 'top' },
+  ],
+  'analytics-cashflow': analytics('cashflow'),
+  'analytics-year': analytics('year'),
+  'analytics-categories': analytics('categories'),
+  'analytics-networth': analytics('networth'),
+  'analytics-stores': analytics('stores'),
+  'analytics-pnl': analytics('pnl'),
+  'analytics-losses': analytics('losses'),
+  'analytics-portfolio': analytics('portfolio'),
+  'analytics-inflation': analytics('inflation'),
   'directory-contacts': [
     { target: 'contact-quick-create', key: 'directory.create', side: 'right' },
     { target: 'contact-groups', key: 'directory.groups', side: 'right' },
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
   ],
+  'directory-rates': [
+    { target: 'section-tabs', key: 'directory.tabs', side: 'bottom' },
+    { target: 'section-content', key: 'directory.rates', side: 'top' },
+  ],
+  'planning-automations': planning([
+    { target: 'section-content', key: 'planningAutomations.content', side: 'top' },
+    { target: 'automation-simulate', key: 'planningAutomations.simulate', side: 'bottom' },
+  ]),
+  'planning-budgets': planning([{ target: 'section-content', key: 'planningBudgets.content', side: 'top' }]),
+  'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),
+  'planning-reminders': planning([
+    { target: 'section-content', key: 'planningReminders.content', side: 'top' },
+    { target: 'reminder-filter', key: 'planningReminders.filter', side: 'bottom' },
+  ]),
+  'planning-alerts': planning([{ target: 'section-content', key: 'planningAlerts.content', side: 'top' }]),
+}
+
+/** Routes with no tour, and why (the `check-onboarding` gate reads this). */
+export const TOURLESS_ROUTES: Record<string, string> = {
+  unlock: 'Before a vault is open: the unlock screen explains itself.',
+  settings: 'A redirect to the settings window, which has its own sections.',
 }

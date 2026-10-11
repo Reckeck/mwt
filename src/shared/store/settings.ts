@@ -103,6 +103,7 @@ export const useSettingsStore = defineStore('settings', {
           inflation: patch.inflation ?? null,
           enrichment_opt_in: patch.enrichment_opt_in ?? null,
           completed_tours: patch.completed_tours ?? null,
+          seen_whats_new: patch.seen_whats_new ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

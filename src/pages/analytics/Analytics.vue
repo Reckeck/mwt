@@ -44,12 +44,14 @@ const filter = reactive<ReportFilter>({
 <template>
   <div class="grid gap-4 @container">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <Tabs v-model="tab" :tabs="tabs" />
-      <ReportExportButton :kind="kind" :filter="filter" />
+      <div class="w-fit max-w-full" data-tour="section-tabs"><Tabs v-model="tab" :tabs="tabs" /></div>
+      <div data-tour="report-export"><ReportExportButton :kind="kind" :filter="filter" /></div>
     </div>
-    <ReportFilterBar v-model="filter" :kind="kind" />
-    <RouterView v-slot="{ Component }">
-      <component :is="Component" :kind="kind" :filter="filter" />
-    </RouterView>
+    <div data-tour="report-filter"><ReportFilterBar v-model="filter" :kind="kind" /></div>
+    <div class="min-w-0" data-tour="section-content">
+      <RouterView v-slot="{ Component }">
+        <component :is="Component" :kind="kind" :filter="filter" />
+      </RouterView>
+    </div>
   </div>
 </template>

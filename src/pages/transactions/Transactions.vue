@@ -95,7 +95,7 @@ function rowActions(tx: Transaction): UiAction[] {
 <template>
   <div class="grid gap-4 @container">
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <TransactionFilterBar v-model="filter" />
+      <div data-tour="tx-filter"><TransactionFilterBar v-model="filter" /></div>
 
       <Button variant="outline" size="sm" class="h-9" @click="refresh">
         <RefreshCw class="size-4" />

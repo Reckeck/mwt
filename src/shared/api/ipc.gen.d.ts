@@ -126,7 +126,11 @@ quick_add_shortcut: string | null,
 /**
  * Guided tours already shown (by page), so a tour starts by itself only once.
  */
-completed_tours: Array<string>, };
+completed_tours: Array<string>, 
+/**
+ * «Что нового» entries already shown after an update.
+ */
+seen_whats_new: Array<string>, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -2835,7 +2839,11 @@ inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null,
 /**
  * Replaces the list of tours already shown; `[]` shows them all again.
  */
-completed_tours: Array<string> | null, };
+completed_tours: Array<string> | null, 
+/**
+ * Replaces the list of «Что нового» entries already shown.
+ */
+seen_whats_new: Array<string> | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 

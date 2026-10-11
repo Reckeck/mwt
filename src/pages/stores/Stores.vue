@@ -58,13 +58,13 @@ function openWallet(created: Store) {
   <div class="grid gap-4 @container">
     <div class="flex items-center justify-between gap-4">
       <p class="text-sm text-muted-foreground">{{ t('stores.title') }}</p>
-      <Button @click="createDialogOpen = true">
+      <Button data-tour="stores-create" @click="createDialogOpen = true">
         <Plus class="size-4" />
         {{ t('stores.create') }}
       </Button>
     </div>
 
-    <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
+    <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3" data-tour="stores-list">
       <StoreCard
         v-for="node in roots"
         :key="node.store.id"

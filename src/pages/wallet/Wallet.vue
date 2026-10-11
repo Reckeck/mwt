@@ -304,7 +304,7 @@ function openWallet(created: Store) {
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
-          <Button size="sm" :disabled="isArchived" @click="openTransaction">
+          <Button size="sm" :disabled="isArchived" data-tour="wallet-operation" @click="openTransaction">
             <Plus class="size-4" />
             {{ t('wallet.addOperation') }}
           </Button>

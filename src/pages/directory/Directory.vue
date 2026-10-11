@@ -23,7 +23,7 @@ const tab = computed({
 
 <template>
   <div class="grid gap-4">
-    <Tabs v-model="tab" :tabs="tabs" />
-    <RouterView />
+    <div class="w-fit max-w-full" data-tour="section-tabs"><Tabs v-model="tab" :tabs="tabs" /></div>
+    <div class="min-w-0" data-tour="section-content"><RouterView /></div>
   </div>
 </template>
