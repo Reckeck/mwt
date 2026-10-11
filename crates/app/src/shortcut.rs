@@ -6,6 +6,17 @@ use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+/// Command-line flag that opens «+ Операция» in the running instance — what a
+/// Hyprland/Sway binding calls, since Wayland gives apps no global keys.
+pub const QUICK_ADD_FLAG: &str = "--quick-add";
+
+/// Whether this desktop lets an app grab keys system-wide. On Wayland the
+/// compositor owns them; the X11 grab the plugin uses only sees keys while an
+/// XWayland window has focus.
+pub fn global_keys_supported() -> bool {
+    !cfg!(target_os = "linux") || std::env::var("WAYLAND_DISPLAY").is_err()
+}
+
 /// The plugin with the one handler every registered combination shares.
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     tauri_plugin_global_shortcut::Builder::new()

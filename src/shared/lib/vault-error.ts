@@ -10,6 +10,7 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
   UNSUPPORTED: 'auth.unsupported',
   NOT_FOUND: 'auth.missing',
   INCOMPATIBLE_VAULT: 'vault.incompatible',
+  VAULT_BUSY: 'auth.vaultBusy',
 }
 
 /**

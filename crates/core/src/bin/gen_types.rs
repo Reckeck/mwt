@@ -159,6 +159,7 @@ fn main() {
         trade_core::ipc_contract::CachedPrice,
         trade_core::ipc_contract::ConvertAmountInput,
         trade_core::ipc_contract::EnsureFxInput,
+        trade_core::ipc_contract::ShortcutSupport,
         trade_core::ipc_contract::CreateBybitAccountsInput,
         trade_core::ipc_contract::ExchangeAccountBalance,
         trade_core::ipc_contract::ExchangeCoinRow,

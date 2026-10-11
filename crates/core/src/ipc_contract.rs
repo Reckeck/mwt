@@ -860,6 +860,15 @@ pub struct CachedPrice {
     pub ts: String,
 }
 
+/// Whether the «+ Операция» key can be registered by the app, and the command
+/// a compositor binding runs instead when it cannot (Wayland).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ShortcutSupport {
+    pub global_keys: bool,
+    /// The running executable with `--quick-add`.
+    pub launch_command: String,
+}
+
 /// Set up a bonus programme.
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetLoyaltyInfoInput {

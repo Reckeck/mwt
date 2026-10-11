@@ -198,6 +198,60 @@ pub fn backup_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
+/// Keeps a vault open in one app instance at a time.
+///
+/// Every save rewrites the whole file, so two windows editing the same vault
+/// would silently undo each other. The lock is `<vault>.lock` holding the
+/// owner's PID; a lock whose process is gone (a crash) is taken over. The
+/// owning process may open the vault again (re-unlock, tests).
+#[derive(Debug)]
+pub struct VaultLock {
+    path: PathBuf,
+    owned: bool,
+}
+
+impl VaultLock {
+    pub fn acquire(vault: &Path) -> Result<Self> {
+        let mut name = vault.file_name().unwrap_or_default().to_os_string();
+        name.push(".lock");
+        let path = vault.with_file_name(name);
+        let own = std::process::id();
+        if let Some(holder) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|raw| raw.trim().parse::<u32>().ok())
+        {
+            if holder == own {
+                return Ok(Self { path, owned: false });
+            }
+            if process_alive(holder) {
+                return Err(Error::VaultBusy(vault.display().to_string()));
+            }
+        }
+        std::fs::write(&path, own.to_string()).map_err(|err| Error::Io(err.to_string()))?;
+        Ok(Self { path, owned: true })
+    }
+}
+
+impl Drop for VaultLock {
+    fn drop(&mut self) {
+        if self.owned {
+            std::fs::remove_file(&self.path).ok();
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn process_alive(pid: u32) -> bool {
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// Without `/proc` a leftover lock cannot be told from a live one; it is
+/// ignored rather than locking the user out after a crash.
+#[cfg(not(target_os = "linux"))]
+fn process_alive(_pid: u32) -> bool {
+    false
+}
+
 /// File extension of a vault on disk.
 pub const VAULT_EXT: &str = "wallet";
 
@@ -589,5 +643,34 @@ mod tests {
         for (input, expected) in cases {
             assert_eq!(ensure_wallet_ext(Path::new(input)), PathBuf::from(expected));
         }
+    }
+
+    #[test]
+    fn a_vault_lock_keeps_other_processes_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        let lock_file = dir.path().join("v.wallet.lock");
+        {
+            let _held = VaultLock::acquire(&vault).unwrap();
+            assert!(lock_file.exists());
+            // The same process may open it again.
+            assert!(VaultLock::acquire(&vault).is_ok());
+            assert!(
+                lock_file.exists(),
+                "a re-entrant lock does not release the first"
+            );
+        }
+        assert!(!lock_file.exists());
+        // PID 1 is always alive on Linux: another process holds it.
+        std::fs::write(&lock_file, "1").unwrap();
+        if cfg!(target_os = "linux") {
+            assert!(matches!(
+                VaultLock::acquire(&vault),
+                Err(Error::VaultBusy(_))
+            ));
+        }
+        // A dead holder is taken over.
+        std::fs::write(&lock_file, "4294967000").unwrap();
+        assert!(VaultLock::acquire(&vault).is_ok());
     }
 }
