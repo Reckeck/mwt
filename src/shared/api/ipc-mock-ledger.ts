@@ -89,6 +89,7 @@ export const mockContacts: Contact[] = [
     note: '',
     archived: false,
     created_at: new Date().toISOString(),
+    group: '',
   },
   {
     id: 'mock-contact-mom',
@@ -109,6 +110,7 @@ export const mockContacts: Contact[] = [
     note: '',
     archived: false,
     created_at: new Date().toISOString(),
+    group: '',
   },
 ]
 

@@ -27,7 +27,10 @@ impl VaultHeader {
 
     pub const KDF_ARGON2ID: u8 = 0;
     pub const FMT_JSON: u8 = 0;
+    /// bincode: positional, written by v1 release builds; read-only now.
     pub const FMT_BIN: u8 = 1;
+    /// MessagePack with field names: release builds from payload v2 on.
+    pub const FMT_PACK: u8 = 2;
 
     pub fn new(fmt: SnapshotFormat, salt: [u8; SALT_LEN], nonce: [u8; NONCE_LEN]) -> Self {
         Self {
@@ -38,10 +41,7 @@ impl VaultHeader {
             kdf_par: crate::crypto::KDF_PAR,
             salt,
             nonce,
-            payload_fmt: match fmt {
-                SnapshotFormat::Json => Self::FMT_JSON,
-                SnapshotFormat::Bin => Self::FMT_BIN,
-            },
+            payload_fmt: fmt.as_u8(),
         }
     }
 

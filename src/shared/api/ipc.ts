@@ -427,6 +427,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         name: input.name.trim(),
         kind: input.kind,
         note: input.note,
+        group: '',
         accounts: input.accounts.map((account) => ({
           ...account,
           id: account.id || crypto.randomUUID(),
@@ -1024,7 +1025,7 @@ let mockStatus: VaultStatus = {
 
 const mockInfo: VaultInfo = {
   path: '/tmp/mock/vault.wallet',
-  doc_version: 1,
+  doc_version: 2,
   id: crypto.randomUUID(),
   created_at: new Date().toISOString(),
   format: 'json',
@@ -1038,6 +1039,7 @@ const mockSettings: Settings = {
   minimize_to_tray: true,
   savings_rate: '0.10',
   daily_budget_mode: 'month',
+  notifications: { system: true, hide_details_when_locked: false, default_time: '10:00', categories: [] },
   budget_currency: '',
 }
 
@@ -1871,7 +1873,7 @@ function mockCandles(input: GetCandlesInput): GetCandlesOutput {
 /** Stand-in for the decrypted `VaultDoc`, mirroring the Rust dump command. */
 function mockVaultDoc(): VaultDoc {
   return {
-    version: 1,
+    version: 2,
     id: mockInfo.id,
     created_at: mockInfo.created_at,
     settings: mockSettings,
@@ -1897,6 +1899,7 @@ function mockVaultDoc(): VaultDoc {
     envelopes: mockEnvelopes,
     debt_terms: mockDebtTerms,
     key_rates: [],
+    notification_log: [],
   }
 }
 

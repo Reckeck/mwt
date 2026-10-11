@@ -74,4 +74,7 @@ pub struct Contact {
     pub note: String,
     pub archived: bool,
     pub created_at: String,
+    /// Group the directory lists it under («Семья», «P2P»); empty = by kind.
+    #[serde(default)]
+    pub group: String,
 }

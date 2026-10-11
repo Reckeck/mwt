@@ -204,12 +204,108 @@ pub struct Goal {
     pub created_at: String,
 }
 
+/// Unit of a reminder's repeat interval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RepeatUnit {
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+/// «Every `every` `unit`s»: a monthly bill is `{ every: 1, unit: month }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ReminderRepeat {
+    pub every: u16,
+    pub unit: RepeatUnit,
+}
+
+impl ReminderRepeat {
+    /// The occurrence after `from`. A month too short for the day keeps its
+    /// last day, the way a bank moves a payment date.
+    pub fn advance(
+        self,
+        from: chrono::DateTime<chrono::Utc>,
+    ) -> Option<chrono::DateTime<chrono::Utc>> {
+        let every = u32::from(self.every.max(1));
+        match self.unit {
+            RepeatUnit::Day => from.checked_add_days(chrono::Days::new(u64::from(every))),
+            RepeatUnit::Week => from.checked_add_days(chrono::Days::new(u64::from(every) * 7)),
+            RepeatUnit::Month => from.checked_add_months(chrono::Months::new(every)),
+            RepeatUnit::Year => from.checked_add_months(chrono::Months::new(every * 12)),
+        }
+    }
+}
+
+/// What an automatic reminder is made from (plan §15). Its `id` is the id of
+/// the store, utility item, contact debt or goal it follows.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ReminderSourceKind {
+    LoanPayment,
+    CreditCardPayment,
+    Rent,
+    Utilities,
+    MeterReadings,
+    DepositEnd,
+    PdsContribution,
+    LoyaltyExpiry,
+    Debt,
+    GoalSaving,
+    GoalDeadline,
+    PropertyTax,
+    InterestTax,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ReminderSource {
+    pub kind: ReminderSourceKind,
+    pub id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Reminder {
     pub id: String,
     pub text: String,
+    /// RFC3339: the date and the time it is due.
     pub due_at: String,
     pub done: bool,
+    /// A repeating reminder moves to its next date when done instead of
+    /// staying done.
+    #[serde(default)]
+    pub repeat: Option<ReminderRepeat>,
+    /// Set on a reminder the app keeps in step with its source.
+    #[serde(default)]
+    pub source: Option<ReminderSource>,
+    /// An automatic reminder the user turned off; it is kept so it is not
+    /// created again.
+    #[serde(default)]
+    pub muted: bool,
+    /// The user changed the time of an automatic reminder: the sync keeps it.
+    #[serde(default)]
+    pub user_edited: bool,
+    /// Put off until this moment (RFC3339); it is not due before.
+    #[serde(default)]
+    pub snoozed_until: Option<String>,
+}
+
+impl Reminder {
+    pub fn new(text: &str, due_at: &str) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            text: text.trim().to_string(),
+            due_at: due_at.to_string(),
+            done: false,
+            repeat: None,
+            source: None,
+            muted: false,
+            user_edited: false,
+            snoozed_until: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -287,6 +383,18 @@ pub struct MeterReading {
     /// YYYY-MM.
     pub period: String,
     pub recorded_at: String,
+    /// Day of the month the meter was read (1–31); `None` = the month's end.
+    /// A month may hold several readings: moving out on the 15th and the
+    /// next flat's first reading the same day.
+    #[serde(default)]
+    pub day: Option<u8>,
+}
+
+impl MeterReading {
+    /// Order in time: by month, then by day, a dayless reading last.
+    pub fn sort_key(&self) -> (String, u8) {
+        (self.period.clone(), self.day.unwrap_or(u8::MAX))
+    }
 }
 
 /// An envelope: a named, earmarked part of one asset's balance in one store

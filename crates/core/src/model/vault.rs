@@ -48,11 +48,11 @@ impl Default for DashboardWidgetCfg {
     }
 }
 
-fn default_fx_interval() -> u32 {
+pub(crate) fn default_fx_interval() -> u32 {
     300
 }
 
-fn default_minimize_to_tray() -> bool {
+pub(crate) fn default_minimize_to_tray() -> bool {
     true
 }
 
@@ -76,6 +76,9 @@ pub struct Settings {
     pub daily_budget_mode: DailyBudgetMode,
     /// Currency of budgets and month totals; empty = the base currency.
     pub budget_currency: String,
+    /// What to be told about and how far ahead.
+    #[serde(default)]
+    pub notifications: crate::model::notify::NotificationSettings,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -113,6 +116,7 @@ impl Default for Settings {
             savings_rate: Amount::parse("0.10").unwrap_or(Amount::ZERO),
             daily_budget_mode: DailyBudgetMode::Month,
             budget_currency: String::new(),
+            notifications: crate::model::notify::NotificationSettings::default(),
         }
     }
 }
@@ -462,6 +466,9 @@ pub struct VaultDoc {
     /// Bank of Russia key rate history, for the deposit-interest tax limit.
     #[serde(default)]
     pub key_rates: Vec<crate::model::deposit::KeyRatePoint>,
+    /// Notices already shown, newest last (payload v2).
+    #[serde(default)]
+    pub notification_log: Vec<crate::model::notify::NoticeRecord>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -505,6 +512,7 @@ impl Default for VaultDoc {
             envelopes: Vec::new(),
             debt_terms: Vec::new(),
             key_rates: Vec::new(),
+            notification_log: Vec::new(),
         }
     }
 }

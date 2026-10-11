@@ -229,6 +229,7 @@ pub fn full_doc() -> VaultDoc {
         note: "note".into(),
         archived: false,
         created_at: "2026-01-01T00:00:00Z".into(),
+        group: "P2P".into(),
     }];
     let schedules = [
         Schedule::Monthly { day: 31 },
@@ -329,6 +330,17 @@ pub fn full_doc() -> VaultDoc {
         text: "Call the bank".into(),
         due_at: "2026-03-01T09:00:00Z".into(),
         done: false,
+        repeat: Some(crate::model::planning::ReminderRepeat {
+            every: 1,
+            unit: crate::model::planning::RepeatUnit::Month,
+        }),
+        source: Some(crate::model::planning::ReminderSource {
+            kind: crate::model::planning::ReminderSourceKind::LoanPayment,
+            id: "loan".into(),
+        }),
+        muted: true,
+        user_edited: true,
+        snoozed_until: Some("2026-03-01T10:00:00Z".into()),
     }];
     doc.price_alerts = vec![PriceAlert {
         id: "alert".into(),
@@ -382,7 +394,29 @@ pub fn full_doc() -> VaultDoc {
         value: amount("1234.5"),
         period: "2026-01".into(),
         recorded_at: "2026-01-31T00:00:00Z".into(),
+        day: Some(15),
     }];
+    doc.notification_log = vec![crate::model::notify::NoticeRecord {
+        key: "reminder:rem:2026-03-01T09:00:00Z".into(),
+        category: crate::model::notify::NoticeCategory::Reminder,
+        title: "Reminder".into(),
+        body: "Call the bank".into(),
+        link: Some("/planning".into()),
+        at: "2026-03-01T09:00:00Z".into(),
+        delivered_at: "2026-03-01T09:00:10Z".into(),
+        read: true,
+    }];
+    doc.settings.notifications = crate::model::notify::NotificationSettings {
+        system: false,
+        hide_details_when_locked: true,
+        default_time: "09:30".into(),
+        categories: vec![crate::model::notify::NoticeCategoryCfg {
+            category: crate::model::notify::NoticeCategory::Tax,
+            enabled: false,
+            lead_days: 30,
+            auto_reminders: false,
+        }],
+    };
     doc.enrichments = [
         EnrichmentSource::Explorer(Chain::Bitcoin),
         EnrichmentSource::TokenList,

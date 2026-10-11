@@ -33,7 +33,7 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 │  pricing/    — ценовые провайдеры, кэш, FX           │
 │  crypto/     — XChaCha20-Poly1305 + Argon2id,        │
 │                фиксированный 55-байт header (AAD)    │
-│  storage/    — SnapshotFormat (JSON/bincode),        │
+│  storage/    — SnapshotFormat (JSON/MessagePack),    │
 │                атомарная запись                      │
 │  market/     — OHLCV-свечи Binance для графиков     │
 │  ipc_contract.rs — DTO команд (ts-rs → ipc.gen.d.ts)  │
@@ -44,7 +44,7 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 
 | Путь (Linux) | Что | Формат |
 |---|---|---|
-| `~/.local/share/dev.tradeapp.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, bincode в release) |
+| `~/.local/share/dev.tradeapp.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, MessagePack в release; старый bincode читается) |
 | `~/.config/dev.tradeapp.desktop/app_settings.json` | тема, язык, базовая валюта, избранные валюты | обычный JSON |
 | `~/.config/dev.tradeapp.desktop/currencies.json` | кэш каталога валют (фиат + крипто) | обычный JSON |
 | `~/.config/dev.tradeapp.desktop/recent_vaults.json` | недавние хранилища | обычный JSON |
@@ -80,14 +80,16 @@ vault.
   `fx_cache`); без сети используется последний известный курс, а операции
   оцениваются по курсу своей даты.
 - **Деньги = Decimal.** `Amount` — newtype над `rust_decimal::Decimal`,
-  всегда сериализуется строкой (точность + JSON/bincode стабильность).
+  всегда сериализуется строкой (точность + стабильность JSON и MessagePack).
 - **Настройки, которые описывают пользователя, живут вне vault.** Тема, язык,
   базовая валюта и избранные валюты не шифруются и не дублируются в каждом
   хранилище; им нечего прятать, зато второй vault должен унаследовать их, а
   экран входа — отрисоваться на нужном языке до ввода пароля. Vault-scoped
   настройки (интервалы, трей, виджеты) остаются в документе.
-- **Два формата снапшота.** Dev — человекочитаемый JSON, release — компактный
-  bincode. Тип хранится в header файла (`payload_fmt`), файл самодостаточен.
+- **Форматы снапшота.** Dev — человекочитаемый JSON, release — MessagePack с
+  именами полей (до v2 — bincode, он только читается). Тип хранится в header
+  файла (`payload_fmt`), файл самодостаточен. Старые версии схемы мигрируют
+  при открытии, см. `docs/data-model.md` → «Версии и миграции».
 
 ## Масштабирование
 

@@ -161,19 +161,27 @@ impl UnlockedVault {
     }
 
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
-        let (doc, fmt) = VaultFile::open(&path, password)?;
+        let (decoded, fmt) = VaultFile::open_versioned(&path, password)?;
         // After the password check: a wrong password must not hint the vault is in use.
         let lock = crate::storage::VaultLock::acquire(&path)?;
+        let migrated = decoded.from_version < crate::VAULT_FORMAT_VERSION;
+        if migrated {
+            // The file as it was stays next to the vault before anything rewrites it.
+            VaultFile::backup_version(&path, decoded.from_version)?;
+        }
         let mut vault = Self {
             path,
-            fmt,
-            doc,
+            fmt: fmt.for_writing(),
+            doc: decoded.doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
         };
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
+        if migrated || fmt != vault.fmt {
+            vault.persist()?;
+        }
         Ok(vault)
     }
 
@@ -242,8 +250,9 @@ impl UnlockedVault {
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
+    /// Legacy bincode is never written: asking for it writes MessagePack.
     pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()> {
-        self.fmt = fmt;
+        self.fmt = fmt.for_writing();
         self.persist()
     }
 
@@ -4155,6 +4164,7 @@ mod persist_tests {
             savings_rate: Amount::parse("0.25").unwrap(),
             daily_budget_mode: crate::model::vault::DailyBudgetMode::UntilIncome,
             budget_currency: "thb".into(),
+            notifications: crate::model::notify::NotificationSettings::default(),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

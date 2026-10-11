@@ -1,0 +1,191 @@
+//! Payload v1, frozen: the document as every vault before payload v2 holds it.
+//!
+//! v1 release builds wrote bincode, which is positional: such a file reads
+//! only with the exact v1 field list. Every type whose shape changed in v2 is
+//! copied here as it was; the unchanged ones are reused from the model. When
+//! a later version changes one of the reused types, freeze its v1 shape here
+//! first.
+//!
+//! Never edit these definitions: they describe files already on users' disks.
+
+use serde::Deserialize;
+
+use crate::Amount;
+use crate::model::category::Category;
+use crate::model::contact::{Contact, ContactAccount, ContactKind, DebtTerms};
+use crate::model::deposit::KeyRatePoint;
+use crate::model::enrichment::EnrichmentRecord;
+use crate::model::notify::NotificationSettings;
+use crate::model::planning::{
+    Automation, AutomationRun, Budget, CategorizationRule, Envelope, Goal, MeterReading,
+    PriceAlert, Reminder, UtilityItem,
+};
+use crate::model::store::{Holding, Store};
+use crate::model::transaction::Transaction;
+use crate::model::vault::{
+    DailyBudgetMode, DashboardWidgetCfg, Exchanges, FxPoint, ManualPrice, PendingImport,
+    PricePoint, Settings, VaultDoc, default_fx_interval, default_minimize_to_tray,
+};
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct SettingsV1 {
+    pub display_decimals: u32,
+    #[serde(default)]
+    pub dashboard_widgets: Vec<DashboardWidgetCfg>,
+    #[serde(default = "default_fx_interval")]
+    pub fx_refresh_interval_sec: u32,
+    #[serde(default = "default_minimize_to_tray")]
+    pub minimize_to_tray: bool,
+    pub savings_rate: Amount,
+    pub daily_budget_mode: DailyBudgetMode,
+    pub budget_currency: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct ReminderV1 {
+    pub id: String,
+    pub text: String,
+    pub due_at: String,
+    pub done: bool,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct MeterReadingV1 {
+    pub id: String,
+    pub item_id: String,
+    pub value: Amount,
+    pub period: String,
+    pub recorded_at: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct ContactV1 {
+    pub id: String,
+    pub name: String,
+    pub kind: ContactKind,
+    pub accounts: Vec<ContactAccount>,
+    pub note: String,
+    pub archived: bool,
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct VaultDocV1 {
+    pub version: u32,
+    pub id: String,
+    pub created_at: String,
+    pub settings: SettingsV1,
+    pub stores: Vec<Store>,
+    pub holdings: Vec<Holding>,
+    pub transactions: Vec<Transaction>,
+    pub categories: Vec<Category>,
+    pub price_cache: Vec<PricePoint>,
+    pub fx_cache: Vec<FxPoint>,
+    #[serde(default)]
+    pub exchanges: Exchanges,
+    #[serde(default)]
+    pub pending_imports: Vec<PendingImport>,
+    pub contacts: Vec<ContactV1>,
+    pub automations: Vec<Automation>,
+    pub automation_runs: Vec<AutomationRun>,
+    pub budgets: Vec<Budget>,
+    pub goals: Vec<Goal>,
+    pub reminders: Vec<ReminderV1>,
+    pub price_alerts: Vec<PriceAlert>,
+    pub categorization_rules: Vec<CategorizationRule>,
+    pub utility_items: Vec<UtilityItem>,
+    pub meter_readings: Vec<MeterReadingV1>,
+    pub enrichments: Vec<EnrichmentRecord>,
+    pub manual_prices: Vec<ManualPrice>,
+    #[serde(default)]
+    pub envelopes: Vec<Envelope>,
+    #[serde(default)]
+    pub debt_terms: Vec<DebtTerms>,
+    #[serde(default)]
+    pub key_rates: Vec<KeyRatePoint>,
+}
+
+/// v1 → v2: reminders gain a repeat and a source, meter readings a day,
+/// contacts a group, settings the notification switches, and the document a
+/// notification log. Every v1 value keeps its place.
+impl From<VaultDocV1> for VaultDoc {
+    fn from(old: VaultDocV1) -> Self {
+        let settings = old.settings;
+        Self {
+            version: 2,
+            id: old.id,
+            created_at: old.created_at,
+            settings: Settings {
+                display_decimals: settings.display_decimals,
+                dashboard_widgets: settings.dashboard_widgets,
+                fx_refresh_interval_sec: settings.fx_refresh_interval_sec,
+                minimize_to_tray: settings.minimize_to_tray,
+                savings_rate: settings.savings_rate,
+                daily_budget_mode: settings.daily_budget_mode,
+                budget_currency: settings.budget_currency,
+                notifications: NotificationSettings::default(),
+            },
+            stores: old.stores,
+            holdings: old.holdings,
+            transactions: old.transactions,
+            categories: old.categories,
+            price_cache: old.price_cache,
+            fx_cache: old.fx_cache,
+            exchanges: old.exchanges,
+            pending_imports: old.pending_imports,
+            contacts: old
+                .contacts
+                .into_iter()
+                .map(|contact| Contact {
+                    id: contact.id,
+                    name: contact.name,
+                    kind: contact.kind,
+                    accounts: contact.accounts,
+                    note: contact.note,
+                    archived: contact.archived,
+                    created_at: contact.created_at,
+                    group: String::new(),
+                })
+                .collect(),
+            automations: old.automations,
+            automation_runs: old.automation_runs,
+            budgets: old.budgets,
+            goals: old.goals,
+            reminders: old
+                .reminders
+                .into_iter()
+                .map(|reminder| Reminder {
+                    id: reminder.id,
+                    done: reminder.done,
+                    ..Reminder::new(&reminder.text, &reminder.due_at)
+                })
+                .collect(),
+            price_alerts: old.price_alerts,
+            categorization_rules: old.categorization_rules,
+            utility_items: old.utility_items,
+            meter_readings: old
+                .meter_readings
+                .into_iter()
+                .map(|reading| MeterReading {
+                    id: reading.id,
+                    item_id: reading.item_id,
+                    value: reading.value,
+                    period: reading.period,
+                    recorded_at: reading.recorded_at,
+                    day: None,
+                })
+                .collect(),
+            enrichments: old.enrichments,
+            manual_prices: old.manual_prices,
+            envelopes: old.envelopes,
+            debt_terms: old.debt_terms,
+            key_rates: old.key_rates,
+            notification_log: Vec::new(),
+        }
+    }
+}

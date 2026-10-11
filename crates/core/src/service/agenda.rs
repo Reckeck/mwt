@@ -88,12 +88,7 @@ impl UnlockedVault {
 
     pub fn create_reminder(&mut self, text: &str, due_at: &str) -> Result<Reminder> {
         Self::check_reminder(text, due_at)?;
-        let reminder = Reminder {
-            id: uuid::Uuid::new_v4().to_string(),
-            text: text.trim().to_string(),
-            due_at: due_at.to_string(),
-            done: false,
-        };
+        let reminder = Reminder::new(text, due_at);
         self.doc.reminders.push(reminder.clone());
         self.persist()?;
         Ok(reminder)

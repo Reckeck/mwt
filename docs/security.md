@@ -25,7 +25,7 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 - **AEAD** — XChaCha20-Poly1305: `key = XChaCha20Poly1305::new(derive_key(pw, salt))`,
   `nonce = random 24B`, `aad = header.bytes()`, новые случайные salt+nonce при
   каждой записи (никакого nonce-переиспользования между коллизиями).
-- **payload_fmt** — `0` = JSON (dev), `1` = bincode (release); файл самодостаточен.
+- **payload_fmt** — `0` = JSON (dev), `1` = bincode (release до v2, только чтение), `2` = MessagePack с именами полей (release с v2); файл самодостаточен.
 - **Атомарная запись** — временный файл рядом (`.<name>.tmp.<pid>.<uuid>`), запись,
   `fsync(file)`, `rename`, best-effort `fsync(dir)`; при ошибке tmp удаляется.
 

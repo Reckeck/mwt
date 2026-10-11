@@ -126,6 +126,7 @@ impl UnlockedVault {
             note: draft.note.trim().to_string(),
             archived: false,
             created_at: now_iso(),
+            group: String::new(),
         };
         self.doc.contacts.push(contact.clone());
         self.persist()?;
