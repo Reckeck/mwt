@@ -7,7 +7,6 @@ import { ArrowUpDown } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { AssetInput } from '@/entities/asset'
-import { CurrencyPicker } from '@/entities/currency'
 import { TxPreviewCard } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -282,19 +281,22 @@ const quoteInCurrency = useQuery({
 })
 
 /**
- * A price in a currency without a rate on the operation's day could not be
- * saved; fetch that day's rate (or the last published one) ahead of time.
+ * The price is stamped by the backend from the rates of the operation's day;
+ * fetch that day's rates (or the last published ones) of the asset and the
+ * price currency ahead of time, so the stamp has something to use.
  */
 const ensuredFx = new Set<string>()
 watch(
-  [priceCode, () => form.timestamp, () => form.price],
-  ([code, stamp, price]) => {
-    if (props.template || code === 'usd' || (!price.trim() && !priced.value)) return
+  [priceCode, () => form.timestamp, () => form.price, () => priced.value?.symbol],
+  ([code, stamp, price, asset]) => {
+    if (props.template || (!price.trim() && !asset)) return
     const day = (toIsoTimestamp(stamp) ?? new Date().toISOString()).slice(0, 10)
-    const key = `${code}@${day}`
-    if (ensuredFx.has(key)) return
-    ensuredFx.add(key)
-    void call<EnsureFxOutput>('ensure_fx', { input: { currencies: [code], date: day } satisfies EnsureFxInput }).catch(() => {
+    const currencies = [...new Set([code, (asset ?? '').toLowerCase()])].filter(
+      (entry) => entry && entry !== 'usd' && !ensuredFx.has(`${entry}@${day}`),
+    )
+    if (!currencies.length) return
+    for (const entry of currencies) ensuredFx.add(`${entry}@${day}`)
+    void call<EnsureFxOutput>('ensure_fx', { input: { currencies, date: day } satisfies EnsureFxInput }).catch(() => {
       /* offline: the backend answers FX_MISSING on save, with a clear message */
     })
   },
@@ -854,30 +856,19 @@ const verbLabel = (kind: TxKind) =>
       </div>
     </div>
 
-    <div class="grid items-start gap-3 @sm:grid-cols-3">
+    <!-- No price field: the backend prices the operation at the rates of its moment
+         (a price from an exchange fill or the calculator still travels in `form.price`). -->
+    <div class="grid items-start gap-3 @sm:grid-cols-2">
       <div class="grid gap-1.5">
         <Label for="tx-fee">{{ t('form.fee') }}</Label>
         <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0" />
       </div>
-      <div v-if="!props.template && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="grid min-w-0 gap-1.5">
-        <Label for="tx-price">{{ t('form.price') }}</Label>
-        <AmountInput id="tx-price" v-model="form.price" :placeholder="t('form.priceHint')">
-          <template #suffix>
-            <div class="w-20">
-              <CurrencyPicker
-                v-model="form.priceCurrency"
-                compact
-                :placeholder="settings.baseCurrency.toUpperCase()"
-                class="[&_button]:h-7 [&_button]:border-0 [&_button]:shadow-none"
-              />
-            </div>
-          </template>
-        </AmountInput>
-        <p v-if="rateHint" class="text-xs text-muted-foreground">{{ rateHint }}</p>
-      </div>
       <div v-if="!props.template" class="grid min-w-0 gap-1.5">
         <Label for="tx-date">{{ t('form.date') }}</Label>
         <Input id="tx-date" v-model="form.timestamp" type="datetime-local" class="min-w-0 px-2" />
+        <p v-if="rateHint && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="text-xs text-muted-foreground">
+          {{ rateHint }}
+        </p>
       </div>
     </div>
 
