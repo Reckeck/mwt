@@ -1406,5 +1406,10 @@
   "tx.duplicate": "Дублировать",
   "tx.copyId": "Копировать ID",
   "tx.deleteConfirmTitle": "Удалить операцию?",
-  "tx.deleteConfirmHint": "Операция исчезнет из истории, балансы пересчитаются. Отменить это нельзя."
+  "tx.deleteConfirmHint": "Операция исчезнет из истории, балансы пересчитаются. Отменить это нельзя.",
+  "storeWizard.opening": "Начальный остаток",
+  "storeWizard.openingPlaceholder": "0 — можно не заполнять",
+  "storeWizard.openingHint": "Сколько уже лежит. Запишется одной операцией «Начальный остаток» — не доход и не трата.",
+  "storeWizard.openingInvalid": "Укажите положительную сумму и актив",
+  "categories.default.opening_balance": "Начальный остаток"
 }

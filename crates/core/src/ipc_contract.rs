@@ -103,6 +103,9 @@ pub struct CreateStoreInput {
     /// Exchange wallets: which exchange it is.
     #[serde(default)]
     pub provider: Option<ExchangeProvider>,
+    /// Money the wallet already holds; booked as one opening top-up.
+    #[serde(default)]
+    pub opening: Option<crate::service::OpeningBalance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
