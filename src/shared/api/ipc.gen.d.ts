@@ -1689,9 +1689,17 @@ type PreviewTransactionInput = { transaction: TransactionInput, replaces: string
 
 type PreviewWarning = { "kind": "negative_balance", store_id: string, asset: AssetRef, } | { "kind": "credit_limit", store_id: string, limit: Amount, } | { "kind": "into_envelopes", store_id: string, asset: AssetRef, earmarked: Amount, };
 
-type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, };
+type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, 
+/**
+ * The exchange whose terminal set the alert; `None` for a vault-wide one.
+ */
+store_id?: string, };
 
-type PriceAlertInput = { asset: AssetIdent, condition: AlertCondition, price: Amount, currency: string, active: boolean, };
+type PriceAlertInput = { asset: AssetIdent, condition: AlertCondition, price: Amount, currency: string, active: boolean, 
+/**
+ * The exchange whose terminal sets the alert.
+ */
+store_id?: string, };
 
 /**
  * A cached price: one unit of an asset in USD.

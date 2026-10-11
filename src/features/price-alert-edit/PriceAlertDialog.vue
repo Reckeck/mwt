@@ -12,12 +12,13 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
+import { tickerRef } from '@/shared/lib/asset-ref'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { PriceAlertDialogProps } from './price-alert-edit.types'
 
-const props = withDefaults(defineProps<PriceAlertDialogProps>(), { alert: null })
+const props = withDefaults(defineProps<PriceAlertDialogProps>(), { alert: null, storeId: null, preset: null })
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
@@ -29,13 +30,37 @@ const price = ref('')
 const currency = ref('usd')
 const active = ref(true)
 
-watch(open, (isOpen) => {
+/** A chart knows only the ticker: take the matching listed asset, so the alert gets a price feed. */
+async function resolveTicker(symbol: string): Promise<AssetRef> {
+  try {
+    const hits = await call<AssetSearchHit[]>('search_assets', { query: symbol })
+    const hit = hits.find((entry) => entry.symbol.toUpperCase() === symbol.toUpperCase())
+    if (hit) {
+      const ticker = hit.symbol.toUpperCase()
+      return {
+        symbol: ticker,
+        name: hit.name || ticker,
+        coingecko_id: hit.coingecko_id,
+        chain: hit.chain,
+        contract: hit.contract,
+        quote: ticker,
+      }
+    }
+  } catch {
+    // Offline search: the bare ticker still names the asset.
+  }
+  return tickerRef(symbol)
+}
+
+watch(open, async (isOpen) => {
   if (!isOpen) return
+  const preset = props.alert ? null : props.preset
   asset.value = props.alert?.asset ?? null
-  condition.value = props.alert?.condition ?? 'above'
-  price.value = props.alert?.price ?? ''
+  condition.value = props.alert?.condition ?? preset?.condition ?? 'above'
+  price.value = props.alert?.price ?? preset?.price ?? ''
   currency.value = props.alert?.currency ?? 'usd'
   active.value = props.alert?.active ?? true
+  if (preset) asset.value = await resolveTicker(preset.symbol)
 })
 
 const valid = computed(() => asset.value !== null && Number(price.value) > 0)
@@ -55,6 +80,7 @@ const save = useMutation({
       price: price.value.trim(),
       currency: currency.value,
       active: active.value,
+      store_id: (props.alert ? props.alert.store_id : props.storeId) ?? undefined,
     }
     return props.alert
       ? call<PriceAlert>('update_price_alert', { input: { id: props.alert.id, alert: input } })

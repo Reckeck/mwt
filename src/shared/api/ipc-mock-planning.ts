@@ -509,6 +509,7 @@ export function mockPlanning(
         currency: input.currency,
         active: input.active,
         triggered_at: null,
+        ...(input.store_id ? { store_id: input.store_id } : {}),
       }
       alerts.push(alert)
       return alert

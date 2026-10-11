@@ -3,6 +3,8 @@ import type { IndicatorKey } from './trading-chart.constants'
 export interface TradingChartProps {
   /** Base asset; quoted against USDT on Binance. */
   symbol: string
+  /** Offer «alert at this price» in the right-click menu (the owner handles `alert`). */
+  canAlert?: boolean
   /** How many candles to load. */
   limit?: number
   /** Saved drawing exports by upper-case symbol; the chart reports changes through `drawings`. */

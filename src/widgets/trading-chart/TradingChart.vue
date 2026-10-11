@@ -17,9 +17,11 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts'
 import { DrawingManager, type DrawingKind } from 'lightweight-charts-drawing'
-import { Magnet, RefreshCw, Trash2, Undo2 } from 'lucide-vue-next'
+import { BellPlus, Copy, Magnet, PencilLine, RefreshCw, Trash2, Undo2 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
+import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Separator } from '@/shared/ui/separator'
 import { Toggle } from '@/shared/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
@@ -34,6 +36,7 @@ import type { TradingChartProps } from './trading-chart.types'
 
 const props = withDefaults(defineProps<TradingChartProps>(), {
   limit: 500,
+  canAlert: false,
   savedDrawings: () => ({}),
   timeframe: '1h',
   indicators: () => ['sma'],
@@ -43,6 +46,8 @@ const emit = defineEmits<{
   drawings: [symbol: string, json: string]
   timeframe: [label: string]
   indicators: [keys: IndicatorKey[]]
+  /** «Alert at this price» from the chart's menu; the price is in USDT, the side is where it lies from the last close. */
+  alert: [price: string, condition: 'above' | 'below']
 }>()
 
 const { t } = useI18n()
@@ -529,6 +534,69 @@ function pickTool(value: unknown) {
   activeTool.value = next
 }
 
+// --- right-click menu: acts on the price under the cursor ---------------------
+
+const cursorPrice = ref<number | null>(null)
+
+function onChartMenu(event: MouseEvent) {
+  const rect = chartEl.value?.getBoundingClientRect()
+  const price = rect && candles ? candles.coordinateToPrice(event.clientY - rect.top) : null
+  cursorPrice.value = price === null || !Number.isFinite(price) || price <= 0 ? null : price
+}
+
+async function copyPrice(price: number) {
+  try {
+    await navigator.clipboard.writeText(fmt(price))
+    toast.success(t('terminal.priceCopied'))
+  } catch {
+    // The clipboard can be refused; nothing to undo.
+  }
+}
+
+const chartActions = computed<UiAction[]>(() => {
+  const price = cursorPrice.value
+  const shown = price === null ? '' : fmt(price)
+  return [
+    {
+      id: 'alert',
+      label: t('terminal.alertAt', { price: shown }),
+      icon: BellPlus,
+      hidden: !props.canAlert || price === null,
+      run: () => {
+        const last = bars[bars.length - 1]?.close ?? 0
+        emit('alert', shown, price !== null && price < last ? 'below' : 'above')
+      },
+    },
+    {
+      id: 'draw',
+      label: t('terminal.draw'),
+      icon: PencilLine,
+      children: DRAWING_TOOLS.map((tool) => ({
+        id: `draw-${tool.kind}`,
+        label: t(tool.key),
+        icon: tool.icon,
+        run: () => pickTool(tool.kind),
+      })),
+    },
+    {
+      id: 'copy',
+      label: t('terminal.copyPrice', { price: shown }),
+      icon: Copy,
+      hidden: price === null,
+      run: () => price !== null && void copyPrice(price),
+    },
+    {
+      id: 'clear',
+      label: t('trading.clearDrawings'),
+      icon: Trash2,
+      destructive: true,
+      separated: true,
+      disabled: !drawingCount.value,
+      run: clearDrawings,
+    },
+  ]
+})
+
 function undoDrawing() {
   if (!drawings) return
   const id = undoStack.value.pop()
@@ -758,7 +826,14 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
       </div>
     </div>
 
-    <div class="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
+    <ContextMenu :actions="chartActions">
+    <!-- The chart is a canvas the user works in (draws, scrolls, right-clicks): an application region. -->
+    <div
+      role="application"
+      :aria-label="`${symbol} · ${tfLabel(tf)}`"
+      class="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"
+      @contextmenu="onChartMenu"
+    >
       <div ref="chartEl" class="absolute inset-0" />
 
       <!-- OHLC of the hovered bar (or the last one); same clock as the axis. -->
@@ -801,5 +876,6 @@ watch(magnet, (on) => drawings?.setMagnet(on ? 'weak' : 'off'))
         {{ t('trading.empty') }}
       </div>
     </div>
+    </ContextMenu>
   </div>
 </template>
