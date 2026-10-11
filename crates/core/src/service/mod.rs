@@ -98,6 +98,14 @@ pub struct StoreExtras {
     pub opening: Option<OpeningBalance>,
 }
 
+/// The first card of a new bank: a sub-account bound to one currency.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct FirstCard {
+    pub name: String,
+    /// Lowercase currency code, e.g. `rub`.
+    pub currency: String,
+}
+
 /// What a new wallet already holds. Booked as a top-up in the service
 /// category `opening_balance`, so it is neither income nor spending.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -643,6 +651,53 @@ impl UnlockedVault {
         self.recompute_holdings();
         self.persist()?;
         Ok(store)
+    }
+
+    /// A new bank together with its first card: a card is a bank account, so
+    /// a bank is never left without one. The opening balance goes on the
+    /// card. All or nothing.
+    pub fn create_bank_with_card(
+        &mut self,
+        name: &str,
+        color: &str,
+        note: &str,
+        mut extras: StoreExtras,
+        card: FirstCard,
+    ) -> Result<Store> {
+        let currency = card.currency.trim().to_uppercase();
+        if currency.is_empty() {
+            return Err(Error::InvalidInput("the card needs a currency".into()));
+        }
+        let opening = extras.opening.take();
+        let backup = self.doc.clone();
+        let result = (|| -> Result<Store> {
+            let bank = self.create_store_with(name, StoreKind::Bank, color, note, None, extras)?;
+            let card_name = if card.name.trim().is_empty() {
+                format!("{name} {currency}")
+            } else {
+                card.name.trim().to_string()
+            };
+            self.create_store_with(
+                &card_name,
+                StoreKind::Bank,
+                color,
+                "",
+                Some(bank.id.clone()),
+                StoreExtras {
+                    sub_type: Some(SubType::Card),
+                    binding: Some(Binding::Asset(AssetRef::fiat(&currency, &currency))),
+                    opening,
+                    ..StoreExtras::default()
+                },
+            )?;
+            Ok(bank)
+        })();
+        if result.is_err() {
+            self.doc = backup;
+            self.recompute_holdings();
+            self.persist()?;
+        }
+        result
     }
 
     /// Edit a store's own fields. Its place in the tree changes only through
@@ -3861,6 +3916,63 @@ mod import_tests {
         assert_eq!(vault.unified_account_of(&store), ids[1]);
         // Trades on the wallet or any of its accounts go to the unified one.
         assert_eq!(vault.unified_account_of(ids[1].as_deref().unwrap()), ids[1]);
+    }
+
+    #[test]
+    fn a_bank_comes_with_its_card_and_the_opening_balance_on_it() {
+        use crate::service::test_support::{amount, empty_vault, holding_of};
+        let (_dir, mut vault) = empty_vault();
+        let bank = vault
+            .create_bank_with_card(
+                "Sber",
+                "#0a0",
+                "",
+                StoreExtras {
+                    opening: Some(OpeningBalance {
+                        asset: AssetRef::fiat("RUB", "RUB"),
+                        amount: amount("1500"),
+                    }),
+                    ..StoreExtras::default()
+                },
+                FirstCard {
+                    name: String::new(),
+                    currency: "rub".into(),
+                },
+            )
+            .unwrap();
+        let cards = vault.children_of(&bank.id);
+        assert_eq!(cards.len(), 1);
+        let card = cards[0].clone();
+        assert_eq!(card.sub_type, Some(SubType::Card));
+        assert_eq!(card.name, "Sber RUB");
+        assert_eq!(
+            holding_of(&vault, &card.id, &AssetRef::fiat("RUB", "RUB")),
+            amount("1500")
+        );
+
+        // A card that cannot hold the opening currency leaves nothing behind.
+        let stores = vault.doc.stores.len();
+        assert!(
+            vault
+                .create_bank_with_card(
+                    "Tinkoff",
+                    "#ff0",
+                    "",
+                    StoreExtras {
+                        opening: Some(OpeningBalance {
+                            asset: AssetRef::fiat("USD", "USD"),
+                            amount: amount("10"),
+                        }),
+                        ..StoreExtras::default()
+                    },
+                    FirstCard {
+                        name: "Card".into(),
+                        currency: "rub".into(),
+                    },
+                )
+                .is_err()
+        );
+        assert_eq!(vault.doc.stores.len(), stores);
     }
 
     #[test]

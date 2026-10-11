@@ -5,7 +5,7 @@ use trade_core::ipc_contract::{
     UpdateStoreInput, WalletCatalog,
 };
 use trade_core::model::planning::Envelope;
-use trade_core::model::store::Store;
+use trade_core::model::store::{Store, StoreKind};
 use trade_core::service::{
     EnvelopeDraft, EnvelopeView, StoreExtras, StoreMoveTargets, StoreOverview, StoreTreeNode,
 };
@@ -32,27 +32,32 @@ pub async fn create_store(
 ) -> Result<Store, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
-    vault
-        .create_store_with(
+    let extras = StoreExtras {
+        purpose: input.purpose,
+        liability: input.liability,
+        contact_id: input.contact_id,
+        sub_type: input.sub_type,
+        binding: input.binding,
+        custody: input.custody,
+        property: input.property,
+        secured_by: input.secured_by,
+        provider: input.provider,
+        opening: input.opening,
+    };
+    match input.card {
+        Some(card) if input.kind == StoreKind::Bank && input.parent_id.is_none() => {
+            vault.create_bank_with_card(&input.name, &input.color, &input.note, extras, card)
+        }
+        _ => vault.create_store_with(
             &input.name,
             input.kind,
             &input.color,
             &input.note,
             input.parent_id,
-            StoreExtras {
-                purpose: input.purpose,
-                liability: input.liability,
-                contact_id: input.contact_id,
-                sub_type: input.sub_type,
-                binding: input.binding,
-                custody: input.custody,
-                property: input.property,
-                secured_by: input.secured_by,
-                provider: input.provider,
-                opening: input.opening,
-            },
-        )
-        .map_err(err_to_string)
+            extras,
+        ),
+    }
+    .map_err(err_to_string)
 }
 
 #[tauri::command]
