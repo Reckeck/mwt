@@ -218,6 +218,31 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
           : null,
       }
       mockStores.push(store)
+      // Like `create_bank_with_card`: a new bank gets its first card, and the
+      // opening balance goes on it.
+      let openingStoreId = store.id
+      if (input.card && input.kind === 'bank' && !input.parent_id) {
+        const code = input.card.currency.toUpperCase()
+        const card = {
+          ...store,
+          id: crypto.randomUUID(),
+          name: input.card.name.trim() || `${input.name} ${code}`,
+          parent_id: store.id,
+          sub_type: 'card' as SubType,
+          binding: {
+            asset: {
+              symbol: code,
+              name: code,
+              coingecko_id: null,
+              chain: 'fiat' as Chain,
+              contract: null,
+              quote: code,
+            },
+          },
+        }
+        mockStores.push(card)
+        openingStoreId = card.id
+      }
       // Like the backend: the opening balance is one top-up in a service category.
       if (input.opening && Number(input.opening.amount) > 0) {
         const { quote: _quote, ...asset } = input.opening.asset
@@ -236,7 +261,7 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
                 price: null,
                 price_currency: null,
               },
-              store_id: store.id,
+              store_id: openingStoreId,
               asset,
               amount: input.opening.amount,
               fee: null,

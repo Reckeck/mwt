@@ -68,6 +68,10 @@ const propertyCategory = ref<PropertyCategory>('flat')
 const securedBy = ref('')
 const currency = ref('')
 const token = ref<AssetRef | null>(null)
+/** A new bank comes with its first card: a card is a bank account. */
+const cardCurrency = ref('')
+const cardName = ref('')
+const withCard = computed(() => !isSub.value && kind.value === 'bank')
 const pairText = ref('')
 
 const pair = computed(() => parsePairSymbol(pairText.value))
@@ -86,6 +90,7 @@ const openingAsset = computed<AssetRef | null>(() => {
   const current = binding.value
   if (current && typeof current === 'object' && 'asset' in current) return current.asset
   if (current && typeof current === 'object' && 'pair' in current) return current.pair[openingSide.value]
+  if (withCard.value) return cardCurrency.value ? fiatRef(cardCurrency.value) : null
   if (kind.value === 'bank' || kind.value === 'cash') return openingCurrency.value ? fiatRef(openingCurrency.value) : null
   return openingToken.value
 })
@@ -94,6 +99,7 @@ const openingPicker = computed<'none' | 'currency' | 'asset' | 'side'>(() => {
   const current = binding.value
   if (current && typeof current === 'object' && 'asset' in current) return 'none'
   if (current && typeof current === 'object' && 'pair' in current) return 'side'
+  if (withCard.value) return 'none'
   return kind.value === 'bank' || kind.value === 'cash' ? 'currency' : 'asset'
 })
 const openingAmountValue = computed(() => openingAmount.value.trim().replace(',', '.'))
@@ -158,6 +164,8 @@ watch(open, (isOpen) => {
   subType.value = null
   openingAmount.value = ''
   openingCurrency.value = settings.baseCurrency.toLowerCase()
+  cardCurrency.value = settings.baseCurrency.toLowerCase()
+  cardName.value = ''
   openingToken.value = null
   openingSide.value = 'quote'
   if (props.parent) {
@@ -189,6 +197,7 @@ const canGoBack = computed(() => step.value === 'details' && (isSub.value || !pr
 const valid = computed(() => {
   if (!name.value.trim() || !openingValid.value) return false
   if (isSub.value) return subInfo.value !== null && (subInfo.value.shape === 'market' || binding.value !== null)
+  if (withCard.value && !cardCurrency.value) return false
   if (kind.value === 'exchange') return provider.value !== null && !apiKey.value.trim() === !apiSecret.value.trim()
   return true
 })
@@ -225,6 +234,7 @@ const createStore = useMutation({
           offersOpening.value && openingAmountValue.value && openingAsset.value
             ? { asset: openingAsset.value, amount: openingAmountValue.value }
             : null,
+        card: withCard.value ? { name: cardName.value.trim(), currency: cardCurrency.value } : null,
       } satisfies CreateStoreInput,
     })
     if (!isSub.value && kind.value === 'exchange' && withKey.value) {
@@ -385,6 +395,21 @@ const cardClass =
           </option>
         </Select>
       </div>
+
+      <!-- A bank always has a card: it is created with the bank. -->
+      <fieldset v-if="withCard" class="grid gap-1.5" data-tour="store-bank-card">
+        <Label for="store-card-currency">{{ t('storeWizard.card') }}</Label>
+        <div class="grid grid-cols-[10rem_1fr] gap-2">
+          <CurrencyPicker id="store-card-currency" v-model="cardCurrency" :kinds="['fiat']" label="" />
+          <Input
+            v-model="cardName"
+            autocomplete="off"
+            :placeholder="t('storeWizard.cardNamePlaceholder', { name: `${name.trim() || t('stores.kind.bank')} ${cardCurrency.toUpperCase()}` })"
+            :aria-label="t('storeWizard.cardName')"
+          />
+        </div>
+        <p class="text-xs text-muted-foreground">{{ t('storeWizard.cardHint') }}</p>
+      </fieldset>
 
       <!-- Optional: money already there, so the new wallet does not start at zero. -->
       <fieldset v-if="offersOpening" class="grid gap-1.5" data-tour="store-opening">

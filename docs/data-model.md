@@ -99,7 +99,7 @@ vault: они переживают открытие другого хранил�
 | Тип | Что это | Корней | Субсчета (`sub_type`) | Назначение по умолчанию |
 |---|---|---|---|---|
 | `cash` | наличные | ровно один, создаётся вместе с vault, не архивируется и не удаляется (`CASH_LOCKED`) | `pocket` | `everyday` |
-| `bank` | банк | сколько угодно | `card`, `account`, `deposit`, `savings`, `pds`, `credit_card` | `everyday` |
+| `bank` | банк | сколько угодно | `card` («карта / счёт» — для учёта одно и то же), `deposit`, `savings`, `pds`, `credit_card`; прежний `account` остаётся валидным. Новый банк создаётся сразу с первой картой (`create_bank_with_card`), начальный остаток — на неё | `everyday` |
 | `crypto` | свой кошелёк (`custody: hot \| cold`) | сколько угодно | `token` | `investment` |
 | `exchange` | биржа (`exchange: ExchangeProfile`) | сколько угодно | `funding`, `unified`, `earn`; прежние `spot`, `futures`, `pair` остаются валидными, но новыми не предлагаются (`StoreKind::admits_sub_type`). Спот и фьючерсы ведутся на `unified`: форма операции и импорт кладут сделку туда | `investment` |
 | `property` | имущество (`property: PropertyInfo`, `utilities_pay_day?`) | сколько угодно | — | `investment` |

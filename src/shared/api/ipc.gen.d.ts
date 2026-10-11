@@ -681,9 +681,14 @@ contact_id: string | null, custody: Custody | null, property: PropertyInfo | nul
  */
 provider: ExchangeProvider | null, 
 /**
- * Money the wallet already holds; booked as one opening top-up.
+ * Money the wallet already holds; booked as one opening top-up. With
+ * `card` it goes on the card.
  */
-opening: OpeningBalance | null, };
+opening: OpeningBalance | null, 
+/**
+ * A new bank: its first card, created with it (a card is a bank account).
+ */
+card: FirstCard | null, };
 
 type CreateVaultInput = { path: string, password: string, 
 /**
@@ -1021,6 +1026,15 @@ supported: boolean, };
 type Fee = { asset: AssetRef, amount: Amount, price: PriceStamp, };
 
 type FeeInput = { asset: AssetIdent, amount: Amount, };
+
+/**
+ * The first card of a new bank: a sub-account bound to one currency.
+ */
+type FirstCard = { name: string, 
+/**
+ * Lowercase currency code, e.g. `rub`.
+ */
+currency: string, };
 
 /**
  * One side of a chain's result.
