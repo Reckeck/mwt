@@ -2199,6 +2199,49 @@ loyalty?: LoyaltyInfo,
 deposit?: DepositTerms, };
 
 /**
+ * What to do with an account.
+ */
+type StoreChange = { "change_kind": { kind: StoreKind, } } | { "move_to": { parent_id: string, } } | "detach" | { "merge_into": { target_id: string, } };
+
+/**
+ * An operation that would no longer fit the account it is on.
+ */
+type StoreChangeConflict = { tx_id: string, timestamp: string, comment: string, message: string, };
+
+type StoreChangeInput = { store_id: string, change: StoreChange, };
+
+/**
+ * One account the change touches.
+ */
+type StoreChangeItem = { store_id: string, name: string, kind_after: StoreKind, sub_type_before: SubType | null, sub_type_after: SubType | null, };
+
+/**
+ * What a change would do, before it is applied.
+ */
+type StoreChangePlan = { store_id: string, 
+/**
+ * The account itself and the sub-accounts that move along with it.
+ */
+kept: Array<StoreChangeItem>, 
+/**
+ * Sub-accounts the new kind cannot hold: split off as archived wallets
+ * of the old kind, with their operations intact.
+ */
+archived: Array<StoreChangeItem>, 
+/**
+ * Operations that would break the rules of their new account.
+ */
+conflicts: Array<StoreChangeConflict>, 
+/**
+ * Merge: how many operations move to the target.
+ */
+moved_transactions: number, 
+/**
+ * Why the change cannot be made at all.
+ */
+error: string | null, };
+
+/**
  * A direct sub-account row on the wallet page.
  */
 type StoreChildRow = { store: Store, 

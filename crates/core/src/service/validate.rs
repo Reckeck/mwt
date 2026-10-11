@@ -193,7 +193,7 @@ impl UnlockedVault {
     }
 
     /// Every store a transaction is booked on, with the kind it must accept.
-    fn store_sides(tx: &Transaction) -> Vec<&str> {
+    pub(crate) fn store_sides(tx: &Transaction) -> Vec<&str> {
         match tx {
             Transaction::Topup(inner) => vec![&inner.store_id],
             Transaction::Payment(inner) => vec![&inner.store_id],

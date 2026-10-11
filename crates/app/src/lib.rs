@@ -37,6 +37,8 @@ pub fn run() {
             stores::list_stores,
             stores::get_wallet_catalog,
             stores::create_store,
+            stores::plan_store_change,
+            stores::apply_store_change,
             stores::list_envelopes,
             stores::create_envelope,
             stores::update_envelope,

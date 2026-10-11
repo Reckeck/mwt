@@ -274,6 +274,45 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       }
       return resolve(store)
     }
+    case 'plan_store_change':
+    case 'apply_store_change': {
+      // A thin stand-in for `store_change.rs`: no conflict checks, the shape only.
+      const input = body as StoreChangeInput
+      const store = mockStore(input.store_id)
+      if (!store) throw { code: 'MISSING', message: 'store' }
+      const item = (entry: Store, before: SubType | null) => ({
+        store_id: entry.id,
+        name: entry.name,
+        kind_after: entry.kind,
+        sub_type_before: before,
+        sub_type_after: entry.sub_type,
+      })
+      const touching = mockTransactions.filter((tx) => JSON.stringify(tx).includes(store.id)).length
+      const plan: StoreChangePlan = {
+        store_id: store.id,
+        kept: [item(store, store.sub_type)],
+        archived: [],
+        conflicts: [],
+        moved_transactions: typeof input.change === 'object' && 'merge_into' in input.change ? touching : 0,
+        error: null,
+      }
+      if (cmd === 'plan_store_change') return resolve(plan)
+      const change = input.change
+      if (change === 'detach') Object.assign(store, { parent_id: null, sub_type: null, binding: 'any' })
+      else if ('change_kind' in change) {
+        store.kind = change.change_kind.kind
+        for (const child of mockStores.filter((entry) => entry.parent_id === store.id)) child.kind = store.kind
+      } else if ('move_to' in change) {
+        const parent = mockStore(change.move_to.parent_id)
+        if (parent) Object.assign(store, { parent_id: parent.id, kind: parent.kind })
+      } else if ('merge_into' in change) {
+        const target = change.merge_into.target_id
+        mockStores.splice(mockStores.indexOf(store), 1)
+        const moved = JSON.parse(JSON.stringify(mockTransactions).replaceAll(store.id, target)) as Transaction[]
+        mockTransactions.splice(0, mockTransactions.length, ...moved)
+      }
+      return resolve(plan)
+    }
     case 'update_store': {
       const input = body as UpdateStoreInput
       const store = mockStore(input.id)

@@ -39,6 +39,7 @@ mod loyalty;
 mod preview;
 mod rates;
 mod reports;
+mod store_change;
 #[cfg(test)]
 mod test_support;
 mod utilities;
@@ -69,6 +70,9 @@ pub use reports::{
     CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
     PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
     ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
+};
+pub use store_change::{
+    StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
 };
 pub use utilities::{
     PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill, UtilityBillLine,

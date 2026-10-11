@@ -269,6 +269,8 @@ fn main() {
         trade_core::service::FlowClass,
         trade_core::service::TxPreview,
         trade_core::service::AdjustmentDraft,
+        trade_core::service::StoreChangeInput,
+        trade_core::service::StoreChangePlan,
         trade_core::service::PositionChange,
         trade_core::service::PreviewWarning,
         trade_core::service::ContactDraft,
