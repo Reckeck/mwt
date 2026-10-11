@@ -179,7 +179,8 @@ impl UnlockedVault {
             let counts = match leg.role {
                 LegRole::Principal => leg.amount.is_positive() == incoming,
                 LegRole::Fee => !incoming,
-                LegRole::Pnl => false,
+                // A correction is neither income nor spending.
+                LegRole::Pnl | LegRole::Adjustment => false,
             };
             if !counts || leg.amount.is_zero() {
                 continue;

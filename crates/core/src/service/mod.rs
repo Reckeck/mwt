@@ -23,6 +23,7 @@ use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_
 use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
 
+mod adjustments;
 mod agenda;
 mod automations;
 mod budget;
@@ -44,6 +45,7 @@ mod utilities;
 mod validate;
 mod worth;
 
+pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
 pub use automations::{
     AutomationDraft, AutomationPass, MAX_CATCH_UP, describe_reject, planned_dates,
@@ -874,6 +876,7 @@ impl UnlockedVault {
         Self::normalize_categories(tx);
         self.apply_categorization_rules(tx);
         self.complete_transaction(tx);
+        self.complete_adjustment(tx)?;
         Self::stamp_prices(&self.rate_book(), tx);
         self.validate_transaction(tx)
     }
@@ -1669,7 +1672,7 @@ impl UnlockedVault {
                         side: "sell".into(),
                     });
                 }
-                LegRole::Principal if delta.is_positive() => {
+                LegRole::Principal | LegRole::Adjustment if delta.is_positive() => {
                     let new_qty = cur + delta;
                     let new_cost = if new_qty.is_zero() {
                         Amount::ZERO
@@ -1679,7 +1682,8 @@ impl UnlockedVault {
                     };
                     cost.insert(key.clone(), new_cost);
                 }
-                LegRole::Principal => {}
+                // Found missing: the position shrinks, nothing is sold.
+                LegRole::Principal | LegRole::Adjustment => {}
             }
             qty.insert(key, cur + delta);
         }

@@ -8,7 +8,8 @@ use crate::error::{Error, Result, WalletRule};
 use crate::model::category::CategoryGroup;
 use crate::model::store::{Store, StoreKind};
 use crate::model::transaction::{
-    AccountRef, DebtEffect, FuturesAction, KindDetails, LegRole, Transaction, TxKind, allowed_kinds,
+    AccountRef, AdjustmentTx, DebtEffect, FuturesAction, KindDetails, LegRole, Transaction, TxKind,
+    allowed_kinds,
 };
 use crate::model::vault::iso_to_millis;
 use crate::txinfo::{HashShape, hash_shape};
@@ -45,7 +46,7 @@ impl UnlockedVault {
     /// Fill empty categories from the first matching active rule (plan §8.1):
     /// a case-insensitive substring of the comment or of a contact's name.
     pub(crate) fn apply_categorization_rules(&self, tx: &mut Transaction) {
-        if !tx.meta().categories.is_empty() {
+        if !tx.meta().categories.is_empty() || tx.kind() == TxKind::Adjustment {
             return;
         }
         let mut haystacks = vec![tx.meta().comment.to_lowercase()];
@@ -157,6 +158,40 @@ impl UnlockedVault {
         Ok(())
     }
 
+    /// A correction: at least one asset, each once, each one the account may
+    /// hold; a real balance below zero only on a loan or a credit card.
+    fn check_adjustment(&self, tx: &AdjustmentTx) -> Result<()> {
+        let store = self.live_store(&tx.store_id)?;
+        if tx.lines.is_empty() {
+            return Err(invalid("a correction needs at least one asset"));
+        }
+        if tx.fee.is_some() {
+            return Err(invalid("a correction has no fee"));
+        }
+        if !tx.meta.categories.is_empty() {
+            return Err(invalid("a correction is neither income nor spending"));
+        }
+        let mut seen = HashSet::new();
+        for line in &tx.lines {
+            if !seen.insert(line.asset.key()) {
+                return Err(invalid(format!("{} is listed twice", line.asset.symbol)));
+            }
+            if line.after.is_negative() && !store.is_debt() {
+                return Err(invalid(format!(
+                    "{}: a real balance cannot be below zero",
+                    line.asset.symbol
+                )));
+            }
+            if !store.binding.admits(&line.asset) {
+                return Err(Error::WalletRule(WalletRule::BindingMismatch));
+            }
+            if matches!(store.kind, StoreKind::Cash | StoreKind::Bank) && !line.asset.is_fiat() {
+                return Err(invalid("cash and bank accounts hold only fiat"));
+            }
+        }
+        Ok(())
+    }
+
     /// Every store a transaction is booked on, with the kind it must accept.
     fn store_sides(tx: &Transaction) -> Vec<&str> {
         match tx {
@@ -176,6 +211,7 @@ impl UnlockedVault {
             Transaction::TradeFutures(inner) => vec![&inner.store_id],
             Transaction::Defi(inner) => vec![&inner.store_id],
             Transaction::AssetSell(inner) => vec![&inner.store_id],
+            Transaction::Adjustment(inner) => vec![&inner.store_id],
         }
     }
 
@@ -203,7 +239,7 @@ impl UnlockedVault {
         for leg in tx
             .legs()
             .into_iter()
-            .filter(|leg| leg.role == LegRole::Principal)
+            .filter(|leg| matches!(leg.role, LegRole::Principal | LegRole::Adjustment))
         {
             let store = self.live_store(&leg.store_id)?;
             // V15: a sub-account holds only what it is bound to.
@@ -317,6 +353,7 @@ impl UnlockedVault {
                 positive(inner.quantity, "the quantity")?;
                 positive(inner.unit_price, "the price")?;
             }
+            Transaction::Adjustment(inner) => self.check_adjustment(inner)?,
         }
         if let Some(fee) = tx.fee()
             && fee.amount.is_negative()

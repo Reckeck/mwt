@@ -1,12 +1,13 @@
 use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{
-    PreviewTransactionInput, TransactionInput, TransactionKinds, UpdateTransactionInput,
+    AdjustmentDraftInput, PreviewTransactionInput, TransactionInput, TransactionKinds,
+    UpdateTransactionInput,
 };
 use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
 
-use trade_core::service::{TxFilter, TxGraph, TxPreview};
+use trade_core::service::{AdjustmentDraft, TxFilter, TxGraph, TxPreview};
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
@@ -110,6 +111,21 @@ pub async fn update_transaction(
     };
     enrich_in_background(&app, saved.meta().id.clone());
     Ok(saved)
+}
+
+/// The correction screen of one account: its assets and their ledger
+/// balances at the moment asked.
+#[tauri::command]
+pub async fn get_adjustment_draft(
+    input: AdjustmentDraftInput,
+    state: State<'_, AppState>,
+) -> Result<AdjustmentDraft, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .adjustment_draft(&input)
+        .map_err(err_to_string)
 }
 
 #[tauri::command]

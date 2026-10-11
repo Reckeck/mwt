@@ -191,6 +191,17 @@ pub fn every_transaction() -> Vec<Transaction> {
             fee: fee(),
             price: stamp(),
         }),
+        Transaction::Adjustment(AdjustmentTx {
+            meta: meta("counted"),
+            store_id: "bank".into(),
+            lines: vec![AdjustmentLine {
+                asset: usd(),
+                before: amount("100"),
+                after: amount("95.5"),
+                price: stamp(),
+            }],
+            fee: None,
+        }),
     ]
 }
 

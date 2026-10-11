@@ -30,6 +30,7 @@ export const TX_KINDS: TxKind[] = [
   'trade_futures',
   'defi',
   'asset_sell',
+  'adjustment',
 ]
 
 export const TX_VERBS: TxKind[] = ['topup', 'payment', 'transfer', 'convert']
@@ -153,13 +154,21 @@ export function txLegs(tx: Transaction): TxLegView[] {
       pushFee(record.store_id, record.fee)
       break
     }
+    case 'adjustment': {
+      const record = body(tx, 'adjustment')
+      for (const line of record.lines) {
+        const delta = Number(line.after) - Number(line.before)
+        if (delta !== 0) push(record.store_id, line.asset, String(delta), line.price, 'adjustment')
+      }
+      break
+    }
   }
   return legs
 }
 
-/** Legs that are the movement itself (not fees, not settled PnL). */
+/** Legs that are the movement itself (not fees, not settled PnL); a correction's are its own. */
 export function txPrincipalLegs(tx: Transaction): TxLegView[] {
-  return txLegs(tx).filter((leg) => leg.role === 'principal')
+  return txLegs(tx).filter((leg) => leg.role === 'principal' || leg.role === 'adjustment')
 }
 
 /** The store the transaction is booked on first. */
@@ -307,6 +316,12 @@ export function txDetails(tx: Transaction): Array<[string, string]> {
       out.push(['tx.field.unitPrice', `${record.unit_price} ${record.currency.symbol}`])
       break
     }
+    case 'adjustment': {
+      for (const line of body(tx, 'adjustment').lines) {
+        out.push(['adjustment.line', `${line.asset.symbol}: ${line.before} → ${line.after}`])
+      }
+      break
+    }
     default:
       break
   }
@@ -337,6 +352,7 @@ export const TX_KIND_BADGE: Record<TxKind, TxBadgeVariant> = {
   trade_futures: 'secondary',
   defi: 'secondary',
   asset_sell: 'secondary',
+  adjustment: 'outline',
 }
 
 export const DEFAULT_TX_BADGE: TxBadgeVariant = 'secondary'

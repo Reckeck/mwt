@@ -58,6 +58,7 @@ pub fn run() {
             transactions::preview_transaction,
             transactions::update_transaction,
             transactions::delete_transaction,
+            transactions::get_adjustment_draft,
             // categories and rules
             categories::list_categories,
             categories::create_category,

@@ -52,6 +52,10 @@ impl UnlockedVault {
     /// Preview a draft. `replaces` is the id of the transaction being edited:
     /// its effect is taken out first, so the preview shows the net change.
     pub fn preview_transaction(&self, mut tx: Transaction, replaces: Option<&str>) -> TxPreview {
+        // An edit is the same transaction: a correction must not count itself.
+        if let Some(id) = replaces {
+            tx.meta_mut().id = id.to_string();
+        }
         let error = self
             .prepare_transaction(&mut tx)
             .err()

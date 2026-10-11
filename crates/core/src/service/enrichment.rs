@@ -171,6 +171,7 @@ impl UnlockedVault {
                 crate::model::transaction::Transaction::TradeFutures(inner) => &mut inner.fee,
                 crate::model::transaction::Transaction::Defi(inner) => &mut inner.fee,
                 crate::model::transaction::Transaction::AssetSell(inner) => &mut inner.fee,
+                crate::model::transaction::Transaction::Adjustment(inner) => &mut inner.fee,
             };
             if slot.is_none() {
                 *slot = Some(found.clone());
