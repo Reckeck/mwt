@@ -7,6 +7,7 @@ import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
+import { currencySymbol, formatMoney } from '@/shared/lib/format'
 import { useTheme } from '@/shared/lib/theme'
 
 import type { StoreChartProps } from './store-chart.types'
@@ -29,10 +30,15 @@ const history = useQuery({
 const points = computed(() => history.data.value ?? [])
 
 const axisColor = chartAxisColor(resolved)
+/** The series is in the base currency: the axis and the tooltip say which. */
+const currency = computed(() => (props.baseCurrency || 'usd').toLowerCase())
 
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis' },
+  tooltip: {
+    trigger: 'axis',
+    valueFormatter: (value) => formatMoney(Number(value), { currency: currency.value }),
+  },
   // containLabel already reserves room for the axis labels; extra margins only add empty space.
   grid: { left: 4, right: 12, top: 12, bottom: 4, containLabel: true },
   xAxis: {
@@ -42,7 +48,10 @@ const option = computed<ChartOption>(() => ({
   },
   yAxis: {
     type: 'value',
-    axisLabel: { color: axisColor.value },
+    axisLabel: {
+      color: axisColor.value,
+      formatter: (value: number) => formatMoney(value, { currency: currency.value, decimals: 0, compact: true }),
+    },
     splitLine: { lineStyle: { color: axisColor.value, opacity: 0.15 } },
   },
   series: [
@@ -63,7 +72,10 @@ const option = computed<ChartOption>(() => ({
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('wallet.chart') }}</p>
+      <div class="flex items-center justify-between gap-2">
+        <p class="font-medium">{{ t('wallet.chart') }}</p>
+        <span class="text-xs text-muted-foreground">{{ currencySymbol(currency) }}</span>
+      </div>
     </template>
 
     <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
