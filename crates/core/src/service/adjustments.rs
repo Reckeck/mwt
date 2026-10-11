@@ -1,6 +1,8 @@
 //! Corrections («Корректировка»): set the balances of one account to what is
 //! really there. The ledger balance before it is worked out at the
-//! correction's own moment, so a back-dated one corrects the past.
+//! correction's own moment, so a back-dated one corrects the past, and it is
+//! worked out again whenever the history changes: what a correction keeps is
+//! the real balance (`after`), the difference follows the ledger.
 
 use std::collections::HashMap;
 
@@ -33,14 +35,24 @@ impl UnlockedVault {
         at: &str,
         exclude: Option<&str>,
     ) -> Vec<(AssetRef, Amount)> {
-        let limit = secs_or_now(at);
+        self.balances_where(store_id, secs_or_now(at), |tx| {
+            exclude.is_some_and(|id| tx.meta().id == id)
+        })
+    }
+
+    /// Balance of every asset of one store up to `limit` seconds (inclusive),
+    /// leaving out the transactions `skip` picks. Zero balances are dropped.
+    fn balances_where(
+        &self,
+        store_id: &str,
+        limit: i64,
+        skip: impl Fn(&Transaction) -> bool,
+    ) -> Vec<(AssetRef, Amount)> {
         let mut order: Vec<String> = Vec::new();
         let mut assets: HashMap<String, AssetRef> = HashMap::new();
         let mut totals: HashMap<String, Amount> = HashMap::new();
         for tx in &self.doc.transactions {
-            if exclude.is_some_and(|id| tx.meta().id == id)
-                || secs_or_now(&tx.meta().timestamp) > limit
-            {
+            if skip(tx) || secs_or_now(&tx.meta().timestamp) > limit {
                 continue;
             }
             for leg in tx.legs() {
@@ -88,6 +100,48 @@ impl UnlockedVault {
             at,
             lines,
         })
+    }
+
+    /// Work out again what the ledger held before every correction, oldest
+    /// first, so each one still sets the balance it was given after an
+    /// earlier operation was added, edited or deleted. A line whose
+    /// difference comes to zero stays: it keeps the balance pinned for the
+    /// next change. Corrections of one account at the same moment see only
+    /// the ones before them in the list, so the result does not flip-flop.
+    pub(crate) fn rebase_adjustments(&mut self) {
+        let mut order: Vec<(i64, usize)> = self
+            .doc
+            .transactions
+            .iter()
+            .enumerate()
+            .filter(|(_, tx)| matches!(tx, Transaction::Adjustment(_)))
+            .map(|(index, tx)| (secs_or_now(&tx.meta().timestamp), index))
+            .collect();
+        order.sort_unstable();
+        for (rank, &(secs, index)) in order.iter().enumerate() {
+            let Transaction::Adjustment(inner) = &self.doc.transactions[index] else {
+                continue;
+            };
+            let id = inner.meta.id.clone();
+            let store_id = inner.store_id.clone();
+            let later: Vec<&str> = order[rank + 1..]
+                .iter()
+                .take_while(|(other, _)| *other == secs)
+                .map(|&(_, other)| self.doc.transactions[other].meta().id.as_str())
+                .collect();
+            let balances: HashMap<String, Amount> = self
+                .balances_where(&store_id, secs, |tx| {
+                    tx.meta().id == id || later.contains(&tx.meta().id.as_str())
+                })
+                .into_iter()
+                .map(|(asset, balance)| (asset.key(), balance))
+                .collect();
+            if let Transaction::Adjustment(inner) = &mut self.doc.transactions[index] {
+                for line in &mut inner.lines {
+                    line.before = balances.get(&line.asset.key()).copied().unwrap_or_default();
+                }
+            }
+        }
     }
 
     /// Fill in what the ledger held before the correction, from the other
@@ -218,6 +272,107 @@ mod tests {
         };
         assert_eq!(inner.lines[0].before, amount("100"));
         assert_eq!(holding_of(&vault, &cash, &usd()), amount("145"));
+    }
+
+    fn before_of(vault: &UnlockedVault, id: &str) -> Vec<Amount> {
+        let Some(Transaction::Adjustment(inner)) =
+            vault.doc.transactions.iter().find(|tx| tx.meta().id == id)
+        else {
+            panic!("a correction");
+        };
+        inner.lines.iter().map(|line| line.before).collect()
+    }
+
+    #[test]
+    fn a_correction_follows_changes_to_the_history_before_it() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut salary = income(&cash, "100", "salary");
+        at(&mut salary, "2026-03-01T10:00:00Z");
+        let salary = vault.add_transaction(salary).unwrap();
+        let fixed = vault
+            .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
+            .unwrap();
+        let fixed = fixed.meta().id.clone();
+        let mut later = income(&cash, "10", "salary");
+        at(&mut later, "2026-03-10T10:00:00Z");
+        vault.add_transaction(later).unwrap();
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
+
+        // Added before it: the counted 80 still stands.
+        let mut forgotten = payment(&cash, "15", "lunch");
+        at(&mut forgotten, "2026-03-03T10:00:00Z");
+        let forgotten = vault.add_transaction(forgotten).unwrap();
+        assert_eq!(before_of(&vault, &fixed), [amount("85")]);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
+
+        // Edited before it.
+        let mut bigger = income(&cash, "120", "salary");
+        at(&mut bigger, "2026-03-01T10:00:00Z");
+        vault.update_transaction(&salary.meta().id, bigger).unwrap();
+        assert_eq!(before_of(&vault, &fixed), [amount("105")]);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
+
+        // Deleted before it; the difference may come to nothing, the line stays.
+        vault.delete_transaction(&forgotten.meta().id).unwrap();
+        let mut spent = payment(&cash, "40", "rent");
+        at(&mut spent, "2026-03-02T10:00:00Z");
+        vault.add_transaction(spent).unwrap();
+        assert_eq!(before_of(&vault, &fixed), [amount("80")]);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
+    }
+
+    #[test]
+    fn corrections_in_a_row_are_recalculated_in_order() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut salary = income(&cash, "100", "salary");
+        at(&mut salary, "2026-03-01T10:00:00Z");
+        vault.add_transaction(salary).unwrap();
+        let first = vault
+            .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
+            .unwrap();
+        let mut between = payment(&cash, "10", "lunch");
+        at(&mut between, "2026-03-07T10:00:00Z");
+        let between = vault.add_transaction(between).unwrap();
+        let second = vault
+            .add_transaction(correction(&cash, &[(usd(), "60")], "2026-03-09T10:00:00Z"))
+            .unwrap();
+        assert_eq!(before_of(&vault, &second.meta().id), [amount("70")]);
+
+        // A change before both moves only the first one's difference.
+        let mut bonus = income(&cash, "50", "bonus");
+        at(&mut bonus, "2026-03-02T10:00:00Z");
+        vault.add_transaction(bonus).unwrap();
+        assert_eq!(before_of(&vault, &first.meta().id), [amount("150")]);
+        assert_eq!(before_of(&vault, &second.meta().id), [amount("70")]);
+
+        // A change between them moves only the second one's.
+        vault.delete_transaction(&between.meta().id).unwrap();
+        assert_eq!(before_of(&vault, &first.meta().id), [amount("150")]);
+        assert_eq!(before_of(&vault, &second.meta().id), [amount("80")]);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("60"));
+    }
+
+    #[test]
+    fn corrections_at_the_same_moment_settle() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut salary = income(&cash, "100", "salary");
+        at(&mut salary, "2026-03-01T10:00:00Z");
+        vault.add_transaction(salary).unwrap();
+        let moment = "2026-03-05T10:00:00Z";
+        vault
+            .add_transaction(correction(&cash, &[(usd(), "80")], moment))
+            .unwrap();
+        vault
+            .add_transaction(correction(&cash, &[(usd(), "70")], moment))
+            .unwrap();
+        let held = holding_of(&vault, &cash, &usd());
+        vault.rebase_adjustments();
+        vault.recompute_holdings();
+        assert_eq!(holding_of(&vault, &cash, &usd()), held, "stable");
+        assert_eq!(held, amount("70"));
     }
 
     #[test]

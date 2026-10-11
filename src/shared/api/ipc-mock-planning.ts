@@ -552,9 +552,13 @@ export function mockPlanning(
         snoozed_until: null,
       })
     }
-    case 'delete_reminder':
-      remove(reminders, String(args?.id))
+    case 'delete_reminder': {
+      // An automatic one is muted, not removed: its source would make it again.
+      const reminder = reminders.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
+      if (reminder.source) Object.assign(reminder, { repeat: null, done: true, snoozed_until: null, muted: true })
+      else remove(reminders, reminder.id)
       return {}
+    }
     case 'set_reminder_done': {
       const reminder = reminders.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
       reminder.snoozed_until = null

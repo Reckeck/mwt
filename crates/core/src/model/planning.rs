@@ -409,9 +409,24 @@ pub struct MeterReading {
 }
 
 impl MeterReading {
-    /// Order in time: by month, then by day, a dayless reading last.
+    /// Order in time: by month, then by day. A reading without a day (an
+    /// older vault, or a bill paid without one) stands on the day it was
+    /// entered when that falls in its month, else at the month's end — so a
+    /// reading taken later in the same month is not mistaken for an earlier one.
     pub fn sort_key(&self) -> (String, u8) {
-        (self.period.clone(), self.day.unwrap_or(u8::MAX))
+        (self.period.clone(), self.effective_day())
+    }
+
+    fn effective_day(&self) -> u8 {
+        if let Some(day) = self.day {
+            return day;
+        }
+        self.recorded_at
+            .strip_prefix(self.period.as_str())
+            .and_then(|rest| rest.strip_prefix('-'))
+            .and_then(|rest| rest.get(..2))
+            .and_then(|day| day.parse().ok())
+            .unwrap_or(u8::MAX)
     }
 }
 
