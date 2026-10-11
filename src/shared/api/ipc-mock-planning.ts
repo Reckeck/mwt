@@ -32,15 +32,30 @@ function utilityTrend(item: UtilityItem): UtilityTrend {
     .filter((entry) => entry.item_id === item.id)
     .sort((left, right) => left.period.localeCompare(right.period))
   const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
-  const months: UtilityMonth[] = own.map((entry, index) => {
-    const consumption = index ? Number(entry.value) - Number(own[index - 1].value) : null
-    return {
-      period: entry.period,
-      reading: entry.value,
-      consumption: consumption === null ? null : String(consumption),
-      amount: money((consumption ?? 0) * tariff),
-    }
-  })
+  const paid = paymentsOf(item)
+  const months: UtilityMonth[] =
+    'metered' in item.kind
+      ? own.map((entry, index) => {
+          const consumption = index ? Number(entry.value) - Number(own[index - 1].value) : null
+          return {
+            period: entry.period,
+            reading: entry.value,
+            consumption: consumption === null ? null : String(consumption),
+            amount: money((consumption ?? 0) * tariff),
+            reading_id: entry.id,
+            payments: paid.get(entry.period) ?? [],
+          }
+        })
+      : [...paid.entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([period, payments]) => ({
+            period,
+            reading: null,
+            consumption: null,
+            amount: money(payments.reduce((sum, tx) => sum + ('payment' in tx ? Number(tx.payment.amount) : 0), 0)),
+            reading_id: null,
+            payments,
+          }))
   const billed = months.map((month) => Number(month.amount)).filter((value) => value > 0)
   const average = billed.length ? billed.reduce((sum, value) => sum + value, 0) / billed.length : null
   const fixed =
@@ -56,6 +71,40 @@ function utilityTrend(item: UtilityItem): UtilityTrend {
     monthly: billed.length ? money(billed[billed.length - 1]) : fixed,
   }
 }
+
+/** Two bills of a demo flat with half a year of readings. */
+export function seedUtilityDemo(propertyId: string) {
+  if (utilities.length) return
+  const base = { active: true, currency: 'rub', property_id: propertyId, store_id: null, category: 'utilities' }
+  const power: UtilityItem = {
+    id: uuid(),
+    name: 'Электричество',
+    kind: { metered: { unit: 'кВт·ч', tariff: '6.5' } },
+    ...base,
+  }
+  const net: UtilityItem = { id: uuid(), name: 'Интернет', kind: { static: { amount: '700' } }, ...base }
+  utilities.push(power, net)
+  const now = new Date()
+  let value = 12000
+  for (let back = 6; back >= 1; back -= 1) {
+    const month = new Date(now.getFullYear(), now.getMonth() - back, 1)
+    const period = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+    value += 180 + back * 15
+    readings.push({ id: uuid(), item_id: power.id, value: String(value), period, recorded_at: month.toISOString() })
+  }
+}
+
+/** Payments linked to a bill, by `YYYY-MM`. */
+function paymentsOf(item: UtilityItem): Map<string, Transaction[]> {
+  const out = new Map<string, Transaction[]>()
+  for (const tx of mockContext?.transactions ?? []) {
+    if (!('payment' in tx) || tx.payment.meta.utility_item_id !== item.id) continue
+    const period = tx.payment.meta.timestamp.slice(0, 7)
+    out.set(period, [...(out.get(period) ?? []), tx])
+  }
+  return out
+}
+let mockContext: PlanningMockContext | null = null
 
 const uuid = () => crypto.randomUUID()
 const isRejected = (outcome: AutomationOutcome) => typeof outcome === 'object' && 'rejected' in outcome
@@ -304,6 +353,7 @@ export function mockPlanning(
 ): unknown {
   const body = args?.input as Record<string, unknown> | undefined
   const rate = Number(settings.savings_rate)
+  mockContext = ctx
   switch (cmd) {
     case 'list_automations':
       return automations
@@ -500,6 +550,101 @@ export function mockPlanning(
     case 'delete_meter_reading':
       remove(readings, String(args?.id))
       return {}
+    case 'update_meter_reading': {
+      const input = body as UpdateMeterReadingInput
+      const reading = readings.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
+      Object.assign(reading, { value: input.value, period: input.period })
+      return reading
+    }
+    case 'get_utility_bill': {
+      const propertyId = String(args?.propertyId ?? '')
+      const period = String(args?.period ?? iso(now()).slice(0, 7))
+      const property = ctx.stores.find((store) => store.id === propertyId)
+      const payDay = property?.property?.utilities_pay_day ?? null
+      const lines: UtilityBillLine[] = utilities
+        .filter((item) => item.active && item.property_id === propertyId)
+        .map((item) => {
+          const own = readings
+            .filter((entry) => entry.item_id === item.id)
+            .sort((left, right) => left.period.localeCompare(right.period))
+          const previous = own.filter((entry) => entry.period < period).at(-1)?.value ?? null
+          const current = own.find((entry) => entry.period === period)?.value ?? null
+          const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
+          const fixed =
+            'static' in item.kind ? item.kind.static.amount : 'housing' in item.kind ? item.kind.housing.amount : null
+          const consumption = current !== null && previous !== null ? Number(current) - Number(previous) : null
+          const paid = (paymentsOf(item).get(period) ?? []).reduce(
+            (sum, tx) => sum + ('payment' in tx ? Number(tx.payment.amount) : 0),
+            0,
+          )
+          return {
+            item,
+            previous_reading: previous,
+            reading: current,
+            consumption: consumption === null ? null : String(consumption),
+            amount: 'metered' in item.kind ? (consumption === null ? null : money(consumption * tariff)) : fixed,
+            paid: money(paid),
+            includes_deposit: false,
+          }
+        })
+      const day = String(Math.min(payDay ?? now().getDate(), 28)).padStart(2, '0')
+      return {
+        property_id: propertyId,
+        period,
+        pay_day: payDay,
+        due_at: `${period}-${day}T12:00:00Z`,
+        lines,
+      } satisfies UtilityBill
+    }
+    case 'pay_utility_bill': {
+      const input = body as PayUtilityBillInput
+      const saved: Transaction[] = []
+      for (const line of input.lines) {
+        const item = utilities.find((entry) => entry.id === line.item_id) ?? fail('not found', 'MISSING')
+        if (line.reading) {
+          remove(
+            readings,
+            readings.find((entry) => entry.item_id === item.id && entry.period === input.period)?.id ?? '',
+          )
+          readings.push({
+            id: uuid(),
+            item_id: item.id,
+            value: line.reading,
+            period: input.period,
+            recorded_at: iso(now()),
+          })
+        }
+        const code = item.currency.toUpperCase()
+        const ts = input.timestamp || `${input.period}-10T12:00:00Z`
+        const tx = ctx.transactionFrom(
+          {
+            type: 'payment',
+            common: {
+              timestamp: ts,
+              comment: item.name,
+              categories: [item.category],
+              flow_id: null,
+              contact_id: null,
+              price_usd: null,
+              fx_override: null,
+              price: null,
+              price_currency: null,
+            },
+            store_id: item.store_id || input.store_id,
+            asset: { symbol: code, name: code, coingecko_id: null, chain: 'fiat', contract: null },
+            amount: line.amount,
+            fee: null,
+            to: null,
+            details: { cash_breakdown: null, unit_price: null, network: null, tx_hash: null },
+          } as TransactionInput,
+          ts,
+        )
+        if ('payment' in tx) tx.payment.meta.utility_item_id = item.id
+        ctx.transactions.push(tx)
+        saved.push(tx)
+      }
+      return saved
+    }
     case 'get_property_summary': {
       const storeId = String(args?.storeId ?? '')
       const own = utilities.filter((item) => item.active && item.property_id === storeId)
@@ -536,6 +681,8 @@ export function mockPlanning(
             contact_id: null,
             price_usd: null,
             fx_override: null,
+            price: null,
+            price_currency: null,
           },
           store_id: item.store_id ?? '',
           asset: { symbol: code, name: code, coingecko_id: null, chain: 'fiat', contract: null },

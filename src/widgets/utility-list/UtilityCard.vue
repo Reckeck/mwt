@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { CircleAlert, Pencil, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-vue-next'
+import { ChevronDown, CircleAlert, Pencil, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { MeterReadingForm } from '@/features/meter-reading'
@@ -17,6 +17,8 @@ import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
+
+import UtilityHistory from './UtilityHistory.vue'
 
 const props = defineProps<{ item: UtilityItem }>()
 
@@ -55,6 +57,7 @@ const prepare = useMutation({
 })
 
 const editOpen = ref(false)
+const historyOpen = ref(false)
 const remove = useMutation({
   mutationFn: () => call('delete_utility_item', { id: props.item.id }),
   onSuccess: () => {
@@ -143,6 +146,17 @@ function onPaid() {
         {{ t('utilities.recordExpense') }}
       </Button>
       <p v-if="draft?.includes_deposit" class="text-xs text-muted-foreground">{{ t('utilities.depositIncluded') }}</p>
+
+      <button
+        type="button"
+        class="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        :aria-expanded="historyOpen"
+        @click="historyOpen = !historyOpen"
+      >
+        <ChevronDown class="size-3.5 transition-transform" :class="historyOpen && 'rotate-180'" />
+        {{ t('utilityHistory.title') }}
+      </button>
+      <UtilityHistory v-if="historyOpen" :item="props.item" :months="trend.data.value?.months ?? []" />
     </div>
 
     <UtilityDialog v-model:open="editOpen" :item="props.item" />
