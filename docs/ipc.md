@@ -217,7 +217,7 @@ JSON без шифрования — там нет ничего секретно
 | `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
 | `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` | `ReminderInput { text, due_at }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder` |
 | `set_reminder_done` | `id, done` | `Reminder` |
-| `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново |
+| `list_price_alerts` / `create_price_alert` / `update_price_alert` / `delete_price_alert` | `PriceAlertInput { asset: AssetIdent, condition, price, currency, active, store_id? }` / `UpdatePriceAlertInput { id, alert }` / `id` | `PriceAlert`; правка взводит алерт заново. `store_id` — биржа, из терминала которой заведён алерт (только корневой кошелёк `exchange`, иначе `INVALID_INPUT`) |
 | `list_utility_items` / `create_utility_item` / `update_utility_item` / `delete_utility_item` | `UtilityInput { name, active, kind: metered{ unit, tariff } \| static{ amount } \| housing{ amount, deposit?, due_day, automation_id? }, currency, property_id, store_id?, category }` / `UpdateUtilityInput { id, item }` / `id` | `UtilityItem` — ЖКХ всегда принадлежит имуществу (`property_id` — корневой кошелёк `property`, иначе `MISSING`); удаление уносит показания, платежи остаются |
 | `add_meter_reading` | `MeterReadingInput { item_id, value, period (YYYY-MM) }` | `MeterReading`; показание за тот же месяц заменяется; меньше прошлого или больше следующего — `INVALID_INPUT` |
 | `delete_meter_reading` | `id` | `()` |

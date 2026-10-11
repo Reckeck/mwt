@@ -228,6 +228,10 @@ pub struct PriceAlert {
     pub currency: String,
     pub active: bool,
     pub triggered_at: Option<String>,
+    /// The exchange whose terminal set the alert; `None` for a vault-wide one.
+    #[serde(default)]
+    #[ts(optional)]
+    pub store_id: Option<String>,
 }
 
 /// «If the comment or the contact name contains `pattern`, use `category`.»

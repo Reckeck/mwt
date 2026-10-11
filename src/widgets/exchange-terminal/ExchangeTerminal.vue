@@ -6,7 +6,9 @@ import { useDebounceFn } from '@vueuse/core'
 import { ArrowUpToLine, LineChart, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { PriceAlertList } from '@/widgets/price-alert-list'
 import { TradingChart, type IndicatorKey } from '@/widgets/trading-chart'
+import { PriceAlertDialog, type PriceAlertPreset } from '@/features/price-alert-edit'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Input } from '@/shared/ui/input'
@@ -157,6 +159,14 @@ const indicatorKeys = computed<IndicatorKey[]>(() =>
     .filter((kind) => ['sma', 'ema', 'rsi'].includes(kind)),
 )
 
+/* --- alerts set from the chart belong to this exchange --- */
+const alertOpen = ref(false)
+const alertPreset = ref<PriceAlertPreset | null>(null)
+function onAlert(price: string, condition: AlertCondition) {
+  alertPreset.value = { symbol: baseOf(active.value || 'BTCUSDT'), price, condition }
+  alertOpen.value = true
+}
+
 function onTimeframe(label: string) {
   patch.mutate({ watchlist: null, active_symbol: null, timeframe: label, indicators: null, layout: null })
 }
@@ -223,6 +233,7 @@ function onIndicators(keys: IndicatorKey[]) {
         </li>
         </ContextMenu>
       </ul>
+      <PriceAlertList :store-id="props.storeId" class="mt-auto border-t border-border pt-2" />
     </aside>
 
     <TradingChart
@@ -232,9 +243,12 @@ function onIndicators(keys: IndicatorKey[]) {
       :timeframe="terminal.data.value?.timeframe ?? '1h'"
       :indicators="indicatorKeys.length ? indicatorKeys : ['sma']"
       class="min-h-[30rem]"
+      can-alert
+      @alert="onAlert"
       @drawings="onDrawings"
       @timeframe="onTimeframe"
       @indicators="onIndicators"
     />
+    <PriceAlertDialog v-model:open="alertOpen" :store-id="props.storeId" :preset="alertPreset" />
   </div>
 </template>

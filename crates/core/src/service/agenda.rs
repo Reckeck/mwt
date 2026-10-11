@@ -29,6 +29,8 @@ pub struct PriceAlertDraft {
     pub price: Amount,
     pub currency: String,
     pub active: bool,
+    /// The exchange whose terminal sets the alert.
+    pub store_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -146,7 +148,7 @@ impl UnlockedVault {
         self.doc.price_alerts.clone()
     }
 
-    fn check_alert(draft: &PriceAlertDraft) -> Result<()> {
+    fn check_alert(&self, draft: &PriceAlertDraft) -> Result<()> {
         if draft.asset.symbol.trim().is_empty() {
             return Err(Error::InvalidInput("choose an asset".into()));
         }
@@ -156,11 +158,21 @@ impl UnlockedVault {
         if draft.currency.trim().is_empty() {
             return Err(Error::InvalidInput("choose a currency".into()));
         }
+        if let Some(store_id) = &draft.store_id {
+            let store = self
+                .find_store(store_id)
+                .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+            if store.kind != StoreKind::Exchange || store.parent_id.is_some() {
+                return Err(Error::InvalidInput(
+                    "an alert belongs to an exchange".into(),
+                ));
+            }
+        }
         Ok(())
     }
 
     pub fn create_price_alert(&mut self, draft: PriceAlertDraft) -> Result<PriceAlert> {
-        Self::check_alert(&draft)?;
+        self.check_alert(&draft)?;
         let alert = PriceAlert {
             id: uuid::Uuid::new_v4().to_string(),
             asset: draft.asset,
@@ -169,6 +181,7 @@ impl UnlockedVault {
             currency: draft.currency.trim().to_lowercase(),
             active: draft.active,
             triggered_at: None,
+            store_id: draft.store_id,
         };
         self.doc.price_alerts.push(alert.clone());
         self.persist()?;
@@ -177,7 +190,7 @@ impl UnlockedVault {
 
     /// Edit an alert; an edited alert is armed again.
     pub fn update_price_alert(&mut self, id: &str, draft: PriceAlertDraft) -> Result<PriceAlert> {
-        Self::check_alert(&draft)?;
+        self.check_alert(&draft)?;
         let alert = self
             .doc
             .price_alerts
@@ -190,6 +203,7 @@ impl UnlockedVault {
         alert.currency = draft.currency.trim().to_lowercase();
         alert.active = draft.active;
         alert.triggered_at = None;
+        alert.store_id = draft.store_id;
         let out = alert.clone();
         self.persist()?;
         Ok(out)
@@ -589,12 +603,38 @@ mod tests {
                 price: amount("95000"),
                 currency: "usd".into(),
                 active: true,
+                store_id: None,
             })
             .unwrap();
         let now = secs("2026-03-02T00:00:00Z");
         assert_eq!(vault.check_alerts(now).unwrap().len(), 1);
         assert!(vault.check_alerts(now).unwrap().is_empty());
         assert!(vault.alert_assets().is_empty());
+    }
+
+    #[test]
+    fn an_alert_belongs_to_an_exchange_only() {
+        let (_dir, mut vault) = empty_vault();
+        let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let draft = |store_id: &str| PriceAlertDraft {
+            asset: btc(),
+            condition: AlertCondition::Above,
+            price: amount("95000"),
+            currency: "usd".into(),
+            active: true,
+            store_id: Some(store_id.to_string()),
+        };
+        let alert = vault.create_price_alert(draft(&exchange)).unwrap();
+        assert_eq!(alert.store_id.as_deref(), Some(exchange.as_str()));
+        assert!(matches!(
+            vault.create_price_alert(draft(&bank)),
+            Err(Error::InvalidInput(_))
+        ));
+        assert!(matches!(
+            vault.create_price_alert(draft("nope")),
+            Err(Error::Missing(_))
+        ));
     }
 
     #[test]

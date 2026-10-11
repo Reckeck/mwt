@@ -338,6 +338,7 @@ pub fn full_doc() -> VaultDoc {
         currency: "eur".into(),
         active: true,
         triggered_at: None,
+        store_id: None,
     }];
     doc.categorization_rules = vec![CategorizationRule {
         id: "rule".into(),

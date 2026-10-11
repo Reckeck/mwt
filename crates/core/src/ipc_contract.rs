@@ -1090,6 +1090,10 @@ pub struct PriceAlertInput {
     pub price: Amount,
     pub currency: String,
     pub active: bool,
+    /// The exchange whose terminal sets the alert.
+    #[serde(default)]
+    #[ts(optional)]
+    pub store_id: Option<String>,
 }
 
 impl From<PriceAlertInput> for PriceAlertDraft {
@@ -1100,6 +1104,7 @@ impl From<PriceAlertInput> for PriceAlertDraft {
             price: input.price,
             currency: input.currency,
             active: input.active,
+            store_id: input.store_id,
         }
     }
 }

@@ -24,7 +24,7 @@
 | `manual_prices` | `Vec<ManualPrice>` | ручная оценка имущества |
 | `envelopes` | `Vec<Envelope>` | конверты (см. выше) |
 | `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
-| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества |
+| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий |
 
 ### Settings — только vault-scoped
 
