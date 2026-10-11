@@ -2,21 +2,23 @@
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
 mod commands;
+mod quick_add_socket;
 mod scheduler;
 mod shortcut;
+mod tray;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
     losses, planning, portfolio, pricing, settings, stores, transactions, vault_recents,
 };
-use tauri::{
-    Emitter, Manager,
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
-    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
-};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `--quick-add` with an instance running: hand it over, start nothing.
+    if quick_add_socket::forward_if_running() {
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -117,6 +119,7 @@ pub fn run() {
             app_settings::get_app_settings,
             app_settings::update_app_settings,
             app_settings::set_quick_add_shortcut,
+            app_settings::get_shortcut_support,
             app_settings::get_supported_currencies,
             // settings
             settings::get_settings,
@@ -217,7 +220,8 @@ pub fn run() {
             }
 
             // Create system tray with context menu
-            create_tray(app)?;
+            tray::create(app)?;
+            quick_add_socket::listen(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -244,167 +248,4 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running TradeApp");
-}
-
-fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let app_handle = app.handle().clone();
-
-    // Create tray menu items
-    let show_hide = MenuItemBuilder::new("Показать / Скрыть")
-        .id("show_hide")
-        .accelerator("CmdOrCtrl+Shift+H")
-        .build(&app_handle)?;
-
-    let separator1 = PredefinedMenuItem::separator(&app_handle)?;
-
-    let dashboard = MenuItemBuilder::new("Дашборд")
-        .id("nav_dashboard")
-        .build(&app_handle)?;
-
-    let wallets = MenuItemBuilder::new("Кошельки")
-        .id("nav_stores")
-        .build(&app_handle)?;
-
-    let transactions = MenuItemBuilder::new("Операции")
-        .id("nav_transactions")
-        .build(&app_handle)?;
-
-    let charts = MenuItemBuilder::new("Графики")
-        .id("nav_charts")
-        .build(&app_handle)?;
-
-    let trading = MenuItemBuilder::new("Терминал")
-        .id("nav_trading")
-        .build(&app_handle)?;
-
-    let strategy_lab = MenuItemBuilder::new("Лаборатория")
-        .id("nav_strategy_lab")
-        .build(&app_handle)?;
-
-    let settings = MenuItemBuilder::new("Настройки")
-        .id("nav_settings")
-        .build(&app_handle)?;
-
-    let separator2 = PredefinedMenuItem::separator(&app_handle)?;
-
-    let refresh_prices = MenuItemBuilder::new("Обновить цены")
-        .id("refresh_prices")
-        .accelerator("CmdOrCtrl+R")
-        .build(&app_handle)?;
-
-    let separator3 = PredefinedMenuItem::separator(&app_handle)?;
-
-    let lock_unlock = MenuItemBuilder::new("Заблокировать")
-        .id("lock_unlock")
-        .build(&app_handle)?;
-
-    let separator4 = PredefinedMenuItem::separator(&app_handle)?;
-
-    let quit = MenuItemBuilder::new("Выйти")
-        .id("quit")
-        .accelerator("CmdOrCtrl+Q")
-        .build(&app_handle)?;
-
-    let menu = MenuBuilder::new(&app_handle)
-        .items(&[
-            &show_hide,
-            &separator1,
-            &dashboard,
-            &wallets,
-            &transactions,
-            &charts,
-            &trading,
-            &strategy_lab,
-            &settings,
-            &separator2,
-            &refresh_prices,
-            &separator3,
-            &lock_unlock,
-            &separator4,
-            &quit,
-        ])
-        .build()?;
-
-    // Build tray icon
-    let app_handle_tray = app_handle.clone();
-    let app_handle_menu = app_handle.clone();
-    let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_tray_icon_event(move |_tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                ..
-            } = event
-            {
-                let window = app_handle_tray.get_webview_window("main").unwrap();
-                let _ = if window.is_visible().unwrap_or(false) {
-                    window.hide()
-                } else {
-                    window.show().and_then(|_| window.set_focus())
-                };
-            }
-        })
-        .on_menu_event(move |_tray, event| {
-            match event.id.as_ref() {
-                "show_hide" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = if window.is_visible().unwrap_or(false) {
-                        window.hide()
-                    } else {
-                        window.show().and_then(|_| window.set_focus())
-                    };
-                }
-                "nav_dashboard" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/'");
-                }
-                "nav_stores" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/stores'");
-                }
-                "nav_transactions" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/transactions'");
-                }
-                "nav_charts" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/charts'");
-                }
-                "nav_trading" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/trading'");
-                }
-                "nav_strategy_lab" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/strategy-lab'");
-                }
-                "nav_settings" => {
-                    let window = app_handle_menu.get_webview_window("main").unwrap();
-                    let _ = window.show().and_then(|_| window.set_focus());
-                    let _ = window.eval("window.location.href = '/settings'");
-                }
-                "refresh_prices" => {
-                    // Emit event to frontend to trigger refresh
-                    let _ = app_handle_menu.emit("refresh-prices", ());
-                }
-                "lock_unlock" => {
-                    let _ = app_handle_menu.emit("toggle-lock", ());
-                }
-                "quit" => {
-                    std::process::exit(0);
-                }
-                _ => {}
-            }
-        })
-        .build(&app_handle)?;
-
-    Ok(())
 }

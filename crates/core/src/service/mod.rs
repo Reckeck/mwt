@@ -138,11 +138,14 @@ pub struct UnlockedVault {
     /// value in right after the vault is opened.
     base_currency: String,
     password: Zeroizing<String>,
+    /// Released when the vault is locked (dropped).
+    _lock: crate::storage::VaultLock,
 }
 
 impl UnlockedVault {
     pub fn create(path: PathBuf, password: &str) -> Result<Self> {
         VaultFile::create(&path, password)?;
+        let lock = crate::storage::VaultLock::acquire(&path)?;
         let doc = VaultDoc::default();
         let fmt = SnapshotFormat::for_profile();
         let mut vault = Self {
@@ -151,6 +154,7 @@ impl UnlockedVault {
             doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
+            _lock: lock,
         };
         vault.ensure_cash_wallet("Cash")?;
         Ok(vault)
@@ -158,12 +162,15 @@ impl UnlockedVault {
 
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
         let (doc, fmt) = VaultFile::open(&path, password)?;
+        // After the password check: a wrong password must not hint the vault is in use.
+        let lock = crate::storage::VaultLock::acquire(&path)?;
         let mut vault = Self {
             path,
             fmt,
             doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             password: Zeroizing::new(password.to_string()),
+            _lock: lock,
         };
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;

@@ -1923,6 +1923,16 @@ savings_rate: Amount, daily_budget_mode: DailyBudgetMode,
 budget_currency: string, };
 
 /**
+ * Whether the «+ Операция» key can be registered by the app, and the command
+ * a compositor binding runs instead when it cannot (Wayland).
+ */
+type ShortcutSupport = { global_keys: boolean, 
+/**
+ * The running executable with `--quick-add`.
+ */
+launch_command: string, };
+
+/**
  * A "store"/"platform" (хранилище) — a portfolio container.
  * Important: a store is NOT an asset — it holds holdings (`Holding`).
  */

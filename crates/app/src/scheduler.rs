@@ -63,7 +63,7 @@ fn is_unlocked(app: &AppHandle) -> bool {
 }
 
 /// Whether texts shown outside the window should be in Russian.
-fn russian(app: &AppHandle) -> bool {
+pub fn russian(app: &AppHandle) -> bool {
     let Ok(dir) = app.path().app_config_dir() else {
         return false;
     };

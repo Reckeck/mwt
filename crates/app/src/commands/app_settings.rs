@@ -68,6 +68,19 @@ pub async fn update_app_settings(
     Ok(settings)
 }
 
+/// Can the app own a system-wide key here, and what should a compositor
+/// binding run otherwise.
+#[tauri::command]
+pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::ShortcutSupport, String> {
+    let exe = std::env::current_exe()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "trade-app".into());
+    Ok(trade_core::ipc_contract::ShortcutSupport {
+        global_keys: crate::shortcut::global_keys_supported(),
+        launch_command: format!("{exe} {}", crate::shortcut::QUICK_ADD_FLAG),
+    })
+}
+
 /// Set or clear the system-wide «+ Операция» key. The combination is
 /// registered first and saved only if that worked, so the settings never
 /// claim a shortcut the system refused (`SHORTCUT_FAILED`).

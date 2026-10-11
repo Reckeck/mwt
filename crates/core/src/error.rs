@@ -74,6 +74,10 @@ pub enum Error {
     /// UI fetches one (`ensure_fx`) or asks for the price in another currency.
     #[error("no exchange rate for {0}")]
     FxMissing(String),
+
+    /// The vault is open in another app instance (see `storage::VaultLock`).
+    #[error("vault is open in another window: {0}")]
+    VaultBusy(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -170,6 +174,7 @@ impl Error {
             Error::InsufficientFunds(_) => "INSUFFICIENT_FUNDS",
             Error::TooLarge(_) => "TOO_LARGE",
             Error::FxMissing(_) => "FX_MISSING",
+            Error::VaultBusy(_) => "VAULT_BUSY",
         }
     }
 }

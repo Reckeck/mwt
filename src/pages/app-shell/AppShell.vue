@@ -216,6 +216,18 @@ void onEvent<{ id: string }>('reminder-due', (payload) => {
 async function lock() {
   await vault.lock()
 }
+
+/* --- the tray menu: screens without a page reload, prices, lock --- */
+void onEvent<string>('tray-navigate', (target) => {
+  if (target === 'settings') openSettings()
+  else void router.push({ name: target })
+})
+void onEvent('refresh-prices', () => {
+  void call<RefreshResult>('refresh_all')
+    .then((result) => toast.success(t('store.refreshed'), { description: `${result.prices} · ${result.fx}` }))
+    .catch((err) => toast.error(t('store.refreshFailed'), { description: parseError(err).message }))
+})
+void onEvent('toggle-lock', () => void lock())
 </script>
 
 <template>
