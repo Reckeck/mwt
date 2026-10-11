@@ -16,6 +16,7 @@ use std::time::Duration;
 use hmac::{Hmac, Mac};
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
@@ -72,6 +73,10 @@ pub struct Execution {
     pub closed_size: Option<String>,
     /// Bybit's unique execution ID (execId) for deduplication.
     pub exec_id: String,
+    /// `spot` | `linear` | `inverse`: the category the fill was fetched under.
+    /// Bybit does not echo it per row, so the client stamps it.
+    #[serde(default)]
+    pub category: String,
 }
 
 impl Execution {
@@ -102,14 +107,14 @@ impl Execution {
             .is_some_and(|size| !size.is_empty() && size != "0")
     }
 
-    /// Best-effort product category from the symbol, for imports that sweep
-    /// every category in one pass and therefore cannot tag fills as they fetch.
-    /// Bybit names perpetual futures `…PERP`, so that suffix is the only signal.
-    pub fn category_hint(&self) -> &'static str {
-        if self.symbol.to_ascii_uppercase().ends_with("PERP") {
-            "linear"
-        } else {
-            "spot"
+    /// The product category: the one the fill was fetched under, else a
+    /// guess from the symbol (Bybit names USDC perpetuals `…PERP`). The guess
+    /// used to be all there was, and booked every USDT perpetual as spot.
+    pub fn category_hint(&self) -> &str {
+        match self.category.as_str() {
+            "spot" | "linear" | "inverse" => &self.category,
+            _ if self.symbol.to_ascii_uppercase().ends_with("PERP") => "linear",
+            _ => "spot",
         }
     }
 }
@@ -263,6 +268,7 @@ impl From<ApiExecution> for Execution {
             is_maker: api.is_maker,
             closed_size: api.closed_size,
             exec_id: api.exec_id,
+            category: String::new(),
         }
     }
 }
@@ -387,7 +393,15 @@ impl BybitClient {
 
         Ok(envelope
             .result
-            .map(|page| page.list.into_iter().map(Execution::from).collect())
+            .map(|page| {
+                page.list
+                    .into_iter()
+                    .map(|row| Execution {
+                        category: category.as_str().into(),
+                        ..Execution::from(row)
+                    })
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -453,7 +467,10 @@ impl BybitClient {
                     break;
                 }
                 let rows = envelope.result.map(|page| page.list).unwrap_or_default();
-                all.extend(rows.into_iter().map(Execution::from));
+                all.extend(rows.into_iter().map(|row| Execution {
+                    category: category.as_str().into(),
+                    ..Execution::from(row)
+                }));
 
                 if window_start == 0 {
                     break; // walked back to the epoch
@@ -466,6 +483,280 @@ impl BybitClient {
         all.sort_by(|left, right| right.exec_time.cmp(&left.exec_time));
         all.truncate(max_total as usize);
         Ok(all)
+    }
+}
+
+/// Bybit account types a sub-account can stand for.
+pub const ACCOUNT_FUND: &str = "FUND";
+pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
+/// Not a Bybit transfer account type: Earn products, as this app names them.
+pub const ACCOUNT_EARN: &str = "EARN";
+
+/// A move between the user's own Bybit accounts (`/v5/asset/transfer/query-inter-transfer-list`).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterTransfer {
+    #[serde(default)]
+    pub transfer_id: String,
+    #[serde(default)]
+    pub coin: String,
+    #[serde(default)]
+    pub amount: String,
+    #[serde(default)]
+    pub from_account_type: String,
+    #[serde(default)]
+    pub to_account_type: String,
+    /// Milliseconds since the epoch, as a string.
+    #[serde(default)]
+    pub timestamp: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+/// One payout of an Earn product (`/v5/earn/yield`).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarnYield {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub coin: String,
+    #[serde(default)]
+    pub product_id: String,
+    #[serde(default)]
+    pub amount: String,
+    /// Milliseconds since the epoch, as a string.
+    #[serde(default)]
+    pub created_at: String,
+}
+
+/// What one Bybit account holds of a coin.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CoinBalance {
+    pub coin: String,
+    pub amount: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ListPage<T> {
+    #[serde(default = "Vec::new")]
+    list: Vec<T>,
+    #[serde(default, rename = "nextPageCursor")]
+    next_page_cursor: String,
+}
+
+/// `/v5/account/wallet-balance`: `result.list[0].coin[{coin, walletBalance}]`.
+pub fn parse_unified_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
+    body.pointer("/list/0/coin")
+        .and_then(serde_json::Value::as_array)
+        .map(|coins| {
+            coins
+                .iter()
+                .filter_map(|coin| balance_row(coin, "walletBalance"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `/v5/asset/transfer/query-account-coins-balance`: `result.balance[{coin, walletBalance}]`.
+pub fn parse_funding_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
+    body.get("balance")
+        .and_then(serde_json::Value::as_array)
+        .map(|coins| {
+            coins
+                .iter()
+                .filter_map(|coin| balance_row(coin, "walletBalance"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `/v5/earn/position`: `result.list[{coin, amount}]`, one row per product; summed per coin.
+pub fn parse_earn_positions(body: &serde_json::Value) -> Vec<CoinBalance> {
+    let mut sums: std::collections::BTreeMap<String, rust_decimal::Decimal> =
+        std::collections::BTreeMap::new();
+    for row in body
+        .get("list")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(balance) = balance_row(row, "amount")
+            && let Ok(value) = balance.amount.parse::<rust_decimal::Decimal>()
+        {
+            *sums.entry(balance.coin).or_default() += value;
+        }
+    }
+    sums.into_iter()
+        .map(|(coin, amount)| CoinBalance {
+            coin,
+            amount: amount.normalize().to_string(),
+        })
+        .collect()
+}
+
+fn balance_row(row: &serde_json::Value, field: &str) -> Option<CoinBalance> {
+    let coin = row.get("coin")?.as_str()?.trim().to_ascii_uppercase();
+    let amount = row.get(field)?.as_str()?.trim().to_string();
+    let nonzero = amount
+        .parse::<rust_decimal::Decimal>()
+        .is_ok_and(|value| !value.is_zero());
+    (!coin.is_empty() && nonzero).then_some(CoinBalance { coin, amount })
+}
+
+impl BybitClient {
+    /// A signed GET returning `result`; a non-zero `retCode` is an error.
+    async fn signed_get<T: DeserializeOwned>(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        path: &str,
+        query: &str,
+    ) -> Result<T> {
+        let headers = Self::signed_headers(
+            api_key,
+            api_secret,
+            RECV_WINDOW_MS,
+            Self::now_millis(),
+            query,
+        )?;
+        let url = format!("{}{path}?{query}", self.base_url);
+        let envelope: ApiEnvelope<T> = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.to_string()))?
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.to_string()))?;
+        if envelope.retcode != 0 {
+            return Err(Error::Network(format!(
+                "bybit error {}: {}",
+                envelope.retcode, envelope.retmsg
+            )));
+        }
+        envelope
+            .result
+            .ok_or_else(|| Error::Network("bybit: empty result".into()))
+    }
+
+    /// Successful transfers between the user's own accounts, newest first,
+    /// walking back in 7-day windows like the fill import.
+    pub async fn inter_transfers(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        max_total: usize,
+    ) -> Result<Vec<InterTransfer>> {
+        let mut out: Vec<InterTransfer> = Vec::new();
+        let mut window_end = Self::now_millis();
+        for _ in 0..MAX_IMPORT_PAGES {
+            if out.len() >= max_total {
+                break;
+            }
+            let window_start = window_end.saturating_sub(IMPORT_WINDOW_MS);
+            let mut cursor = String::new();
+            loop {
+                let mut query = format!("startTime={window_start}&endTime={window_end}&limit=50");
+                if !cursor.is_empty() {
+                    query.push_str("&cursor=");
+                    query.push_str(&cursor);
+                }
+                let page: ListPage<InterTransfer> = self
+                    .signed_get(
+                        api_key,
+                        api_secret,
+                        "/v5/asset/transfer/query-inter-transfer-list",
+                        &query,
+                    )
+                    .await?;
+                out.extend(
+                    page.list
+                        .into_iter()
+                        .filter(|row| row.status.eq_ignore_ascii_case("SUCCESS")),
+                );
+                if page.next_page_cursor.is_empty() || out.len() >= max_total {
+                    break;
+                }
+                cursor = page.next_page_cursor;
+            }
+            if window_start == 0 {
+                break;
+            }
+            window_end = window_start - 1;
+        }
+        out.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+        out.truncate(max_total);
+        Ok(out)
+    }
+
+    /// Earn payouts (flexible savings and on-chain), newest first. A product
+    /// line the key cannot read is skipped, not fatal.
+    pub async fn earn_yields(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        max_total: usize,
+    ) -> Result<Vec<EarnYield>> {
+        let mut out = Vec::new();
+        for category in ["FlexibleSaving", "OnChain"] {
+            let query = format!("category={category}&limit=100");
+            if let Ok(page) = self
+                .signed_get::<ListPage<EarnYield>>(api_key, api_secret, "/v5/earn/yield", &query)
+                .await
+            {
+                out.extend(page.list);
+            }
+        }
+        out.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+        out.truncate(max_total);
+        Ok(out)
+    }
+
+    /// What each account holds right now: `(FUND, UNIFIED, EARN)`.
+    pub async fn balances(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+    ) -> Result<Vec<(String, Vec<CoinBalance>)>> {
+        let unified: serde_json::Value = self
+            .signed_get(
+                api_key,
+                api_secret,
+                "/v5/account/wallet-balance",
+                "accountType=UNIFIED",
+            )
+            .await?;
+        let funding: serde_json::Value = self
+            .signed_get(
+                api_key,
+                api_secret,
+                "/v5/asset/transfer/query-account-coins-balance",
+                "accountType=FUND",
+            )
+            .await
+            .unwrap_or_default();
+        let mut earn = Vec::new();
+        for category in ["FlexibleSaving", "OnChain"] {
+            if let Ok(body) = self
+                .signed_get::<serde_json::Value>(
+                    api_key,
+                    api_secret,
+                    "/v5/earn/position",
+                    &format!("category={category}"),
+                )
+                .await
+            {
+                earn.extend(parse_earn_positions(&body));
+            }
+        }
+        Ok(vec![
+            (ACCOUNT_FUND.into(), parse_funding_balances(&funding)),
+            (ACCOUNT_UNIFIED.into(), parse_unified_balances(&unified)),
+            (ACCOUNT_EARN.into(), earn),
+        ])
     }
 }
 
@@ -509,6 +800,7 @@ mod tests {
             is_maker: false,
             closed_size: None,
             exec_id: "exec-1".into(),
+            category: "spot".into(),
         }
     }
 
@@ -703,5 +995,45 @@ mod tests {
         assert_eq!(Category::Spot.as_str(), "spot");
         assert_eq!(Category::Linear.as_str(), "linear");
         assert_eq!(Category::Inverse.as_str(), "inverse");
+    }
+
+    #[test]
+    fn balances_parse_and_drop_zero_rows() {
+        let unified = serde_json::json!({"list": [{"accountType": "UNIFIED", "coin": [
+            {"coin": "USDT", "walletBalance": "120.5"}, {"coin": "BTC", "walletBalance": "0"}]}]});
+        assert_eq!(
+            parse_unified_balances(&unified),
+            vec![CoinBalance {
+                coin: "USDT".into(),
+                amount: "120.5".into()
+            }]
+        );
+        let funding = serde_json::json!({"accountType": "FUND", "balance": [{"coin": "usdc", "walletBalance": "3"}]});
+        assert_eq!(
+            parse_funding_balances(&funding),
+            vec![CoinBalance {
+                coin: "USDC".into(),
+                amount: "3".into()
+            }]
+        );
+        let earn = serde_json::json!({"list": [{"coin": "USDT", "amount": "10"}, {"coin": "USDT", "amount": "5.5"}]});
+        assert_eq!(
+            parse_earn_positions(&earn),
+            vec![CoinBalance {
+                coin: "USDT".into(),
+                amount: "15.5".into()
+            }]
+        );
+        assert!(parse_unified_balances(&serde_json::json!({})).is_empty());
+    }
+
+    #[test]
+    fn transfer_rows_read_camel_case() {
+        let row: InterTransfer = serde_json::from_value(serde_json::json!({
+            "transferId": "t1", "coin": "USDT", "amount": "50", "fromAccountType": "FUND",
+            "toAccountType": "UNIFIED", "timestamp": "1700000000000", "status": "SUCCESS"}))
+        .unwrap();
+        assert_eq!(row.from_account_type, "FUND");
+        assert_eq!(row.to_account_type, "UNIFIED");
     }
 }

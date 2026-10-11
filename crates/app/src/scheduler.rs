@@ -138,16 +138,19 @@ async fn poll_bybit_once(
             .await
             .map_err(err_to_string)?;
 
-        let imports: Vec<trade_core::model::vault::PendingImport> = execs
-            .iter()
-            .filter_map(|execution| {
-                trade_core::model::vault::PendingImport::from_execution(
-                    &store_id,
-                    execution.category_hint(),
-                    execution,
-                )
-            })
-            .collect();
+        // Same sweep as the manual import: moves between accounts and Earn
+        // payouts too, each optional for a key without those permissions.
+        let transfers = client
+            .inter_transfers(&api_key, &api_secret, 500)
+            .await
+            .unwrap_or_default();
+        let yields = client
+            .earn_yields(&api_key, &api_secret, 500)
+            .await
+            .unwrap_or_default();
+        let imports = trade_core::model::vault::PendingImport::bybit_batch(
+            &store_id, &execs, &transfers, &yields,
+        );
 
         let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
         let Some(vault) = guard.as_mut() else {
@@ -174,6 +177,13 @@ fn automations_tick(app: &AppHandle) {
         let Ok(pass) = vault.run_due_automations(now_secs(), &zone) else {
             return;
         };
+        // Savings accounts that ask for it get last month's interest booked.
+        let today = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
+        if let Ok(posted) = vault.post_due_interest(today)
+            && posted > 0
+        {
+            let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
+        }
         let names: std::collections::HashMap<String, String> = vault
             .doc
             .automations

@@ -123,14 +123,24 @@ async function discardImports(execIds: string[]) {
             <td class="px-2 py-1.5 font-mono text-xs">{{ imp.occurred_at.slice(0, 10) }}</td>
             <td class="px-2 py-1.5">{{ imp.symbol }}</td>
             <td class="px-2 py-1.5">
-              <Badge :variant="imp.side === 'buy' ? 'default' : 'secondary'">
+              <Badge v-if="imp.kind === 'fill'" :variant="imp.side === 'buy' ? 'default' : 'secondary'">
                 {{ imp.side === 'buy' ? t('import.buy') : t('import.sell') }}
               </Badge>
+              <!-- A move between Bybit accounts or an Earn payout: what it is and where it goes. -->
+              <span v-else class="flex flex-wrap items-center gap-1">
+                <Badge variant="outline">{{ t(`pending.kind.${imp.kind}`) }}</Badge>
+                <span class="text-xs text-muted-foreground">
+                  <template v-if="imp.kind === 'transfer'">
+                    {{ t(`exchangeBalances.account.${imp.from_account}`) }} → {{ t(`exchangeBalances.account.${imp.to_account}`) }}
+                  </template>
+                  <template v-else>{{ t('exchangeBalances.account.EARN') }}</template>
+                </span>
+              </span>
             </td>
             <td class="px-2 py-1.5 text-right tabular-nums">
-              {{ imp.side === 'buy' ? imp.qty_bought : imp.qty_sold }}
+              {{ imp.kind !== 'fill' || imp.side === 'buy' ? imp.qty_bought : imp.qty_sold }}
             </td>
-            <td class="px-2 py-1.5 text-right tabular-nums">{{ imp.price }}</td>
+            <td class="px-2 py-1.5 text-right tabular-nums">{{ imp.kind === 'fill' ? imp.price : '—' }}</td>
             <td class="px-2 py-1.5 text-right">
               <div class="flex justify-end gap-1">
                 <Button

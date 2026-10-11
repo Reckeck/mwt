@@ -5,4 +5,6 @@
 
 pub mod bybit;
 
-pub use bybit::{BybitClient, Category, Execution, TradePrefill};
+pub use bybit::{
+    BybitClient, Category, CoinBalance, EarnYield, Execution, InterTransfer, TradePrefill,
+};
