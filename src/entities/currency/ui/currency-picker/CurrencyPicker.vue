@@ -40,6 +40,19 @@ const props = withDefaults(defineProps<CurrencyPickerProps>(), {
 
 const selected = defineModel<string>({ default: '' })
 
+/**
+ * The «none» row. Reka throws on an item whose value is `''`, which left the
+ * list half-rendered and the dialog under it unresponsive; the empty model
+ * value is mapped to this code instead.
+ */
+const NONE = '\u0000none'
+const picked = computed({
+  get: () => selected.value || (props.allowEmpty ? NONE : ''),
+  set: (value: string) => {
+    selected.value = value === NONE ? '' : value
+  },
+})
+
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const generatedId = useId()
@@ -55,7 +68,7 @@ watch(open, (isOpen) => {
 const extra = computed(() => [...props.extra, ...(selected.value ? [selected.value] : [])])
 const { filter } = useCurrencyOptions(() => props.kinds, extra)
 
-const EMPTY: CurrencyOption = { code: '', kind: 'fiat', name: '', favorite: false }
+const EMPTY: CurrencyOption = { code: NONE, kind: 'fiat', name: '', favorite: false }
 const options = computed(() => {
   const rows = filter(search.value)
   return props.allowEmpty && !search.value.trim() ? [EMPTY, ...rows] : rows
@@ -79,7 +92,7 @@ function onOpen(isOpen: boolean) {
     <Label v-if="props.label" :for="triggerId">{{ props.label }}</Label>
 
     <ComboboxRoot
-      v-model="selected"
+      v-model="picked"
       v-model:open="open"
       :disabled="props.disabled"
       :ignore-filter="true"
@@ -138,10 +151,10 @@ function onOpen(isOpen: boolean) {
                 :value="option.code"
                 class="flex h-8 w-full cursor-pointer select-none items-center gap-2 rounded px-2 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
               >
-                <Check v-if="option.code === selected" class="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                <Check v-if="option.code === picked" class="size-3.5 shrink-0 text-primary" aria-hidden="true" />
                 <Star v-else-if="option.favorite" class="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
                 <span v-else class="size-3.5 shrink-0" aria-hidden="true" />
-                <template v-if="option.code">
+                <template v-if="option.code !== NONE">
                   <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>
                   <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ option.name }}</span>
                   <span class="shrink-0 text-[10px] uppercase text-muted-foreground">
