@@ -21,6 +21,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'round14',
+    date: '2026-10-13',
+    points: [
+      { key: 'workflows', route: 'workflows' },
+      { key: 'editor', route: 'workflow-new' },
+      { key: 'emulation', route: 'workflow-new' },
+      { key: 'queue', route: 'workflows-queue' },
+      { key: 'workday', route: 'workflow-new' },
+    ],
+  },
+  {
     id: 'round13',
     date: '2026-10-12',
     points: [

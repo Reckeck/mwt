@@ -186,6 +186,48 @@ export const router = createRouter({
           ],
         },
         {
+          path: 'workflows',
+          component: () => import('@/pages/workflows').then((page) => page.Workflows),
+          children: [
+            {
+              path: '',
+              name: 'workflows',
+              component: () => import('@/pages/workflows').then((page) => page.WorkflowsList),
+              meta: { i18n: 'nav.workflows' },
+            },
+            {
+              path: 'vars',
+              name: 'workflows-vars',
+              component: () => import('@/pages/workflows').then((page) => page.WorkflowsVars),
+              meta: { i18n: 'nav.workflows' },
+            },
+            {
+              path: 'queue',
+              name: 'workflows-queue',
+              component: () => import('@/pages/workflows').then((page) => page.WorkflowsQueue),
+              meta: { i18n: 'nav.workflows' },
+            },
+            {
+              path: 'runs',
+              name: 'workflows-runs',
+              component: () => import('@/pages/workflows').then((page) => page.WorkflowsRuns),
+              meta: { i18n: 'nav.workflows' },
+            },
+          ],
+        },
+        {
+          path: 'workflows/new',
+          name: 'workflow-new',
+          component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
+          meta: { i18n: 'nav.workflows' },
+        },
+        {
+          path: 'workflows/:id',
+          name: 'workflow-edit',
+          component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
+          meta: { i18n: 'nav.workflows' },
+        },
+        {
           // The settings window opens over any page; old links land on the dashboard with it open.
           path: 'settings',
           name: 'settings',

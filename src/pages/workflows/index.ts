@@ -1,0 +1,6 @@
+export { default as Workflows } from './Workflows.vue'
+export { default as WorkflowsList } from './WorkflowsList.vue'
+export { default as WorkflowsVars } from './WorkflowsVars.vue'
+export { default as WorkflowsQueue } from './WorkflowsQueue.vue'
+export { default as WorkflowsRuns } from './WorkflowsRuns.vue'
+export { default as WorkflowEdit } from './WorkflowEdit.vue'

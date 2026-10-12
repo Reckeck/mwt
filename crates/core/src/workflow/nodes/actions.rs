@@ -383,7 +383,7 @@ impl Executor<'_> {
                     key,
                     &title,
                     text.clone(),
-                    Some(format!("/workflows/{}", self.ctx.workflow_id)),
+                    Some(format!("workflow-edit:{}", self.ctx.workflow_id)),
                     crate::calendar::iso(now),
                 ));
                 Ok(Step::next(

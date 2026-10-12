@@ -394,6 +394,15 @@ fn main() {
     fs::write(&path, merged).expect("write ipc.gen.d.ts");
     let _ = fs::remove_dir_all(&out_dir);
     println!("gen-types: wrote {}", path.display());
+
+    // The browser mock (`pnpm dev`) shows the real node catalog.
+    let catalog = Path::new("src")
+        .join("shared")
+        .join("api")
+        .join(trade_core::workflow::catalog::MOCK_CATALOG_FILE);
+    let json = serde_json::to_string(trade_core::workflow::catalog()).expect("catalog to JSON");
+    fs::write(&catalog, json + "\n").expect("write the mock node catalog");
+    println!("gen-types: wrote {}", catalog.display());
 }
 
 fn export_ty<T: ts_rs::TS + 'static>(out_dir: &Path) -> bool {

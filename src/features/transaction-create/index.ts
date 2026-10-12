@@ -1,4 +1,5 @@
 export { default as TransactionCreateDialog } from './TransactionCreateDialog.vue'
+export * from './ui/account-ref-picker'
 export { default as TransactionForm } from './TransactionForm.vue'
 export * from './transaction-form.model'
 export * from './transaction-form.types'
