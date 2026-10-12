@@ -40,7 +40,7 @@ import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { settingsQuery } from '@/shared/lib/settings-link'
-import { useTour } from '@/shared/lib/tour'
+import { tourIdOf, useTour } from '@/shared/lib/tour'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
@@ -70,7 +70,7 @@ const summary = useQuery({
 
 /* --- guided tours: «?» starts the page's tour; a first visit starts it once --- */
 const tour = useTour()
-const routeTour = computed(() => String(route.name ?? ''))
+const routeTour = computed(() => tourIdOf(String(route.name ?? '')))
 let tourTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   routeTour,

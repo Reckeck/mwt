@@ -27,6 +27,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'workflows', route: 'workflows' },
       { key: 'editor', route: 'workflow-new' },
       { key: 'emulation', route: 'workflow-new' },
+      { key: 'lessons', route: 'workflows' },
       { key: 'queue', route: 'workflows-queue' },
       { key: 'workday', route: 'workflow-new' },
     ],

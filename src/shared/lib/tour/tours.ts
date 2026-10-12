@@ -31,6 +31,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-palette', key: 'workflowEditor.palette', side: 'right' },
   { target: 'workflow-quick-button', key: 'workflowEditor.quick', side: 'bottom' },
   { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
+  { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
   { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },
   { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
@@ -43,6 +44,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
  */
 export const TOURS: Record<string, TourStep[]> = {
   workflows: workflows([
+    { target: 'workflow-lessons', key: 'workflows.lessons', side: 'bottom' },
     { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
     { target: 'workflow-new', key: 'workflows.new', side: 'left' },
     { target: 'workflow-card', key: 'workflows.card', side: 'top' },
@@ -51,7 +53,6 @@ export const TOURS: Record<string, TourStep[]> = {
   'workflows-queue': workflows([{ target: 'workflow-queue', key: 'workflows.queue', side: 'top' }]),
   'workflows-runs': workflows([{ target: 'workflow-runs', key: 'workflows.runs', side: 'top' }]),
   'workflow-new': WORKFLOW_EDITOR,
-  'workflow-edit': WORKFLOW_EDITOR,
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
@@ -128,6 +129,17 @@ export const TOURS: Record<string, TourStep[]> = {
 
 /** Routes with no tour, and why (the `check-onboarding` gate reads this). */
 export const TOURLESS_ROUTES: Record<string, string> = {
+  'workflow-edit': 'The same editor as workflow-new; it shows that tour (TOUR_ALIASES).',
   unlock: 'Before a vault is open: the unlock screen explains itself.',
   settings: 'A redirect to the settings window, which has its own sections.',
+}
+
+/** Routes that show another route's tour: a saved workflow opens the same editor as a new one. */
+export const TOUR_ALIASES: Record<string, string> = {
+  'workflow-edit': 'workflow-new',
+}
+
+/** The tour a route shows. */
+export function tourIdOf(routeName: string): string {
+  return TOUR_ALIASES[routeName] ?? routeName
 }
