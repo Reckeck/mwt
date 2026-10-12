@@ -274,6 +274,15 @@ body .driver-popover-close-btn {
 }
 
 /* Vue Flow on the app's theme (the workflow editor's canvas). */
+/* Space held: the whole canvas, nodes too, is a hand that moves it. */
+.wf-canvas[data-space-pan='grab'],
+.wf-canvas[data-space-pan='grab'] * {
+  cursor: grab !important;
+}
+.wf-canvas[data-space-pan='grabbing'],
+.wf-canvas[data-space-pan='grabbing'] * {
+  cursor: grabbing !important;
+}
 .wf-canvas .vue-flow__minimap {
   background-color: var(--card);
 }

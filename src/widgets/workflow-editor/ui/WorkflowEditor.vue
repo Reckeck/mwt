@@ -52,6 +52,7 @@ import {
 } from '../model/flow'
 import { useHistory } from '../model/history'
 import { isTyping } from '../model/hotkeys'
+import { useSpacePan } from '../model/space-pan'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
 import HotkeysHelp from './HotkeysHelp.vue'
 import LessonPanel from './LessonPanel.vue'
@@ -88,7 +89,12 @@ const {
   removeSelectedElements,
   setCenter,
   vueFlowRef,
+  getViewport,
+  setViewport,
 } = useVueFlow(flowId)
+
+/* --- hold Space and drag to move the canvas --- */
+const spacePan = useSpacePan({ get: getViewport, set: (next) => void setViewport(next) })
 
 // Typed as plain refs: unwrapping Vue Flow's node type is too deep for TypeScript.
 const nodes = ref([]) as Ref<EditorNode[]>
@@ -719,6 +725,9 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
           :aria-label="t('workflow.canvasLabel')"
           @drop.prevent="onDrop"
           @dragover.prevent
+          :data-space-pan="spacePan.held.value ? (spacePan.panning.value ? 'grabbing' : 'grab') : undefined"
+          @pointerdown.capture="spacePan.onPress"
+          @mousedown.capture="spacePan.onPress"
           @pointermove="onPointerMove"
         >
           <VueFlow
@@ -727,6 +736,7 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
             v-model:edges="edges"
             :is-valid-connection="isValidConnection"
             :delete-key-code="null"
+            :pan-activation-key-code="null"
             :min-zoom="0.2"
             :max-zoom="2"
             :snap-to-grid="true"
