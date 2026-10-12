@@ -6,7 +6,7 @@ import { type Connection, VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import { FlaskConical, Keyboard, Play, Plus, Save } from 'lucide-vue-next'
+import { FlaskConical, Keyboard, Play, Plus, Save, StickyNote } from 'lucide-vue-next'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -26,11 +26,30 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
-import { WORKFLOW_KEYS, emptyGraph, localized, parseGraph, portAccepts, portType, shortId } from '@/shared/lib/workflow'
+import {
+  WORKFLOW_KEYS,
+  emptyGraph,
+  localized,
+  outcomeKey,
+  parseGraph,
+  portAccepts,
+  portType,
+  shortId,
+} from '@/shared/lib/workflow'
 
 import { nodeSummary } from '../model/fields'
-import { type EditorEdge, type EditorNode, toFlow, toFlowEdge, toGraph } from '../model/flow'
+import {
+  type EditorEdge,
+  type EditorNode,
+  type EditorNoteData,
+  NOTE_PREFIX,
+  isNote,
+  toFlow,
+  toFlowEdge,
+  toGraph,
+} from '../model/flow'
 import { useHistory } from '../model/history'
 import { isTyping } from '../model/hotkeys'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
@@ -38,6 +57,8 @@ import HotkeysHelp from './HotkeysHelp.vue'
 import LessonPanel from './LessonPanel.vue'
 import NodeInspector from './NodeInspector.vue'
 import NodePalette from './NodePalette.vue'
+import NoteCard from './NoteCard.vue'
+import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
 import RunPanel from './RunPanel.vue'
 import WorkflowSettingsPanel from './WorkflowSettingsPanel.vue'
 
@@ -112,6 +133,31 @@ function loadGraph(graph: WorkflowGraph) {
   edges.value = flow.edges
 }
 
+
+const graph = computed(() => toGraph(nodes.value, edges.value))
+const graphJson = computed(() => JSON.stringify(graph.value))
+const settingsJson = computed(() =>
+  JSON.stringify([name.value, description.value, active.value, react.value, maxAmount.value]),
+)
+const dirty = computed(() => loaded.value && savedSnapshot.value !== graphJson.value + settingsJson.value)
+
+/* --- undo / redo --- */
+let restoring = false
+const history = useHistory((snapshot) => {
+  restoring = true
+  loadGraph(parseGraph(snapshot))
+  void nextTick(() => {
+    restoring = false
+  })
+})
+let recordTimer: ReturnType<typeof setTimeout> | undefined
+watch(graphJson, (json) => {
+  if (!loaded.value || restoring) return
+  clearTimeout(recordTimer)
+  recordTimer = setTimeout(() => history.record(json), 250)
+})
+
+/* Loads after everything it touches is declared: a cached workflow fires at once. */
 watch(
   [() => workflow.data.value, () => catalogQuery.data.value, () => props.template],
   ([stored, catalog]) => {
@@ -139,29 +185,6 @@ watch(
   },
   { immediate: true },
 )
-
-const graph = computed(() => toGraph(nodes.value, edges.value))
-const graphJson = computed(() => JSON.stringify(graph.value))
-const settingsJson = computed(() =>
-  JSON.stringify([name.value, description.value, active.value, react.value, maxAmount.value]),
-)
-const dirty = computed(() => loaded.value && savedSnapshot.value !== graphJson.value + settingsJson.value)
-
-/* --- undo / redo --- */
-let restoring = false
-const history = useHistory((snapshot) => {
-  restoring = true
-  loadGraph(parseGraph(snapshot))
-  void nextTick(() => {
-    restoring = false
-  })
-})
-let recordTimer: ReturnType<typeof setTimeout> | undefined
-watch(graphJson, (json) => {
-  if (!loaded.value || restoring) return
-  clearTimeout(recordTimer)
-  recordTimer = setTimeout(() => history.record(json), 250)
-})
 
 /* --- checks while editing --- */
 const issues = ref<GraphIssue[]>([])
@@ -371,7 +394,10 @@ function onQuickPick(choice: QuickAddChoice) {
 }
 
 /* --- selection and inspector --- */
-const selectedNode = computed(() => (getSelectedNodes.value.length === 1 ? getSelectedNodes.value[0] : null))
+const selectedNode = computed(() => {
+  const selected = getSelectedNodes.value
+  return selected.length === 1 && !isNote(selected[0]) ? selected[0] : null
+})
 const selectedDef = computed(() => def(selectedNode.value?.data?.kind ?? ''))
 const helpOpen = ref(false)
 
@@ -422,7 +448,25 @@ function removeSelected() {
 }
 
 function toggleSelected() {
-  for (const node of getSelectedNodes.value) patchNode(node.id, (data) => ({ ...data, disabled: !data.disabled }))
+  for (const node of getSelectedNodes.value.filter((entry) => !isNote(entry))) patchNode(node.id, (data) => ({ ...data, disabled: !data.disabled }))
+}
+
+/* --- notes --- */
+function addNote() {
+  const at = centerPoint()
+  const note: EditorNode = {
+    id: shortId(NOTE_PREFIX),
+    type: 'note',
+    position: toCanvas(at.x, at.y),
+    data: { text: '', color: '' } as unknown as EditorNode['data'],
+  }
+  nodes.value = [...nodes.value, note]
+}
+
+function noteText(id: string, text: string) {
+  nodes.value = nodes.value.map((node) =>
+    node.id === id ? { ...node, data: { ...(node.data as unknown as EditorNoteData), text } as unknown as EditorNode['data'] } : node,
+  )
 }
 
 /* --- copy, paste, duplicate --- */
@@ -468,14 +512,13 @@ const draft = computed<WorkflowDraft>(() => ({
   react_to_workflows: react.value,
   max_amount: maxAmount.value.trim() ? maxAmount.value.trim().replace(',', '.') : null,
 }))
-const missing = computed(() => {
-  if (!name.value.trim()) return t('workflow.missing.name')
-  if (active.value && errors.value.length) return t('workflow.missing.errors')
-  return ''
-})
+/** Save stays enabled; a missing name or errors on a workflow switched on show under the toolbar. */
+const form = useFormValidation(() => ({
+  name: required(name.value),
+  graph: active.value && errors.value.length ? t('workflow.missing.errors') : null,
+}))
 
 function save() {
-  if (missing.value) return
   actions.save.mutate(
     { id: props.workflowId, draft: draft.value },
     {
@@ -485,6 +528,39 @@ function save() {
       },
     },
   )
+}
+
+/** A version put back: the canvas shows it, and it counts as saved. */
+function onRestored(restored: Workflow) {
+  active.value = restored.active
+  loadGraph(parseGraph(restored.graph))
+  report.value = null
+  void nextTick(() => {
+    savedSnapshot.value = graphJson.value + settingsJson.value
+    history.reset(graphJson.value)
+  })
+}
+
+/** Keep what the last emulation did as a test of this workflow. */
+function saveAsTest() {
+  const result = report.value
+  if (!props.workflowId || !result) return
+  const queued = result.queued.reduce((sum, batch) => sum + batch.transactions.length, 0)
+  actions.saveTest.mutate({
+    workflow_id: props.workflowId,
+    test: {
+      id: '',
+      name: t('workflow.tests.defaultName', { when: new Date().toLocaleString(locale.value) }),
+      trigger_node: result.run.trace[0]?.node_id ?? null,
+      at: result.run.started_at,
+      expect: {
+        outcome: outcomeKey(result.run.outcome),
+        transactions: result.transactions.length,
+        queued,
+        notices: result.notices.length,
+      },
+    },
+  })
 }
 
 function emulate() {
@@ -507,7 +583,7 @@ function onKeydown(event: KeyboardEvent) {
   const key = event.key.toLowerCase()
   if (ctrl && key === 's') {
     event.preventDefault()
-    save()
+    form.submit(save, event)
     return
   }
   if (ctrl && key === 'enter') {
@@ -582,7 +658,15 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
   >
     <!-- Toolbar: name, on/off, save, emulate, run. -->
     <div class="flex flex-wrap items-center gap-2" data-tour="workflow-toolbar">
-      <Input v-model="name" class="w-64" :aria-label="t('workflow.name')" :placeholder="t('workflow.name')" />
+      <div class="w-64" :data-invalid="form.invalidAttr('name')">
+        <Input
+          v-model="name"
+          :aria-label="t('workflow.name')"
+          :aria-invalid="Boolean(form.error('name'))"
+          :placeholder="t('workflow.name')"
+          :class="form.error('name') ? 'border-destructive' : ''"
+        />
+      </div>
       <div class="flex items-center gap-2" data-tour="workflow-active">
         <Switch id="workflow-active" v-model="active" />
         <Label for="workflow-active">{{ active ? t('workflow.active') : t('workflow.inactive') }}</Label>
@@ -594,6 +678,9 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
       </div>
       <Button variant="ghost" size="icon" :aria-label="t('workflow.hotkeys')" :aria-pressed="hotkeysOpen" @click="hotkeysOpen = !hotkeysOpen">
         <Keyboard class="size-4" />
+      </Button>
+      <Button variant="ghost" size="icon" :aria-label="t('workflow.note.add')" :title="t('workflow.note.add')" @click="addNote">
+        <StickyNote class="size-4" />
       </Button>
       <Button variant="outline" data-tour="workflow-quick-button" @click="quickAddHere">
         <Plus class="size-4" />
@@ -613,12 +700,12 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
         <Play class="size-4" />
         {{ t('workflow.runNow') }}
       </Button>
-      <Button data-tour="workflow-save" :disabled="Boolean(missing) || actions.save.isPending.value" :title="missing || undefined" @click="save">
+      <Button data-tour="workflow-save" :disabled="actions.save.isPending.value" @click="form.submit(save, $event)">
         <Save class="size-4" />
         {{ t('actions.save') }}
       </Button>
     </div>
-    <p v-if="missing" class="text-xs text-muted-foreground">{{ t('workflow.missing.prefix') }} {{ missing }}</p>
+    <p v-if="form.firstMessage()" class="text-xs text-destructive" role="alert">{{ form.firstMessage() }}</p>
 
     <div v-if="hotkeysOpen" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
 
@@ -649,6 +736,14 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
             <template #node-wf="nodeProps">
               <WorkflowNodeCard :id="nodeProps.id" :data="display(nodeProps.id, nodeProps.data)" :selected="nodeProps.selected" />
             </template>
+            <template #node-note="noteProps">
+              <NoteCard
+                :id="noteProps.id"
+                :data="noteProps.data as EditorNoteData"
+                :selected="noteProps.selected"
+                @text="noteText"
+              />
+            </template>
             <Background :gap="20" />
             <Controls :show-interactive="false" />
             <MiniMap pannable zoomable />
@@ -660,7 +755,14 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
             {{ t('workflow.canvas.empty') }}
           </div>
         </section>
-        <RunPanel v-if="report" :report="report" @focus="focusNode" @close="report = null" />
+        <RunPanel
+          v-if="report"
+          :report="report"
+          :can-save-test="Boolean(props.workflowId) && report.run.dry_run && !dirty"
+          @focus="focusNode"
+          @close="report = null"
+          @save-test="saveAsTest"
+        />
       </div>
 
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto">
@@ -695,6 +797,13 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
           :issues="issues"
           :base="base"
           @focus="focusNode"
+        />
+        <WorkflowHistoryPanel
+          v-if="!selectedNode && workflow.data.value"
+          class="mt-4 border-t border-border pt-4"
+          :workflow="workflow.data.value"
+          :dirty="dirty"
+          @restored="onRestored"
         />
         </div>
       </div>

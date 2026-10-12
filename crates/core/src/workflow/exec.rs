@@ -30,6 +30,8 @@ pub const MAX_STEPS: usize = 500;
 pub const MAX_ACTIONS: usize = 20;
 /// Most items «Для каждого» goes through.
 pub const MAX_ITEMS: usize = 200;
+/// How deep «Вызвать схему» may nest.
+pub const MAX_CALL_DEPTH: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -91,6 +93,8 @@ pub struct RunContext {
     /// Most one run may move, in the base currency.
     pub max_amount: Option<Amount>,
     pub resume: Option<Resume>,
+    /// How many «Вызвать схему» deep this run is.
+    pub call_depth: u32,
 }
 
 impl RunContext {
@@ -113,6 +117,7 @@ impl RunContext {
             mode: RunMode::Live,
             max_amount: None,
             resume: None,
+            call_depth: 0,
         }
     }
 }
@@ -147,6 +152,8 @@ pub(crate) enum Halt {
     Stop(String),
     Fail(String),
     Wait(Box<WorkflowWait>),
+    /// «Вернуть значение»: a called workflow ends with this value.
+    Return(Box<WfValue>),
 }
 
 /// How a node can fail.
@@ -161,6 +168,12 @@ pub(crate) enum Fault {
 impl From<String> for Fault {
     fn from(message: String) -> Self {
         Self::Error(message)
+    }
+}
+
+impl From<&str> for Fault {
+    fn from(message: &str) -> Self {
+        Self::Error(message.to_string())
     }
 }
 
@@ -217,27 +230,13 @@ pub(crate) struct Executor<'run> {
 pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunReport {
     let backup = (ctx.mode == RunMode::Live).then(|| vault.doc.clone());
     let started_at = crate::calendar::iso(ctx.now);
-    let mut exec = Executor {
-        vault,
-        graph,
-        ctx,
-        memo: HashMap::new(),
-        evaluating: HashSet::new(),
-        steps: 0,
-        actions: 0,
-        queue_mode: false,
-        moved: Amount::ZERO,
-        created: Vec::new(),
-        queued: Vec::new(),
-        notices: Vec::new(),
-        events: Vec::new(),
-        trace: Vec::new(),
-    };
+    let mut exec = Executor::new(vault, graph, ctx);
     let result = exec.start();
     let edge_values = exec.edge_values();
     let mut wait = None;
     let outcome = match result {
         Ok(()) => RunOutcome::Done,
+        Err(Halt::Return(_)) => RunOutcome::Done,
         Err(Halt::Stop(reason)) => RunOutcome::Stopped { reason },
         Err(Halt::Fail(message)) => RunOutcome::Failed { message },
         Err(Halt::Wait(asleep)) => {
@@ -291,8 +290,42 @@ fn memo_key(node: &str, port: &str) -> (String, String) {
     (node.to_string(), port.to_string())
 }
 
+impl<'run> Executor<'run> {
+    pub(crate) fn new(
+        vault: &'run mut UnlockedVault,
+        graph: &'run Graph,
+        ctx: &'run RunContext,
+    ) -> Self {
+        Executor {
+            vault,
+            graph,
+            ctx,
+            memo: HashMap::new(),
+            evaluating: HashSet::new(),
+            steps: 0,
+            actions: 0,
+            queue_mode: false,
+            moved: Amount::ZERO,
+            created: Vec::new(),
+            queued: Vec::new(),
+            notices: Vec::new(),
+            events: Vec::new(),
+            trace: Vec::new(),
+        }
+    }
+
+    /// The steps so far, handed over when a called workflow returns.
+    pub(crate) fn take_trace(&mut self) -> Vec<TraceStep> {
+        std::mem::take(&mut self.trace)
+    }
+
+    pub(crate) fn extend_trace(&mut self, steps: Vec<TraceStep>) {
+        self.trace.extend(steps);
+    }
+}
+
 impl Executor<'_> {
-    fn start(&mut self) -> Result<(), Halt> {
+    pub(crate) fn start(&mut self) -> Result<(), Halt> {
         let ctx = self.ctx;
         if let Some(resume) = &ctx.resume {
             let saved: Vec<(String, String, WfValue)> =
@@ -441,6 +474,11 @@ impl Executor<'_> {
                         StepStatus::Error,
                         format!("«{}»: {message}", def.title.ru),
                         format!("«{}»: {message}", def.title.en),
+                    ),
+                    Halt::Return(value) => (
+                        StepStatus::Ok,
+                        format!("«{}»: {}", def.title.ru, value.as_text()),
+                        format!("«{}»: {}", def.title.en, value.as_text()),
                     ),
                 };
                 self.push_trace(node_id, status, ru, en);

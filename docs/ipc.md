@@ -248,7 +248,7 @@ JSON без шифрования — там нет ничего секретно
 
 ### workflows — схемы из узлов (`crates/app/src/commands/workflows.rs`)
 
-Граф хранится в vault как JSON (`WorkflowGraph { version, nodes, edges, comments }`), каталог узлов — в Rust (`trade_core::workflow::catalog`). Схема с ошибками сохраняется, но не включается. Планировщик раз в тик вызывает `run_due_workflows`: дождавшиеся «Подождать», расписания (пропущенное — не больше 12), новые операции (свои операции схемы её не запускают; операции других схем — только с `include_workflows` / `react_to_workflows`), пересечения порогов баланса и цены, затем события (глубина ≤ 5). Лимиты: 500 шагов и 20 действий за запуск, 60 запусков схемы в час, `max_amount` в базовой валюте. Неудачный запуск откатывает всё, что сделал.
+Граф хранится в vault как JSON (`WorkflowGraph { version, nodes, edges, comments }`), каталог узлов — в Rust (`trade_core::workflow::catalog`). Схема с ошибками сохраняется, но не включается. Планировщик раз в тик вызывает `run_due_workflows`: дождавшиеся «Подождать», расписания (пропущенное — не больше 12), новые операции (свои операции схемы её не запускают; операции других схем — только с `include_workflows` / `react_to_workflows`), пересечения порогов баланса и цены, затем события (глубина ≤ 5). Узел «Вызвать схему» выполняет схему с триггером «Вызов из другой схемы» внутри того же запуска (общие операции, лимиты и откат, вложенность ≤ 5), ответ отдаёт «Вернуть значение». Лимиты: 500 шагов и 20 действий за запуск, 60 запусков схемы в час, `max_amount` в базовой валюте. Неудачный запуск откатывает всё, что сделал.
 
 | Команда | Вход | Выход |
 |---|---|---|
@@ -271,6 +271,9 @@ JSON без шифрования — там нет ничего секретно
 | `delete_workflow_var` | `DeleteWorkflowVarInput { scope, name }` | `()` |
 | `export_workflow` | `id` | `string` — файл `{ format: "trade-app-workflow", version, name, description, graph }` |
 | `import_workflow` | `json` | `SavedWorkflow` — новая схема, выключена |
+| `save_workflow_test` | `SaveWorkflowTestInput { workflow_id, test: WorkflowTest { id (пусто — новая), name, trigger_node?, at?, expect: TestExpect { outcome, transactions?, queued?, notices? } } }` | `Workflow` |
+| `delete_workflow_test` | `DeleteWorkflowTestInput { workflow_id, test_id }` | `Workflow` |
+| `run_workflow_tests` | `id` | `Vec<WorkflowTestResult { test_id, name, passed, problems_ru, problems_en, report }>` — каждая проверка эмуляцией на копии vault в момент `at` (или сейчас); ничего не пишется |
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — только vault-scoped поля |

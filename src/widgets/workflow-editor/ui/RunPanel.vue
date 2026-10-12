@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { X } from 'lucide-vue-next'
+import { ClipboardCheck, X } from 'lucide-vue-next'
 
 import { OutcomeBadge, RunTrace, explainRun } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
@@ -8,8 +8,8 @@ import { formatMoney } from '@/shared/lib/format'
 import { txId, txKind, txLegs } from '@/shared/lib/transactions'
 
 /** The last emulation or run: the steps in words and what it would make. */
-const props = defineProps<{ report: RunReport }>()
-const emit = defineEmits<{ focus: [nodeId: string]; close: [] }>()
+const props = defineProps<{ report: RunReport; canSaveTest?: boolean }>()
+const emit = defineEmits<{ focus: [nodeId: string]; close: []; saveTest: [] }>()
 
 const { t, locale } = useI18n()
 
@@ -28,6 +28,10 @@ function line(tx: Transaction): string {
       </h3>
       <OutcomeBadge :outcome="props.report.run.outcome" />
       <span class="flex-1" />
+      <Button v-if="props.canSaveTest" size="sm" variant="outline" data-tour="workflow-save-test" @click="emit('saveTest')">
+        <ClipboardCheck class="size-4" />
+        {{ t('workflow.tests.saveFromRun') }}
+      </Button>
       <Button variant="ghost" size="icon" :aria-label="t('actions.close')" @click="emit('close')"><X class="size-4" /></Button>
     </header>
     <p class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>

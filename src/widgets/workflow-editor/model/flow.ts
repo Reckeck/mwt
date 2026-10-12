@@ -10,7 +10,30 @@ export interface EditorNodeData {
   disabled: boolean
 }
 
+/** A note on the canvas: text only, no effect on a run. */
+export interface EditorNoteData {
+  text: string
+  color: string
+}
+
 export type EditorNode = FlowNode<EditorNodeData>
+export type EditorNote = FlowNode<EditorNoteData>
+
+/** Notes and nodes share the canvas; notes carry this id prefix. */
+export const NOTE_PREFIX = 'note-'
+
+export function isNote(node: { type?: string }): boolean {
+  return node.type === 'note'
+}
+
+export function toFlowNote(comment: WorkflowComment): EditorNode {
+  return {
+    id: comment.id.startsWith(NOTE_PREFIX) ? comment.id : `${NOTE_PREFIX}${comment.id}`,
+    type: 'note',
+    position: { x: comment.position.x, y: comment.position.y },
+    data: { text: comment.text, color: comment.color } as unknown as EditorNodeData,
+  }
+}
 export type EditorEdge = FlowEdge<{ type: PortType }>
 
 /** How a wire looks: a thick neutral line for the flow, a coloured one for data. */
@@ -47,13 +70,25 @@ export function toFlowEdge(edge: WorkflowEdge, defs: Map<string, NodeDef>, kindO
 export function toFlow(graph: WorkflowGraph, defs: Map<string, NodeDef>): { nodes: EditorNode[]; edges: EditorEdge[] } {
   const kinds = new Map(graph.nodes.map((node) => [node.id, node.kind]))
   return {
-    nodes: graph.nodes.map(toFlowNode),
+    nodes: [...graph.comments.map(toFlowNote), ...graph.nodes.map(toFlowNode)],
     edges: graph.edges.map((edge) => toFlowEdge(edge, defs, (id) => kinds.get(id) ?? '')),
   }
 }
 
 /** The stored graph of what is on the canvas. */
-export function toGraph(nodes: EditorNode[], edges: EditorEdge[], comments: WorkflowComment[] = []): WorkflowGraph {
+export function toGraph(all: EditorNode[], edges: EditorEdge[]): WorkflowGraph {
+  const nodes = all.filter((node) => !isNote(node))
+  const comments: WorkflowComment[] = all.filter(isNote).map((note) => {
+    const data = note.data as unknown as EditorNoteData | undefined
+    return {
+      id: note.id,
+      text: data?.text ?? '',
+      position: { x: Math.round(note.position.x), y: Math.round(note.position.y) },
+      width: 0,
+      height: 0,
+      color: data?.color ?? '',
+    }
+  })
   return {
     version: 1,
     nodes: nodes.map((node) => ({

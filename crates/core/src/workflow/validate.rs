@@ -67,7 +67,8 @@ fn optional_input(kind: &str, port: &str) -> bool {
         (kind, port),
         ("logic.text", "a" | "b" | "c")
             | ("logic.compare" | "logic.math", "b")
-            | ("action.emit", "payload")
+            | ("action.emit" | "action.call", "payload")
+            | ("action.return", "value")
             | ("var.set", "value")
             | ("var.add", "delta")
     )

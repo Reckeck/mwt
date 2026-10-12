@@ -32,6 +32,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-quick-button', key: 'workflowEditor.quick', side: 'bottom' },
   { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
   { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
+  { target: 'workflow-tests', key: 'workflowEditor.tests', side: 'left' },
   { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },
   { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },

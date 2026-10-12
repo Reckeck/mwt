@@ -118,6 +118,7 @@ impl Executor<'_> {
             | ParamKind::Time
             | ParamKind::Budget
             | ParamKind::Goal
+            | ParamKind::Workflow
             | ParamKind::Select { .. } => WfValue::Text(json_text(&raw)),
             ParamKind::Targets => WfValue::Null,
         }

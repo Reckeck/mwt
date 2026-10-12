@@ -86,7 +86,7 @@ pub use utilities::{
     PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill, UtilityBillLine,
     UtilityDraft, UtilityMonth, UtilityPaymentDraft, UtilityTrend,
 };
-pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass};
+pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
 pub use worth::{FlowClass, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an

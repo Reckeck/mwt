@@ -679,3 +679,250 @@ fn a_workday_check_sends_the_salary_on_holidays_another_way() {
         Some("false")
     );
 }
+
+#[test]
+fn a_called_workflow_answers_and_shares_the_run() {
+    let (_dir, mut vault, card, savings) = wallets();
+    // The helper: moves what it is given to savings and answers «moved».
+    let helper = vec![
+        node("called", "trigger.called", json!({})),
+        node(
+            "move",
+            "action.transaction",
+            json!({ "tx_kind": "transfer", "account": store_ref(&card), "to": store_ref(&savings), "asset": "USD" }),
+        ),
+        node(
+            "answer",
+            "data.constant",
+            json!({ "value_type": "text", "text": "moved" }),
+        ),
+        node("back", "action.return", json!({})),
+    ];
+    let helper = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                active: false,
+                ..draft(
+                    "Helper",
+                    graph(
+                        helper,
+                        vec![
+                            wire("called", "out", "move", "in"),
+                            wire("called", "payload", "move", "amount"),
+                            wire("move", "out", "back", "in"),
+                            wire("answer", "value", "back", "value"),
+                        ],
+                    ),
+                )
+            },
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    let caller = vec![
+        node("t", "trigger.manual", json!({})),
+        node(
+            "call",
+            "action.call",
+            json!({ "workflow": helper.id, "payload": "200" }),
+        ),
+        node(
+            "said",
+            "var.set",
+            json!({ "name": "answer", "scope": "global" }),
+        ),
+    ];
+    let caller = save(
+        &mut vault,
+        "Caller",
+        graph(
+            caller,
+            vec![
+                wire("t", "out", "call", "in"),
+                wire("call", "out", "said", "in"),
+                wire("call", "result", "said", "value"),
+            ],
+        ),
+    );
+    let report = vault
+        .run_workflow_now(&caller.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(
+        report.run.outcome,
+        RunOutcome::Done,
+        "{:?}",
+        report.run.trace
+    );
+    assert_eq!(
+        report.run.created.len(),
+        1,
+        "the helper's transfer belongs to the caller's run"
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("200"));
+    assert_eq!(
+        vault.wf_var(&VarScope::Global, "answer"),
+        Some(WfValue::Text("moved".into()))
+    );
+    assert!(
+        report
+            .run
+            .trace
+            .iter()
+            .any(|step| step.text_en.starts_with("↳ «Helper»"))
+    );
+}
+
+#[test]
+fn a_failing_helper_rolls_back_the_whole_run() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let helper = vec![
+        node("called", "trigger.called", json!({})),
+        transfer_node("move", &card, &savings, "5000"),
+    ];
+    let helper = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                active: false,
+                ..draft(
+                    "Too much",
+                    graph(helper, vec![wire("called", "out", "move", "in")]),
+                )
+            },
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    let caller = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("first", &card, &savings, "100"),
+        node("call", "action.call", json!({ "workflow": helper.id })),
+    ];
+    let caller = save(
+        &mut vault,
+        "Caller",
+        graph(
+            caller,
+            vec![
+                wire("t", "out", "first", "in"),
+                wire("first", "out", "call", "in"),
+            ],
+        ),
+    );
+    let report = vault
+        .run_workflow_now(&caller.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(report.run.outcome, RunOutcome::Failed { .. }),
+        "{:?}",
+        report.run.outcome
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+}
+
+#[test]
+fn a_workflow_calling_itself_stops_at_the_depth_limit() {
+    let (_dir, mut vault) = empty_vault();
+    let id = "loop-self";
+    let nodes = vec![
+        node("called", "trigger.called", json!({})),
+        node("again", "action.call", json!({ "workflow": id })),
+    ];
+    let saved = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                active: false,
+                ..draft(
+                    "Loop",
+                    graph(nodes, vec![wire("called", "out", "again", "in")]),
+                )
+            },
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    // Point the call at the workflow itself.
+    let graph_json = saved.graph.replace(id, &saved.id);
+    vault.doc.workflows[0].graph = graph_json.clone();
+    let report = vault
+        .dry_run_workflow(&graph_json, Some(&saved.id), None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("deeper")),
+        "{:?}",
+        report.run.outcome
+    );
+}
+
+#[test]
+fn tests_compare_an_emulation_with_what_is_expected() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("tx", &card, &savings, "300"),
+    ];
+    let workflow = save(
+        &mut vault,
+        "Tested",
+        graph(nodes, vec![wire("t", "out", "tx", "in")]),
+    );
+    let test = |name: &str, transactions: u32| WorkflowTest {
+        id: String::new(),
+        name: name.into(),
+        trigger_node: None,
+        at: None,
+        expect: TestExpect {
+            outcome: "done".into(),
+            transactions: Some(transactions),
+            queued: None,
+            notices: None,
+        },
+    };
+    vault
+        .save_workflow_test(&workflow.id, test("one transfer", 1))
+        .unwrap();
+    let saved = vault
+        .save_workflow_test(&workflow.id, test("two transfers", 2))
+        .unwrap();
+    assert_eq!(saved.tests.len(), 2);
+    let before = vault.doc.transactions.len();
+    let results = vault
+        .run_workflow_tests(&workflow.id, later(), "UTC")
+        .unwrap();
+    assert_eq!(vault.doc.transactions.len(), before, "tests write nothing");
+    assert!(results[0].passed, "{:?}", results[0].problems_en);
+    assert!(!results[1].passed);
+    assert_eq!(
+        results[1].problems_en,
+        vec!["operations: 1 instead of 2".to_string()]
+    );
+    // Saving the graph keeps the tests.
+    let kept = vault
+        .save_workflow(
+            Some(&workflow.id),
+            draft("Tested", workflow.graph.clone()),
+            now_secs(),
+        )
+        .unwrap();
+    assert_eq!(kept.workflow.tests.len(), 2);
+    let removed = vault
+        .delete_workflow_test(&workflow.id, &saved.tests[1].id)
+        .unwrap();
+    assert_eq!(removed.tests.len(), 1);
+    assert!(
+        vault
+            .save_workflow_test(
+                &workflow.id,
+                WorkflowTest {
+                    expect: TestExpect {
+                        outcome: "maybe".into(),
+                        ..saved.tests[0].expect.clone()
+                    },
+                    ..saved.tests[0].clone()
+                }
+            )
+            .is_err()
+    );
+}

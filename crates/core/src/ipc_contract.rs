@@ -1629,3 +1629,16 @@ pub struct DeleteWorkflowVarInput {
 pub struct ValidateWorkflowInput {
     pub graph: String,
 }
+
+/// Add a test to a workflow (empty `test.id`) or replace one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SaveWorkflowTestInput {
+    pub workflow_id: String,
+    pub test: crate::workflow::WorkflowTest,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct DeleteWorkflowTestInput {
+    pub workflow_id: String,
+    pub test_id: String,
+}

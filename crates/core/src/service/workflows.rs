@@ -17,8 +17,8 @@ use crate::pricing::history::{secs_or_now, unix_secs};
 use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
 use crate::workflow::graph::Graph;
 use crate::workflow::model::{
-    GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, VarScope, Workflow,
-    WorkflowRun, WorkflowState, WorkflowVar,
+    GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, TestExpect, VarScope,
+    Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar,
 };
 use crate::workflow::nodes::triggers::{schedule_moments, tx_matches, tx_trigger_values};
 use crate::workflow::types::WfValue;
@@ -67,6 +67,70 @@ pub struct WorkflowPass {
     pub queued: u32,
     /// New notices to show.
     pub notices: Vec<NoticeRecord>,
+}
+
+/// How a test went.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct WorkflowTestResult {
+    pub test_id: String,
+    pub name: String,
+    pub passed: bool,
+    /// What differed, in both languages.
+    pub problems_ru: Vec<String>,
+    pub problems_en: Vec<String>,
+    pub report: RunReport,
+}
+
+const OUTCOMES: [&str; 4] = ["done", "stopped", "failed", "waiting"];
+
+fn outcome_word(outcome: &crate::workflow::RunOutcome) -> &'static str {
+    use crate::workflow::RunOutcome::*;
+    match outcome {
+        Done => "done",
+        Stopped { .. } => "stopped",
+        Failed { .. } => "failed",
+        Waiting { .. } => "waiting",
+    }
+}
+
+/// What a report did that a test did not expect.
+fn test_problems(expect: &TestExpect, report: &RunReport) -> (Vec<String>, Vec<String>) {
+    let mut ru = Vec::new();
+    let mut en = Vec::new();
+    let got = outcome_word(&report.run.outcome);
+    if got != expect.outcome {
+        ru.push(format!("итог «{got}» вместо «{}»", expect.outcome));
+        en.push(format!("outcome «{got}» instead of «{}»", expect.outcome));
+    }
+    let queued = report
+        .queued
+        .iter()
+        .map(|batch| batch.transactions.len() as u32)
+        .sum::<u32>();
+    let counts = [
+        (
+            expect.transactions,
+            report.transactions.len() as u32,
+            "операций",
+            "operations",
+        ),
+        (expect.queued, queued, "в очереди", "queued"),
+        (
+            expect.notices,
+            report.notices.len() as u32,
+            "уведомлений",
+            "notices",
+        ),
+    ];
+    for (wanted, actual, word_ru, word_en) in counts {
+        if let Some(wanted) = wanted
+            && wanted != actual
+        {
+            ru.push(format!("{word_ru}: {actual} вместо {wanted}"));
+            en.push(format!("{word_en}: {actual} instead of {wanted}"));
+        }
+    }
+    (ru, en)
 }
 
 /// An exported workflow: the graph and its name, without ids or history.
@@ -382,6 +446,7 @@ impl UnlockedVault {
                     react_to_workflows: draft.react_to_workflows,
                     max_amount: draft.max_amount,
                     versions: Vec::new(),
+                    tests: Vec::new(),
                 };
                 self.doc.workflows.push(workflow.clone());
                 let arm = workflow.active;
@@ -543,6 +608,94 @@ impl UnlockedVault {
             max_amount: None,
         };
         self.save_workflow(None, draft, now)
+    }
+
+    // -- tests ------------------------------------------------------------------------
+
+    /// Add a test (empty id) or replace the one with the same id.
+    pub fn save_workflow_test(
+        &mut self,
+        workflow_id: &str,
+        mut test: WorkflowTest,
+    ) -> Result<Workflow> {
+        if test.name.trim().is_empty() {
+            return Err(Error::InvalidInput("name the test".into()));
+        }
+        if !OUTCOMES.contains(&test.expect.outcome.as_str()) {
+            return Err(Error::InvalidInput(format!(
+                "unknown outcome {}",
+                test.expect.outcome
+            )));
+        }
+        if let Some(at) = &test.at
+            && !at.trim().is_empty()
+            && unix_secs(at).is_none()
+        {
+            return Err(Error::InvalidInput(format!("not a moment: {at}")));
+        }
+        let workflow = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == workflow_id)
+            .ok_or_else(|| Error::Missing(format!("workflow {workflow_id}")))?;
+        if test.id.trim().is_empty() {
+            test.id = uuid::Uuid::new_v4().to_string();
+        }
+        test.name = test.name.trim().to_string();
+        match workflow.tests.iter_mut().find(|known| known.id == test.id) {
+            Some(known) => *known = test,
+            None => workflow.tests.push(test),
+        }
+        let out = workflow.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    pub fn delete_workflow_test(&mut self, workflow_id: &str, test_id: &str) -> Result<Workflow> {
+        let workflow = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == workflow_id)
+            .ok_or_else(|| Error::Missing(format!("workflow {workflow_id}")))?;
+        workflow.tests.retain(|test| test.id != test_id);
+        let out = workflow.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Run every test of a workflow by emulation; nothing is written.
+    pub fn run_workflow_tests(
+        &self,
+        workflow_id: &str,
+        now: i64,
+        zone: &str,
+    ) -> Result<Vec<WorkflowTestResult>> {
+        let workflow = self.workflow(workflow_id)?;
+        workflow
+            .tests
+            .iter()
+            .map(|test| {
+                let at = test.at.as_deref().and_then(unix_secs).unwrap_or(now);
+                let report = self.dry_run_workflow(
+                    &workflow.graph,
+                    Some(workflow_id),
+                    test.trigger_node.as_deref(),
+                    at,
+                    zone,
+                )?;
+                let (problems_ru, problems_en) = test_problems(&test.expect, &report);
+                Ok(WorkflowTestResult {
+                    test_id: test.id.clone(),
+                    name: test.name.clone(),
+                    passed: problems_en.is_empty(),
+                    problems_ru,
+                    problems_en,
+                    report,
+                })
+            })
+            .collect()
     }
 
     // -- journal, queue, variables ---------------------------------------------------
