@@ -34,6 +34,37 @@ pub struct Workflow {
     /// Earlier graphs, newest last, to compare and restore.
     #[serde(default)]
     pub versions: Vec<GraphVersion>,
+    /// Checks run by emulation: what the workflow should do.
+    #[serde(default)]
+    pub tests: Vec<WorkflowTest>,
+}
+
+/// An expectation checked by emulation: run the workflow as at a moment and
+/// compare what it did with what it should do.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct WorkflowTest {
+    pub id: String,
+    pub name: String,
+    /// The trigger to start from; a manual one, else the first, by default.
+    #[serde(default)]
+    pub trigger_node: Option<String>,
+    /// The moment to emulate (RFC3339); now when empty.
+    #[serde(default)]
+    pub at: Option<String>,
+    pub expect: TestExpect,
+}
+
+/// What a test expects; `None` = not checked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct TestExpect {
+    /// `done`, `stopped`, `failed` or `waiting`.
+    pub outcome: String,
+    #[serde(default)]
+    pub transactions: Option<u32>,
+    #[serde(default)]
+    pub queued: Option<u32>,
+    #[serde(default)]
+    pub notices: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

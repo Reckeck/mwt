@@ -17,7 +17,7 @@ import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { WEEKDAYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
-import { localized } from '@/shared/lib/workflow'
+import { WORKFLOW_KEYS, localized } from '@/shared/lib/workflow'
 
 import TargetsField from './TargetsField.vue'
 
@@ -41,6 +41,15 @@ const budgets = useQuery({
   queryFn: () => call<Budget[]>('list_budgets'),
   enabled: computed(() => kind.value === 'budget'),
 })
+const workflows = useQuery({
+  queryKey: WORKFLOW_KEYS.list,
+  queryFn: () => call<Workflow[]>('list_workflows'),
+  enabled: computed(() => kind.value === 'workflow'),
+})
+/** Only workflows that can be called: they start with «Вызов из другой схемы». */
+const callable = computed(() =>
+  (workflows.data.value ?? []).filter((workflow) => workflow.graph.includes('"trigger.called"')),
+)
 const goals = useQuery({
   queryKey: ['goals'],
   queryFn: () => call<Goal[]>('list_goals'),
@@ -120,6 +129,13 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         <option value="">{{ t('workflow.field.notSet') }}</option>
         <option v-for="goal in goals.data.value ?? []" :key="goal.id" :value="goal.id">{{ goal.name }}</option>
       </Select>
+      <template v-else-if="kind === 'workflow'">
+        <Select :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
+          <option value="">{{ t('workflow.field.notSet') }}</option>
+          <option v-for="workflow in callable" :key="workflow.id" :value="workflow.id">{{ workflow.name }}</option>
+        </Select>
+        <p class="text-xs text-muted-foreground">{{ t('workflow.field.callableHint') }}</p>
+      </template>
       <TargetsField
         v-else-if="kind === 'targets'"
         :value="current"

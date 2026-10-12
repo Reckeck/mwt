@@ -146,7 +146,49 @@ export function useWorkflowActions() {
     onError: failed('workflow.vars.deleteFailed'),
   })
 
+  const restoreVersion = useMutation({
+    mutationFn: (input: { id: string; saved_at: string }) => call<SavedWorkflow>('restore_workflow_version', { input }),
+    onSuccess: (saved) => {
+      void queryClient.setQueryData(WORKFLOW_KEYS.one(saved.workflow.id), saved.workflow)
+      toast.success(t('workflow.versions.restored'))
+      refresh()
+    },
+    onError: failed('workflow.versions.restoreFailed'),
+  })
+
+  const saveTest = useMutation({
+    mutationFn: (input: { workflow_id: string; test: WorkflowTest }) => call<Workflow>('save_workflow_test', { input }),
+    onSuccess: (workflow) => {
+      void queryClient.setQueryData(WORKFLOW_KEYS.one(workflow.id), workflow)
+      toast.success(t('workflow.tests.saved'))
+    },
+    onError: failed('workflow.tests.saveFailed'),
+  })
+
+  const deleteTest = useMutation({
+    mutationFn: (input: { workflow_id: string; test_id: string }) => call<Workflow>('delete_workflow_test', { input }),
+    onSuccess: (workflow) => {
+      void queryClient.setQueryData(WORKFLOW_KEYS.one(workflow.id), workflow)
+      toast.success(t('workflow.tests.deleted'))
+    },
+    onError: failed('workflow.tests.deleteFailed'),
+  })
+
+  const runTests = useMutation({
+    mutationFn: (id: string) => call<WorkflowTestResult[]>('run_workflow_tests', { id }),
+    onSuccess: (results) => {
+      const failedCount = results.filter((result) => !result.passed).length
+      if (failedCount) toast.error(t('workflow.tests.someFailed', { count: failedCount, total: results.length }))
+      else toast.success(t('workflow.tests.allPassed', { total: results.length }))
+    },
+    onError: failed('workflow.tests.runFailed'),
+  })
+
   return {
+    restoreVersion,
+    saveTest,
+    deleteTest,
+    runTests,
     save,
     setActive,
     remove,

@@ -846,6 +846,8 @@ type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liqu
 
 type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: AssetRef, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: Fee | null, price: PriceStamp, };
 
+type DeleteWorkflowTestInput = { workflow_id: string, test_id: string, };
+
 type DeleteWorkflowVarInput = { scope: VarScope, name: string, };
 
 /**
@@ -1723,7 +1725,7 @@ wirable: boolean, };
 /**
  * What kind of field edits a parameter.
  */
-type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
+type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
 type PayUtilityBillInput = { property_id: string, 
 /**
@@ -2221,6 +2223,11 @@ json: string, };
 type SaveWorkflowInput = { id: string | null, workflow: WorkflowDraft, };
 
 /**
+ * Add a test to a workflow (empty `test.id`) or replace one.
+ */
+type SaveWorkflowTestInput = { workflow_id: string, test: WorkflowTest, };
+
+/**
  * A saved workflow with what is wrong with its graph.
  */
 type SavedWorkflow = { workflow: Workflow, issues: Array<GraphIssue>, };
@@ -2647,6 +2654,15 @@ type TerminalState = { watchlist: Array<string>, active_symbol: string | null, t
  * Symbol → the drawing manager's JSON export.
  */
 drawings: { [key: string]: string }, layout: TerminalLayout, };
+
+/**
+ * What a test expects; `None` = not checked.
+ */
+type TestExpect = { 
+/**
+ * `done`, `stopped`, `failed` or `waiting`.
+ */
+outcome: string, transactions: number | null, queued: number | null, notices: number | null, };
 
 type Theme = "auto" | "light" | "dark";
 
@@ -3293,7 +3309,11 @@ max_amount: Amount | null,
 /**
  * Earlier graphs, newest last, to compare and restore.
  */
-versions: Array<GraphVersion>, };
+versions: Array<GraphVersion>, 
+/**
+ * Checks run by emulation: what the workflow should do.
+ */
+tests: Array<WorkflowTest>, };
 
 /**
  * A note or a frame on the canvas: no effect on a run.
@@ -3380,6 +3400,29 @@ marks: { [key: string]: string },
  * The last operation an «operation added» trigger looked at, and where it was.
  */
 tx_cursor: string | null, tx_index: number, };
+
+/**
+ * An expectation checked by emulation: run the workflow as at a moment and
+ * compare what it did with what it should do.
+ */
+type WorkflowTest = { id: string, name: string, 
+/**
+ * The trigger to start from; a manual one, else the first, by default.
+ */
+trigger_node: string | null, 
+/**
+ * The moment to emulate (RFC3339); now when empty.
+ */
+at: string | null, expect: TestExpect, };
+
+/**
+ * How a test went.
+ */
+type WorkflowTestResult = { test_id: string, name: string, passed: boolean, 
+/**
+ * What differed, in both languages.
+ */
+problems_ru: Array<string>, problems_en: Array<string>, report: RunReport, };
 
 /**
  * A variable that outlives a run. The value is a `WfValue` in JSON.

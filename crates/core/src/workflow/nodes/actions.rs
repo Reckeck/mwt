@@ -15,8 +15,10 @@ use crate::model::transaction::{
 };
 use crate::workflow::catalog::NodeDef;
 use crate::workflow::exec::{
-    EmittedEvent, Executor, Fault, Halt, MAX_ACTIONS, RunMode, Step, StepStatus,
+    EmittedEvent, Executor, Fault, Halt, MAX_ACTIONS, MAX_CALL_DEPTH, RunContext, RunMode, Step,
+    StepStatus,
 };
+use crate::workflow::graph::Graph;
 use crate::workflow::graph::Node;
 use crate::workflow::model::{QueuedActions, WorkflowWait};
 use crate::workflow::types::WfValue;
@@ -490,7 +492,106 @@ impl Executor<'_> {
                 }))
                 .into())
             }
+            "action.call" => self.call_workflow(node, def),
+            "action.return" => {
+                let value = self.input(node, "value")?;
+                Err(Halt::Return(Box::new(value)).into())
+            }
             other => Err(Fault::Error(format!("unknown node {other}"))),
         }
+    }
+
+    /// «Вызвать схему»: run a helper workflow inside this run and take its answer.
+    fn call_workflow(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
+        if self.ctx.call_depth >= MAX_CALL_DEPTH {
+            return Err(Fault::Error(format!(
+                "calls go deeper than {MAX_CALL_DEPTH}"
+            )));
+        }
+        let target = self.text_param(node, "workflow");
+        let callee = self
+            .vault
+            .doc
+            .workflows
+            .iter()
+            .find(|workflow| workflow.id == target)
+            .cloned()
+            .ok_or("choose the workflow to call")?;
+        let graph = Graph::parse(&callee.graph).map_err(|err| err.to_string())?;
+        let entry = graph
+            .nodes
+            .iter()
+            .find(|candidate| candidate.kind == "trigger.called" && !candidate.disabled)
+            .map(|candidate| candidate.id.clone())
+            .ok_or_else(|| format!("«{}» has no «Called by a workflow» trigger", callee.name))?;
+        let payload = self.input(node, "payload")?;
+        let mut ctx = RunContext::new(
+            &callee.id,
+            &callee.name,
+            &entry,
+            self.ctx.now,
+            &self.ctx.zone,
+        );
+        ctx.run_id.clone_from(&self.ctx.run_id);
+        ctx.mode = self.ctx.mode;
+        ctx.max_amount = self.ctx.max_amount;
+        ctx.call_depth = self.ctx.call_depth + 1;
+        ctx.trigger_label = format!("call from {}", self.ctx.workflow_name);
+        ctx.trigger_values = std::collections::BTreeMap::from([("payload".to_string(), payload)]);
+
+        let (actions, queue_mode, moved) = (self.actions, self.queue_mode, self.moved);
+        let mut child = Executor::new(&mut *self.vault, &graph, &ctx);
+        child.actions = actions;
+        child.queue_mode = queue_mode;
+        child.moved = moved;
+        let result = child.start();
+        let steps = child.take_trace();
+        let Executor {
+            actions,
+            moved,
+            created,
+            queued,
+            notices,
+            events,
+            ..
+        } = child;
+        self.actions = actions;
+        self.moved = moved;
+        self.created.extend(created);
+        self.queued.extend(queued);
+        self.notices.extend(notices);
+        self.events.extend(events);
+        // The helper's steps show under the calling node.
+        let prefix = (
+            format!("↳ «{}»: ", callee.name),
+            format!("↳ «{}»: ", callee.name),
+        );
+        self.extend_trace(
+            steps
+                .into_iter()
+                .map(|mut step| {
+                    step.node_id.clone_from(&node.id);
+                    step.text_ru = format!("{}{}", prefix.0, step.text_ru);
+                    step.text_en = format!("{}{}", prefix.1, step.text_en);
+                    step
+                })
+                .collect(),
+        );
+        let answer = match result {
+            Ok(()) => WfValue::Null,
+            Err(Halt::Return(value)) => *value,
+            Err(Halt::Stop(_)) => WfValue::Null,
+            Err(Halt::Fail(message)) => {
+                return Err(Fault::Error(format!("«{}»: {message}", callee.name)));
+            }
+            Err(Halt::Wait(_)) => return Err(Fault::Error("a called workflow cannot wait".into())),
+        };
+        let text = answer.as_text();
+        self.set_output(node, "result", answer);
+        Ok(Step::next(
+            "out",
+            format!("«{}»: «{}» ответила {text}", def.title.ru, callee.name),
+            format!("«{}»: «{}» answered {text}", def.title.en, callee.name),
+        ))
     }
 }

@@ -21,7 +21,8 @@ pub use catalog::{NodeDef, ParamDef, ParamKind, PortDef, catalog, node_def};
 pub use exec::{RunContext, RunMode, RunReport, TraceStep};
 pub use graph::{Edge, Graph, Node, Position};
 pub use model::{
-    QueuedActions, RunOutcome, VarScope, Workflow, WorkflowRun, WorkflowState, WorkflowVar,
+    QueuedActions, RunOutcome, TestExpect, VarScope, Workflow, WorkflowRun, WorkflowState,
+    WorkflowTest, WorkflowVar,
 };
 pub use types::{PortType, WfValue};
 pub use validate::{GraphIssue, IssueLevel, validate};

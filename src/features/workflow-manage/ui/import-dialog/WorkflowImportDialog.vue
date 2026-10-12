@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Label } from '@/shared/ui/label'
+import { FormField } from '@/shared/ui/form-field'
 import { Textarea } from '@/shared/ui/textarea'
+import { required, useFormValidation } from '@/shared/lib/form'
 
 import { useWorkflowActions } from '../../model/use-workflow-actions'
 
@@ -19,10 +20,9 @@ const text = ref('')
 watch(open, (value) => {
   if (value) text.value = ''
 })
-const missing = computed(() => (text.value.trim() ? '' : t('workflow.import.missing')))
+const form = useFormValidation(() => ({ text: required(text.value) }), { resetOn: open })
 
 function submit() {
-  if (missing.value) return
   importFile.mutate(text.value, {
     onSuccess: (saved) => {
       open.value = false
@@ -34,13 +34,13 @@ function submit() {
 
 <template>
   <Dialog v-model:open="open" :title="t('workflow.import.title')" :description="t('workflow.import.description')" size="lg">
-    <form id="workflow-import" class="grid gap-1.5" @submit.prevent="submit">
-      <Label for="workflow-import-text">{{ t('workflow.import.label') }}</Label>
-      <Textarea id="workflow-import-text" v-model="text" rows="10" class="font-mono text-xs" />
-      <p v-if="missing" class="text-xs text-muted-foreground">{{ missing }}</p>
+    <form id="workflow-import" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
+      <FormField :label="t('workflow.import.label')" for="workflow-import-text" required :error="form.error('text')">
+        <Textarea id="workflow-import-text" v-model="text" rows="10" class="font-mono text-xs" />
+      </FormField>
     </form>
     <template #footer>
-      <Button type="submit" form="workflow-import" :disabled="Boolean(missing) || importFile.isPending.value">
+      <Button type="submit" form="workflow-import" :disabled="importFile.isPending.value">
         {{ t('workflow.import.submit') }}
       </Button>
     </template>

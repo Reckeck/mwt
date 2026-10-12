@@ -118,6 +118,7 @@ function save(id: string | null, draft: WorkflowDraft): SavedWorkflow {
       react_to_workflows: draft.react_to_workflows,
       max_amount: draft.max_amount,
       versions: [],
+      tests: [],
     }
     workflows.push(workflow)
     return { workflow, issues }
@@ -229,6 +230,35 @@ export function mockWorkflows(cmd: string, args: Record<string, unknown> | undef
         graph: JSON.stringify(file.graph ?? emptyGraph()),
         react_to_workflows: false,
         max_amount: null,
+      })
+    }
+    case 'save_workflow_test': {
+      const workflow = find(String(input?.workflow_id))
+      const test = { ...(input?.test as WorkflowTest) }
+      if (!test.name?.trim()) throw { code: 'INVALID_INPUT', message: 'name the test' }
+      if (!test.id) test.id = uuid()
+      workflow.tests = [...workflow.tests.filter((entry) => entry.id !== test.id), test]
+      return workflow
+    }
+    case 'delete_workflow_test': {
+      const workflow = find(String(input?.workflow_id))
+      workflow.tests = workflow.tests.filter((entry) => entry.id !== input?.test_id)
+      return workflow
+    }
+    case 'run_workflow_tests': {
+      const workflow = find(String(args?.id))
+      return workflow.tests.map((test): WorkflowTestResult => {
+        const report = fakeRun(parseGraph(workflow.graph), workflow.id, test.trigger_node, true)
+        const got = report.run.outcome === 'done' ? 'done' : 'failed'
+        const passed = got === test.expect.outcome
+        return {
+          test_id: test.id,
+          name: test.name,
+          passed,
+          problems_ru: passed ? [] : [`итог «${got}» вместо «${test.expect.outcome}»`],
+          problems_en: passed ? [] : [`outcome «${got}» instead of «${test.expect.outcome}»`],
+          report,
+        }
       })
     }
     default:

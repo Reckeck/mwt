@@ -64,6 +64,8 @@ pub enum ParamKind {
     Date,
     Budget,
     Goal,
+    /// Another workflow (its id).
+    Workflow,
     Select {
         options: Vec<(&'static str, Text)>,
     },
@@ -353,6 +355,25 @@ fn build() -> Vec<NodeDef> {
         params: vec![param("name", ParamKind::Text, txt("Имя события", "Event name"), json!(""))],
         advanced: true,
         keywords: vec!["событие", "сигнал", "event", "signal"],
+    });
+
+    out.push(NodeDef {
+        kind: "trigger.called",
+        group: Trigger,
+        title: txt("Вызов из другой схемы", "Called by a workflow"),
+        description: txt(
+            "Схема-помощник: её запускает узел «Вызвать схему» и ждёт результата.",
+            "A helper workflow: a «Call a workflow» node runs it and waits for its result.",
+        ),
+        help: txt(
+            "Так общую часть пишут один раз: например, «перевести на накопительный с проверкой лимита». Данные вызова приходят в выход «Данные», ответ отдаёт узел «Вернуть значение». Такую схему не нужно включать — она работает только по вызову.",
+            "Write a shared part once: for instance «move to savings within the limit». The call's data comes out of «Data», the answer goes back through «Return a value». Such a workflow need not be switched on: it runs only when called.",
+        ),
+        inputs: vec![],
+        outputs: vec![flow_out(), port("payload", Ty::Any, txt("Данные", "Data"))],
+        params: vec![],
+        advanced: true,
+        keywords: vec!["вызов", "подсхема", "функция", "помощник", "call", "subflow", "function", "helper"],
     });
 
     // -- data -----------------------------------------------------------------
@@ -1377,6 +1398,67 @@ fn build() -> Vec<NodeDef> {
         params,
         advanced: true,
         keywords: vec!["подождать", "пауза", "через", "задержка", "wait", "delay", "later"],
+    });
+
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        param(
+            "workflow",
+            ParamKind::Workflow,
+            txt("Какую схему", "Which workflow"),
+            json!(null),
+        ),
+        wired(
+            "payload",
+            ParamKind::Text,
+            Ty::Any,
+            txt("Данные", "Data"),
+            json!(""),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "action.call",
+        group: Action,
+        title: txt("Вызвать схему", "Call a workflow"),
+        description: txt(
+            "Выполняет схему-помощник с триггером «Вызов из другой схемы» и берёт её ответ.",
+            "Runs a helper workflow with a «Called by a workflow» trigger and takes its answer.",
+        ),
+        help: txt(
+            "Помощник выполняется внутри этого же запуска: его операции, лимиты и откат при ошибке общие. Ошибка помощника идёт по ветке «Ошибка». Вложенность — не глубже 5.",
+            "The helper runs inside this same run: its operations, limits and rollback on error are shared. A helper's error takes the «Error» way. Nesting goes no deeper than 5.",
+        ),
+        inputs,
+        outputs: vec![flow_out(), error_out(), port("result", Ty::Any, txt("Ответ", "Answer"))],
+        params,
+        advanced: true,
+        keywords: vec!["вызвать", "подсхема", "функция", "call", "subflow", "function", "reuse"],
+    });
+    out.push(NodeDef {
+        kind: "action.return",
+        group: Action,
+        title: txt("Вернуть значение", "Return a value"),
+        description: txt(
+            "Завершает схему-помощник и отдаёт значение тому, кто её вызвал.",
+            "Ends a helper workflow and hands a value to its caller.",
+        ),
+        help: txt(
+            "В обычной схеме просто завершает запуск. Без подключённого значения отдаёт пустое.",
+            "In an ordinary workflow it just ends the run. With nothing wired it returns nothing.",
+        ),
+        inputs: vec![flow_in(), port("value", Ty::Any, txt("Значение", "Value"))],
+        outputs: vec![],
+        params: vec![],
+        advanced: true,
+        keywords: vec![
+            "вернуть",
+            "ответ",
+            "результат",
+            "return",
+            "result",
+            "answer",
+        ],
     });
 
     // -- lists --------------------------------------------------------------------

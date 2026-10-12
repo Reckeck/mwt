@@ -7,12 +7,12 @@ use tauri::{AppHandle, Emitter, State};
 
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    DeleteWorkflowVarInput, DryRunWorkflowInput, ListWorkflowRunsInput,
-    RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowInput, SetWorkflowActiveInput,
-    SetWorkflowVarInput, ValidateWorkflowInput,
+    DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput, ListWorkflowRunsInput,
+    RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowInput, SaveWorkflowTestInput,
+    SetWorkflowActiveInput, SetWorkflowVarInput, ValidateWorkflowInput,
 };
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{SavedWorkflow, UnlockedVault};
+use trade_core::service::{SavedWorkflow, UnlockedVault, WorkflowTestResult};
 use trade_core::workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar, catalog,
     graph::Graph, validate,
@@ -212,4 +212,37 @@ pub async fn import_workflow(
     state: State<'_, AppState>,
 ) -> Result<SavedWorkflow, String> {
     with_vault_mut(&state, |vault| vault.import_workflow(&json, now_secs()))
+}
+
+#[tauri::command]
+pub async fn save_workflow_test(
+    input: SaveWorkflowTestInput,
+    state: State<'_, AppState>,
+) -> Result<Workflow, String> {
+    with_vault_mut(&state, |vault| {
+        vault.save_workflow_test(&input.workflow_id, input.test)
+    })
+}
+
+#[tauri::command]
+pub async fn delete_workflow_test(
+    input: DeleteWorkflowTestInput,
+    state: State<'_, AppState>,
+) -> Result<Workflow, String> {
+    with_vault_mut(&state, |vault| {
+        vault.delete_workflow_test(&input.workflow_id, &input.test_id)
+    })
+}
+
+/// Every test of a workflow by emulation; nothing is written.
+#[tauri::command]
+pub async fn run_workflow_tests(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<WorkflowTestResult>, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| {
+        vault.run_workflow_tests(&id, now_secs(), &zone)
+    })
 }

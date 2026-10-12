@@ -5,8 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { FormField } from '@/shared/ui/form-field'
 import { Select } from '@/shared/ui/select'
+import { decimal, firstError, required, useFormValidation } from '@/shared/lib/form'
 
 import { useWorkflowActions } from '../../model/use-workflow-actions'
 import type { VarDialogProps } from './var-dialog.types'
@@ -45,13 +46,15 @@ watch(open, (isOpen) => {
   }
 })
 
-const missing = computed(() => {
-  if (!name.value.trim()) return t('workflow.vars.missingName')
-  if ((kind.value === 'number' || kind.value === 'money') && !/^-?\d+([.,]\d+)?$/.test(value.value.trim())) {
-    return t('workflow.vars.missingNumber')
-  }
-  return ''
-})
+const numeric = computed(() => kind.value === 'number' || kind.value === 'money')
+const form = useFormValidation(
+  () => ({
+    name: required(name.value),
+    value: numeric.value ? firstError(required(value.value), decimal(value.value)) : null,
+    currency: kind.value === 'money' ? required(currency.value) : null,
+  }),
+  { resetOn: open },
+)
 
 function encoded(): string {
   const number = value.value.trim().replace(',', '.')
@@ -67,7 +70,6 @@ function encoded(): string {
 }
 
 function submit() {
-  if (missing.value) return
   setVar.mutate(
     { scope: props.variable?.scope ?? 'global', name: name.value.trim(), value: encoded() },
     { onSuccess: () => (open.value = false) },
@@ -77,34 +79,36 @@ function submit() {
 
 <template>
   <Dialog v-model:open="open" :title="t(props.variable ? 'workflow.vars.edit' : 'workflow.vars.new')" :description="t('workflow.vars.description')" size="sm">
-    <form id="workflow-var" class="grid gap-4" @submit.prevent="submit">
-      <div class="grid gap-1.5">
-        <Label for="workflow-var-name">{{ t('workflow.vars.name') }}</Label>
+    <form id="workflow-var" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
+      <FormField :label="t('workflow.vars.name')" for="workflow-var-name" required :error="form.error('name')">
         <Input id="workflow-var-name" v-model="name" :disabled="Boolean(props.variable)" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="workflow-var-kind">{{ t('workflow.vars.kind') }}</Label>
+      </FormField>
+      <FormField :label="t('workflow.vars.kind')" for="workflow-var-kind">
         <Select id="workflow-var-kind" v-model="kind">
           <option v-for="option in ['number', 'money', 'text', 'bool']" :key="option" :value="option">
             {{ t(`workflow.vars.kinds.${option}`) }}
           </option>
         </Select>
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="workflow-var-value">{{ t('workflow.vars.value') }}</Label>
+      </FormField>
+      <FormField :label="t('workflow.vars.value')" for="workflow-var-value" :required="numeric" :error="form.error('value')">
         <Select v-if="kind === 'bool'" id="workflow-var-value" v-model="value">
           <option value="true">{{ t('workflow.vars.yes') }}</option>
           <option value="false">{{ t('workflow.vars.no') }}</option>
         </Select>
-        <div v-else class="flex gap-2">
-          <Input id="workflow-var-value" v-model="value" :inputmode="kind === 'text' ? 'text' : 'decimal'" />
-          <Input v-if="kind === 'money'" v-model="currency" class="w-24" :aria-label="t('workflow.vars.currency')" />
-        </div>
-      </div>
-      <p v-if="missing" class="text-xs text-muted-foreground">{{ missing }}</p>
+        <Input v-else id="workflow-var-value" v-model="value" :inputmode="kind === 'text' ? 'text' : 'decimal'" />
+      </FormField>
+      <FormField
+        v-if="kind === 'money'"
+        :label="t('workflow.vars.currency')"
+        for="workflow-var-currency"
+        required
+        :error="form.error('currency')"
+      >
+        <Input id="workflow-var-currency" v-model="currency" />
+      </FormField>
     </form>
     <template #footer>
-      <Button type="submit" form="workflow-var" :disabled="Boolean(missing) || setVar.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" form="workflow-var" :disabled="setVar.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>
