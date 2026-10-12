@@ -5,13 +5,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { Money } from '@/entities/currency'
+import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
@@ -107,7 +108,18 @@ const totals = computed(() => {
 })
 const chosen = computed(() => rows.value.filter((row) => row.include && Number(row.amount) > 0))
 const needsStore = computed(() => chosen.value.some((row) => !row.line.item.store_id))
-const valid = computed(() => chosen.value.length > 0 && (!needsStore.value || !!storeId.value))
+const form = useFormValidation(
+  () => ({
+    when: required(when.value),
+    store: needsStore.value ? required(storeId.value, 'pick') : null,
+    lines: !chosen.value.length
+      ? t('validation.billLines')
+      : rows.value.some((row) => row.include && !(Number(row.amount) > 0))
+        ? t('validation.billAmounts')
+        : null,
+  }),
+  { resetOn: open },
+)
 
 const pay = useMutation({
   mutationFn: () =>
@@ -139,27 +151,30 @@ const pay = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="t('utilityBill.title')" size="lg">
-    <form id="utility-bill-form" class="@container grid gap-4" @submit.prevent="valid && pay.mutate()">
+    <form id="utility-bill-form" class="@container grid gap-4" @submit.prevent="form.submit(pay.mutate, $event)">
       <div class="grid gap-3 @sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="bill-date">{{ t('utilityBill.date') }}</Label>
+        <FormField for="bill-date" :label="t('utilityBill.date')" required :error="form.error('when')">
           <Input id="bill-date" v-model="when" type="datetime-local" />
           <p v-if="bill.data.value?.pay_day" class="text-xs text-muted-foreground">
             {{ t('utilityBill.payDay', { day: bill.data.value.pay_day }) }}
           </p>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="bill-store">{{ t('utilities.store') }}</Label>
+        </FormField>
+        <FormField for="bill-store" :label="t('utilities.store')" :required="needsStore" :error="form.error('store')">
           <Select id="bill-store" v-model="storeId">
             <option value="" disabled>{{ t('utilityBill.pickStore') }}</option>
             <option v-for="node in payable" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
           </Select>
-        </div>
+        </FormField>
       </div>
 
       <p v-if="bill.isSuccess.value && !rows.length" class="text-sm text-muted-foreground">{{ t('utilities.empty') }}</p>
 
-      <ul class="grid divide-y divide-border rounded-lg border border-border">
+      <p v-if="form.error('lines')" class="text-xs text-destructive" role="alert">{{ form.error('lines') }}</p>
+      <ul
+        class="grid divide-y divide-border rounded-lg border"
+        :class="form.error('lines') ? 'border-destructive' : 'border-border'"
+        :data-invalid="form.error('lines') ? '' : undefined"
+      >
         <li v-for="row in rows" :key="row.line.item.id" class="grid items-center gap-2 p-2.5 @sm:grid-cols-[1.5rem_1fr_9rem_9rem]">
           <input
             v-model="row.include"
@@ -209,7 +224,7 @@ const pay = useMutation({
         </span>
       </div>
       <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button type="submit" form="utility-bill-form" :disabled="!valid || pay.isPending.value">
+      <Button type="submit" form="utility-bill-form" :disabled="pay.isPending.value">
         {{ t('utilityBill.pay', { count: chosen.length }) }}
       </Button>
     </template>

@@ -5,10 +5,12 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
+import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
@@ -26,6 +28,16 @@ const value = ref('')
 const currency = ref('')
 const expiresAt = ref('')
 const expiring = ref('')
+
+const form = useFormValidation(
+  () => ({
+    symbol: required(symbol.value),
+    value: positiveAmount(value.value),
+    currency: required(currency.value, 'pick'),
+    expiring: nonNegativeAmount(expiring.value),
+  }),
+  { resetOn: () => props.store.id },
+)
 watch(
   () => props.store,
   (store) => {
@@ -61,31 +73,34 @@ const save = useMutation({
 </script>
 
 <template>
-  <form class="@container grid gap-4" @submit.prevent="symbol.trim() && save.mutate()">
+  <form class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
     <div class="grid gap-4 @sm:grid-cols-3">
-      <div class="grid gap-1.5">
-        <Label for="loyalty-symbol">{{ t('loyalty.symbol') }}</Label>
+      <FormField for="loyalty-symbol" :label="t('loyalty.symbol')" required :error="form.error('symbol')">
         <Input id="loyalty-symbol" v-model="symbol" class="uppercase" maxlength="16" />
         <p class="text-xs text-muted-foreground">{{ t('loyalty.symbolHint') }}</p>
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="loyalty-value">{{ t('loyalty.pointValue') }}</Label>
+      </FormField>
+      <FormField for="loyalty-value" :label="t('loyalty.pointValue')" required :error="form.error('value')">
         <AmountInput id="loyalty-value" v-model="value" :decimals="4" />
-      </div>
-      <CurrencyPicker v-model="currency" :label="t('form.currency')" :kinds="['fiat']" />
+      </FormField>
+      <CurrencyPicker
+        v-model="currency"
+        :label="t('form.currency')"
+        :kinds="['fiat']"
+        required
+        :error="form.error('currency')"
+      />
     </div>
     <div class="grid gap-4 @sm:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="loyalty-expires">{{ t('loyalty.expiresAt') }}</Label>
         <Input id="loyalty-expires" v-model="expiresAt" type="date" />
       </div>
-      <div class="grid gap-1.5">
-        <Label for="loyalty-expiring">{{ t('loyalty.expiringPoints') }}</Label>
+      <FormField for="loyalty-expiring" :label="t('loyalty.expiringPoints')" :error="form.error('expiring')">
         <AmountInput id="loyalty-expiring" v-model="expiring" />
-      </div>
+      </FormField>
     </div>
     <div>
-      <Button type="submit" :disabled="!symbol.trim() || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

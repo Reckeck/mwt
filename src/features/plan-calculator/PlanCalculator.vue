@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 
 import { AssetInput } from '@/entities/asset'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call, parseError } from '@/shared/api/ipc'
+import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
 
 import type { CalculatorPlan, PlanCalculatorProps } from './plan-calculator.types'
@@ -161,7 +163,7 @@ const rows = computed<ResultRow[]>(() => {
   ]
 })
 
-const canApply = computed(() => amount.value.trim() !== '' && priceIn.value.trim() !== '')
+const form = useFormValidation(() => ({ amount: positiveAmount(amount.value), priceIn: positiveAmount(priceIn.value) }))
 
 const CALC_MODES: CalcMode[] = ['converter', 'position']
 
@@ -169,7 +171,12 @@ function pickMode(value: unknown) {
   if (value === 'converter' || value === 'position') mode.value = value
 }
 
-function apply() {
+/** Checks the two fields a plan needs, then hands the plan over. */
+function apply(event?: Event) {
+  form.submit(emitPlan, event)
+}
+
+function emitPlan() {
   emit('apply', {
     mode: mode.value,
     from: from.value,
@@ -180,7 +187,7 @@ function apply() {
 }
 
 /** The dialog owns the "apply" button, so it reads these. */
-defineExpose({ canApply, apply })
+defineExpose({ apply })
 </script>
 
 <template>
@@ -208,14 +215,22 @@ defineExpose({ canApply, apply })
     </div>
 
     <div class="grid gap-3 @sm:grid-cols-3">
-      <div class="grid gap-1.5">
-        <Label>{{ t(mode === 'converter' ? 'calc.amount' : 'calc.quantity') }}</Label>
-        <AmountInput v-model="amount" :placeholder="t('calc.amountHint')" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label>{{ t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice') }}</Label>
-        <AmountInput v-model="priceIn" placeholder="0" />
-      </div>
+      <FormField
+        for="calc-amount"
+        :label="t(mode === 'converter' ? 'calc.amount' : 'calc.quantity')"
+        required
+        :error="form.error('amount')"
+      >
+        <AmountInput id="calc-amount" v-model="amount" :placeholder="t('calc.amountHint')" />
+      </FormField>
+      <FormField
+        for="calc-price-in"
+        :label="t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice')"
+        required
+        :error="form.error('priceIn')"
+      >
+        <AmountInput id="calc-price-in" v-model="priceIn" placeholder="0" />
+      </FormField>
       <div class="grid gap-1.5">
         <Label>{{ t(mode === 'converter' ? 'calc.priceOut' : 'calc.stopPrice') }}</Label>
         <AmountInput v-if="mode === 'converter'" v-model="priceOut" placeholder="0" />

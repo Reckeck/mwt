@@ -12,6 +12,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
 import { call, parseError } from '@/shared/api/ipc'
 import { CATEGORY_GROUPS } from '@/shared/lib/categories'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 const { t } = useI18n()
@@ -51,12 +52,14 @@ function move(index: number, step: number) {
 
 const pattern = ref('')
 const category = ref('')
+const adder = useFormValidation(() => ({ pattern: required(pattern.value), category: required(category.value, 'pick') }))
 const create = useMutation({
   mutationFn: () =>
     call<CategorizationRule>('create_categorization_rule', { input: { pattern: pattern.value.trim(), category: category.value } }),
   onSuccess: () => {
     toast.success(t('rules.created'))
     pattern.value = ''
+    adder.reset()
     refresh()
   },
   onError: fail,
@@ -72,20 +75,25 @@ const create = useMutation({
     <div class="grid gap-4">
       <p class="text-xs text-muted-foreground">{{ t('rules.hint') }}</p>
 
-      <form class="flex flex-wrap items-center gap-2" @submit.prevent="create.mutate()">
-        <Input v-model="pattern" class="h-9 w-56" :placeholder="t('rules.pattern')" />
-        <div class="w-56">
-          <CategorySelect
-            v-model="category"
-            :groups="CATEGORY_GROUPS"
-            :aria-label="t('rules.category')"
-            :placeholder="t('rules.category')"
-          />
+      <form class="grid gap-1" @submit.prevent="adder.submit(create.mutate, $event)">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="contents" :data-invalid="adder.invalidAttr('pattern')">
+            <Input v-model="pattern" class="h-9 w-56" :placeholder="t('rules.pattern')" :aria-label="t('rules.pattern')" />
+          </span>
+          <div class="w-56" :data-invalid="adder.invalidAttr('category')">
+            <CategorySelect
+              v-model="category"
+              :groups="CATEGORY_GROUPS"
+              :aria-label="t('rules.category')"
+              :placeholder="t('rules.category')"
+            />
+          </div>
+          <Button type="submit" size="sm" :disabled="create.isPending.value">
+            <Plus class="size-4" />
+            {{ t('rules.add') }}
+          </Button>
         </div>
-        <Button type="submit" size="sm" :disabled="!pattern.trim() || !category || create.isPending.value">
-          <Plus class="size-4" />
-          {{ t('rules.add') }}
-        </Button>
+        <p v-if="adder.firstMessage()" class="text-xs text-destructive" role="alert">{{ adder.firstMessage() }}</p>
       </form>
 
       <p v-if="!rules.data.value?.length" class="text-sm text-muted-foreground">{{ t('rules.empty') }}</p>

@@ -11,6 +11,7 @@ import { TxPreviewCard } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
@@ -21,6 +22,7 @@ import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txChainAndHash, txId } from '@/shared/lib/transactions'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
+import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
@@ -682,6 +684,57 @@ const save = useMutation({
 
 const valid = computed(() => !props.disabled && isFormComplete(form))
 
+/** Fields entered as numbers: blank, not a number and «≤ 0» each get their own message. */
+const AMOUNT_FIELDS = new Set([
+  'amount',
+  'fromAmount',
+  'toAmount',
+  'soldQty',
+  'boughtQty',
+  'quantity',
+  'fillPrice',
+  'sellQty',
+  'sellPrice',
+])
+/* --- a top-up or a payment needs a category, unless a rule fills it in (backend check V5) --- */
+const needsCategory = computed(() => form.kind === 'topup' || form.kind === 'payment')
+const rules = useQuery({
+  queryKey: ['categorization-rules'],
+  queryFn: () => call<CategorizationRule[]>('list_categorization_rules'),
+  enabled: needsCategory,
+})
+/** Same match as `apply_categorization_rules`: a pattern inside the comment or a contact's name. */
+const ruleFillsCategory = computed(() => {
+  const contactIds = [form.contactId, form.counterpart && 'contact' in form.counterpart ? form.counterpart.contact.contact_id : '']
+  const names = (contacts.data.value ?? []).filter((contact) => contactIds.includes(contact.id)).map((contact) => contact.name)
+  const haystacks = [form.comment, ...names].map((text) => text.toLowerCase())
+  return (rules.data.value ?? []).some(
+    (rule) => rule.active && rule.pattern.trim() && haystacks.some((text) => text.includes(rule.pattern.trim().toLowerCase())),
+  )
+})
+
+/** Every missing field gets its message under it; the list under the form stays as the summary. */
+const check = useFormValidation(
+  () => {
+    if (props.disabled) return {}
+    const errors: Record<string, string | null> = {}
+    // A template hides the summary list, but its fields are checked all the same.
+    for (const key of props.template ? missingFields(form) : missing.value) {
+      if (AMOUNT_FIELDS.has(key)) errors[key] = positiveAmount(form[key as keyof typeof form] as string)
+      else if (key === 'symbol') errors[key] = required(form.symbol)
+      else if (key === 'extra') errors[key] = t('validation.splitRows')
+      else errors[key] = required(null, 'pick')
+    }
+    if (needsCategory.value && !props.template && !form.categories.length && !ruleFillsCategory.value) {
+      errors.categories = t('validation.category')
+    }
+    // Complete on the surface but still not an operation (e.g. an unknown kind of side).
+    if (!Object.values(errors).some(Boolean) && !isFormComplete(form)) errors.form = t('validation.summary')
+    return errors
+  },
+  { resetOn: () => form.kind },
+)
+
 function submit() {
   if (props.template) emit('submit')
   else save.mutate()
@@ -690,6 +743,10 @@ function submit() {
 /** The dialog owns the submit button, so it reads these; a template's parent reads `input`. */
 defineExpose({
   valid,
+  /** For a parent that owns the save button of a template: show the messages under the fields. */
+  showErrors: () => {
+    check.attempted.value = true
+  },
   pending: computed(() => save.isPending.value),
   input: computed(() => formToInput(form)),
 })
@@ -702,7 +759,7 @@ const verbLabel = (kind: TxKind) =>
   <form
     :id="props.template ? 'transaction-template-form' : 'transaction-form'"
     class="flex flex-col gap-4"
-    @submit.prevent="submit"
+    @submit.prevent="check.submit(submit, $event)"
   >
     <ToggleGroup
       v-if="offered.length > 1"
@@ -729,11 +786,10 @@ const verbLabel = (kind: TxKind) =>
           <Label for="tx-property">{{ t('tx.field.property') }}</Label>
           <Input id="tx-property" v-model="propertyName" :placeholder="t('tx.field.propertyHint')" />
         </div>
-        <AssetInput v-else v-model="form.asset" :label="t('form.asset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-amount">{{ isProperty ? t('tx.field.units') : t('form.amount') }}</Label>
+        <AssetInput v-else v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
+        <FormField for="tx-amount" :label="isProperty ? t('tx.field.units') : t('form.amount')" required :error="check.error('amount')">
           <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
-        </div>
+        </FormField>
       </div>
       <p
         v-if="overrunText"
@@ -770,31 +826,30 @@ const verbLabel = (kind: TxKind) =>
       </div>
       <div v-if="form.kind === 'topup' && !props.template && !isProperty" class="grid gap-1.5">
         <p v-if="form.extra.length" class="text-xs text-muted-foreground">{{ t('tx.split.topupHint') }}</p>
-        <SplitRows v-model="form.extra" kind="topup" mode="direct" />
+        <FormField :error="check.error('extra')">
+          <SplitRows v-model="form.extra" kind="topup" mode="direct" />
+        </FormField>
       </div>
     </template>
 
     <!-- Transfer: one asset between two places -->
     <template v-else-if="form.kind === 'transfer'">
       <div class="grid gap-3 @sm:grid-cols-2">
-        <AssetInput v-model="form.asset" :label="t('form.asset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-amount">{{ t('form.amount') }}</Label>
+        <AssetInput v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
+        <FormField for="tx-amount" :label="t('form.amount')" required :error="check.error('amount')">
           <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
-        </div>
+        </FormField>
       </div>
       <div class="grid items-end gap-3 @sm:grid-cols-[1fr_auto_1fr]">
-        <div class="grid gap-1.5">
-          <Label>{{ t('tx.field.from') }}</Label>
+        <FormField :label="t('tx.field.from')" required :error="check.error('from')">
           <AccountRefPicker v-model="form.from" />
-        </div>
+        </FormField>
         <Button type="button" variant="ghost" size="icon" :title="t('tx.field.swap')" :aria-label="t('tx.field.swap')" @click="swapSides">
           <ArrowUpDown class="size-4" />
         </Button>
-        <div class="grid gap-1.5">
-          <Label>{{ t('tx.field.to') }}</Label>
+        <FormField :label="t('tx.field.to')" required :error="check.error('to')">
           <AccountRefPicker v-model="form.to" />
-        </div>
+        </FormField>
       </div>
       <div v-if="debts.length" class="grid gap-1.5">
         <Label for="tx-debt">{{ t('debt.title') }}</Label>
@@ -826,20 +881,21 @@ const verbLabel = (kind: TxKind) =>
       <p v-if="form.convertMode === 'p2p'" class="text-xs text-muted-foreground">{{ t('tx.p2p.hint') }}</p>
 
       <div class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label>{{ form.convertMode === 'p2p' ? t('tx.p2p.from') : t('tx.field.give') }}</Label>
+        <FormField
+          :label="form.convertMode === 'p2p' ? t('tx.p2p.from') : t('tx.field.give')"
+          required
+          :error="check.error('from')"
+        >
           <AccountRefPicker v-model="form.from" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
-        </div>
-        <AssetInput v-model="form.fromAsset" :label="t('form.asset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-from-amount">{{ t('form.amount') }}</Label>
+        </FormField>
+        <AssetInput v-model="form.fromAsset" required :error="check.error('fromAsset')" :label="t('form.asset')" />
+        <FormField for="tx-from-amount" :label="t('form.amount')" required :error="check.error('fromAmount')">
           <AmountInput id="tx-from-amount" v-model="form.fromAmount" />
-        </div>
+        </FormField>
       </div>
-      <div v-if="form.convertMode === 'p2p'" class="grid gap-1.5">
-        <Label>{{ t('tx.p2p.via') }}</Label>
+      <FormField v-if="form.convertMode === 'p2p'" :label="t('tx.p2p.via')" required :error="check.error('via')">
         <AccountRefPicker v-model="form.via" :stores="false" />
-      </div>
+      </FormField>
       <div class="flex justify-center">
         <Button type="button" variant="ghost" size="icon" :title="t('tx.field.swap')" :aria-label="t('tx.field.swap')" @click="swapSides">
           <ArrowUpDown class="size-4" />
@@ -849,17 +905,23 @@ const verbLabel = (kind: TxKind) =>
            out to several of them; each row is an account and its amount. -->
       <div class="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_14rem]">
         <div class="grid gap-1.5">
-          <Label>{{ form.convertMode === 'p2p' ? t('tx.p2p.receiveTo') : t('tx.field.receive') }}</Label>
+          <Label required>{{ form.convertMode === 'p2p' ? t('tx.p2p.receiveTo') : t('tx.field.receive') }}</Label>
           <p class="text-xs text-muted-foreground">{{ t('tx.split.receiveHint') }}</p>
         </div>
-        <AssetInput v-model="form.toAsset" :label="t('tx.split.receiveAsset')" />
+        <AssetInput v-model="form.toAsset" required :error="check.error('toAsset')" :label="t('tx.split.receiveAsset')" />
       </div>
       <div class="grid gap-2" data-tour="tx-split">
         <div class="grid items-start gap-2 @sm:grid-cols-[minmax(0,1fr)_10rem_2rem]">
-          <AccountRefPicker v-model="form.to" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
-          <AmountInput id="tx-to-amount" v-model="form.toAmount" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
+          <FormField :error="check.error('to')">
+            <AccountRefPicker v-model="form.to" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
+          </FormField>
+          <FormField :error="check.error('toAmount')">
+            <AmountInput id="tx-to-amount" v-model="form.toAmount" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
+          </FormField>
         </div>
-        <SplitRows v-if="!props.template" v-model="form.extra" kind="convert" :mode="form.convertMode" />
+        <FormField v-if="!props.template" :error="check.error('extra')">
+          <SplitRows v-model="form.extra" kind="convert" :mode="form.convertMode" />
+        </FormField>
         <p v-if="form.extra.length && form.toAsset" class="text-xs text-muted-foreground">
           {{ t('tx.split.receivedTotal', { total: `${Number(receivedTotal.toFixed(8))} ${form.toAsset.symbol}` }) }}
         </p>
@@ -877,16 +939,14 @@ const verbLabel = (kind: TxKind) =>
     <!-- Spot trade -->
     <template v-else-if="form.kind === 'trade_spot'">
       <div class="grid gap-3 @sm:grid-cols-2">
-        <AssetInput v-model="form.soldAsset" :label="t('form.sellAsset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-sold">{{ t('form.sellQty') }}</Label>
+        <AssetInput v-model="form.soldAsset" required :error="check.error('soldAsset')" :label="t('form.sellAsset')" />
+        <FormField for="tx-sold" :label="t('form.sellQty')" required :error="check.error('soldQty')">
           <AmountInput id="tx-sold" v-model="form.soldQty" />
-        </div>
-        <AssetInput v-model="form.boughtAsset" :label="t('form.buyAsset')" />
-        <div class="grid gap-1.5">
-          <Label for="tx-bought">{{ t('form.buyQty') }}</Label>
+        </FormField>
+        <AssetInput v-model="form.boughtAsset" required :error="check.error('boughtAsset')" :label="t('form.buyAsset')" />
+        <FormField for="tx-bought" :label="t('form.buyQty')" required :error="check.error('boughtQty')">
           <AmountInput id="tx-bought" v-model="form.boughtQty" />
-        </div>
+        </FormField>
       </div>
       <div class="grid gap-3 @sm:grid-cols-2">
         <div class="grid gap-1.5">
@@ -907,10 +967,9 @@ const verbLabel = (kind: TxKind) =>
     <!-- Futures -->
     <template v-else-if="form.kind === 'trade_futures'">
       <div class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label for="tx-symbol">{{ t('tx.field.contract') }}</Label>
+        <FormField for="tx-symbol" :label="t('tx.field.contract')" required :error="check.error('symbol')">
           <Input id="tx-symbol" v-model="form.symbol" placeholder="BTCUSDT" spellcheck="false" />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="tx-direction">{{ t('tx.field.direction') }}</Label>
           <Select id="tx-direction" v-model="form.direction">
@@ -925,14 +984,12 @@ const verbLabel = (kind: TxKind) =>
             <option value="close">{{ t('tx.futures.close') }}</option>
           </Select>
         </div>
-        <div class="grid gap-1.5">
-          <Label for="tx-qty">{{ t('tx.field.quantity') }}</Label>
+        <FormField for="tx-qty" :label="t('tx.field.quantity')" required :error="check.error('quantity')">
           <AmountInput id="tx-qty" v-model="form.quantity" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="tx-fill">{{ t('tx.field.price') }}</Label>
+        </FormField>
+        <FormField for="tx-fill" :label="t('tx.field.price')" required :error="check.error('fillPrice')">
           <AmountInput id="tx-fill" v-model="form.fillPrice" />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="tx-leverage">{{ t('tx.field.leverage') }}</Label>
           <AmountInput id="tx-leverage" v-model="form.leverage" />
@@ -955,22 +1012,19 @@ const verbLabel = (kind: TxKind) =>
     <!-- Selling property -->
     <template v-else-if="form.kind === 'asset_sell'">
       <div class="grid gap-3 @sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="tx-sell-asset">{{ t('tx.field.property') }}</Label>
+        <FormField for="tx-sell-asset" :label="t('tx.field.property')" required :error="check.error('asset')">
           <Select id="tx-sell-asset" v-model="sellKey">
             <option value="" disabled>{{ t('tx.field.pickProperty') }}</option>
             <option v-for="asset in heldAssets" :key="asset.symbol" :value="asset.symbol">{{ asset.name || asset.symbol }}</option>
           </Select>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="tx-sell-qty">{{ t('tx.field.units') }}</Label>
+        </FormField>
+        <FormField for="tx-sell-qty" :label="t('tx.field.units')" required :error="check.error('sellQty')">
           <AmountInput id="tx-sell-qty" v-model="form.sellQty" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="tx-sell-price">{{ t('tx.field.unitPrice') }}</Label>
+        </FormField>
+        <FormField for="tx-sell-price" :label="t('tx.field.unitPrice')" required :error="check.error('sellPrice')">
           <AmountInput id="tx-sell-price" v-model="form.sellPrice" />
-        </div>
-        <AssetInput v-model="form.currency" :label="t('tx.field.currency')" />
+        </FormField>
+        <AssetInput v-model="form.currency" required :error="check.error('currency')" :label="t('tx.field.currency')" />
       </div>
       <div class="grid gap-1.5">
         <Label for="tx-proceeds">{{ t('tx.field.proceedsTo') }}</Label>
@@ -1048,13 +1102,15 @@ const verbLabel = (kind: TxKind) =>
       </div>
     </div>
 
-    <div class="grid gap-1.5">
-      <Label for="tx-categories">{{ t('form.categories') }}</Label>
+    <FormField
+      for="tx-categories"
+      :label="t('form.categories')"
+      :required="needsCategory && !props.template"
+      :error="check.error('categories')"
+      :hint="needsCategory ? t('tx.field.categoryHint') : undefined"
+    >
       <CategorySelect id="tx-categories" v-model="form.categories" multiple :groups="categoryGroupsFor(form.kind)" />
-      <p v-if="form.kind === 'topup' || form.kind === 'payment'" class="text-xs text-muted-foreground">
-        {{ t('tx.field.categoryHint') }}
-      </p>
-    </div>
+    </FormField>
 
     <!-- Cashback: which card's purchases earned it, for the cashback-by-card report. -->
     <div v-if="form.kind === 'topup' && form.categories.includes('cashback')" class="grid gap-1.5">
@@ -1088,6 +1144,7 @@ const verbLabel = (kind: TxKind) =>
     >
       {{ t('tx.missing.title') }}: {{ missing.map((key) => t(`tx.missing.${key}`)).join(', ') }}
     </p>
+    <p v-if="!missing.length && check.error('form')" class="text-xs text-destructive" role="alert">{{ check.error('form') }}</p>
 
     <TxPreviewCard
       v-if="debouncedDraft"

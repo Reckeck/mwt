@@ -25,7 +25,7 @@ const calculator = ref<InstanceType<typeof PlanCalculator> | null>(null)
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.close') }}</Button>
-      <Button :disabled="!calculator?.canApply" @click="calculator?.apply()">{{ t('calc.apply') }}</Button>
+      <Button @click="calculator?.apply($event)">{{ t('calc.apply') }}</Button>
     </template>
   </Dialog>
 </template>

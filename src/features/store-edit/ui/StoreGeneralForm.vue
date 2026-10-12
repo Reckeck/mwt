@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 
@@ -24,6 +26,8 @@ const note = ref('')
 const color = ref('')
 const purpose = ref<Purpose>('everyday')
 const contactId = ref('')
+
+const form = useFormValidation(() => ({ name: required(name.value) }), { resetOn: () => props.store.id })
 
 /** Only a top-level wallet belongs to a contact (its sub-accounts share it). */
 const isRoot = computed(() => !props.store.parent_id)
@@ -64,12 +68,11 @@ function submit() {
 </script>
 
 <template>
-  <form class="@container grid gap-5" @submit.prevent="submit">
+  <form class="@container grid gap-5" @submit.prevent="form.submit(submit, $event)">
     <div class="grid grid-cols-[1fr_auto] gap-4">
-      <div class="grid gap-1.5">
-        <Label for="store-name">{{ t('stores.name') }}</Label>
+      <FormField for="store-name" :label="t('stores.name')" required :error="form.error('name')">
         <Input id="store-name" v-model="name" />
-      </div>
+      </FormField>
       <div class="grid gap-1.5">
         <Label for="store-color">{{ t('stores.color') }}</Label>
         <input
@@ -124,7 +127,7 @@ function submit() {
     </div>
 
     <div>
-      <Button type="submit" :disabled="!name.trim() || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

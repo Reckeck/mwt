@@ -4,10 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { useMutation } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { vaultErrorMessage } from '@/shared/lib/vault-error'
 
@@ -26,7 +27,14 @@ watch(open, () => {
 })
 
 const mismatch = computed(() => repeat.value !== '' && repeat.value !== next.value)
-const valid = computed(() => current.value !== '' && next.value !== '' && next.value === repeat.value)
+const form = useFormValidation(
+  () => ({
+    current: required(current.value),
+    next: required(next.value),
+    repeat: required(repeat.value) ?? (mismatch.value ? t('vault.password.mismatch') : null),
+  }),
+  { resetOn: open },
+)
 
 const change = useMutation({
   mutationFn: () =>
@@ -43,17 +51,14 @@ const change = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="t('vault.password.title')">
-    <form id="change-password-form" class="grid gap-4" @submit.prevent="valid && change.mutate()">
-      <div class="grid gap-1.5">
-        <Label for="password-current">{{ t('vault.password.current') }}</Label>
+    <form id="change-password-form" class="grid gap-4" @submit.prevent="form.submit(change.mutate, $event)">
+      <FormField for="password-current" :label="t('vault.password.current')" required :error="form.error('current')">
         <Input id="password-current" v-model="current" type="password" autocomplete="current-password" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="password-new">{{ t('vault.password.new') }}</Label>
+      </FormField>
+      <FormField for="password-new" :label="t('vault.password.new')" required :error="form.error('next')">
         <Input id="password-new" v-model="next" type="password" autocomplete="new-password" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="password-repeat">{{ t('vault.password.repeat') }}</Label>
+      </FormField>
+      <FormField for="password-repeat" :label="t('vault.password.repeat')" required :error="form.error('repeat')">
         <Input
           id="password-repeat"
           v-model="repeat"
@@ -61,13 +66,13 @@ const change = useMutation({
           autocomplete="new-password"
           :aria-invalid="mismatch"
         />
-        <p v-if="mismatch" class="text-xs text-destructive">{{ t('vault.password.mismatch') }}</p>
-      </div>
+        <p v-if="mismatch && !form.error('repeat')" class="text-xs text-destructive">{{ t('vault.password.mismatch') }}</p>
+      </FormField>
       <p class="text-xs text-muted-foreground">{{ t('vault.password.hint') }}</p>
     </form>
     <template #footer>
       <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button type="submit" form="change-password-form" :disabled="!valid || change.isPending.value">
+      <Button type="submit" form="change-password-form" :disabled="change.isPending.value">
         {{ t('vault.password.submit') }}
       </Button>
     </template>

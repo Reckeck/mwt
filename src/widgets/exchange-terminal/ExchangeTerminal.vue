@@ -14,6 +14,7 @@ import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Input } from '@/shared/ui/input'
 import { call, parseError } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { ExchangeTerminalProps } from './exchange-terminal.types'
@@ -100,10 +101,14 @@ function watchActions(pair: string): UiAction[] {
 }
 
 const draft = ref('')
+const adder = useFormValidation(() => ({
+  pair: required(draft.value) ?? (pairOf(draft.value) ? null : t('validation.pair')),
+}))
 function add() {
   const pair = pairOf(draft.value)
-  draft.value = ''
   if (!pair) return
+  draft.value = ''
+  adder.reset()
   if (!watchlist.value.includes(pair)) {
     patch.mutate({ watchlist: [...watchlist.value, pair], active_symbol: pair, timeframe: null, indicators: null, layout: null })
   }
@@ -193,19 +198,22 @@ function onIndicators(keys: IndicatorKey[]) {
 
   <div v-else class="grid min-h-[32rem] gap-3 @container lg:grid-cols-[14rem_1fr]" data-tour="exchange-terminal">
     <aside class="flex flex-col gap-2 rounded-lg border border-border p-2">
-      <form class="flex items-center gap-1" @submit.prevent="add">
-        <div class="relative min-w-0 flex-1">
-          <Search class="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            v-model="draft"
-            class="h-8 pl-7 uppercase"
-            :placeholder="t('trading.symbol')"
-            :aria-label="t('trading.symbol')"
-          />
+      <form class="grid gap-1" @submit.prevent="adder.submit(add, $event)">
+        <div class="flex items-center gap-1">
+          <div class="relative min-w-0 flex-1" :data-invalid="adder.invalidAttr('pair')">
+            <Search class="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              v-model="draft"
+              class="h-8 pl-7 uppercase"
+              :placeholder="t('trading.symbol')"
+              :aria-label="t('trading.symbol')"
+            />
+          </div>
+          <Button type="submit" variant="ghost" size="icon" class="size-8" :title="t('terminal.add')" :aria-label="t('terminal.add')">
+            <Plus class="size-4" />
+          </Button>
         </div>
-        <Button type="submit" variant="ghost" size="icon" class="size-8" :title="t('terminal.add')" :aria-label="t('terminal.add')">
-          <Plus class="size-4" />
-        </Button>
+        <p v-if="adder.firstMessage()" class="text-xs text-destructive" role="alert">{{ adder.firstMessage() }}</p>
       </form>
       <ul class="flex flex-col gap-0.5 overflow-y-auto" :aria-label="t('trading.watchlist')">
         <ContextMenu v-for="pair in watchlist" :key="pair" :actions="watchActions(pair)">

@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { parseError } from '@/shared/api/ipc'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -90,14 +91,16 @@ async function onBaseCurrencyChange(next: string) {
   await queryClient.invalidateQueries()
 }
 
+const favoriteCheck = useFormValidation(() => {
+  const code = pickedFavorite.value.trim().toLowerCase()
+  const taken = code === settingsStore.baseCurrency || favorites.value.some((entry) => entry.toLowerCase() === code)
+  return { favorite: required(code, 'pick') ?? (taken ? t('validation.duplicateCurrency') : null) }
+})
+
 function addFavorite() {
   const code = pickedFavorite.value.trim().toLowerCase()
-  if (!code) return
-  if (code === settingsStore.baseCurrency || favorites.value.some((entry) => entry.toLowerCase() === code)) {
-    pickedFavorite.value = ''
-    return
-  }
   pickedFavorite.value = ''
+  favoriteCheck.reset()
   void persist({ favorite_currencies: [...settingsStore.favoriteCurrencies, code.toUpperCase()] })
 }
 
@@ -168,22 +171,18 @@ function removeFavorite(code: string) {
           </button>
         </span>
       </div>
-      <div class="flex items-end gap-2">
+      <div class="flex items-end gap-2" :data-invalid="favoriteCheck.invalidAttr('favorite')">
         <CurrencyPicker
           v-model="pickedFavorite"
           class="flex-1"
           :placeholder="t('settings.favoriteCurrencyPlaceholder')"
         />
-        <Button
-          size="sm"
-          class="h-9"
-          :disabled="!pickedFavorite"
-          @click="addFavorite"
-        >
+        <Button size="sm" class="h-9" @click="favoriteCheck.submit(addFavorite, $event)">
           {{ t('settings.favoriteCurrencyAdd') }}
         </Button>
       </div>
-      <p class="text-xs text-muted-foreground">{{ t('settings.favoriteCurrenciesHint') }}</p>
+      <p v-if="favoriteCheck.firstMessage()" class="text-xs text-destructive" role="alert">{{ favoriteCheck.firstMessage() }}</p>
+      <p v-else class="text-xs text-muted-foreground">{{ t('settings.favoriteCurrenciesHint') }}</p>
     </div>
   </div>
 </template>

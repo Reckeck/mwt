@@ -5,11 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { integerInRange, nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
@@ -65,7 +67,16 @@ function addRate() {
   rates.value = [...rates.value, { from: localDate(new Date()), rate: rates.value.at(-1)?.rate ?? '' }]
 }
 
-const valid = computed(() => rates.value.every((row) => row.from && row.rate !== '') && (!isPds.value || !!firstContribution.value))
+const form = useFormValidation(
+  () => ({
+    rates: rates.value.some((row) => !row.from || required(row.rate) || nonNegativeAmount(row.rate))
+      ? t('validation.rates')
+      : null,
+    termMonths: isDeposit.value ? integerInRange(termMonths.value, 1, 120) : null,
+    firstContribution: isPds.value ? required(firstContribution.value) : null,
+  }),
+  { resetOn: () => props.store.id },
+)
 
 const save = useMutation({
   mutationFn: () =>
@@ -91,10 +102,10 @@ const save = useMutation({
 </script>
 
 <template>
-  <form class="@container grid gap-4" @submit.prevent="valid && save.mutate()">
-    <div class="grid gap-2">
+  <form class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+    <div class="grid gap-2" :data-invalid="form.error('rates') ? '' : undefined">
       <div class="flex items-center justify-between gap-2">
-        <Label>{{ t('deposit.rates') }}</Label>
+        <Label required>{{ t('deposit.rates') }}</Label>
         <span v-if="tax.data.value?.max_key_rate" class="text-xs text-muted-foreground">
           {{ t('deposit.keyRate', { rate: tax.data.value.max_key_rate }) }}
         </span>
@@ -120,7 +131,8 @@ const save = useMutation({
         <Plus class="size-4" />
         {{ t('deposit.addRate') }}
       </Button>
-      <p class="text-xs text-muted-foreground">{{ t('deposit.ratesHint') }}</p>
+      <p v-if="form.error('rates')" class="text-xs text-destructive" role="alert">{{ form.error('rates') }}</p>
+      <p v-else class="text-xs text-muted-foreground">{{ t('deposit.ratesHint') }}</p>
     </div>
 
     <div class="grid gap-4 @sm:grid-cols-3">
@@ -135,10 +147,9 @@ const save = useMutation({
           <Label for="deposit-opened">{{ t('deposit.openedAt') }}</Label>
           <Input id="deposit-opened" v-model="openedAt" type="date" />
         </div>
-        <div class="grid gap-1.5">
-          <Label for="deposit-term">{{ t('deposit.termMonths') }}</Label>
+        <FormField for="deposit-term" :label="t('deposit.termMonths')" :error="form.error('termMonths')">
           <Input id="deposit-term" v-model="termMonths" type="number" min="1" max="120" />
-        </div>
+        </FormField>
       </template>
     </div>
 
@@ -151,10 +162,9 @@ const save = useMutation({
       <p class="text-sm font-medium">{{ t('deposit.pds.title') }}</p>
       <p class="text-xs text-muted-foreground">{{ t('deposit.pds.hint') }}</p>
       <div class="grid gap-4 @sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="pds-first">{{ t('deposit.pds.firstContribution') }}</Label>
+        <FormField for="pds-first" :label="t('deposit.pds.firstContribution')" required :error="form.error('firstContribution')">
           <Input id="pds-first" v-model="firstContribution" type="date" />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="pds-bracket">{{ t('deposit.pds.bracket') }}</Label>
           <Select id="pds-bracket" v-model="bracket">
@@ -165,7 +175,7 @@ const save = useMutation({
     </div>
 
     <div>
-      <Button type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

@@ -7,13 +7,20 @@ import { call } from '@/shared/api/ipc'
 import { fiatRef } from '@/shared/lib/asset-ref'
 import { CHAIN_LABELS } from '@/shared/lib/chains'
 import { useSettingsStore } from '@/shared/store/settings'
+import { Label } from '@/shared/ui/label'
 
 import type { AssetInputProps } from './asset-input.types'
 
 /** Fiat rows shown at most; the full catalog is one more letter away. */
 const FIAT_LIMIT = 6
 
-const props = withDefaults(defineProps<AssetInputProps>(), { label: '', placeholder: '', invalid: false })
+const props = withDefaults(defineProps<AssetInputProps>(), {
+  label: '',
+  placeholder: '',
+  invalid: false,
+  required: false,
+  error: undefined,
+})
 
 const asset = defineModel<AssetRef | null>({ default: null })
 
@@ -141,10 +148,8 @@ const subtitle = (value: AssetRef) => {
 </script>
 
 <template>
-  <div class="relative grid gap-1.5">
-    <label v-if="props.label" :for="inputId" class="text-sm font-medium leading-none">
-      {{ props.label }}
-    </label>
+  <div class="relative grid content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
+    <Label v-if="props.label" :for="inputId" :required="props.required">{{ props.label }}</Label>
     <div class="relative">
       <input
         :id="inputId"
@@ -154,7 +159,7 @@ const subtitle = (value: AssetRef) => {
         spellcheck="false"
         :placeholder="props.placeholder || t('asset.searchPlaceholder')"
         class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        :class="props.invalid && 'border-destructive'"
+        :class="(props.invalid || props.error) && 'border-destructive'"
         @input="onInput"
         @focus="onFocus"
         @blur="onBlur"
@@ -164,7 +169,8 @@ const subtitle = (value: AssetRef) => {
       </span>
     </div>
 
-    <p v-if="asset" class="truncate text-xs text-muted-foreground">{{ subtitle(asset) }}</p>
+    <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>
+    <p v-else-if="asset" class="truncate text-xs text-muted-foreground">{{ subtitle(asset) }}</p>
 
     <ul
       v-if="open && hasRows"

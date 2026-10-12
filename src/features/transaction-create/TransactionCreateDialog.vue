@@ -42,7 +42,7 @@ const form = ref<InstanceType<typeof TransactionForm> | null>(null)
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="transaction-form" type="submit" :disabled="!form?.valid || form?.pending">
+      <Button form="transaction-form" type="submit" :disabled="form?.pending">
         {{ t('form.submit') }}
       </Button>
     </template>

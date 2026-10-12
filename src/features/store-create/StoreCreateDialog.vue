@@ -18,6 +18,7 @@ import {
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -27,6 +28,7 @@ import { fiatRef, tickerRef } from '@/shared/lib/asset-ref'
 import { getStoreIcon, getSubTypeIcon } from '@/shared/lib/store-icons'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { cn } from '@/shared/lib/utils'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -194,13 +196,26 @@ function pickSubType(value: SubType) {
 
 const canGoBack = computed(() => step.value === 'details' && (isSub.value || !props.kind))
 
-const valid = computed(() => {
-  if (!name.value.trim() || !openingValid.value) return false
-  if (isSub.value) return subInfo.value !== null && (subInfo.value.shape === 'market' || binding.value !== null)
-  if (withCard.value && !cardCurrency.value) return false
-  if (kind.value === 'exchange') return provider.value !== null && !apiKey.value.trim() === !apiSecret.value.trim()
-  return true
-})
+const exchangeRoot = computed(() => !isSub.value && kind.value === 'exchange')
+/** Key and secret go together: one without the other cannot connect. */
+const keyHalf = computed(() => exchangeRoot.value && !apiKey.value.trim() !== !apiSecret.value.trim())
+const form = useFormValidation(
+  () => ({
+    name: required(name.value),
+    token: isSub.value && subInfo.value?.shape === 'asset' && props.parent?.kind === 'crypto' ? required(token.value, 'pick') : null,
+    currency: isSub.value && subInfo.value?.shape === 'asset' && props.parent?.kind !== 'crypto' ? required(currency.value, 'pick') : null,
+    pair:
+      isSub.value && subInfo.value?.shape === 'pair'
+        ? (required(pairText.value) ?? (pair.value ? null : t('binding.pairInvalid')))
+        : null,
+    provider: exchangeRoot.value ? required(provider.value, 'pick') : null,
+    apiKey: keyHalf.value && !apiKey.value.trim() ? t('validation.keyPair') : null,
+    apiSecret: keyHalf.value && !apiSecret.value.trim() ? t('validation.keyPair') : null,
+    cardCurrency: withCard.value ? required(cardCurrency.value, 'pick') : null,
+    opening: openingValid.value ? null : t('storeWizard.openingInvalid'),
+  }),
+  { resetOn: [open, step] },
+)
 
 const createStore = useMutation({
   mutationFn: async () => {
@@ -305,28 +320,33 @@ const cardClass =
     </div>
 
     <!-- Step 2: only the fields this kind or sub-account type needs. -->
-    <form v-else id="store-create-form" class="@container grid gap-4" @submit.prevent="valid && createStore.mutate()">
+    <form v-else id="store-create-form" class="@container grid gap-4" @submit.prevent="form.submit(createStore.mutate, $event)">
       <template v-if="isSub && subInfo">
-        <div v-if="subInfo.shape === 'asset'" class="grid gap-1.5">
-          <Label :for="props.parent?.kind === 'crypto' ? undefined : 'store-binding-currency'">
-            {{ props.parent?.kind === 'crypto' ? t('binding.token') : t('binding.currency') }}
-          </Label>
+        <FormField
+          v-if="subInfo.shape === 'asset'"
+          :for="props.parent?.kind === 'crypto' ? undefined : 'store-binding-currency'"
+          :label="props.parent?.kind === 'crypto' ? t('binding.token') : t('binding.currency')"
+          required
+          :error="form.error(props.parent?.kind === 'crypto' ? 'token' : 'currency')"
+        >
           <AssetInput v-if="props.parent?.kind === 'crypto'" v-model="token" />
-          <CurrencyPicker v-else v-model="currency" />
-        </div>
-        <div v-else-if="subInfo.shape === 'pair'" class="grid gap-1.5">
-          <Label for="store-binding-pair">{{ t('binding.pair') }}</Label>
+          <CurrencyPicker v-else id="store-binding-currency" v-model="currency" />
+        </FormField>
+        <FormField
+          v-else-if="subInfo.shape === 'pair'"
+          for="store-binding-pair"
+          :label="t('binding.pair')"
+          required
+          :error="form.error('pair')"
+          :hint="pair ? t('binding.pairParsed', pair) : pairText ? t('binding.pairInvalid') : t('subTypeHint.pair')"
+        >
           <Input id="store-binding-pair" v-model="pairText" :placeholder="t('binding.pairPlaceholder')" autocomplete="off" />
-          <p class="text-xs" :class="pairText && !pair ? 'text-destructive' : 'text-muted-foreground'">
-            {{ pair ? t('binding.pairParsed', pair) : pairText ? t('binding.pairInvalid') : t('subTypeHint.pair') }}
-          </p>
-        </div>
+        </FormField>
         <p v-else class="text-sm text-muted-foreground">{{ t(`subTypeHint.${subInfo.sub_type}`) }}</p>
       </template>
 
       <template v-if="!isSub && kind === 'exchange'">
-        <div class="grid gap-1.5">
-          <Label>{{ t('provider.title') }}</Label>
+        <FormField :label="t('provider.title')" required :error="form.error('provider')">
           <div class="grid gap-2 @sm:grid-cols-3">
             <button
               v-for="info in catalog.data.value?.providers ?? []"
@@ -341,33 +361,30 @@ const cardClass =
               <span v-if="!info.supported" class="text-xs text-muted-foreground">{{ t('provider.soon') }}</span>
             </button>
           </div>
-        </div>
+        </FormField>
       </template>
 
       <fieldset v-if="!isSub && kind === 'exchange' && provider === 'bybit'" class="grid gap-3" data-tour="store-bybit-key">
         <p class="text-xs text-muted-foreground">{{ t('storeWizard.bybitKeyHint') }}</p>
         <div class="grid gap-3 @sm:grid-cols-2">
-          <div class="grid gap-1.5">
-            <Label for="store-bybit-key">{{ t('wallet.bybit.apiKey') }}</Label>
+          <FormField for="store-bybit-key" :label="t('wallet.bybit.apiKey')" :error="form.error('apiKey')">
             <Input id="store-bybit-key" v-model="apiKey" autocomplete="off" spellcheck="false" />
-          </div>
-          <div class="grid gap-1.5">
-            <Label for="store-bybit-secret">{{ t('wallet.bybit.apiSecret') }}</Label>
+          </FormField>
+          <FormField for="store-bybit-secret" :label="t('wallet.bybit.apiSecret')" :error="form.error('apiSecret')">
             <Input id="store-bybit-secret" v-model="apiSecret" type="password" autocomplete="new-password" spellcheck="false" />
-          </div>
+          </FormField>
         </div>
       </fieldset>
 
       <div class="grid grid-cols-[1fr_auto] gap-4">
-        <div class="grid gap-1.5">
-          <Label for="store-name">{{ t('stores.name') }}</Label>
+        <FormField for="store-name" :label="t('stores.name')" required :error="form.error('name')">
           <Input
             id="store-name"
             v-model="name"
             :placeholder="t('stores.namePlaceholder')"
             @input="nameTouched = true"
           />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="store-color">{{ t('stores.color') }}</Label>
           <input
@@ -397,8 +414,15 @@ const cardClass =
       </div>
 
       <!-- A bank always has a card: it is created with the bank. -->
-      <fieldset v-if="withCard" class="grid gap-1.5" data-tour="store-bank-card">
-        <Label for="store-card-currency">{{ t('storeWizard.card') }}</Label>
+      <FormField
+        v-if="withCard"
+        for="store-card-currency"
+        :label="t('storeWizard.card')"
+        required
+        :error="form.error('cardCurrency')"
+        :hint="t('storeWizard.cardHint')"
+        data-tour="store-bank-card"
+      >
         <div class="grid grid-cols-[10rem_1fr] gap-2">
           <CurrencyPicker id="store-card-currency" v-model="cardCurrency" :kinds="['fiat']" label="" />
           <Input
@@ -408,12 +432,17 @@ const cardClass =
             :aria-label="t('storeWizard.cardName')"
           />
         </div>
-        <p class="text-xs text-muted-foreground">{{ t('storeWizard.cardHint') }}</p>
-      </fieldset>
+      </FormField>
 
       <!-- Optional: money already there, so the new wallet does not start at zero. -->
-      <fieldset v-if="offersOpening" class="grid gap-1.5" data-tour="store-opening">
-        <Label for="store-opening-amount">{{ t('storeWizard.opening') }}</Label>
+      <FormField
+        v-if="offersOpening"
+        for="store-opening-amount"
+        :label="t('storeWizard.opening')"
+        :error="form.error('opening')"
+        :hint="t('storeWizard.openingHint')"
+        data-tour="store-opening"
+      >
         <div class="grid grid-cols-[1fr_10rem] gap-2">
           <AmountInput
             id="store-opening-amount"
@@ -431,10 +460,7 @@ const cardClass =
             {{ openingAsset.symbol }}
           </span>
         </div>
-        <p class="text-xs" :class="openingValid ? 'text-muted-foreground' : 'text-destructive'">
-          {{ openingValid ? t('storeWizard.openingHint') : t('storeWizard.openingInvalid') }}
-        </p>
-      </fieldset>
+      </FormField>
 
       <template v-if="kind === 'liability' || subInfo?.credit">
         <LiabilityTermsFields v-model="terms" />
@@ -458,7 +484,7 @@ const cardClass =
         v-if="step === 'details'"
         form="store-create-form"
         type="submit"
-        :disabled="!valid || createStore.isPending.value"
+        :disabled="createStore.isPending.value"
       >
         <Plus class="size-4" />
         {{ t('stores.create') }}

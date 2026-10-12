@@ -6,6 +6,7 @@ import { Search, Star } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Switch } from '@/shared/ui/switch'
@@ -13,6 +14,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -71,14 +73,17 @@ function toggleStore(id: string) {
     : [...storeIds.value, id]
 }
 
-const valid = computed(
-  () =>
-    name.value.trim() !== '' &&
-    Number(target.value) > 0 &&
-    currency.value !== '' &&
-    startsAt.value !== '' &&
-    storeIds.value.length > 0 &&
-    (!deadline.value || deadline.value >= startsAt.value),
+const form = useFormValidation(
+  () => ({
+    name: required(name.value),
+    target: positiveAmount(target.value),
+    currency: required(currency.value, 'pick'),
+    startsAt: required(startsAt.value),
+    deadline: deadline.value && startsAt.value && deadline.value < startsAt.value ? t('validation.dateOrder') : null,
+    commitment: nonNegativeAmount(commitment.value),
+    stores: storeIds.value.length ? null : t('validation.stores'),
+  }),
+  { resetOn: open },
 )
 
 const save = useMutation({
@@ -110,34 +115,35 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.goal ? t('goal.edit') : t('goal.new')" size="lg">
-    <form id="goal-form" class="@container grid gap-5" @submit.prevent="valid && save.mutate()">
-      <div class="grid gap-1.5">
-        <Label for="goal-name">{{ t('goal.name') }}</Label>
+    <form id="goal-form" class="@container grid gap-5" @submit.prevent="form.submit(save.mutate, $event)">
+      <FormField for="goal-name" :label="t('goal.name')" required :error="form.error('name')">
         <Input id="goal-name" v-model="name" :placeholder="t('goal.namePlaceholder')" />
-      </div>
+      </FormField>
 
       <div class="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_11rem]">
-        <div class="grid gap-1.5">
-          <Label for="goal-target">{{ t('goal.target') }}</Label>
+        <FormField for="goal-target" :label="t('goal.target')" required :error="form.error('target')">
           <AmountInput id="goal-target" v-model="target" />
-        </div>
-        <CurrencyPicker id="goal-currency" v-model="currency" :label="t('goal.currency')" />
+        </FormField>
+        <CurrencyPicker
+          id="goal-currency"
+          v-model="currency"
+          :label="t('goal.currency')"
+          required
+          :error="form.error('currency')"
+        />
       </div>
 
       <div class="grid items-start gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label for="goal-start">{{ t('goal.startsAt') }}</Label>
+        <FormField for="goal-start" :label="t('goal.startsAt')" required :error="form.error('startsAt')">
           <Input id="goal-start" v-model="startsAt" type="date" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="goal-deadline">{{ t('goal.deadline') }}</Label>
+        </FormField>
+        <FormField for="goal-deadline" :label="t('goal.deadline')" :error="form.error('deadline')">
           <Input id="goal-deadline" v-model="deadline" type="date" />
           <p class="text-xs text-muted-foreground">{{ t('goal.optional') }}</p>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="goal-commitment">{{ t('goal.commitment') }}</Label>
+        </FormField>
+        <FormField for="goal-commitment" :label="t('goal.commitment')" :error="form.error('commitment')">
           <AmountInput id="goal-commitment" v-model="commitment" :placeholder="t('goal.optional')" />
-        </div>
+        </FormField>
       </div>
 
       <div class="grid gap-1.5">
@@ -157,12 +163,13 @@ const save = useMutation({
         </div>
       </div>
 
-      <div class="grid gap-2" data-tour="goal-stores">
+      <div class="grid gap-2" data-tour="goal-stores" :data-invalid="form.error('stores') ? '' : undefined">
         <div class="flex items-baseline justify-between gap-2">
-          <Label>{{ t('goal.stores') }}</Label>
+          <Label required>{{ t('goal.stores') }}</Label>
           <span class="text-xs text-muted-foreground">{{ t('goal.storesChosen', { count: storeIds.length }) }}</span>
         </div>
-        <p class="text-xs text-muted-foreground">{{ t('goal.storesHint') }}</p>
+        <p v-if="form.error('stores')" class="text-xs text-destructive" role="alert">{{ form.error('stores') }}</p>
+        <p v-else class="text-xs text-muted-foreground">{{ t('goal.storesHint') }}</p>
         <div class="overflow-hidden rounded-md border border-border">
           <div class="relative border-b border-border">
             <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -202,7 +209,7 @@ const save = useMutation({
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="goal-form" type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button form="goal-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { parseError } from '@/shared/api/ipc'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -44,10 +45,16 @@ async function persist() {
   }
 }
 
+const adder = useFormValidation(() => ({
+  currency:
+    required(adding.value, 'pick') ??
+    (rows.value.some(([code]) => code === adding.value) ? t('validation.duplicateCurrency') : null),
+}))
+
 function add() {
-  if (!adding.value) return
   rows.value.push([adding.value, '0'])
   adding.value = ''
+  adder.reset()
   void persist()
 }
 
@@ -84,14 +91,15 @@ function remove(index: number) {
         </Button>
       </div>
       <div class="flex items-center gap-2">
-        <div class="w-48">
+        <div class="w-48" :data-invalid="adder.invalidAttr('currency')">
           <CurrencyPicker v-model="adding" :kinds="['fiat']" :placeholder="t('inflation.pick')" />
         </div>
-        <Button variant="outline" size="sm" :disabled="!adding" @click="add">
+        <Button variant="outline" size="sm" @click="adder.submit(add, $event)">
           <Plus class="size-4" />
           {{ t('inflation.add') }}
         </Button>
       </div>
+      <p v-if="adder.firstMessage()" class="text-xs text-destructive" role="alert">{{ adder.firstMessage() }}</p>
     </div>
   </Card>
 </template>

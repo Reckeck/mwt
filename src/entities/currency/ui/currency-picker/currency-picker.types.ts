@@ -15,6 +15,10 @@ export interface CurrencyPickerProps {
   compact?: boolean
   /** `id` for the trigger, so an outer `<Label for>` can point at it. */
   id?: string
+  /** Red `*` on the label: the form will not save without a currency. */
+  required?: boolean
+  /** Message under the control after a failed save (see `useFormValidation`). */
+  error?: string
 }
 
 export interface CurrencyOption {

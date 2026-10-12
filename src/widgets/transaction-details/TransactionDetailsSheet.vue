@@ -147,7 +147,13 @@ const unlink = useMutation({
             </template>
             <p v-else class="text-xs text-muted-foreground">{{ t('flows.none') }}</p>
             <div class="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" :disabled="!continueStore" @click="continueChain">
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="!continueStore"
+                :title="continueStore ? undefined : t('flows.continueNoStore')"
+                @click="continueChain"
+              >
                 <Redo2 class="size-4" />
                 {{ t('flows.continue') }}
               </Button>
