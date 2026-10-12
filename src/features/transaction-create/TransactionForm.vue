@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, toRaw, watch } from 'vue'
 import { refDebounced } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -235,8 +235,9 @@ const autoSet: Partial<Record<'fromAsset' | 'toAsset' | 'asset' | 'soldAsset', A
 function autoFill(key: 'fromAsset' | 'toAsset' | 'asset' | 'soldAsset', value: AssetRef | null) {
   if (editing.value || !value) return
   const current = form[key]
-  if (current && current !== autoSet[key]) return
-  autoSet[key] = value
+  // `form` is reactive: what it hands back is a proxy of what was stored.
+  if (current && toRaw(current) !== autoSet[key]) return
+  autoSet[key] = toRaw(value)
   form[key] = value
 }
 // The account money leaves gives its first asset.
