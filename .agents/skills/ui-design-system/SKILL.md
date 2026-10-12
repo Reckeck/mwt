@@ -56,7 +56,49 @@ iconSize: 4       // 16px
 ### Forms
 - Label→input: `gap-1.5`
 - Field→field: `gap-4`
-- Validation: `text-xs text-destructive` below field
+- **Required fields carry a red `*`** — `<FormField required>` / `<Label required>`;
+  `AssetInput` and `CurrencyPicker` take `required` and `error` themselves.
+- **The save button stays enabled.** Only a save in flight (`isPending`) or a
+  backend refusal whose reason is shown next to it may disable it.
+- **Errors appear on save, under the field.** Pressing save with a missing or
+  wrong field does not save: each such field gets its message
+  (`text-xs text-destructive`, `role="alert"`) and a red border, and the focus
+  goes to the first one. After that the messages follow the input.
+- One flow for all of it — `useFormValidation` from `@/shared/lib/form`:
+
+```vue
+<script setup lang="ts">
+const form = useFormValidation(
+  () => ({
+    name: required(name.value),
+    limit: positiveAmount(limit.value),        // blank / not a number / ≤ 0
+    currency: required(currency.value, 'pick'), // «Выберите значение»
+  }),
+  { resetOn: open },                            // a reopened dialog starts clean
+)
+</script>
+
+<template>
+  <form id="budget-form" @submit.prevent="form.submit(save.mutate, $event)">
+    <FormField for="budget-limit" :label="t('budget.limit')" required :error="form.error('limit')">
+      <AmountInput id="budget-limit" v-model="limit" />
+    </FormField>
+  </form>
+  <Button form="budget-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
+</template>
+```
+
+- A button outside a `<form>`: `@click="form.submit(save.mutate, $event)"`.
+- A one-line «add» row with no labels: wrap each control in
+  `<span class="contents" :data-invalid="form.invalidAttr('name')">` and put
+  `form.firstMessage()` in one line under the row; call `form.reset()` after
+  a successful add, or the cleared field shows its error at once.
+- Validators (`validators.ts`): `required`, `decimal`, `positiveAmount`,
+  `nonNegativeAmount`, `integerInRange`, `minLength`, `firstError`. Texts live
+  under `validation.*` and say how to fix it.
+- Mirror backend rules the form can know (a top-up or payment needs a
+  category, V5): a bare «Invalid input» toast after saving is a form bug.
+- Gate: `mise run check-forms` (part of `mise run check`).
 
 ### Buttons
 Use `shared/ui/button` variants: `default`, `outline`, `ghost`, `destructive`, `link`
@@ -143,6 +185,7 @@ belongs on the screen.
 - [ ] No hardcoded hex colors
 - [ ] Typography follows hierarchy
 - [ ] Forms: label→input `gap-1.5`, field→field `gap-4`
+- [ ] Forms: required fields have `*`, save stays enabled, errors under fields via `useFormValidation`
 - [ ] Buttons use standard variants
 - [ ] No nested modals
 - [ ] Focus rings on all interactive elements

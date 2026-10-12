@@ -126,8 +126,12 @@ SpacingClasses = {
 
 ### Forms
 - Label above input, `gap-1.5` label→input, `gap-4` field→field
-- Inline validation: `text-xs text-destructive` below field
-- Disabled: `opacity-50 cursor-not-allowed`
+- Required fields: red `*` after the label (`FormField required` / `Label required`)
+- Validation on save: the save button stays enabled; pressing it with a missing or
+  wrong field shows `text-xs text-destructive` under each such field, a red border
+  on its control and the focus on the first one (`useFormValidation`,
+  `@/shared/lib/form`). AGENTS.md rule 13; gate `mise run check-forms`
+- Disabled: `opacity-50 cursor-not-allowed` — on a save button only while it saves
 - Input: `h-9 rounded-md border border-input bg-transparent px-3 text-sm`
 
 ### Buttons
