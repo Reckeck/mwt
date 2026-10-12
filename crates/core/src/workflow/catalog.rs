@@ -1490,6 +1490,10 @@ fn build() -> Vec<NodeDef> {
     out
 }
 
+/// The catalog as JSON for the browser mock, under `src/shared/api/`;
+/// `mise run gen-types` rewrites it.
+pub const MOCK_CATALOG_FILE: &str = "ipc-mock-workflow-catalog.json";
+
 static CATALOG: OnceLock<Vec<NodeDef>> = OnceLock::new();
 
 /// Every node there is.
@@ -1505,6 +1509,22 @@ pub fn node_def(kind: &str) -> Option<&'static NodeDef> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn the_browser_mock_has_the_current_catalog() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../src/shared/api")
+            .join(MOCK_CATALOG_FILE);
+        let stored: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_default())
+                .unwrap_or_default();
+        let current = serde_json::to_value(catalog()).unwrap();
+        assert!(
+            stored == current,
+            "{} is stale: run `mise run gen-types`",
+            path.display()
+        );
+    }
 
     #[test]
     fn every_node_is_described_once_and_its_ports_are_unique() {

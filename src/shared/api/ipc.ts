@@ -21,6 +21,7 @@ import {
 import { mockCalendar, mockReport } from './ipc-mock-analytics'
 import { mockListTxs, mockTxGraph } from './ipc-mock-explore'
 import { mockPlanning, seedUtilityDemo } from './ipc-mock-planning'
+import { mockWorkflows } from './ipc-mock-workflows'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -965,6 +966,12 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       // No save dialog in the browser.
       return resolve(null)
     default: {
+      try {
+        const flowed = mockWorkflows(cmd, args)
+        if (flowed !== undefined) return resolve(flowed)
+      } catch (err) {
+        return Promise.reject(err)
+      }
       const planned = mockPlanning(
         cmd,
         args,

@@ -4,7 +4,7 @@ import { useIntervalFn, useNow } from '@vueuse/core'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { BookUser, CircleHelp, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff, Clock } from 'lucide-vue-next'
+import { BookUser, CircleHelp, CalendarCheck, ChartArea, LayoutDashboard, Lock, Plus, ScrollText, Settings, WifiOff, Clock, Workflow } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { Money } from '@/entities/currency'
@@ -101,6 +101,7 @@ const navItems = [
   { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
   { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
   { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
+  { name: 'workflows', icon: Workflow, key: 'nav.workflows', prefix: '/workflows' },
   { name: 'analytics-cashflow', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
   { name: 'directory-contacts', icon: BookUser, key: 'nav.directory', prefix: '/directory' },
 ]

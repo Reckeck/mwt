@@ -20,12 +20,38 @@ function planning(own: TourStep[]): TourStep[] {
   return [{ target: 'section-tabs', key: 'planning.tabs', side: 'bottom' }, ...own]
 }
 
+/** Every workflows tab starts with the tabs, then its own content. */
+function workflows(own: TourStep[]): TourStep[] {
+  return [{ target: 'section-tabs', key: 'workflows.tabs', side: 'bottom' }, ...own]
+}
+
+/** The node editor: new and saved workflows alike. */
+const WORKFLOW_EDITOR: TourStep[] = [
+  { target: 'workflow-canvas', key: 'workflowEditor.canvas', side: 'top' },
+  { target: 'workflow-palette', key: 'workflowEditor.palette', side: 'right' },
+  { target: 'workflow-quick-button', key: 'workflowEditor.quick', side: 'bottom' },
+  { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
+  { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },
+  { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },
+  { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
+]
+
 /**
  * Tours by route name. Steps whose element is not on the screen are skipped,
  * so one tour serves wallets of every kind. Every route has one — the
  * `check-onboarding` gate says so (see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
+  workflows: workflows([
+    { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
+    { target: 'workflow-new', key: 'workflows.new', side: 'left' },
+    { target: 'workflow-card', key: 'workflows.card', side: 'top' },
+  ]),
+  'workflows-vars': workflows([{ target: 'workflow-vars', key: 'workflows.vars', side: 'top' }]),
+  'workflows-queue': workflows([{ target: 'workflow-queue', key: 'workflows.queue', side: 'top' }]),
+  'workflows-runs': workflows([{ target: 'workflow-runs', key: 'workflows.runs', side: 'top' }]),
+  'workflow-new': WORKFLOW_EDITOR,
+  'workflow-edit': WORKFLOW_EDITOR,
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },

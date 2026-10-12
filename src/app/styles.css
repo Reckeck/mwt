@@ -31,6 +31,27 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-port-flow: var(--port-flow);
+  --color-port-any: var(--port-any);
+  --color-port-number: var(--port-number);
+  --color-port-money: var(--port-money);
+  --color-port-asset: var(--port-asset);
+  --color-port-currency: var(--port-currency);
+  --color-port-account: var(--port-account);
+  --color-port-category: var(--port-category);
+  --color-port-bool: var(--port-bool);
+  --color-port-text: var(--port-text);
+  --color-port-date: var(--port-date);
+  --color-port-duration: var(--port-duration);
+  --color-port-transaction: var(--port-transaction);
+  --color-port-list: var(--port-list);
+  --color-port-record: var(--port-record);
+  --color-node-trigger: var(--node-trigger);
+  --color-node-data: var(--node-data);
+  --color-node-logic: var(--node-logic);
+  --color-node-variable: var(--node-variable);
+  --color-node-action: var(--node-action);
+  --color-node-list: var(--node-list);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -81,6 +102,28 @@
   --syntax-invalid: oklch(0.577 0.245 27.325);
   --syntax-active-line: oklch(0.546 0.245 262.881 / 8%);
   --syntax-selection: oklch(0.546 0.245 262.881 / 18%);
+  /* Workflow editor: a colour per port type and per node group. */
+  --port-flow: oklch(0.45 0.02 286);
+  --port-any: oklch(0.6 0.01 286);
+  --port-number: oklch(0.6 0.15 250);
+  --port-money: oklch(0.6 0.16 150);
+  --port-asset: oklch(0.62 0.15 80);
+  --port-currency: oklch(0.65 0.14 60);
+  --port-account: oklch(0.58 0.17 300);
+  --port-category: oklch(0.62 0.15 340);
+  --port-bool: oklch(0.6 0.18 25);
+  --port-text: oklch(0.55 0.03 230);
+  --port-date: oklch(0.6 0.12 200);
+  --port-duration: oklch(0.62 0.1 180);
+  --port-transaction: oklch(0.55 0.15 275);
+  --port-list: oklch(0.6 0.14 120);
+  --port-record: oklch(0.58 0.12 100);
+  --node-trigger: oklch(0.7 0.16 70);
+  --node-data: oklch(0.6 0.15 250);
+  --node-logic: oklch(0.58 0.17 300);
+  --node-variable: oklch(0.6 0.12 190);
+  --node-action: oklch(0.6 0.16 150);
+  --node-list: oklch(0.62 0.15 340);
 }
 
 .dark {
@@ -122,6 +165,28 @@
   --syntax-invalid: oklch(0.704 0.191 22.216);
   --syntax-active-line: oklch(1 0 0 / 6%);
   --syntax-selection: oklch(1 0 0 / 16%);
+  /* Workflow editor, dark. */
+  --port-flow: oklch(0.85 0.01 286);
+  --port-any: oklch(0.7 0.01 286);
+  --port-number: oklch(0.75 0.15 250);
+  --port-money: oklch(0.75 0.16 150);
+  --port-asset: oklch(0.75 0.15 80);
+  --port-currency: oklch(0.75 0.14 60);
+  --port-account: oklch(0.75 0.17 300);
+  --port-category: oklch(0.75 0.15 340);
+  --port-bool: oklch(0.75 0.18 25);
+  --port-text: oklch(0.75 0.03 230);
+  --port-date: oklch(0.75 0.12 200);
+  --port-duration: oklch(0.75 0.1 180);
+  --port-transaction: oklch(0.75 0.15 275);
+  --port-list: oklch(0.75 0.14 120);
+  --port-record: oklch(0.75 0.12 100);
+  --node-trigger: oklch(0.72 0.16 70);
+  --node-data: oklch(0.72 0.15 250);
+  --node-logic: oklch(0.72 0.17 300);
+  --node-variable: oklch(0.72 0.12 190);
+  --node-action: oklch(0.72 0.16 150);
+  --node-list: oklch(0.72 0.15 340);
 }
 
 * {
@@ -206,4 +271,47 @@ body .driver-popover-arrow {
 }
 body .driver-popover-close-btn {
   color: var(--muted-foreground);
+}
+
+/* Vue Flow on the app's theme (the workflow editor's canvas). */
+.wf-canvas .vue-flow__minimap {
+  background-color: var(--card);
+}
+.wf-canvas .vue-flow__minimap-node {
+  fill: var(--muted-foreground);
+}
+.wf-canvas .vue-flow__minimap-mask {
+  fill: var(--muted);
+  fill-opacity: 0.6;
+}
+.wf-canvas .vue-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+.wf-canvas .vue-flow__controls-button {
+  background: var(--card);
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+.wf-canvas .vue-flow__controls-button:hover {
+  background: var(--muted);
+}
+.wf-canvas .vue-flow__controls-button svg {
+  fill: currentColor;
+}
+.wf-canvas .vue-flow__edge-textbg {
+  fill: var(--card);
+}
+.wf-canvas .vue-flow__edge-text {
+  fill: var(--foreground);
+  font-size: 11px;
+}
+.wf-canvas .vue-flow__connection-path {
+  stroke: var(--muted-foreground);
+}
+.wf-canvas .vue-flow__edge.selected .vue-flow__edge-path {
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 2px var(--ring));
 }
