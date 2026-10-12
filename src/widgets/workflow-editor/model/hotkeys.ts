@@ -1,6 +1,7 @@
 /** Keyboard shortcuts of the editor, for the help card and the handler. */
 export const EDITOR_HOTKEYS = [
   { keys: 'Ctrl+Space', action: 'quickAdd' },
+  { keys: 'Space', action: 'pan' },
   { keys: 'Ctrl+S', action: 'save' },
   { keys: 'Ctrl+Enter', action: 'emulate' },
   { keys: 'F1', action: 'help' },

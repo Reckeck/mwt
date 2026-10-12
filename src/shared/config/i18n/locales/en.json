@@ -2120,7 +2120,7 @@
   "tour.workflows.runs.title": "Journal",
   "tour.workflows.runs.body": "Open a run to see every step and the values it went with.",
   "tour.workflowEditor.canvas.title": "Canvas",
-  "tour.workflowEditor.canvas.body": "Square ports are the flow (what runs next), round ones data; the colour is the value's type. Drag a wire from an output to an input.",
+  "tour.workflowEditor.canvas.body": "Square ports are the flow (what runs next), round ones data; the colour is the value's type. Drag a wire from an output to an input. Hold Space and drag to move the canvas.",
   "tour.workflowEditor.palette.title": "Nodes",
   "tour.workflowEditor.palette.body": "Triggers, data, logic, variables and actions. Drag onto the canvas or click.",
   "tour.workflowEditor.quick.title": "Ctrl+Space",
@@ -2233,5 +2233,7 @@
   "tour.workflowEditor.tests.title": "Tests and versions",
   "tour.workflowEditor.tests.body": "A saved emulation becomes a test: after edits one button shows whether anything broke. Earlier versions can be put back.",
   "whatsNew.round14.subflows": "Helper workflows: «Call a workflow» runs a shared part inside the run and gets its answer.",
-  "whatsNew.round14.tests": "Workflow tests by emulation, a version history to restore from, and notes on the canvas."
+  "whatsNew.round14.tests": "Workflow tests by emulation, a version history to restore from, and notes on the canvas.",
+  "workflow.hotkey.pan": "hold and drag: move the canvas along X and Y, even over nodes",
+  "whatsNew.round14.spacePan": "In the workflow editor hold Space and drag: the canvas moves along X and Y from any point, even over nodes."
 }
