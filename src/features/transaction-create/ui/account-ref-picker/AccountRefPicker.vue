@@ -2,7 +2,7 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Building2, Check, ChevronDown, PenLine, User } from 'lucide-vue-next'
+import { Building2, Check, ChevronDown, CreditCard, Hash, Landmark, Link, PenLine, Phone, User, Wallet } from 'lucide-vue-next'
 import {
   ComboboxAnchor,
   ComboboxContent,
@@ -55,9 +55,11 @@ const contactList = useQuery({
 })
 
 const RAW = 'raw'
+/** The «not set» row. Reka throws on an item whose value is `''`, which left the list half-rendered. */
+const NONE = 'none'
 
 function encode(value: AccountRef | null): string {
-  if (!value) return ''
+  if (!value) return NONE
   if ('store' in value) return `store:${value.store}`
   if ('contact' in value) {
     const { contact_id: contactId, account_id: accountId } = value.contact
@@ -71,7 +73,9 @@ const choice = ref(encode(side.value))
 
 // Follow outside changes (a swap of the two ends, an edit loaded later).
 watch(side, (value) => {
-  if (encode(value) !== choice.value) choice.value = encode(value)
+  // Free text not typed yet is still a free-text choice, not «not set».
+  const keepRaw = value === null && choice.value === RAW
+  if (!keepRaw && encode(value) !== choice.value) choice.value = encode(value)
   if (value && 'raw' in value && value.raw !== rawText.value) rawText.value = value.raw
 })
 
@@ -125,16 +129,12 @@ const contactOptions = computed<AccountOption[]>(() =>
         },
         ...accounts.map((account) => ({
           value: `contact:${contact.id}:${account.id}`,
-          title: contact.name,
-          detail: [
-            account.label || t(`detailKind.${account.kind}`),
-            account.value,
-            account.currency?.toUpperCase() ?? '',
-          ]
-            .filter(Boolean)
-            .join(' · '),
+          title: account.label || t(`detailKind.${account.kind}`),
+          detail: [account.value, account.currency?.toUpperCase() ?? ''].filter(Boolean).join(' · '),
           group,
           haystack: `${contact.name} ${account.label} ${account.value} ${account.currency ?? ''}`.toLowerCase(),
+          parent: `contact:${contact.id}`,
+          detailKind: account.kind,
         })),
       ]
     }),
@@ -155,9 +155,13 @@ const search = ref('')
 watch(open, (isOpen) => {
   if (isOpen) search.value = ''
 })
+/** A matching account keeps its contact on top, so it is clear whose card it is. */
 const shown = computed(() => {
   const needle = search.value.trim().toLowerCase()
-  return needle ? allOptions.value.filter((row) => row.value === RAW || row.haystack.includes(needle)) : allOptions.value
+  if (!needle) return allOptions.value
+  const hit = (row: AccountOption) => row.value === RAW || row.haystack.includes(needle)
+  const parents = new Set(allOptions.value.filter((row) => row.parent && hit(row)).map((row) => row.parent))
+  return allOptions.value.filter((row) => hit(row) || parents.has(row.value))
 })
 /** Rows under their headings, in first-seen order. */
 const groups = computed(() => {
@@ -167,7 +171,19 @@ const groups = computed(() => {
 })
 
 const current = computed(() => allOptions.value.find((row) => row.value === choice.value) ?? null)
-const iconOf = (value: string) => (value.startsWith('store:') ? Building2 : value === RAW ? PenLine : User)
+const DETAIL_ICONS: Record<DetailKind, typeof User> = {
+  card: CreditCard,
+  crypto_address: Wallet,
+  iban: Landmark,
+  account: Landmark,
+  phone: Phone,
+  url: Link,
+  other: Hash,
+}
+function iconOf(row: AccountOption) {
+  if (row.detailKind) return DETAIL_ICONS[row.detailKind]
+  return row.value.startsWith('store:') ? Building2 : row.value === RAW ? PenLine : User
+}
 </script>
 
 <template>
@@ -213,7 +229,7 @@ const iconOf = (value: string) => (value.startsWith('store:') ? Building2 : valu
           <ComboboxViewport class="max-h-80 overflow-y-auto p-1">
             <ComboboxItem
               v-if="props.emptyLabel && !search.trim()"
-              value=""
+              :value="NONE"
               class="flex w-full cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-sm text-muted-foreground outline-none data-[highlighted]:bg-accent"
             >
               {{ props.emptyLabel }}
@@ -222,16 +238,18 @@ const iconOf = (value: string) => (value.startsWith('store:') ? Building2 : valu
               <p v-if="group" class="px-2 pb-0.5 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {{ group }}
               </p>
+              <!-- A contact's accounts hang under it, indented, instead of repeating its name. -->
               <ComboboxItem
                 v-for="row in rows"
                 :key="row.value"
                 :value="row.value"
                 class="flex w-full cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+                :class="row.parent && 'ml-4 w-[calc(100%-1rem)] rounded-l-none border-l border-border py-1'"
               >
                 <Check v-if="row.value === choice" class="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                <component :is="iconOf(row.value)" v-else class="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <component :is="iconOf(row)" v-else class="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span class="grid min-w-0 leading-tight">
-                  <span class="truncate font-medium">{{ row.title }}</span>
+                  <span class="truncate" :class="row.parent ? 'text-[13px]' : 'font-medium'">{{ row.title }}</span>
                   <span class="truncate text-xs text-muted-foreground">{{ row.detail }}</span>
                 </span>
               </ComboboxItem>

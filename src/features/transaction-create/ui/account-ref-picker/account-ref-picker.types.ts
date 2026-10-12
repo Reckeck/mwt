@@ -23,4 +23,8 @@ export interface AccountOption {
   group: string
   /** Lower-case text the search looks in. */
   haystack: string
+  /** A contact's account: the contact row it sits under (`contact:<id>`). */
+  parent?: string
+  /** What kind of account this is, for the icon. */
+  detailKind?: DetailKind
 }
