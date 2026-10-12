@@ -22,5 +22,6 @@ CARGO_TARGET_DIR = ".rust-target"
 "clippy" = { description = "Clippy lints (deny warnings)", run = "cargo clippy --workspace --all-targets -- -D warnings" }
 "gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
 "check-onboarding" = { description = "Every screen has a tour; tour, whats-new and learning texts exist (AGENTS.md rule 12)", run = "node scripts/check-onboarding.mjs" }
-"check" = { description = "Lint + typecheck + onboarding + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
+"check-forms" = { description = "Forms: save buttons stay enabled, fields are checked on save (AGENTS.md rule 13)", run = "node scripts/check-forms.mjs" }
+"check" = { description = "Lint + typecheck + onboarding + forms + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && node scripts/check-forms.mjs && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }

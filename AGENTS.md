@@ -16,7 +16,8 @@
 | `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
-| `mise run check` | lint + typecheck + onboarding + clippy + tests |
+| `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13) |
+| `mise run check` | lint + typecheck + onboarding + forms + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
@@ -136,6 +137,30 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
     строка `Onboarding: n/a — <причина>`. `mise run check-onboarding` (входит
     в `mise run check`) ловит экран без тура, шаг без элемента и пропавшие
     тексты. Подробно — скилл `onboarding`.
+
+13. **Формы: обязательные поля помечены, ошибки — под полем при сохранении.**
+    Любая форма (диалог, вкладка настроек, строка «добавить») устроена так:
+    - обязательное поле отмечено красной `*` — `FormField required` или
+      `Label required` (`shared/ui/form-field`, `shared/ui/label`); у
+      `AssetInput` и `CurrencyPicker` для этого свои пропсы `required`/`error`;
+    - кнопка сохранения **активна**; её блокирует только идущее сохранение
+      (`isPending`) или отказ бэкенда, причина которого показана рядом;
+    - нажатие с пустым или неверным полем не сохраняет, а показывает
+      сообщение под каждым таким полем, красит его рамку и ставит фокус на
+      первое — всё это даёт `useFormValidation` (`shared/lib/form`):
+      `@submit.prevent="form.submit(save.mutate, $event)"`,
+      `:error="form.error('name')"`;
+    - правила — из `shared/lib/form/validators.ts` (`required`,
+      `positiveAmount`, `nonNegativeAmount`, `integerInRange`, `minLength`,
+      `firstError`); тексты — `validation.*` в обоих локалях. Сообщение
+      говорит, как исправить («Должно быть больше нуля»), а не «неверно»;
+    - всё, что бэкенд отвергнет на известном правиле, форма проверяет сама
+      до отправки (пример — категория у пополнения и оплаты, V5): ответ
+      «Invalid input» после нажатия — это баг формы.
+
+    `mise run check-forms` (входит в `mise run check`) ловит кнопку отправки,
+    заблокированную проверкой полей, и `@submit` с ручной проверкой
+    (`valid && save()`). Подробно — скилл `ui-design-system`, раздел «Forms».
 
 ## Конвенции
 
@@ -283,5 +308,7 @@ pnpm dlx skills list                             # что установлено
 - [ ] Обучение к фиче (правило 12, скилл `onboarding`): тур, подсказки, пустые
       состояния, «Что нового» обновлены и `mise run check-onboarding` зелёный —
       или в коммите строка `Onboarding: n/a — <причина>`
+- [ ] Формы (правило 13): обязательные поля с `*`, кнопка сохранения активна,
+      ошибки под полями через `useFormValidation`; `mise run check-forms` зелёный
 - [ ] `jj diff` содержит только то, что относится к задаче
 - [ ] Коммит сделан **только если пользователь попросил**, гейт до этого зелёный
