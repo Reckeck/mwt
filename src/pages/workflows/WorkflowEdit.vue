@@ -11,6 +11,7 @@ const router = useRouter()
 
 const workflowId = computed(() => (route.name === 'workflow-edit' ? String(route.params.id) : null))
 const template = computed(() => (typeof route.query.template === 'string' ? route.query.template : null))
+const lesson = computed(() => (typeof route.query.lesson === 'string' ? route.query.lesson : null))
 const editor = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 let leavingAfterSave = false
 
@@ -31,6 +32,14 @@ onBeforeRouteLeave(() => {
 
 <template>
   <div class="h-[calc(100dvh-7rem)] min-h-[36rem] @container">
-    <WorkflowEditor :key="workflowId ?? `new-${template ?? ''}`" ref="editor" :workflow-id="workflowId" :template="template" @saved="onSaved" />
+    <WorkflowEditor
+      :key="workflowId ?? `new-${template ?? ''}-${lesson ?? ''}`"
+      ref="editor"
+      :workflow-id="workflowId"
+      :template="template"
+      :lesson="lesson"
+      @saved="onSaved"
+      @lesson="(id) => router.push({ name: 'workflow-new', query: { lesson: id } })"
+    />
   </div>
 </template>

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { RouterLink, useRouter } from 'vue-router'
 import { Copy, FileInput, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
 
-import { OutcomeBadge, WORKFLOW_TEMPLATES } from '@/entities/workflow'
+import { LessonList, OutcomeBadge, WORKFLOW_TEMPLATES } from '@/entities/workflow'
 import { WorkflowImportDialog, useWorkflowActions } from '@/features/workflow-manage'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -47,6 +47,8 @@ const importOpen = ref(false)
         </Button>
       </div>
     </div>
+
+    <LessonList />
 
     <section class="grid gap-2" data-tour="workflow-templates">
       <h3 class="text-sm font-medium">{{ t('workflow.list.templates') }}</h3>

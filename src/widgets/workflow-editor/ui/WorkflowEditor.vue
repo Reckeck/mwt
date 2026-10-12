@@ -12,7 +12,13 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
-import { WORKFLOW_TEMPLATES, WorkflowNodeCard, type WorkflowNodeData, useNodeCatalog } from '@/entities/workflow'
+import {
+  WORKFLOW_LESSONS,
+  WORKFLOW_TEMPLATES,
+  WorkflowNodeCard,
+  type WorkflowNodeData,
+  useNodeCatalog,
+} from '@/entities/workflow'
 import { useWorkflowActions } from '@/features/workflow-manage'
 import { type QuickAddChoice, type QuickAddContext, QuickAddPanel } from '@/features/workflow-quick-add'
 import { Button } from '@/shared/ui/button'
@@ -29,6 +35,7 @@ import { useHistory } from '../model/history'
 import { isTyping } from '../model/hotkeys'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
 import HotkeysHelp from './HotkeysHelp.vue'
+import LessonPanel from './LessonPanel.vue'
 import NodeInspector from './NodeInspector.vue'
 import NodePalette from './NodePalette.vue'
 import RunPanel from './RunPanel.vue'
@@ -39,8 +46,8 @@ import WorkflowSettingsPanel from './WorkflowSettingsPanel.vue'
  * right. Ctrl+Space adds a node that fits where the cursor is; the emulation
  * shows the run step by step and the value on every wire.
  */
-const props = withDefaults(defineProps<WorkflowEditorProps>(), { workflowId: null, template: null })
-const emit = defineEmits<{ saved: [id: string] }>()
+const props = withDefaults(defineProps<WorkflowEditorProps>(), { workflowId: null, template: null, lesson: null })
+const emit = defineEmits<{ saved: [id: string]; lesson: [id: string] }>()
 
 const { t, locale } = useI18n()
 const settings = useSettingsStore()
@@ -92,6 +99,7 @@ watch(simple, (value) => {
 })
 
 /* --- loading --- */
+const lesson = computed(() => WORKFLOW_LESSONS.find((entry) => entry.id === props.lesson) ?? null)
 const workflow = useQuery({
   queryKey: computed(() => WORKFLOW_KEYS.one(props.workflowId ?? '')),
   queryFn: () => call<Workflow>('get_workflow', { id: props.workflowId }),
@@ -116,6 +124,9 @@ watch(
       react.value = stored.react_to_workflows
       maxAmount.value = stored.max_amount ?? ''
       loadGraph(parseGraph(stored.graph))
+    } else if (lesson.value) {
+      name.value = t('workflow.lesson.workflowName', { title: t(`workflow.lesson.${lesson.value.id}.title`) })
+      loadGraph(lesson.value.start((key) => t(key)))
     } else {
       const template = WORKFLOW_TEMPLATES.find((entry) => entry.id === props.template)
       name.value = template ? t(`workflow.template.${template.id}.name`) : t('workflow.newName')
@@ -341,6 +352,15 @@ function onQuickPick(choice: QuickAddChoice) {
     else connect(node.id, choice.port, context.nodeId, context.port)
   } else if (context.mode === 'edge' && choice.port) {
     const old = edges.value.find((edge) => edge.id === context.edgeId)
+    const source = nodes.value.find((entry) => entry.id === old?.source)
+    const target = nodes.value.find((entry) => entry.id === old?.target)
+    // Inserted into a wire: it sits halfway along it.
+    if (source && target) {
+      node.position = {
+        x: Math.round((source.position.x + target.position.x) / 2),
+        y: Math.round((source.position.y + target.position.y) / 2) + 40,
+      }
+    }
     if (old && choice.port && choice.outPort) {
       edges.value = edges.value.filter((edge) => edge.id !== old.id)
       connect(old.source, old.sourceHandle ?? '', node.id, choice.port)
@@ -539,7 +559,7 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) event.preventDefault()
+  if (dirty.value && !lesson.value) event.preventDefault()
 }
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => {
@@ -548,7 +568,8 @@ onBeforeUnmount(() => {
   clearTimeout(checkTimer)
 })
 
-defineExpose({ dirty })
+/** A lesson is practice: leaving it never asks to save. */
+defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
 </script>
 
 <template>
@@ -642,7 +663,17 @@ defineExpose({ dirty })
         <RunPanel v-if="report" :report="report" @focus="focusNode" @close="report = null" />
       </div>
 
-      <div class="min-h-0 overflow-y-auto rounded-lg border border-border bg-card p-3">
+      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto">
+        <LessonPanel
+          v-if="lesson"
+          :lesson="lesson"
+          :graph="graph"
+          :report="report"
+          :checking="actions.dryRun.isPending.value"
+          @check="emulate"
+          @next="(id) => emit('lesson', id)"
+        />
+        <div class="rounded-lg border border-border bg-card p-3">
         <NodeInspector
           v-if="selectedNode"
           v-model:help="helpOpen"
@@ -665,6 +696,7 @@ defineExpose({ dirty })
           :base="base"
           @focus="focusNode"
         />
+        </div>
       </div>
     </div>
 

@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
 
-import { OutcomeBadge, RunTrace } from '@/entities/workflow'
+import { OutcomeBadge, RunTrace, explainRun } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 import { formatMoney } from '@/shared/lib/format'
 import { txId, txKind, txLegs } from '@/shared/lib/transactions'
@@ -11,7 +11,7 @@ import { txId, txKind, txLegs } from '@/shared/lib/transactions'
 const props = defineProps<{ report: RunReport }>()
 const emit = defineEmits<{ focus: [nodeId: string]; close: [] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 function line(tx: Transaction): string {
   const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
@@ -30,6 +30,7 @@ function line(tx: Transaction): string {
       <span class="flex-1" />
       <Button variant="ghost" size="icon" :aria-label="t('actions.close')" @click="emit('close')"><X class="size-4" /></Button>
     </header>
+    <p class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>
     <RunTrace :steps="props.report.run.trace" @focus="(id) => emit('focus', id)" />
     <div v-if="props.report.transactions.length" class="grid gap-1">
       <h4 class="text-xs font-medium uppercase text-muted-foreground">

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { CircleCheck, GraduationCap, PlayCircle, Sparkles } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { LessonList } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
@@ -84,6 +85,7 @@ async function reset() {
           </Button>
         </li>
       </ul>
+      <LessonList />
     </div>
   </Card>
 </template>
