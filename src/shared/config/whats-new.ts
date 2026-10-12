@@ -28,6 +28,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'adjustment', route: 'wallet' },
       { key: 'p2p', route: 'transactions' },
       { key: 'picker', route: 'transactions' },
+      { key: 'assetCurrencies', route: 'transactions' },
       { key: 'notifications', route: 'planning-reminders' },
       { key: 'autoReminders', route: 'planning-reminders' },
       { key: 'reminders', route: 'planning-reminders' },
