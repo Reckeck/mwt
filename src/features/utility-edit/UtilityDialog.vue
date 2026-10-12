@@ -7,12 +7,14 @@ import { toast } from 'vue-sonner'
 import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { firstError, integerInRange, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -88,8 +90,18 @@ const utilityKind = computed<UtilityKind | null>(() => {
       }
     : null
 })
-const valid = computed(
-  () => name.value.trim() !== '' && utilityKind.value !== null && currency.value !== '' && propertyId.value !== '',
+const form = useFormValidation(
+  () => ({
+    name: required(name.value),
+    unit: kind.value === 'metered' ? required(unit.value) : null,
+    tariff: kind.value === 'metered' ? positiveAmount(tariff.value) : null,
+    amount: kind.value === 'metered' ? null : positiveAmount(amount.value),
+    deposit: kind.value === 'housing' ? nonNegativeAmount(deposit.value) : null,
+    dueDay: kind.value === 'housing' ? firstError(required(dueDay.value), integerInRange(dueDay.value, 1, 31)) : null,
+    currency: required(currency.value, 'pick'),
+    property: required(propertyId.value, 'pick'),
+  }),
+  { resetOn: open },
 )
 
 const save = useMutation({
@@ -118,12 +130,11 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.item ? t('utilities.edit') : t('utilities.new')">
-    <form id="utility-form" class="@container grid gap-4" @submit.prevent="valid && save.mutate()">
+    <form id="utility-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <div class="grid gap-3 @sm:grid-cols-[1fr_11rem]">
-        <div class="grid gap-1.5">
-          <Label for="utility-name">{{ t('utilities.name') }}</Label>
+        <FormField for="utility-name" :label="t('utilities.name')" required :error="form.error('name')">
           <Input id="utility-name" v-model="name" :placeholder="t('utilities.namePlaceholder')" />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="utility-kind">{{ t('utilities.kind') }}</Label>
           <Select id="utility-kind" v-model="kind">
@@ -134,29 +145,24 @@ const save = useMutation({
       <p class="text-xs text-muted-foreground">{{ t(`utilities.kindHint.${kind}`) }}</p>
 
       <div v-if="kind === 'metered'" class="grid gap-3 @sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="utility-unit">{{ t('utilities.unit') }}</Label>
+        <FormField for="utility-unit" :label="t('utilities.unit')" required :error="form.error('unit')">
           <Input id="utility-unit" v-model="unit" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="utility-tariff">{{ t('utilities.tariff', { unit }) }}</Label>
+        </FormField>
+        <FormField for="utility-tariff" :label="t('utilities.tariff', { unit })" required :error="form.error('tariff')">
           <AmountInput id="utility-tariff" v-model="tariff" />
-        </div>
+        </FormField>
       </div>
       <div v-else class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label for="utility-amount">{{ kind === 'housing' ? t('utilities.rent') : t('utilities.amount') }}</Label>
+        <FormField for="utility-amount" :label="kind === 'housing' ? t('utilities.rent') : t('utilities.amount')" required :error="form.error('amount')">
           <AmountInput id="utility-amount" v-model="amount" />
-        </div>
+        </FormField>
         <template v-if="kind === 'housing'">
-          <div class="grid gap-1.5">
-            <Label for="utility-deposit">{{ t('utilities.deposit') }}</Label>
+          <FormField for="utility-deposit" :label="t('utilities.deposit')" :error="form.error('deposit')">
             <AmountInput id="utility-deposit" v-model="deposit" :placeholder="t('goal.optional')" />
-          </div>
-          <div class="grid gap-1.5">
-            <Label for="utility-due">{{ t('utilities.dueDay') }}</Label>
+          </FormField>
+          <FormField for="utility-due" :label="t('utilities.dueDay')" required :error="form.error('dueDay')">
             <Input id="utility-due" v-model="dueDay" type="number" min="1" max="31" />
-          </div>
+          </FormField>
         </template>
       </div>
       <div v-if="kind === 'housing'" class="grid gap-1.5">
@@ -169,18 +175,16 @@ const save = useMutation({
       </div>
 
       <div class="grid gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label for="utility-currency">{{ t('utilities.currency') }}</Label>
+        <FormField for="utility-currency" :label="t('utilities.currency')" required :error="form.error('currency')">
           <CurrencyPicker id="utility-currency" v-model="currency" />
-        </div>
-        <div v-if="!props.propertyId" class="grid gap-1.5">
-          <Label for="utility-property">{{ t('utilities.property') }}</Label>
+        </FormField>
+        <FormField v-if="!props.propertyId" for="utility-property" :label="t('utilities.property')" required :error="form.error('property')">
           <Select id="utility-property" v-model="propertyId">
             <option value="" disabled>{{ t('utilities.pickProperty') }}</option>
             <option v-for="node in properties" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
           </Select>
           <p v-if="!properties.length" class="text-xs text-muted-foreground">{{ t('utilities.noProperty') }}</p>
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="utility-store">{{ t('utilities.store') }}</Label>
           <StoreNodeSelect id="utility-store" v-model="storeId" :nodes="nodes" :empty-label="t('utilities.anyStore')" />
@@ -197,7 +201,7 @@ const save = useMutation({
     </form>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="utility-form" type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button form="utility-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

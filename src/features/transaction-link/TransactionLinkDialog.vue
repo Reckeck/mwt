@@ -10,6 +10,7 @@ import { Input } from '@/shared/ui/input'
 import { call, parseError } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { txId, txKind, txMeta, txPrincipalLegs, txSearchText } from '@/shared/lib/transactions'
+import { useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { TransactionLinkDialogProps } from './transaction-link.types'
@@ -54,6 +55,10 @@ function toggle(id: string) {
   picked.value = picked.value.includes(id) ? picked.value.filter((entry) => entry !== id) : [...picked.value, id]
 }
 
+const form = useFormValidation(() => ({ picked: picked.value.length ? null : t('validation.pickOperations') }), {
+  resetOn: open,
+})
+
 const save = useMutation({
   mutationFn: () =>
     call<string>('link_transactions', {
@@ -73,7 +78,8 @@ const save = useMutation({
     <div class="grid gap-3">
       <p class="text-sm text-muted-foreground">{{ t('flows.linkHint') }}</p>
       <Input v-model="search" :placeholder="t('flows.search')" />
-      <ul class="grid max-h-80 gap-1 overflow-y-auto">
+      <p v-if="form.firstMessage()" class="text-xs text-destructive" role="alert">{{ form.firstMessage() }}</p>
+      <ul class="grid max-h-80 gap-1 overflow-y-auto" :data-invalid="form.invalidAttr('picked')">
         <li v-for="tx in candidates" :key="txId(tx)">
           <label class="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
             <input type="checkbox" class="size-4 accent-primary" :checked="picked.includes(txId(tx))" @change="toggle(txId(tx))" />
@@ -88,7 +94,7 @@ const save = useMutation({
     </div>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button :disabled="!picked.length || save.isPending.value" @click="save.mutate()">{{ t('flows.link') }}</Button>
+      <Button :disabled="save.isPending.value" @click="form.submit(save.mutate, $event)">{{ t('flows.link') }}</Button>
     </template>
   </Dialog>
 </template>

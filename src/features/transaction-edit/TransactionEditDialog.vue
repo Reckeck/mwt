@@ -39,7 +39,7 @@ const isAdjustment = computed(() => txKind(props.transaction) === 'adjustment')
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="transaction-form" type="submit" :disabled="!form?.valid || form?.pending">
+      <Button form="transaction-form" type="submit" :disabled="form?.pending">
         {{ t('actions.save') }}
       </Button>
     </template>

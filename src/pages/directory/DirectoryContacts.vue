@@ -268,6 +268,7 @@ function contactActions(contact: Contact): UiAction[] {
               variant="outline"
               size="sm"
               :disabled="!transferStore || selected.archived"
+              :title="selected.archived ? t('contacts.transferArchived') : transferStore ? undefined : t('contacts.transferNoStore')"
               @click="openTransfer(null)"
             >
               <ArrowRightLeft class="size-4" />

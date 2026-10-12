@@ -7,8 +7,9 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { FormField } from '@/shared/ui/form-field'
 import { call, parseError } from '@/shared/api/ipc'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -56,6 +57,10 @@ function record(event: KeyboardEvent) {
   draft.value = parts.join('+')
 }
 
+const shortcutCheck = useFormValidation(() => ({
+  shortcut: required(draft.value) ?? (draft.value === settings.app?.quick_add_shortcut ? t('quickAdd.unchanged') : null),
+}))
+
 async function save(shortcut: string | null) {
   failed.value = ''
   try {
@@ -83,8 +88,7 @@ async function save(shortcut: string | null) {
       </div>
     </div>
     <div v-else class="grid gap-3">
-      <div class="grid gap-1.5">
-        <Label for="quick-add-shortcut">{{ t('quickAdd.shortcut') }}</Label>
+      <FormField for="quick-add-shortcut" :label="t('quickAdd.shortcut')" required :error="shortcutCheck.error('shortcut')">
         <div class="flex flex-wrap gap-2">
           <Input
             id="quick-add-shortcut"
@@ -93,7 +97,7 @@ async function save(shortcut: string | null) {
             :placeholder="t('quickAdd.shortcutPlaceholder')"
             @keydown="record"
           />
-          <Button size="sm" class="h-9" :disabled="!draft || draft === settings.app?.quick_add_shortcut" @click="save(draft)">
+          <Button size="sm" class="h-9" @click="shortcutCheck.submit(() => save(draft), $event)">
             {{ t('actions.save') }}
           </Button>
           <Button v-if="settings.app?.quick_add_shortcut" variant="outline" size="sm" class="h-9" @click="save(null)">
@@ -104,7 +108,7 @@ async function save(shortcut: string | null) {
           {{ settings.app?.quick_add_shortcut ? t('quickAdd.stateOn', { keys: settings.app.quick_add_shortcut }) : t('quickAdd.stateOff') }}
         </p>
         <p v-if="failed" class="text-xs text-destructive">{{ failed }}</p>
-      </div>
+      </FormField>
     </div>
   </Card>
 </template>

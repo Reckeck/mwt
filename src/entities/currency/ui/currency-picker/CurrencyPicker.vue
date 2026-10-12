@@ -36,6 +36,8 @@ const props = withDefaults(defineProps<CurrencyPickerProps>(), {
   extra: () => [],
   compact: false,
   id: '',
+  required: false,
+  error: undefined,
 })
 
 const selected = defineModel<string>({ default: '' })
@@ -88,8 +90,8 @@ function onOpen(isOpen: boolean) {
 </script>
 
 <template>
-  <div class="grid gap-1.5">
-    <Label v-if="props.label" :for="triggerId">{{ props.label }}</Label>
+  <div class="grid content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
+    <Label v-if="props.label" :for="triggerId" :required="props.required">{{ props.label }}</Label>
 
     <ComboboxRoot
       v-model="picked"
@@ -173,6 +175,7 @@ function onOpen(isOpen: boolean) {
       </ComboboxPortal>
     </ComboboxRoot>
 
-    <p v-if="catalogNotice" class="text-xs text-muted-foreground">{{ catalogNotice }}</p>
+    <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>
+    <p v-else-if="catalogNotice" class="text-xs text-muted-foreground">{{ catalogNotice }}</p>
   </div>
 </template>

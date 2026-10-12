@@ -5,12 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, Minus, Plus, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -36,6 +37,12 @@ const fail = (err: unknown) => toast.error(t('envelope.failed'), { description: 
 const name = ref('')
 const assetKey = ref('')
 const target = ref('')
+
+const form = useFormValidation(() => ({
+  name: required(name.value),
+  asset: required(pickedAsset.value, 'pick'),
+  target: nonNegativeAmount(target.value),
+}))
 watch(
   () => props.assets,
   (assets) => {
@@ -58,6 +65,7 @@ const create = useMutation({
     }),
   onSuccess: () => {
     name.value = ''
+    form.reset()
     target.value = ''
     toast.success(t('envelope.created'))
     refresh()
@@ -150,25 +158,22 @@ const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals:
     <form
       v-if="props.assets.length"
       class="@container grid gap-3 rounded-lg border border-dashed border-border p-3"
-      @submit.prevent="create.mutate()"
+      @submit.prevent="form.submit(create.mutate, $event)"
     >
       <p class="text-sm font-medium">{{ t('envelope.new') }}</p>
-      <div class="grid gap-3 @md:grid-cols-[1fr_8rem_8rem_auto] @md:items-end">
-        <div class="grid gap-1.5">
-          <Label for="envelope-name">{{ t('envelope.name') }}</Label>
+      <div class="grid gap-3 @md:grid-cols-[1fr_8rem_8rem_auto] @md:items-start">
+        <FormField for="envelope-name" :label="t('envelope.name')" required :error="form.error('name')">
           <Input id="envelope-name" v-model="name" :placeholder="t('envelope.namePlaceholder')" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="envelope-asset">{{ t('form.asset') }}</Label>
+        </FormField>
+        <FormField for="envelope-asset" :label="t('form.asset')" required :error="form.error('asset')">
           <Select id="envelope-asset" v-model="assetKey">
             <option v-for="asset in props.assets" :key="asset.symbol" :value="asset.symbol">{{ asset.symbol }}</option>
           </Select>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="envelope-target">{{ t('envelope.target') }}</Label>
+        </FormField>
+        <FormField for="envelope-target" :label="t('envelope.target')" :error="form.error('target')">
           <AmountInput id="envelope-target" v-model="target" />
-        </div>
-        <Button type="submit" :disabled="!name.trim() || !pickedAsset || create.isPending.value">
+        </FormField>
+        <Button type="submit" class="@md:mt-[1.375rem]" :disabled="create.isPending.value">
           <Plus class="size-4" />
           {{ t('envelope.add') }}
         </Button>

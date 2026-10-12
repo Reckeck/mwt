@@ -128,6 +128,12 @@
   border-color: var(--border);
 }
 
+/* A field a failed save pointed at (`FormField` with an error): red edge on its control. */
+[data-invalid] .border-input,
+.border-input[data-invalid] {
+  border-color: var(--destructive);
+}
+
 body {
   margin: 0;
   background-color: var(--background);

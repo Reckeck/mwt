@@ -7,12 +7,14 @@ import { AlertTriangle, ArrowRight } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { StoreNodeSelect } from '@/entities/store'
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
@@ -107,6 +109,22 @@ const plan = useQuery({
 const confirmed = computed(() => confirmName.value.trim().toLowerCase() === props.store.name.trim().toLowerCase())
 const blocked = computed(() => !plan.data.value || Boolean(plan.data.value.error) || plan.data.value.conflicts.length > 0)
 
+/** A plan the backend refuses (its reason is shown above) keeps the button off; anything the user can fill in is checked on press. */
+const refused = computed(() => input.value !== null && blocked.value)
+const form = useFormValidation(
+  () => ({
+    // Shown in the plan above with its reason; here it only keeps Enter from applying.
+    plan: refused.value ? t('validation.summary') : null,
+    parent: action.value === 'move_to' ? required(parentId.value, 'pick') : null,
+    target: action.value === 'merge_into' ? required(targetId.value, 'pick') : null,
+    confirm:
+      input.value && !blocked.value
+        ? (required(confirmName.value) ?? (confirmed.value ? null : t('validation.confirmName', { name: props.store.name })))
+        : null,
+  }),
+  { resetOn: [open, () => action.value] },
+)
+
 const apply = useMutation({
   mutationFn: () => call<StoreChangePlan>('apply_store_change', { input: input.value }),
   onSuccess: () => {
@@ -133,7 +151,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
     :description="t('storeChange.hint')"
     size="lg"
   >
-    <form id="store-change-form" class="grid gap-4" @submit.prevent="!blocked && confirmed && apply.mutate()">
+    <form id="store-change-form" class="grid gap-4" @submit.prevent="form.submit(apply.mutate, $event)">
       <p v-if="!actions.length" class="text-sm text-muted-foreground">{{ t('storeChange.nothing') }}</p>
       <ToggleGroup
         v-else
@@ -158,14 +176,12 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
           </option>
         </Select>
       </div>
-      <div v-else-if="action === 'move_to'" class="grid gap-1.5">
-        <Label for="store-change-parent">{{ t('storeChange.into') }}</Label>
+      <FormField v-else-if="action === 'move_to'" for="store-change-parent" :label="t('storeChange.into')" required :error="form.error('parent')">
         <StoreNodeSelect id="store-change-parent" v-model="parentId" :nodes="parents" :empty-label="t('storeChange.pick')" />
-      </div>
-      <div v-else-if="action === 'merge_into'" class="grid gap-1.5">
-        <Label for="store-change-target">{{ t('storeChange.mergeTarget') }}</Label>
+      </FormField>
+      <FormField v-else-if="action === 'merge_into'" for="store-change-target" :label="t('storeChange.mergeTarget')" required :error="form.error('target')">
         <StoreNodeSelect id="store-change-target" v-model="targetId" :nodes="mergeTargets" :empty-label="t('storeChange.pick')" />
-      </div>
+      </FormField>
 
       <!-- What it would do -->
       <section v-if="plan.data.value && input" class="grid gap-3 rounded-lg border border-border p-3" data-tour="store-change-plan">
@@ -208,10 +224,9 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
         </template>
       </section>
 
-      <div v-if="input && !blocked" class="grid gap-1.5">
-        <Label for="store-change-confirm">{{ t('storeChange.confirm', { name: props.store.name }) }}</Label>
+      <FormField v-if="input && !blocked" for="store-change-confirm" :label="t('storeChange.confirm', { name: props.store.name })" required :error="form.error('confirm')">
         <Input id="store-change-confirm" v-model="confirmName" autocomplete="off" :placeholder="props.store.name" />
-      </div>
+      </FormField>
     </form>
 
     <template #footer>
@@ -220,7 +235,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
         variant="destructive"
         form="store-change-form"
         type="submit"
-        :disabled="!input || blocked || !confirmed || apply.isPending.value"
+        :disabled="refused || apply.isPending.value"
       >
         {{ t('storeChange.apply') }}
       </Button>

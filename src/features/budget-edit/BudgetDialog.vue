@@ -10,11 +10,13 @@ import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -59,7 +61,15 @@ const target = computed<BudgetTarget | null>(() => {
   return storeId.value ? { store: { store_ids: [storeId.value], include_children: true } } : null
 })
 
-const valid = computed(() => target.value !== null && Number(limit.value) > 0 && currency.value.trim() !== '')
+const form = useFormValidation(
+  () => ({
+    category: targetKind.value === 'category' ? required(category.value, 'pick') : null,
+    store: targetKind.value === 'store' ? required(storeId.value, 'pick') : null,
+    limit: positiveAmount(limit.value),
+    currency: required(currency.value, 'pick'),
+  }),
+  { resetOn: open },
+)
 
 const save = useMutation({
   mutationFn: () => {
@@ -85,7 +95,7 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.budget ? t('budget.edit') : t('budget.new')">
-    <form id="budget-form" class="@container grid gap-4" @submit.prevent="valid && save.mutate()">
+    <form id="budget-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <div class="grid gap-3 @sm:grid-cols-2">
         <div class="grid gap-1.5">
           <Label for="budget-target">{{ t('budget.target') }}</Label>
@@ -93,19 +103,29 @@ const save = useMutation({
             <option v-for="kind in BUDGET_TARGETS" :key="kind" :value="kind">{{ t(`budget.targetKind.${kind}`) }}</option>
           </Select>
         </div>
-        <div v-if="targetKind === 'category'" class="grid gap-1.5">
-          <Label for="budget-category">{{ t('budget.category') }}</Label>
+        <FormField
+          v-if="targetKind === 'category'"
+          for="budget-category"
+          :label="t('budget.category')"
+          required
+          :error="form.error('category')"
+        >
           <CategorySelect
             id="budget-category"
             v-model="category"
             :groups="['daily', 'fixed']"
             :placeholder="t('budget.pickCategory')"
           />
-        </div>
-        <div v-else-if="targetKind === 'store'" class="grid gap-1.5">
-          <Label for="budget-store">{{ t('budget.store') }}</Label>
+        </FormField>
+        <FormField
+          v-else-if="targetKind === 'store'"
+          for="budget-store"
+          :label="t('budget.store')"
+          required
+          :error="form.error('store')"
+        >
           <StoreNodeSelect id="budget-store" v-model="storeId" :nodes="liveNodes" :empty-label="t('budget.pickStore')" />
-        </div>
+        </FormField>
       </div>
 
       <div class="grid gap-3 @sm:grid-cols-3">
@@ -115,14 +135,12 @@ const save = useMutation({
             <option v-for="entry in BUDGET_PERIODS" :key="entry" :value="entry">{{ t(`budget.periodKind.${entry}`) }}</option>
           </Select>
         </div>
-        <div class="grid gap-1.5">
-          <Label for="budget-limit">{{ t('budget.limit') }}</Label>
+        <FormField for="budget-limit" :label="t('budget.limit')" required :error="form.error('limit')">
           <AmountInput id="budget-limit" v-model="limit" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="budget-currency">{{ t('budget.currency') }}</Label>
+        </FormField>
+        <FormField for="budget-currency" :label="t('budget.currency')" required :error="form.error('currency')">
           <CurrencyPicker id="budget-currency" v-model="currency" />
-        </div>
+        </FormField>
       </div>
 
       <label class="flex items-center gap-2 text-sm">
@@ -134,7 +152,7 @@ const save = useMutation({
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="budget-form" type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button form="budget-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

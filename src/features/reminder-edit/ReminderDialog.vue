@@ -4,11 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
@@ -52,7 +54,14 @@ const repeat = computed<ReminderRepeat | null>(() =>
   unit.value ? { unit: unit.value, every: Math.max(1, Math.round(Number(every.value) || 1)) } : null,
 )
 
-const valid = computed(() => text.value.trim() !== '' && dueAt.value !== null)
+const form = useFormValidation(
+  () => ({
+    text: required(text.value),
+    date: required(date.value) ?? (dueAt.value ? null : t('validation.date')),
+    time: required(time.value),
+  }),
+  { resetOn: open },
+)
 
 const save = useMutation({
   mutationFn: () => {
@@ -72,20 +81,17 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
-    <form id="reminder-form" class="grid gap-4" @submit.prevent="valid && save.mutate()">
-      <div class="grid gap-1.5">
-        <Label for="reminder-text">{{ t('reminder.text') }}</Label>
+    <form id="reminder-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <FormField for="reminder-text" :label="t('reminder.text')" required :error="form.error('text')">
         <Input id="reminder-text" v-model="text" />
-      </div>
+      </FormField>
       <div class="grid grid-cols-[1fr_8rem] gap-3">
-        <div class="grid gap-1.5">
-          <Label for="reminder-date">{{ t('reminder.date') }}</Label>
+        <FormField for="reminder-date" :label="t('reminder.date')" required :error="form.error('date')">
           <Input id="reminder-date" v-model="date" type="date" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="reminder-time">{{ t('reminder.time') }}</Label>
+        </FormField>
+        <FormField for="reminder-time" :label="t('reminder.time')" required :error="form.error('time')">
           <Input id="reminder-time" v-model="time" type="time" />
-        </div>
+        </FormField>
       </div>
       <div class="grid gap-1.5" data-tour="reminder-repeat">
         <Label for="reminder-repeat">{{ t('reminder.repeat') }}</Label>
@@ -107,7 +113,7 @@ const save = useMutation({
     </form>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="reminder-form" type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button form="reminder-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

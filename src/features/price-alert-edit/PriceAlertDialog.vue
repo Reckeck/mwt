@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { AssetInput } from '@/entities/asset'
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { tickerRef } from '@/shared/lib/asset-ref'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
@@ -63,7 +65,14 @@ watch(open, async (isOpen) => {
   if (preset) asset.value = await resolveTicker(preset.symbol)
 })
 
-const valid = computed(() => asset.value !== null && Number(price.value) > 0)
+const form = useFormValidation(
+  () => ({
+    asset: required(asset.value, 'pick'),
+    price: positiveAmount(price.value),
+    currency: required(currency.value, 'pick'),
+  }),
+  { resetOn: open },
+)
 
 const save = useMutation({
   mutationFn: () => {
@@ -97,8 +106,8 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.alert ? t('alert.edit') : t('alert.new')">
-    <form id="price-alert-form" class="@container grid gap-4" @submit.prevent="valid && save.mutate()">
-      <AssetInput v-model="asset" :label="t('alert.asset')" />
+    <form id="price-alert-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <AssetInput v-model="asset" :label="t('alert.asset')" required :error="form.error('asset')" />
       <div class="grid gap-3 @sm:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="alert-condition">{{ t('alert.condition') }}</Label>
@@ -107,14 +116,12 @@ const save = useMutation({
             <option value="below">{{ t('alert.below') }}</option>
           </Select>
         </div>
-        <div class="grid gap-1.5">
-          <Label for="alert-price">{{ t('alert.price') }}</Label>
+        <FormField for="alert-price" :label="t('alert.price')" required :error="form.error('price')">
           <AmountInput id="alert-price" v-model="price" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="alert-currency">{{ t('alert.currency') }}</Label>
+        </FormField>
+        <FormField for="alert-currency" :label="t('alert.currency')" required :error="form.error('currency')">
           <CurrencyPicker id="alert-currency" v-model="currency" />
-        </div>
+        </FormField>
       </div>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="active" type="checkbox" class="size-4 accent-primary" />
@@ -124,7 +131,7 @@ const save = useMutation({
     </form>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="price-alert-form" type="submit" :disabled="!valid || save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button form="price-alert-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

@@ -6,10 +6,11 @@ import { Tag } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
+import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
-import { Label } from '@/shared/ui/label'
+import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -26,6 +27,11 @@ const settings = useSettingsStore()
 const open = ref(false)
 const price = ref('')
 const currency = ref('')
+
+const form = useFormValidation(
+  () => ({ price: positiveAmount(price.value), currency: required(currency.value, 'pick') }),
+  { resetOn: open },
+)
 
 watch(open, (isOpen) => {
   if (!isOpen) return
@@ -73,23 +79,21 @@ const reset = useMutation({
   </Button>
 
   <Dialog v-model:open="open" :title="t('asset.revalueTitle', { name: props.asset.name || props.asset.symbol })" size="sm">
-    <form id="asset-revalue-form" class="grid gap-4" @submit.prevent="save.mutate()">
+    <form id="asset-revalue-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <div class="grid grid-cols-[1fr_8rem] gap-3">
-        <div class="grid gap-1.5">
-          <Label for="revalue-price">{{ t('tx.field.unitPrice') }}</Label>
+        <FormField for="revalue-price" :label="t('tx.field.unitPrice')" required :error="form.error('price')">
           <AmountInput id="revalue-price" v-model="price" />
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="revalue-currency">{{ t('tx.field.currency') }}</Label>
+        </FormField>
+        <FormField for="revalue-currency" :label="t('tx.field.currency')" required :error="form.error('currency')">
           <CurrencyPicker id="revalue-currency" v-model="currency" />
-        </div>
+        </FormField>
       </div>
       <p class="text-xs text-muted-foreground">{{ t('asset.revalueHint') }}</p>
     </form>
 
     <template #footer>
       <Button variant="ghost" :disabled="reset.isPending.value" @click="reset.mutate()">{{ t('asset.revalueReset') }}</Button>
-      <Button form="asset-revalue-form" type="submit" :disabled="!Number(price.replace(',', '.')) || save.isPending.value">
+      <Button form="asset-revalue-form" type="submit" :disabled="save.isPending.value">
         {{ t('actions.save') }}
       </Button>
     </template>

@@ -4,12 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
+import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -24,6 +26,8 @@ const queryClient = useQueryClient()
 const amount = ref('')
 const comment = ref('')
 const source = ref('')
+
+const form = useFormValidation(() => ({ amount: positiveAmount(amount.value) }), { resetOn: open })
 watch(open, () => {
   amount.value = ''
   comment.value = ''
@@ -56,15 +60,14 @@ const save = useMutation({
 
 <template>
   <Dialog v-model:open="open" :title="props.mode === 'credit' ? t('loyalty.credit') : t('loyalty.spend')">
-    <form id="points-form" class="grid gap-4" @submit.prevent="Number(amount) > 0 && save.mutate()">
-      <div class="grid gap-1.5">
-        <Label for="points-amount">{{ t('loyalty.amount') }}</Label>
+    <form id="points-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <FormField for="points-amount" :label="t('loyalty.amount')" required :error="form.error('amount')">
         <AmountInput id="points-amount" v-model="amount">
           <template #suffix>
             <span class="px-2 text-xs text-muted-foreground">{{ props.store.loyalty?.points_symbol }}</span>
           </template>
         </AmountInput>
-      </div>
+      </FormField>
       <div class="grid gap-1.5">
         <Label for="points-comment">{{ t('loyalty.comment') }}</Label>
         <Input id="points-comment" v-model="comment" />
@@ -79,7 +82,7 @@ const save = useMutation({
     </form>
     <template #footer>
       <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button type="submit" form="points-form" :disabled="!(Number(amount) > 0) || save.isPending.value">
+      <Button type="submit" form="points-form" :disabled="save.isPending.value">
         {{ props.mode === 'credit' ? t('loyalty.credit') : t('loyalty.spend') }}
       </Button>
     </template>

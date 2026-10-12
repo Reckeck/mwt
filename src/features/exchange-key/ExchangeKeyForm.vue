@@ -5,10 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
 import { StoreNodeSelect } from '@/entities/store'
+import { FormField } from '@/shared/ui/form-field'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -32,6 +34,8 @@ const apiKey = ref('')
 const apiSecret = ref('')
 const busy = ref(false)
 
+const form = useFormValidation(() => ({ apiKey: required(apiKey.value), apiSecret: required(apiSecret.value) }))
+
 async function save() {
   busy.value = true
   try {
@@ -42,6 +46,7 @@ async function save() {
     })
     apiKey.value = ''
     apiSecret.value = ''
+    form.reset()
     toast.success(t('wallet.bybit.keySaved'), { description: t('wallet.bybit.accountsReady', { count }) })
     for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
     await status.refetch()
@@ -190,16 +195,14 @@ async function remove() {
     </template>
 
     <!-- Key, secret and the button on one row: it is a two-field form. -->
-    <form v-else class="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="save">
-      <div class="grid gap-1.5">
-        <Label for="bk">{{ t('wallet.bybit.apiKey') }}</Label>
+    <form v-else class="grid items-start gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="form.submit(save, $event)">
+      <FormField for="bk" :label="t('wallet.bybit.apiKey')" required :error="form.error('apiKey')">
         <Input id="bk" v-model="apiKey" autocomplete="off" spellcheck="false" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="bs">{{ t('wallet.bybit.apiSecret') }}</Label>
+      </FormField>
+      <FormField for="bs" :label="t('wallet.bybit.apiSecret')" required :error="form.error('apiSecret')">
         <Input id="bs" v-model="apiSecret" type="password" autocomplete="new-password" spellcheck="false" />
-      </div>
-      <Button type="submit" :disabled="busy || !apiKey || !apiSecret">
+      </FormField>
+      <Button type="submit" class="sm:mt-[1.375rem]" :disabled="busy">
         {{ t('wallet.bybit.save') }}
       </Button>
     </form>

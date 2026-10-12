@@ -14,6 +14,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call, parseError } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
 import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
+import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 /**
@@ -39,6 +40,10 @@ const draft = ref('')
 /** The reading's date; moving it to another month moves the reading there. */
 const draftDate = ref('')
 const draftParts = computed(() => readingDateParts(draftDate.value))
+const draftCheck = useFormValidation(
+  () => ({ date: draftParts.value ? null : t('validation.date'), value: positiveAmount(draft.value) }),
+  { resetOn: () => editing.value },
+)
 function startEdit(reading: MeterReading) {
   editing.value = reading.id
   draft.value = reading.value
@@ -101,15 +106,19 @@ const txOpen = computed({
           class="flex items-center gap-2 text-xs text-muted-foreground"
         >
           <template v-if="editing === reading.id">
-            <Input v-model="draftDate" type="date" class="h-7 w-36 px-2" :aria-label="t('utilities.day')" />
-            <AmountInput v-model="draft" class="h-7 w-32" :aria-label="t('utilities.reading')" />
+            <span class="contents" :data-invalid="draftCheck.invalidAttr('date')">
+              <Input v-model="draftDate" type="date" class="h-7 w-36 px-2" :aria-label="t('utilities.day')" />
+            </span>
+            <span class="contents" :data-invalid="draftCheck.invalidAttr('value')">
+              <AmountInput v-model="draft" class="h-7 w-32" :aria-label="t('utilities.reading')" />
+            </span>
             <Button
               variant="ghost"
               size="icon"
               class="size-7"
               :aria-label="t('actions.save')"
-              :disabled="!draft || !draftParts || saveReading.isPending.value"
-              @click="saveReading.mutate(reading)"
+              :disabled="saveReading.isPending.value"
+              @click="draftCheck.submit(() => saveReading.mutate(reading), $event)"
             >
               <Check class="size-3.5" />
             </Button>
@@ -141,6 +150,13 @@ const txOpen = computed({
             </ConfirmButton>
           </template>
         </div>
+        <p
+          v-if="draftCheck.firstMessage() && month.readings.some((reading) => reading.id === editing)"
+          class="text-xs text-destructive"
+          role="alert"
+        >
+          {{ draftCheck.firstMessage() }}
+        </p>
         <div v-for="tx in month.payments" :key="'payment' in tx ? tx.payment.meta.id : ''" class="flex items-center gap-2 text-xs">
           <template v-if="'payment' in tx">
             <span class="text-muted-foreground">{{ t('utilityHistory.paid') }}</span>

@@ -13,6 +13,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { detectDetail } from '@/shared/lib/detect-detail'
+import { required, useFormValidation } from '@/shared/lib/form'
 
 import { CONTACT_KINDS, DETAIL_KINDS } from '../contact-edit.constants'
 import type { ContactEditorProps } from '../contact-edit.types'
@@ -79,6 +80,7 @@ function removeAccount(index: number) {
 /* --- one paste box: the kind and the network are guessed --- */
 const pasted = ref('')
 const guess = computed(() => (pasted.value.trim() ? detectDetail(pasted.value) : null))
+const paste = useFormValidation(() => ({ pasted: required(pasted.value) }))
 
 function addPasted() {
   const detected = guess.value
@@ -96,6 +98,7 @@ function addPasted() {
   save.mutate(draftOf(props.contact, { accounts: [...props.contact.accounts, account] }), {
     onSuccess: () => {
       pasted.value = ''
+      paste.reset()
     },
   })
 }
@@ -218,8 +221,8 @@ const inlineInput =
         </li>
       </ul>
 
-      <form class="grid gap-1" @submit.prevent="addPasted">
-        <div class="flex items-center gap-2">
+      <form class="grid gap-1" @submit.prevent="paste.submit(addPasted, $event)">
+        <div class="flex items-center gap-2" :data-invalid="paste.invalidAttr('pasted')">
           <Input
             v-model="pasted"
             class="h-9 flex-1 font-mono text-sm"
@@ -228,12 +231,13 @@ const inlineInput =
             :placeholder="t('contacts.pastePlaceholder')"
             :aria-label="t('contacts.pastePlaceholder')"
           />
-          <Button type="submit" variant="outline" :disabled="!guess || save.isPending.value">
+          <Button type="submit" variant="outline" :disabled="save.isPending.value">
             <ClipboardPaste class="size-4" />
             {{ t('contacts.addAccount') }}
           </Button>
         </div>
-        <p v-if="guess" class="text-xs text-muted-foreground">
+        <p v-if="paste.firstMessage()" class="text-xs text-destructive" role="alert">{{ paste.firstMessage() }}</p>
+        <p v-else-if="guess" class="text-xs text-muted-foreground">
           {{ t('contacts.detected', { kind: t(`detailKind.${guess.kind}`) }) }}
           <template v-if="guess.network"> · {{ CHAIN_LABELS[guess.network] }}</template>
         </p>

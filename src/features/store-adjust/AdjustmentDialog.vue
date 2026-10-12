@@ -11,6 +11,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
 import { call, parseError } from '@/shared/api/ipc'
@@ -21,6 +22,7 @@ import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { decimalSub, parseDecimal } from '@/shared/lib/decimal'
 import { formatMoney } from '@/shared/lib/format'
 import { amountClass, body, txId } from '@/shared/lib/transactions'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { AdjustmentDialogProps, AdjustmentRow } from './store-adjust.types'
@@ -95,7 +97,14 @@ watch(
 const difference = (row: AdjustmentRow): string | null => (row.actual.trim() ? decimalSub(row.actual, row.before) : null)
 
 const changed = computed(() => rows.value.filter((row) => (difference(row) ?? '0') !== '0'))
-const invalid = computed(() => rows.value.some((row) => row.actual.trim() && parseDecimal(row.actual) === null))
+const badRow = (row: { actual: string }) => Boolean(row.actual.trim()) && parseDecimal(row.actual) === null
+const form = useFormValidation(
+  () => ({
+    timestamp: required(timestamp.value),
+    rows: rows.value.some(badRow) ? t('validation.number') : changed.value.length ? null : t('adjustment.nothing'),
+  }),
+  { resetOn: open },
+)
 /** The asset code a balance is shown in: a fiat code gets its symbol, a ticker stays. */
 const shown = (value: string | null, asset: AssetRef, signed = false) =>
   value === null ? '—' : formatMoney(value, { currency: asset.symbol.toLowerCase(), signed })
@@ -103,12 +112,23 @@ const shown = (value: string | null, asset: AssetRef, signed = false) =>
 /* --- an asset the ledger does not know about yet --- */
 const newCurrency = ref('')
 const newAsset = ref<AssetRef | null>(null)
+const newRowAsset = computed(() =>
+  fiatOnly.value ? (newCurrency.value ? fiatRef(newCurrency.value) : null) : newAsset.value,
+)
+const adder = useFormValidation(() => ({
+  asset:
+    required(newRowAsset.value, 'pick') ??
+    (rows.value.some((row) => newRowAsset.value && keyOf(row.asset) === keyOf(newRowAsset.value))
+      ? t('validation.duplicateAsset')
+      : null),
+}))
 function addRow() {
-  const asset = fiatOnly.value ? (newCurrency.value ? fiatRef(newCurrency.value) : null) : newAsset.value
-  if (!asset || rows.value.some((row) => keyOf(row.asset) === keyOf(asset))) return
+  const asset = newRowAsset.value
+  if (!asset) return
   rows.value.push({ asset, before: '0', actual: '' })
   newCurrency.value = ''
   newAsset.value = null
+  adder.reset()
 }
 
 function removeRow(index: number) {
@@ -163,14 +183,24 @@ const title = computed(() =>
 
 <template>
   <Dialog v-model:open="open" :title="title" :description="t('adjustment.hint')" size="lg">
-    <form id="adjustment-form" class="grid gap-4" @submit.prevent="changed.length && !invalid && save.mutate()">
-      <div class="grid gap-1.5 sm:max-w-64">
-        <Label for="adjustment-date">{{ t('adjustment.date') }}</Label>
+    <form id="adjustment-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <FormField
+        for="adjustment-date"
+        :label="t('adjustment.date')"
+        class="sm:max-w-64"
+        required
+        :error="form.error('timestamp')"
+        :hint="t('adjustment.dateHint')"
+      >
         <Input id="adjustment-date" v-model="timestamp" type="datetime-local" class="px-2" />
-        <p class="text-xs text-muted-foreground">{{ t('adjustment.dateHint') }}</p>
-      </div>
+      </FormField>
 
-      <div class="overflow-hidden rounded-lg border border-border" data-tour="adjustment-rows">
+      <div
+        class="overflow-hidden rounded-lg border"
+        :class="form.error('rows') ? 'border-destructive' : 'border-border'"
+        :data-invalid="form.error('rows') ? '' : undefined"
+        data-tour="adjustment-rows"
+      >
         <div class="grid grid-cols-[minmax(0,1fr)_8rem_9rem_7rem_2rem] items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span>{{ t('adjustment.asset') }}</span>
           <span class="text-right">{{ t('adjustment.ledger') }}</span>
@@ -190,7 +220,13 @@ const title = computed(() =>
           <span class="truncate text-right text-sm tabular-nums text-muted-foreground" :title="row.before">
             {{ shown(row.before, row.asset) }}
           </span>
-          <AmountInput v-model="row.actual" :placeholder="row.before" :aria-label="t('adjustment.actualFor', { asset: row.asset.symbol })" />
+          <AmountInput
+            v-model="row.actual"
+            :placeholder="row.before"
+            :class="badRow(row) && 'border-destructive'"
+            :aria-invalid="badRow(row)"
+            :aria-label="t('adjustment.actualFor', { asset: row.asset.symbol })"
+          />
           <span
             class="truncate text-right text-sm tabular-nums"
             :class="difference(row) === null ? 'text-muted-foreground' : amountClass(difference(row) ?? '0')"
@@ -212,31 +248,32 @@ const title = computed(() =>
         </div>
       </div>
 
-      <div class="grid gap-1.5">
-        <Label>{{ t('adjustment.addAsset') }}</Label>
+      <p v-if="form.error('rows')" class="-mt-2 text-xs text-destructive" role="alert">{{ form.error('rows') }}</p>
+
+      <FormField :label="t('adjustment.addAsset')" :error="adder.error('asset')">
         <div class="flex items-start gap-2">
           <div class="min-w-0 flex-1">
             <CurrencyPicker v-if="fiatOnly" v-model="newCurrency" :kinds="['fiat']" label="" />
             <AssetInput v-else v-model="newAsset" label="" />
           </div>
-          <Button type="button" variant="outline" :disabled="fiatOnly ? !newCurrency : !newAsset" @click="addRow">
+          <Button type="button" variant="outline" @click="adder.submit(addRow, $event)">
             <Plus class="size-4" />
             {{ t('actions.add') }}
           </Button>
         </div>
-      </div>
+      </FormField>
 
       <div class="grid gap-1.5">
         <Label for="adjustment-comment">{{ t('form.comment') }}</Label>
         <Textarea id="adjustment-comment" v-model="comment" rows="1" :placeholder="t('adjustment.commentHint')" />
       </div>
 
-      <p v-if="!changed.length" class="text-xs text-muted-foreground">{{ t('adjustment.nothing') }}</p>
+      <p v-if="!changed.length && !form.error('rows')" class="text-xs text-muted-foreground">{{ t('adjustment.nothing') }}</p>
     </form>
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="adjustment-form" type="submit" :disabled="!changed.length || invalid || save.isPending.value">
+      <Button form="adjustment-form" type="submit" :disabled="save.isPending.value">
         {{ t('adjustment.submit', { count: changed.length }) }}
       </Button>
     </template>

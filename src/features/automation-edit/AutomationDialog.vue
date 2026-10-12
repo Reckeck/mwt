@@ -9,12 +9,14 @@ import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
 import { PLANNING_KEYS, WEEKDAYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
+import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import { SCHEDULE_KINDS, type ScheduleKind } from './automation-edit.constants'
@@ -85,9 +87,26 @@ const initialTx = computed(() =>
 )
 
 const form = ref<InstanceType<typeof TransactionForm> | null>(null)
-const valid = computed(
-  () => name.value.trim() !== '' && schedule.value !== null && startsAt.value !== '' && Boolean(form.value?.valid),
+const fields = useFormValidation(
+  () => ({
+    name: required(name.value),
+    day: scheduleKind.value === 'monthly' ? firstError(required(day.value), integerInRange(day.value, 1, 31)) : null,
+    everyDays:
+      scheduleKind.value === 'monthly' || scheduleKind.value === 'weekly'
+        ? null
+        : firstError(required(everyDays.value), integerInRange(everyDays.value, 1, 3650)),
+    startsAt: required(startsAt.value),
+    // The template's own fields carry their messages; this only keeps the save from going through.
+    template: form.value?.valid ? null : t('validation.summary'),
+  }),
+  { resetOn: open },
 )
+
+/** Both halves are checked at once: the schedule above and the operation below. */
+function trySave(event?: Event) {
+  form.value?.showErrors()
+  fields.submit(save.mutate, event)
+}
 
 const save = useMutation({
   mutationFn: () => {
@@ -123,10 +142,9 @@ const save = useMutation({
   >
     <div class="@container grid gap-4">
       <div class="grid gap-3 @sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="automation-name">{{ t('automation.name') }}</Label>
+        <FormField for="automation-name" :label="t('automation.name')" required :error="fields.error('name')">
           <Input id="automation-name" v-model="name" :placeholder="t('automation.namePlaceholder')" />
-        </div>
+        </FormField>
         <div class="grid gap-1.5">
           <Label for="automation-store">{{ t('automation.store') }}</Label>
           <StoreNodeSelect id="automation-store" v-model="storeId" :nodes="liveNodes" />
@@ -140,27 +158,27 @@ const save = useMutation({
             <option v-for="kind in SCHEDULE_KINDS" :key="kind" :value="kind">{{ t(`schedule.kind.${kind}`) }}</option>
           </Select>
         </div>
-        <div class="grid gap-1.5">
-          <template v-if="scheduleKind === 'monthly'">
-            <Label for="automation-day">{{ t('schedule.day') }}</Label>
-            <Input id="automation-day" v-model="day" type="number" min="1" max="31" />
-            <p class="text-xs text-muted-foreground">{{ t('schedule.dayHint') }}</p>
-          </template>
-          <template v-else-if="scheduleKind === 'weekly'">
-            <Label for="automation-weekday">{{ t('schedule.weekdayLabel') }}</Label>
-            <Select id="automation-weekday" v-model="weekday">
-              <option v-for="entry in WEEKDAYS" :key="entry" :value="String(entry)">{{ t(`schedule.weekday.${entry}`) }}</option>
-            </Select>
-          </template>
-          <template v-else>
-            <Label for="automation-days">{{ t('schedule.days') }}</Label>
-            <Input id="automation-days" v-model="everyDays" type="number" min="1" />
-          </template>
-        </div>
-        <div class="grid gap-1.5">
-          <Label for="automation-start">{{ t('automation.startsAt') }}</Label>
+        <FormField
+          v-if="scheduleKind === 'monthly'"
+          for="automation-day"
+          :label="t('schedule.day')"
+          required
+          :error="fields.error('day')"
+          :hint="t('schedule.dayHint')"
+        >
+          <Input id="automation-day" v-model="day" type="number" min="1" max="31" />
+        </FormField>
+        <FormField v-else-if="scheduleKind === 'weekly'" for="automation-weekday" :label="t('schedule.weekdayLabel')">
+          <Select id="automation-weekday" v-model="weekday">
+            <option v-for="entry in WEEKDAYS" :key="entry" :value="String(entry)">{{ t(`schedule.weekday.${entry}`) }}</option>
+          </Select>
+        </FormField>
+        <FormField v-else for="automation-days" :label="t('schedule.days')" required :error="fields.error('everyDays')">
+          <Input id="automation-days" v-model="everyDays" type="number" min="1" />
+        </FormField>
+        <FormField for="automation-start" :label="t('automation.startsAt')" required :error="fields.error('startsAt')">
           <Input id="automation-start" v-model="startsAt" type="date" />
-        </div>
+        </FormField>
       </div>
 
       <label class="flex items-center gap-2 text-sm">
@@ -178,13 +196,13 @@ const save = useMutation({
         :transaction="template"
         :initial="initialTx"
         template
-        @submit="valid && save.mutate()"
+        @submit="trySave()"
       />
     </div>
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button :disabled="!valid || save.isPending.value" @click="save.mutate()">{{ t('actions.save') }}</Button>
+      <Button :disabled="save.isPending.value" @click="trySave($event)">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>
