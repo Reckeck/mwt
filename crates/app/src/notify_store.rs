@@ -15,7 +15,9 @@ use tauri::{AppHandle, Manager};
 use trade_core::model::notify::NoticeRecord;
 use trade_core::service::NotificationSnapshot;
 
+#[cfg(desktop)]
 const KEYRING_SERVICE: &str = "dev.tradeapp.desktop";
+#[cfg(desktop)]
 const KEYRING_USER: &str = "notification-snapshot";
 const FILE_NAME: &str = "notify-snapshot.bin";
 const NONCE_LEN: usize = 24;
@@ -48,10 +50,12 @@ fn file(app: &AppHandle) -> Option<PathBuf> {
         .map(|dir| dir.join(FILE_NAME))
 }
 
+#[cfg(desktop)]
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+#[cfg(desktop)]
 fn unhex(text: &str) -> Option<[u8; 32]> {
     let mut out = [0u8; 32];
     if text.len() != 64 {
@@ -64,6 +68,7 @@ fn unhex(text: &str) -> Option<[u8; 32]> {
 }
 
 /// The snapshot key from the keyring, made on first use. `None` without one.
+#[cfg(desktop)]
 fn key() -> Option<[u8; 32]> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()?;
     match entry.get_password() {
@@ -75,6 +80,12 @@ fn key() -> Option<[u8; 32]> {
         }
         Err(_) => None,
     }
+}
+
+/// No OS keyring on mobile: the snapshot stays in memory.
+#[cfg(mobile)]
+fn key() -> Option<[u8; 32]> {
+    None
 }
 
 /// Read what was kept on disk, if the keyring opens it.

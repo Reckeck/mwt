@@ -2,6 +2,7 @@
 //! notice and whether the system lets the app show any.
 
 use tauri::{AppHandle, State};
+#[cfg(desktop)]
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
@@ -73,6 +74,7 @@ pub async fn notification_permission(app: AppHandle, request: bool) -> Result<St
 }
 
 /// Whether the app starts with the system, hidden in the tray.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|err| err.to_string())
@@ -80,6 +82,7 @@ pub async fn get_autostart(app: AppHandle) -> Result<bool, String> {
 
 /// Start with the system (hidden in the tray, so reminders come after a
 /// reboot) or not.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
     let launcher = app.autolaunch();
@@ -89,6 +92,24 @@ pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String
         launcher.disable().map_err(|err| err.to_string())?;
     }
     launcher.is_enabled().map_err(|err| err.to_string())
+}
+
+/// A phone starts apps itself; the app never does.
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn get_autostart(_app: AppHandle) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn set_autostart(_app: AppHandle, enabled: bool) -> Result<bool, String> {
+    if enabled {
+        return Err(
+            "UNSUPPORTED: starting with the system is not available on this platform".into(),
+        );
+    }
+    Ok(false)
 }
 
 /// Whether notices of a locked vault survive a restart (a keyring answered)
