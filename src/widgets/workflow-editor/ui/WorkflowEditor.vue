@@ -2,6 +2,7 @@
 import { type Ref, computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { useEventListener } from '@vueuse/core'
 import { type Connection, VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -51,7 +52,7 @@ import {
   toGraph,
 } from '../model/flow'
 import { useHistory } from '../model/history'
-import { isTyping } from '../model/hotkeys'
+import { isTyping, keyLetter, overlayOpen } from '../model/hotkeys'
 import { useSpacePan } from '../model/space-pan'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
 import HotkeysHelp from './HotkeysHelp.vue'
@@ -584,9 +585,18 @@ function runNow() {
 /* --- keyboard --- */
 const hotkeysOpen = ref(false)
 
+const editorRoot = ref<HTMLElement | null>(null)
+
+/**
+ * Shortcuts listen on the window, so they work wherever the focus is after a
+ * click on the canvas; letters go by key position, so they work on any layout.
+ */
 function onKeydown(event: KeyboardEvent) {
+  if (event.defaultPrevented || !editorRoot.value || overlayOpen(editorRoot.value)) return
+  const target = event.target as Node | null
+  if (target instanceof HTMLElement && target !== document.body && !editorRoot.value.contains(target)) return
   const ctrl = event.ctrlKey || event.metaKey
-  const key = event.key.toLowerCase()
+  const key = keyLetter(event)
   if (ctrl && key === 's') {
     event.preventDefault()
     form.submit(save, event)
@@ -608,7 +618,11 @@ function onKeydown(event: KeyboardEvent) {
     return
   }
   if (isTyping(event) || quick.value) return
-  if (ctrl && key === 'z') {
+  if (!ctrl && event.shiftKey && key === 'a') {
+    // Ctrl+Space is often taken by the input method switcher.
+    event.preventDefault()
+    quickAddHere()
+  } else if (ctrl && key === 'z') {
     event.preventDefault()
     if (event.shiftKey) history.redo()
     else history.undo()
@@ -628,12 +642,21 @@ function onKeydown(event: KeyboardEvent) {
   } else if (ctrl && key === 'a') {
     event.preventDefault()
     addSelectedNodes(nodes.value as never)
-  } else if (!ctrl && key === 'f') {
+  } else if (!ctrl && !event.shiftKey && key === 'f') {
     void fitView({ padding: 0.2, duration: 300 })
   } else if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
     removeSelected()
   }
+}
+useEventListener(window, 'keydown', onKeydown)
+
+/** A click on the canvas leaves the name or a field, so the shortcuts work again. */
+function leaveFields(event: PointerEvent) {
+  const active = document.activeElement as HTMLElement | null
+  if (!active || active === document.body) return
+  if ((event.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]')) return
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable) active.blur()
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -657,10 +680,10 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
 <template>
   <div
     class="flex h-full min-h-0 flex-col gap-3"
+    ref="editorRoot"
     role="application"
     :aria-label="t('workflow.editorLabel')"
     tabindex="-1"
-    @keydown="onKeydown"
   >
     <!-- Toolbar: name, on/off, save, emulate, run. -->
     <div class="flex flex-wrap items-center gap-2" data-tour="workflow-toolbar">
@@ -728,6 +751,7 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
           :data-space-pan="spacePan.held.value ? (spacePan.panning.value ? 'grabbing' : 'grab') : undefined"
           @pointerdown.capture="spacePan.onPress"
           @mousedown.capture="spacePan.onPress"
+          @pointerdown="leaveFields"
           @pointermove="onPointerMove"
         >
           <VueFlow
