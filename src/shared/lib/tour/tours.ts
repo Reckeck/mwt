@@ -34,8 +34,12 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
   { target: 'workflow-tests', key: 'workflowEditor.tests', side: 'left' },
   { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },
+  { target: 'workflow-emulation-question', key: 'workflowEditor.question', side: 'top' },
+  { target: 'workflow-event-runs', key: 'workflowEditor.eventRuns', side: 'top' },
   { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
+  { target: 'workflow-discard', key: 'workflowEditor.discard', side: 'bottom' },
+  { target: 'workflow-draft', key: 'workflowEditor.draft', side: 'bottom' },
 ]
 
 /**
@@ -51,7 +55,10 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'workflow-card', key: 'workflows.card', side: 'top' },
   ]),
   'workflows-vars': workflows([{ target: 'workflow-vars', key: 'workflows.vars', side: 'top' }]),
-  'workflows-queue': workflows([{ target: 'workflow-queue', key: 'workflows.queue', side: 'top' }]),
+  'workflows-queue': workflows([
+    { target: 'workflow-queue', key: 'workflows.queue', side: 'top' },
+    { target: 'workflow-questions', key: 'workflows.questions', side: 'top' },
+  ]),
   'workflows-runs': workflows([{ target: 'workflow-runs', key: 'workflows.runs', side: 'top' }]),
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [
@@ -70,6 +77,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-operation', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
+    { target: 'chart-currency', key: 'wallet.chartCurrency', side: 'left' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
     { target: 'exchange-terminal', key: 'wallet.terminal', side: 'top' },
   ],
@@ -79,6 +87,10 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'automation-presets', key: 'walletSettings.presets', side: 'bottom' },
     { target: 'exchange-configure-import', key: 'walletSettings.importSetup', side: 'top' },
     { target: 'import-routes', key: 'walletSettings.importRoutes', side: 'top' },
+    { target: 'import-kinds', key: 'walletSettings.importKinds', side: 'top' },
+    { target: 'import-preview', key: 'walletSettings.importPreview', side: 'top' },
+    { target: 'exchange-sync-history', key: 'walletSettings.syncHistory', side: 'top' },
+    { target: 'exchange-imported', key: 'walletSettings.imported', side: 'top' },
     { target: 'store-change', key: 'walletSettings.change', side: 'top' },
   ],
   transactions: [
