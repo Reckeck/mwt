@@ -1,4 +1,4 @@
-// Unified spacing tokens for TradeApp
+// Unified spacing tokens for Multi Wallet Tracker
 // Base unit = 4px (Tailwind's 1 unit = 0.25rem = 4px)
 //
 // Standard spacing scale (all values in rem, Tailwind units)

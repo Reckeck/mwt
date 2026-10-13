@@ -145,7 +145,7 @@ impl PricingService {
             .client
             .get(url)
             .query(&[("from", "USD")])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -168,7 +168,7 @@ impl PricingService {
             .client
             .get(CBR_DAILY)
             .query(&[("date_req", date.format("%d/%m/%Y").to_string())])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .send()
             .await
             .map_err(|err| Error::Network(err.to_string()))?;

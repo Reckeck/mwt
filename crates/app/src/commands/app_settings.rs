@@ -74,7 +74,7 @@ pub async fn update_app_settings(
 pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::ShortcutSupport, String> {
     let exe = std::env::current_exe()
         .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "trade-app".into());
+        .unwrap_or_else(|_| "multi-wallet-tracker".into());
     Ok(trade_core::ipc_contract::ShortcutSupport {
         global_keys: crate::shortcut::global_keys_supported(),
         launch_command: format!("{exe} {}", crate::shortcut::QUICK_ADD_FLAG),

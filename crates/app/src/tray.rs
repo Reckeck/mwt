@@ -127,7 +127,7 @@ pub fn create(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("the app has no window icon for the tray")?;
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("TradeApp")
+        .tooltip("Multi Wallet Tracker")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {

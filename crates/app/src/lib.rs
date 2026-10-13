@@ -1,7 +1,9 @@
-//! Tauri entrypoint for the TradeApp desktop shell. All business logic and
+//! Tauri entrypoint for the Multi Wallet Tracker shell. All business logic and
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
 mod commands;
+#[cfg(desktop)]
+mod legacy;
 mod notify_store;
 mod quick_add_socket;
 mod scheduler;
@@ -22,6 +24,9 @@ pub fn run() {
     if quick_add_socket::forward_if_running() {
         return;
     }
+    // Once, from the TradeApp name: before any window opens its storage.
+    #[cfg(desktop)]
+    legacy::migrate_dirs();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -276,6 +281,8 @@ pub fn run() {
             // Create system tray with context menu
             #[cfg(desktop)]
             tray::create(app)?;
+            #[cfg(desktop)]
+            legacy::migrate_autostart(app.handle());
             // Started with the system: stay in the tray, remind from there.
             if std::env::args().any(|arg| arg == "--hidden")
                 && let Some(window) = app.get_webview_window("main")
@@ -308,5 +315,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running TradeApp");
+        .expect("error while running Multi Wallet Tracker");
 }

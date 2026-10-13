@@ -1,4 +1,4 @@
-# TradeApp UI Design System
+# Multi Wallet Tracker UI Design System
 
 > Single source of truth for spacing, typography, color, components, and accessibility rules.
 > All UI work must follow these rules. Agents must reference this file.

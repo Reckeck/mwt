@@ -105,7 +105,7 @@ impl PricingService {
             .client
             .get(url)
             .query(&[("query", query)])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -161,7 +161,7 @@ impl PricingService {
         let resp = self
             .client
             .get(url)
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -228,7 +228,7 @@ impl PricingService {
                 ("vs_currencies", "usd".into()),
                 ("include_24hr_change", "true".into()),
             ])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -267,7 +267,7 @@ impl PricingService {
             .client
             .get(&url)
             .query(&[("contract_addresses", contract), ("vs_currencies", "usd")])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -295,7 +295,7 @@ impl PricingService {
             .client
             .get(&url)
             .query(&[("search", asset.symbol.to_ascii_lowercase())])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -335,7 +335,7 @@ impl PricingService {
             .client
             .get(&url)
             .query(&[("symbol", pair)])
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await
@@ -359,7 +359,7 @@ impl PricingService {
         let resp = self
             .client
             .get(&url)
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .header(ACCEPT, "application/json")
             .send()
             .await

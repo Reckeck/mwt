@@ -21,26 +21,48 @@ fn recents_path(app: &AppHandle) -> PathBuf {
 
 /// Load recents from disk
 fn load_recents(app: &AppHandle) -> Vec<RecentVault> {
-    let path = recents_path(app);
-    if !path.exists() {
-        return Vec::new();
-    }
-    std::fs::read_to_string(&path)
+    read_recents(&recents_path(app))
+}
+
+/// Save recents to disk
+fn save_recents(app: &AppHandle, recents: &[RecentVault]) {
+    write_recents(&recents_path(app), recents);
+}
+
+fn read_recents(path: &Path) -> Vec<RecentVault> {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default()
 }
 
-/// Save recents to disk
-fn save_recents(app: &AppHandle, recents: &[RecentVault]) {
-    let path = recents_path(app);
+fn write_recents(path: &Path, recents: &[RecentVault]) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::write(
-        &path,
+        path,
         serde_json::to_string_pretty(recents).unwrap_or_default(),
     );
+}
+
+/// Point recents that lay in a moved app directory (the default vault) at
+/// its new place. `config_dir` is the app config dir, before Tauri starts.
+#[cfg(desktop)]
+pub fn rebase_paths(config_dir: &Path, moves: &[(PathBuf, PathBuf)]) {
+    let path = config_dir.join(RECENTS_FILE);
+    let mut recents = read_recents(&path);
+    let mut changed = false;
+    for recent in &mut recents {
+        if let Some(rebased) = trade_core::app_dirs::rebase_path(&recent.path, moves) {
+            recent.exists = Path::new(&rebased).exists();
+            recent.path = rebased;
+            changed = true;
+        }
+    }
+    if changed {
+        write_recents(&path, &recents);
+    }
 }
 
 /// Add a vault to recents (move to top, dedupe, cap)
@@ -97,12 +119,12 @@ pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<String
     let dialog = app.dialog().file();
     let dialog = if save {
         dialog
-            .add_filter("TradeApp Vault", &["wallet"])
+            .add_filter("Multi Wallet Tracker vault", &["wallet"])
             .set_file_name("vault.wallet")
             .set_title("Сохранить vault как…")
     } else {
         dialog
-            .add_filter("TradeApp Vault", &["wallet"])
+            .add_filter("Multi Wallet Tracker vault", &["wallet"])
             .set_title("Открыть vault")
     };
     if !save {

@@ -210,10 +210,16 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI:
   `cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings`
   (нужен Android NDK и `rustup target add aarch64-linux-android`).
-- **Идентификаторы не меняются.** `dev.tradeapp.desktop` (десктоп; от него
-  зависит путь к vault), `dev.tradeapp.app` (Android,
-  `tauri.android.conf.json`), `dev.tradeapp.TradeApp` (Flatpak). Смена =
-  потеря данных у пользователей или невозможность обновиться.
+- **Идентификаторы не меняются.** `dev.mwt.desktop` (десктоп; от него
+  зависит путь к vault), `dev.mwt.app` (Android, `tauri.android.conf.json`),
+  `dev.mwt.MultiWalletTracker` (Flatpak). Смена = потеря данных у пользователей или
+  невозможность обновиться. Прежнее имя TradeApp (`dev.tradeapp.desktop`)
+  переносится один раз при запуске — `crates/app/src/legacy.rs`; не удаляй
+  его, пока у кого-то может остаться старая установка.
+- **Имя.** Приложение — Multi Wallet Tracker (MWT): `productName`, бинарник и пакеты
+  `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin`. Rust-крейты `trade-core`/`trade-app`
+  остаются внутренними именами. Магические байты vault и формат экспорта
+  `trade-app-workflow` не трогать — от них зависит чтение старых файлов.
 - **Выпуск — тег `vX.Y.Z`.** Версия одинакова в `crates/app/tauri.conf.json`,
   `[workspace.package]` `Cargo.toml` и `<release>` в
   `packaging/flatpak/*.metainfo.xml`; `version:check` сверяет тег. Тег и

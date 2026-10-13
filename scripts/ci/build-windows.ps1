@@ -25,7 +25,7 @@ $rustVersion = Get-Tool 'rust'
 $nodeVersion = Get-Tool 'node'
 $pnpmVersion = Get-Tool 'pnpm'
 $version = (Get-Content crates/app/tauri.conf.json -Raw | ConvertFrom-Json).version
-Write-Host "TradeApp $version — rust $rustVersion, node $nodeVersion, pnpm $pnpmVersion"
+Write-Host "Multi Wallet Tracker $version — rust $rustVersion, node $nodeVersion, pnpm $pnpmVersion"
 
 # MSVC linker: present on the GitLab image; install the build tools otherwise.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -66,18 +66,18 @@ $bundle = Join-Path $env:CARGO_TARGET_DIR 'release\bundle'
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $setup = Get-ChildItem "$bundle\nsis\*-setup.exe" | Select-Object -First 1
 if (-not $setup) { throw 'NSIS installer not found' }
-Copy-Item $setup.FullName "$OutDir\TradeApp-$version-x64-setup.exe"
+Copy-Item $setup.FullName "$OutDir\multi-wallet-tracker-$version-x64-setup.exe"
 $msis = Get-ChildItem "$bundle\msi\*.msi"
 if (-not $msis) { throw 'MSI not found' }
 foreach ($msi in $msis) {
   $lang = [regex]::Match($msi.Name, '_([a-z]{2}-[A-Z]{2})\.msi$').Groups[1].Value
-  Copy-Item $msi.FullName "$OutDir\TradeApp-$version-x64-$lang.msi"
+  Copy-Item $msi.FullName "$OutDir\multi-wallet-tracker-$version-x64-$lang.msi"
 }
 
 # Portable: the bare exe (needs the WebView2 runtime, built into Windows 10/11)
-$portable = Join-Path $cache "trade-app-$version-windows-x64-portable"
+$portable = Join-Path $cache "multi-wallet-tracker-$version-windows-x64-portable"
 New-Item -ItemType Directory -Force $portable | Out-Null
-Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\trade-app.exe') "$portable\TradeApp.exe"
-Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\trade-app-$version-windows-x64-portable.zip"
+Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\multi-wallet-tracker.exe') "$portable\multi-wallet-tracker.exe"
+Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\multi-wallet-tracker-$version-windows-x64-portable.zip"
 
 Get-ChildItem $OutDir | Format-Table Name, Length

@@ -22,7 +22,7 @@ const createOpen = ref(false)
          before a vault is open. -->
     <header class="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 md:px-6">
       <div class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-        T
+        M
       </div>
       <span class="truncate text-sm font-semibold">{{ t('app.title') }}</span>
       <Button

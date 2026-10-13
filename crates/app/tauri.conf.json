@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TradeApp",
+  "productName": "Multi Wallet Tracker",
   "version": "0.1.0",
-  "identifier": "dev.tradeapp.desktop",
+  "identifier": "dev.mwt.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TradeApp",
+        "title": "Multi Wallet Tracker",
         "width": 1320,
         "height": 860,
         "minWidth": 720,
@@ -27,12 +27,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "publisher": "TradeApp",
+    "publisher": "MWT",
     "homepage": "https://gitlab.com/Reckeck/trade-app",
     "license": "MIT",
     "category": "Finance",
     "shortDescription": "Encrypted finance & crypto portfolio manager",
-    "longDescription": "TradeApp — offline-first encrypted transactions, portfolio, prices and charts.",
+    "longDescription": "Multi Wallet Tracker (MWT) — offline-first encrypted transactions, portfolio, prices and charts.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,11 +45,17 @@
       "digestAlgorithm": "sha256",
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["English", "Russian"],
+        "languages": [
+          "English",
+          "Russian"
+        ],
         "displayLanguageSelector": true
       },
       "wix": {
-        "language": ["en-US", "ru-RU"]
+        "language": [
+          "en-US",
+          "ru-RU"
+        ]
       }
     },
     "android": {

@@ -29,14 +29,14 @@ else
   export ANDROID_KEY_ALIAS="test"
   keytool -genkeypair -keystore "$keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
     -alias "$ANDROID_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 365 \
-    -dname "CN=TradeApp test build" >/dev/null 2>&1
+    -dname "CN=Multi Wallet Tracker test build" >/dev/null 2>&1
   suffix="-testkey"
 fi
 export ANDROID_KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
 
 mkdir -p "$out"
-apk_out="$out/trade-app-${version}-android-universal${suffix}.apk"
-aab_out="$out/trade-app-${version}-android-universal${suffix}.aab"
+apk_out="$out/multi-wallet-tracker-${version}-android-universal${suffix}.apk"
+aab_out="$out/multi-wallet-tracker-${version}-android-universal${suffix}.aab"
 
 zipalign -p -f 4 "$apk_in" "$apk_out.aligned"
 apksigner sign --ks "$keystore" --ks-key-alias "$ANDROID_KEY_ALIAS" \

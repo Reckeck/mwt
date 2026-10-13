@@ -2,7 +2,7 @@
 
 ## Обзор
 
-TradeApp — это Tauri 2 desktop-приложение с монолитным Rust-ядром и Vue-фронтендом,
+Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с монолитным Rust-ядром и Vue-фронтендом,
 связка через IPC (invoke + events). Вся бизнес-логика живёт в `crates/core`
 (чистый Rust, ноль зависимостей от Tauri) и покрыта юнит-тестами; `crates/app`
 представляет собой тонкую оболочку: `tauri::Builder`, команды и состояние.
@@ -44,10 +44,10 @@ TradeApp — это Tauri 2 desktop-приложение с монолитным
 
 | Путь (Linux) | Что | Формат |
 |---|---|---|
-| `~/.local/share/dev.tradeapp.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, MessagePack в release; старый bincode читается) |
-| `~/.config/dev.tradeapp.desktop/app_settings.json` | тема, язык, базовая валюта, избранные валюты | обычный JSON |
-| `~/.config/dev.tradeapp.desktop/currencies.json` | кэш каталога валют (фиат + крипто) | обычный JSON |
-| `~/.config/dev.tradeapp.desktop/recent_vaults.json` | недавние хранилища | обычный JSON |
+| `~/.local/share/dev.mwt.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, MessagePack в release; старый bincode читается) |
+| `~/.config/dev.mwt.desktop/app_settings.json` | тема, язык, базовая валюта, избранные валюты | обычный JSON |
+| `~/.config/dev.mwt.desktop/currencies.json` | кэш каталога валют (фиат + крипто) | обычный JSON |
+| `~/.config/dev.mwt.desktop/recent_vaults.json` | недавние хранилища | обычный JSON |
 
 Кэш цен и FX **внутри vault** (`VaultDoc.price_cache` / `fx_cache`) — он
 зашифрован и переживает рестарт, но привязан к конкретному хранилищу, у каждого

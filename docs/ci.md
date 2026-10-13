@@ -16,7 +16,7 @@
 | build | `build:windows` | NSIS-установщик `.exe`, MSI (по одному на `en-US` и `ru-RU`), portable `.zip` с голым `.exe` |
 | build | `build:android` | универсальные APK и AAB (`aarch64`, `armv7`, `x86_64`), подписанные |
 | package | `package:flatpak` | `.flatpak`-бандл (рантайм GNOME 50) из Linux-tarball |
-| package | `package:pacman` | `trade-app-bin-*.pkg.tar.zst` из того же tarball |
+| package | `package:pacman` | `multi-wallet-tracker-bin-*.pkg.tar.zst` из того же tarball |
 | release | `release` | только на теге: всё из `release/` + `SHA256SUMS` → Generic Package Registry, GitLab Release со ссылками и заметками из `CHANGELOG.md` |
 | release | `aur:publish` | вручную, на теге при заданном `AUR_SSH_PRIVATE_KEY`: пуш `PKGBUILD` + `.SRCINFO` в AUR |
 
@@ -58,7 +58,7 @@
 репозитория:
 
 ```bash
-keytool -genkeypair -v -keystore release.keystore -alias tradeapp \
+keytool -genkeypair -v -keystore release.keystore -alias mwt \
   -keyalg RSA -keysize 4096 -validity 10000
 ```
 
@@ -68,8 +68,8 @@ keytool -genkeypair -v -keystore release.keystore -alias tradeapp \
 
 - **Android.** Gradle-проект (`crates/app/gen/android`) генерируется в CI
   (`tauri android init`) и не коммитится; иконки — `tauri icon`.
-  Идентификатор — `dev.tradeapp.app` (`crates/app/tauri.android.conf.json`),
-  десктопный `dev.tradeapp.desktop` не менялся (от него зависит путь к vault).
+  Идентификатор — `dev.mwt.app` (`crates/app/tauri.android.conf.json`),
+  десктопный — `dev.mwt.desktop` (от него зависит путь к vault).
   Трей, автозапуск, глобальный хоткей, сохранение геометрии окна и системный
   keyring — только десктоп (`cfg(desktop)`): на Android автозапуск всегда
   выключен, задать хоткей нельзя (`UNSUPPORTED`), напоминания заблокированного
@@ -77,10 +77,10 @@ keytool -genkeypair -v -keystore release.keystore -alias tradeapp \
   пока не скрыты на телефоне — их переключение там вернёт ошибку.
   Локально: `pnpm tauri android init` → `pnpm tauri android dev`
   (нужны Android SDK, NDK и JDK 17, переменные `ANDROID_HOME`, `NDK_HOME`).
-- **Flatpak.** ID `dev.tradeapp.TradeApp` (ID на `.desktop` Flatpak не любит).
-  Данные — в `~/.var/app/dev.tradeapp.TradeApp/`. Автозапуск из sandbox не
+- **Flatpak.** ID `dev.mwt.MultiWalletTracker` (ID на `.desktop` Flatpak не любит).
+  Данные — в `~/.var/app/dev.mwt.MultiWalletTracker/`. Автозапуск из sandbox не
   работает. Для Flathub нужен отдельный PR в flathub с этим манифестом.
-- **AUR / pacman.** Пакет `trade-app-bin` ставит готовый бинарник из
+- **AUR / pacman.** Пакет `multi-wallet-tracker-bin` ставит готовый бинарник из
   Package Registry, поэтому проект (или хотя бы его пакеты) должен быть
   публичным. Шаблон — `packaging/aur/PKGBUILD.in`, рендер —
   `packaging/aur/render.sh`.
@@ -93,5 +93,5 @@ keytool -genkeypair -v -keystore release.keystore -alias tradeapp \
 ```bash
 mise run build                                       # deb/rpm/AppImage
 scripts/ci/collect-linux.sh "$(scripts/ci/version.sh)" release
-packaging/aur/render.sh 0.1.0 release/trade-app-0.1.0-linux-x86_64.tar.gz > PKGBUILD
+packaging/aur/render.sh 0.1.0 release/multi-wallet-tracker-0.1.0-linux-x86_64.tar.gz > PKGBUILD
 ```

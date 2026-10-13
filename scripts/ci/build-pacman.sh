@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the pacman package (trade-app-bin) from the Linux tarball, in an
+# Build the pacman package (multi-wallet-tracker-bin) from the Linux tarball, in an
 # archlinux:base-devel container. makepkg refuses root, so a user builds it.
 #
 #   scripts/ci/build-pacman.sh <version> <release-dir>
@@ -7,7 +7,7 @@ set -euo pipefail
 
 version="$1"
 release="$(realpath "$2")"
-tarball="$release/trade-app-${version}-linux-x86_64.tar.gz"
+tarball="$release/multi-wallet-tracker-${version}-linux-x86_64.tar.gz"
 
 pacman -Sy --noconfirm --needed base-devel >/dev/null
 id builder >/dev/null 2>&1 || useradd -m builder
