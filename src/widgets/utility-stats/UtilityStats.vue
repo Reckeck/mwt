@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQueries, useQuery } from '@tanstack/vue-query'
 import { TrendingDown, TrendingUp } from 'lucide-vue-next'
 
-import { Money, useConversions, useMoneyChartTooltip } from '@/entities/currency'
+import { ChartCurrencySwitch, Money, useChartCurrency, useConversions, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
@@ -55,7 +55,9 @@ const periods = computed(() => {
 })
 
 const conversions = useConversions(computed(() => own.value.some((item) => item.currency !== currency.value)))
-const moneyTooltip = useMoneyChartTooltip(currency)
+/** The bills' currency, or the base or a favourite one the user switches to. */
+const shown = useChartCurrency(currency)
+const moneyTooltip = useMoneyChartTooltip(shown.currency)
 
 const series = computed(() =>
   own.value.flatMap((item, index) => {
@@ -63,7 +65,7 @@ const series = computed(() =>
     const factor = foreign ? conversions.convertTo(1, item.currency, currency.value) : 1
     if (factor === null) return []
     const months = trends.value[index]?.data?.months ?? []
-    const byPeriod = new Map(months.map((month) => [month.period, Number(month.amount) * factor]))
+    const byPeriod = new Map(months.map((month) => [month.period, shown.convert(Number(month.amount) * factor)]))
     return [
       {
         name: foreign ? `${item.name} (≈ ${item.currency.toUpperCase()})` : item.name,
@@ -110,7 +112,7 @@ const option = computed<ChartOption>(() => ({
       <div class="flex items-center justify-between gap-2">
         <p data-widget-title class="text-sm text-muted-foreground">{{ t('utilityStats.title') }}</p>
         <span v-if="lastTwo.last" class="flex items-baseline gap-1.5 text-sm font-semibold">
-          <Money :amount="lastTwo.last.value" :currency="currency" :decimals="0" />
+          <Money :amount="lastTwo.last.value" :currency="shown.currency.value" :decimals="0" />
           <span
             v-if="deltaPct !== null"
             class="inline-flex items-center gap-0.5 text-xs font-normal"
@@ -125,6 +127,9 @@ const option = computed<ChartOption>(() => ({
     <Skeleton v-if="items.isPending.value" class="h-40 w-full" />
     <p v-else-if="!own.length" class="text-sm text-muted-foreground">{{ t('utilities.noProperty') }}</p>
     <p v-else-if="!lastTwo.last" class="text-sm text-muted-foreground">{{ t('utilityStats.noBills') }}</p>
-    <div v-else class="h-40 min-h-32 w-full"><Chart :option="option" autoresize /></div>
+    <template v-else>
+      <ChartCurrencySwitch v-model="shown.selected.value" :options="shown.options.value" class="mb-2 justify-self-start" />
+      <div class="h-40 min-h-32 w-full"><Chart :option="option" autoresize /></div>
+    </template>
   </Card>
 </template>

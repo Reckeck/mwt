@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { useMoneyChartTooltip } from '@/entities/currency'
+import { ChartCurrencySwitch, useChartCurrency, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
@@ -22,7 +22,8 @@ const history = useQuery({
 
 /** History is in the base currency; the tooltip adds the favourite ones. */
 const settings = useSettingsStore()
-const moneyTooltip = useMoneyChartTooltip(computed(() => settings.baseCurrency))
+const shown = useChartCurrency(computed(() => settings.baseCurrency))
+const moneyTooltip = useMoneyChartTooltip(shown.currency)
 
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
@@ -44,7 +45,7 @@ const option = computed<ChartOption>(() => ({
       type: 'line',
       smooth: true,
       showSymbol: false,
-      data: (history.data.value ?? []).map((point) => [Number(point.ts_ms), Number(point.value_base)]),
+      data: (history.data.value ?? []).map((point) => [Number(point.ts_ms), shown.convert(Number(point.value_base))]),
       areaStyle: { opacity: 0.12 },
     },
   ],
@@ -54,7 +55,10 @@ const option = computed<ChartOption>(() => ({
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('charts.title') }}</p>
+      <div class="flex items-center justify-between gap-2">
+        <p class="font-medium">{{ t('charts.title') }}</p>
+        <ChartCurrencySwitch v-model="shown.selected.value" :options="shown.options.value" />
+      </div>
     </template>
     <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
          so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
