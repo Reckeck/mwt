@@ -5,6 +5,7 @@ import { DailyBudget } from '@/widgets/daily-budget'
 import { DashboardAllocation } from '@/widgets/dashboard-allocation'
 import { DashboardAssets } from '@/widgets/dashboard-assets'
 import { DashboardBudgets } from '@/widgets/dashboard-budgets'
+import { DashboardBybitSync } from '@/widgets/dashboard-bybit-sync'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
 import { DashboardTotal } from '@/widgets/dashboard-total'
@@ -246,6 +247,17 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
     component: ExchangeBalances,
     w: 8,
     h: 7,
+    minW: 6,
+    minH: 5,
+    requires: 'exchange',
+  },
+  {
+    id: 'bybitSync',
+    titleKey: 'dashboard.widget.bybitSync',
+    descriptionKey: 'dashboard.widgetHint.bybitSync',
+    component: DashboardBybitSync,
+    w: 8,
+    h: 8,
     minW: 6,
     minH: 5,
     requires: 'exchange',

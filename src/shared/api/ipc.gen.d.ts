@@ -1065,7 +1065,11 @@ type ExchangeProfile = { provider: ExchangeProvider,
 /**
  * Background import interval; 0 = off.
  */
-import_interval_sec: number, terminal: TerminalState, };
+import_interval_sec: number, terminal: TerminalState, 
+/**
+ * What an import brings in and where it books it.
+ */
+import: ImportSettings, };
 
 type ExchangeProvider = "bybit" | "binance" | "okx";
 
@@ -1308,6 +1312,12 @@ type Holding = { id: string, store_id: string, asset: AssetRef, quantity: Amount
 avg_cost: Amount | null, };
 
 /**
+ * One exchange account (Bybit `FUND`, `UNIFIED`, `EARN`) and the wallet it
+ * books in; `store_id: None` = this account is not imported at all.
+ */
+type ImportAccountRoute = { account: string, store_id: string | null, };
+
+/**
  * Fetch every Bybit fill for a store and stage it for user confirmation.
  */
 type ImportBybitHistoryInput = { store_id: string, 
@@ -1325,12 +1335,113 @@ type ImportBybitHistoryOutput = { staged: number,
  * Machine code: `no_key` | `unreachable` | `rate_limited` |
  * `forbidden_region`.
  */
-notice: string | null, };
+notice: string | null, 
+/**
+ * The sync as kept in the history; `None` without a key.
+ */
+run: ImportRun | null, };
+
+type ImportCategories = { trades: string | null, transfers: string | null, earn: string | null, };
 
 /**
  * What an import stages.
  */
 type ImportKind = "fill" | "transfer" | "earn_income";
+
+/**
+ * One sync with an exchange, for its history in the wallet settings.
+ */
+type ImportRun = { id: string, 
+/**
+ * The exchange wallet (root store).
+ */
+store_id: string, 
+/**
+ * RFC3339.
+ */
+at: string, source: ImportSource, 
+/**
+ * Records the exchange sent.
+ */
+fetched: number, 
+/**
+ * New ones staged for confirmation (or booked at once).
+ */
+staged: number, 
+/**
+ * Seen before (staged, booked or discarded).
+ */
+known: number, 
+/**
+ * Left out by the import settings (kind, coin, account, date).
+ */
+filtered: number, 
+/**
+ * Booked at once by «подтверждать сразу».
+ */
+confirmed: number, 
+/**
+ * The correction that set the live balance, if one was needed.
+ */
+reconcile_tx_id: string | null, 
+/**
+ * Why the sync failed; `None` when it went through.
+ */
+error: string | null, };
+
+/**
+ * What an exchange import brings in and where it books it: set up after the
+ * key is saved. The defaults are what the import did before these settings.
+ */
+type ImportSettings = { 
+/**
+ * Spot and futures fills.
+ */
+trades: boolean, 
+/**
+ * Moves between the exchange's own accounts.
+ */
+transfers: boolean, 
+/**
+ * Earn payouts.
+ */
+earn: boolean, 
+/**
+ * Book new operations at once instead of staging them for confirmation.
+ */
+auto_confirm: boolean, 
+/**
+ * When the ledger and the exchange disagree after everything is booked,
+ * a correction sets the exchange's live balance.
+ */
+auto_reconcile: boolean, 
+/**
+ * Only these coins (upper case); empty = every coin.
+ */
+coins: Array<string>, 
+/**
+ * Nothing older than this moment (RFC3339) is imported.
+ */
+since: string | null, 
+/**
+ * Category of each kind of operation; `None` = the built-in one.
+ */
+categories: ImportCategories, 
+/**
+ * Where each exchange account books; an account not listed goes to the
+ * sub-account bound to it (as before).
+ */
+accounts: Array<ImportAccountRoute>, };
+
+/**
+ * What started a sync with an exchange.
+ */
+type ImportSource = "auto" | "manual";
+
+/**
+ * Imported operations of one exchange wallet, newest first, a page at a time.
+ */
+type ImportedTransactions = { total: number, items: Array<Transaction>, };
 
 /**
  * Monthly income bracket of the ПДС co-financing ratio.
@@ -1467,6 +1578,12 @@ due_day: number | null, monthly_payment: Amount | null, };
 type LinkTransactionsInput = { ids: Array<string>, flow_id: string | null, };
 
 type Liquidity = "maker" | "taker";
+
+type ListImportedTransactionsInput = { store_id: string, 
+/**
+ * Default 50, at most 500.
+ */
+limit: number | null, offset: number | null, };
 
 type ListPendingImportsOutput = { imports: Array<PendingImport>, };
 
@@ -2281,6 +2398,8 @@ type SetImportIntervalInput = { store_id: string,
  * Seconds; `0` turns the background import off.
  */
 interval_sec: number, };
+
+type SetImportSettingsInput = { store_id: string, settings: ImportSettings, };
 
 /**
  * Set up a bonus programme.
@@ -3286,7 +3405,15 @@ workflows: Array<Workflow>, workflow_runs: Array<WorkflowRun>, workflow_vars: Ar
 /**
  * Runs asleep at a «Подождать» node.
  */
-workflow_waits: Array<WorkflowWait>, };
+workflow_waits: Array<WorkflowWait>, 
+/**
+ * Syncs with exchanges, newest last.
+ */
+import_runs: Array<ImportRun>, 
+/**
+ * Exchange ids the user discarded: a later sync does not stage them again.
+ */
+discarded_imports: Array<string>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

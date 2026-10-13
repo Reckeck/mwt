@@ -425,6 +425,51 @@ pub struct Exchanges {
     pub bybit: Vec<ExchangeKeys>,
 }
 
+/// What started a sync with an exchange.
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportSource {
+    /// The background poll.
+    #[default]
+    Auto,
+    /// «Синхронизировать сейчас» / «Загрузить историю».
+    Manual,
+}
+
+/// One sync with an exchange, for its history in the wallet settings.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ImportRun {
+    pub id: String,
+    /// The exchange wallet (root store).
+    pub store_id: String,
+    /// RFC3339.
+    pub at: String,
+    pub source: ImportSource,
+    /// Records the exchange sent.
+    pub fetched: u32,
+    /// New ones staged for confirmation (or booked at once).
+    pub staged: u32,
+    /// Seen before (staged, booked or discarded).
+    pub known: u32,
+    /// Left out by the import settings (kind, coin, account, date).
+    pub filtered: u32,
+    /// Booked at once by «подтверждать сразу».
+    pub confirmed: u32,
+    /// The correction that set the live balance, if one was needed.
+    #[serde(default)]
+    pub reconcile_tx_id: Option<String>,
+    /// Why the sync failed; `None` when it went through.
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Most syncs kept in the history, over all exchanges.
+pub const MAX_IMPORT_RUNS: usize = 500;
+/// Most discarded exchange ids remembered so they are not staged again.
+pub const MAX_DISCARDED_IMPORTS: usize = 20_000;
+
 /// Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct VaultDoc {
@@ -484,6 +529,12 @@ pub struct VaultDoc {
     /// Runs asleep at a «Подождать» node.
     #[serde(default)]
     pub workflow_waits: Vec<crate::workflow::model::WorkflowWait>,
+    /// Syncs with exchanges, newest last.
+    #[serde(default)]
+    pub import_runs: Vec<ImportRun>,
+    /// Exchange ids the user discarded: a later sync does not stage them again.
+    #[serde(default)]
+    pub discarded_imports: Vec<String>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -534,6 +585,8 @@ impl Default for VaultDoc {
             workflow_queue: Vec::new(),
             workflow_state: Vec::new(),
             workflow_waits: Vec::new(),
+            import_runs: Vec::new(),
+            discarded_imports: Vec::new(),
         }
     }
 }

@@ -77,6 +77,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-purpose', key: 'walletSettings.purpose', side: 'top' },
     { target: 'wallet-envelopes', key: 'walletSettings.envelopes', side: 'top' },
     { target: 'automation-presets', key: 'walletSettings.presets', side: 'bottom' },
+    { target: 'exchange-configure-import', key: 'walletSettings.importSetup', side: 'top' },
+    { target: 'import-routes', key: 'walletSettings.importRoutes', side: 'top' },
     { target: 'store-change', key: 'walletSettings.change', side: 'top' },
   ],
   transactions: [

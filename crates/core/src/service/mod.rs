@@ -32,6 +32,8 @@ mod categories;
 mod contacts;
 mod enrichment;
 mod envelopes;
+mod exchange_sync;
+pub use exchange_sync::{IMPORT_ACCOUNTS, ImportedTransactions};
 mod goals;
 mod interest;
 mod ledger;
@@ -680,6 +682,7 @@ impl UnlockedVault {
                     provider,
                     import_interval_sec: 900,
                     terminal: Default::default(),
+                    import: Default::default(),
                 }),
                 _ => None,
             };
@@ -826,6 +829,7 @@ impl UnlockedVault {
                         provider,
                         import_interval_sec: 900,
                         terminal: Default::default(),
+                        import: Default::default(),
                     });
                     profile.provider = provider;
                 }
@@ -1223,6 +1227,12 @@ impl UnlockedVault {
                     .map(|point| point.value_usd)
             })
             .or_else(|| self.last_stamped_price(asset_key))
+            // A dollar stablecoin with no price yet is still worth a dollar,
+            // not nothing: exchange balances are mostly in them.
+            .or_else(|| {
+                crate::exchange::is_usd_stablecoin(asset_key)
+                    .then(|| Amount::new(rust_decimal::Decimal::ONE))
+            })
             .unwrap_or(Amount::ZERO)
     }
 
@@ -1965,12 +1975,9 @@ impl UnlockedVault {
     /// Returns how many fills were newly staged.
     pub fn stage_imports(&mut self, imports: Vec<PendingImport>) -> Result<u32> {
         let before = self.doc.pending_imports.len();
-        let mut known: HashSet<String> = self
-            .doc
-            .pending_imports
-            .iter()
-            .map(|pending| pending.exec_id.clone())
-            .collect();
+        // Staged, booked or discarded before: a later poll sees the same
+        // history again and must not stage it twice.
+        let mut known = self.known_import_ids();
 
         for imp in imports {
             if imp.exec_id.is_empty() || known.contains(&imp.exec_id) {
@@ -2063,6 +2070,10 @@ impl UnlockedVault {
     /// `CONTRACT`) → Unified, `EARN`/`INVESTMENT` → Earn.
     fn bybit_account_store(&self, root_id: &str, account: &str) -> Option<String> {
         use crate::model::store::MarketKind;
+        // The import settings may send an account to a wallet of the user's choice.
+        if let Some(Some(target)) = self.import_route(root_id, account) {
+            return Some(target);
+        }
         let market = match account.trim().to_ascii_uppercase().as_str() {
             "FUND" => MarketKind::Funding,
             "UNIFIED" | "SPOT" | "CONTRACT" => MarketKind::Unified,
@@ -2321,7 +2332,7 @@ impl UnlockedVault {
     fn transaction_for_import(&self, imp: &PendingImport) -> Transaction {
         use crate::model::vault::ImportKind;
         let mut meta = TxMeta::new(&imp.comment);
-        meta.categories = vec!["trading".to_string()];
+        meta.categories = self.import_categories(imp, "trading");
         meta.origin = TxOrigin::Import {
             exec_id: imp.exec_id.clone(),
         };
@@ -2331,7 +2342,7 @@ impl UnlockedVault {
         match imp.kind {
             ImportKind::Fill => {}
             ImportKind::Transfer => {
-                meta.categories = vec!["transfer".to_string()];
+                meta.categories = self.import_categories(imp, "transfer");
                 let side = |account: &Option<String>| {
                     account
                         .as_deref()
@@ -2352,7 +2363,7 @@ impl UnlockedVault {
                 });
             }
             ImportKind::EarnIncome => {
-                meta.categories = vec!["deposit_interest".to_string()];
+                meta.categories = self.import_categories(imp, "deposit_interest");
                 return Transaction::Topup(TopupTx {
                     meta,
                     store_id: self.import_target(imp),
@@ -2468,6 +2479,7 @@ impl UnlockedVault {
         let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
         let mut confirmed = 0u32;
         let mut kept = Vec::new();
+        self.ensure_import_category();
 
         for imp in std::mem::take(&mut self.doc.pending_imports) {
             if !(all || wanted.contains(imp.exec_id.as_str())) {
@@ -2500,9 +2512,11 @@ impl UnlockedVault {
         let all = exec_ids.is_empty();
         let before = self.doc.pending_imports.len();
         let wanted: HashSet<&str> = exec_ids.iter().map(String::as_str).collect();
-        self.doc
-            .pending_imports
-            .retain(|pending| !(all || wanted.contains(pending.exec_id.as_str())));
+        let (dropped, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.doc.pending_imports)
+            .into_iter()
+            .partition(|pending| all || wanted.contains(pending.exec_id.as_str()));
+        self.doc.pending_imports = kept;
+        self.remember_discarded(dropped.into_iter().map(|pending| pending.exec_id));
         let discarded = (before - self.doc.pending_imports.len()) as u32;
         if discarded > 0 {
             self.persist()?;
@@ -2531,10 +2545,14 @@ impl UnlockedVault {
                 asset.symbol = upper;
                 asset
             }
-            // Unseen symbol: leave the chain unresolved so the user can bind
-            // it later, rather than attributing the asset to asset wrong network.
+            // Unseen symbol: a well-known coin gets its CoinGecko id (so it is
+            // priced like one picked by hand); the chain stays unresolved so
+            // the user can bind it later, rather than guessing a network.
             None => {
-                let mut asset = AssetRef::crypto(&upper, &upper, None, Chain::Fiat);
+                let known = crate::exchange::well_known_coin(&upper);
+                let name = known.map_or(upper.as_str(), |(_, name)| name);
+                let mut asset =
+                    AssetRef::crypto(&upper, name, known.map(|(id, _)| id), Chain::Fiat);
                 asset.chain = None;
                 asset
             }
@@ -4177,7 +4195,11 @@ mod import_tests {
             .doc
             .transactions
             .iter()
-            .find(|tx| tx.tag() == "topup" && tx.meta().categories == ["deposit_interest"])
+            // The payout's own category, plus the mark of an imported operation.
+            .find(|tx| {
+                tx.tag() == "topup"
+                    && tx.meta().categories == ["deposit_interest", "exchange_import"]
+            })
             .unwrap();
         let Transaction::Topup(income) = income else {
             panic!()

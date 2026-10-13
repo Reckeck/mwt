@@ -308,12 +308,16 @@ JSON без шифрования — там нет ничего секретно
 | `clear_exchange_key` | `ClearExchangeKeyInput { store_id }` | `ExchangeKeyStatus` |
 
 ### Bybit import — staging (D2.4)
-| `import_bybit_history` | `ImportBybitHistoryInput { store_id, category?, limit? }` | `ImportBybitHistoryOutput { staged, notice? }` — скачивает сделки и **кладёт их в staging**, операции не создаёт |
+| `import_bybit_history` | `ImportBybitHistoryInput { store_id, category?, limit? }` | `ImportBybitHistoryOutput { staged, notice?, run? }` — синхронизация «сейчас»: скачивает сделки, переводы и Earn, отбрасывает уже виденные (в staging, проведённые, отброшенные) и не нужные по настройкам импорта, **кладёт новые в staging** (или проводит сразу при `auto_confirm`), затем при расхождении ставит живой баланс корректировкой; `run` — запись в истории синхронизаций |
+| `get_import_settings` | `store_id` | `ImportSettings { trades, transfers, earn, auto_confirm, auto_reconcile, coins, since?, categories{trades?,transfers?,earn?}, accounts[{account, store_id?}] }` — что и куда импортирует биржа |
+| `set_import_settings` | `SetImportSettingsInput { store_id, settings }` | `ImportSettings` — сохраняет; счета маршрутов — только этот кошелёк или его субсчета, `store_id: null` = счёт биржи не импортируется |
+| `list_import_runs` | `store_id` | `Vec<ImportRun { id, at, source, fetched, staged, known, filtered, confirmed, reconcile_tx_id?, error? }>` — история синхронизаций, новые сверху |
+| `list_imported_transactions` | `ListImportedTransactionsInput { store_id, limit?, offset? }` | `ImportedTransactions { total, items }` — операции с `origin: import` этого кошелька и субсчетов, новые сверху |
 | `list_pending_imports` | — | `ListPendingImportsOutput { imports: Vec<PendingImport> }` (новые сверху) |
 | `confirm_pending_imports` | `ConfirmPendingImportsInput { exec_ids }` (пусто = все) | `ConfirmPendingImportsOutput { confirmed }` — `kind = fill`: спот → `TradeSpot`, linear/inverse → `TradeFutures` (комиссия в валюте расчёта), на субсчёт из ключа, иначе Unified; `transfer` → `Transfer` между субсчетами Funding/Unified/Earn; `earn_income` → `Topup` (`deposit_interest`) на Earn; не прошедшая проверку остаётся в staging |
 | `discard_pending_imports` | `DiscardPendingImportsInput { exec_ids }` (пусто = все) | `DiscardPendingImportsOutput { discarded }` |
 | `create_bybit_accounts` | `CreateBybitAccountsInput { store_id, funding_name, unified_name, earn_name, detect }` | `Vec<String>` — субсчета Funding / Unified / Earn (недостающие создаются). `detect`: сперва спросить у Bybit балансы и создать только счета, где есть монеты (Unified — всегда); без сети создаются все три. Фронт вызывает его с `detect` сразу после `set_exchange_key` (настройки биржи и мастер создания биржи) |
-| `bybit_balances` | `store_id` | `Vec<ExchangeAccountBalance { account, store_id?, rows[{ coin, exchange, ledger, diff }] }>` — балансы FUND/UNIFIED/EARN по API рядом с учётом субсчёта |
+| `bybit_balances` | `store_id` | `Vec<ExchangeAccountBalance { account, store_id?, rows[{ coin, exchange, ledger, diff }] }>` — балансы FUND/UNIFIED/EARN по API рядом с учётом субсчёта; если всё проведено и учёт расходится, сначала ставит живой баланс корректировкой (`auto_reconcile`) |
 
 Инварианты блока:
 - **Ни одна команда не создаёт операции сама.** Только `confirm_pending_imports`;

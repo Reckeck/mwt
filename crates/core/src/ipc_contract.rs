@@ -1473,6 +1473,25 @@ pub struct ImportBybitHistoryOutput {
     /// Machine code: `no_key` | `unreachable` | `rate_limited` |
     /// `forbidden_region`.
     pub notice: Option<String>,
+    /// The sync as kept in the history; `None` without a key.
+    #[serde(default)]
+    pub run: Option<crate::model::vault::ImportRun>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetImportSettingsInput {
+    pub store_id: String,
+    pub settings: crate::model::store::ImportSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct ListImportedTransactionsInput {
+    pub store_id: String,
+    /// Default 50, at most 500.
+    #[serde(default)]
+    pub limit: Option<u32>,
+    #[serde(default)]
+    pub offset: Option<u32>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]

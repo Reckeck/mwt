@@ -215,7 +215,12 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
         property: input.property ?? null,
         secured_by: input.secured_by ?? null,
         exchange: input.provider
-          ? { provider: input.provider, import_interval_sec: 900, terminal: mockTerminal() }
+          ? {
+              provider: input.provider,
+              import_interval_sec: 900,
+              terminal: mockTerminal(),
+              import: mockImportSettings(),
+            }
           : null,
       }
       mockStores.push(store)
@@ -335,7 +340,12 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       if (input.provider) {
         store.exchange = store.exchange
           ? { ...store.exchange, provider: input.provider }
-          : { provider: input.provider, import_interval_sec: 900, terminal: mockTerminal() }
+          : {
+              provider: input.provider,
+              import_interval_sec: 900,
+              terminal: mockTerminal(),
+              import: mockImportSettings(),
+            }
       }
       return resolve(store)
     }
@@ -885,12 +895,37 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
           : [],
       )
     // --- bybit import staging (D2.4) ---
-    case 'import_bybit_history':
-      return resolve(
-        mockKeyStatus.configured
-          ? { staged: mockPendingImports().length, notice: null }
-          : { staged: 0, notice: 'no_key' },
-      )
+    case 'import_bybit_history': {
+      if (!mockKeyStatus.configured) return resolve({ staged: 0, notice: 'no_key', run: null })
+      // Records belong to the wallet synced, as the backend stages them.
+      mockPendingStore = mockPendingImports().map((entry) => ({ ...entry, store_id: String(body?.store_id ?? '') }))
+      const run: ImportRun = {
+        id: crypto.randomUUID(),
+        store_id: String(body?.store_id ?? ''),
+        at: new Date().toISOString(),
+        source: 'manual',
+        fetched: mockPendingImports().length,
+        staged: mockPendingImports().length,
+        known: 0,
+        filtered: 0,
+        confirmed: 0,
+        reconcile_tx_id: null,
+        error: null,
+      }
+      mockImportRuns.unshift(run)
+      return resolve({ staged: run.staged, notice: null, run })
+    }
+    case 'list_import_runs':
+      return resolve(mockImportRuns.filter((run) => run.store_id === args?.storeId))
+    case 'get_import_settings':
+      return resolve(mockImportSettingsByStore.get(String(args?.storeId)) ?? mockImportSettings())
+    case 'set_import_settings': {
+      const input = body as unknown as SetImportSettingsInput
+      mockImportSettingsByStore.set(input.store_id, input.settings)
+      return resolve(input.settings)
+    }
+    case 'list_imported_transactions':
+      return resolve({ total: 0, items: [] })
     case 'list_pending_imports':
       return resolve({ imports: mockPendingImports() })
     case 'confirm_pending_imports': {
@@ -1100,6 +1135,9 @@ const mockExecutions: BybitExecution[] = [
 
 /** Staged fills for the browser mock of the D2.4 import flow. */
 let mockPendingStore: PendingImport[] = []
+/** Syncs of the mock exchanges, newest first. */
+const mockImportRuns: ImportRun[] = []
+const mockImportSettingsByStore = new Map<string, ImportSettings>()
 const mockKeyStatusStoreId = 'mock-store-bybit'
 
 function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImport[] {
@@ -1347,8 +1385,26 @@ const newStore = (name: string, kind: StoreKind, color: string, parent: string |
   custody: kind === 'crypto' ? 'cold' : null,
   property: null,
   secured_by: null,
-  exchange: kind === 'exchange' ? { provider: 'bybit', import_interval_sec: 900, terminal: mockTerminal() } : null,
+  exchange:
+    kind === 'exchange'
+      ? { provider: 'bybit', import_interval_sec: 900, terminal: mockTerminal(), import: mockImportSettings() }
+      : null,
 })
+
+/** What an exchange import brings in, as Rust's `ImportSettings::default()`. */
+function mockImportSettings(): ImportSettings {
+  return {
+    trades: true,
+    transfers: true,
+    earn: true,
+    auto_confirm: false,
+    auto_reconcile: true,
+    coins: [],
+    since: null,
+    categories: { trades: null, transfers: null, earn: null },
+    accounts: [],
+  }
+}
 
 const mockEnvelopes: Envelope[] = []
 const mockDebtTerms: DebtTerms[] = []
@@ -2070,6 +2126,8 @@ function mockVaultDoc(): VaultDoc {
     workflow_queue: [],
     workflow_state: [],
     workflow_waits: [],
+    import_runs: [],
+    discarded_imports: [],
   }
 }
 

@@ -17,7 +17,10 @@ import {
   StoreTermsForm,
 } from '@/features/store-edit'
 import { StoreChangeDialog } from '@/features/store-change'
+import { ImportSettingsForm } from '@/features/exchange-import-settings'
 import { AutomationList } from '@/widgets/automation-list'
+import { ExchangeImported } from '@/widgets/exchange-imported'
+import { ExchangeSyncHistory } from '@/widgets/exchange-sync-history'
 import { bindingLabel, kindInfo, useWalletCatalog } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button, buttonVariants } from '@/shared/ui/button'
@@ -69,7 +72,13 @@ const tabs = computed(() => {
     list.push({ value: 'accounts', label: isRoot.value ? t('walletSettings.accounts') : t('walletSettings.envelopes') })
   }
   list.push({ value: 'automations', label: t('walletSettings.automations') })
-  if (current.kind === 'exchange' && isRoot.value) list.push({ value: 'exchange', label: t('walletSettings.exchange') })
+  if (current.kind === 'exchange' && isRoot.value) {
+    list.push({ value: 'exchange', label: t('walletSettings.exchange') })
+    // What the key brings in and where, the history of syncs, what came in.
+    list.push({ value: 'import', label: t('walletSettings.import') })
+    list.push({ value: 'syncs', label: t('walletSettings.syncs') })
+    list.push({ value: 'imported', label: t('walletSettings.imported') })
+  }
   if (current.kind === 'property' && isRoot.value) {
     list.push({ value: 'property', label: t('walletSettings.property') })
   }
@@ -197,7 +206,16 @@ const money = (value: string) => formatMoney(value, { currency: overview.data.va
       </template>
 
       <template #exchange>
-        <Card><StoreExchangeForm :store="store" /></Card>
+        <Card><StoreExchangeForm :store="store" @configure="tab = 'import'" /></Card>
+      </template>
+      <template #import>
+        <Card><ImportSettingsForm :store-id="store.id" /></Card>
+      </template>
+      <template #syncs>
+        <Card><ExchangeSyncHistory :store-id="store.id" /></Card>
+      </template>
+      <template #imported>
+        <Card><ExchangeImported :store-id="store.id" /></Card>
       </template>
 
       <template #property>
