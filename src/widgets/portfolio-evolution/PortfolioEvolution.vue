@@ -3,11 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
 import { useTheme } from '@/shared/lib/theme'
+import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
 const { resolved } = useTheme()
@@ -18,9 +20,13 @@ const history = useQuery({
   queryFn: () => call<HistoryPoint[]>('get_history'),
 })
 
+/** History is in the base currency; the tooltip adds the favourite ones. */
+const settings = useSettingsStore()
+const moneyTooltip = useMoneyChartTooltip(computed(() => settings.baseCurrency))
+
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis' },
+  tooltip: { trigger: 'axis', formatter: moneyTooltip.value },
   grid: { left: 4, right: 12, top: 24, bottom: 4, containLabel: true },
   xAxis: {
     type: 'time',

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
@@ -17,11 +18,14 @@ const props = defineProps<{ report: InflationReport }>()
 const { t } = useI18n()
 const route = useRoute()
 const axisColor = chartAxisColor(useTheme().resolved)
+/** Each value also in the base and favourite currencies. */
+const moneyTooltip = useMoneyChartTooltip(computed(() => props.report.meta.currency))
 
 const option = computed<ChartOption>(() => ({
   ...categoryChart(
     props.report.points.map((point) => monthLabel(point.month, activeLocale.value)),
     axisColor.value,
+    moneyTooltip.value,
   ),
   series: [
     { name: t('report.inflation.nominal'), type: 'line', data: props.report.points.map((point) => num(point.nominal_net)) },

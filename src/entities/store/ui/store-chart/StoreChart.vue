@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
@@ -33,12 +34,12 @@ const axisColor = chartAxisColor(resolved)
 /** The series is in the base currency: the axis and the tooltip say which. */
 const currency = computed(() => (props.baseCurrency || 'usd').toLowerCase())
 
+const moneyTooltip = useMoneyChartTooltip(currency)
+
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value) => formatMoney(Number(value), { currency: currency.value }),
-  },
+  // The value in the wallet's currency, then in the base and favourite ones.
+  tooltip: { trigger: 'axis', formatter: moneyTooltip.value },
   // containLabel already reserves room for the axis labels; extra margins only add empty space.
   grid: { left: 4, right: 12, top: 12, bottom: 4, containLabel: true },
   xAxis: {

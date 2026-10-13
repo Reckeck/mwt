@@ -4,13 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useQueries, useQuery } from '@tanstack/vue-query'
 import { TrendingDown, TrendingUp } from 'lucide-vue-next'
 
-import { Money } from '@/entities/currency'
+import { Money, useConversions, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
 import { useTheme } from '@/shared/lib/theme'
@@ -19,8 +18,9 @@ import type { UtilityStatsProps } from './utility-stats.types'
 
 /**
  * Utilities by month, stacked per bill, with the latest month against the one
- * before. Bills in another currency than the most common one are left off the
- * chart rather than added up as if they were the same money.
+ * before. The chart speaks the currency most bills are in; a bill in another
+ * one is converted at the cached rate (marked «≈»), never added up as is, and
+ * left off only while its rate is unknown.
  */
 const props = withDefaults(defineProps<UtilityStatsProps>(), { propertyId: undefined, months: 12 })
 const { t } = useI18n()
@@ -54,12 +54,22 @@ const periods = computed(() => {
   )
 })
 
+const conversions = useConversions(computed(() => own.value.some((item) => item.currency !== currency.value)))
+const moneyTooltip = useMoneyChartTooltip(currency)
+
 const series = computed(() =>
   own.value.flatMap((item, index) => {
-    if (item.currency !== currency.value) return []
+    const foreign = item.currency !== currency.value
+    const factor = foreign ? conversions.convertTo(1, item.currency, currency.value) : 1
+    if (factor === null) return []
     const months = trends.value[index]?.data?.months ?? []
-    const byPeriod = new Map(months.map((month) => [month.period, Number(month.amount)]))
-    return [{ name: item.name, data: periods.value.map((period) => byPeriod.get(period) ?? 0) }]
+    const byPeriod = new Map(months.map((month) => [month.period, Number(month.amount) * factor]))
+    return [
+      {
+        name: foreign ? `${item.name} (≈ ${item.currency.toUpperCase()})` : item.name,
+        data: periods.value.map((period) => byPeriod.get(period) ?? 0),
+      },
+    ]
   }),
 )
 const totals = computed(() =>
@@ -82,10 +92,7 @@ const monthLabel = (period: string) =>
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
   grid: { left: 4, right: 4, top: 8, bottom: 20, containLabel: true },
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value) => formatMoney(Number(value), { currency: currency.value, decimals: 0 }),
-  },
+  tooltip: { trigger: 'axis', formatter: moneyTooltip.value },
   xAxis: {
     type: 'category',
     data: periods.value.map(monthLabel),
