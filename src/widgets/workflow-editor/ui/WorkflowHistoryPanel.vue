@@ -94,9 +94,25 @@ function runTests() {
             {{ formatDateTime(version.saved_at) }}
             <span class="text-xs text-muted-foreground">· {{ t('workflow.versions.nodes', { count: nodeCount(version.graph) }) }}</span>
           </span>
-          <Button size="sm" variant="ghost" :disabled="actions.restoreVersion.isPending.value" @click="restore(version.saved_at)">
+          <!-- Over unsaved edits a restore asks once more: they would be lost. -->
+          <Button
+            v-if="!props.dirty"
+            size="sm"
+            variant="ghost"
+            :disabled="actions.restoreVersion.isPending.value"
+            @click="restore(version.saved_at)"
+          >
             {{ t('workflow.versions.restore') }}
           </Button>
+          <ConfirmButton
+            v-else
+            :label="t('workflow.versions.restore')"
+            :confirm-label="t('workflow.versions.restoreOverEdits')"
+            :disabled="actions.restoreVersion.isPending.value"
+            @confirm="restore(version.saved_at)"
+          >
+            <History class="size-4" />
+          </ConfirmButton>
         </li>
       </ul>
     </section>

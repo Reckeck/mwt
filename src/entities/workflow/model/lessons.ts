@@ -5,6 +5,8 @@
  * `workflow.lesson.<id>.{title,goal,hint}` and `workflow.lesson.<id>.check.<key>`.
  */
 
+import { GRAPH_VERSION } from '@/shared/lib/workflow'
+
 export interface LessonCheck {
   key: string
   /** Ticks from the graph alone, or needs the last emulation. */
@@ -29,7 +31,7 @@ function wire(from: string, fromPort: string, to: string, toPort: string): Workf
 }
 
 function graph(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): WorkflowGraph {
-  return { version: 1, nodes, edges, comments: [] }
+  return { version: GRAPH_VERSION, nodes, edges, comments: [] }
 }
 
 const kindsOf = (value: WorkflowGraph, kind: string) => value.nodes.filter((entry) => entry.kind === kind)
@@ -152,13 +154,26 @@ export const WORKFLOW_LESSONS: Lesson[] = [
     start: () => graph([node('start', 'trigger.manual', 0, 0)]),
     checks: [
       { key: 'confirm', test: (value) => wired(value, 'trigger.manual', 'out', 'action.confirm', 'in') },
-      { key: 'operation', test: (value) => wired(value, 'action.confirm', 'out', 'action.transaction', 'in') },
+      { key: 'operation', test: (value) => wired(value, 'action.confirm', 'true', 'action.transaction', 'in') },
       {
         key: 'accounts',
         test: (value) =>
           kindsOf(value, 'action.transaction').some((entry) => entry.params.account && entry.params.amount),
       },
-      { key: 'queued', test: (_value, report) => ran(report) && (report?.queued.length ?? 0) > 0 },
+      {
+        key: 'answered',
+        test: (_value, report) => ran(report, 'action.confirm') && (report?.transactions.length ?? 0) > 0,
+      },
+    ],
+  },
+  {
+    id: 'payday',
+    start: () => graph([node('start', 'trigger.manual', 0, 0)]),
+    checks: [
+      { key: 'make', test: (value) => kindsOf(value, 'date.make').length > 0 },
+      { key: 'shift', test: (value) => wired(value, 'date.make', 'date', 'date.shift_workday', 'date') },
+      { key: 'remind', test: (value) => wired(value, 'date.shift_workday', 'date', 'action.reminder', 'date') },
+      { key: 'emulate', test: (_value, report) => ran(report) && (report?.reminders.length ?? 0) > 0 },
     ],
   },
 ]

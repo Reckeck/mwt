@@ -17,7 +17,7 @@ pub struct Text {
     pub en: &'static str,
 }
 
-const fn txt(ru: &'static str, en: &'static str) -> Text {
+pub(super) const fn txt(ru: &'static str, en: &'static str) -> Text {
     Text { ru, en }
 }
 
@@ -30,6 +30,10 @@ pub enum NodeGroup {
     Variable,
     Action,
     List,
+    /// Days and moments: parts, shifting, working days.
+    Date,
+    /// Text, numbers in text, converting a value to another type.
+    Text,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
@@ -128,23 +132,28 @@ impl NodeDef {
     }
 }
 
-fn port(name: &'static str, ty: PortType, label: Text) -> PortDef {
+pub(super) fn port(name: &'static str, ty: PortType, label: Text) -> PortDef {
     PortDef { name, ty, label }
 }
 
-fn flow_in() -> PortDef {
+pub(super) fn flow_in() -> PortDef {
     port("in", PortType::Flow, txt("Вход", "In"))
 }
 
-fn flow_out() -> PortDef {
+pub(super) fn flow_out() -> PortDef {
     port("out", PortType::Flow, txt("Дальше", "Next"))
 }
 
-fn error_out() -> PortDef {
+pub(super) fn error_out() -> PortDef {
     port("error", PortType::Flow, txt("Ошибка", "Error"))
 }
 
-fn param(name: &'static str, kind: ParamKind, label: Text, default: serde_json::Value) -> ParamDef {
+pub(super) fn param(
+    name: &'static str,
+    kind: ParamKind,
+    label: Text,
+    default: serde_json::Value,
+) -> ParamDef {
     ParamDef {
         name,
         kind,
@@ -155,7 +164,7 @@ fn param(name: &'static str, kind: ParamKind, label: Text, default: serde_json::
 }
 
 /// A parameter that also has an input of the same name and type.
-fn wired(
+pub(super) fn wired(
     name: &'static str,
     kind: ParamKind,
     ty: PortType,
@@ -173,7 +182,7 @@ fn wired(
     }
 }
 
-fn select(options: &[(&'static str, Text)]) -> ParamKind {
+pub(super) fn select(options: &[(&'static str, Text)]) -> ParamKind {
     ParamKind::Select {
         options: options.to_vec(),
     }
@@ -1002,13 +1011,22 @@ fn build() -> Vec<NodeDef> {
             "Keeps a value between runs.",
         ),
         help: txt(
-            "Например, дату последнего пополнения.",
-            "For instance, the date of the last top-up.",
+            "Например, дату последнего пополнения. «Дальше» подключать не обязательно, а если не подключить и «Вход» — узел выполнится сам в конце запуска. Узлы, читающие переменную после записи, видят новое значение.",
+            "For instance, the date of the last top-up. «Next» is optional, and with no wire into «In» the node runs by itself at the end of the run. Nodes reading the variable after the write see the new value.",
         ),
         inputs: vec![flow_in(), port("value", Ty::Any, txt("Значение", "Value"))],
         outputs: vec![flow_out()],
         params: vec![
             param("name", ParamKind::Text, txt("Имя", "Name"), json!("")),
+            ParamDef {
+                wirable: true,
+                ..param(
+                    "value",
+                    ParamKind::Text,
+                    txt("Значение, если не подключено", "Value when not wired"),
+                    json!(""),
+                )
+            },
             scope(),
         ],
         advanced: false,
@@ -1030,8 +1048,8 @@ fn build() -> Vec<NodeDef> {
             "Adds to the number in a variable.",
         ),
         help: txt(
-            "Счётчик: сколько раз купил BTC.",
-            "A counter: how many times BTC was bought.",
+            "Счётчик: сколько раз купил BTC. Без связи во «Вход» выполнится сам в конце запуска; «Дальше» не обязателен.",
+            "A counter: how many times BTC was bought. With no wire into «In» it runs by itself at the end of the run; «Next» is optional.",
         ),
         inputs: vec![
             flow_in(),
@@ -1236,8 +1254,8 @@ fn build() -> Vec<NodeDef> {
             "Shows a notice, in the bell and from the system.",
         ),
         help: txt(
-            "Текст можно собрать из данных узлом «Собрать текст».",
-            "Build the text from data with «Build text».",
+            "Текст можно собрать из данных узлом «Собрать текст». Без связи во «Вход» выполнится сам в конце запуска; «Дальше» не обязателен.",
+            "Build the text from data with «Build text». With no wire into «In» it runs by itself at the end of the run; «Next» is optional.",
         ),
         inputs,
         outputs: vec![flow_out()],
@@ -1258,6 +1276,17 @@ fn build() -> Vec<NodeDef> {
             ParamKind::LongText,
             Ty::Text,
             txt("Текст", "Text"),
+            json!(""),
+            &mut inputs,
+        ),
+        wired(
+            "date",
+            ParamKind::Date,
+            Ty::Date,
+            txt(
+                "Дата (вместо «через сколько дней»)",
+                "Date (instead of «in how many days»)",
+            ),
             json!(""),
             &mut inputs,
         ),
@@ -1283,8 +1312,8 @@ fn build() -> Vec<NodeDef> {
             "A reminder for a date and time.",
         ),
         help: txt(
-            "Оно появится в «Напоминаниях» и придёт уведомлением.",
-            "It shows in «Reminders» and arrives as a notice.",
+            "Оно появится в «Напоминаниях» и придёт уведомлением. День — из входа «Дата» (например, после «Сдвинуть на рабочий день»), иначе сегодня плюс «через сколько дней»; время — из поля. Узлу не нужен «Дальше»: можно закончить им ветку.",
+            "It shows in «Reminders» and arrives as a notice. The day comes from the «Date» input (say, after «Shift to a working day»), else today plus «in how many days»; the time from its field. It needs no «Next»: a branch may end with it.",
         ),
         inputs,
         outputs: vec![flow_out()],
@@ -1292,23 +1321,46 @@ fn build() -> Vec<NodeDef> {
         advanced: false,
         keywords: vec!["напоминание", "напомнить", "reminder", "remind"],
     });
+    let mut inputs = vec![flow_in()];
+    let params = vec![
+        wired(
+            "question",
+            ParamKind::Text,
+            Ty::Text,
+            txt("Что спросить", "What to ask"),
+            json!(""),
+            &mut inputs,
+        ),
+        param(
+            "timeout_hours",
+            ParamKind::Number,
+            txt(
+                "Ждать не дольше, часов (0 — без срока)",
+                "Wait at most, hours (0 = no limit)",
+            ),
+            json!(0),
+        ),
+    ];
     out.push(NodeDef {
         kind: "action.confirm",
         group: Action,
         title: txt("Ждать подтверждения", "Wait for confirmation"),
         description: txt(
-            "Операции после этого узла не создаются сразу, а ждут вашего «да» в очереди.",
-            "Operations after this node are not made at once but wait for your yes in the queue.",
+            "Останавливает запуск и спрашивает вас; по «Да» идёт одной веткой, по «Нет» — другой.",
+            "Pauses the run and asks you; «Yes» goes one way, «No» the other.",
         ),
         help: txt(
-            "По умолчанию схема делает всё сразу. Поставьте этот узел перед операциями, которые хотите проверить; очередь — во вкладке «Очередь».",
-            "By default a workflow acts at once. Put this node before the operations you want to check; the queue is under «Queue».",
+            "Запуск засыпает, а вопрос появляется во вкладке «Очередь» и в уведомлении. Ответ «Да» или «Нет» продолжает запуск по своей ветке. Если задан срок и вы не ответили — считается «Нет». В эмуляции вопрос задаётся сразу в окне.",
+            "The run sleeps and the question shows under «Queue» and in a notice. Answering «Yes» or «No» goes on along that way. With a time limit and no answer it counts as «No». In emulation the question is asked at once in a dialog.",
         ),
-        inputs: vec![flow_in()],
-        outputs: vec![flow_out()],
-        params: vec![],
+        inputs,
+        outputs: vec![
+            port("true", Ty::Flow, txt("Да", "Yes")),
+            port("false", Ty::Flow, txt("Нет", "No")),
+        ],
+        params,
         advanced: false,
-        keywords: vec!["подтверждение", "проверить", "очередь", "confirm", "approve", "queue"],
+        keywords: vec!["подтверждение", "проверить", "очередь", "спросить", "жди меня", "confirm", "approve", "ask", "queue"],
     });
     out.push(NodeDef {
         kind: "action.stop",
@@ -1359,8 +1411,8 @@ fn build() -> Vec<NodeDef> {
             "Runs workflows with a «Workflow event» trigger of the same name.",
         ),
         help: txt(
-            "Цепочка событий не глубже 5: схема не может бесконечно запускать сама себя.",
-            "An event chain goes no deeper than 5: a workflow cannot run itself forever.",
+            "Цепочка событий не глубже 5: схема не может бесконечно запускать сама себя. Без связи во «Вход» выполнится сам в конце запуска; «Дальше» не обязателен.",
+            "An event chain goes no deeper than 5: a workflow cannot run itself forever. With no wire into «In» it runs by itself at the end of the run; «Next» is optional.",
         ),
         inputs,
         outputs: vec![flow_out()],
@@ -1569,6 +1621,7 @@ fn build() -> Vec<NodeDef> {
         keywords: vec!["поле", "запись", "field", "record", "property"],
     });
 
+    super::catalog_more::more_nodes(&mut out);
     out
 }
 

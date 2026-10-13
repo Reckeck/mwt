@@ -90,6 +90,12 @@ type AlertCondition = "above" | "below";
 
 type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
 
+type AnswerWorkflowWaitInput = { id: string, 
+/**
+ * «Да» (true) or «Нет» (false).
+ */
+yes: boolean, };
+
 /**
  * Preferences that follow the *user*, not the vault: they must survive opening
  * a different vault, so they are stored next to the app, not inside the doc.
@@ -929,7 +935,12 @@ graph: string, workflow_id: string | null,
 /**
  * The trigger to start from; a manual one, else the first, by default.
  */
-trigger_node: string | null, };
+trigger_node: string | null, 
+/**
+ * Answers to «Ждать подтверждения» given so far, by node id; a question
+ * without one pauses the emulation (outcome `asking`).
+ */
+answers?: { [key: string]: boolean }, };
 
 /**
  * An event a run sent with «Отправить событие».
@@ -1647,7 +1658,7 @@ advanced: boolean,
  */
 keywords: Array<string>, };
 
-type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list";
+type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list" | "date" | "text";
 
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
@@ -2193,7 +2204,7 @@ type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
 
 type RunMode = "live" | "dry_run";
 
-type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } };
+type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } };
 
 /**
  * Everything a run did. The vault already holds its operations; the caller
@@ -2204,6 +2215,10 @@ type RunReport = { run: WorkflowRun,
  * Operations made (or, in emulation, that would be made).
  */
 transactions: Array<Transaction>, queued: Array<QueuedActions>, notices: Array<NoticeRecord>, events: Array<EmittedEvent>, 
+/**
+ * Reminders it set (or, in emulation, would set).
+ */
+reminders: Array<Reminder>, 
 /**
  * Data wire id → the value that went along it, for the editor.
  */
@@ -2216,6 +2231,12 @@ type SaveTerminalDrawingsInput = { store_id: string, symbol: string,
  * The chart drawing manager's JSON export; empty or `[]` removes it.
  */
 json: string, };
+
+type SaveWorkflowDraftInput = { id: string, 
+/**
+ * The editor's graph as JSON.
+ */
+graph: string, };
 
 /**
  * Create (`id` empty) or update a workflow.
@@ -3275,6 +3296,11 @@ type VaultInfo = { path: string, doc_version: number, id: string, created_at: st
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
 
 /**
+ * What a sleeping run waits for.
+ */
+type WaitKind = "timer" | "confirm";
+
+/**
  * What every wallet kind allows, in sidebar order. Static domain data, so the
  * UI never duplicates these rules.
  */
@@ -3313,7 +3339,12 @@ versions: Array<GraphVersion>,
 /**
  * Checks run by emulation: what the workflow should do.
  */
-tests: Array<WorkflowTest>, };
+tests: Array<WorkflowTest>, 
+/**
+ * Edits left unsaved in the editor, kept to come back to; the saved
+ * graph (and the runs) are not touched by them.
+ */
+draft?: GraphVersion, };
 
 /**
  * A note or a frame on the canvas: no effect on a run.
@@ -3413,7 +3444,12 @@ trigger_node: string | null,
 /**
  * The moment to emulate (RFC3339); now when empty.
  */
-at: string | null, expect: TestExpect, };
+at: string | null, 
+/**
+ * Answers to «Ждать подтверждения» questions, by node id; a question
+ * without one ends the emulation as `waiting`.
+ */
+answers?: { [key: string]: boolean }, expect: TestExpect, };
 
 /**
  * How a test went.
@@ -3430,16 +3466,16 @@ problems_ru: Array<string>, problems_en: Array<string>, report: RunReport, };
 type WorkflowVar = { scope: VarScope, name: string, value: string, updated_at: string, };
 
 /**
- * A run asleep at a «Подождать» node: where it goes on, when, and the data it
- * had worked out by then.
+ * A run asleep at a «Подождать» or «Ждать подтверждения» node: where it goes
+ * on, when, and the data it had worked out by then.
  */
 type WorkflowWait = { id: string, workflow_id: string, run_id: string, 
 /**
- * The wait node; the run goes on from its «Дальше».
+ * The wait node; the run goes on from its «Дальше» (or «Да»/«Нет»).
  */
 node_id: string, 
 /**
- * RFC3339.
+ * RFC3339; empty for a question without a deadline.
  */
 resume_at: string, 
 /**
@@ -3449,7 +3485,15 @@ memo: string,
 /**
  * Whether operations after it go to the confirmation queue.
  */
-queue_mode: boolean, trigger: string, };
+queue_mode: boolean, trigger: string, kind: WaitKind, 
+/**
+ * The question of a «Ждать подтверждения» node.
+ */
+question: string, 
+/**
+ * When the run fell asleep (RFC3339).
+ */
+created_at: string, };
 
 type YearReport = { meta: ReportMeta, year: number, rows: Array<YearRow>, total: YearRow, 
 /**

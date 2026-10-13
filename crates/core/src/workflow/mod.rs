@@ -10,6 +10,7 @@
 //! operations waiting for confirmation.
 
 pub mod catalog;
+mod catalog_more;
 pub mod exec;
 pub mod graph;
 pub mod model;
@@ -21,8 +22,8 @@ pub use catalog::{NodeDef, ParamDef, ParamKind, PortDef, catalog, node_def};
 pub use exec::{RunContext, RunMode, RunReport, TraceStep};
 pub use graph::{Edge, Graph, Node, Position};
 pub use model::{
-    QueuedActions, RunOutcome, TestExpect, VarScope, Workflow, WorkflowRun, WorkflowState,
-    WorkflowTest, WorkflowVar,
+    QueuedActions, RunOutcome, TestExpect, VarScope, WaitKind, Workflow, WorkflowRun,
+    WorkflowState, WorkflowTest, WorkflowVar, WorkflowWait,
 };
 pub use types::{PortType, WfValue};
 pub use validate::{GraphIssue, IssueLevel, validate};

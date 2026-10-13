@@ -22,7 +22,7 @@ export function localized(text: LocalizedText, locale: string): string {
   return locale.startsWith('ru') ? text.ru : text.en
 }
 
-export const NODE_GROUPS: NodeGroup[] = ['trigger', 'data', 'logic', 'variable', 'action', 'list']
+export const NODE_GROUPS: NodeGroup[] = ['trigger', 'data', 'date', 'text', 'logic', 'variable', 'action', 'list']
 
 /** Tailwind classes of a port's dot, by type. */
 export const PORT_COLOR: Record<PortType, string> = {
@@ -54,11 +54,16 @@ export const GROUP_COLOR: Record<NodeGroup, string> = {
   variable: 'bg-node-variable',
   action: 'bg-node-action',
   list: 'bg-node-list',
+  date: 'bg-node-date',
+  text: 'bg-node-text',
 }
+
+/** The graph format the app writes; mirrors `GRAPH_VERSION` in `graph.rs`. */
+export const GRAPH_VERSION = 2
 
 /** An empty graph of the current format. */
 export function emptyGraph(): WorkflowGraph {
-  return { version: 1, nodes: [], edges: [], comments: [] }
+  return { version: GRAPH_VERSION, nodes: [], edges: [], comments: [] }
 }
 
 export function parseGraph(json: string): WorkflowGraph {
@@ -66,7 +71,7 @@ export function parseGraph(json: string): WorkflowGraph {
   try {
     const parsed = JSON.parse(json) as Partial<WorkflowGraph>
     return {
-      version: parsed.version ?? 1,
+      version: parsed.version ?? GRAPH_VERSION,
       nodes: parsed.nodes ?? [],
       edges: parsed.edges ?? [],
       comments: parsed.comments ?? [],
@@ -93,11 +98,18 @@ export function portType(def: NodeDef | undefined, port: string, side: 'in' | 'o
 }
 
 /** The value of a run in words: the trace step's outcome as a key of `workflow.outcome.*`. */
-export function outcomeKey(outcome: RunOutcome): 'done' | 'stopped' | 'failed' | 'waiting' {
+export function outcomeKey(outcome: RunOutcome): 'done' | 'stopped' | 'failed' | 'waiting' | 'asking' {
   if (outcome === 'done') return 'done'
   if ('stopped' in outcome) return 'stopped'
   if ('failed' in outcome) return 'failed'
+  if ('asking' in outcome) return 'asking'
   return 'waiting'
+}
+
+/** The question a run stopped at, when it waits for «Да»/«Нет». */
+export function outcomeQuestion(outcome: RunOutcome): { nodeId: string; question: string } | null {
+  if (outcome === 'done' || !('asking' in outcome)) return null
+  return { nodeId: outcome.asking.node_id, question: outcome.asking.question }
 }
 
 /** The reason or the moment a run outcome carries. */
@@ -105,6 +117,7 @@ export function outcomeDetail(outcome: RunOutcome): string {
   if (outcome === 'done') return ''
   if ('stopped' in outcome) return outcome.stopped.reason
   if ('failed' in outcome) return outcome.failed.message
+  if ('asking' in outcome) return outcome.asking.question
   return outcome.waiting.until
 }
 
@@ -115,5 +128,6 @@ export const WORKFLOW_KEYS = {
   one: (id: string) => ['workflow', id],
   runs: ['workflow-runs'],
   queue: ['workflow-queue'],
+  waits: ['workflow-waits'],
   vars: ['workflow-vars'],
 } as const

@@ -20,7 +20,7 @@ use crate::workflow::exec::{
 };
 use crate::workflow::graph::Graph;
 use crate::workflow::graph::Node;
-use crate::workflow::model::{QueuedActions, WorkflowWait};
+use crate::workflow::model::{QueuedActions, WaitKind, WorkflowWait};
 use crate::workflow::types::WfValue;
 
 use super::{json_account, json_number};
@@ -416,9 +416,17 @@ impl Executor<'_> {
                     .unwrap_or(0u32)
                     .min(59);
                 let cal = Calendar::new(&self.ctx.zone);
-                let date = cal.date_of(now) + chrono::Duration::days(days);
+                let date = match self.input(node, "date")? {
+                    WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
+                        super::data::parse_date(&text, &cal)
+                            .ok_or_else(|| Fault::Error(format!("«{text}» is not a date")))?
+                    }
+                    _ => cal.date_of(now) + chrono::Duration::days(days),
+                };
                 let due = crate::calendar::iso(cal.at_local_hm(date, hour, minute));
-                self.vault.doc.reminders.push(Reminder::new(&text, &due));
+                let reminder = Reminder::new(&text, &due);
+                self.reminders.push(reminder.clone());
+                self.vault.doc.reminders.push(reminder);
                 Ok(Step::next(
                     "out",
                     format!("«{}»: «{text}» на {due}", def.title.ru),
@@ -426,15 +434,54 @@ impl Executor<'_> {
                 ))
             }
             "action.confirm" => {
-                self.queue_mode = true;
-                Ok(Step::next(
-                    "out",
-                    format!("«{}»: дальше операции ждут подтверждения", def.title.ru),
-                    format!(
-                        "«{}»: operations from here wait for confirmation",
-                        def.title.en
-                    ),
-                ))
+                let question = self.input(node, "question")?.as_text();
+                let question = if question.trim().is_empty() {
+                    format!("«{}»: продолжить?", self.ctx.workflow_name)
+                } else {
+                    question.trim().to_string()
+                };
+                if self.ctx.mode == RunMode::DryRun
+                    && let Some(&answer) = self.ctx.answers.get(&node.id)
+                {
+                    let (port, ru, en) = if answer {
+                        ("true", "Да", "Yes")
+                    } else {
+                        ("false", "Нет", "No")
+                    };
+                    return Ok(Step::next(
+                        port,
+                        format!(
+                            "«{}»: «{question}» — в эмуляции вы ответили «{ru}»",
+                            def.title.ru
+                        ),
+                        format!(
+                            "«{}»: «{question}»: you answered «{en}» in emulation",
+                            def.title.en
+                        ),
+                    ));
+                }
+                let hours = json_number(&self.raw_param(node, "timeout_hours"))
+                    .unwrap_or(Amount::ZERO)
+                    .max(Amount::ZERO);
+                let resume_at = if hours.is_zero() {
+                    String::new()
+                } else {
+                    crate::calendar::iso(now + (hours.to_f64() * 3600.0) as i64)
+                };
+                Err(Halt::Wait(Box::new(WorkflowWait {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    workflow_id: self.ctx.workflow_id.clone(),
+                    run_id: self.ctx.run_id.clone(),
+                    node_id: node.id.clone(),
+                    resume_at,
+                    memo: self.memo_json(),
+                    queue_mode: self.queue_mode,
+                    trigger: self.ctx.trigger_label.clone(),
+                    kind: WaitKind::Confirm,
+                    question,
+                    created_at: crate::calendar::iso(now),
+                }))
+                .into())
             }
             "action.stop" => {
                 let reason = self.text_param(node, "reason");
@@ -489,6 +536,9 @@ impl Executor<'_> {
                     memo: self.memo_json(),
                     queue_mode: self.queue_mode,
                     trigger: self.ctx.trigger_label.clone(),
+                    kind: WaitKind::Timer,
+                    question: String::new(),
+                    created_at: crate::calendar::iso(now),
                 }))
                 .into())
             }
@@ -553,6 +603,7 @@ impl Executor<'_> {
             queued,
             notices,
             events,
+            reminders,
             ..
         } = child;
         self.actions = actions;
@@ -561,6 +612,7 @@ impl Executor<'_> {
         self.queued.extend(queued);
         self.notices.extend(notices);
         self.events.extend(events);
+        self.reminders.extend(reminders);
         // The helper's steps show under the calling node.
         let prefix = (
             format!("↳ «{}»: ", callee.name),
@@ -580,7 +632,7 @@ impl Executor<'_> {
         let answer = match result {
             Ok(()) => WfValue::Null,
             Err(Halt::Return(value)) => *value,
-            Err(Halt::Stop(_)) => WfValue::Null,
+            Err(Halt::Stop(_) | Halt::Break) => WfValue::Null,
             Err(Halt::Fail(message)) => {
                 return Err(Fault::Error(format!("«{}»: {message}", callee.name)));
             }

@@ -52,6 +52,8 @@
   --color-node-variable: var(--node-variable);
   --color-node-action: var(--node-action);
   --color-node-list: var(--node-list);
+  --color-node-date: var(--node-date);
+  --color-node-text: var(--node-text);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -124,6 +126,8 @@
   --node-variable: oklch(0.6 0.12 190);
   --node-action: oklch(0.6 0.16 150);
   --node-list: oklch(0.62 0.15 340);
+  --node-date: oklch(0.6 0.13 210);
+  --node-text: oklch(0.55 0.06 40);
 }
 
 .dark {
@@ -187,6 +191,8 @@
   --node-variable: oklch(0.72 0.12 190);
   --node-action: oklch(0.72 0.16 150);
   --node-list: oklch(0.72 0.15 340);
+  --node-date: oklch(0.74 0.13 210);
+  --node-text: oklch(0.74 0.06 40);
 }
 
 * {

@@ -35,6 +35,7 @@ import {
   SidebarTrigger,
 } from '@/shared/ui/sidebar'
 import { call, onEvent, parseError } from '@/shared/api/ipc'
+import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 import { formatAsOf, formatDate } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS, rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -172,6 +173,12 @@ function refreshPlanning() {
 }
 
 void onEvent<{ tx_ids: string[] }>('automation-created', () => refreshPlanning())
+// Runs in the background may leave questions, queued operations or sleeping runs.
+void onEvent('workflows-ran', () => {
+  for (const queryKey of [WORKFLOW_KEYS.runs, WORKFLOW_KEYS.queue, WORKFLOW_KEYS.waits]) {
+    void queryClient.invalidateQueries({ queryKey })
+  }
+})
 
 void onEvent<AutomationRejectedEvent>('automation-rejected', (payload) => {
   refreshPlanning()

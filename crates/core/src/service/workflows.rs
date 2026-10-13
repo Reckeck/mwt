@@ -3,6 +3,7 @@
 //! the vault lookups the executor (`workflow::exec`) runs on.
 
 use std::collections::BTreeMap;
+use std::ops::Not;
 
 use chrono::{Datelike, Duration};
 
@@ -18,7 +19,7 @@ use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, Run
 use crate::workflow::graph::Graph;
 use crate::workflow::model::{
     GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, TestExpect, VarScope,
-    Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar,
+    WaitKind, Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar, WorkflowWait,
 };
 use crate::workflow::nodes::triggers::{schedule_moments, tx_matches, tx_trigger_values};
 use crate::workflow::types::WfValue;
@@ -89,7 +90,7 @@ fn outcome_word(outcome: &crate::workflow::RunOutcome) -> &'static str {
         Done => "done",
         Stopped { .. } => "stopped",
         Failed { .. } => "failed",
-        Waiting { .. } => "waiting",
+        Waiting { .. } | Asking { .. } => "waiting",
     }
 }
 
@@ -388,6 +389,25 @@ impl UnlockedVault {
 
     // -- CRUD -----------------------------------------------------------------------
 
+    /// Rewrite stored graphs (and their versions) in an older graph format,
+    /// so the editor always gets the current one. Returns whether any changed.
+    pub(crate) fn migrate_workflow_graphs(&mut self) -> bool {
+        let mut changed = false;
+        for workflow in &mut self.doc.workflows {
+            if let Some(json) = Graph::migrate_json(&workflow.graph) {
+                workflow.graph = json;
+                changed = true;
+            }
+            for version in &mut workflow.versions {
+                if let Some(json) = Graph::migrate_json(&version.graph) {
+                    version.graph = json;
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+
     pub fn workflows(&self) -> Vec<Workflow> {
         self.doc.workflows.clone()
     }
@@ -447,6 +467,7 @@ impl UnlockedVault {
                     max_amount: draft.max_amount,
                     versions: Vec::new(),
                     tests: Vec::new(),
+                    draft: None,
                 };
                 self.doc.workflows.push(workflow.clone());
                 let arm = workflow.active;
@@ -470,6 +491,8 @@ impl UnlockedVault {
                 }
                 workflow.name = draft.name.trim().to_string();
                 workflow.description = draft.description;
+                // Saved for real: the edits kept aside are in it now.
+                workflow.draft = None;
                 workflow.active = draft.active;
                 workflow.graph = graph_json;
                 workflow.updated_at = stamp;
@@ -505,6 +528,43 @@ impl UnlockedVault {
                 .marks
                 .insert(format!("schedule:{}", node.id), stamp.clone());
         }
+    }
+
+    /// Keep the editor's unsaved graph aside: the saved one keeps running.
+    pub fn save_workflow_draft(
+        &mut self,
+        id: &str,
+        graph_json: &str,
+        now: i64,
+    ) -> Result<Workflow> {
+        let graph = Graph::parse(graph_json)?;
+        let workflow = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == id)
+            .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+        workflow.draft = Some(GraphVersion {
+            saved_at: crate::calendar::iso(now),
+            graph: graph.to_json(),
+        });
+        let out = workflow.clone();
+        self.persist()?;
+        Ok(out)
+    }
+
+    /// Throw the kept-aside edits away.
+    pub fn discard_workflow_draft(&mut self, id: &str) -> Result<Workflow> {
+        let workflow = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == id)
+            .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+        workflow.draft = None;
+        let out = workflow.clone();
+        self.persist()?;
+        Ok(out)
     }
 
     pub fn set_workflow_active(&mut self, id: &str, active: bool, now: i64) -> Result<Workflow> {
@@ -682,6 +742,7 @@ impl UnlockedVault {
                     &workflow.graph,
                     Some(workflow_id),
                     test.trigger_node.as_deref(),
+                    test.answers.clone().unwrap_or_default(),
                     at,
                     zone,
                 )?;
@@ -745,6 +806,58 @@ impl UnlockedVault {
         self.persist()
     }
 
+    /// Runs asleep: timers and questions waiting for an answer, oldest first.
+    pub fn workflow_waits(&self) -> Vec<WorkflowWait> {
+        self.doc.workflow_waits.clone()
+    }
+
+    /// Answer a «Ждать подтверждения» question: the run goes on from «Да» or
+    /// «Нет» right away.
+    pub fn answer_workflow_wait(
+        &mut self,
+        id: &str,
+        yes: bool,
+        now: i64,
+        zone: &str,
+    ) -> Result<RunReport> {
+        let wait = self
+            .doc
+            .workflow_waits
+            .iter()
+            .find(|wait| wait.id == id && wait.kind == WaitKind::Confirm)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("question {id}")))?;
+        self.doc.workflow_waits.retain(|known| known.id != id);
+        let workflow = self.workflow(&wait.workflow_id)?;
+        let graph = Graph::parse(&workflow.graph)?;
+        if graph.node(&wait.node_id).is_none() {
+            self.persist()?;
+            return Err(Error::InvalidInput(
+                "the question's node was removed from the workflow; the run is dropped".into(),
+            ));
+        }
+        let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
+        ctx.max_amount = workflow.max_amount;
+        ctx.trigger_label = format!("{} → {}", wait.trigger, if yes { "yes" } else { "no" });
+        ctx.resume = Some(Resume {
+            node_id: wait.node_id.clone(),
+            port: if yes { "true" } else { "false" }.into(),
+            memo: wait.memo.clone(),
+            queue_mode: wait.queue_mode,
+        });
+        let mut pass = WorkflowPass::default();
+        let report = exec::run(self, &graph, &ctx);
+        self.keep_run(&report, &mut pass);
+        let events = report.events.clone();
+        self.run_events(events, now, zone, &mut pass);
+        self.recompute_holdings();
+        self.persist()?;
+        if !pass.notices.is_empty() {
+            self.log_notices(pass.notices)?;
+        }
+        Ok(report)
+    }
+
     pub fn workflow_vars(&self) -> Vec<WorkflowVar> {
         self.doc.workflow_vars.clone()
     }
@@ -790,6 +903,23 @@ impl UnlockedVault {
             .extend(report.queued.iter().cloned());
         if let Some(wait) = &report.wait {
             self.doc.workflow_waits.push(wait.clone());
+            if wait.kind == WaitKind::Confirm && report.run.dry_run.not() {
+                let title = self
+                    .doc
+                    .workflows
+                    .iter()
+                    .find(|workflow| workflow.id == wait.workflow_id)
+                    .map(|workflow| workflow.name.clone())
+                    .unwrap_or_default();
+                pass.notices.push(crate::service::notice(
+                    crate::model::notify::NoticeCategory::Automation,
+                    format!("wf-ask:{}", wait.id),
+                    &title,
+                    format!("Нужен ваш ответ: {}", wait.question),
+                    Some("workflows-queue".to_string()),
+                    wait.created_at.clone(),
+                ));
+            }
         }
         pass.created.extend(report.run.created.iter().cloned());
         pass.queued += report.run.queued;
@@ -862,6 +992,7 @@ impl UnlockedVault {
         graph_json: &str,
         workflow_id: Option<&str>,
         trigger_node: Option<&str>,
+        answers: BTreeMap<String, bool>,
         now: i64,
         zone: &str,
     ) -> Result<RunReport> {
@@ -877,6 +1008,7 @@ impl UnlockedVault {
         ctx.mode = RunMode::DryRun;
         ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
         ctx.trigger_values = self.sample_trigger_values(&trigger, now);
+        ctx.answers = answers;
         Ok(exec::run(&mut sandbox, &graph, &ctx))
     }
 
@@ -1042,6 +1174,11 @@ impl UnlockedVault {
             ctx.trigger_label = format!("{} → wait", wait.trigger);
             ctx.resume = Some(Resume {
                 node_id: wait.node_id.clone(),
+                // A question nobody answered in time counts as «No».
+                port: match wait.kind {
+                    WaitKind::Timer => "out".into(),
+                    WaitKind::Confirm => "false".into(),
+                },
                 memo: wait.memo.clone(),
                 queue_mode: wait.queue_mode,
             });

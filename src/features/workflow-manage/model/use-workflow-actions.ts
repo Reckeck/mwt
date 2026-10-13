@@ -17,7 +17,13 @@ export function useWorkflowActions() {
   const queryClient = useQueryClient()
 
   function refresh(ledger = false) {
-    for (const queryKey of [WORKFLOW_KEYS.list, WORKFLOW_KEYS.runs, WORKFLOW_KEYS.queue, WORKFLOW_KEYS.vars]) {
+    for (const queryKey of [
+      WORKFLOW_KEYS.list,
+      WORKFLOW_KEYS.runs,
+      WORKFLOW_KEYS.queue,
+      WORKFLOW_KEYS.waits,
+      WORKFLOW_KEYS.vars,
+    ]) {
       void queryClient.invalidateQueries({ queryKey })
     }
     if (ledger) for (const queryKey of LEDGER_KEYS) void queryClient.invalidateQueries({ queryKey })
@@ -73,9 +79,19 @@ export function useWorkflowActions() {
   })
 
   const dryRun = useMutation({
-    mutationFn: (args: { graph: string; workflowId: string | null; triggerNode?: string | null }) =>
+    mutationFn: (args: {
+      graph: string
+      workflowId: string | null
+      triggerNode?: string | null
+      answers?: Record<string, boolean>
+    }) =>
       call<RunReport>('dry_run_workflow', {
-        input: { graph: args.graph, workflow_id: args.workflowId, trigger_node: args.triggerNode ?? null },
+        input: {
+          graph: args.graph,
+          workflow_id: args.workflowId,
+          trigger_node: args.triggerNode ?? null,
+          answers: args.answers ?? {},
+        },
       }),
     onSuccess: (report) => announce(report, true),
     onError: failed('workflow.run.failed'),
@@ -126,6 +142,33 @@ export function useWorkflowActions() {
       refresh()
     },
     onError: failed('workflow.queue.discardFailed'),
+  })
+
+  const saveDraft = useMutation({
+    mutationFn: (input: { id: string; graph: string }) => call<Workflow>('save_workflow_draft', { input }),
+    onSuccess: (workflow) => {
+      void queryClient.setQueryData(WORKFLOW_KEYS.one(workflow.id), workflow)
+      toast.success(t('workflow.draft.saved'))
+    },
+    onError: failed('workflow.draft.saveFailed'),
+  })
+
+  const discardDraft = useMutation({
+    mutationFn: (id: string) => call<Workflow>('discard_workflow_draft', { id }),
+    onSuccess: (workflow) => {
+      void queryClient.setQueryData(WORKFLOW_KEYS.one(workflow.id), workflow)
+      toast.success(t('workflow.draft.dropped'))
+    },
+    onError: failed('workflow.draft.dropFailed'),
+  })
+
+  const answerWait = useMutation({
+    mutationFn: (input: { id: string; yes: boolean }) => call<RunReport>('answer_workflow_wait', { input }),
+    onSuccess: (report) => {
+      announce(report, false)
+      refresh(true)
+    },
+    onError: failed('workflow.queue.answerFailed'),
   })
 
   const setVar = useMutation({
@@ -198,6 +241,9 @@ export function useWorkflowActions() {
     importFile,
     confirmQueued,
     discardQueued,
+    answerWait,
+    saveDraft,
+    discardDraft,
     setVar,
     deleteVar,
   }

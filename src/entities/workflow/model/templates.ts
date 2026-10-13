@@ -3,6 +3,8 @@
  * empty: the editor marks what to fill in, the emulation shows the result.
  */
 
+import { GRAPH_VERSION } from '@/shared/lib/workflow'
+
 export interface WorkflowTemplate {
   id: string
   /** `workflow.template.<id>.name` / `.desc` in the locales. */
@@ -21,7 +23,7 @@ function wire(from: string, fromPort: string, to: string, toPort: string): Workf
 }
 
 function graph(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowGraph {
-  return { version: 1, nodes, edges, comments: [] }
+  return { version: GRAPH_VERSION, nodes, edges, comments: [] }
 }
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
@@ -70,7 +72,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           node('buy', 'action.transaction', 2, 0, { tx_kind: 'convert', amount: '50', to_amount: '0' }),
           node('count', 'var.add', 3, 0, { name: 'buys', delta: '1', scope: 'workflow' }),
         ],
-        [wire('friday', 'out', 'check', 'in'), wire('check', 'out', 'buy', 'in'), wire('buy', 'out', 'count', 'in')],
+        [wire('friday', 'out', 'check', 'in'), wire('check', 'true', 'buy', 'in'), wire('buy', 'out', 'count', 'in')],
       ),
   },
   {
@@ -114,6 +116,34 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           wire('guard', 'out', 'tell', 'in'),
           wire('budget', 'used', 'text', 'a'),
           wire('text', 'text', 'tell', 'text'),
+        ],
+      ),
+  },
+  {
+    id: 'payday',
+    graph: (t) =>
+      graph(
+        [
+          node('month', 'trigger.schedule', 0, 0, { every: 'month', day: 1, time: '09:00', interval: '1' }),
+          node('advanceDay', 'date.make', 1, 1, { day: 10, time: '10:00' }),
+          node('advanceShift', 'date.shift_workday', 2, 1, { direction: 'back', calendar: 'ru', weekend: 'sat_sun' }),
+          node('advanceRemind', 'action.reminder', 3, 0, {
+            text: t('workflow.template.payday.advance'),
+            time: '10:00',
+          }),
+          node('salaryDay', 'date.make', 1, 3, { day: 25, time: '10:00' }),
+          node('salaryShift', 'date.shift_workday', 2, 3, { direction: 'back', calendar: 'ru', weekend: 'sat_sun' }),
+          node('salaryRemind', 'action.reminder', 3, 2, { text: t('workflow.template.payday.salary'), time: '10:00' }),
+        ],
+        [
+          wire('month', 'out', 'advanceRemind', 'in'),
+          wire('month', 'out', 'salaryRemind', 'in'),
+          wire('month', 'at', 'advanceDay', 'base'),
+          wire('month', 'at', 'salaryDay', 'base'),
+          wire('advanceDay', 'date', 'advanceShift', 'date'),
+          wire('salaryDay', 'date', 'salaryShift', 'date'),
+          wire('advanceShift', 'date', 'advanceRemind', 'date'),
+          wire('salaryShift', 'date', 'salaryRemind', 'date'),
         ],
       ),
   },

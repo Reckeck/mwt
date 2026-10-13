@@ -207,7 +207,8 @@ impl UnlockedVault {
         };
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
-        if migrated || fmt != vault.fmt {
+        let graphs_migrated = vault.migrate_workflow_graphs();
+        if migrated || graphs_migrated || fmt != vault.fmt {
             vault.persist()?;
         }
         Ok(vault)

@@ -7,7 +7,7 @@ import { type Connection, VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import { FlaskConical, Keyboard, Play, Plus, Save, StickyNote } from 'lucide-vue-next'
+import { FlaskConical, Keyboard, Play, Plus, Save, StickyNote, Undo2 } from 'lucide-vue-next'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -23,10 +23,12 @@ import {
 import { useWorkflowActions } from '@/features/workflow-manage'
 import { type QuickAddChoice, type QuickAddContext, QuickAddPanel } from '@/features/workflow-quick-add'
 import { Button } from '@/shared/ui/button'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
+import { formatDateTime } from '@/shared/lib/format'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 import {
@@ -107,6 +109,8 @@ const react = ref(false)
 const maxAmount = ref('')
 const savedSnapshot = ref('')
 const loaded = ref(false)
+/** What «Отменить правки» goes back to: the saved workflow, or the start of a new one. */
+const savedState = ref<{ graph: string; settings: [string, string, boolean, boolean, string] } | null>(null)
 
 /* --- simple / advanced mode, remembered per viewer --- */
 const SIMPLE_KEY = 'workflow.editor.simple'
@@ -187,6 +191,7 @@ watch(
     }
     loaded.value = true
     savedSnapshot.value = props.workflowId ? graphJson.value + settingsJson.value : ''
+    rememberSaved()
     history.reset(graphJson.value)
     void nextTick(() => fitView({ padding: 0.2, maxZoom: 1 }))
   },
@@ -531,10 +536,65 @@ function save() {
     {
       onSuccess: (saved) => {
         savedSnapshot.value = graphJson.value + settingsJson.value
+        rememberSaved()
+        draftOpened.value = false
         emit('saved', saved.workflow.id)
       },
     },
   )
+}
+
+function rememberSaved() {
+  savedState.value = {
+    graph: graphJson.value,
+    settings: [name.value, description.value, active.value, react.value, maxAmount.value],
+  }
+}
+
+/** Throw the unsaved edits away: the canvas and the settings as they were saved. */
+function discardEdits() {
+  const saved = savedState.value
+  if (!saved) return
+  ;[name.value, description.value, active.value, react.value, maxAmount.value] = saved.settings
+  loadGraph(parseGraph(saved.graph))
+  report.value = null
+  draftOpened.value = false
+  void nextTick(() => history.reset(graphJson.value))
+}
+
+/* --- a draft: edits kept aside without touching the saved workflow --- */
+const draftOpened = ref(false)
+const storedDraft = computed(() => (draftOpened.value ? null : (workflow.data.value?.draft ?? null)))
+
+/** Keep the current edits aside (an existing workflow only); the saved one keeps running. */
+function saveDraft(): Promise<void> {
+  if (!props.workflowId) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    actions.saveDraft.mutate(
+      { id: props.workflowId as string, graph: graphJson.value },
+      {
+        onSuccess: () => {
+          // Kept: leaving now loses nothing.
+          savedSnapshot.value = graphJson.value + settingsJson.value
+          resolve()
+        },
+        onError: reject,
+      },
+    )
+  })
+}
+
+/** Put the kept-aside edits on the canvas; they count as unsaved until «Сохранить». */
+function openDraft() {
+  const kept = workflow.data.value?.draft
+  if (!kept) return
+  loadGraph(parseGraph(kept.graph))
+  draftOpened.value = true
+  void nextTick(() => history.record(graphJson.value))
+}
+
+function dropDraft() {
+  if (props.workflowId) actions.discardDraft.mutate(props.workflowId)
 }
 
 /** A version put back: the canvas shows it, and it counts as saved. */
@@ -560,8 +620,10 @@ function saveAsTest() {
       name: t('workflow.tests.defaultName', { when: new Date().toLocaleString(locale.value) }),
       trigger_node: result.run.trace[0]?.node_id ?? null,
       at: result.run.started_at,
+      answers: { ...answers.value },
       expect: {
-        outcome: outcomeKey(result.run.outcome),
+        // A question left unanswered is a run that waits.
+        outcome: outcomeKey(result.run.outcome) === 'asking' ? 'waiting' : outcomeKey(result.run.outcome),
         transactions: result.transactions.length,
         queued,
         notices: result.notices.length,
@@ -570,11 +632,21 @@ function saveAsTest() {
   })
 }
 
-function emulate() {
+/** Answers given to «Ждать подтверждения» in the current emulation, by node id. */
+const answers = ref<Record<string, boolean>>({})
+
+function emulate(keepAnswers = false) {
+  if (keepAnswers !== true) answers.value = {}
   actions.dryRun.mutate(
-    { graph: graphJson.value, workflowId: props.workflowId },
+    { graph: graphJson.value, workflowId: props.workflowId, answers: answers.value },
     { onSuccess: (result) => (report.value = result) },
   )
+}
+
+/** The emulation asked: remember the answer and run it again along that way. */
+function answer(nodeId: string, yes: boolean) {
+  answers.value = { ...answers.value, [nodeId]: yes }
+  emulate(true)
 }
 
 function runNow() {
@@ -674,7 +746,12 @@ onBeforeUnmount(() => {
 })
 
 /** A lesson is practice: leaving it never asks to save. */
-defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
+defineExpose({
+  dirty: computed(() => dirty.value && !lesson.value),
+  canDraft: computed(() => Boolean(props.workflowId)),
+  saveDraft,
+  discardEdits,
+})
 </script>
 
 <template>
@@ -729,12 +806,32 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
         <Play class="size-4" />
         {{ t('workflow.runNow') }}
       </Button>
+      <ConfirmButton
+        v-if="dirty && !lesson"
+        :label="t('workflow.discard.button')"
+        :confirm-label="t('workflow.discard.confirm')"
+        data-tour="workflow-discard"
+        @confirm="discardEdits"
+      >
+        <Undo2 class="size-4" />
+      </ConfirmButton>
       <Button data-tour="workflow-save" :disabled="actions.save.isPending.value" @click="form.submit(save, $event)">
         <Save class="size-4" />
         {{ t('actions.save') }}
       </Button>
     </div>
     <p v-if="form.firstMessage()" class="text-xs text-destructive" role="alert">{{ form.firstMessage() }}</p>
+    <div
+      v-if="storedDraft"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm"
+      data-tour="workflow-draft"
+    >
+      <span class="min-w-0 flex-1">{{ t('workflow.draft.found', { when: formatDateTime(storedDraft.saved_at) }) }}</span>
+      <Button size="sm" variant="outline" @click="openDraft">{{ t('workflow.draft.open') }}</Button>
+      <Button size="sm" variant="ghost" :disabled="actions.discardDraft.isPending.value" @click="dropDraft">
+        {{ t('workflow.draft.drop') }}
+      </Button>
+    </div>
 
     <div v-if="hotkeysOpen" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
 
@@ -792,8 +889,10 @@ defineExpose({ dirty: computed(() => dirty.value && !lesson.value) })
         <RunPanel
           v-if="report"
           :report="report"
+          :answers="answers"
           :can-save-test="Boolean(props.workflowId) && report.run.dry_run && !dirty"
           @focus="focusNode"
+          @answer="answer"
           @close="report = null"
           @save-test="saveAsTest"
         />

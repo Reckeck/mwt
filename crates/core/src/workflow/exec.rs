@@ -16,12 +16,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::Amount;
 use crate::model::notify::NoticeRecord;
+use crate::model::planning::Reminder;
 use crate::model::transaction::Transaction;
 use crate::service::UnlockedVault;
 
 use super::catalog::{NodeDef, node_def};
 use super::graph::{Graph, Node};
-use super::model::{QueuedActions, RunOutcome, WorkflowRun, WorkflowWait};
+use super::model::{QueuedActions, RunOutcome, WaitKind, WorkflowRun, WorkflowWait};
 use super::types::{PortType, WfValue};
 
 /// Most nodes one run executes.
@@ -32,6 +33,25 @@ pub const MAX_ACTIONS: usize = 20;
 pub const MAX_ITEMS: usize = 200;
 /// How deep «Вызвать схему» may nest.
 pub const MAX_CALL_DEPTH: u32 = 5;
+
+/// Nodes that change what data nodes read (variables, balances): the values
+/// computed before them are worked out again after them.
+const WRITES: [&str; 4] = [
+    "var.set",
+    "var.add",
+    "action.transaction",
+    "action.distribute",
+];
+
+/// Nodes that may stand apart from the flow: with no wire into «Вход» they
+/// still run, once, after the rest of the run.
+pub const FREE_RUNNING: [&str; 5] = [
+    "var.set",
+    "var.add",
+    "action.notify",
+    "action.reminder",
+    "action.emit",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -72,6 +92,8 @@ pub struct TraceStep {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resume {
     pub node_id: String,
+    /// The output it goes on from: «Дальше», or «Да»/«Нет» after a question.
+    pub port: String,
     pub memo: String,
     pub queue_mode: bool,
 }
@@ -95,6 +117,9 @@ pub struct RunContext {
     pub resume: Option<Resume>,
     /// How many «Вызвать схему» deep this run is.
     pub call_depth: u32,
+    /// Emulation only: answers already given to «Ждать подтверждения»
+    /// nodes, by node id. A question without an answer pauses the emulation.
+    pub answers: BTreeMap<String, bool>,
 }
 
 impl RunContext {
@@ -118,6 +143,7 @@ impl RunContext {
             max_amount: None,
             resume: None,
             call_depth: 0,
+            answers: BTreeMap::new(),
         }
     }
 }
@@ -139,6 +165,9 @@ pub struct RunReport {
     pub queued: Vec<QueuedActions>,
     pub notices: Vec<NoticeRecord>,
     pub events: Vec<EmittedEvent>,
+    /// Reminders it set (or, in emulation, would set).
+    #[serde(default)]
+    pub reminders: Vec<Reminder>,
     #[ts(skip)]
     #[serde(skip)]
     pub wait: Option<WorkflowWait>,
@@ -154,6 +183,8 @@ pub(crate) enum Halt {
     Wait(Box<WorkflowWait>),
     /// «Вернуть значение»: a called workflow ends with this value.
     Return(Box<WfValue>),
+    /// «Прервать цикл»: the nearest loop goes on to its «Готово».
+    Break,
 }
 
 /// How a node can fail.
@@ -213,6 +244,9 @@ pub(crate) struct Executor<'run> {
     pub graph: &'run Graph,
     pub ctx: &'run RunContext,
     memo: HashMap<(String, String), WfValue>,
+    /// Values data nodes had before they were worked out again (after a
+    /// write, on a loop pass): the editor still shows them on the wires.
+    shown: HashMap<(String, String), WfValue>,
     evaluating: HashSet<String>,
     steps: usize,
     pub actions: usize,
@@ -223,6 +257,7 @@ pub(crate) struct Executor<'run> {
     pub queued: Vec<QueuedActions>,
     pub notices: Vec<NoticeRecord>,
     pub events: Vec<EmittedEvent>,
+    pub reminders: Vec<Reminder>,
     trace: Vec<TraceStep>,
 }
 
@@ -236,13 +271,22 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
     let mut wait = None;
     let outcome = match result {
         Ok(()) => RunOutcome::Done,
-        Err(Halt::Return(_)) => RunOutcome::Done,
+        Err(Halt::Return(_) | Halt::Break) => RunOutcome::Done,
         Err(Halt::Stop(reason)) => RunOutcome::Stopped { reason },
         Err(Halt::Fail(message)) => RunOutcome::Failed { message },
         Err(Halt::Wait(asleep)) => {
-            let until = asleep.resume_at.clone();
+            let outcome = match asleep.kind {
+                WaitKind::Timer => RunOutcome::Waiting {
+                    until: asleep.resume_at.clone(),
+                },
+                WaitKind::Confirm => RunOutcome::Asking {
+                    node_id: asleep.node_id.clone(),
+                    question: asleep.question.clone(),
+                    until: Some(asleep.resume_at.clone()).filter(|until| !until.is_empty()),
+                },
+            };
             wait = Some(*asleep);
-            RunOutcome::Waiting { until }
+            outcome
         }
     };
     let failed = matches!(outcome, RunOutcome::Failed { .. });
@@ -251,16 +295,17 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
         queued,
         notices,
         events,
+        reminders,
         trace,
         ..
     } = exec;
     if failed && let Some(doc) = backup {
         vault.doc = doc;
     }
-    let (created, queued, notices, events) = if failed {
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+    let (created, queued, notices, events, reminders) = if failed {
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
-        (created, queued, notices, events)
+        (created, queued, notices, events, reminders)
     };
     RunReport {
         run: WorkflowRun {
@@ -281,6 +326,7 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
         queued,
         notices,
         events,
+        reminders,
         wait,
         edge_values,
     }
@@ -301,6 +347,7 @@ impl<'run> Executor<'run> {
             graph,
             ctx,
             memo: HashMap::new(),
+            shown: HashMap::new(),
             evaluating: HashSet::new(),
             steps: 0,
             actions: 0,
@@ -310,6 +357,7 @@ impl<'run> Executor<'run> {
             queued: Vec::new(),
             notices: Vec::new(),
             events: Vec::new(),
+            reminders: Vec::new(),
             trace: Vec::new(),
         }
     }
@@ -335,13 +383,23 @@ impl Executor<'_> {
             }
             self.queue_mode = resume.queue_mode;
             let node_id = resume.node_id.clone();
-            self.push_trace(
-                &node_id,
-                StepStatus::Ok,
-                "Ожидание закончилось, запуск продолжается".into(),
-                "The wait is over; the run goes on".into(),
-            );
-            return self.follow(&node_id, "out");
+            let (ru, en) = match resume.port.as_str() {
+                "true" => (
+                    "Ответ «Да» — запуск продолжается",
+                    "Answered «Yes»: the run goes on",
+                ),
+                "false" => (
+                    "Ответ «Нет» — запуск идёт по ветке «Нет»",
+                    "Answered «No»: the run goes the «No» way",
+                ),
+                _ => (
+                    "Ожидание закончилось, запуск продолжается",
+                    "The wait is over; the run goes on",
+                ),
+            };
+            self.push_trace(&node_id, StepStatus::Ok, ru.into(), en.into());
+            let port = resume.port.clone();
+            return self.follow(&node_id, &port);
         }
         let trigger = ctx.trigger_node.clone();
         let Some(node) = self.graph.node(&trigger) else {
@@ -359,7 +417,35 @@ impl Executor<'_> {
             None => ("Запуск".into(), "Run".into()),
         };
         self.push_trace(&trigger, StepStatus::Ok, ru, en);
-        self.follow(&trigger, "out")
+        self.follow(&trigger, "out")?;
+        self.run_free_nodes()
+    }
+
+    /// Write nodes drawn without a flow wire into them: they need no place in
+    /// the chain and run once the flow is through, top to bottom on the canvas.
+    fn run_free_nodes(&mut self) -> Result<(), Halt> {
+        let graph = self.graph;
+        let mut free: Vec<&Node> = graph
+            .nodes
+            .iter()
+            .filter(|node| !node.disabled && FREE_RUNNING.contains(&node.kind.as_str()))
+            .filter(|node| {
+                graph
+                    .edges
+                    .iter()
+                    .all(|edge| !(edge.to == node.id && edge.to_port == "in"))
+            })
+            .collect();
+        free.sort_by(|left, right| {
+            left.position
+                .top
+                .total_cmp(&right.position.top)
+                .then(left.position.left.total_cmp(&right.position.left))
+        });
+        for node in free {
+            self.visit(&node.id)?;
+        }
+        Ok(())
     }
 
     fn push_trace(&mut self, node_id: &str, status: StepStatus, ru: String, en: String) {
@@ -428,8 +514,16 @@ impl Executor<'_> {
         if node.kind == "list.for_each" {
             return self.for_each(node, def);
         }
+        if node.kind.starts_with("loop.") && node.kind != "loop.break" {
+            return self.run_loop(node, def);
+        }
         match self.run_flow_node(node, def) {
             Ok(step) => {
+                if WRITES.contains(&node.kind.as_str()) {
+                    // What was read before the write is stale now: a variable,
+                    // a balance read after this node sees the new value.
+                    self.forget_pure_data();
+                }
                 self.push_trace(node_id, step.status, step.ru, step.en);
                 for port in step.next {
                     self.follow(node_id, port)?;
@@ -465,6 +559,14 @@ impl Executor<'_> {
                         format!("«{}»: остановка — {reason}", def.title.ru),
                         format!("«{}»: stopped: {reason}", def.title.en),
                     ),
+                    Halt::Wait(wait) if wait.kind == WaitKind::Confirm => (
+                        StepStatus::Waiting,
+                        format!("«{}»: жду вашего ответа — {}", def.title.ru, wait.question),
+                        format!(
+                            "«{}»: waiting for your answer: {}",
+                            def.title.en, wait.question
+                        ),
+                    ),
                     Halt::Wait(wait) => (
                         StepStatus::Waiting,
                         format!("«{}»: продолжу {}", def.title.ru, wait.resume_at),
@@ -480,6 +582,11 @@ impl Executor<'_> {
                         format!("«{}»: {}", def.title.ru, value.as_text()),
                         format!("«{}»: {}", def.title.en, value.as_text()),
                     ),
+                    Halt::Break => (
+                        StepStatus::Ok,
+                        format!("«{}»: выход из цикла", def.title.ru),
+                        format!("«{}»: leaving the loop", def.title.en),
+                    ),
                 };
                 self.push_trace(node_id, status, ru, en);
                 Err(halt)
@@ -492,15 +599,7 @@ impl Executor<'_> {
             Ok(WfValue::List(items)) => items,
             Ok(WfValue::Null) => Vec::new(),
             Ok(other) => vec![other],
-            Err(message) => {
-                self.push_trace(
-                    &node.id,
-                    StepStatus::Error,
-                    format!("«{}»: {message}", def.title.ru),
-                    format!("«{}»: {message}", def.title.en),
-                );
-                return Err(Halt::Fail(message));
-            }
+            Err(message) => return Err(self.loop_failed(node, def, message)),
         };
         let total = items.len();
         let taken = total.min(MAX_ITEMS);
@@ -523,13 +622,166 @@ impl Executor<'_> {
         };
         self.push_trace(&node.id, StepStatus::Ok, ru, en);
         for (index, item) in items.into_iter().take(taken).enumerate() {
-            self.forget_pure_data();
-            self.memo.insert(memo_key(&node.id, "item"), item);
-            self.memo.insert(
-                memo_key(&node.id, "index"),
-                WfValue::Number(Amount::new(rust_decimal::Decimal::from(index as u64))),
-            );
-            self.follow(&node.id, "each")?;
+            if !self.loop_pass(node, index, ("item", item))? {
+                break;
+            }
+        }
+        self.forget_pure_data();
+        self.follow(&node.id, "done")
+    }
+
+    fn loop_failed(&mut self, node: &Node, def: &NodeDef, message: String) -> Halt {
+        self.push_trace(
+            &node.id,
+            StepStatus::Error,
+            format!("«{}»: {message}", def.title.ru),
+            format!("«{}»: {message}", def.title.en),
+        );
+        Halt::Fail(message)
+    }
+
+    /// One pass of a loop: its outputs set, its «each» way run. `false` when
+    /// «Прервать цикл» ended the loop.
+    fn loop_pass(
+        &mut self,
+        node: &Node,
+        index: usize,
+        (port, value): (&str, WfValue),
+    ) -> Result<bool, Halt> {
+        self.forget_pure_data();
+        self.memo.insert(memo_key(&node.id, port), value);
+        self.memo.insert(
+            memo_key(&node.id, "index"),
+            WfValue::Number(Amount::new(rust_decimal::Decimal::from(index as u64))),
+        );
+        match self.follow(&node.id, "each") {
+            Ok(()) => Ok(true),
+            Err(Halt::Break) => Ok(false),
+            Err(other) => Err(other),
+        }
+    }
+
+    /// «Повторить N раз», «Цикл по числам», «Пока условие да».
+    fn run_loop(&mut self, node: &Node, def: &NodeDef) -> Result<(), Halt> {
+        let number = |value: i64| WfValue::Number(Amount::new(rust_decimal::Decimal::from(value)));
+        match node.kind.as_str() {
+            "loop.repeat" => {
+                let count = match self.number_input(node, "count") {
+                    Ok(count) => count.unwrap_or(Amount::ZERO),
+                    Err(message) => return Err(self.loop_failed(node, def, message)),
+                };
+                let count = count
+                    .into_inner()
+                    .trunc()
+                    .to_string()
+                    .parse::<i64>()
+                    .unwrap_or(0)
+                    .max(0);
+                let taken = count.min(MAX_ITEMS as i64);
+                self.push_trace(
+                    &node.id,
+                    StepStatus::Ok,
+                    format!("«{}»: {taken} раз", def.title.ru),
+                    format!("«{}»: {taken} times", def.title.en),
+                );
+                for index in 0..taken {
+                    if !self.loop_pass(node, index as usize, ("value", number(index + 1)))? {
+                        break;
+                    }
+                }
+            }
+            "loop.range" => {
+                let read = |exec: &mut Self,
+                            name: &str,
+                            fallback: i64|
+                 -> Result<rust_decimal::Decimal, String> {
+                    Ok(exec
+                        .number_input(node, name)?
+                        .map_or(rust_decimal::Decimal::from(fallback), Amount::into_inner))
+                };
+                let bounds = read(self, "from", 1)
+                    .and_then(|from| Ok((from, read(self, "to", 10)?, read(self, "step", 1)?)));
+                let (from, to, step) = match bounds {
+                    Ok(bounds) => bounds,
+                    Err(message) => return Err(self.loop_failed(node, def, message)),
+                };
+                if step.is_zero() {
+                    return Err(self.loop_failed(node, def, "the step cannot be 0".into()));
+                }
+                let mut values = Vec::new();
+                let mut current = from;
+                while (step.is_sign_positive() && current <= to)
+                    || (step.is_sign_negative() && current >= to)
+                {
+                    if values.len() >= MAX_ITEMS {
+                        break;
+                    }
+                    values.push(current);
+                    current += step;
+                }
+                self.push_trace(
+                    &node.id,
+                    StepStatus::Ok,
+                    format!(
+                        "«{}»: {from}…{to}, шаг {step} — {} значений",
+                        def.title.ru,
+                        values.len()
+                    ),
+                    format!(
+                        "«{}»: {from}…{to} by {step}: {} values",
+                        def.title.en,
+                        values.len()
+                    ),
+                );
+                for (index, value) in values.into_iter().enumerate() {
+                    if !self.loop_pass(
+                        node,
+                        index,
+                        ("value", WfValue::Number(Amount::new(value))),
+                    )? {
+                        break;
+                    }
+                }
+            }
+            _ => {
+                let limit = super::nodes::json_number(&self.raw_param(node, "max"))
+                    .and_then(|max| max.into_inner().trunc().to_string().parse::<usize>().ok())
+                    .unwrap_or(50)
+                    .clamp(1, MAX_ITEMS);
+                let mut passes = 0;
+                loop {
+                    self.forget_pure_data();
+                    let going = match self.input(node, "condition") {
+                        Ok(value) => value.as_bool().unwrap_or(true),
+                        Err(message) => return Err(self.loop_failed(node, def, message)),
+                    };
+                    if !going {
+                        break;
+                    }
+                    if passes >= limit {
+                        self.push_trace(
+                            &node.id,
+                            StepStatus::Stopped,
+                            format!("«{}»: {limit} раз — больше нельзя, выхожу", def.title.ru),
+                            format!(
+                                "«{}»: {limit} times, the most allowed: leaving",
+                                def.title.en
+                            ),
+                        );
+                        break;
+                    }
+                    if !self.loop_pass(node, passes, ("value", number(passes as i64 + 1)))? {
+                        break;
+                    }
+                    passes += 1;
+                }
+                self.push_trace(
+                    &node.id,
+                    StepStatus::Ok,
+                    format!("«{}»: повторено {passes} раз", def.title.ru),
+                    format!("«{}»: repeated {passes} times", def.title.en),
+                );
+            }
         }
         self.forget_pure_data();
         self.follow(&node.id, "done")
@@ -538,11 +790,16 @@ impl Executor<'_> {
     /// Drop what pure data nodes computed, so they see the next list item.
     fn forget_pure_data(&mut self) {
         let graph = self.graph;
-        self.memo.retain(|(node, _), _| {
-            graph
-                .node(node)
+        let shown = &mut self.shown;
+        self.memo.retain(|key, value| {
+            let keep = graph
+                .node(&key.0)
                 .and_then(|node| node_def(&node.kind))
-                .is_some_and(NodeDef::has_flow)
+                .is_some_and(NodeDef::has_flow);
+            if !keep {
+                shown.insert(key.clone(), value.clone());
+            }
+            keep
         });
     }
 
@@ -617,7 +874,8 @@ impl Executor<'_> {
                 if def.output(&edge.from_port)?.ty == PortType::Flow {
                     return None;
                 }
-                let value = self.memo.get(&memo_key(&edge.from, &edge.from_port))?;
+                let key = memo_key(&edge.from, &edge.from_port);
+                let value = self.memo.get(&key).or_else(|| self.shown.get(&key))?;
                 Some((edge.id.clone(), value.as_text()))
             })
             .collect()

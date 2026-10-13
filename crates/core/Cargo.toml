@@ -32,6 +32,7 @@ reqwest.workspace = true
 tokio.workspace = true
 schemars.workspace = true
 ts-rs.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
