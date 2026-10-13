@@ -62,7 +62,7 @@ impl Executor<'_> {
             "list.goals" => {
                 let items = self
                     .vault
-                    .goal_progress(self.ctx.now, &self.ctx.zone)
+                    .goal_progress(self.now(), &self.ctx.zone)
                     .iter()
                     .map(|progress| {
                         let mut record: BTreeMap<String, WfValue> =

@@ -168,6 +168,10 @@ pub struct RunReport {
     /// Reminders it set (or, in emulation, would set).
     #[serde(default)]
     pub reminders: Vec<Reminder>,
+    /// Emulation: the runs of the workflows its events would start, on the
+    /// same copy of the vault.
+    #[serde(default)]
+    pub event_runs: Vec<WorkflowRun>,
     #[ts(skip)]
     #[serde(skip)]
     pub wait: Option<WorkflowWait>,
@@ -258,6 +262,9 @@ pub(crate) struct Executor<'run> {
     pub notices: Vec<NoticeRecord>,
     pub events: Vec<EmittedEvent>,
     pub reminders: Vec<Reminder>,
+    /// Emulation only: seconds «Подождать» has moved the clock forward, so
+    /// the nodes after it see the moment the real run would go on at.
+    clock_shift: i64,
     trace: Vec<TraceStep>,
 }
 
@@ -327,6 +334,7 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
         notices,
         events,
         reminders,
+        event_runs: Vec::new(),
         wait,
         edge_values,
     }
@@ -358,8 +366,19 @@ impl<'run> Executor<'run> {
             notices: Vec::new(),
             events: Vec::new(),
             reminders: Vec::new(),
+            clock_shift: 0,
             trace: Vec::new(),
         }
+    }
+
+    /// The moment the run is at: the start, moved on by emulated waits.
+    pub(crate) fn now(&self) -> i64 {
+        self.ctx.now + self.clock_shift
+    }
+
+    /// Emulation: go on as if `secs` had passed.
+    pub(crate) fn advance_clock(&mut self, secs: i64) {
+        self.clock_shift += secs.max(0);
     }
 
     /// The steps so far, handed over when a called workflow returns.

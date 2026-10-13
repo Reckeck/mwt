@@ -2337,6 +2337,11 @@ transactions: Array<Transaction>, queued: Array<QueuedActions>, notices: Array<N
  */
 reminders: Array<Reminder>, 
 /**
+ * Emulation: the runs of the workflows its events would start, on the
+ * same copy of the vault.
+ */
+event_runs: Array<WorkflowRun>, 
+/**
  * Data wire id → the value that went along it, for the editor.
  */
 edge_values: { [key: string]: string }, };

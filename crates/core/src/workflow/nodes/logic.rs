@@ -207,7 +207,7 @@ impl Executor<'_> {
                 let value = amount.as_number().unwrap_or(Amount::ZERO);
                 let converted = self
                     .vault
-                    .wf_convert(value, &from, &to, self.ctx.now)
+                    .wf_convert(value, &from, &to, self.now())
                     .ok_or_else(|| {
                         format!("no rate {}→{}", from.to_uppercase(), to.to_uppercase())
                     })?;
@@ -299,7 +299,7 @@ impl Executor<'_> {
                     .wf_mark(&self.ctx.workflow_id, &key)
                     .and_then(|mark| crate::pricing::history::unix_secs(&mark));
                 if let Some(last) = last
-                    && self.ctx.now - last < gap
+                    && self.now() - last < gap
                 {
                     return Ok(Step::next(
                         "skipped",
@@ -314,7 +314,7 @@ impl Executor<'_> {
                     )
                     .with_status(StepStatus::Skipped));
                 }
-                let now = crate::calendar::iso(self.ctx.now);
+                let now = crate::calendar::iso(self.now());
                 self.vault.wf_set_mark(&self.ctx.workflow_id, &key, &now);
                 Ok(Step::next(
                     "out",

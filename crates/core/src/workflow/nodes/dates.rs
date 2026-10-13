@@ -123,8 +123,8 @@ impl Executor<'_> {
         let cal = Calendar::new(&self.ctx.zone);
         let value = self.input(node, name)?;
         match &value {
-            WfValue::Null => Ok(cal.local(self.ctx.now)),
-            WfValue::Text(text) if text.trim().is_empty() => Ok(cal.local(self.ctx.now)),
+            WfValue::Null => Ok(cal.local(self.now())),
+            WfValue::Text(text) if text.trim().is_empty() => Ok(cal.local(self.now())),
             WfValue::Date(text) | WfValue::Text(text) => {
                 let text = text.trim();
                 if let Some(secs) = crate::pricing::history::unix_secs(text) {
