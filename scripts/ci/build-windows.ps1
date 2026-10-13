@@ -73,8 +73,15 @@ if (-not (Test-Path $nodeDir)) {
 }
 $env:Path = "$nodeDir;$env:Path"
 Invoke-Native npm install -g "pnpm@$pnpmVersion"
-Invoke-Native pnpm config set store-dir (Join-Path $cache 'pnpm')
-Invoke-Native pnpm install --frozen-lockfile --prefer-offline
+# pnpm straight through node: the npm shims (pnpm.ps1 / pnpm.cmd) handed it
+# the whole argument list as one string on the GitLab Windows runner.
+$pnpmCli = Join-Path $nodeDir 'node_modules\pnpm\bin\pnpm.cjs'
+if (-not (Test-Path $pnpmCli)) { throw "pnpm not found at $pnpmCli" }
+function Invoke-Pnpm { Invoke-Native node $pnpmCli @args }
+# The store goes in the GitLab cache; pnpm reads npm_config_* settings itself.
+$env:npm_config_store_dir = Join-Path $cache 'pnpm'
+Invoke-Pnpm --version
+Invoke-Pnpm install --frozen-lockfile --prefer-offline
 
 # Build (NSIS/WiX are fetched by the Tauri bundler)
 $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
@@ -83,7 +90,7 @@ $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
 $tauriConfig = Join-Path $cache 'tauri-ci.json'
 $overlay = '{"version":"' + $version + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
 [System.IO.File]::WriteAllText($tauriConfig, $overlay)
-Invoke-Native pnpm tauri build --ci --bundles nsis,msi --config $tauriConfig
+Invoke-Pnpm tauri build --ci --bundles nsis,msi --config $tauriConfig
 
 # Collect under stable names
 $bundle = Join-Path $env:CARGO_TARGET_DIR 'release\bundle'
