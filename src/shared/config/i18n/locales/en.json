@@ -2136,6 +2136,8 @@
   "tour.workflowEditor.active.body": "A workflow switched on watches its triggers from that moment. With errors it cannot be switched on.",
   "tour.workflowEditor.save.title": "Save",
   "tour.workflowEditor.save.body": "Ctrl+S. The previous version is kept in the history.",
+  "whatsNew.round15.title": "Workflows ask you; the exchange counts",
+  "whatsNew.round15.adjustment": "A correction opened again shows all its rows and keeps every asset; saving an operation again no longer moves it in time.",
   "whatsNew.round14.title": "Node workflows",
   "whatsNew.round14.workflows": "A new «Workflows» section: automations made of nodes: triggers, conditions, variables, data from other nodes and actions.",
   "whatsNew.round14.editor": "An editor with Ctrl+Space node search: it offers only what fits a port or a wire and understands «10%», «> 5000».",
