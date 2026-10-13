@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useMoneyChartTooltip } from '@/entities/currency'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { ChartCurrencySwitch, useChartCurrency, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
@@ -31,8 +31,10 @@ const history = useQuery({
 const points = computed(() => history.data.value ?? [])
 
 const axisColor = chartAxisColor(resolved)
-/** The series is in the base currency: the axis and the tooltip say which. */
-const currency = computed(() => (props.baseCurrency || 'usd').toLowerCase())
+/** The series comes in the base currency; the switch redraws it in a favourite one. */
+const source = computed(() => (props.baseCurrency || 'usd').toLowerCase())
+const shown = useChartCurrency(source)
+const currency = shown.currency
 
 const moneyTooltip = useMoneyChartTooltip(currency)
 
@@ -62,7 +64,7 @@ const option = computed<ChartOption>(() => ({
       smooth: true,
       showSymbol: false,
       // ts_ms is a bigint on the TS side
-      data: points.value.map((point) => [Number(point.ts_ms), Number(point.value_base)]),
+      data: points.value.map((point) => [Number(point.ts_ms), shown.convert(Number(point.value_base))]),
       lineStyle: { width: 2 },
       areaStyle: { opacity: 0.12 },
     },
@@ -75,7 +77,8 @@ const option = computed<ChartOption>(() => ({
     <template #header>
       <div class="flex items-center justify-between gap-2">
         <p class="font-medium">{{ t('wallet.chart') }}</p>
-        <span class="text-xs text-muted-foreground">{{ currencySymbol(currency) }}</span>
+        <ChartCurrencySwitch v-if="shown.options.value.length > 1" v-model="shown.selected.value" :options="shown.options.value" />
+        <span v-else class="text-xs text-muted-foreground">{{ currencySymbol(currency) }}</span>
       </div>
     </template>
 
