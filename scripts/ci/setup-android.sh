@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Android SDK + NDK + JDK 17 and the Rust Android targets for
 # `tauri android build`. Sourced after setup-linux.sh (same job shell).
+# The android CI image has all of it (and the variables) already; this only
+# installs on a bare image.
+
+if [[ -f /etc/mwt-ci-android ]]; then
+  return 0
+fi
 
 export ANDROID_HOME="$CI_PROJECT_DIR/.cache/android-sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
@@ -9,7 +15,9 @@ ANDROID_BUILD_TOOLS="${ANDROID_BUILD_TOOLS:-35.0.0}"
 ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}" # r27c
 CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 
-apt-get install -y -qq --no-install-recommends openjdk-17-jdk-headless >/dev/null
+# shellcheck source=scripts/ci/apt-packages.sh
+source "$CI_PROJECT_DIR/scripts/ci/apt-packages.sh"
+apt-get install -y -qq --no-install-recommends "${APT_ANDROID[@]}" >/dev/null
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"

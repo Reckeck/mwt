@@ -8,8 +8,11 @@
 
 | Стадия | Job | Что делает |
 |---|---|---|
+| .pre | `ci:image` | только когда меняются входы образов: собирает и пушит CI-образы (см. ниже) |
 | check | `frontend:check` | `mise run lint`, `typecheck`, `check-onboarding`, `check-forms` |
-| check | `rust:check` | `cargo fmt --check`, `mise run clippy`, `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |
+| check | `rust:fmt` | `cargo fmt --check` — без компиляции, секунды |
+| check | `rust:clippy` | `mise run clippy` |
+| check | `rust:test` | `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |
 | check | `version:check` | только на теге: `vX.Y.Z` = версия в `tauri.conf.json` и `Cargo.toml` |
 | check | `sast`, `secret_detection` | шаблоны GitLab Security |
 | build | `build:linux` | `.deb`, `.rpm`, `.AppImage`, `tar.gz` с бинарником (Ubuntu 22.04 — старый glibc, файлы запускаются на новых дистрибутивах) |
@@ -17,11 +20,50 @@
 | build | `build:android` | универсальные APK и AAB (`aarch64`, `armv7`, `x86_64`), подписанные |
 | package | `package:flatpak` | `.flatpak`-бандл (рантайм GNOME 50) из Linux-tarball |
 | package | `package:pacman` | `multi-wallet-tracker-bin-*.pkg.tar.zst` из того же tarball |
-| release | `release` | только на теге: всё из `release/` + `SHA256SUMS` → Generic Package Registry, GitLab Release со ссылками и заметками из `CHANGELOG.md` |
+| release | `release` | только на теге и только когда **все** проверки и сборки зелёные: всё из `release/` + `SHA256SUMS` → Generic Package Registry, GitLab Release со ссылками и заметками из `CHANGELOG.md` |
 | release | `aur:publish` | вручную, на теге при заданном `AUR_SSH_PRIVATE_KEY`: пуш `PKGBUILD` + `.SRCINFO` в AUR |
 
 Сборки (`build`, `package`) идут автоматически на тегах, на `main`, при ручном
-запуске и по расписанию; в MR — по кнопке (manual, не блокируют MR).
+запуске и по расписанию; в MR — по кнопке (manual, не блокируют MR). Они
+стартуют сразу, параллельно с проверками, а не после них; выпуск при этом
+всё равно ждёт проверки.
+
+## Скорость
+
+Что делает пайплайн быстрым и что не надо ломать:
+
+- **Готовые образы.** Job'ы идут в образах из `scripts/ci/ci.Dockerfile`
+  (GitLab Container Registry проекта): `ci-node` (mise + node/pnpm,
+  фронтенд), `ci-linux` (+ библиотеки Tauri, Rust, sccache), `ci-android`
+  (+ JDK 17, SDK/NDK, Rust-таргеты). Job не ставит ни apt-пакеты, ни
+  тулчейн — `setup-linux.sh` только подключает кэши. Тег образа —
+  `CI_IMAGE_TAG`, хеш входов (Dockerfile, `apt-packages.sh`, `[tools]` из
+  `mise.toml`): поменял что-то из этого — обнови тег
+  (`scripts/ci/image-tag.sh` печатает новый, `ci:image` без этого упадёт и
+  подскажет). Сборка образов идёт только в пайплайне, где входы поменялись;
+  уже запушенный тег не пересобирается (`FORCE_CI_IMAGE=1` — принудительно).
+  Без образов (`CI_NODE_IMAGE`/`CI_LINUX_IMAGE`/`CI_ANDROID_IMAGE` =
+  `ubuntu:22.04`) всё ставится скриптом — медленно, но работает.
+- **sccache.** Скомпилированные крейты лежат в GitLab-кэше
+  (`.cache/sccache`, ключ на job и `CI_IMAGE_TAG`) и возвращаются через
+  `RUSTC_WRAPPER=sccache`, в том числе на Windows. Скачанные крейты —
+  `.cache/cargo-registry`.
+- **Кэш пишет только `main`.** В MR, ветках и тегах кэш только читается
+  (`CACHE_POLICY`), поэтому они не тратят время на выгрузку.
+- **Тесты быстрые.** KDF vault (Argon2id, 64 MiB × 3) идёт на каждом
+  сохранении; `argon2`/`blake2` собираются с `opt-level = 3` даже в debug
+  (`Cargo.toml`), иначе `cargo test` шёл ~5,5 мин вместо ~30 с. Параметры
+  KDF не менялись.
+- **Лишнее не запускается.** В MR и ветках job'ы Rust идут, только если
+  менялись `crates/`, `Cargo.*`, `ipc.gen.d.ts`, CI или `mise.toml`;
+  фронтенд — если менялись `src/`, конфиги фронта, `pnpm-lock.yaml`. На
+  `main` и тегах идёт всё.
+- **Новый пуш отменяет старый пайплайн** (`interruptible` +
+  `auto_cancel: on_new_commit`); выпуск и AUR не прерываются.
+- **Android вне тега — только `aarch64`** (телефоны); на теге — `aarch64`,
+  `armv7`, `x86_64`.
+- Быстрое сжатие кэша и артефактов (`FF_USE_FASTZIP`), без debug-info в
+  проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
 
 ## Выпуск версии
 
@@ -38,8 +80,10 @@
 - `build:windows` — Windows-раннер с тегом из `WINDOWS_RUNNER_TAG`
   (по умолчанию `saas-windows-medium-amd64`, общий раннер GitLab.com; для своего
   раннера — его тег). MSVC Build Tools ставятся через choco, если их нет.
-- Android-сборка длинная (release + LTO на три архитектуры): timeout 3 ч.
-  Меньше архитектур — `ANDROID_TARGETS: aarch64`.
+- Android-сборка длинная (release + LTO): timeout 2 ч; на теге три
+  архитектуры, иначе одна (`ANDROID_TARGETS`).
+- `ci:image` — docker-in-docker (`docker:27-dind`), нужен privileged-раннер
+  и включённый Container Registry проекта.
 
 ## CI/CD-переменные (Settings → CI/CD → Variables)
 
