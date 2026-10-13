@@ -1,110 +1,80 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 import { Check, Download, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 
 import type { PendingImportsProps } from './pending-imports.types'
-import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
+import { useExchangeSync } from './use-exchange-sync'
 
-const props = defineProps<PendingImportsProps>()
+const props = withDefaults(defineProps<PendingImportsProps>(), { storeId: '', limit: 0, compact: false })
 
 const { t } = useI18n()
-const queryClient = useQueryClient()
+const sync = useExchangeSync()
 
 // -- D2.4: Bybit import staging -----------------------------------------
 // Fills are staged in the vault and only become transactions when the user
 // confirms them, so an import can never silently rewrite history.
-const importBusy = ref(false)
-
 const pending = useQuery({
   queryKey: ['pending-imports'],
   queryFn: () => call<ListPendingImportsOutput>('list_pending_imports'),
 })
 
-const pendingCount = computed(() => pending.data.value?.imports.length ?? 0)
-
-async function loadHistory() {
-  importBusy.value = true
-  try {
-    const res = await call<ImportBybitHistoryOutput>('import_bybit_history', {
-      input: { store_id: props.storeId },
-    })
-    if (res.notice) {
-      toast.warning(t(`import.notice.${res.notice}`))
-    } else {
-      toast.success(t('import.staged'), { description: String(res.staged) })
-    }
-    await pending.refetch()
-  } catch {
-    toast.error(t('import.notice.unreachable'))
-  } finally {
-    importBusy.value = false
-  }
-}
-
-async function confirmImports(execIds: string[]) {
-  importBusy.value = true
-  try {
-    const res = await call<ConfirmPendingImportsOutput>('confirm_pending_imports', { input: { exec_ids: execIds } })
-    toast.success(t('import.confirmed'), { description: String(res.confirmed) })
-    await pending.refetch()
-    // Confirmed fills became trades, so every derived view is stale.
-    const staleKeys: ReadonlyArray<readonly unknown[]> = [...LEDGER_KEYS, ...PLANNING_KEYS]
-    await Promise.all(
-      staleKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-    )
-  } catch (err) {
-    toast.error(t('import.confirmFailed'), { description: parseError(err).message })
-  } finally {
-    importBusy.value = false
-  }
-}
-
-async function discardImports(execIds: string[]) {
-  importBusy.value = true
-  try {
-    const res = await call<DiscardPendingImportsOutput>('discard_pending_imports', { input: { exec_ids: execIds } })
-    toast.success(t('import.discarded'), { description: String(res.discarded) })
-    await pending.refetch()
-  } catch (err) {
-    toast.error(t('import.discardFailed'), { description: parseError(err).message })
-  } finally {
-    importBusy.value = false
-  }
-}
+/** Only this exchange's records (all of them with no `storeId`), newest first; the widget shows the first few. */
+const rows = computed(() => {
+  const all = pending.data.value?.imports ?? []
+  const mine = props.storeId ? all.filter((imp) => imp.store_id === props.storeId) : all
+  return props.limit ? mine.slice(0, props.limit) : mine
+})
+const pendingCount = computed(() => {
+  const all = pending.data.value?.imports ?? []
+  return props.storeId ? all.filter((imp) => imp.store_id === props.storeId).length : all.length
+})
+const busy = computed(() => sync.syncNow.isPending.value || sync.confirm.isPending.value || sync.discard.isPending.value)
+/** «Подтвердить все» confirms what this list shows the owner of: one exchange, or every one. */
+const allIds = computed(() =>
+  props.storeId
+    ? (pending.data.value?.imports ?? []).filter((imp) => imp.store_id === props.storeId).map((imp) => imp.exec_id)
+    : [],
+)
 </script>
 
 <template>
   <!-- D2.4: import history into a staging area, confirmed explicitly -->
-  <div class="grid gap-3 border-t border-border pt-3">
+  <div class="grid gap-3" :class="!props.compact && 'border-t border-border pt-3'">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm font-medium">
+      <p v-if="!props.compact" class="text-sm font-medium">
         {{ t('import.title') }}
         <Badge v-if="pendingCount" variant="secondary">{{ pendingCount }}</Badge>
       </p>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" :disabled="importBusy" @click="loadHistory">
+        <Button
+          v-if="props.storeId && !props.compact"
+          variant="outline"
+          size="sm"
+          :disabled="busy"
+          @click="sync.syncNow.mutate(props.storeId)"
+        >
           <Download class="size-4" />
-          {{ t('import.load') }}
+          {{ t('import.syncNow') }}
         </Button>
         <Button
           v-if="pendingCount"
           size="sm"
-          :disabled="importBusy"
-          @click="confirmImports([])"
+          :disabled="busy"
+          @click="sync.confirm.mutate(allIds)"
         >
           <Check class="size-4" />
           {{ t('import.confirmAll') }}
         </Button>
       </div>
     </div>
-    <p class="text-xs text-muted-foreground">{{ t('import.hint') }}</p>
+    <p v-if="!props.compact" class="text-xs text-muted-foreground">{{ t('import.hint') }}</p>
+    <p v-if="pending.isSuccess.value && !pendingCount" class="text-sm text-muted-foreground">{{ t('import.nothingPending') }}</p>
 
     <div v-if="pendingCount" class="max-h-72 overflow-auto rounded-md border border-border">
       <table class="w-full text-sm">
@@ -119,7 +89,7 @@ async function discardImports(execIds: string[]) {
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          <tr v-for="imp in pending.data.value?.imports ?? []" :key="imp.exec_id">
+          <tr v-for="imp in rows" :key="imp.exec_id">
             <td class="px-2 py-1.5 font-mono text-xs">{{ imp.occurred_at.slice(0, 10) }}</td>
             <td class="px-2 py-1.5">{{ imp.symbol }}</td>
             <td class="px-2 py-1.5">
@@ -147,8 +117,8 @@ async function discardImports(execIds: string[]) {
                   variant="ghost"
                   size="icon"
                   :title="t('import.confirmOne')"
-                  :disabled="importBusy"
-                  @click="confirmImports([imp.exec_id])"
+                  :disabled="busy"
+                  @click="sync.confirm.mutate([imp.exec_id])"
                 >
                   <Check class="size-4" />
                 </Button>
@@ -156,8 +126,8 @@ async function discardImports(execIds: string[]) {
                   variant="ghost"
                   size="icon"
                   :title="t('import.discardOne')"
-                  :disabled="importBusy"
-                  @click="discardImports([imp.exec_id])"
+                  :disabled="busy"
+                  @click="sync.discard.mutate([imp.exec_id])"
                 >
                   <X class="size-4 text-destructive" />
                 </Button>

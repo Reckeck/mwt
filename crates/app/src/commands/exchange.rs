@@ -7,18 +7,20 @@
 
 use tauri::State;
 
+use trade_core::calendar::now_secs;
 use trade_core::exchange::{BybitClient, Category};
 use trade_core::ipc_contract::{
     BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
     ConfirmPendingImportsInput, ConfirmPendingImportsOutput, CreateBybitAccountsInput,
     DiscardPendingImportsInput, DiscardPendingImportsOutput, ExchangeAccountBalance,
     ExchangeKeyStatus, ExchangeKeyStatusInput, ImportBybitHistoryInput, ImportBybitHistoryOutput,
-    InspectTxInput, InspectTxResult, ListPendingImportsOutput, SaveTerminalDrawingsInput,
-    SetExchangeKeyInput, SetExchangeTargetsInput, SetImportIntervalInput, TxFieldHint,
-    UpdateTerminalStateInput,
+    InspectTxInput, InspectTxResult, ListImportedTransactionsInput, ListPendingImportsOutput,
+    SaveTerminalDrawingsInput, SetExchangeKeyInput, SetExchangeTargetsInput,
+    SetImportIntervalInput, SetImportSettingsInput, TxFieldHint, UpdateTerminalStateInput,
 };
-use trade_core::model::store::TerminalState;
-use trade_core::model::vault::{ExchangeKeys, PendingImport};
+use trade_core::model::store::{ImportSettings, TerminalState};
+use trade_core::model::vault::{ExchangeKeys, ImportRun, ImportSource, PendingImport};
+use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -334,6 +336,8 @@ pub async fn create_bybit_accounts(
 }
 
 /// What each Bybit account holds per the API, next to the ledger's figures.
+/// When everything is booked and they still disagree, the live balance is
+/// set by a correction first (unless the import settings turn that off).
 /// An empty list when the wallet has no key; a network failure is an error.
 #[tauri::command]
 pub async fn bybit_balances(
@@ -356,12 +360,78 @@ pub async fn bybit_balances(
         .balances(&api_key, &api_secret)
         .await
         .map_err(err_to_string)?;
-    let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard.as_ref().unwrap().bybit_reconcile(&root_id, &balances))
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault
+        .reconcile_exchange(&root_id, &balances, now_secs())
+        .map_err(err_to_string)?;
+    Ok(vault.bybit_reconcile(&root_id, &balances))
 }
 
-/// Fetch Bybit fills and stage them for confirmation. Never creates
-/// transactions on its own — that only happens in `confirm_pending_imports`.
+/// One sync of a Bybit wallet: fetch fills, moves between accounts and Earn
+/// payouts, let the import settings and the history of ids sort them, stage
+/// (or book) the new ones, then set the live balance where the ledger still
+/// disagrees. A failed fetch is kept in the history with its reason. Shared
+/// by the background poll and «Синхронизировать сейчас».
+pub(crate) async fn sync_bybit(
+    state: &AppState,
+    root_id: &str,
+    api_key: &str,
+    api_secret: &str,
+    limit: u32,
+    source: ImportSource,
+) -> Result<ImportRun, String> {
+    let client = BybitClient::default();
+    let execs = match client.all_executions(api_key, api_secret, limit).await {
+        Ok(fills) => fills,
+        Err(err) => {
+            let message = err.to_string();
+            let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
+            let vault = guard
+                .as_mut()
+                .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
+            return vault
+                .record_import_error(root_id, source, import_notice(&message), now_secs())
+                .map_err(err_to_string);
+        }
+    };
+    // Moves between accounts and Earn payouts: a key without those
+    // permissions still imports its fills.
+    let transfers = client
+        .inter_transfers(api_key, api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let yields = client
+        .earn_yields(api_key, api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let fills: Vec<_> = execs.into_iter().take(limit as usize).collect();
+    let imports = PendingImport::bybit_batch(root_id, &fills, &transfers, &yields);
+    let mut run = {
+        let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
+        let vault = guard
+            .as_mut()
+            .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
+        vault
+            .sync_exchange(root_id, imports, source, now_secs())
+            .map_err(err_to_string)?
+    };
+    // The live balance is optional: a key without wallet rights still syncs.
+    if let Ok(balances) = client.balances(api_key, api_secret).await {
+        let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
+        let vault = guard
+            .as_mut()
+            .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
+        let made = vault
+            .reconcile_exchange(root_id, &balances, now_secs())
+            .map_err(err_to_string)?;
+        run.reconcile_tx_id = made.into_iter().next();
+    }
+    Ok(run)
+}
+
+/// Fetch Bybit fills and stage them for confirmation (or book them at once
+/// when the import settings say so).
 #[tauri::command]
 pub async fn import_bybit_history(
     input: ImportBybitHistoryInput,
@@ -380,45 +450,77 @@ pub async fn import_bybit_history(
                 return Ok(ImportBybitHistoryOutput {
                     staged: 0,
                     notice: Some("no_key".into()),
+                    run: None,
                 });
             }
         }
     };
-
     let limit = input.limit.unwrap_or(1000).clamp(1, 10_000);
-    let client = BybitClient::default();
-
-    // `all_executions` paginates per category; fills come back newest-first.
-    let execs = match client.all_executions(&api_key, &api_secret, limit).await {
-        Ok(fills) => fills,
-        Err(err) => {
-            return Ok(ImportBybitHistoryOutput {
-                staged: 0,
-                notice: Some(import_notice(&err.to_string()).into()),
-            });
-        }
-    };
-
-    // Moves between accounts and Earn payouts: a key without those
-    // permissions still imports its fills.
-    let transfers = client
-        .inter_transfers(&api_key, &api_secret, limit as usize)
-        .await
-        .unwrap_or_default();
-    let yields = client
-        .earn_yields(&api_key, &api_secret, limit as usize)
-        .await
-        .unwrap_or_default();
-    let fills: Vec<_> = execs.into_iter().take(limit as usize).collect();
-    let imports = PendingImport::bybit_batch(&root_id, &fills, &transfers, &yields);
-
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    let staged = vault.stage_imports(imports).map_err(err_to_string)?;
+    let run = sync_bybit(
+        &state,
+        &root_id,
+        &api_key,
+        &api_secret,
+        limit,
+        ImportSource::Manual,
+    )
+    .await?;
     Ok(ImportBybitHistoryOutput {
-        staged,
-        notice: None,
+        staged: run.staged,
+        notice: run.error.clone(),
+        run: Some(run),
     })
+}
+
+/// What an exchange import brings in and where it books it.
+#[tauri::command]
+pub async fn get_import_settings(
+    store_id: String,
+    state: State<'_, AppState>,
+) -> Result<ImportSettings, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .import_settings(&store_id)
+        .map_err(err_to_string)
+}
+
+#[tauri::command]
+pub async fn set_import_settings(
+    input: SetImportSettingsInput,
+    state: State<'_, AppState>,
+) -> Result<ImportSettings, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_import_settings(&input.store_id, input.settings)
+        .map_err(err_to_string)
+}
+
+/// Syncs of one exchange wallet, newest first.
+#[tauri::command]
+pub async fn list_import_runs(
+    store_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImportRun>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().import_runs(&store_id))
+}
+
+/// Operations brought in from one exchange wallet, newest first.
+#[tauri::command]
+pub async fn list_imported_transactions(
+    input: ListImportedTransactionsInput,
+    state: State<'_, AppState>,
+) -> Result<ImportedTransactions, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().imported_transactions(
+        &input.store_id,
+        input.limit.unwrap_or(50).clamp(1, 500) as usize,
+        input.offset.unwrap_or(0) as usize,
+    ))
 }
 
 /// Every staged fill, newest first.

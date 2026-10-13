@@ -192,6 +192,8 @@ impl From<VaultDocV1> for VaultDoc {
             workflow_queue: Vec::new(),
             workflow_state: Vec::new(),
             workflow_waits: Vec::new(),
+            import_runs: Vec::new(),
+            discarded_imports: Vec::new(),
         }
     }
 }

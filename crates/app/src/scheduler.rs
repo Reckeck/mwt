@@ -26,8 +26,8 @@ use trade_core::model::notify::{NoticeCategory, NoticeRecord};
 use trade_core::model::planning::{AlertCondition, AutomationOutcome, RejectReason};
 use trade_core::service::{notice, notice_title};
 
+use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, err_to_string};
 
 /// How often the scheduler wakes up.
 const SCHEDULER_TICK_SEC: u64 = 30;
@@ -328,9 +328,16 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     for (store_id, _, _) in &due {
         memory.last_bybit.insert(store_id.clone(), Instant::now());
     }
-    let Ok(staged) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
+    let Ok((staged, confirmed)) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
         return;
     };
+    if confirmed > 0 {
+        let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
+    }
+    let _ = app.emit(
+        "bybit-synced",
+        serde_json::json!({ "staged": staged, "confirmed": confirmed }),
+    );
     if staged > 0 {
         let _ = app.emit(
             "bybit-import-pending",
@@ -356,44 +363,30 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
 }
 
 /// One polling pass over the given `(store_id, api_key, api_secret)` keys.
-/// Returns how many fills were newly staged.
+/// Returns how many operations were newly staged and how many were booked
+/// at once. Each sync, failed ones included, lands in the wallet's history.
 async fn poll_bybit_once(
     app: &AppHandle,
     keys: Vec<(String, String, String)>,
-) -> Result<u32, String> {
+) -> Result<(u32, u32), String> {
     let state = app.state::<AppState>();
-    let client = trade_core::exchange::BybitClient::default();
     let mut staged_total = 0u32;
-
+    let mut confirmed_total = 0u32;
     for (store_id, api_key, api_secret) in keys {
-        // Network call happens with no guard held.
-        let execs = client
-            .all_executions(&api_key, &api_secret, 500)
-            .await
-            .map_err(err_to_string)?;
-
-        // Same sweep as the manual import: moves between accounts and Earn
-        // payouts too, each optional for a key without those permissions.
-        let transfers = client
-            .inter_transfers(&api_key, &api_secret, 500)
-            .await
-            .unwrap_or_default();
-        let yields = client
-            .earn_yields(&api_key, &api_secret, 500)
-            .await
-            .unwrap_or_default();
-        let imports = trade_core::model::vault::PendingImport::bybit_batch(
-            &store_id, &execs, &transfers, &yields,
-        );
-
-        let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
-        let Some(vault) = guard.as_mut() else {
-            return Err("REQUIRES_UNLOCK: vault was locked mid-poll".into());
-        };
-        staged_total += vault.stage_imports(imports).map_err(err_to_string)?;
+        // Network calls happen with no guard held.
+        let run = crate::commands::exchange::sync_bybit(
+            &state,
+            &store_id,
+            &api_key,
+            &api_secret,
+            500,
+            trade_core::model::vault::ImportSource::Auto,
+        )
+        .await?;
+        staged_total += run.staged.saturating_sub(run.confirmed);
+        confirmed_total += run.confirmed;
     }
-
-    Ok(staged_total)
+    Ok((staged_total, confirmed_total))
 }
 
 // -- 2b. Node workflows ------------------------------------------------------------

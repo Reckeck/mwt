@@ -427,6 +427,83 @@ pub struct ExchangeProfile {
     pub import_interval_sec: u32,
     #[serde(default)]
     pub terminal: TerminalState,
+    /// What an import brings in and where it books it.
+    #[serde(default)]
+    pub import: ImportSettings,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// What an exchange import brings in and where it books it: set up after the
+/// key is saved. The defaults are what the import did before these settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ImportSettings {
+    /// Spot and futures fills.
+    #[serde(default = "yes")]
+    pub trades: bool,
+    /// Moves between the exchange's own accounts.
+    #[serde(default = "yes")]
+    pub transfers: bool,
+    /// Earn payouts.
+    #[serde(default = "yes")]
+    pub earn: bool,
+    /// Book new operations at once instead of staging them for confirmation.
+    #[serde(default)]
+    pub auto_confirm: bool,
+    /// When the ledger and the exchange disagree after everything is booked,
+    /// a correction sets the exchange's live balance.
+    #[serde(default = "yes")]
+    pub auto_reconcile: bool,
+    /// Only these coins (upper case); empty = every coin.
+    #[serde(default)]
+    pub coins: Vec<String>,
+    /// Nothing older than this moment (RFC3339) is imported.
+    #[serde(default)]
+    pub since: Option<String>,
+    /// Category of each kind of operation; `None` = the built-in one.
+    #[serde(default)]
+    pub categories: ImportCategories,
+    /// Where each exchange account books; an account not listed goes to the
+    /// sub-account bound to it (as before).
+    #[serde(default)]
+    pub accounts: Vec<ImportAccountRoute>,
+}
+
+impl Default for ImportSettings {
+    fn default() -> Self {
+        Self {
+            trades: true,
+            transfers: true,
+            earn: true,
+            auto_confirm: false,
+            auto_reconcile: true,
+            coins: Vec::new(),
+            since: None,
+            categories: ImportCategories::default(),
+            accounts: Vec::new(),
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ImportCategories {
+    #[serde(default)]
+    pub trades: Option<String>,
+    #[serde(default)]
+    pub transfers: Option<String>,
+    #[serde(default)]
+    pub earn: Option<String>,
+}
+
+/// One exchange account (Bybit `FUND`, `UNIFIED`, `EARN`) and the wallet it
+/// books in; `store_id: None` = this account is not imported at all.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ImportAccountRoute {
+    pub account: String,
+    #[serde(default)]
+    pub store_id: Option<String>,
 }
 
 /// Deepest allowed node depth; a root is depth 0, so the tree has two levels:

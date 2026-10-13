@@ -43,6 +43,11 @@ const legs = computed(() => txPrincipalLegs(props.tx))
 const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 const debt = computed(() => txDebt(props.tx))
 const fee = computed(() => txFee(props.tx))
+/** Brought in from an exchange; a correction has no categories, so it gets the mark here. */
+const imported = computed(() => {
+  const origin = meta.value.origin
+  return typeof origin === 'object' && 'import' in origin && !meta.value.categories.includes('exchange_import')
+})
 
 /** Where the money went or came from, seen from this list's wallet. */
 const route = computed(() => {
@@ -84,6 +89,7 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
           {{ context.categoryName(key) }}
         </Badge>
+        <Badge v-if="imported" variant="outline" class="shrink-0">{{ t('tx.imported') }}</Badge>
         <Badge v-if="internal" variant="secondary" class="shrink-0">{{ t('tx.internal') }}</Badge>
         <Badge v-if="debt" variant="secondary" class="shrink-0">{{ t(`debt.${debt}`) }}</Badge>
         <Badge v-if="txHasNoPrice(props.tx)" variant="outline" class="shrink-0 text-muted-foreground">
@@ -108,6 +114,7 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
           {{ context.categoryName(key) }}
         </Badge>
+        <Badge v-if="imported" variant="outline" class="shrink-0">{{ t('tx.imported') }}</Badge>
         <Badge v-if="internal" variant="secondary" class="shrink-0">{{ t('tx.internal') }}</Badge>
         <Badge v-if="debt" variant="secondary" class="shrink-0">{{ t(`debt.${debt}`) }}</Badge>
         <Badge v-if="txHasNoPrice(props.tx)" variant="outline" class="shrink-0 text-muted-foreground">

@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
-import { ExchangeKeyForm } from '@/features/exchange-key'
+import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { useWalletCatalog } from '@/entities/store'
+import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call, parseError } from '@/shared/api/ipc'
@@ -16,6 +17,7 @@ import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
 
 const props = defineProps<StoreFormProps>()
+const emit = defineEmits<{ configure: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 const catalog = useWalletCatalog()
@@ -34,6 +36,12 @@ watch(
 )
 
 const save = useStoreUpdate()
+
+// Once the key is in, the next step is choosing what it brings in and where.
+const { hasKey } = useExchangeKeyStatus(
+  computed(() => props.store.id),
+  computed(() => provider.value !== null),
+)
 
 function pick(value: ExchangeProvider) {
   if (value === provider.value) return
@@ -86,6 +94,14 @@ function intervalLabel(seconds: number): string {
     <!-- Keys only once the exchange is known: they mean nothing without it. -->
     <template v-if="provider">
       <ExchangeKeyForm :store-id="props.store.id" />
+      <div
+        v-if="hasKey"
+        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3"
+        data-tour="exchange-configure-import"
+      >
+        <p class="text-sm">{{ t('importSettings.nextStep') }}</p>
+        <Button size="sm" variant="outline" @click="emit('configure')">{{ t('importSettings.open') }}</Button>
+      </div>
       <div class="grid max-w-xs gap-1.5">
         <Label for="exchange-interval">{{ t('exchange.importInterval') }}</Label>
         <Select

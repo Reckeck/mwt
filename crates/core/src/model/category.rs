@@ -41,6 +41,10 @@ impl Category {
     }
 }
 
+/// Marks every operation brought in from an exchange, so they can be found
+/// and told apart from the ones entered by hand.
+pub const EXCHANGE_IMPORT_CATEGORY: &str = "exchange_import";
+
 /// Categories a new vault starts with (plan §7.1, after the T—Zh budget table).
 pub fn default_categories() -> Vec<Category> {
     use CategoryGroup::*;
@@ -103,7 +107,14 @@ pub fn default_categories() -> Vec<Category> {
         (Savings, &["savings"]),
         (
             Service,
-            &["trading", "fee", "transfer", "exchange", "opening_balance"],
+            &[
+                "trading",
+                "fee",
+                "transfer",
+                "exchange",
+                "opening_balance",
+                EXCHANGE_IMPORT_CATEGORY,
+            ],
         ),
     ];
     groups
