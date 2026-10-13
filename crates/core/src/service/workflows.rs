@@ -915,7 +915,11 @@ impl UnlockedVault {
                     crate::model::notify::NoticeCategory::Automation,
                     format!("wf-ask:{}", wait.id),
                     &title,
-                    format!("Нужен ваш ответ: {}", wait.question),
+                    if wait.question.is_empty() {
+                        "Нужен ваш ответ, чтобы продолжить".to_string()
+                    } else {
+                        format!("Нужен ваш ответ: {}", wait.question)
+                    },
                     Some("workflows-queue".to_string()),
                     wait.created_at.clone(),
                 ));

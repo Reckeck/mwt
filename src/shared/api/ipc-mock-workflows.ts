@@ -90,14 +90,14 @@ function fakeRun(
     const step = (status: TraceStep['status'], ru: string, en: string) =>
       trace.push({ node_id: id, kind: node.kind, status, text_ru: ru, text_en: en, values: {} })
     if (node.kind === 'action.confirm' && !node.disabled) {
-      const question = String(node.params.question ?? '').trim() || 'Продолжить?'
+      const question = String(node.params.question ?? '').trim()
       const answer = answers[id]
       if (answer === undefined) {
         asking = { node_id: id, question, until: null }
         step(
           'waiting',
-          `«${def.title.ru}»: жду вашего ответа — ${question}`,
-          `«${def.title.en}»: waiting for your answer: ${question}`,
+          `«${def.title.ru}»: жду вашего ответа — ${question || 'Продолжить?'}`,
+          `«${def.title.en}»: waiting for your answer: ${question || 'Go on?'}`,
         )
         return
       }

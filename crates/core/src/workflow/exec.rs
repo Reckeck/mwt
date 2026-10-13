@@ -179,6 +179,16 @@ pub struct RunReport {
     pub edge_values: BTreeMap<String, String>,
 }
 
+/// A «Ждать подтверждения» question for the trace, in both languages: the
+/// user's own text, or «Продолжить?» / «Go on?» when the node asks nothing.
+pub(crate) fn asked(question: &str) -> (String, String) {
+    if question.trim().is_empty() {
+        ("Продолжить?".into(), "Go on?".into())
+    } else {
+        (question.to_string(), question.to_string())
+    }
+}
+
 /// Why a run ends early.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Halt {
@@ -578,14 +588,14 @@ impl Executor<'_> {
                         format!("«{}»: остановка — {reason}", def.title.ru),
                         format!("«{}»: stopped: {reason}", def.title.en),
                     ),
-                    Halt::Wait(wait) if wait.kind == WaitKind::Confirm => (
-                        StepStatus::Waiting,
-                        format!("«{}»: жду вашего ответа — {}", def.title.ru, wait.question),
-                        format!(
-                            "«{}»: waiting for your answer: {}",
-                            def.title.en, wait.question
-                        ),
-                    ),
+                    Halt::Wait(wait) if wait.kind == WaitKind::Confirm => {
+                        let (ru, en) = asked(&wait.question);
+                        (
+                            StepStatus::Waiting,
+                            format!("«{}»: жду вашего ответа — {ru}", def.title.ru),
+                            format!("«{}»: waiting for your answer: {en}", def.title.en),
+                        )
+                    }
                     Halt::Wait(wait) => (
                         StepStatus::Waiting,
                         format!("«{}»: продолжу {}", def.title.ru, wait.resume_at),

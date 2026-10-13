@@ -2177,6 +2177,7 @@
   "workflow.queue.discardFailed": "Не удалось отклонить",
   "workflow.queue.questions": "Вопросы схем",
   "workflow.queue.questionsIntro": "Схема остановилась на узле «Ждать подтверждения». «Да» и «Нет» продолжают запуск по своей ветке.",
+  "workflow.defaultQuestion": "Продолжить?",
   "workflow.queue.deadline": "без ответа до {when} — будет «Нет»",
   "workflow.queue.yes": "Да",
   "workflow.queue.no": "Нет",
