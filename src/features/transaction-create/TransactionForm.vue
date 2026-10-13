@@ -6,8 +6,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowUpDown } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import { AssetInput } from '@/entities/asset'
+import { AssetInput, AssetSelect } from '@/entities/asset'
 import { TxPreviewCard } from '@/entities/transaction'
+import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
@@ -201,10 +202,6 @@ watch(
   { immediate: true },
 )
 const heldAssets = computed(() => overview.data.value?.positions.map((position) => position.asset) ?? [])
-const sellKey = ref(form.kind === 'asset_sell' && form.asset ? form.asset.symbol : '')
-watch(sellKey, (symbol) => {
-  form.asset = heldAssets.value.find((asset) => asset.symbol === symbol) ?? null
-})
 
 const contacts = useQuery({
   queryKey: ['contacts'],
@@ -1013,10 +1010,13 @@ const verbLabel = (kind: TxKind) =>
     <template v-else-if="form.kind === 'asset_sell'">
       <div class="grid gap-3 @sm:grid-cols-2">
         <FormField for="tx-sell-asset" :label="t('tx.field.property')" required :error="check.error('asset')">
-          <Select id="tx-sell-asset" v-model="sellKey">
-            <option value="" disabled>{{ t('tx.field.pickProperty') }}</option>
-            <option v-for="asset in heldAssets" :key="asset.symbol" :value="asset.symbol">{{ asset.name || asset.symbol }}</option>
-          </Select>
+          <AssetSelect
+            id="tx-sell-asset"
+            v-model="form.asset"
+            :assets="heldAssets"
+            :placeholder="t('tx.field.pickProperty')"
+            :invalid="Boolean(check.error('asset'))"
+          />
         </FormField>
         <FormField for="tx-sell-qty" :label="t('tx.field.units')" required :error="check.error('sellQty')">
           <AmountInput id="tx-sell-qty" v-model="form.sellQty" />
@@ -1028,10 +1028,13 @@ const verbLabel = (kind: TxKind) =>
       </div>
       <div class="grid gap-1.5">
         <Label for="tx-proceeds">{{ t('tx.field.proceedsTo') }}</Label>
-        <Select id="tx-proceeds" v-model="form.proceedsTo">
-          <option value="">{{ t('tx.side.unspecified') }}</option>
-          <option v-for="node in proceedsStores" :key="node.store.id" :value="node.store.id">{{ node.path.join(' › ') }}</option>
-        </Select>
+        <StoreNodeSelect
+          id="tx-proceeds"
+          v-model="form.proceedsTo"
+          :nodes="proceedsStores"
+          flat
+          :empty-label="t('tx.side.unspecified')"
+        />
       </div>
     </template>
 
@@ -1115,10 +1118,13 @@ const verbLabel = (kind: TxKind) =>
     <!-- Cashback: which card's purchases earned it, for the cashback-by-card report. -->
     <div v-if="form.kind === 'topup' && form.categories.includes('cashback')" class="grid gap-1.5">
       <Label for="tx-cashback-source">{{ t('loyalty.source') }}</Label>
-      <Select id="tx-cashback-source" v-model="form.sourceStoreId">
-        <option value="">{{ t('loyalty.noSource') }}</option>
-        <option v-for="node in cashbackSources" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-      </Select>
+      <StoreNodeSelect
+        id="tx-cashback-source"
+        v-model="form.sourceStoreId"
+        :nodes="cashbackSources"
+        flat
+        :empty-label="t('loyalty.noSource')"
+      />
     </div>
 
     <div class="grid gap-3 @sm:grid-cols-2">

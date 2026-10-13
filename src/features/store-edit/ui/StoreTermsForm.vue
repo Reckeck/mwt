@@ -3,10 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { LiabilityTermsFields, emptyLiabilityTerms } from '@/entities/store'
+import { emptyLiabilityTerms, LiabilityTermsFields, StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
@@ -51,10 +50,13 @@ const save = useStoreUpdate()
     <LiabilityTermsFields v-model="terms" />
     <div v-if="isLoan" class="grid gap-1.5">
       <Label for="store-secured-by">{{ t('property.securedBy') }}</Label>
-      <Select id="store-secured-by" v-model="securedBy">
-        <option value="">{{ t('property.securedByNone') }}</option>
-        <option v-for="node in properties" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-      </Select>
+      <StoreNodeSelect
+        id="store-secured-by"
+        v-model="securedBy"
+        :nodes="properties"
+        flat
+        :empty-label="t('property.securedByNone')"
+      />
     </div>
     <div>
       <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>

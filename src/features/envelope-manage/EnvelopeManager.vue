@@ -10,7 +10,8 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
+import { AssetSelect } from '@/entities/asset'
+import { assetKey } from '@/shared/lib/asset-ref'
 import { nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
@@ -35,7 +36,7 @@ const fail = (err: unknown) => toast.error(t('envelope.failed'), { description: 
 
 /* --- new envelope --- */
 const name = ref('')
-const assetKey = ref('')
+const pickedAsset = ref<AssetRef | null>(null)
 const target = ref('')
 
 const form = useFormValidation(() => ({
@@ -46,11 +47,11 @@ const form = useFormValidation(() => ({
 watch(
   () => props.assets,
   (assets) => {
-    if (!assets.some((asset) => asset.symbol === assetKey.value)) assetKey.value = assets[0]?.symbol ?? ''
+    const current = pickedAsset.value ? assetKey(pickedAsset.value) : ''
+    if (!assets.some((asset) => assetKey(asset) === current)) pickedAsset.value = assets[0] ?? null
   },
   { immediate: true },
 )
-const pickedAsset = computed(() => props.assets.find((asset) => asset.symbol === assetKey.value) ?? null)
 
 const create = useMutation({
   mutationFn: () =>
@@ -166,9 +167,12 @@ const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals:
           <Input id="envelope-name" v-model="name" :placeholder="t('envelope.namePlaceholder')" />
         </FormField>
         <FormField for="envelope-asset" :label="t('form.asset')" required :error="form.error('asset')">
-          <Select id="envelope-asset" v-model="assetKey">
-            <option v-for="asset in props.assets" :key="asset.symbol" :value="asset.symbol">{{ asset.symbol }}</option>
-          </Select>
+          <AssetSelect
+            id="envelope-asset"
+            v-model="pickedAsset"
+            :assets="props.assets"
+            :invalid="Boolean(form.error('asset'))"
+          />
         </FormField>
         <FormField for="envelope-target" :label="t('envelope.target')" :error="form.error('target')">
           <AmountInput id="envelope-target" v-model="target" />

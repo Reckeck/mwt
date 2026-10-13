@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
@@ -97,15 +98,14 @@ function submit() {
         </Select>
         <Input v-else id="workflow-var-value" v-model="value" :inputmode="kind === 'text' ? 'text' : 'decimal'" />
       </FormField>
-      <FormField
+      <CurrencyPicker
         v-if="kind === 'money'"
+        id="workflow-var-currency"
+        v-model="currency"
         :label="t('workflow.vars.currency')"
-        for="workflow-var-currency"
         required
         :error="form.error('currency')"
-      >
-        <Input id="workflow-var-currency" v-model="currency" />
-      </FormField>
+      />
     </form>
     <template #footer>
       <Button type="submit" form="workflow-var" :disabled="setVar.isPending.value">{{ t('actions.save') }}</Button>

@@ -179,10 +179,14 @@ const save = useMutation({
           <CurrencyPicker id="utility-currency" v-model="currency" />
         </FormField>
         <FormField v-if="!props.propertyId" for="utility-property" :label="t('utilities.property')" required :error="form.error('property')">
-          <Select id="utility-property" v-model="propertyId">
-            <option value="" disabled>{{ t('utilities.pickProperty') }}</option>
-            <option v-for="node in properties" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-          </Select>
+          <StoreNodeSelect
+            id="utility-property"
+            v-model="propertyId"
+            :nodes="properties"
+            flat
+            :placeholder="t('utilities.pickProperty')"
+            :invalid="Boolean(form.error('property'))"
+          />
           <p v-if="!properties.length" class="text-xs text-muted-foreground">{{ t('utilities.noProperty') }}</p>
         </FormField>
         <div class="grid gap-1.5">
