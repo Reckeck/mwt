@@ -7,7 +7,9 @@ import { OutcomeBadge, RunTrace, explainRun } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { txId, txKind, txLegs } from '@/shared/lib/transactions'
-import { outcomeQuestion } from '@/shared/lib/workflow'
+import { WORKFLOW_KEYS, outcomeQuestion } from '@/shared/lib/workflow'
+import { call } from '@/shared/api/ipc'
+import { useQuery } from '@tanstack/vue-query'
 
 /** The last emulation or run: the steps in words and what it would make. */
 const props = defineProps<{ report: RunReport; canSaveTest?: boolean; answers?: Record<string, boolean> }>()
@@ -22,6 +24,10 @@ const answered = computed(() =>
     .map((yes) => t(yes ? 'workflow.runPanel.yes' : 'workflow.runPanel.no'))
     .join(', '),
 )
+
+/** The workflows an emulated event would start, by name. */
+const workflows = useQuery({ queryKey: WORKFLOW_KEYS.list, queryFn: () => call<Workflow[]>('list_workflows') })
+const nameOf = (id: string) => (workflows.data.value ?? []).find((entry) => entry.id === id)?.name ?? id
 
 function line(tx: Transaction): string {
   const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
@@ -82,6 +88,14 @@ function line(tx: Transaction): string {
     <div v-if="props.report.notices.length" class="grid gap-1">
       <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.notices') }}</h4>
       <p v-for="notice in props.report.notices" :key="notice.key" class="text-sm">{{ notice.title }}: {{ notice.body }}</p>
+    </div>
+    <div v-if="props.report.event_runs.length" class="grid gap-1" data-tour="workflow-event-runs">
+      <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.eventRuns') }}</h4>
+      <p v-for="run in props.report.event_runs" :key="run.id" class="flex flex-wrap items-center gap-2 text-sm">
+        <span>{{ nameOf(run.workflow_id) }}</span>
+        <OutcomeBadge :outcome="run.outcome" />
+        <span class="text-xs text-muted-foreground">{{ t('workflow.runPanel.eventSteps', { count: run.trace.length }) }}</span>
+      </p>
     </div>
     <div v-if="props.report.reminders.length" class="grid gap-1">
       <h4 class="text-xs font-medium uppercase text-muted-foreground">

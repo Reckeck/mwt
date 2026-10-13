@@ -136,7 +136,7 @@ function fakeRun(
     trace,
     dry_run: dryRun,
   }
-  return { run, transactions: [], queued: [], notices: [], events: [], reminders: [], edge_values: {} }
+  return { run, transactions: [], queued: [], notices: [], events: [], reminders: [], event_runs: [], edge_values: {} }
 }
 
 /** A live mock run that asked keeps its question for «Очередь». */

@@ -1009,7 +1009,20 @@ impl UnlockedVault {
         ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
         ctx.trigger_values = self.sample_trigger_values(&trigger, now);
         ctx.answers = answers;
-        Ok(exec::run(&mut sandbox, &graph, &ctx))
+        let mut report = exec::run(&mut sandbox, &graph, &ctx);
+        // The workflows its events start run too, on the same copy, so the
+        // emulation shows the whole chain a real run would set off.
+        let mut pass = WorkflowPass::default();
+        sandbox.run_events(report.events.clone(), now, zone, &mut pass);
+        report.event_runs = pass
+            .runs
+            .into_iter()
+            .map(|run| WorkflowRun {
+                dry_run: true,
+                ..run
+            })
+            .collect();
+        Ok(report)
     }
 
     /// What a trigger would hand on now: for an operation trigger the latest

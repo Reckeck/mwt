@@ -21,7 +21,7 @@ fn percent(ratio: Amount) -> Amount {
 
 impl Executor<'_> {
     pub(crate) fn eval_data(&mut self, node: &Node) -> Result<Outputs, String> {
-        let now = self.ctx.now;
+        let now = self.now();
         match node.kind.as_str() {
             "data.balance" => {
                 let account = self.account_input(node, "account")?;

@@ -1395,3 +1395,88 @@ fn a_draft_waits_aside_and_saving_takes_it_in() {
     assert!(saved.draft.is_none());
     assert!(vault.save_workflow_draft("nope", &first, later()).is_err());
 }
+
+#[test]
+fn an_emulation_shows_the_workflows_its_events_start() {
+    let (_dir, mut vault) = empty_vault();
+    let listener = vec![
+        node("on", "trigger.event", json!({ "name": "paid" })),
+        node("n", "action.notify", json!({})),
+    ];
+    let listener = save(
+        &mut vault,
+        "Listener",
+        graph(
+            listener,
+            vec![
+                wire("on", "out", "n", "in"),
+                wire("on", "payload", "n", "text"),
+            ],
+        ),
+    );
+    let sender = graph(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node(
+                "e",
+                "action.emit",
+                json!({ "name": "paid", "payload": "ипотека" }),
+            ),
+        ],
+        vec![wire("t", "out", "e", "in")],
+    );
+    let report = vault
+        .dry_run_workflow(&sender, None, None, BTreeMap::new(), later(), "UTC")
+        .unwrap();
+    assert_eq!(report.event_runs.len(), 1);
+    let run = &report.event_runs[0];
+    assert_eq!(run.workflow_id, listener.id);
+    assert!(run.dry_run);
+    assert_eq!(run.outcome, RunOutcome::Done);
+    // Nothing of it is kept: not the run, not the notice.
+    assert!(vault.doc.workflow_runs.is_empty());
+    assert!(vault.notifications().is_empty());
+}
+
+#[test]
+fn an_emulated_wait_moves_the_clock_for_what_follows() {
+    let (_dir, vault) = empty_vault();
+    let graph_json = graph(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("w", "action.wait", json!({ "hours": "48" })),
+            node("now", "data.now", json!({})),
+            node("set", "var.set", json!({ "name": "when" })),
+            node(
+                "remind",
+                "action.reminder",
+                json!({ "text": "later", "time": "10:00" }),
+            ),
+        ],
+        vec![
+            wire("t", "out", "w", "in"),
+            wire("w", "out", "set", "in"),
+            wire("set", "out", "remind", "in"),
+            wire("now", "now", "set", "value"),
+        ],
+    );
+    let start = later();
+    let report = vault
+        .dry_run_workflow(&graph_json, None, None, BTreeMap::new(), start, "UTC")
+        .unwrap();
+    assert_eq!(
+        report.run.outcome,
+        RunOutcome::Done,
+        "{:?}",
+        report.run.trace
+    );
+    // «Now» after the wait is two days on, and so is today's reminder.
+    let two_days_on = crate::calendar::iso(start + 48 * 3600);
+    let seen = report
+        .edge_values
+        .get("now.now>set.value")
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(seen, two_days_on);
+    assert_eq!(report.reminders[0].due_at.get(..10), two_days_on.get(..10));
+}

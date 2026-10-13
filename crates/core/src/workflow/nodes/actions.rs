@@ -108,6 +108,9 @@ impl Executor<'_> {
             comment.to_string()
         };
         let mut meta = TxMeta::new(&comment);
+        // The run's own moment, not the emulated clock: a sandbox operation
+        // dated after a long «Подождать» would fail the future-date check,
+        // which the real run (made at that later moment) passes.
         meta.timestamp = crate::calendar::iso(self.ctx.now);
         meta.categories = category.into_iter().collect();
         meta.origin = TxOrigin::Workflow {
@@ -154,7 +157,7 @@ impl Executor<'_> {
                 id: uuid::Uuid::new_v4().to_string(),
                 workflow_id: self.ctx.workflow_id.clone(),
                 run_id: self.ctx.run_id.clone(),
-                created_at: crate::calendar::iso(self.ctx.now),
+                created_at: crate::calendar::iso(self.now()),
                 summary: summary.to_string(),
                 transactions: checked.clone(),
             });
@@ -338,7 +341,7 @@ impl Executor<'_> {
     }
 
     pub(crate) fn run_action(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
-        let now = self.ctx.now;
+        let now = self.now();
         match node.kind.as_str() {
             "action.transaction" => {
                 let tx = self.build_transaction(node)?;
@@ -515,14 +518,17 @@ impl Executor<'_> {
                     .max(Amount::ZERO);
                 let resume_at = crate::calendar::iso(now + (hours.to_f64() * 3600.0) as i64);
                 if self.ctx.mode == RunMode::DryRun {
+                    // The emulation goes on at once, but as at the moment the
+                    // real run would wake: dates and reminders after it see that.
+                    self.advance_clock((hours.to_f64() * 3600.0) as i64);
                     return Ok(Step::next(
                         "out",
                         format!(
-                            "«{}»: здесь запуск уснул бы до {resume_at}; в эмуляции идём дальше сразу",
+                            "«{}»: запуск уснул бы до {resume_at}; эмуляция идёт дальше сразу, как будто это время уже наступило",
                             def.title.ru
                         ),
                         format!(
-                            "«{}»: the run would sleep until {resume_at}; the emulation goes on at once",
+                            "«{}»: the run would sleep until {resume_at}; the emulation goes on at once as if that time had come",
                             def.title.en
                         ),
                     ));
@@ -575,13 +581,7 @@ impl Executor<'_> {
             .map(|candidate| candidate.id.clone())
             .ok_or_else(|| format!("«{}» has no «Called by a workflow» trigger", callee.name))?;
         let payload = self.input(node, "payload")?;
-        let mut ctx = RunContext::new(
-            &callee.id,
-            &callee.name,
-            &entry,
-            self.ctx.now,
-            &self.ctx.zone,
-        );
+        let mut ctx = RunContext::new(&callee.id, &callee.name, &entry, self.now(), &self.ctx.zone);
         ctx.run_id.clone_from(&self.ctx.run_id);
         ctx.mode = self.ctx.mode;
         ctx.max_amount = self.ctx.max_amount;

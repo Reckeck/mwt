@@ -25,6 +25,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: '2026-10-13',
     points: [
       { key: 'confirm', route: 'workflows-queue' },
+      { key: 'emulation', route: 'workflow-new' },
       { key: 'hotkeys', route: 'workflow-new' },
       { key: 'nodes', route: 'workflow-new' },
       { key: 'loops', route: 'workflow-new' },
