@@ -1586,6 +1586,25 @@ pub struct DryRunWorkflowInput {
     /// The trigger to start from; a manual one, else the first, by default.
     #[serde(default)]
     pub trigger_node: Option<String>,
+    /// Answers to «Ждать подтверждения» given so far, by node id; a question
+    /// without one pauses the emulation (outcome `asking`).
+    #[serde(default)]
+    #[ts(optional)]
+    pub answers: Option<std::collections::BTreeMap<String, bool>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SaveWorkflowDraftInput {
+    pub id: String,
+    /// The editor's graph as JSON.
+    pub graph: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AnswerWorkflowWaitInput {
+    pub id: String,
+    /// «Да» (true) or «Нет» (false).
+    pub yes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

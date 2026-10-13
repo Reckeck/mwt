@@ -1,6 +1,6 @@
 import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
 
-import { portStroke, portType } from '@/shared/lib/workflow'
+import { GRAPH_VERSION, portStroke, portType } from '@/shared/lib/workflow'
 
 /** What a canvas node carries: the stored node without its position. */
 export interface EditorNodeData {
@@ -90,7 +90,7 @@ export function toGraph(all: EditorNode[], edges: EditorEdge[]): WorkflowGraph {
     }
   })
   return {
-    version: 1,
+    version: GRAPH_VERSION,
     nodes: nodes.map((node) => ({
       id: node.id,
       kind: node.data?.kind ?? '',

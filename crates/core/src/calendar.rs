@@ -46,6 +46,15 @@ impl Calendar {
             .date_naive()
     }
 
+    /// Local wall-clock date and time of a moment.
+    pub fn local(&self, secs: i64) -> NaiveDateTime {
+        Utc.timestamp_opt(secs, 0)
+            .single()
+            .unwrap_or_default()
+            .with_timezone(&self.tz)
+            .naive_local()
+    }
+
     /// Local date of an RFC3339 moment.
     pub fn date_of_iso(&self, iso: &str) -> Option<NaiveDate> {
         crate::pricing::history::unix_secs(iso).map(|secs| self.date_of(secs))

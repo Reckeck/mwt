@@ -15,6 +15,7 @@ const workflows: Workflow[] = []
 const runs: WorkflowRun[] = []
 const queue: QueuedActions[] = []
 const vars: WorkflowVar[] = []
+const waits: WorkflowWait[] = []
 
 const uuid = () => crypto.randomUUID()
 const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -51,8 +52,22 @@ function validate(graph: WorkflowGraph): GraphIssue[] {
   return out
 }
 
-/** Walk the flow from a trigger, as a stand-in for a real run. */
-function fakeRun(graph: WorkflowGraph, workflowId: string, triggerNode: string | null, dryRun: boolean): RunReport {
+/** Flow outputs the mock never takes: it has no data to decide them. */
+const MOCK_SKIPPED_PORTS = new Set(['error', 'skipped', 'false', 'case2', 'case3', 'case4', 'other'])
+
+/**
+ * Walk the flow from a trigger (or on from a question), as a stand-in for a
+ * real run. A branch goes its «Да» way; «Ждать подтверждения» goes the way
+ * answered, or stops the run and asks.
+ */
+function fakeRun(
+  graph: WorkflowGraph,
+  workflowId: string,
+  triggerNode: string | null,
+  dryRun: boolean,
+  answers: Record<string, boolean> = {},
+  resume: { nodeId: string; port: string } | null = null,
+): RunReport {
   const triggers = graph.nodes.filter((node) => defs.get(node.kind)?.group === 'trigger')
   const start =
     triggers.find((node) => node.id === triggerNode) ??
@@ -60,37 +75,87 @@ function fakeRun(graph: WorkflowGraph, workflowId: string, triggerNode: string |
     triggers[0]
   const trace: TraceStep[] = []
   const seen = new Set<string>()
+  let asking: { node_id: string; question: string; until: string | null } | null = null
+  const follow = (id: string, port: string) => {
+    for (const edge of graph.edges.filter((entry) => entry.from === id && entry.from_port === port)) {
+      if (!asking) visit(edge.to)
+    }
+  }
   const visit = (id: string) => {
-    if (seen.has(id) || seen.size > 100) return
+    if (seen.has(id) || seen.size > 100 || asking) return
     seen.add(id)
     const node = graph.nodes.find((entry) => entry.id === id)
     const def = defs.get(node?.kind ?? '')
     if (!node || !def) return
-    trace.push({
-      node_id: id,
-      kind: node.kind,
-      status: node.disabled ? 'skipped' : 'ok',
-      text_ru: `«${def.title.ru}» (браузерный мок: только порядок узлов)`,
-      text_en: `«${def.title.en}» (browser mock: node order only)`,
-      values: {},
-    })
-    for (const edge of graph.edges.filter((entry) => entry.from === id)) {
-      if (portType(def, edge.from_port, 'out') === 'flow') visit(edge.to)
+    const step = (status: TraceStep['status'], ru: string, en: string) =>
+      trace.push({ node_id: id, kind: node.kind, status, text_ru: ru, text_en: en, values: {} })
+    if (node.kind === 'action.confirm' && !node.disabled) {
+      const question = String(node.params.question ?? '').trim() || 'Продолжить?'
+      const answer = answers[id]
+      if (answer === undefined) {
+        asking = { node_id: id, question, until: null }
+        step(
+          'waiting',
+          `«${def.title.ru}»: жду вашего ответа — ${question}`,
+          `«${def.title.en}»: waiting for your answer: ${question}`,
+        )
+        return
+      }
+      step(
+        'ok',
+        `«${def.title.ru}»: ответ «${answer ? 'Да' : 'Нет'}»`,
+        `«${def.title.en}»: answered «${answer ? 'Yes' : 'No'}»`,
+      )
+      follow(id, answer ? 'true' : 'false')
+      return
+    }
+    step(
+      node.disabled ? 'skipped' : 'ok',
+      `«${def.title.ru}» (браузерный мок: только порядок узлов)`,
+      `«${def.title.en}» (browser mock: node order only)`,
+    )
+    for (const output of def.outputs) {
+      if (output.type === 'flow' && !MOCK_SKIPPED_PORTS.has(output.name)) follow(id, output.name)
     }
   }
-  if (start) visit(start.id)
+  if (resume) follow(resume.nodeId, resume.port)
+  else if (start) visit(start.id)
+  const outcome: RunOutcome = asking
+    ? { asking }
+    : start || resume
+      ? 'done'
+      : { failed: { message: 'the workflow has no trigger' } }
   const run: WorkflowRun = {
     id: uuid(),
     workflow_id: workflowId,
     trigger: start ? start.kind.replace('trigger.', '') : '',
     started_at: now(),
-    outcome: start ? 'done' : { failed: { message: 'the workflow has no trigger' } },
+    outcome,
     created: [],
     queued: 0,
     trace,
     dry_run: dryRun,
   }
-  return { run, transactions: [], queued: [], notices: [], events: [], edge_values: {} }
+  return { run, transactions: [], queued: [], notices: [], events: [], reminders: [], edge_values: {} }
+}
+
+/** A live mock run that asked keeps its question for «Очередь». */
+function keepQuestion(report: RunReport) {
+  const outcome = report.run.outcome
+  if (outcome === 'done' || !('asking' in outcome)) return
+  waits.push({
+    id: uuid(),
+    workflow_id: report.run.workflow_id,
+    run_id: report.run.id,
+    node_id: outcome.asking.node_id,
+    resume_at: '',
+    memo: '[]',
+    queue_mode: false,
+    trigger: report.run.trigger,
+    kind: 'confirm',
+    question: outcome.asking.question,
+    created_at: now(),
+  })
 }
 
 function find(id: string): Workflow {
@@ -127,7 +192,7 @@ function save(id: string | null, draft: WorkflowDraft): SavedWorkflow {
   if (workflow.graph !== draft.graph) {
     workflow.versions = [...workflow.versions, { saved_at: workflow.updated_at, graph: workflow.graph }].slice(-20)
   }
-  Object.assign(workflow, { ...draft, name: draft.name.trim(), updated_at: stamp })
+  Object.assign(workflow, { ...draft, name: draft.name.trim(), updated_at: stamp, draft: undefined })
   return { workflow, issues }
 }
 
@@ -172,11 +237,36 @@ export function mockWorkflows(cmd: string, args: Record<string, unknown> | undef
         String(input?.workflow_id ?? 'draft'),
         (input?.trigger_node as string) ?? null,
         true,
+        (input?.answers as Record<string, boolean> | undefined) ?? {},
       )
     case 'run_workflow_now': {
       const workflow = find(String(input?.id))
       const report = fakeRun(parseGraph(workflow.graph), workflow.id, (input?.trigger_node as string) ?? null, false)
       runs.unshift(report.run)
+      keepQuestion(report)
+      return report
+    }
+    case 'save_workflow_draft': {
+      const workflow = find(String(input?.id))
+      workflow.draft = { saved_at: now(), graph: String(input?.graph ?? '') }
+      return workflow
+    }
+    case 'discard_workflow_draft': {
+      const workflow = find(String(args?.id))
+      workflow.draft = undefined
+      return workflow
+    }
+    case 'list_workflow_waits':
+      return waits
+    case 'answer_workflow_wait': {
+      const index = waits.findIndex((entry) => entry.id === input?.id && entry.kind === 'confirm')
+      if (index < 0) throw { code: 'MISSING', message: `question ${String(input?.id)}` }
+      const [wait] = waits.splice(index, 1)
+      const workflow = find(wait.workflow_id)
+      const port = input?.yes ? 'true' : 'false'
+      const report = fakeRun(parseGraph(workflow.graph), workflow.id, null, false, {}, { nodeId: wait.node_id, port })
+      runs.unshift(report.run)
+      keepQuestion(report)
       return report
     }
     case 'list_workflow_runs':

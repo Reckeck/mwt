@@ -20,6 +20,10 @@ export function paramVisible(kind: string, name: string, params: Record<string, 
   if (kind === 'action.transaction' && (name === 'to_asset' || name === 'to_amount')) {
     return value('tx_kind', 'transfer') === 'convert'
   }
+  if (kind === 'convert.to') {
+    if (name === 'currency') return value('to', 'number') === 'money'
+    if (name === 'date_format') return value('to', 'number') === 'date'
+  }
   return true
 }
 
@@ -84,6 +88,36 @@ export function nodeSummary(def: NodeDef | undefined, params: Record<string, unk
       return `${pick('flow')}, ${pick('period')}`
     case 'data.workday':
       return pick('calendar')
+    case 'date.make': {
+      const shift = Number(params.month_shift ?? 0)
+      const month = shift ? (ru ? `, месяц +${shift}` : `, month +${shift}`) : ''
+      return `${pick('day')}-${ru ? 'е' : 'th'}${month}, ${pick('time')}`
+    }
+    case 'date.add':
+      return `+${pick('amount')} ${pick('unit')}`
+    case 'date.boundary':
+      return pick('which')
+    case 'date.shift_workday':
+      return pick('direction')
+    case 'date.format':
+      return pick('pattern')
+    case 'text.extract':
+    case 'text.replace':
+      return pick(def.kind === 'text.extract' ? 'pattern' : 'find')
+    case 'text.case':
+      return pick('mode')
+    case 'convert.to':
+      return pick('to')
+    case 'logic.round':
+      return `${pick('mode')}, ${pick('places')}`
+    case 'loop.repeat':
+      return `× ${pick('count')}`
+    case 'loop.range':
+      return `${pick('from')} … ${pick('to')}`
+    case 'list.sum':
+    case 'list.filter':
+    case 'text.join':
+      return pick('field')
     default:
       return ''
   }

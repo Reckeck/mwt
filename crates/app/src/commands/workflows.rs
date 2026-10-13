@@ -7,15 +7,16 @@ use tauri::{AppHandle, Emitter, State};
 
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput, ListWorkflowRunsInput,
-    RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowInput, SaveWorkflowTestInput,
-    SetWorkflowActiveInput, SetWorkflowVarInput, ValidateWorkflowInput,
+    AnswerWorkflowWaitInput, DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput,
+    ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowDraftInput,
+    SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput, SetWorkflowVarInput,
+    ValidateWorkflowInput,
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{SavedWorkflow, UnlockedVault, WorkflowTestResult};
 use trade_core::workflow::{
-    GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar, catalog,
-    graph::Graph, validate,
+    GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
+    WorkflowWait, catalog, graph::Graph, validate,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -76,6 +77,25 @@ pub async fn save_workflow(
     })
 }
 
+/// Keep the editor's unsaved edits aside, to come back to them.
+#[tauri::command]
+pub async fn save_workflow_draft(
+    input: SaveWorkflowDraftInput,
+    state: State<'_, AppState>,
+) -> Result<Workflow, String> {
+    with_vault_mut(&state, |vault| {
+        vault.save_workflow_draft(&input.id, &input.graph, now_secs())
+    })
+}
+
+#[tauri::command]
+pub async fn discard_workflow_draft(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Workflow, String> {
+    with_vault_mut(&state, |vault| vault.discard_workflow_draft(&id))
+}
+
 #[tauri::command]
 pub async fn set_workflow_active(
     input: SetWorkflowActiveInput,
@@ -114,6 +134,7 @@ pub async fn dry_run_workflow(
             &input.graph,
             input.workflow_id.as_deref(),
             input.trigger_node.as_deref(),
+            input.answers.unwrap_or_default(),
             now_secs(),
             &zone,
         )
@@ -172,6 +193,34 @@ pub async fn confirm_workflow_queued(
 #[tauri::command]
 pub async fn discard_workflow_queued(id: String, state: State<'_, AppState>) -> Result<(), String> {
     with_vault_mut(&state, |vault| vault.discard_queued(&id))
+}
+
+/// Runs asleep: timers and questions waiting for an answer.
+#[tauri::command]
+pub async fn list_workflow_waits(state: State<'_, AppState>) -> Result<Vec<WorkflowWait>, String> {
+    with_vault(&state, |vault| Ok(vault.workflow_waits()))
+}
+
+/// Answer a «Ждать подтверждения» question; the run goes on at once.
+#[tauri::command]
+pub async fn answer_workflow_wait(
+    input: AnswerWorkflowWaitInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<RunReport, String> {
+    let zone = current_zone(&app);
+    let report = with_vault_mut(&state, |vault| {
+        vault.answer_workflow_wait(&input.id, input.yes, now_secs(), &zone)
+    })?;
+    crate::scheduler::deliver(&app, report.notices.clone(), false);
+    if !report.run.created.is_empty() {
+        let _ = app.emit(
+            "automation-created",
+            serde_json::json!({ "tx_ids": report.run.created }),
+        );
+    }
+    let _ = app.emit("workflows-ran", serde_json::json!({}));
+    Ok(report)
 }
 
 #[tauri::command]

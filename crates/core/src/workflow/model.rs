@@ -37,6 +37,11 @@ pub struct Workflow {
     /// Checks run by emulation: what the workflow should do.
     #[serde(default)]
     pub tests: Vec<WorkflowTest>,
+    /// Edits left unsaved in the editor, kept to come back to; the saved
+    /// graph (and the runs) are not touched by them.
+    #[serde(default)]
+    #[ts(optional)]
+    pub draft: Option<GraphVersion>,
 }
 
 /// An expectation checked by emulation: run the workflow as at a moment and
@@ -51,6 +56,11 @@ pub struct WorkflowTest {
     /// The moment to emulate (RFC3339); now when empty.
     #[serde(default)]
     pub at: Option<String>,
+    /// Answers to «Ждать подтверждения» questions, by node id; a question
+    /// without one ends the emulation as `waiting`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub answers: Option<BTreeMap<String, bool>>,
     pub expect: TestExpect,
 }
 
@@ -84,6 +94,14 @@ pub enum RunOutcome {
     Failed { message: String },
     /// Asleep at a «Подождать» node until `until` (RFC3339).
     Waiting { until: String },
+    /// Asleep at a «Ждать подтверждения» node until the user answers (or,
+    /// with a time limit, until `until`, which counts as «No»).
+    Asking {
+        node_id: String,
+        question: String,
+        #[serde(default)]
+        until: Option<String>,
+    },
 }
 
 /// One run of a workflow, with its trace for the journal.
@@ -147,20 +165,42 @@ pub struct WorkflowState {
     pub tx_index: usize,
 }
 
-/// A run asleep at a «Подождать» node: where it goes on, when, and the data it
-/// had worked out by then.
+/// What a sleeping run waits for.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitKind {
+    /// «Подождать»: goes on from «Дальше» at `resume_at`.
+    #[default]
+    Timer,
+    /// «Ждать подтверждения»: goes on from «Да» or «Нет» when the user
+    /// answers; `resume_at`, when set, is the deadline that counts as «Нет».
+    Confirm,
+}
+
+/// A run asleep at a «Подождать» or «Ждать подтверждения» node: where it goes
+/// on, when, and the data it had worked out by then.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct WorkflowWait {
     pub id: String,
     pub workflow_id: String,
     pub run_id: String,
-    /// The wait node; the run goes on from its «Дальше».
+    /// The wait node; the run goes on from its «Дальше» (or «Да»/«Нет»).
     pub node_id: String,
-    /// RFC3339.
+    /// RFC3339; empty for a question without a deadline.
     pub resume_at: String,
     /// Node outputs computed before the wait, as JSON.
     pub memo: String,
     /// Whether operations after it go to the confirmation queue.
     pub queue_mode: bool,
     pub trigger: String,
+    #[serde(default)]
+    pub kind: WaitKind,
+    /// The question of a «Ждать подтверждения» node.
+    #[serde(default)]
+    pub question: String,
+    /// When the run fell asleep (RFC3339).
+    #[serde(default)]
+    pub created_at: String,
 }

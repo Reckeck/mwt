@@ -260,10 +260,14 @@ JSON без шифрования — там нет ничего секретно
 | `set_workflow_active` | `SetWorkflowActiveInput { id, active }` | `Workflow`; с ошибками в графе — `INVALID_INPUT` |
 | `delete_workflow` | `id` | `()` — вместе с журналом, своими переменными, очередью, состоянием и ожиданиями; созданные операции остаются |
 | `restore_workflow_version` | `RestoreWorkflowVersionInput { id, saved_at }` | `SavedWorkflow`; текущий граф становится версией, сломанная версия возвращается выключенной |
-| `dry_run_workflow` | `DryRunWorkflowInput { graph, workflow_id?, trigger_node? }` | `RunReport { run, transactions, queued, notices, events, edge_values }` — эмуляция на копии vault, ничего не пишется; `edge_values` — значение на каждой связи данных для редактора |
+| `dry_run_workflow` | `DryRunWorkflowInput { graph, workflow_id?, trigger_node?, answers? }` | `RunReport { run, transactions, queued, notices, events, reminders, edge_values }` — эмуляция на копии vault, ничего не пишется; `edge_values` — значение на каждой связи данных для редактора; узел «Ждать подтверждения» без ответа в `answers` (node id → да/нет) останавливает эмуляцию с исходом `asking` |
 | `run_workflow_now` | `RunWorkflowInput { id, trigger_node? }` | `RunReport`; уведомления показываются, запуск попадает в журнал |
 | `list_workflow_runs` | `ListWorkflowRunsInput { workflow_id?, limit? (100) }` | `Vec<WorkflowRun>` новыми первыми, с `trace` по шагам |
-| `list_workflow_queue` | — | `Vec<QueuedActions>` — операции после узла «Ждать подтверждения» |
+| `list_workflow_queue` | — | `Vec<QueuedActions>` — операции, поставленные в очередь старым узлом «Ждать подтверждения» (до графа v2) |
+| `save_workflow_draft` | `SaveWorkflowDraftInput { id, graph }` | `Workflow` — откладывает несохранённые правки редактора в `draft { saved_at, graph }`; сохранённый граф и запуски не трогает |
+| `discard_workflow_draft` | `id` | `Workflow` — удаляет черновик; `save_workflow` удаляет его сам |
+| `list_workflow_waits` | — | `Vec<WorkflowWait>` — уснувшие запуски: `kind: timer` («Подождать») и `kind: confirm` (вопрос «Ждать подтверждения», `question`, `resume_at` — срок или пусто) |
+| `answer_workflow_wait` | `AnswerWorkflowWaitInput { id, yes }` | `RunReport` — ответ на вопрос: запуск сразу продолжается по ветке «Да»/«Нет»; шлёт `workflows-ran` |
 | `confirm_workflow_queued` | `id` | `Vec<Transaction>` — все операции пачки вместе или ни одной |
 | `discard_workflow_queued` | `id` | `()` |
 | `list_workflow_vars` | — | `Vec<WorkflowVar { scope, name, value (WfValue JSON), updated_at }>` |

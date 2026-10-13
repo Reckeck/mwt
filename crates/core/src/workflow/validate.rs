@@ -71,6 +71,13 @@ fn optional_input(kind: &str, port: &str) -> bool {
             | ("action.return", "value")
             | ("var.set", "value")
             | ("var.add", "delta")
+            // Dates default to now.
+            | ("date.parts" | "date.add" | "date.boundary" | "date.shift_workday" | "date.format", "date")
+            | ("date.make", "base")
+            | ("date.add", "duration")
+            | ("date.diff", "a" | "b")
+            | ("list.make", "a" | "b" | "c" | "d")
+            | ("logic.select", "a" | "b")
     )
 }
 
@@ -235,7 +242,9 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
                 .on_node(&node.id),
             );
         }
-        if def.has_flow() && def.input("in").is_some() {
+        // A write drawn apart from the flow runs on its own at the end of the run.
+        let free = super::exec::FREE_RUNNING.contains(&def.kind);
+        if def.has_flow() && def.input("in").is_some() && !free {
             let reached = graph
                 .edges
                 .iter()
@@ -260,8 +269,8 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
         out.push(
             GraphIssue::error(
                 "flow_cycle",
-                "Поток замкнут в кольцо — для повторов используйте «Для каждого»".into(),
-                "The flow loops back on itself; use «For each» to repeat".into(),
+                "Поток замкнут в кольцо — для повторов используйте «Повторить N раз», «Цикл по числам», «Пока условие да» или «Для каждого»".into(),
+                "The flow loops back on itself; to repeat use «Repeat N times», «Count from … to», «While» or «For each»".into(),
             )
             .on_node(&node_id),
         );
@@ -376,13 +385,23 @@ mod tests {
     #[test]
     fn no_trigger_and_unknown_nodes_are_errors() {
         let graph = Graph {
-            nodes: vec![node("n", "action.notify"), node("x", "nope.nope")],
+            nodes: vec![
+                node("n", "action.transaction"),
+                node("x", "nope.nope"),
+                node("free", "action.notify"),
+            ],
             ..Graph::default()
         };
         let found = codes(&graph);
         assert!(found.contains(&"no_trigger".to_string()));
         assert!(found.contains(&"unknown_node".to_string()));
         assert!(found.contains(&"unreachable".to_string()));
+        // A notice apart from the flow runs at the end: not a mistake.
+        assert!(
+            !validate(&graph).iter().any(
+                |issue| issue.code == "unreachable" && issue.node_id.as_deref() == Some("free")
+            )
+        );
         assert_eq!(validate(&graph).last().unwrap().level, IssueLevel::Warning);
     }
 

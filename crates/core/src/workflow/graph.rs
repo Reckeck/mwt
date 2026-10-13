@@ -5,7 +5,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Current graph format.
-pub const GRAPH_VERSION: u32 = 1;
+///
+/// - 2: «Ждать подтверждения» answers with «Да»/«Нет» instead of one «Дальше»;
+///   a wire from its old «Дальше» now leaves «Да».
+pub const GRAPH_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[ts(rename = "WorkflowPosition")]
@@ -95,14 +98,44 @@ impl Graph {
         if json.trim().is_empty() {
             return Ok(Self::default());
         }
-        let graph: Graph = serde_json::from_str(json)
+        let mut graph: Graph = serde_json::from_str(json)
             .map_err(|err| crate::Error::InvalidInput(format!("workflow graph: {err}")))?;
         if graph.version > GRAPH_VERSION {
             return Err(crate::Error::InvalidInput(
                 "the workflow was made by a newer app".into(),
             ));
         }
+        graph.migrate();
         Ok(graph)
+    }
+
+    /// Bring an older graph to the current format. Returns whether it changed.
+    pub fn migrate(&mut self) -> bool {
+        if self.version >= GRAPH_VERSION {
+            return false;
+        }
+        if self.version < 2 {
+            let confirms: Vec<String> = self
+                .nodes
+                .iter()
+                .filter(|node| node.kind == "action.confirm")
+                .map(|node| node.id.clone())
+                .collect();
+            for edge in &mut self.edges {
+                if edge.from_port == "out" && confirms.contains(&edge.from) {
+                    edge.from_port = "true".into();
+                }
+            }
+        }
+        self.version = GRAPH_VERSION;
+        true
+    }
+
+    /// The graph JSON brought to the current format, or `None` when it is
+    /// current already (or not a graph at all).
+    pub fn migrate_json(json: &str) -> Option<String> {
+        let mut graph: Graph = serde_json::from_str(json).ok()?;
+        graph.migrate().then(|| graph.to_json())
     }
 
     pub fn to_json(&self) -> String {

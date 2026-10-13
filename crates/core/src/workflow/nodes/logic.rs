@@ -85,6 +85,21 @@ pub(crate) fn arithmetic(
     })
 }
 
+/// A date or a moment as seconds, for comparing: an RFC3339 moment, or a
+/// `2026-11-25` day (its start, UTC).
+pub(crate) fn moment_of(value: &WfValue) -> Option<i64> {
+    let (WfValue::Date(text) | WfValue::Text(text)) = value else {
+        return None;
+    };
+    let text = text.trim();
+    crate::pricing::history::unix_secs(text).or_else(|| {
+        chrono::NaiveDate::parse_from_str(text.get(..10)?, "%Y-%m-%d")
+            .ok()
+            .and_then(|day| day.and_hms_opt(0, 0, 0))
+            .map(|start| start.and_utc().timestamp())
+    })
+}
+
 /// `A op B` as yes or no.
 pub(crate) fn compare(op: &str, left: &WfValue, right: &WfValue) -> Result<bool, String> {
     if op == "contains" {
@@ -92,6 +107,20 @@ pub(crate) fn compare(op: &str, left: &WfValue, right: &WfValue) -> Result<bool,
             .as_text()
             .to_lowercase()
             .contains(&right.as_text().to_lowercase()));
+    }
+    // Two dates (one may be text like «2026-11-25»): earlier is less.
+    if (matches!(left, WfValue::Date(_)) || matches!(right, WfValue::Date(_)))
+        && let (Some(one), Some(other)) = (moment_of(left), moment_of(right))
+    {
+        return Ok(match op {
+            "gt" => one > other,
+            "gte" => one >= other,
+            "lt" => one < other,
+            "lte" => one <= other,
+            "eq" => one == other,
+            "ne" => one != other,
+            other_op => return Err(format!("unknown comparison {other_op}")),
+        });
     }
     if let (Some(one), Some(other)) = (left.as_number(), right.as_number()) {
         shared_currency(left, right)?;
@@ -203,6 +232,33 @@ impl Executor<'_> {
                 }
                 Ok(single("text", WfValue::Text(text)))
             }
+            "logic.select" => {
+                let condition = truth(&self.input(node, "condition")?);
+                let value = self.input(node, if condition { "a" } else { "b" })?;
+                Ok(single("result", value))
+            }
+            "logic.round" => {
+                let value = self.input(node, "value")?;
+                let places = self
+                    .number_input(node, "places")?
+                    .and_then(|places| places.into_inner().trunc().to_string().parse::<u32>().ok())
+                    .unwrap_or(0)
+                    .min(18);
+                let number = number_of(&value, "the value")?;
+                let strategy = match self.text_param(node, "mode").as_str() {
+                    "floor" => rust_decimal::RoundingStrategy::ToNegativeInfinity,
+                    "ceil" => rust_decimal::RoundingStrategy::ToPositiveInfinity,
+                    _ => rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+                };
+                let rounded = Amount::new(number.round_dp_with_strategy(places, strategy));
+                Ok(single(
+                    "result",
+                    match money_currency(&value) {
+                        Some(code) => WfValue::money(rounded, &code),
+                        None => WfValue::Number(rounded),
+                    },
+                ))
+            }
             other => Err(format!("unknown node {other}")),
         }
     }
@@ -264,6 +320,26 @@ impl Executor<'_> {
                     "out",
                     format!("«{}»: пропускаю дальше", def.title.ru),
                     format!("«{}»: letting through", def.title.en),
+                ))
+            }
+            "logic.switch" => {
+                let value = self.input(node, "value")?;
+                let chosen = ["case1", "case2", "case3", "case4"]
+                    .into_iter()
+                    .find(|case| {
+                        let expected = self.text_param(node, case);
+                        let expected = expected.trim();
+                        if expected.is_empty() {
+                            return false;
+                        }
+                        compare("eq", &value, &WfValue::Text(expected.to_string())).unwrap_or(false)
+                            || value.as_text().trim().to_lowercase() == expected.to_lowercase()
+                    });
+                let port = chosen.unwrap_or("other");
+                Ok(Step::next(
+                    port,
+                    format!("«{}»: «{}» → {port}", def.title.ru, value.as_text()),
+                    format!("«{}»: «{}» → {port}", def.title.en, value.as_text()),
                 ))
             }
             other => Err(Fault::Error(format!("unknown node {other}"))),

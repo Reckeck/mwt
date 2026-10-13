@@ -6,7 +6,6 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::TxOrigin;
 use crate::service::test_support::*;
 use crate::workflow::RunOutcome;
-use crate::workflow::exec::StepStatus;
 
 fn node(id: &str, kind: &str, params: Value) -> Value {
     json!({ "id": id, "kind": kind, "params": params })
@@ -134,8 +133,138 @@ fn a_salary_sends_ten_percent_to_savings_once() {
     assert_eq!(vault.workflow_runs(Some(&workflow.id), 10).len(), 1);
 }
 
+/// «Ask first → yes: 300 to savings; no: a notice».
+fn ask_graph(card: &str, savings: &str, timeout_hours: &str) -> String {
+    graph(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node(
+                "c",
+                "action.confirm",
+                json!({ "question": "Отложить 300?", "timeout_hours": timeout_hours }),
+            ),
+            transfer_node("tx", card, savings, "300"),
+            node("n", "action.notify", json!({ "text": "Не отложили" })),
+        ],
+        vec![
+            wire("t", "out", "c", "in"),
+            wire("c", "true", "tx", "in"),
+            wire("c", "false", "n", "in"),
+        ],
+    )
+}
+
 #[test]
-fn after_confirmation_the_operation_waits_in_the_queue() {
+fn a_question_pauses_the_run_until_the_answer() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&report.run.outcome, RunOutcome::Asking { question, until: None, .. } if question == "Отложить 300?"),
+        "{:?}",
+        report.run.outcome
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+    // Nothing goes on by itself, however long it waits.
+    assert!(
+        vault
+            .run_due_workflows(later() + 400 * 24 * 3600, "UTC")
+            .unwrap()
+            .runs
+            .is_empty()
+    );
+    let waits = vault.workflow_waits();
+    assert_eq!(waits.len(), 1);
+    assert_eq!(waits[0].kind, WaitKind::Confirm);
+
+    let answered = vault
+        .answer_workflow_wait(&waits[0].id, true, later(), "UTC")
+        .unwrap();
+    assert_eq!(answered.run.outcome, RunOutcome::Done);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("300"));
+    assert!(vault.workflow_waits().is_empty());
+}
+
+#[test]
+fn answering_no_goes_the_no_way() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let id = vault.workflow_waits()[0].id.clone();
+    let report = vault
+        .answer_workflow_wait(&id, false, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.notices.len(), 1);
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+    assert!(
+        vault
+            .answer_workflow_wait(&id, true, later(), "UTC")
+            .is_err()
+    );
+}
+
+#[test]
+fn an_unanswered_question_with_a_deadline_counts_as_no() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "2"));
+    let now = later();
+    vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    assert!(
+        vault
+            .run_due_workflows(now + 3600, "UTC")
+            .unwrap()
+            .runs
+            .is_empty()
+    );
+    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    assert_eq!(pass.runs.len(), 1);
+    assert!(
+        pass.notices
+            .iter()
+            .any(|notice| notice.body == "Не отложили")
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+}
+
+#[test]
+fn an_emulation_asks_and_then_follows_the_answer() {
+    let (_dir, vault, card, savings) = wallets();
+    let graph_json = ask_graph(&card, &savings, "0");
+    let asked = vault
+        .dry_run_workflow(&graph_json, None, None, BTreeMap::new(), later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&asked.run.outcome, RunOutcome::Asking { node_id, .. } if node_id == "c"),
+        "{:?}",
+        asked.run.outcome
+    );
+    assert!(asked.transactions.is_empty());
+
+    let yes = BTreeMap::from([("c".to_string(), true)]);
+    let report = vault
+        .dry_run_workflow(&graph_json, None, None, yes, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.run.outcome, RunOutcome::Done);
+    assert_eq!(report.transactions.len(), 1);
+
+    let no = BTreeMap::from([("c".to_string(), false)]);
+    let report = vault
+        .dry_run_workflow(&graph_json, None, None, no, later(), "UTC")
+        .unwrap();
+    assert!(report.transactions.is_empty());
+    assert_eq!(report.notices.len(), 1);
+    // Emulation keeps nothing asleep.
+    assert!(vault.workflow_waits().is_empty());
+}
+
+#[test]
+fn an_old_confirm_wire_from_next_becomes_yes() {
     let (_dir, mut vault, card, savings) = wallets();
     let nodes = vec![
         node("t", "trigger.manual", json!({})),
@@ -143,25 +272,25 @@ fn after_confirmation_the_operation_waits_in_the_queue() {
         transfer_node("tx", &card, &savings, "300"),
     ];
     let edges = vec![wire("t", "out", "c", "in"), wire("c", "out", "tx", "in")];
-    let workflow = save(&mut vault, "Queue", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    assert_eq!(report.run.queued, 1, "{:?}", report.run.trace);
+    let old = graph(nodes, edges);
+    let workflow = save(&mut vault, "Old", old.clone());
     assert!(
-        report
-            .run
-            .trace
-            .iter()
-            .any(|step| step.status == StepStatus::Queued)
+        workflow.graph.contains("\"from_port\":\"true\""),
+        "{}",
+        workflow.graph
     );
-    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
-
-    let queue = vault.workflow_queue();
-    assert_eq!(queue.len(), 1);
-    vault.confirm_queued(&queue[0].id).unwrap();
-    assert_eq!(holding_of(&vault, &savings, &usd()), amount("300"));
-    assert!(vault.workflow_queue().is_empty());
+    // A vault written by the older app is brought up to date when it opens.
+    vault.doc.workflows[0].graph = old;
+    assert!(vault.migrate_workflow_graphs());
+    assert!(!vault.migrate_workflow_graphs());
+    let parsed = Graph::parse(&vault.doc.workflows[0].graph).unwrap();
+    assert_eq!(parsed.version, crate::workflow::graph::GRAPH_VERSION);
+    assert!(
+        parsed
+            .edges
+            .iter()
+            .any(|edge| edge.from == "c" && edge.from_port == "true")
+    );
 }
 
 #[test]
@@ -234,7 +363,14 @@ fn an_emulation_shows_the_operations_and_keeps_nothing() {
         .unwrap();
     let before = vault.doc.transactions.len();
     let report = vault
-        .dry_run_workflow(&tithe_graph(&card, &savings), None, None, later(), "UTC")
+        .dry_run_workflow(
+            &tithe_graph(&card, &savings),
+            None,
+            None,
+            BTreeMap::new(),
+            later(),
+            "UTC",
+        )
         .unwrap();
     assert_eq!(
         report.run.outcome,
@@ -847,7 +983,14 @@ fn a_workflow_calling_itself_stops_at_the_depth_limit() {
     let graph_json = saved.graph.replace(id, &saved.id);
     vault.doc.workflows[0].graph = graph_json.clone();
     let report = vault
-        .dry_run_workflow(&graph_json, Some(&saved.id), None, later(), "UTC")
+        .dry_run_workflow(
+            &graph_json,
+            Some(&saved.id),
+            None,
+            BTreeMap::new(),
+            later(),
+            "UTC",
+        )
         .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("deeper")),
@@ -873,6 +1016,7 @@ fn tests_compare_an_emulation_with_what_is_expected() {
         name: name.into(),
         trigger_node: None,
         at: None,
+        answers: None,
         expect: TestExpect {
             outcome: "done".into(),
             transactions: Some(transactions),
@@ -925,4 +1069,329 @@ fn tests_compare_an_emulation_with_what_is_expected() {
             )
             .is_err()
     );
+}
+
+fn count_of(vault: &UnlockedVault, workflow: &Workflow, name: &str) -> Option<Amount> {
+    vault
+        .wf_var(&VarScope::Workflow(workflow.id.clone()), name)
+        .and_then(|value| value.as_number())
+}
+
+/// «At the start of a month: the salary day of this month, moved back to a
+/// working day if it falls on a day off, and a reminder to book it».
+fn payday_graph(month: u32, day: u32) -> String {
+    graph(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node(
+                "make",
+                "date.make",
+                json!({ "year": "2026", "month": month.to_string(), "day": day }),
+            ),
+            node(
+                "shift",
+                "date.shift_workday",
+                json!({ "direction": "back" }),
+            ),
+            node(
+                "remind",
+                "action.reminder",
+                json!({ "text": "Внести поступление зарплаты", "time": "10:00" }),
+            ),
+        ],
+        vec![
+            wire("make", "date", "shift", "date"),
+            wire("shift", "date", "remind", "date"),
+            wire("t", "out", "remind", "in"),
+        ],
+    )
+}
+
+#[test]
+fn a_payday_on_a_day_off_moves_back_to_the_working_day_before() {
+    for (month, day, due) in [
+        // April 25, 2026 is a Saturday: paid on Friday the 24th.
+        (4, 25, "2026-04-24T10:00:00Z"),
+        // June 12 is a holiday (a Friday): Thursday the 11th.
+        (6, 12, "2026-06-11T10:00:00Z"),
+        // A working day stays.
+        (6, 10, "2026-06-10T10:00:00Z"),
+        // The 31st of a 30-day month is its last day: September 30, a Wednesday.
+        (9, 31, "2026-09-30T10:00:00Z"),
+    ] {
+        let (_dir, mut vault) = empty_vault();
+        let workflow = save(&mut vault, "Payday", payday_graph(month, day));
+        let report = vault
+            .run_workflow_now(&workflow.id, None, later(), "UTC")
+            .unwrap();
+        assert_eq!(
+            report.run.outcome,
+            RunOutcome::Done,
+            "{:?}",
+            report.run.trace
+        );
+        assert_eq!(report.reminders.len(), 1);
+        assert_eq!(report.reminders[0].due_at, due, "{month}/{day}");
+        assert!(
+            vault
+                .doc
+                .reminders
+                .iter()
+                .any(|reminder| reminder.due_at == due)
+        );
+    }
+}
+
+#[test]
+fn the_payday_template_runs_as_emulation() {
+    let (_dir, vault) = empty_vault();
+    let report = vault
+        .dry_run_workflow(
+            &payday_graph(4, 25),
+            None,
+            None,
+            BTreeMap::new(),
+            later(),
+            "UTC",
+        )
+        .unwrap();
+    assert_eq!(report.reminders.len(), 1);
+    // Emulation keeps nothing.
+    assert!(vault.doc.reminders.is_empty());
+}
+
+#[test]
+fn loops_repeat_count_and_break() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("rep", "loop.repeat", json!({ "count": "3" })),
+        node("add", "var.add", json!({ "name": "repeats", "delta": "1" })),
+        node("range", "loop.range", json!({ "from": "1", "to": "4" })),
+        node("sum", "var.add", json!({ "name": "sum" })),
+        node("many", "loop.repeat", json!({ "count": "10" })),
+        node("cmp", "logic.compare", json!({ "op": "gte", "b": "2" })),
+        node("branch", "logic.branch", json!({})),
+        node("stop", "loop.break", json!({})),
+        node("tick", "var.add", json!({ "name": "ticks", "delta": "1" })),
+    ];
+    let edges = vec![
+        wire("t", "out", "rep", "in"),
+        wire("rep", "each", "add", "in"),
+        wire("rep", "done", "range", "in"),
+        wire("range", "each", "sum", "in"),
+        wire("range", "value", "sum", "delta"),
+        wire("range", "done", "many", "in"),
+        wire("many", "each", "tick", "in"),
+        wire("tick", "out", "branch", "in"),
+        wire("many", "index", "cmp", "a"),
+        wire("cmp", "result", "branch", "condition"),
+        wire("branch", "true", "stop", "in"),
+    ];
+    let workflow = save(&mut vault, "Loops", graph(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(
+        report.run.outcome,
+        RunOutcome::Done,
+        "{:?}",
+        report.run.trace
+    );
+    assert_eq!(count_of(&vault, &workflow, "repeats"), Some(amount("3")));
+    assert_eq!(count_of(&vault, &workflow, "sum"), Some(amount("10")));
+    // Passes 0, 1, 2: the third one breaks out.
+    assert_eq!(count_of(&vault, &workflow, "ticks"), Some(amount("3")));
+}
+
+#[test]
+fn a_while_loop_sees_the_variable_it_changes() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("reset", "var.set", json!({ "name": "n", "value": "0" })),
+        node("get", "var.get", json!({ "name": "n" })),
+        node("cmp", "logic.compare", json!({ "op": "lt", "b": "5" })),
+        node("while", "loop.while", json!({ "max": "100" })),
+        node("add", "var.add", json!({ "name": "n", "delta": "1" })),
+    ];
+    let edges = vec![
+        wire("t", "out", "reset", "in"),
+        wire("reset", "out", "while", "in"),
+        wire("get", "value", "cmp", "a"),
+        wire("cmp", "result", "while", "condition"),
+        wire("while", "each", "add", "in"),
+    ];
+    let workflow = save(&mut vault, "While", graph(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(
+        report.run.outcome,
+        RunOutcome::Done,
+        "{:?}",
+        report.run.trace
+    );
+    assert_eq!(count_of(&vault, &workflow, "n"), Some(amount("5")));
+}
+
+#[test]
+fn a_variable_read_after_a_write_is_fresh() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("one", "var.set", json!({ "name": "x", "value": "1" })),
+        node("get", "var.get", json!({ "name": "x" })),
+        node("say1", "action.notify", json!({})),
+        node("two", "var.set", json!({ "name": "x", "value": "2" })),
+        node("say2", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "one", "in"),
+        wire("one", "out", "say1", "in"),
+        wire("say1", "out", "two", "in"),
+        wire("two", "out", "say2", "in"),
+        wire("get", "value", "say1", "text"),
+        wire("get", "value", "say2", "text"),
+    ];
+    let workflow = save(&mut vault, "Fresh", graph(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let bodies: Vec<&str> = report
+        .notices
+        .iter()
+        .map(|notice| notice.body.as_str())
+        .collect();
+    assert_eq!(bodies, ["1", "2"]);
+}
+
+#[test]
+fn a_write_apart_from_the_flow_runs_at_the_end() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node(
+            "main",
+            "var.set",
+            json!({ "name": "seen", "value": "flow" }),
+        ),
+        node("apart", "var.set", json!({ "name": "apart", "value": "7" })),
+    ];
+    let workflow = save(
+        &mut vault,
+        "Apart",
+        graph(nodes, vec![wire("t", "out", "main", "in")]),
+    );
+    assert!(
+        !validate(&Graph::parse(&workflow.graph).unwrap())
+            .iter()
+            .any(|issue| issue.code == "unreachable"),
+        "a write apart from the flow is not a mistake"
+    );
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(count_of(&vault, &workflow, "apart"), Some(amount("7")));
+}
+
+#[test]
+fn text_and_conversion_nodes_read_what_people_write() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node(
+            "sms",
+            "data.constant",
+            json!({ "value_type": "text", "text": "Покупка 1 234,56 р. Карта *4321. 25.11.2026" }),
+        ),
+        node("num", "text.number", json!({})),
+        node(
+            "card",
+            "text.extract",
+            json!({ "pattern": r"\*(\d{4})", "group": "1" }),
+        ),
+        node(
+            "when",
+            "text.extract",
+            json!({ "pattern": r"\d{2}\.\d{2}\.\d{4}" }),
+        ),
+        node("date", "convert.to", json!({ "to": "date" })),
+        node("parts", "date.parts", json!({})),
+        node("amount", "var.set", json!({ "name": "amount" })),
+        node("digits", "var.set", json!({ "name": "card" })),
+        node("month", "var.set", json!({ "name": "month" })),
+    ];
+    let edges = vec![
+        wire("sms", "value", "num", "text"),
+        wire("sms", "value", "card", "text"),
+        wire("sms", "value", "when", "text"),
+        wire("when", "match", "date", "value"),
+        wire("date", "result", "parts", "date"),
+        wire("num", "number", "amount", "value"),
+        wire("card", "match", "digits", "value"),
+        wire("parts", "month", "month", "value"),
+        wire("t", "out", "amount", "in"),
+        wire("amount", "out", "digits", "in"),
+        wire("digits", "out", "month", "in"),
+    ];
+    let workflow = save(&mut vault, "Sms", graph(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(
+        report.run.outcome,
+        RunOutcome::Done,
+        "{:?}",
+        report.run.trace
+    );
+    let scope = VarScope::Workflow(workflow.id.clone());
+    assert_eq!(
+        count_of(&vault, &workflow, "amount"),
+        Some(amount("1234.56"))
+    );
+    assert_eq!(
+        vault.wf_var(&scope, "card").map(|value| value.as_text()),
+        Some("4321".to_string())
+    );
+    assert_eq!(count_of(&vault, &workflow, "month"), Some(amount("11")));
+}
+
+#[test]
+fn a_draft_waits_aside_and_saving_takes_it_in() {
+    let (_dir, mut vault) = empty_vault();
+    let first = graph(vec![node("t", "trigger.manual", json!({}))], vec![]);
+    let workflow = save(&mut vault, "Draft", first.clone());
+    let edited = graph(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("n", "action.notify", json!({ "text": "hi" })),
+        ],
+        vec![wire("t", "out", "n", "in")],
+    );
+    let drafted = vault
+        .save_workflow_draft(&workflow.id, &edited, later())
+        .unwrap();
+    // The saved graph is untouched; the draft sits next to it.
+    assert_eq!(drafted.graph, workflow.graph);
+    assert!(
+        drafted
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.graph.contains("action.notify"))
+    );
+    assert!(drafted.versions.is_empty());
+
+    let dropped = vault.discard_workflow_draft(&workflow.id).unwrap();
+    assert!(dropped.draft.is_none());
+
+    vault
+        .save_workflow_draft(&workflow.id, &edited, later())
+        .unwrap();
+    let saved = vault
+        .save_workflow(Some(&workflow.id), draft("Draft", edited), later())
+        .unwrap()
+        .workflow;
+    assert!(saved.draft.is_none());
+    assert!(vault.save_workflow_draft("nope", &first, later()).is_err());
 }

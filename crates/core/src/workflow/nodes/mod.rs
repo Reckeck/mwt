@@ -4,8 +4,10 @@
 
 mod actions;
 mod data;
+mod dates;
 mod lists;
-mod logic;
+pub(crate) mod logic;
+mod texts;
 pub mod triggers;
 
 use std::collections::BTreeMap;
@@ -193,7 +195,10 @@ impl Executor<'_> {
                 format!("«{}»", def.title.en),
             )),
             _ => match node.kind.as_str() {
-                "logic.branch" | "logic.guard" | "logic.throttle" => self.run_logic(node, def),
+                "logic.branch" | "logic.guard" | "logic.throttle" | "logic.switch" => {
+                    self.run_logic(node, def)
+                }
+                "loop.break" => Err(super::exec::Halt::Break.into()),
                 "var.set" | "var.add" => self.run_var(node, def),
                 _ => self.run_action(node, def),
             },
@@ -202,6 +207,8 @@ impl Executor<'_> {
 
     pub(crate) fn eval_data_node(&mut self, node: &Node, def: &NodeDef) -> Result<Outputs, String> {
         match def.group {
+            super::catalog::NodeGroup::Date => self.eval_date(node),
+            super::catalog::NodeGroup::Text => self.eval_text(node),
             super::catalog::NodeGroup::Data => self.eval_data(node),
             super::catalog::NodeGroup::Logic => self.eval_logic(node),
             super::catalog::NodeGroup::Variable => self.eval_var(node),

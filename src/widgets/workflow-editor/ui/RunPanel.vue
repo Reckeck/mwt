@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ClipboardCheck, X } from 'lucide-vue-next'
+import { Check, ClipboardCheck, MessageCircleQuestion, X } from 'lucide-vue-next'
+import { computed } from 'vue'
 
 import { OutcomeBadge, RunTrace, explainRun } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
-import { formatMoney } from '@/shared/lib/format'
+import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { txId, txKind, txLegs } from '@/shared/lib/transactions'
+import { outcomeQuestion } from '@/shared/lib/workflow'
 
 /** The last emulation or run: the steps in words and what it would make. */
-const props = defineProps<{ report: RunReport; canSaveTest?: boolean }>()
-const emit = defineEmits<{ focus: [nodeId: string]; close: []; saveTest: [] }>()
+const props = defineProps<{ report: RunReport; canSaveTest?: boolean; answers?: Record<string, boolean> }>()
+const emit = defineEmits<{ focus: [nodeId: string]; close: []; saveTest: []; answer: [nodeId: string, yes: boolean] }>()
 
 const { t, locale } = useI18n()
+
+/** An emulation that stopped at «Ждать подтверждения»: answered right here. */
+const question = computed(() => (props.report.run.dry_run ? outcomeQuestion(props.report.run.outcome) : null))
+const answered = computed(() =>
+  Object.values(props.answers ?? {})
+    .map((yes) => t(yes ? 'workflow.runPanel.yes' : 'workflow.runPanel.no'))
+    .join(', '),
+)
 
 function line(tx: Transaction): string {
   const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
@@ -35,6 +45,29 @@ function line(tx: Transaction): string {
       <Button variant="ghost" size="icon" :aria-label="t('actions.close')" @click="emit('close')"><X class="size-4" /></Button>
     </header>
     <p class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>
+    <div v-if="question" class="grid gap-2 rounded-md border border-primary/40 bg-primary/5 p-3" data-tour="workflow-emulation-question">
+      <div class="flex items-start gap-2">
+        <MessageCircleQuestion class="mt-0.5 size-4 shrink-0 text-primary" />
+        <div class="grid gap-1">
+          <span class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.question') }}</span>
+          <button type="button" class="text-left font-medium hover:underline" @click="emit('focus', question.nodeId)">{{ question.question }}</button>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground">{{ t('workflow.runPanel.questionHint') }}</p>
+      <div class="flex gap-2">
+        <Button size="sm" @click="question && emit('answer', question.nodeId, true)">
+          <Check class="size-4" />
+          {{ t('workflow.runPanel.yes') }}
+        </Button>
+        <Button size="sm" variant="outline" @click="question && emit('answer', question.nodeId, false)">
+          <X class="size-4" />
+          {{ t('workflow.runPanel.no') }}
+        </Button>
+      </div>
+    </div>
+    <p v-if="props.report.run.dry_run && answered" class="text-xs text-muted-foreground">
+      {{ t('workflow.runPanel.answers', { list: answered }) }}
+    </p>
     <RunTrace :steps="props.report.run.trace" @focus="(id) => emit('focus', id)" />
     <div v-if="props.report.transactions.length" class="grid gap-1">
       <h4 class="text-xs font-medium uppercase text-muted-foreground">
@@ -49,6 +82,14 @@ function line(tx: Transaction): string {
     <div v-if="props.report.notices.length" class="grid gap-1">
       <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.notices') }}</h4>
       <p v-for="notice in props.report.notices" :key="notice.key" class="text-sm">{{ notice.title }}: {{ notice.body }}</p>
+    </div>
+    <div v-if="props.report.reminders.length" class="grid gap-1">
+      <h4 class="text-xs font-medium uppercase text-muted-foreground">
+        {{ props.report.run.dry_run ? t('workflow.runPanel.wouldRemind') : t('workflow.runPanel.reminders') }}
+      </h4>
+      <p v-for="reminder in props.report.reminders" :key="reminder.id" class="text-sm">
+        {{ formatDateTime(reminder.due_at) }} · {{ reminder.text }}
+      </p>
     </div>
   </section>
 </template>

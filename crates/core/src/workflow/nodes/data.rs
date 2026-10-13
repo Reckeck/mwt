@@ -246,6 +246,14 @@ impl WorkdayRules {
         }
     }
 
+    /// The day itself if it is a working one, else the last working day before it.
+    pub fn previous_workday(&self, date: NaiveDate) -> NaiveDate {
+        (0..WORKDAY_SEARCH_DAYS)
+            .map(|offset| date - chrono::Duration::days(offset))
+            .find(|day| self.classify(*day).workday)
+            .unwrap_or(date)
+    }
+
     /// The day itself if it is a working one, else the first working day after it.
     pub fn next_workday(&self, date: NaiveDate) -> NaiveDate {
         (0..WORKDAY_SEARCH_DAYS)
