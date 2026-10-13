@@ -24,8 +24,13 @@ function Get-Tool([string]$name) { [regex]::Match($mise, "(?m)^$name = `"([^`"]+
 $rustVersion = Get-Tool 'rust'
 $nodeVersion = Get-Tool 'node'
 $pnpmVersion = Get-Tool 'pnpm'
-$version = (Get-Content crates/app/tauri.conf.json -Raw | ConvertFrom-Json).version
-Write-Host "Multi Wallet Tracker $version — rust $rustVersion, node $nodeVersion, pnpm $pnpmVersion"
+# The version this build ships under: BUILD_VERSION from the version job
+# (scripts/ci/version.sh), else the plain app version for a local run.
+$version = $env:BUILD_VERSION
+if (-not $version) { $version = (Get-Content crates/app/tauri.conf.json -Raw | ConvertFrom-Json).version }
+$versionCode = $env:ANDROID_VERSION_CODE
+if (-not $versionCode) { $versionCode = '1' }
+Write-Host "Multi Wallet Tracker $version - rust $rustVersion, node $nodeVersion, pnpm $pnpmVersion"
 
 # MSVC linker: present on the GitLab image; install the build tools otherwise.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -73,7 +78,12 @@ Invoke-Native pnpm install --frozen-lockfile --prefer-offline
 
 # Build (NSIS/WiX are fetched by the Tauri bundler)
 $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
-Invoke-Native pnpm tauri build --ci --bundles nsis,msi
+# The version goes in as a config file: inline JSON loses its quotes on the
+# way to a native command in Windows PowerShell 5.1.
+$tauriConfig = Join-Path $cache 'tauri-ci.json'
+$overlay = '{"version":"' + $version + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
+[System.IO.File]::WriteAllText($tauriConfig, $overlay)
+Invoke-Native pnpm tauri build --ci --bundles nsis,msi --config $tauriConfig
 
 # Collect under stable names
 $bundle = Join-Path $env:CARGO_TARGET_DIR 'release\bundle'

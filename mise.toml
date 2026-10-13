@@ -23,6 +23,7 @@ CARGO_TARGET_DIR = ".rust-target"
 "gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
 "check-onboarding" = { description = "Every screen has a tour; tour, whats-new and learning texts exist (AGENTS.md rule 12)", run = "node scripts/check-onboarding.mjs" }
 "check-forms" = { description = "Forms: save buttons stay enabled, fields are checked on save (rule 13); accounts, assets, currencies use the ready pickers (rule 14)", run = "node scripts/check-forms.mjs" }
-"check" = { description = "Lint + typecheck + onboarding + forms + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && node scripts/check-forms.mjs && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
+"check" = { description = "Lint + typecheck + onboarding + forms + CI scripts + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && node scripts/check-forms.mjs && scripts/ci/lint-ci.sh && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
+"check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
 "ci-image-tag" = { description = "CI image tag for .gitlab-ci.yml CI_IMAGE_TAG (hash of the image inputs)", run = "scripts/ci/image-tag.sh" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }
