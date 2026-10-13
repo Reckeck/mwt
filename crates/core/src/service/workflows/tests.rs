@@ -1480,3 +1480,31 @@ fn an_emulated_wait_moves_the_clock_for_what_follows() {
     assert_eq!(seen, two_days_on);
     assert_eq!(report.reminders[0].due_at.get(..10), two_days_on.get(..10));
 }
+
+#[test]
+fn a_question_without_text_is_left_for_the_app_to_word() {
+    let (_dir, mut vault) = empty_vault();
+    let workflow = save(
+        &mut vault,
+        "Ask",
+        graph(
+            vec![
+                node("t", "trigger.manual", json!({})),
+                node("c", "action.confirm", json!({})),
+            ],
+            vec![wire("t", "out", "c", "in")],
+        ),
+    );
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&report.run.outcome, RunOutcome::Asking { question, .. } if question.is_empty()),
+        "{:?}",
+        report.run.outcome
+    );
+    let step = report.run.trace.last().unwrap();
+    assert!(step.text_ru.contains("Продолжить?"), "{}", step.text_ru);
+    assert!(step.text_en.contains("Go on?"), "{}", step.text_en);
+    assert!(vault.workflow_waits()[0].question.is_empty());
+}

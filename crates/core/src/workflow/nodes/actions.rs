@@ -437,12 +437,10 @@ impl Executor<'_> {
                 ))
             }
             "action.confirm" => {
-                let question = self.input(node, "question")?.as_text();
-                let question = if question.trim().is_empty() {
-                    format!("«{}»: продолжить?", self.ctx.workflow_name)
-                } else {
-                    question.trim().to_string()
-                };
+                // Left empty when the node asks nothing in particular: the
+                // app words it in its own language («Продолжить?» / «Go on?»).
+                let question = self.input(node, "question")?.as_text().trim().to_string();
+                let (asked_ru, asked_en) = crate::workflow::exec::asked(&question);
                 if self.ctx.mode == RunMode::DryRun
                     && let Some(&answer) = self.ctx.answers.get(&node.id)
                 {
@@ -454,11 +452,11 @@ impl Executor<'_> {
                     return Ok(Step::next(
                         port,
                         format!(
-                            "«{}»: «{question}» — в эмуляции вы ответили «{ru}»",
+                            "«{}»: «{asked_ru}» — в эмуляции вы ответили «{ru}»",
                             def.title.ru
                         ),
                         format!(
-                            "«{}»: «{question}»: you answered «{en}» in emulation",
+                            "«{}»: «{asked_en}»: you answered «{en}» in emulation",
                             def.title.en
                         ),
                     ));

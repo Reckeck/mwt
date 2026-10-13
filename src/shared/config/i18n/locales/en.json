@@ -2177,6 +2177,7 @@
   "workflow.queue.discardFailed": "Could not discard",
   "workflow.queue.questions": "Questions from workflows",
   "workflow.queue.questionsIntro": "A workflow stopped at a «Wait for confirmation» node. «Yes» and «No» go on along their way.",
+  "workflow.defaultQuestion": "Go on?",
   "workflow.queue.deadline": "no answer by {when} counts as «No»",
   "workflow.queue.yes": "Yes",
   "workflow.queue.no": "No",
