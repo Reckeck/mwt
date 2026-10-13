@@ -7,6 +7,24 @@
       "skillPath": "feature-sliced-design/SKILL.md",
       "computedHash": "ee5a0a74e2c5715c9b4573fbc2c64a72db5c6bd51415ad0734dab47ced77edcd"
     },
+    "gitlab-ci-generator": {
+      "source": "akin-ozer/cc-devops-skills",
+      "sourceType": "github",
+      "skillPath": "devops-skills-plugin/skills/gitlab-ci-generator/SKILL.md",
+      "computedHash": "e4d30bb79401d499c0ed012f21a004b2bee51e8eb8b5c80c22ff7405a3cc4655"
+    },
+    "gitlab-ci-validator": {
+      "source": "akin-ozer/cc-devops-skills",
+      "sourceType": "github",
+      "skillPath": "devops-skills-plugin/skills/gitlab-ci-validator/SKILL.md",
+      "computedHash": "170ffe7b08323722ba060e31e062861a866026b324ab295b20471c4757432941"
+    },
+    "glab": {
+      "source": "henricook/claude-glab-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "115f4052ea6a93436e302487edab7d94d8fbac34c04f873054ed982e0780fbdd"
+    },
     "shadcn-vue": {
       "source": "unovue/shadcn-vue",
       "sourceType": "github",
