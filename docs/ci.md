@@ -73,6 +73,16 @@
   выключено «Use separate caches for protected branches» (см.
   [workflow.md](workflow.md)). `AccessDenied … (or it may not exist)` от
   `storage.googleapis.com/gitlab-com-runners-cache` — промах кэша, не ошибка.
+- **Большие раннеры для компиляции.** `rust:clippy`, `rust:test`,
+  `build:linux`, `build:android` идут на `CI_HEAVY_RUNNER_TAG`
+  (`saas-linux-large-amd64`, 8 vCPU; лёгкие job'ы — на small, 2 vCPU). Если
+  этого размера нет в плане GitLab, job'ы будут вечно ждать раннер — тогда
+  поставить `saas-linux-medium-amd64` или `saas-linux-small-amd64`.
+- **Пре-релизы — thin LTO.** В `development` (и ручных/плановых пайплайнах)
+  `CARGO_PROFILE_RELEASE_LTO=thin` и `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`:
+  финальная оптимизация идёт параллельно, а не в один поток. Релизы из
+  `main` собираются с полным LTO и одной единицей (`[profile.release]` в
+  `Cargo.toml`) — самый маленький и быстрый бинарник.
 - Быстрое сжатие кэша и артефактов (`FF_USE_FASTZIP`), без debug-info в
   проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
 

@@ -31,6 +31,10 @@ variables:
   CI_ANDROID_IMAGE: $CI_REGISTRY_IMAGE/ci-android:$CI_IMAGE_TAG
   ARCH_IMAGE: archlinux:base-devel
   WINDOWS_RUNNER_TAG: saas-windows-medium-amd64
+  # Rust compiles and builds: 8 vCPU instead of the default small runner (2).
+  # Set to saas-linux-medium-amd64 or saas-linux-small-amd64 if the plan
+  # does not offer this size (jobs would wait for a runner forever).
+  CI_HEAVY_RUNNER_TAG: saas-linux-large-amd64
   ANDROID_TARGETS: aarch64 armv7 x86_64
   CARGO_TARGET_DIR: $CI_PROJECT_DIR/.rust-target # absolute: tauri runs cargo from crates/app
   CARGO_TERM_COLOR: always
@@ -64,10 +68,19 @@ workflow:
     - if: $CI_COMMIT_BRANCH == $PROD_BRANCH && $CI_PIPELINE_SOURCE == "push"
       variables: { RELEASE_CHANNEL: prod, CACHE_POLICY: pull-push }
     - if: $CI_COMMIT_BRANCH == $DEV_BRANCH && $CI_PIPELINE_SOURCE == "push"
-      variables: { RELEASE_CHANNEL: dev, CACHE_POLICY: pull-push }
+      variables:
+        RELEASE_CHANNEL: dev
+        CACHE_POLICY: pull-push
+        # Pre-releases build fast: thin LTO across 16 codegen units runs in
+        # parallel; releases from main keep full LTO and one unit (Cargo.toml).
+        CARGO_PROFILE_RELEASE_LTO: thin
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     # Run pipeline / schedule: everything built, nothing published.
     - if: $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedule"
-      variables: { FULL_PIPELINE: "true" }
+      variables:
+        FULL_PIPELINE: "true"
+        CARGO_PROFILE_RELEASE_LTO: thin
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     - if: $CI_COMMIT_BRANCH
 
 stages:
@@ -156,6 +169,10 @@ secret_detection:
       paths: [.cache/pnpm]
       policy: $CACHE_POLICY
 
+# Jobs that compile Rust for real: the bigger runner (CI_HEAVY_RUNNER_TAG).
+.heavy:
+  tags: [$CI_HEAVY_RUNNER_TAG]
+
 .rust:
   image: $CI_LINUX_IMAGE
   needs: [*image-needs]
@@ -221,7 +238,7 @@ rust:fmt:
     - cargo fmt --all -- --check
 
 rust:clippy:
-  extends: [.rust, .rust-rules]
+  extends: [.rust, .heavy, .rust-rules]
   stage: check
   script:
     - mise run clippy
@@ -232,7 +249,7 @@ rust:clippy:
       policy: $CACHE_POLICY
 
 rust:test:
-  extends: [.rust, .rust-rules]
+  extends: [.rust, .heavy, .rust-rules]
   stage: check
   script:
     - mise run test
@@ -262,7 +279,7 @@ version:
 # ------------------------------------------------------------------- build
 
 build:linux:
-  extends: [.rust, .build-rules, .build-needs]
+  extends: [.rust, .heavy, .build-rules, .build-needs]
   stage: build
   variables:
     CI_MISE_TOOLS: "" # node, pnpm and rust
@@ -303,7 +320,7 @@ build:windows:
     expire_in: 2 weeks
 
 build:android:
-  extends: [.rust, .build-rules, .build-needs]
+  extends: [.rust, .heavy, .build-rules, .build-needs]
   image: $CI_ANDROID_IMAGE
   stage: build
   timeout: 2h
