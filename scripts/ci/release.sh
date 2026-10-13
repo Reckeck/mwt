@@ -8,7 +8,7 @@
 #   (default)  a release from main: «Multi Wallet Tracker X.Y.Z», notes from
 #              the CHANGELOG section of the version
 #   --pre      a pre-release from development: «Pre-release X.Y.Z-N», notes
-#              = the commit and the [Unreleased] CHANGELOG section
+#              = the commits since the last release (git log; full clone)
 #
 # Authenticates with CI_JOB_TOKEN; set RELEASE_TOKEN (a project access token
 # with `api`) if the job token is not allowed to create releases here.
@@ -54,11 +54,15 @@ section() { # the CHANGELOG section headed «## [$1]»
 commit_link="[\`${CI_COMMIT_SHORT_SHA}\`]($CI_PROJECT_URL/-/commit/$CI_COMMIT_SHA)"
 if [[ -n "$pre" ]]; then
   name="Pre-release $version"
-  notes="**Пре-релиз** из \`${CI_COMMIT_BRANCH:-development}\` — для проверки, не для работы с настоящими данными.
+  # Every commit since the last release, newest first (release tags only).
+  since="$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude 'v*-*' 2>/dev/null || true)"
+  commits="$(git log -n 60 --no-merges --format="- %s ([\`%h\`]($CI_PROJECT_URL/-/commit/%H))" \
+    ${since:+"$since"..}HEAD)"
+  notes="**Пре-релиз** из \`${CI_COMMIT_BRANCH:-development}\` (коммит $commit_link) — для проверки, не для работы с настоящими данными.
 
-Коммит $commit_link: ${CI_COMMIT_TITLE:-}
+### Изменения с ${since:-начала проекта}
 
-$(section Unreleased)"
+${commits:-_нет коммитов_}"
 else
   name="Multi Wallet Tracker $version"
   notes="$(section "$version")"

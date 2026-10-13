@@ -21,17 +21,36 @@
 
 ## Версии
 
-Версия — `X.Y.Z` в `crates/app/tauri.conf.json` и `[workspace.package]`
-`Cargo.toml` (одинаковая; `<release>` в
-`packaging/flatpak/*.metainfo.xml` — тоже). В ветке всегда «следующая
-выпускаемая» версия.
+Версия — `X.Y.Z` в `crates/app/tauri.conf.json`, `[workspace.package]`
+`Cargo.toml`, `Cargo.lock` и `<release>` в
+`packaging/flatpak/*.metainfo.xml`. Руками её не меняют: это делает
+`mise run bump` (см. «Выпуск») вместе с разделом `CHANGELOG.md`.
 
 - **Пре-релиз** из `development`: `X.Y.Z-N`, где `N` — номер пайплайна
-  (только цифры — так требует MSI). Это сборка будущего `X.Y.Z`: для pacman
-  она `X.Y.ZpreN` и идёт раньше релиза `X.Y.Z` (обновится на него).
-- **Релиз** из `main`: ровно `X.Y.Z`, тег `vX.Y.Z`.
-- Если `vX.Y.Z` уже выпущен, job `version` останавливает пайплайн: на `main` —
-  «подними версию перед мержем», на `development` — «подними до следующей».
+  (только цифры — так требует MSI). Если `X.Y.Z` уже выпущен, а bump ещё не
+  было, пре-релиз сам становится `X.Y.(Z+1)-N`. Для pacman это `X.Y.ZpreN` —
+  идёт раньше релиза `X.Y.Z` и обновится на него.
+- **Релиз** из `main`: ровно `X.Y.Z`, тег `vX.Y.Z`. Job `version`
+  останавливает пайплайн, если `vX.Y.Z` уже выпущен или в `CHANGELOG.md`
+  нет раздела `## [X.Y.Z]` — значит, на `development` забыли `mise run bump`.
+
+## CHANGELOG
+
+`CHANGELOG.md` собирается из коммитов: они в формате Conventional Commits
+(`feat`, `fix`, `perf`, … — см. AGENTS.md), `git-cliff` (`cliff.toml`)
+раскладывает их по группам «Добавлено», «Исправлено», «Быстрее»…
+
+- `mise run changelog` — обновить список коммитов в `## [Unreleased]`
+  (между `<!-- commits:start/end -->`). Над ним можно писать руками
+  главное для пользователя — этот текст сохраняется.
+- `mise run bump` — следующая версия по коммитам с прошлого релиза (`feat` →
+  minor, остальное → patch; `mise run bump patch|minor|major|X.Y.Z` —
+  явно), во все файлы версии, и `[Unreleased]` становится
+  `## [X.Y.Z] — дата`. 1.0 и любой major — только явно.
+- Заметки пре-релиза в GitLab пишет CI сам — коммиты с прошлого релиза.
+
+Обе команды работают в основной (colocated) копии: им нужна git-история,
+у side-workspace jj её нет.
 - Android `versionCode` — номер пайплайна: растёт всегда, так что любая
   следующая сборка ставится поверх предыдущей.
 
@@ -54,20 +73,22 @@ Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хр
 
 ## Выпуск
 
-1. В `development`: версия `X.Y.Z` (уже выставлена с прошлого выпуска),
-   раздел `## [X.Y.Z]` в `CHANGELOG.md` вместо `[Unreleased]`.
+1. В `development` (основная копия): `mise run bump` — версия и раздел
+   CHANGELOG; при желании дописать над списком коммитов главное словами;
+   `mise run check`; коммит `chore(release): vX.Y.Z`, пуш, MR в
+   `development` (или прямо в составе MR выпуска).
 2. MR `development` → `main`, merge.
 3. Пайплайн `main`: проверки → сборки → Release `vX.Y.Z` с файлами и
    заметками из CHANGELOG. AUR — кнопкой `aur:publish`.
 4. `backmerge` открывает MR `main` → `development` (нужен `RELEASE_TOKEN`) —
-   слить его и поднять версию в `development` до следующей (`X.Y.(Z+1)` или
-   `X.(Y+1).0`), иначе следующие пре-релизы остановит `version`.
+   слить его. Поднимать версию сразу не нужно: пре-релизы до следующего
+   bump сами идут как `X.Y.(Z+1)-N`.
 
 ## Хотфикс
 
 ```bash
 jj new main@origin
-# … исправление, версия X.Y.(Z+1) в Cargo.toml + tauri.conf.json, CHANGELOG …
+# … исправление (коммит fix: …), затем `mise run bump patch` …
 jj bookmark create hotfix/<задача> -r @ && jj git push -b hotfix/<задача>
 glab mr create --source-branch hotfix/<задача> --target-branch main --fill
 ```
