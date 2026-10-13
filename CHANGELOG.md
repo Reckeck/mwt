@@ -4,6 +4,10 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версионирование —
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+Список коммитов в каждом разделе собирается сам (`mise run changelog`,
+`mise run bump` — см. [docs/workflow.md](docs/workflow.md#changelog)); текст
+над ним — главное для пользователя, пишется руками.
+
 Формат файла vault: `*.wallet` (зашифрованный контейнер), схема payload —
 `VAULT_FORMAT_VERSION` (`crates/core/src/lib.rs`). Обратная совместимость
 снимков **не гарантируется**: файл, записанный другой версией схемы, будет

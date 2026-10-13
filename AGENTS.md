@@ -17,6 +17,8 @@
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
+| `mise run changelog` | обновить список коммитов в `## [Unreleased]` CHANGELOG.md (git-cliff) |
+| `mise run bump` | следующая версия (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) во все файлы + раздел CHANGELOG |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check` | lint + typecheck + onboarding + forms + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
@@ -223,6 +225,11 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   релиз `X.Y.Z` на каждый мерж. Работа идёт через MR, теги ставит CI.
 - **Сборки ждут проверки.** Каждый `build:*` в `needs` держит все проверки и
   `version`: красная проверка не должна доходить до сборки и выпуска.
+- **Версия и CHANGELOG — только через `mise run bump` / `mise run changelog`**
+  (git-cliff по Conventional Commits): версию в файлах руками не меняют, тип
+  коммита (`feat`/`fix`/`perf`/…) решает, куда он попадёт и какой будет
+  следующая версия. Релиз из `main` без раздела `## [X.Y.Z]` в
+  `CHANGELOG.md` CI не выпустит.
 - **`*.ps1` — только ASCII** (Windows PowerShell 5.1 читает их как cp1252:
   «—» ломает разбор); `mise run check-ci` / job `ci:lint` это ловят.
 
