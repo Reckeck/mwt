@@ -27,3 +27,13 @@ src-tauri/gen/schemas/
 data/
 *.wallet
 *.wallet.bak
+
+# CI (scripts/ci, .gitlab-ci.yml): caches, collected bundles, generated projects
+.cache/
+release/
+crates/app/gen/android/
+packaging/flatpak/shared-modules/
+packaging/flatpak/*.tar.gz
+.flatpak-build/
+.flatpak-repo/
+.flatpak-builder/

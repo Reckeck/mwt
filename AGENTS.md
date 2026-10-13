@@ -64,7 +64,10 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
     config/i18n/locales/  # ru.json + en.json, плоские точечные ключи; набор ключей должен совпадать
 .agents/skills/       # скиллы агентов, ВСЕ здесь (см. таблицу ниже)
 mise.toml             # tools + env + tasks
-docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor
+.gitlab-ci.yml        # CI/CD: проверки, сборки Linux/Windows/Android, Flatpak/pacman, релиз (docs/ci.md)
+scripts/ci/           # логика CI-job'ов (bootstrap, сбор бандлов, подпись Android, релиз, AUR)
+packaging/            # flatpak/ (манифест + metainfo), aur/ (PKGBUILD.in + render.sh)
+docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor, ci
 ```
 
 ## Правила работы с кодом
@@ -188,6 +191,37 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `.rust-target/`, `node_modules/`, `dist/`, `src-tauri/target/`.
 - Никаких секретов в репозитории; `.gitignore` игнорит `data/`, `*.wallet`,
   `.rust-target/`, `node_modules/`, `dist/`, `src-tauri/target/`.
+
+## CI/CD (GitLab)
+
+Пайплайн — `.gitlab-ci.yml`, вся логика job'ов — в `scripts/ci/*`, манифесты
+упаковки — в `packaging/`; устройство, переменные и выпуск — `docs/ci.md`.
+
+- **CI повторяет локальный гейт.** Новая проверка в `mise run check`
+  добавляется и в job `frontend:check` или `rust:check`; CI не должен быть
+  мягче `mise run check`. Логику держи в скрипте `scripts/ci/*`, а не в
+  многострочном `script:` — так её можно запустить и проверить локально.
+- **Версии инструментов — только из `mise.toml`.** CI ставит node/pnpm/rust
+  через mise (Windows-скрипт читает те же строки); не хардкодь версии в YAML.
+- **Платформенный код.** Трей, автозапуск, глобальные клавиши, геометрия окна
+  и OS keyring есть только на десктопе: код — под `#[cfg(desktop)]` с
+  заглушкой под `#[cfg(mobile)]`, плагины — в
+  `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]`
+  `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI:
+  `cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings`
+  (нужен Android NDK и `rustup target add aarch64-linux-android`).
+- **Идентификаторы не меняются.** `dev.tradeapp.desktop` (десктоп; от него
+  зависит путь к vault), `dev.tradeapp.app` (Android,
+  `tauri.android.conf.json`), `dev.tradeapp.TradeApp` (Flatpak). Смена =
+  потеря данных у пользователей или невозможность обновиться.
+- **Выпуск — тег `vX.Y.Z`.** Версия одинакова в `crates/app/tauri.conf.json`,
+  `[workspace.package]` `Cargo.toml` и `<release>` в
+  `packaging/flatpak/*.metainfo.xml`; `version:check` сверяет тег. Тег и
+  `jj git push` — только по просьбе пользователя.
+- **Секреты — только в CI/CD-переменных** (ключ подписи Android, SSH-ключ
+  AUR, `RELEASE_TOKEN`), masked. Ни ключей, ни keystore в репозитории.
+- **Генерируемое не коммитится:** Gradle-проект `crates/app/gen/android/`,
+  `release/`, `.cache/`, `.flatpak-*` (в `.gitignore`).
 
 ## Проверки и коммиты (Jujutsu)
 
