@@ -161,7 +161,22 @@ impl UnlockedVault {
         if inner.lines.is_empty() {
             return Ok(());
         }
-        inner.lines.retain(|line| !line.delta().is_zero());
+        // Editing a correction keeps its own assets even when they match now:
+        // such a line keeps pinning the balance against later changes.
+        let own: Vec<String> = self
+            .doc
+            .transactions
+            .iter()
+            .find_map(|tx| match tx {
+                Transaction::Adjustment(old) if old.meta.id == inner.meta.id => {
+                    Some(old.lines.iter().map(|line| line.asset.key()).collect())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        inner
+            .lines
+            .retain(|line| !line.delta().is_zero() || own.contains(&line.asset.key()));
         if inner.lines.is_empty() {
             return Err(Error::InvalidInput(
                 "nothing to correct: the balances already match".into(),
@@ -426,5 +441,62 @@ mod tests {
                 .is_err(),
             "an asset twice"
         );
+    }
+
+    #[test]
+    fn re_saving_a_correction_keeps_its_assets_even_when_they_match() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut salary = income(&cash, "100", "salary");
+        at(&mut salary, "2026-03-01T10:00:00Z");
+        vault.add_transaction(salary).unwrap();
+        let saved = vault
+            .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
+            .unwrap();
+        let id = saved.meta().id.clone();
+
+        // A later change of history before it: the correction absorbs it.
+        let mut refund = income(&cash, "20", "refund");
+        at(&mut refund, "2026-03-02T10:00:00Z");
+        vault.add_transaction(refund).unwrap();
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("80"));
+
+        // Opened and saved as it is: the line stays, so does the balance.
+        let resaved = vault
+            .update_transaction(
+                &id,
+                correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+            )
+            .unwrap();
+        let Transaction::Adjustment(inner) = &resaved else {
+            panic!("a correction");
+        };
+        assert_eq!(inner.lines.len(), 1);
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("80"));
+
+        // A brand-new correction that changes nothing is still refused.
+        assert!(
+            vault
+                .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-06T10:00:00Z"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn re_saving_an_operation_unchanged_does_not_move_the_balance() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut salary = income(&cash, "100", "salary");
+        at(&mut salary, "2026-03-01T10:00:30Z");
+        let salary = vault.add_transaction(salary).unwrap();
+        vault
+            .add_transaction(correction(&cash, &[(usd(), "90")], "2026-03-01T10:00:45Z"))
+            .unwrap();
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
+        // The same moment, seconds and all: nothing moves past the correction.
+        vault
+            .update_transaction(&salary.meta().id.clone(), salary.clone())
+            .unwrap();
+        assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
     }
 }

@@ -30,6 +30,8 @@ export const LEDGER_KEYS = [
   ['net-worth'],
   ['report'],
   ['calendar'],
+  // A correction's «ledger» column is the balance at its moment: any change of history moves it.
+  ['adjustment-draft'],
 ]
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const

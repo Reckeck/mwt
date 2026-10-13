@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus, Trash2 } from 'lucide-vue-next'
@@ -15,8 +15,8 @@ import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
 import { call, parseError } from '@/shared/api/ipc'
-import { fiatRef } from '@/shared/lib/asset-ref'
-import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
+import { assetKey, fiatRef } from '@/shared/lib/asset-ref'
+import { keepOriginalMoment, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { decimalSub, parseDecimal } from '@/shared/lib/decimal'
@@ -44,12 +44,8 @@ const timestamp = ref('')
 const comment = ref('')
 const rows = ref<AdjustmentRow[]>([])
 
-watch(open, (isOpen) => {
-  if (!isOpen) return
-  timestamp.value = editing.value ? toLocalInput(editing.value.meta.timestamp) : ''
-  comment.value = editing.value?.meta.comment ?? ''
-  rows.value = []
-})
+/** The moment saved: the edited correction keeps its seconds while the field is left as it was. */
+const moment = computed(() => keepOriginalMoment(timestamp.value, editing.value?.meta.timestamp))
 
 const draft = useQuery({
   queryKey: computed(() => ['adjustment-draft', props.storeId, timestamp.value, props.transaction ? txId(props.transaction) : null]),
@@ -57,46 +53,74 @@ const draft = useQuery({
     call<AdjustmentDraft>('get_adjustment_draft', {
       input: {
         store_id: props.storeId,
-        at: toIsoTimestamp(timestamp.value),
+        at: moment.value,
         replaces: props.transaction ? txId(props.transaction) : null,
       } satisfies AdjustmentDraftInput,
     }),
   enabled: open,
 })
 
-const keyOf = (asset: AssetRef) => `${asset.symbol}:${asset.chain ?? ''}:${asset.contract ?? ''}`
+const keyOf = assetKey
+
+/** The rows the edited correction started with: kept on save even when they now match. */
+const pinned = ref(new Set<string>())
 
 // The ledger's balances fill the rows; what the user typed (or the edited
 // correction held) stays put when the date moves the balances.
+function fill(data: AdjustmentDraft) {
+  const typed = new Map(rows.value.map((row) => [keyOf(row.asset), row]))
+  const next: AdjustmentRow[] = data.lines.map((line) => ({
+    asset: line.asset,
+    before: line.before,
+    actual: typed.get(keyOf(line.asset))?.actual ?? '',
+  }))
+  const known = new Set(next.map((row) => keyOf(row.asset)))
+  for (const row of typed.values()) {
+    if (!known.has(keyOf(row.asset))) next.push({ ...row, before: '0' })
+  }
+  if (!rows.value.length && editing.value) {
+    for (const line of editing.value.lines) {
+      const row = next.find((entry) => keyOf(entry.asset) === keyOf(line.asset))
+      if (row) row.actual = line.after
+      else next.push({ asset: line.asset, before: '0', actual: line.after })
+    }
+  }
+  rows.value = next
+}
 watch(
   () => draft.data.value,
   (data) => {
-    if (!data) return
-    const typed = new Map(rows.value.map((row) => [keyOf(row.asset), row]))
-    const next: AdjustmentRow[] = data.lines.map((line) => ({
-      asset: line.asset,
-      before: line.before,
-      actual: typed.get(keyOf(line.asset))?.actual ?? '',
-    }))
-    const known = new Set(next.map((row) => keyOf(row.asset)))
-    for (const row of typed.values()) {
-      if (!known.has(keyOf(row.asset))) next.push({ ...row, before: '0' })
-    }
-    if (!rows.value.length && editing.value) {
-      for (const line of editing.value.lines) {
-        const row = next.find((entry) => keyOf(entry.asset) === keyOf(line.asset))
-        if (row) row.actual = line.after
-        else next.push({ asset: line.asset, before: '0', actual: line.after })
-      }
-    }
-    rows.value = next
+    if (data && open.value) fill(data)
   },
+)
+
+// Every opening starts from the edited correction (or from nothing) and the
+// ledger as it is now: the cached draft fills the rows at once, a fresh one
+// follows. Without this a second opening showed no rows at all.
+watch(
+  open,
+  (isOpen) => {
+    if (!isOpen) return
+    timestamp.value = editing.value ? toLocalInput(editing.value.meta.timestamp) : ''
+    comment.value = editing.value?.meta.comment ?? ''
+    rows.value = []
+    pinned.value = new Set((editing.value?.lines ?? []).map((line) => keyOf(line.asset)))
+    void nextTick(() => {
+      if (draft.data.value) fill(draft.data.value)
+      void draft.refetch()
+    })
+  },
+  { immediate: true },
 )
 
 /** Actual minus ledger, exactly; `null` while the field is empty or not a number. */
 const difference = (row: AdjustmentRow): string | null => (row.actual.trim() ? decimalSub(row.actual, row.before) : null)
 
 const changed = computed(() => rows.value.filter((row) => (difference(row) ?? '0') !== '0'))
+/** Sent on save: what changed, plus the edited correction's own rows, which keep pinning their balance. */
+const sent = computed(() =>
+  rows.value.filter((row) => changed.value.includes(row) || (pinned.value.has(keyOf(row.asset)) && row.actual.trim())),
+)
 const badRow = (row: { actual: string }) => Boolean(row.actual.trim()) && parseDecimal(row.actual) === null
 const form = useFormValidation(
   () => ({
@@ -140,7 +164,7 @@ const save = useMutation({
     const input: TransactionInput = {
       type: 'adjustment',
       common: {
-        timestamp: toIsoTimestamp(timestamp.value),
+        timestamp: moment.value,
         comment: comment.value.trim(),
         categories: [],
         flow_id: null,
@@ -151,7 +175,7 @@ const save = useMutation({
         price_currency: null,
       },
       store_id: props.storeId,
-      lines: changed.value.map((row) => ({
+      lines: sent.value.map((row) => ({
         asset: {
           symbol: row.asset.symbol,
           name: row.asset.name,

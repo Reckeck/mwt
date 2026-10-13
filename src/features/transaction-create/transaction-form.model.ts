@@ -1,8 +1,9 @@
+import { toRaw } from 'vue'
 import { body, txKind } from '@/shared/lib/transactions'
 import { parseDecimal } from '@/shared/lib/decimal'
 
 import type { ConvertMode, SplitRow } from './transaction-form.types'
-import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
+import { keepOriginalMoment, toLocalInput } from '@/shared/lib/datetime'
 
 /**
  * Everything the transaction form edits, flat and string-typed the way the
@@ -82,6 +83,8 @@ export interface TransactionFormState {
   comment: string
   /** `datetime-local` value; empty = now. */
   timestamp: string
+  /** The edited operation's stored moment (with seconds), kept when `timestamp` is left as it was. */
+  originalTimestamp: string
   contactId: string
   price: string
   /** Code `price` is typed in; `''` means the base currency. */
@@ -148,6 +151,7 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     categories: [],
     comment: '',
     timestamp: '',
+    originalTimestamp: '',
     contactId: '',
     price: '',
     priceCurrency: '',
@@ -222,7 +226,7 @@ function viaComment(via: AccountRef | null, comment: string): string {
 
 function common(form: TransactionFormState): TxCommonInput {
   return {
-    timestamp: toIsoTimestamp(form.timestamp),
+    timestamp: keepOriginalMoment(form.timestamp, form.originalTimestamp),
     comment: form.comment.trim(),
     categories: [...form.categories],
     flow_id: text(form.flowId),
@@ -490,13 +494,17 @@ export function isFormComplete(form: TransactionFormState): boolean {
 }
 
 /** Load a stored transaction into the form for editing. */
-export function formFromTransaction(tx: Transaction, storeId: string): TransactionFormState {
+export function formFromTransaction(stored: Transaction, storeId: string): TransactionFormState {
+  // A copy: the form edits nested values (assets, accounts) that must not
+  // leak back into the cached transaction it came from.
+  const tx = structuredClone(toRaw(stored))
   const kind = txKind(tx)
   const form = emptyForm(storeId, kind)
   const meta = (tx as unknown as Record<TxKind, { meta: TxMeta; fee: Fee | null }>)[kind]
   form.categories = [...meta.meta.categories]
   form.comment = meta.meta.comment
   form.timestamp = toLocalInput(meta.meta.timestamp)
+  form.originalTimestamp = meta.meta.timestamp
   form.contactId = meta.meta.contact_id ?? ''
   form.flowId = meta.meta.flow_id ?? ''
   if (meta.fee) {
