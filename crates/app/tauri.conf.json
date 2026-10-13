@@ -26,10 +26,34 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage"],
+    "targets": "all",
+    "publisher": "TradeApp",
+    "homepage": "https://gitlab.com/Reckeck/trade-app",
+    "license": "MIT",
     "category": "Finance",
     "shortDescription": "Encrypted finance & crypto portfolio manager",
     "longDescription": "TradeApp — offline-first encrypted transactions, portfolio, prices and charts.",
-    "icon": ["icons/icon.png"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Russian"],
+        "displayLanguageSelector": true
+      },
+      "wix": {
+        "language": ["en-US", "ru-RU"]
+      }
+    },
+    "android": {
+      "minSdkVersion": 24
+    }
   }
 }

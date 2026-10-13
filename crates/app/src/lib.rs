@@ -6,6 +6,7 @@ mod notify_store;
 mod quick_add_socket;
 mod scheduler;
 mod shortcut;
+#[cfg(desktop)]
 mod tray;
 
 use commands::{
@@ -21,17 +22,21 @@ pub fn run() {
     if quick_add_socket::forward_if_running() {
         return;
     }
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+    // Autostart, global keys and window geometry exist on desktops only.
+    #[cfg(desktop)]
+    let builder = builder
         // Off until the user turns it on; a start by the system comes hidden.
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
         .plugin(shortcut::plugin())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_window_state::Builder::default().build());
+    builder
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             // auth
@@ -269,6 +274,7 @@ pub fn run() {
             }
 
             // Create system tray with context menu
+            #[cfg(desktop)]
             tray::create(app)?;
             // Started with the system: stay in the tray, remind from there.
             if std::env::args().any(|arg| arg == "--hidden")

@@ -4,13 +4,17 @@
 //! directory; a launch with the flag pokes it and exits. Without the flag a
 //! second instance starts as usual, so two windows can sit side by side.
 
+#[cfg(all(unix, desktop))]
 use std::io::{Read, Write};
+#[cfg(all(unix, desktop))]
 use std::path::PathBuf;
 
 use tauri::AppHandle;
 
+#[cfg(all(unix, desktop))]
 const MESSAGE: &[u8] = b"quick-add";
 
+#[cfg(all(unix, desktop))]
 fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -20,7 +24,7 @@ fn socket_path() -> PathBuf {
 
 /// Called before the app starts: with `--quick-add` and an instance
 /// listening, hand the request over and report `true` (the caller exits).
-#[cfg(unix)]
+#[cfg(all(unix, desktop))]
 pub fn forward_if_running() -> bool {
     if !std::env::args().any(|arg| arg == crate::shortcut::QUICK_ADD_FLAG) {
         return false;
@@ -32,7 +36,7 @@ pub fn forward_if_running() -> bool {
 }
 
 /// Listen for `--quick-add` launches, unless another instance already does.
-#[cfg(unix)]
+#[cfg(all(unix, desktop))]
 pub fn listen(app: AppHandle) {
     use std::os::unix::net::{UnixListener, UnixStream};
     let path = socket_path();
@@ -54,10 +58,10 @@ pub fn listen(app: AppHandle) {
     });
 }
 
-#[cfg(not(unix))]
+#[cfg(not(all(unix, desktop)))]
 pub fn forward_if_running() -> bool {
     false
 }
 
-#[cfg(not(unix))]
+#[cfg(not(all(unix, desktop)))]
 pub fn listen(_app: AppHandle) {}

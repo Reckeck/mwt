@@ -399,8 +399,10 @@ fn directories_like(app_name: &str) -> PathBuf {
             .join("Library/Application Support")
             .join(app_name)
     }
+    // Android/iOS: the app layer passes Tauri's app data dir instead.
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
+        let _ = app_name;
         PathBuf::from(".")
     }
 }
