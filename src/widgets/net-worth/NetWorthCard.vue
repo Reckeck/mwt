@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
@@ -38,13 +39,15 @@ const rows = computed(() => {
   ].filter((row) => Number(row.value) !== 0)
 })
 
+const moneyTooltip = useMoneyChartTooltip(computed(() => worth.data.value?.base_currency ?? 'usd'))
+
 /** A sparkline: no axes, no grid, just the shape of the last twelve months. */
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
   grid: { left: 0, right: 0, top: 4, bottom: 0 },
   xAxis: { type: 'category', show: false, data: points.value.map((point) => point.month) },
   yAxis: { type: 'value', show: false, scale: true },
-  tooltip: { trigger: 'axis' },
+  tooltip: { trigger: 'axis', formatter: moneyTooltip.value },
   series: [{ type: 'line', showSymbol: false, smooth: true, areaStyle: { opacity: 0.15 }, data: points.value.map((point) => Number(point.net)) }],
 }))
 </script>

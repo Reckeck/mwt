@@ -2137,6 +2137,7 @@
   "tour.workflowEditor.save.title": "Save",
   "tour.workflowEditor.save.body": "Ctrl+S. The previous version is kept in the history.",
   "whatsNew.round15.title": "Workflows ask you; the exchange counts",
+  "whatsNew.round15.currencies": "Chart tooltips show values in the base and favourite currencies; hovering an amount in any currency shows it in them at once.",
   "whatsNew.round15.pickers": "Accounts, assets and currencies are picked with the same fields everywhere: with the «Wallet › Sub-account» path and favourite currencies first.",
   "whatsNew.round15.adjustment": "A correction opened again shows all its rows and keeps every asset; saving an operation again no longer moves it in time.",
   "whatsNew.round15.settings": "Settings open from the gear in the header; the sidebar item is gone.",

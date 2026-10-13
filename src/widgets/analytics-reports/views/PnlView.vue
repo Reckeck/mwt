@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
@@ -16,11 +17,14 @@ const props = defineProps<{ report: PnlReport }>()
 
 const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
+/** Each value also in the base and favourite currencies. */
+const moneyTooltip = useMoneyChartTooltip(computed(() => props.report.meta.currency))
 
 const option = computed<ChartOption>(() => ({
   ...categoryChart(
     props.report.rows.map((row) => monthLabel(row.month, activeLocale.value)),
     axisColor.value,
+    moneyTooltip.value,
   ),
   series: [
     { name: t('report.pnl.realized'), type: 'bar', data: props.report.rows.map((row) => num(row.realized)) },

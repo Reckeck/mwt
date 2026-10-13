@@ -5,6 +5,6 @@ export interface MoneyProps {
   decimals?: number
   signed?: boolean
   compact?: boolean
-  /** Show the conversion tooltip on hover; on by default for amounts in the base currency. */
+  /** Show the conversion tooltip on hover; on by default for the base currency, fiat and favourites. */
   convert?: boolean
 }

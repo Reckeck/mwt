@@ -1,10 +1,14 @@
 import type { ChartOption } from '@/shared/lib/echarts'
 
-/** Axes, grid and tooltip every report chart shares; `labels` is the x axis. */
-export function categoryChart(labels: string[], axisColor: string): ChartOption {
+/**
+ * Axes, grid and tooltip every report chart shares; `labels` is the x axis.
+ * A money chart passes `tooltip` (`useMoneyChartTooltip`): each value then also
+ * shows in the base and favourite currencies.
+ */
+export function categoryChart(labels: string[], axisColor: string, tooltip?: (params: unknown) => string): ChartOption {
   return {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis' },
+    tooltip: tooltip ? { trigger: 'axis', formatter: tooltip } : { trigger: 'axis' },
     legend: { bottom: 0, textStyle: { color: axisColor } },
     grid: { left: 16, right: 16, top: 16, bottom: 40, containLabel: true },
     xAxis: {
