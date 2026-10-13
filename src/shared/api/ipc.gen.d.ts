@@ -1349,6 +1349,37 @@ type ImportCategories = { trades: string | null, transfers: string | null, earn:
 type ImportKind = "fill" | "transfer" | "earn_income";
 
 /**
+ * What a sync would bring, by the import settings: nothing is kept.
+ */
+type ImportPreview = { 
+/**
+ * Records the exchange sent.
+ */
+fetched: number, 
+/**
+ * Seen before: staged, booked or discarded.
+ */
+known: number, 
+/**
+ * Left out by the settings.
+ */
+filtered: number, 
+/**
+ * Would be new.
+ */
+new: number, 
+/**
+ * The new ones, newest first, at most [`MAX_PREVIEW_ITEMS`].
+ */
+items: Array<PendingImport>, };
+
+/**
+ * What a sync would bring; `notice` (`no_key`, `unreachable`, …) when the
+ * exchange could not be asked.
+ */
+type ImportPreviewOutput = { preview: ImportPreview | null, notice: string | null, };
+
+/**
  * One sync with an exchange, for its history in the wallet settings.
  */
 type ImportRun = { id: string, 

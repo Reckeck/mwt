@@ -915,6 +915,14 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
       mockImportRuns.unshift(run)
       return resolve({ staged: run.staged, notice: null, run })
     }
+    case 'preview_bybit_import': {
+      if (!mockKeyStatus.configured) return resolve({ preview: null, notice: 'no_key' })
+      const items = mockPendingImports()
+      return resolve({
+        preview: { fetched: items.length, known: 0, filtered: 0, new: items.length, items },
+        notice: null,
+      })
+    }
     case 'list_import_runs':
       return resolve(mockImportRuns.filter((run) => run.store_id === args?.storeId))
     case 'get_import_settings':

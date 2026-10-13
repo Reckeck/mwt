@@ -33,7 +33,7 @@ mod contacts;
 mod enrichment;
 mod envelopes;
 mod exchange_sync;
-pub use exchange_sync::{IMPORT_ACCOUNTS, ImportedTransactions};
+pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
 mod interest;
 mod ledger;

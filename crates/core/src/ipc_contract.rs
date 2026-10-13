@@ -1484,6 +1484,14 @@ pub struct SetImportSettingsInput {
     pub settings: crate::model::store::ImportSettings,
 }
 
+/// What a sync would bring; `notice` (`no_key`, `unreachable`, …) when the
+/// exchange could not be asked.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct ImportPreviewOutput {
+    pub preview: Option<crate::service::ImportPreview>,
+    pub notice: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct ListImportedTransactionsInput {
     pub store_id: String,
