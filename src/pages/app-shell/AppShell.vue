@@ -293,13 +293,6 @@ void onEvent('toggle-lock', () => void lock())
                   </RouterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <!-- Settings open over the page, not instead of it. -->
-              <SidebarMenuItem>
-                <SidebarMenuButton :tooltip="t('nav.settings')" :is-active="typeof route.query.settings === 'string'" @click="openSettings()">
-                  <Settings />
-                  <span>{{ t('nav.settings') }}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

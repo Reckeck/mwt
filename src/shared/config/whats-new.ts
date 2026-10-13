@@ -25,6 +25,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: '2026-10-13',
     points: [
       { key: 'adjustment', route: 'wallet' },
+      { key: 'settings' },
     ],
   },
   {
