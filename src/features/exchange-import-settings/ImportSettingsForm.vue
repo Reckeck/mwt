@@ -147,7 +147,6 @@ const save = useMutation({
   <form
     id="import-settings"
     class="@container grid gap-6"
-    data-tour="import-settings"
     @submit.prevent="form.submit(save.mutate, $event)"
   >
     <p class="text-sm text-muted-foreground">{{ t('importSettings.intro') }}</p>
