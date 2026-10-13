@@ -2,6 +2,8 @@
 # Rendered by packaging/aur/render.sh — edit PKGBUILD.in, not the output.
 pkgname=multi-wallet-tracker-bin
 pkgver=@PKGVER@
+# The version as CI built it (a pre-release is X.Y.Z-N, pkgver X.Y.ZpreN).
+_upstream=@VERSION@
 pkgrel=1
 pkgdesc="Multi Wallet Tracker (MWT): encrypted finance & crypto portfolio manager (Tauri)"
 arch=('x86_64')
@@ -17,7 +19,7 @@ source=("@SOURCE@")
 sha256sums=('@SHA256@')
 
 package() {
-  cd "multi-wallet-tracker-${pkgver}-linux-x86_64"
+  cd "multi-wallet-tracker-${_upstream}-linux-x86_64"
   install -Dm755 usr/bin/multi-wallet-tracker "$pkgdir/usr/bin/multi-wallet-tracker"
   install -Dm644 usr/share/applications/*.desktop -t "$pkgdir/usr/share/applications/"
   cp -a usr/share/icons "$pkgdir/usr/share/"

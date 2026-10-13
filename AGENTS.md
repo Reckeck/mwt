@@ -17,7 +17,8 @@
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
-| `mise run check` | lint + typecheck + onboarding + forms + clippy + tests |
+| `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
+| `mise run check` | lint + typecheck + onboarding + forms + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
@@ -212,7 +213,18 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 ## CI/CD (GitLab)
 
 Пайплайн — `.gitlab-ci.yml`, вся логика job'ов — в `scripts/ci/*`, манифесты
-упаковки — в `packaging/`; устройство, переменные и выпуск — `docs/ci.md`.
+упаковки — в `packaging/`; устройство, переменные — `docs/ci.md`; ветки и
+выпуск — `docs/workflow.md`. Перед правкой CI загружай скиллы
+`gitlab-ci-generator` и `gitlab-ci-validator`, после — прогоняй валидатор;
+пайплайны и логи смотри через `glab` (скилл `glab`).
+
+- **Ветки.** `feature/*` (от `development`) и `hotfix/*` (от `main`) — только
+  проверки; `development` — пре-релиз `X.Y.Z-N` на каждый пуш; `main` —
+  релиз `X.Y.Z` на каждый мерж. Работа идёт через MR, теги ставит CI.
+- **Сборки ждут проверки.** Каждый `build:*` в `needs` держит все проверки и
+  `version`: красная проверка не должна доходить до сборки и выпуска.
+- **`*.ps1` — только ASCII** (Windows PowerShell 5.1 читает их как cp1252:
+  «—» ломает разбор); `mise run check-ci` / job `ci:lint` это ловят.
 
 - **CI повторяет локальный гейт.** Новая проверка в `mise run check`
   добавляется и в job `frontend:check` или `rust:check`; CI не должен быть
@@ -228,7 +240,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   только в `apt-packages.sh` (его читают и образ, и `setup-linux.sh`).
 - **Скорость не терять.** Не убирай `opt-level = 3` у `argon2`/`blake2` в
   `[profile.dev.package.*]` (без него тесты в 13 раз дольше); кэши
-  (sccache, cargo-registry, pnpm) пишет только `main`; новый job — с
+  (sccache, cargo-registry, pnpm) пишут только `development` и `main`; новый job — с
   `rules: changes` по своим путям и `interruptible`, если его можно бросить.
   Подробно — `docs/ci.md`, раздел «Скорость».
 - **Платформенный код.** Трей, автозапуск, глобальные клавиши, геометрия окна
@@ -342,6 +354,9 @@ Co-authored-by: <Инструмент> <email>
 | `json-editor` | редактор vault в формате JSON (Настройки → Просмотр JSON) |
 | `pricing-offline` | цены/FX, провайдеры, кэш, офлайн-деградация |
 | `onboarding` | любая видимая пользователю фича: туры, подсказки, пустые состояния, «Что нового», центр обучения (правило 12) |
+| `gitlab-ci-generator` | новый или изменённый job, правила, кэш в `.gitlab-ci.yml` |
+| `gitlab-ci-validator` | проверка `.gitlab-ci.yml` перед коммитом (синтаксис, best practices, безопасность) |
+| `glab` | пайплайны, логи job'ов, MR и релизы в GitLab через CLI `glab` |
 
 ### Управление скиллами
 

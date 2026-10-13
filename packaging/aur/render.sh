@@ -15,5 +15,9 @@ name="$(basename "$tarball")"
 source="$name"
 [[ -n "$url" ]] && source="$name::$url"
 
-sed -e "s|@PKGVER@|$version|" -e "s|@SHA256@|$sha|" -e "s|@SOURCE@|$source|" \
+# pkgver allows no hyphen; "pre" keeps a pre-release older than its release
+# for vercmp (0.2.0pre123 < 0.2.0).
+pkgver="${version/-/pre}"
+
+sed -e "s|@PKGVER@|$pkgver|" -e "s|@VERSION@|$version|" -e "s|@SHA256@|$sha|" -e "s|@SOURCE@|$source|" \
   "$(dirname "$0")/PKGBUILD.in"

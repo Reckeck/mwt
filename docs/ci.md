@@ -1,5 +1,8 @@
 # CI/CD (GitLab) и платформы
 
+Как работать с ветками `feature/*`, `hotfix/*`, `development`, `main` и
+выпуском — [workflow.md](workflow.md). Здесь — устройство пайплайна.
+
 Пайплайн описан в `.gitlab-ci.yml`, вся логика — в `scripts/ci/*`, манифесты
 упаковки — в `packaging/`. Версии Rust/Node/pnpm берутся из `mise.toml`
 (на Linux через сам mise, на Windows скрипт читает их из файла).
@@ -13,20 +16,24 @@
 | check | `rust:fmt` | `cargo fmt --check` — без компиляции, секунды |
 | check | `rust:clippy` | `mise run clippy` |
 | check | `rust:test` | `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |
-| check | `version:check` | только на теге: `vX.Y.Z` = версия в `tauri.conf.json` и `Cargo.toml` |
+| check | `ci:lint` | `scripts/ci/lint-ci.sh`: `*.ps1` только ASCII (Windows PowerShell 5.1), `bash -n` всех скриптов |
+| check | `version` | только где есть сборки: версия сборки (`scripts/ci/version.sh`, dotenv `BUILD_VERSION`), стоп, если `vX.Y.Z` уже выпущен |
 | check | `sast`, `secret_detection` | шаблоны GitLab Security |
 | build | `build:linux` | `.deb`, `.rpm`, `.AppImage`, `tar.gz` с бинарником (Ubuntu 22.04 — старый glibc, файлы запускаются на новых дистрибутивах) |
 | build | `build:windows` | NSIS-установщик `.exe`, MSI (по одному на `en-US` и `ru-RU`), portable `.zip` с голым `.exe` |
 | build | `build:android` | универсальные APK и AAB (`aarch64`, `armv7`, `x86_64`), подписанные |
 | package | `package:flatpak` | `.flatpak`-бандл (рантайм GNOME 50) из Linux-tarball |
 | package | `package:pacman` | `multi-wallet-tracker-bin-*.pkg.tar.zst` из того же tarball |
-| release | `release` | только на теге и только когда **все** проверки и сборки зелёные: всё из `release/` + `SHA256SUMS` → Generic Package Registry, GitLab Release со ссылками и заметками из `CHANGELOG.md` |
-| release | `aur:publish` | вручную, на теге при заданном `AUR_SSH_PRIVATE_KEY`: пуш `PKGBUILD` + `.SRCINFO` в AUR |
+| release | `prerelease` | `development`: всё из `release/` + `SHA256SUMS` → Package Registry, Release «Pre-release X.Y.Z-N» (тег создаёт API) |
+| release | `prerelease:cleanup` | `development`: оставить последние `PRERELEASES_KEPT` пре-релизов (нужен `RELEASE_TOKEN`) |
+| release | `release` | `main`: то же для `X.Y.Z`, заметки из раздела `CHANGELOG.md` |
+| release | `backmerge` | `main`: MR `main` → `development` после выпуска (нужен `RELEASE_TOKEN`) |
+| release | `aur:publish` | `main`, вручную, при заданном `AUR_SSH_PRIVATE_KEY`: пуш `PKGBUILD` + `.SRCINFO` в AUR |
 
-Сборки (`build`, `package`) идут автоматически на тегах, на `main`, при ручном
-запуске и по расписанию; в MR — по кнопке (manual, не блокируют MR). Они
-стартуют сразу, параллельно с проверками, а не после них; выпуск при этом
-всё равно ждёт проверки.
+Сборки (`build`, `package`) идут в `development`, `main`, при ручном запуске
+(Run pipeline) и по расписанию — и только когда **все** проверки зелёные.
+Фиче-ветки, хотфиксы и MR — только проверки. Ручной запуск и расписание
+ничего не публикуют. Теговых пайплайнов нет: теги создают job'ы выпуска.
 
 ## Скорость
 
@@ -60,18 +67,23 @@
   `main` и тегах идёт всё.
 - **Новый пуш отменяет старый пайплайн** (`interruptible` +
   `auto_cancel: on_new_commit`); выпуск и AUR не прерываются.
-- **Android вне тега — только `aarch64`** (телефоны); на теге — `aarch64`,
-  `armv7`, `x86_64`.
+- **Кэш пишут `development` и `main`**, остальные читают; ключи
+  постоянные (не от хеша lock-файлов), так что смена зависимостей стартует
+  с прошлого кэша. Чтобы фиче-ветки видели кэш защищённых веток, в GitLab
+  выключено «Use separate caches for protected branches» (см.
+  [workflow.md](workflow.md)). `AccessDenied … (or it may not exist)` от
+  `storage.googleapis.com/gitlab-com-runners-cache` — промах кэша, не ошибка.
 - Быстрое сжатие кэша и артефактов (`FF_USE_FASTZIP`), без debug-info в
   проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
 
 ## Выпуск версии
 
-1. Поднять версию в `crates/app/tauri.conf.json` и `[workspace.package]` в
-   `Cargo.toml` (и `<release>` в `packaging/flatpak/*.metainfo.xml`), раздел
-   `## [X.Y.Z]` в `CHANGELOG.md`.
-2. Поставить тег `vX.Y.Z` и запушить его (`jj git push` + `git push origin vX.Y.Z`).
-3. Пайплайн соберёт всё и создаст Release. AUR — кнопкой `aur:publish`.
+Пре-релизы — каждый пуш в `development`, релиз — мерж в `main`; шаги — в
+[workflow.md](workflow.md#выпуск). Версия сборки:
+`scripts/ci/version.sh --channel dev|prod|none` (dev и ручные — `X.Y.Z-N`,
+prod — `X.Y.Z`); в сборку она попадает через `tauri build --config`
+(`scripts/ci/tauri-config.sh`), вместе с Android `versionCode` = номер
+пайплайна.
 
 ## Раннеры
 
@@ -80,8 +92,8 @@
 - `build:windows` — Windows-раннер с тегом из `WINDOWS_RUNNER_TAG`
   (по умолчанию `saas-windows-medium-amd64`, общий раннер GitLab.com; для своего
   раннера — его тег). MSVC Build Tools ставятся через choco, если их нет.
-- Android-сборка длинная (release + LTO): timeout 2 ч; на теге три
-  архитектуры, иначе одна (`ANDROID_TARGETS`).
+- Android-сборка длинная (release + LTO, три архитектуры —
+  `ANDROID_TARGETS`): timeout 2 ч.
 - `ci:image` — docker-in-docker (`docker:27-dind`), нужен privileged-раннер
   и включённый Container Registry проекта.
 
@@ -94,7 +106,7 @@
 | `ANDROID_KEY_ALIAS` | то же | |
 | `ANDROID_KEY_PASSWORD` | то же | по умолчанию = пароль хранилища |
 | `AUR_SSH_PRIVATE_KEY` | `aur:publish` | тип **File**; ключ, добавленный в аккаунт AUR |
-| `RELEASE_TOKEN` | `release`, если `CI_JOB_TOKEN` не хватает прав | project access token со scope `api` |
+| `RELEASE_TOKEN` | `prerelease:cleanup`, `backmerge`; `release`, если `CI_JOB_TOKEN` не хватает прав | project access token, роль Maintainer, scope `api` |
 
 Без ключа Android APK подписывается одноразовым тестовым ключом и получает
 суффикс `-testkey`: ставится для проверки, но не обновляет предыдущую

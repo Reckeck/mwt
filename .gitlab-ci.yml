@@ -1,48 +1,26 @@
-# Multi Wallet Tracker (MWT) CI/CD. Описание пайплайна, переменных и выпуска — docs/ci.md.
+# Multi Wallet Tracker (MWT) CI/CD. Как работать с ветками — docs/workflow.md,
+# устройство пайплайна и переменные — docs/ci.md.
+#
+#   feature/*, hotfix/*, MRs   checks only (and only those the changes touch)
+#   development                checks → builds (X.Y.Z-<pipeline>) → pre-release
+#   main                       checks → builds (X.Y.Z) → release → AUR (manual),
+#                              back-merge MR main → development
+#   tags                       no pipeline: the release jobs create them
 #
 #   .pre     ci:image — the CI images, only when their inputs change
-#   check    frontend, rust:fmt / rust:clippy / rust:test (parallel), SAST, secrets
+#   check    frontend, rust:fmt / rust:clippy / rust:test, ci:lint, version, SAST, secrets
 #   build    Linux (deb, rpm, AppImage, tar.gz), Windows (NSIS .exe, MSI, zip),
-#            Android (APK, AAB) — start at once, beside the checks
+#            Android (APK, AAB) — only after every check passed
 #   package  Flatpak and pacman (.pkg.tar.zst) from the Linux build
-#   release  tag vX.Y.Z, all checks and builds green → Package Registry +
-#            GitLab Release; AUR push (manual)
-#
-# Speed: jobs run in prebuilt images (scripts/ci/ci.Dockerfile), compiled
-# crates come back through sccache, MR pipelines skip what their changes do
-# not touch, and a new push cancels the pipeline it replaces.
+#   release  pre-release / release in the Package Registry + GitLab Releases
 #
 # SAST customization: https://docs.gitlab.com/user/application_security/sast/#available-cicd-variables
 # Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure/
 
-workflow:
-  auto_cancel:
-    on_new_commit: interruptible
-  rules:
-    # Caches are written by main only; branches and MRs read them.
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      variables: { CACHE_POLICY: pull }
-    # A branch with an open MR runs as the MR pipeline only.
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      variables: { CACHE_POLICY: pull-push }
-    - if: $CI_COMMIT_BRANCH
-      variables: { CACHE_POLICY: pull }
-    - if: $CI_COMMIT_TAG
-      variables: { CACHE_POLICY: pull }
-
-stages:
-  - check
-  - build
-  - package
-  - release
-
-include:
-  - template: Security/SAST.gitlab-ci.yml
-  - template: Security/Secret-Detection.gitlab-ci.yml
-
 variables:
+  DEV_BRANCH: development
+  PROD_BRANCH: main
+  PRERELEASES_KEPT: "10"
   SECRET_DETECTION_ENABLED: "true"
   # = scripts/ci/image-tag.sh; ci:image refuses to build when they differ.
   CI_IMAGE_TAG: "2d8c301fe3bf"
@@ -53,6 +31,7 @@ variables:
   CI_ANDROID_IMAGE: $CI_REGISTRY_IMAGE/ci-android:$CI_IMAGE_TAG
   ARCH_IMAGE: archlinux:base-devel
   WINDOWS_RUNNER_TAG: saas-windows-medium-amd64
+  ANDROID_TARGETS: aarch64 armv7 x86_64
   CARGO_TARGET_DIR: $CI_PROJECT_DIR/.rust-target # absolute: tauri runs cargo from crates/app
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
@@ -67,10 +46,46 @@ variables:
   FF_USE_FASTZIP: "true"
   ARTIFACT_COMPRESSION_LEVEL: fast
   CACHE_COMPRESSION_LEVEL: fast
-  CACHE_POLICY: pull-push
+  CACHE_POLICY: pull
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    # Tags come from the release jobs themselves; building them again would
+    # only duplicate the pipeline that made them.
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # A branch with an open MR runs as the MR pipeline only.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # The protected branches publish and write the caches others read.
+    - if: $CI_COMMIT_BRANCH == $PROD_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      variables: { RELEASE_CHANNEL: prod, CACHE_POLICY: pull-push }
+    - if: $CI_COMMIT_BRANCH == $DEV_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      variables: { RELEASE_CHANNEL: dev, CACHE_POLICY: pull-push }
+    # Run pipeline / schedule: everything built, nothing published.
+    - if: $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedule"
+      variables: { FULL_PIPELINE: "true" }
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - check
+  - build
+  - package
+  - release
+
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
 
 default:
   interruptible: true
+  # Shared runners sometimes die under a job; that is not a red build.
+  retry:
+    max: 2
+    when: [runner_system_failure, stuck_or_timeout_failure, scheduler_failure, api_failure]
 
 sast:
   stage: check
@@ -80,37 +95,52 @@ secret_detection:
 
 # ---------------------------------------------------------------- templates
 
-.always-full: &always-full
-  # Tags, main, manual and scheduled pipelines run everything.
-  if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedule"
-
+# development, main, run pipeline, schedule: everything runs.
+.full: &full
+  if: $RELEASE_CHANNEL || $FULL_PIPELINE
 
 .rust-rules:
   rules:
-    - *always-full
+    - *full
     - changes:
         paths: [crates/**/*, Cargo.toml, Cargo.lock, clippy.toml, src/shared/api/ipc.gen.d.ts, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
-        compare_to: refs/heads/main
+        compare_to: refs/heads/development
 
 .frontend-rules:
   rules:
-    - *always-full
+    - *full
     - changes:
         paths: [src/**/*, index.html, package.json, pnpm-lock.yaml, "*.ts", "*.json", scripts/*.mjs, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
-        compare_to: refs/heads/main
+        compare_to: refs/heads/development
 
-# Release builds: always for tags, main and manual/scheduled runs; on demand in MRs.
+.ci-rules:
+  rules:
+    - *full
+    - changes:
+        paths: [.gitlab-ci.yml, scripts/ci/**/*, packaging/**/*]
+        compare_to: refs/heads/development
+
+# Builds only where something is published or asked for: never in feature or
+# hotfix branches and MRs — those get the checks alone.
 .build-rules:
   rules:
-    - *always-full
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
-      allow_failure: true
+    - *full
 
 # A job waits for the image only when this pipeline rebuilds it.
 .image-needs: &image-needs
   job: ci:image
   optional: true
+
+# Every check, and the version they will ship under: a red check stops the builds.
+.build-needs:
+  needs:
+    - *image-needs
+    - frontend:check
+    - rust:fmt
+    - rust:clippy
+    - rust:test
+    - ci:lint
+    - version
 
 .node:
   image: $CI_NODE_IMAGE
@@ -122,7 +152,7 @@ secret_detection:
     - source scripts/ci/setup-linux.sh
   cache:
     - &pnpm-cache
-      key: { prefix: pnpm, files: [pnpm-lock.yaml] }
+      key: pnpm-store
       paths: [.cache/pnpm]
       policy: $CACHE_POLICY
 
@@ -138,9 +168,15 @@ secret_detection:
     - sccache --show-stats || true
 
 .cargo-cache: &cargo-cache
-  key: { prefix: cargo, files: [Cargo.lock] }
+  key: cargo-registry
   paths: [.cache/cargo-registry]
   policy: $CACHE_POLICY
+
+.publish:
+  image: alpine:3.20
+  interruptible: false
+  before_script:
+    - apk add --no-cache bash curl jq coreutils sed
 
 # ------------------------------------------------------------------- image
 
@@ -169,6 +205,15 @@ frontend:check:
     - mise run check-onboarding
     - mise run check-forms
 
+ci:lint:
+  extends: [.node, .ci-rules]
+  stage: check
+  variables:
+    CI_MISE_TOOLS: node # no pnpm deps needed
+  script:
+    - scripts/ci/lint-ci.sh
+  cache: []
+
 rust:fmt:
   extends: [.rust, .rust-rules]
   stage: check
@@ -185,7 +230,7 @@ rust:clippy:
     - mise run clippy
   cache:
     - *cargo-cache
-    - key: sccache-clippy-$CI_IMAGE_TAG
+    - key: sccache-clippy
       paths: [.cache/sccache]
       policy: $CACHE_POLICY
 
@@ -199,26 +244,25 @@ rust:test:
     - git diff --exit-code -- src/shared/api/ipc.gen.d.ts
   cache:
     - *cargo-cache
-    - key: sccache-test-$CI_IMAGE_TAG
+    - key: sccache-test
       paths: [.cache/sccache]
       policy: $CACHE_POLICY
 
-version:check:
-  image: $CI_NODE_IMAGE
+# The version the builds ship under (dotenv BUILD_VERSION, ANDROID_VERSION_CODE),
+# and the stop sign when it is already released.
+version:
+  extends: .build-rules
   stage: check
+  image: $CI_NODE_IMAGE
   needs: [*image-needs]
-  rules:
-    - if: $CI_COMMIT_TAG
   script:
-    - scripts/ci/version.sh
+    - scripts/ci/version.sh --channel "${RELEASE_CHANNEL:-none}" --dotenv build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: 1 week
 
 # ------------------------------------------------------------------- build
-
-.build-needs:
-  needs:
-    - *image-needs
-    - job: version:check
-      optional: true
 
 build:linux:
   extends: [.rust, .build-rules, .build-needs]
@@ -226,13 +270,12 @@ build:linux:
   variables:
     CI_MISE_TOOLS: "" # node, pnpm and rust
   script:
-    - VERSION="$(scripts/ci/version.sh)"
-    - pnpm tauri build --ci --bundles deb,rpm,appimage
-    - scripts/ci/collect-linux.sh "$VERSION" release
+    - pnpm tauri build --ci --bundles deb,rpm,appimage --config "$(scripts/ci/tauri-config.sh)"
+    - scripts/ci/collect-linux.sh "$BUILD_VERSION" release
   cache:
     - *cargo-cache
     - *pnpm-cache
-    - key: sccache-linux-release-$CI_IMAGE_TAG
+    - key: sccache-linux-release
       paths: [.cache/sccache]
       policy: $CACHE_POLICY
   artifacts:
@@ -241,11 +284,8 @@ build:linux:
     expire_in: 2 weeks
 
 build:windows:
-  extends: [.build-rules]
+  extends: [.build-rules, .build-needs]
   stage: build
-  needs:
-    - job: version:check
-      optional: true
   tags: [$WINDOWS_RUNNER_TAG]
   timeout: 2h
   script:
@@ -254,7 +294,7 @@ build:windows:
     - key: { prefix: windows-toolchain, files: [mise.toml] }
       paths: [.cache/rustup, .cache/cargo/bin, .cache/node-*, .cache/sccache-*.exe]
       policy: $CACHE_POLICY
-    - key: { prefix: windows-deps, files: [Cargo.lock, pnpm-lock.yaml] }
+    - key: windows-deps
       paths: [.cache/cargo/registry, .cache/pnpm]
       policy: $CACHE_POLICY
     - key: sccache-windows
@@ -273,26 +313,19 @@ build:android:
   variables:
     CI_SKIP_GUI_LIBS: "1"
     CI_MISE_TOOLS: "" # node, pnpm and rust
-    # Every ABI for a release; phones only (arm64) otherwise.
-    ANDROID_TARGETS: aarch64
-  rules:
-    - if: $CI_COMMIT_TAG
-      variables: { ANDROID_TARGETS: aarch64 armv7 x86_64 }
-    - !reference [.build-rules, rules]
   before_script:
     - source scripts/ci/setup-linux.sh
     - source scripts/ci/setup-android.sh
   script:
-    - VERSION="$(scripts/ci/version.sh)"
     # The Gradle project is generated, not committed (crates/app/gen/android).
     - pnpm tauri android init --ci
     - pnpm tauri icon crates/app/icons/icon.png
-    - pnpm tauri android build --ci --apk --aab --target $ANDROID_TARGETS
-    - scripts/ci/sign-android.sh "$VERSION" release
+    - pnpm tauri android build --ci --apk --aab --target $ANDROID_TARGETS --config "$(scripts/ci/tauri-config.sh)"
+    - scripts/ci/sign-android.sh "$BUILD_VERSION" release
   cache:
     - *cargo-cache
     - *pnpm-cache
-    - key: sccache-android-$CI_IMAGE_TAG
+    - key: sccache-android
       paths: [.cache/sccache]
       policy: $CACHE_POLICY
     - key: gradle
@@ -311,7 +344,7 @@ package:flatpak:
   extends: .build-rules
   stage: package
   image: $ARCH_IMAGE
-  needs: [build:linux]
+  needs: [build:linux, version]
   cache:
     key: flatpak-gnome
     paths: [.flatpak-builder/downloads]
@@ -319,14 +352,13 @@ package:flatpak:
   before_script:
     - pacman -Sy --noconfirm --needed flatpak flatpak-builder git >/dev/null
   script:
-    - VERSION="$(scripts/ci/version.sh)"
     - git clone --depth 1 https://github.com/flathub/shared-modules.git packaging/flatpak/shared-modules
-    - cp "release/multi-wallet-tracker-$VERSION-linux-x86_64.tar.gz" packaging/flatpak/multi-wallet-tracker-linux-x86_64.tar.gz
+    - cp "release/multi-wallet-tracker-$BUILD_VERSION-linux-x86_64.tar.gz" packaging/flatpak/multi-wallet-tracker-linux-x86_64.tar.gz
     - flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean
       --repo=.flatpak-repo .flatpak-build packaging/flatpak/dev.mwt.MultiWalletTracker.yml
     - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
-      .flatpak-repo "release/multi-wallet-tracker-$VERSION-x86_64.flatpak" dev.mwt.MultiWalletTracker
+      .flatpak-repo "release/multi-wallet-tracker-$BUILD_VERSION-x86_64.flatpak" dev.mwt.MultiWalletTracker
   artifacts:
     name: multi-wallet-tracker-flatpak
     paths: [release/*.flatpak]
@@ -336,10 +368,9 @@ package:pacman:
   extends: .build-rules
   stage: package
   image: $ARCH_IMAGE
-  needs: [build:linux]
+  needs: [build:linux, version]
   script:
-    - VERSION="$(scripts/ci/version.sh)"
-    - scripts/ci/build-pacman.sh "$VERSION" release
+    - scripts/ci/build-pacman.sh "$BUILD_VERSION" release
   artifacts:
     name: multi-wallet-tracker-pacman
     paths: [release/*.pkg.tar.zst]
@@ -347,39 +378,53 @@ package:pacman:
 
 # ----------------------------------------------------------------- release
 
-# Builds no longer wait for the checks, so the release does: nothing ships
-# with a red check.
-release:
+.publish-needs:
+  needs: [version, build:linux, build:windows, build:android, package:flatpak, package:pacman]
+
+prerelease:
+  extends: [.publish, .publish-needs]
   stage: release
-  image: alpine:3.20
-  interruptible: false
   rules:
-    - if: $CI_COMMIT_TAG
-  needs:
-    - frontend:check
-    - rust:fmt
-    - rust:clippy
-    - rust:test
-    - version:check
-    - build:linux
-    - build:windows
-    - build:android
-    - package:flatpak
-    - package:pacman
-  before_script:
-    - apk add --no-cache bash curl jq coreutils sed
+    - if: $RELEASE_CHANNEL == "dev"
   script:
-    - VERSION="$(scripts/ci/version.sh)"
-    - scripts/ci/release.sh "$VERSION" release
+    - scripts/ci/release.sh --pre "$BUILD_VERSION" release
+
+# development pushes often: keep the newest PRERELEASES_KEPT pre-releases.
+prerelease:cleanup:
+  extends: .publish
+  stage: release
+  needs: [prerelease]
+  allow_failure: true
+  rules:
+    - if: $RELEASE_CHANNEL == "dev"
+  script:
+    - scripts/ci/prune-prereleases.sh
+
+release:
+  extends: [.publish, .publish-needs]
+  stage: release
+  rules:
+    - if: $RELEASE_CHANNEL == "prod"
+  script:
+    - scripts/ci/release.sh "$BUILD_VERSION" release
+
+backmerge:
+  extends: .publish
+  stage: release
+  needs: [release, version]
+  allow_failure: true
+  rules:
+    - if: $RELEASE_CHANNEL == "prod"
+  script:
+    - scripts/ci/backmerge.sh "$BUILD_VERSION"
 
 aur:publish:
   stage: release
   image: $ARCH_IMAGE
   interruptible: false
   rules:
-    - if: $CI_COMMIT_TAG && $AUR_SSH_PRIVATE_KEY
+    - if: $RELEASE_CHANNEL == "prod" && $AUR_SSH_PRIVATE_KEY
       when: manual
-  needs: [build:linux, release]
+  needs: [build:linux, version, release]
   script:
-    - VERSION="$(scripts/ci/version.sh)"
-    - scripts/ci/publish-aur.sh "$VERSION" release
+    - scripts/ci/publish-aur.sh "$BUILD_VERSION" release
