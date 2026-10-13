@@ -203,6 +203,17 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   многострочном `script:` — так её можно запустить и проверить локально.
 - **Версии инструментов — только из `mise.toml`.** CI ставит node/pnpm/rust
   через mise (Windows-скрипт читает те же строки); не хардкодь версии в YAML.
+- **CI-образы.** Linux-job'ы идут в готовых образах
+  (`scripts/ci/ci.Dockerfile`, теги `ci-node`/`ci-linux`/`ci-android`).
+  Поменял Dockerfile, `scripts/ci/apt-packages.sh` или `[tools]` в
+  `mise.toml` — обнови `CI_IMAGE_TAG` в `.gitlab-ci.yml` на вывод
+  `scripts/ci/image-tag.sh`, иначе `ci:image` упадёт. Новый apt-пакет —
+  только в `apt-packages.sh` (его читают и образ, и `setup-linux.sh`).
+- **Скорость не терять.** Не убирай `opt-level = 3` у `argon2`/`blake2` в
+  `[profile.dev.package.*]` (без него тесты в 13 раз дольше); кэши
+  (sccache, cargo-registry, pnpm) пишет только `main`; новый job — с
+  `rules: changes` по своим путям и `interruptible`, если его можно бросить.
+  Подробно — `docs/ci.md`, раздел «Скорость».
 - **Платформенный код.** Трей, автозапуск, глобальные клавиши, геометрия окна
   и OS keyring есть только на десктопе: код — под `#[cfg(desktop)]` с
   заглушкой под `#[cfg(mobile)]`, плагины — в

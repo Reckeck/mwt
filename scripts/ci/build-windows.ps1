@@ -46,6 +46,20 @@ if (-not (Test-Path "$env:CARGO_HOME\bin\rustup.exe")) {
 Invoke-Native rustup toolchain install $rustVersion --profile minimal
 Invoke-Native rustup default $rustVersion
 
+# sccache: compiled crates come back from the GitLab cache (.cache\sccache).
+$sccacheVersion = '0.10.0'
+$sccache = Join-Path $cache "sccache-$sccacheVersion.exe"
+if (-not (Test-Path $sccache)) {
+  $name = "sccache-v$sccacheVersion-x86_64-pc-windows-msvc"
+  Invoke-WebRequest "https://github.com/mozilla/sccache/releases/download/v$sccacheVersion/$name.zip" -OutFile "$cache\sccache.zip"
+  Expand-Archive -Force "$cache\sccache.zip" -DestinationPath $cache
+  Move-Item "$cache\$name\sccache.exe" $sccache
+}
+$env:RUSTC_WRAPPER = $sccache
+$env:SCCACHE_DIR = Join-Path $cache 'sccache'
+$env:SCCACHE_CACHE_SIZE = '3G'
+$env:CARGO_INCREMENTAL = '0'
+
 # Node + pnpm
 $nodeDir = Join-Path $cache "node-v$nodeVersion-win-x64"
 if (-not (Test-Path $nodeDir)) {
@@ -55,7 +69,7 @@ if (-not (Test-Path $nodeDir)) {
 $env:Path = "$nodeDir;$env:Path"
 Invoke-Native npm install -g "pnpm@$pnpmVersion"
 Invoke-Native pnpm config set store-dir (Join-Path $cache 'pnpm')
-Invoke-Native pnpm install --frozen-lockfile
+Invoke-Native pnpm install --frozen-lockfile --prefer-offline
 
 # Build (NSIS/WiX are fetched by the Tauri bundler)
 $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
@@ -81,3 +95,4 @@ Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\multi-wallet-tracker.exe') "
 Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\multi-wallet-tracker-$version-windows-x64-portable.zip"
 
 Get-ChildItem $OutDir | Format-Table Name, Length
+& $sccache --show-stats

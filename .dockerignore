@@ -1,0 +1,5 @@
+# The CI image (scripts/ci/ci.Dockerfile) needs only these; everything else
+# would just slow the build context down.
+*
+!mise.toml
+!scripts/ci/apt-packages.sh
