@@ -1,4 +1,4 @@
-//! `trade-app --quick-add` opens «+ Операция» in an app that is already
+//! `multi-wallet-tracker --quick-add` opens «+ Операция» in an app that is already
 //! running — what a Hyprland/Sway key binding runs, since Wayland gives apps
 //! no global keys. The first instance listens on a socket in the runtime
 //! directory; a launch with the flag pokes it and exits. Without the flag a
@@ -19,7 +19,7 @@ fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("trade-app-quick-add.sock")
+        .join("multi-wallet-tracker-quick-add.sock")
 }
 
 /// Called before the app starts: with `--quick-add` and an instance

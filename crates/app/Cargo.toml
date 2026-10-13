@@ -4,14 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "TradeApp — encrypted finance & crypto portfolio (Tauri shell over trade-core)"
+description = "Multi Wallet Tracker (MWT) — encrypted finance & crypto portfolio (Tauri shell over trade-core)"
 
 [lib]
 name = "trade_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "trade-app"
+name = "multi-wallet-tracker"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -47,6 +47,9 @@ tauri-plugin-window-state = "2.5.0"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native", "windows-native"] }
+# Moving the TradeApp-era directories and autostart entry (src/legacy.rs).
+dirs = "7"
+auto-launch = "0.5"
 
 [dev-dependencies]
 tempfile = "3"

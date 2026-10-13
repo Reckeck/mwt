@@ -1,14 +1,14 @@
 # Flatpak of the CI-built Linux binary (repackaged, like Tauri's guide does
 # with the .deb). CI puts the tarball next to this file as
-# trade-app-linux-x86_64.tar.gz and clones flathub/shared-modules here.
+# multi-wallet-tracker-linux-x86_64.tar.gz and clones flathub/shared-modules here.
 #
 #   flatpak-builder --user --install-deps-from=flathub --force-clean \
-#     build-dir packaging/flatpak/dev.tradeapp.TradeApp.yml
-id: dev.tradeapp.TradeApp
+#     build-dir packaging/flatpak/dev.mwt.MultiWalletTracker.yml
+id: dev.mwt.MultiWalletTracker
 runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
-command: trade-app
+command: multi-wallet-tracker
 finish-args:
   - --share=ipc
   - --share=network
@@ -24,21 +24,21 @@ modules:
   # The system tray (tauri tray-icon loads libayatana-appindicator at runtime).
   - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
 
-  - name: trade-app
+  - name: multi-wallet-tracker
     buildsystem: simple
     sources:
       - type: archive
-        path: trade-app-linux-x86_64.tar.gz
+        path: multi-wallet-tracker-linux-x86_64.tar.gz
       - type: file
-        path: dev.tradeapp.TradeApp.metainfo.xml
+        path: dev.mwt.MultiWalletTracker.metainfo.xml
     build-commands:
-      - install -Dm755 usr/bin/trade-app /app/bin/trade-app
-      - install -Dm644 usr/share/applications/*.desktop /app/share/applications/dev.tradeapp.TradeApp.desktop
-      - desktop-file-edit --set-icon=dev.tradeapp.TradeApp --set-key=Exec --set-value=trade-app
-        /app/share/applications/dev.tradeapp.TradeApp.desktop
+      - install -Dm755 usr/bin/multi-wallet-tracker /app/bin/multi-wallet-tracker
+      - install -Dm644 usr/share/applications/*.desktop /app/share/applications/dev.mwt.MultiWalletTracker.desktop
+      - desktop-file-edit --set-icon=dev.mwt.MultiWalletTracker --set-key=Exec --set-value=multi-wallet-tracker
+        /app/share/applications/dev.mwt.MultiWalletTracker.desktop
       - |
         for size in 32x32 128x128; do
           install -Dm644 usr/share/icons/hicolor/$size/apps/*.png \
-            /app/share/icons/hicolor/$size/apps/dev.tradeapp.TradeApp.png
+            /app/share/icons/hicolor/$size/apps/dev.mwt.MultiWalletTracker.png
         done
-      - install -Dm644 dev.tradeapp.TradeApp.metainfo.xml /app/share/metainfo/dev.tradeapp.TradeApp.metainfo.xml
+      - install -Dm644 dev.mwt.MultiWalletTracker.metainfo.xml /app/share/metainfo/dev.mwt.MultiWalletTracker.metainfo.xml

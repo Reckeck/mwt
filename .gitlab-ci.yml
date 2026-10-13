@@ -1,4 +1,4 @@
-# TradeApp CI/CD. Описание пайплайна, переменных и выпуска — docs/ci.md.
+# Multi Wallet Tracker (MWT) CI/CD. Описание пайплайна, переменных и выпуска — docs/ci.md.
 #
 #   check    lint/typecheck/onboarding/forms, fmt/clippy/tests/ipc types, SAST, secrets
 #   build    Linux (deb, rpm, AppImage, tar.gz), Windows (NSIS .exe, MSI, zip),
@@ -137,7 +137,7 @@ build:linux:
     - pnpm tauri build --ci --bundles deb,rpm,appimage
     - scripts/ci/collect-linux.sh "$VERSION" release
   artifacts:
-    name: trade-app-linux
+    name: multi-wallet-tracker-linux
     paths: [release/]
     expire_in: 2 weeks
 
@@ -154,7 +154,7 @@ build:windows:
       files: [mise.toml, Cargo.lock]
     paths: [.cache/cargo/bin, .cache/cargo/registry, .cache/rustup, .cache/node-*, .cache/pnpm]
   artifacts:
-    name: trade-app-windows
+    name: multi-wallet-tracker-windows
     paths: [release/]
     expire_in: 2 weeks
 
@@ -180,7 +180,7 @@ build:android:
     - key: gradle
       paths: [.cache/gradle/caches, .cache/gradle/wrapper]
   artifacts:
-    name: trade-app-android
+    name: multi-wallet-tracker-android
     paths: [release/]
     expire_in: 2 weeks
 
@@ -201,14 +201,14 @@ package:flatpak:
   script:
     - VERSION="$(scripts/ci/version.sh)"
     - git clone --depth 1 https://github.com/flathub/shared-modules.git packaging/flatpak/shared-modules
-    - cp "release/trade-app-$VERSION-linux-x86_64.tar.gz" packaging/flatpak/trade-app-linux-x86_64.tar.gz
+    - cp "release/multi-wallet-tracker-$VERSION-linux-x86_64.tar.gz" packaging/flatpak/multi-wallet-tracker-linux-x86_64.tar.gz
     - flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean
-      --repo=.flatpak-repo .flatpak-build packaging/flatpak/dev.tradeapp.TradeApp.yml
+      --repo=.flatpak-repo .flatpak-build packaging/flatpak/dev.mwt.MultiWalletTracker.yml
     - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
-      .flatpak-repo "release/TradeApp-$VERSION-x86_64.flatpak" dev.tradeapp.TradeApp
+      .flatpak-repo "release/multi-wallet-tracker-$VERSION-x86_64.flatpak" dev.mwt.MultiWalletTracker
   artifacts:
-    name: trade-app-flatpak
+    name: multi-wallet-tracker-flatpak
     paths: [release/*.flatpak]
     expire_in: 2 weeks
 
@@ -221,7 +221,7 @@ package:pacman:
     - VERSION="$(scripts/ci/version.sh)"
     - scripts/ci/build-pacman.sh "$VERSION" release
   artifacts:
-    name: trade-app-pacman
+    name: multi-wallet-tracker-pacman
     paths: [release/*.pkg.tar.zst]
     expire_in: 2 weeks
 

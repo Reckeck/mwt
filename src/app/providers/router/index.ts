@@ -241,5 +241,5 @@ export const router = createRouter({
 
 router.afterEach((to) => {
   const key = to.meta.i18n as string | undefined
-  document.title = key ? `TradeApp · ${key}` : 'TradeApp'
+  document.title = key ? `Multi Wallet Tracker · ${key}` : 'Multi Wallet Tracker'
 })

@@ -20,7 +20,7 @@ else
   auth=(--header "JOB-TOKEN: $CI_JOB_TOKEN")
 fi
 api="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
-base="$api/packages/generic/trade-app/$version"
+base="$api/packages/generic/multi-wallet-tracker/$version"
 
 links='[]'
 for file in *; do
@@ -40,7 +40,7 @@ notes="$(awk -v ver="$version" '
   on {print}' "$CI_PROJECT_DIR/CHANGELOG.md")"
 [[ -n "$notes" ]] || notes="Изменения — в [CHANGELOG.md]($CI_PROJECT_URL/-/blob/$CI_COMMIT_TAG/CHANGELOG.md)."
 
-payload="$(jq -n --arg tag "$CI_COMMIT_TAG" --arg name "TradeApp $version" --arg notes "$notes" \
+payload="$(jq -n --arg tag "$CI_COMMIT_TAG" --arg name "Multi Wallet Tracker $version" --arg notes "$notes" \
   --argjson links "$links" '{tag_name: $tag, name: $name, description: $notes, assets: {links: $links}}')"
 curl -fsS "${auth[@]}" --header 'Content-Type: application/json' \
   --data "$payload" "$api/releases" >/dev/null

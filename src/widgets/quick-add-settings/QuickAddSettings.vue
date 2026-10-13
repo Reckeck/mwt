@@ -27,7 +27,7 @@ const failed = ref('')
 
 /** Wayland gives apps no global keys: there the compositor binds a key to a command. */
 const support = useQuery({ queryKey: ['shortcut-support'], queryFn: () => call<ShortcutSupport>('get_shortcut_support') })
-const binding = computed(() => `bind = SUPER SHIFT, A, exec, ${support.data.value?.launch_command ?? 'trade-app --quick-add'}`)
+const binding = computed(() => `bind = SUPER SHIFT, A, exec, ${support.data.value?.launch_command ?? 'multi-wallet-tracker --quick-add'}`)
 async function copyBinding() {
   try {
     await navigator.clipboard.writeText(binding.value)

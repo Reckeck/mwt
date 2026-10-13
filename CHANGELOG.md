@@ -11,6 +11,18 @@
 
 ## [Unreleased]
 
+### Changed — переименование
+
+- **TradeApp → Multi Wallet Tracker (MWT).** Новое название в окне, меню и
+  пакетах; бинарник и пакеты — `multi-wallet-tracker` (AUR —
+  `multi-wallet-tracker-bin`), идентификаторы `dev.mwt.desktop`,
+  `dev.mwt.app` (Android), `dev.mwt.MultiWalletTracker` (Flatpak). При первом
+  запуске папки данных и настроек `dev.tradeapp.desktop`, пути недавних
+  хранилищ, ключ напоминаний в системном keyring и запись автозапуска
+  переносятся сами. Привязку «+ Операция» в Hyprland/Sway нужно поправить:
+  команда теперь `multi-wallet-tracker --quick-add`. Формат vault и файлов
+  экспорта схем не изменился.
+
 ### Changed — несовместимо (схема vault)
 
 - **Новая модель операций.** Вместо 11 видов — 4 глагола (Пополнить,

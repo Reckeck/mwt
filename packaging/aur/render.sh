@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Render PKGBUILD for trade-app-bin from the release tarball.
+# Render PKGBUILD for multi-wallet-tracker-bin from the release tarball.
 #
 #   packaging/aur/render.sh <version> <tarball> [url] > PKGBUILD
 #

@@ -676,7 +676,10 @@ function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> 
     case 'calc_preview':
       return resolve(mockCalc(body as CalcInput))
     case 'get_shortcut_support':
-      return resolve({ global_keys: false, launch_command: '/usr/bin/trade-app --quick-add' } satisfies ShortcutSupport)
+      return resolve({
+        global_keys: false,
+        launch_command: '/usr/bin/multi-wallet-tracker --quick-add',
+      } satisfies ShortcutSupport)
     case 'ensure_fx':
       return resolve({ points: [], missing: [] } satisfies EnsureFxOutput)
     case 'refresh_all':

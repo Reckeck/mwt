@@ -16,7 +16,10 @@ use trade_core::model::notify::NoticeRecord;
 use trade_core::service::NotificationSnapshot;
 
 #[cfg(desktop)]
-const KEYRING_SERVICE: &str = "dev.tradeapp.desktop";
+const KEYRING_SERVICE: &str = crate::legacy::IDENTIFIER;
+/// Where the key lived while the app was TradeApp; moved on first use.
+#[cfg(desktop)]
+const LEGACY_KEYRING_SERVICE: &str = crate::legacy::LEGACY_IDENTIFIER;
 #[cfg(desktop)]
 const KEYRING_USER: &str = "notification-snapshot";
 const FILE_NAME: &str = "notify-snapshot.bin";
@@ -74,12 +77,25 @@ fn key() -> Option<[u8; 32]> {
     match entry.get_password() {
         Ok(stored) => unhex(&stored),
         Err(keyring::Error::NoEntry) => {
+            if let Some(stored) = take_legacy_key() {
+                entry.set_password(&stored).ok()?;
+                return unhex(&stored);
+            }
             let fresh: [u8; 32] = rand::random();
             entry.set_password(&hex(&fresh)).ok()?;
             Some(fresh)
         }
         Err(_) => None,
     }
+}
+
+/// The key kept under the TradeApp service name, removed once read.
+#[cfg(desktop)]
+fn take_legacy_key() -> Option<String> {
+    let legacy = keyring::Entry::new(LEGACY_KEYRING_SERVICE, KEYRING_USER).ok()?;
+    let stored = legacy.get_password().ok()?;
+    legacy.delete_credential().ok();
+    Some(stored)
 }
 
 /// No OS keyring on mobile: the snapshot stays in memory.

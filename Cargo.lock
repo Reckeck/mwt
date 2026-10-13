@@ -5059,8 +5059,10 @@ dependencies = [
 name = "trade-app"
 version = "0.1.0"
 dependencies = [
+ "auto-launch",
  "chacha20poly1305",
  "chrono",
+ "dirs 7.0.0",
  "iana-time-zone",
  "keyring",
  "rand 0.8.8",

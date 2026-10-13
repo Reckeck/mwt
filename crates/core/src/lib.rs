@@ -1,8 +1,9 @@
-//! TradeApp `core` — pure domain, encrypted vault, pricing and market data.
+//! Multi Wallet Tracker `core` — pure domain, encrypted vault, pricing and market data.
 //! This crate MUST NOT depend on Tauri or any UI runtime so it stays fast
 //! to compile and fully unit-testable (`cargo test -p trade-core`).
 
 pub mod amount;
+pub mod app_dirs;
 pub mod appconfig;
 pub mod calc;
 pub mod calendar;
@@ -45,5 +46,6 @@ pub const VAULT_CONTAINER_VERSION: u32 = 1;
 /// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
 /// encrypted envelope and only moves when the on-disk bytes change.
 pub const VAULT_FORMAT_VERSION: u32 = 2;
-/// Magic bytes prefix of a TradeApp vault file.
+/// Magic bytes prefix of a vault file. Kept from the TradeApp days: changing
+/// them would make every existing vault unreadable.
 pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";

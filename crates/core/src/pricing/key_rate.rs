@@ -67,7 +67,7 @@ impl PricingService {
             .post(CBR_DAILY_INFO)
             .header(CONTENT_TYPE, "text/xml; charset=utf-8")
             .header("SOAPAction", "\"http://web.cbr.ru/KeyRate\"")
-            .header(USER_AGENT, "trade-app")
+            .header(USER_AGENT, "multi-wallet-tracker")
             .body(body)
             .send()
             .await

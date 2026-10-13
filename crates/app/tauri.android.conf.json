@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "identifier": "dev.tradeapp.app",
+  "identifier": "dev.mwt.app",
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "TradeApp"
+        "title": "Multi Wallet Tracker"
       }
     ]
   }

@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>dev.tradeapp.TradeApp</id>
-  <name>TradeApp</name>
+  <id>dev.mwt.MultiWalletTracker</id>
+  <name>Multi Wallet Tracker</name>
   <summary>Encrypted finance &amp; crypto portfolio manager</summary>
   <summary xml:lang="ru">Зашифрованный менеджер финансов и крипто-портфеля</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <developer id="dev.tradeapp">
-    <name>TradeApp</name>
+  <developer id="dev.mwt">
+    <name>MWT</name>
   </developer>
   <description>
     <p>Offline-first encrypted transactions, portfolio, prices and charts. One password opens one encrypted vault file.</p>
     <p xml:lang="ru">Офлайн-учёт операций, портфель, цены и графики. Один пароль открывает один зашифрованный файл-хранилище.</p>
   </description>
-  <launchable type="desktop-id">dev.tradeapp.TradeApp.desktop</launchable>
+  <launchable type="desktop-id">dev.mwt.MultiWalletTracker.desktop</launchable>
   <url type="homepage">https://gitlab.com/Reckeck/trade-app</url>
   <categories>
     <category>Finance</category>
@@ -21,6 +21,6 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-10-12"/>
+    <release version="0.1.0" date="2026-10-13"/>
   </releases>
 </component>

@@ -1,24 +1,24 @@
 # Maintainer: Reckekek
 # Rendered by packaging/aur/render.sh — edit PKGBUILD.in, not the output.
-pkgname=trade-app-bin
+pkgname=multi-wallet-tracker-bin
 pkgver=@PKGVER@
 pkgrel=1
-pkgdesc="Encrypted finance & crypto portfolio manager (Tauri)"
+pkgdesc="Multi Wallet Tracker (MWT): encrypted finance & crypto portfolio manager (Tauri)"
 arch=('x86_64')
 url="https://gitlab.com/Reckeck/trade-app"
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'dbus' 'hicolor-icon-theme')
 optdepends=('gnome-keyring: keep reminders of a locked vault across restarts'
             'kwallet: same, on KDE')
-provides=('trade-app')
-conflicts=('trade-app')
+provides=('multi-wallet-tracker')
+conflicts=('multi-wallet-tracker')
 options=('!strip' '!debug')
 source=("@SOURCE@")
 sha256sums=('@SHA256@')
 
 package() {
-  cd "trade-app-${pkgver}-linux-x86_64"
-  install -Dm755 usr/bin/trade-app "$pkgdir/usr/bin/trade-app"
+  cd "multi-wallet-tracker-${pkgver}-linux-x86_64"
+  install -Dm755 usr/bin/multi-wallet-tracker "$pkgdir/usr/bin/multi-wallet-tracker"
   install -Dm644 usr/share/applications/*.desktop -t "$pkgdir/usr/share/applications/"
   cp -a usr/share/icons "$pkgdir/usr/share/"
 }

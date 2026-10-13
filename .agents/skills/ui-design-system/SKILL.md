@@ -1,13 +1,13 @@
 ---
 name: ui-design-system
-description: Enforces TradeApp UI consistency — spacing tokens, semantic colors, typography, form layout, dialogs and feedback. Use when adding or changing any UI in src/** — new screen, form, table, dialog, toast, loading or error state, button, card. Triggers on .vue, view, component, form, button, card, dialog, toast, sonner, spinner, skeleton, badge, notification, loading state, empty state.
+description: Enforces Multi Wallet Tracker UI consistency — spacing tokens, semantic colors, typography, form layout, dialogs and feedback. Use when adding or changing any UI in src/** — new screen, form, table, dialog, toast, loading or error state, button, card. Triggers on .vue, view, component, form, button, card, dialog, toast, sonner, spinner, skeleton, badge, notification, loading state, empty state.
 ---
 
-# Skill: TradeApp UI Design System
+# Skill: Multi Wallet Tracker UI Design System
 
-Consistent UI across TradeApp. Load this **together with** `shadcn-vue` (in
+Consistent UI across Multi Wallet Tracker. Load this **together with** `shadcn-vue` (in
 `.agents/skills/shadcn-vue/`) whenever you touch a component: that skill knows
-how to add and compose shadcn primitives, this one knows how TradeApp looks.
+how to add and compose shadcn primitives, this one knows how Multi Wallet Tracker looks.
 
 Primitives live in `src/shared/ui/<name>/` — one folder per component with
 an `index.ts` (AGENTS.md rule 11). shadcn-vue's CLI writes there directly

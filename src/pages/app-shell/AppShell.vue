@@ -269,7 +269,7 @@ void onEvent('toggle-lock', () => void lock())
                 <div
                   class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground"
                 >
-                  T
+                  M
                 </div>
                 <div class="grid flex-1 text-left leading-tight">
                   <span class="truncate font-semibold">{{ t('app.title') }}</span>
