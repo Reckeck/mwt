@@ -353,6 +353,8 @@ fn main() {
         trade_core::model::vault::ImportRun,
         trade_core::model::store::ImportSettings,
         trade_core::service::ImportedTransactions,
+        trade_core::service::ImportPreview,
+        trade_core::ipc_contract::ImportPreviewOutput,
         trade_core::ipc_contract::ImportBybitHistoryOutput,
         trade_core::ipc_contract::ListPendingImportsOutput,
         trade_core::ipc_contract::ConfirmPendingImportsInput,

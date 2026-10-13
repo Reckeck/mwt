@@ -113,6 +113,7 @@ pub fn run() {
             exchange::clear_exchange_key,
             exchange::import_bybit_history,
             exchange::get_import_settings,
+            exchange::preview_bybit_import,
             exchange::set_import_settings,
             exchange::list_import_runs,
             exchange::list_imported_transactions,

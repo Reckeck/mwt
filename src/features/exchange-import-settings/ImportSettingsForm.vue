@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { X } from 'lucide-vue-next'
+import { Eye, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import { CategorySelect } from '@/features/category-select'
@@ -98,22 +98,41 @@ const form = useFormValidation(() => ({
   since: since.value && !toIsoTimestamp(since.value) ? t('validation.date') : null,
 }))
 
+/** The settings as the form has them now, saved or not. */
+function currentSettings(): ImportSettings {
+  return {
+    ...flags,
+    coins: coins.value,
+    since: since.value ? toIsoTimestamp(since.value) : null,
+    categories: {
+      trades: categories.trades || null,
+      transfers: categories.transfers || null,
+      earn: categories.earn || null,
+    },
+    accounts: IMPORT_ACCOUNTS.filter((account) => routes[account].mode !== 'default').map((account) => ({
+      account,
+      store_id: routes[account].mode === 'store' ? routes[account].storeId : null,
+    })),
+  }
+}
+
+/** What a sync would bring with these settings, before saving them: nothing is staged. */
+const preview = useMutation({
+  mutationFn: () =>
+    call<ImportPreviewOutput>('preview_bybit_import', {
+      input: { store_id: props.storeId, settings: currentSettings() },
+    }),
+  onSuccess: (result) => {
+    if (result.notice) toast.warning(t(`import.notice.${result.notice}`))
+  },
+  onError: (err) => toast.error(t('importSettings.previewFailed'), { description: codeErrorMessage(parseError(err), t) }),
+})
+/** Rows the preview lists; the counts above cover them all. */
+const PREVIEW_ROWS = 20
+
 const save = useMutation({
   mutationFn: () => {
-    const settings: ImportSettings = {
-      ...flags,
-      coins: coins.value,
-      since: since.value ? toIsoTimestamp(since.value) : null,
-      categories: {
-        trades: categories.trades || null,
-        transfers: categories.transfers || null,
-        earn: categories.earn || null,
-      },
-      accounts: IMPORT_ACCOUNTS.filter((account) => routes[account].mode !== 'default').map((account) => ({
-        account,
-        store_id: routes[account].mode === 'store' ? routes[account].storeId : null,
-      })),
-    }
+    const settings = currentSettings()
     return call<ImportSettings>('set_import_settings', { input: { store_id: props.storeId, settings } })
   },
   onSuccess: (saved) => {
@@ -216,6 +235,40 @@ const save = useMutation({
           <p class="text-xs text-muted-foreground">{{ t('importSettings.autoReconcileHint') }}</p>
         </div>
       </div>
+    </section>
+
+    <section class="grid gap-2" data-tour="import-preview">
+      <div class="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" :disabled="preview.isPending.value" @click="form.submit(preview.mutate, $event)">
+          <Eye class="size-4" />
+          {{ t('importSettings.preview') }}
+        </Button>
+        <p class="text-xs text-muted-foreground">{{ t('importSettings.previewHint') }}</p>
+      </div>
+      <template v-if="preview.data.value?.preview">
+        <p class="text-sm">
+          {{
+            t('importSettings.previewCounts', {
+              fetched: preview.data.value.preview.fetched,
+              new: preview.data.value.preview.new,
+              known: preview.data.value.preview.known,
+              filtered: preview.data.value.preview.filtered,
+            })
+          }}
+        </p>
+        <ul v-if="preview.data.value.preview.items.length" class="grid divide-y divide-border rounded-md border border-border text-sm">
+          <li
+            v-for="imp in preview.data.value.preview.items.slice(0, PREVIEW_ROWS)"
+            :key="imp.exec_id"
+            class="flex flex-wrap items-center gap-2 px-3 py-1.5"
+          >
+            <span class="font-mono text-xs text-muted-foreground">{{ imp.occurred_at.slice(0, 10) }}</span>
+            <span>{{ imp.kind === 'fill' ? imp.symbol : imp.asset_bought }}</span>
+            <Badge variant="outline">{{ t(`pending.kind.${imp.kind}`) }}</Badge>
+            <span class="ml-auto tabular-nums">{{ imp.kind !== 'fill' || imp.side === 'buy' ? imp.qty_bought : imp.qty_sold }}</span>
+          </li>
+        </ul>
+      </template>
     </section>
 
     <div>

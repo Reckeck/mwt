@@ -14,9 +14,10 @@ use trade_core::ipc_contract::{
     ConfirmPendingImportsInput, ConfirmPendingImportsOutput, CreateBybitAccountsInput,
     DiscardPendingImportsInput, DiscardPendingImportsOutput, ExchangeAccountBalance,
     ExchangeKeyStatus, ExchangeKeyStatusInput, ImportBybitHistoryInput, ImportBybitHistoryOutput,
-    InspectTxInput, InspectTxResult, ListImportedTransactionsInput, ListPendingImportsOutput,
-    SaveTerminalDrawingsInput, SetExchangeKeyInput, SetExchangeTargetsInput,
-    SetImportIntervalInput, SetImportSettingsInput, TxFieldHint, UpdateTerminalStateInput,
+    ImportPreviewOutput, InspectTxInput, InspectTxResult, ListImportedTransactionsInput,
+    ListPendingImportsOutput, SaveTerminalDrawingsInput, SetExchangeKeyInput,
+    SetExchangeTargetsInput, SetImportIntervalInput, SetImportSettingsInput, TxFieldHint,
+    UpdateTerminalStateInput,
 };
 use trade_core::model::store::{ImportSettings, TerminalState};
 use trade_core::model::vault::{ExchangeKeys, ImportRun, ImportSource, PendingImport};
@@ -382,10 +383,9 @@ pub(crate) async fn sync_bybit(
     source: ImportSource,
 ) -> Result<ImportRun, String> {
     let client = BybitClient::default();
-    let execs = match client.all_executions(api_key, api_secret, limit).await {
-        Ok(fills) => fills,
-        Err(err) => {
-            let message = err.to_string();
+    let imports = match fetch_bybit(&client, root_id, api_key, api_secret, limit).await {
+        Ok(imports) => imports,
+        Err(message) => {
             let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
             let vault = guard
                 .as_mut()
@@ -395,18 +395,6 @@ pub(crate) async fn sync_bybit(
                 .map_err(err_to_string);
         }
     };
-    // Moves between accounts and Earn payouts: a key without those
-    // permissions still imports its fills.
-    let transfers = client
-        .inter_transfers(api_key, api_secret, limit as usize)
-        .await
-        .unwrap_or_default();
-    let yields = client
-        .earn_yields(api_key, api_secret, limit as usize)
-        .await
-        .unwrap_or_default();
-    let fills: Vec<_> = execs.into_iter().take(limit as usize).collect();
-    let imports = PendingImport::bybit_batch(root_id, &fills, &transfers, &yields);
     let mut run = {
         let mut guard = state.vault.lock().map_err(|err| err.to_string())?;
         let vault = guard
@@ -428,6 +416,85 @@ pub(crate) async fn sync_bybit(
         run.reconcile_tx_id = made.into_iter().next();
     }
     Ok(run)
+}
+
+/// Fills, moves between accounts and Earn payouts of a Bybit key, shaped for
+/// staging. Only the fills are required: a key without the rights for the
+/// other two still imports its trades. The error is Bybit's message.
+async fn fetch_bybit(
+    client: &BybitClient,
+    root_id: &str,
+    api_key: &str,
+    api_secret: &str,
+    limit: u32,
+) -> Result<Vec<PendingImport>, String> {
+    let execs = client
+        .all_executions(api_key, api_secret, limit)
+        .await
+        .map_err(|err| err.to_string())?;
+    let transfers = client
+        .inter_transfers(api_key, api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let yields = client
+        .earn_yields(api_key, api_secret, limit as usize)
+        .await
+        .unwrap_or_default();
+    let fills: Vec<_> = execs.into_iter().take(limit as usize).collect();
+    Ok(PendingImport::bybit_batch(
+        root_id, &fills, &transfers, &yields,
+    ))
+}
+
+/// What a sync would bring under the given import settings (the form's,
+/// saved or not): fetched from Bybit, sorted, nothing staged.
+#[tauri::command]
+pub async fn preview_bybit_import(
+    input: SetImportSettingsInput,
+    state: State<'_, AppState>,
+) -> Result<ImportPreviewOutput, String> {
+    let (root_id, api_key, api_secret) = {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard.as_ref().unwrap();
+        match bybit_key_for(vault, &input.store_id) {
+            Some(entry) => (
+                entry.store_id.clone(),
+                entry.api_key.clone(),
+                entry.api_secret.clone(),
+            ),
+            None => {
+                return Ok(ImportPreviewOutput {
+                    preview: None,
+                    notice: Some("no_key".into()),
+                });
+            }
+        }
+    };
+    match fetch_bybit(
+        &BybitClient::default(),
+        &root_id,
+        &api_key,
+        &api_secret,
+        500,
+    )
+    .await
+    {
+        Ok(imports) => {
+            let guard = require_vault(&state).map_err(err_to_string)?;
+            let preview = guard
+                .as_ref()
+                .unwrap()
+                .preview_exchange_sync(imports, &input.settings);
+            Ok(ImportPreviewOutput {
+                preview: Some(preview),
+                notice: None,
+            })
+        }
+        Err(message) => Ok(ImportPreviewOutput {
+            preview: None,
+            notice: Some(import_notice(&message).into()),
+        }),
+    }
 }
 
 /// Fetch Bybit fills and stage them for confirmation (or book them at once

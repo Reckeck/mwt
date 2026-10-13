@@ -28,6 +28,24 @@ pub const IMPORT_ACCOUNTS: [&str; 3] = [
     crate::exchange::bybit::ACCOUNT_EARN,
 ];
 
+/// Most records a preview lists; the counts cover them all.
+pub const MAX_PREVIEW_ITEMS: usize = 200;
+
+/// What a sync would bring, by the import settings: nothing is kept.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ImportPreview {
+    /// Records the exchange sent.
+    pub fetched: u32,
+    /// Seen before: staged, booked or discarded.
+    pub known: u32,
+    /// Left out by the settings.
+    pub filtered: u32,
+    /// Would be new.
+    pub new: u32,
+    /// The new ones, newest first, at most [`MAX_PREVIEW_ITEMS`].
+    pub items: Vec<PendingImport>,
+}
+
 /// Imported operations of one exchange wallet, newest first, a page at a time.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ImportedTransactions {
@@ -132,10 +150,14 @@ impl UnlockedVault {
     /// The wallet an exchange account is routed to by the settings:
     /// `None` = not set (the bound sub-account), `Some(None)` = not imported.
     pub(crate) fn import_route(&self, root_id: &str, account: &str) -> Option<Option<String>> {
-        let key = account_key(account);
         let settings = self.find_store(root_id)?.exchange.as_ref()?;
+        self.route_in(&settings.import, account)
+    }
+
+    /// [`Self::import_route`] by the given settings (saved or not yet).
+    fn route_in(&self, settings: &ImportSettings, account: &str) -> Option<Option<String>> {
+        let key = account_key(account);
         settings
-            .import
             .accounts
             .iter()
             .find(|route| route.account == key)
@@ -147,8 +169,8 @@ impl UnlockedVault {
             })
     }
 
-    fn account_skipped(&self, root_id: &str, account: Option<&str>) -> bool {
-        account.is_some_and(|account| matches!(self.import_route(root_id, account), Some(None)))
+    fn account_skipped(&self, settings: &ImportSettings, account: Option<&str>) -> bool {
+        account.is_some_and(|account| matches!(self.route_in(settings, account), Some(None)))
     }
 
     /// Whether the settings let a staged record in.
@@ -165,7 +187,7 @@ impl UnlockedVault {
         if !kind_on
             || accounts
                 .into_iter()
-                .any(|account| self.account_skipped(&imp.store_id, account))
+                .any(|account| self.account_skipped(settings, account))
         {
             return false;
         }
@@ -283,6 +305,33 @@ impl UnlockedVault {
         Ok(run)
     }
 
+    /// What a sync would bring under `settings` (the saved ones, or the ones
+    /// still being edited): nothing is staged or kept.
+    pub fn preview_exchange_sync(
+        &self,
+        imports: Vec<PendingImport>,
+        settings: &ImportSettings,
+    ) -> ImportPreview {
+        let known = self.known_import_ids();
+        let mut preview = ImportPreview {
+            fetched: imports.len() as u32,
+            ..ImportPreview::default()
+        };
+        for imp in imports {
+            if imp.exec_id.is_empty() || known.contains(&imp.exec_id) {
+                preview.known += 1;
+            } else if !self.import_wanted(&imp, settings) {
+                preview.filtered += 1;
+            } else {
+                preview.new += 1;
+                if preview.items.len() < MAX_PREVIEW_ITEMS {
+                    preview.items.push(imp);
+                }
+            }
+        }
+        preview
+    }
+
     /// A sync that did not go through, for the history.
     pub fn record_import_error(
         &mut self,
@@ -393,7 +442,7 @@ impl UnlockedVault {
             let Some(target) = account.store_id.clone() else {
                 continue;
             };
-            if self.account_skipped(&root, Some(&account.account)) {
+            if self.account_skipped(&settings, Some(&account.account)) {
                 continue;
             }
             let lines: Vec<AdjustmentLine> = account
@@ -757,5 +806,50 @@ mod tests {
         assert!(crate::exchange::is_usd_stablecoin("coin:tether"));
         assert!(!crate::exchange::is_usd_stablecoin("coin:bitcoin"));
         assert!(!crate::exchange::is_usd_stablecoin("fiat:USD"));
+    }
+
+    #[test]
+    fn a_preview_follows_unsaved_settings_and_keeps_nothing() {
+        let (_dir, mut vault, wallet, _) = bybit();
+        vault
+            .sync_exchange(
+                &wallet,
+                vec![buy(&wallet, "seen", "SOLUSDT", "1700000000000")],
+                ImportSource::Manual,
+                now(),
+            )
+            .unwrap();
+        let fills = vec![
+            buy(&wallet, "seen", "SOLUSDT", "1700000000000"),
+            buy(&wallet, "sol", "SOLUSDT", "1700100000000"),
+            buy(&wallet, "eth", "ETHUSDT", "1700100000000"),
+        ];
+        let draft = ImportSettings {
+            coins: vec!["SOL".into()],
+            ..ImportSettings::default()
+        };
+        let preview = vault.preview_exchange_sync(fills.clone(), &draft);
+        assert_eq!(
+            (
+                preview.fetched,
+                preview.known,
+                preview.filtered,
+                preview.new
+            ),
+            (3, 1, 1, 1)
+        );
+        assert_eq!(preview.items[0].exec_id, "sol");
+        // Not one record staged, the saved settings untouched.
+        assert_eq!(vault.pending_imports().len(), 1);
+        assert!(vault.import_settings(&wallet).unwrap().coins.is_empty());
+        // Skipping the unified account in the draft leaves every fill out.
+        let skip = ImportSettings {
+            accounts: vec![ImportAccountRoute {
+                account: "UNIFIED".into(),
+                store_id: None,
+            }],
+            ..ImportSettings::default()
+        };
+        assert_eq!(vault.preview_exchange_sync(fills, &skip).new, 0);
     }
 }
