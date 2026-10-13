@@ -8,13 +8,7 @@ import { toast } from 'vue-sonner'
 import { connectBybit } from '@/features/exchange-key'
 import { AssetInput } from '@/entities/asset'
 import { CurrencyPicker } from '@/entities/currency'
-import {
-  LiabilityTermsFields,
-  emptyLiabilityTerms,
-  kindInfo,
-  parsePairSymbol,
-  useWalletCatalog,
-} from '@/entities/store'
+import { emptyLiabilityTerms, kindInfo, LiabilityTermsFields, parsePairSymbol, StoreNodeSelect, useWalletCatalog } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -466,10 +460,13 @@ const cardClass =
         <LiabilityTermsFields v-model="terms" />
         <div v-if="kind === 'liability' && propertyRoots.length" class="grid gap-1.5">
           <Label for="store-secured-by">{{ t('property.securedBy') }}</Label>
-          <Select id="store-secured-by" v-model="securedBy">
-            <option value="">{{ t('property.securedByNone') }}</option>
-            <option v-for="node in propertyRoots" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-          </Select>
+          <StoreNodeSelect
+            id="store-secured-by"
+            v-model="securedBy"
+            :nodes="propertyRoots"
+            flat
+            :empty-label="t('property.securedByNone')"
+          />
         </div>
       </template>
     </form>

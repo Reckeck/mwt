@@ -16,7 +16,7 @@
 | `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
-| `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13) |
+| `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
 | `mise run check` | lint + typecheck + onboarding + forms + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
@@ -164,6 +164,23 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
     `mise run check-forms` (входит в `mise run check`) ловит кнопку отправки,
     заблокированную проверкой полей, и `@submit` с ручной проверкой
     (`valid && save()`). Подробно — скилл `ui-design-system`, раздел «Forms».
+
+14. **Счёт, актив и валюта выбираются только готовыми компонентами.** Везде,
+    где пользователь выбирает счёт, актив или валюту (формы, фильтры,
+    настройки, поля узлов схем), — один и тот же компонент, а не самодельный
+    `<Select>` с `<option v-for>` и не `<Input>` для кода:
+    - **счёт/кошелёк/субсчёт** — `StoreNodeSelect` (`entities/store`): путь
+      «Кошелёк › Субсчёт», `flat` для отфильтрованного списка, `placeholder`
+      для обязательного выбора, `emptyLabel` для «не выбран», `invalid`;
+      счёт, контакт или свободный текст в операции — `AccountRefPicker`;
+    - **любой актив** (поиск) — `AssetInput` (`entities/asset`); **один из
+      известных** (что лежит на счёте) — `AssetSelect`;
+    - **валюта** — `CurrencyPicker` (`entities/currency`): избранные сверху,
+      `extra` для кодов вне каталога, `required`/`error` для формы.
+
+    Нужен вариант, которого компонент не умеет, — расширь компонент
+    (пропсом), а не пиши список рядом. `mise run check-forms` ловит
+    `<option v-for>` по счетам, активам и кодам валют и `<Input>` с валютой.
 
 ## Конвенции
 
@@ -361,5 +378,7 @@ pnpm dlx skills list                             # что установлено
       или в коммите строка `Onboarding: n/a — <причина>`
 - [ ] Формы (правило 13): обязательные поля с `*`, кнопка сохранения активна,
       ошибки под полями через `useFormValidation`; `mise run check-forms` зелёный
+- [ ] Выбор счёта, актива, валюты (правило 14) — `StoreNodeSelect` /
+      `AccountRefPicker` / `AssetInput` / `AssetSelect` / `CurrencyPicker`
 - [ ] `jj diff` содержит только то, что относится к задаче
 - [ ] Коммит сделан **только если пользователь попросил**, гейт до этого зелёный

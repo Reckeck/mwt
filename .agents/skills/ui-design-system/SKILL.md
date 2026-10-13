@@ -100,6 +100,22 @@ const form = useFormValidation(
   category, V5): a bare «Invalid input» toast after saving is a form bug.
 - Gate: `mise run check-forms` (part of `mise run check`).
 
+### Choosing an account, an asset, a currency (rule 14)
+Never a hand-made `<Select>` + `<option v-for>` or an `<Input>` for a code —
+the ready component, everywhere (forms, filters, settings, workflow fields):
+
+| What | Component | Notes |
+|---|---|---|
+| wallet / sub-account | `StoreNodeSelect` (`entities/store`) | shows the path «Wallet › Sub»; `flat` for a filtered list, `placeholder` (required pick), `emptyLabel` («none»), `invalid` |
+| wallet, contact or free text in an operation | `AccountRefPicker` (`features/transaction-create`) | |
+| any asset (search) | `AssetInput` (`entities/asset`) | `required`, `error` |
+| one of known assets (held) | `AssetSelect` (`entities/asset`) | model is the `AssetRef`; `placeholder`, `invalid` |
+| currency | `CurrencyPicker` (`entities/currency`) | favourites first; `extra`, `kinds`, `allowEmpty`, `required`, `error` |
+
+A case the component cannot do → add a prop to it, don't write a list next
+to it. `check-forms` flags `<option v-for>` over wallets/assets/currency codes
+and `<Input v-model="…currency…">`.
+
 ### Buttons
 Use `shared/ui/button` variants: `default`, `outline`, `ghost`, `destructive`, `link`
 
@@ -186,6 +202,7 @@ belongs on the screen.
 - [ ] Typography follows hierarchy
 - [ ] Forms: label→input `gap-1.5`, field→field `gap-4`
 - [ ] Forms: required fields have `*`, save stays enabled, errors under fields via `useFormValidation`
+- [ ] Accounts, assets, currencies are picked with `StoreNodeSelect` / `AccountRefPicker` / `AssetInput` / `AssetSelect` / `CurrencyPicker` (rule 14)
 - [ ] Buttons use standard variants
 - [ ] No nested modals
 - [ ] Focus rings on all interactive elements

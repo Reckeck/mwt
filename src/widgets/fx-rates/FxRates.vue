@@ -4,12 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ArrowLeftRight } from 'lucide-vue-next'
 
+import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 
@@ -98,18 +98,14 @@ const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximum
         <div class="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
           <div class="grid gap-1.5">
             <Label for="convert-from">{{ t('rates.from') }}</Label>
-            <Select id="convert-from" v-model="from">
-              <option v-for="code in codes" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-            </Select>
+            <CurrencyPicker id="convert-from" v-model="from" label="" :extra="codes" />
           </div>
           <Button variant="ghost" size="icon" class="size-9" :aria-label="t('rates.swap')" @click="swap">
             <ArrowLeftRight class="size-4" />
           </Button>
           <div class="grid gap-1.5">
             <Label for="convert-to">{{ t('rates.to') }}</Label>
-            <Select id="convert-to" v-model="to">
-              <option v-for="code in codes" :key="code" :value="code">{{ code.toUpperCase() }}</option>
-            </Select>
+            <CurrencyPicker id="convert-to" v-model="to" label="" :extra="codes" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2">

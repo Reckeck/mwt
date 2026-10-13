@@ -3,4 +3,10 @@ export interface StoreNodeSelectProps {
   nodes: StoreTreeNode[]
   /** Label of the `''` option (e.g. "All wallets"); without it there is no such option. */
   emptyLabel?: string
+  /** Hint shown while nothing is picked, not choosable itself («Выберите счёт»). */
+  placeholder?: string
+  /** Offer exactly `nodes`, not their sub-accounts too (for a filtered list). */
+  flat?: boolean
+  /** Marks the field as wrong (red border), next to an error under it. */
+  invalid?: boolean
 }

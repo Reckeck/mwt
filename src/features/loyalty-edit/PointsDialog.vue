@@ -4,13 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
+import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
@@ -74,10 +74,7 @@ const save = useMutation({
       </div>
       <div v-if="props.mode === 'credit'" class="grid gap-1.5">
         <Label for="points-source">{{ t('loyalty.source') }}</Label>
-        <Select id="points-source" v-model="source">
-          <option value="">{{ t('loyalty.noSource') }}</option>
-          <option v-for="node in cards" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-        </Select>
+        <StoreNodeSelect id="points-source" v-model="source" :nodes="cards" flat :empty-label="t('loyalty.noSource')" />
       </div>
     </form>
     <template #footer>

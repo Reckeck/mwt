@@ -5,13 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 
 import { Money } from '@/entities/currency'
+import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
@@ -160,10 +160,14 @@ const pay = useMutation({
           </p>
         </FormField>
         <FormField for="bill-store" :label="t('utilities.store')" :required="needsStore" :error="form.error('store')">
-          <Select id="bill-store" v-model="storeId">
-            <option value="" disabled>{{ t('utilityBill.pickStore') }}</option>
-            <option v-for="node in payable" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</option>
-          </Select>
+          <StoreNodeSelect
+            id="bill-store"
+            v-model="storeId"
+            :nodes="payable"
+            flat
+            :placeholder="t('utilityBill.pickStore')"
+            :invalid="Boolean(form.error('store'))"
+          />
         </FormField>
       </div>
 
