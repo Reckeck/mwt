@@ -49,3 +49,12 @@ codegen-units = 1
 lto = true
 strip = true
 panic = "abort"
+
+# The vault KDF (Argon2id, 64 MiB × 3) runs on every save. Unoptimized it is
+# tens of times slower and dominated `cargo test`; optimizing just these crates
+# keeps debug builds debuggable and changes no parameter.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
