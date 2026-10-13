@@ -665,6 +665,9 @@ const editorRoot = ref<HTMLElement | null>(null)
  */
 function onKeydown(event: KeyboardEvent) {
   if (event.defaultPrevented || !editorRoot.value || overlayOpen(editorRoot.value)) return
+  // The node search has its own keys: Enter there adds the node it found, so
+  // Ctrl+Enter must not also start an emulation behind it.
+  if (quick.value) return
   const target = event.target as Node | null
   if (target instanceof HTMLElement && target !== document.body && !editorRoot.value.contains(target)) return
   const ctrl = event.ctrlKey || event.metaKey
@@ -689,7 +692,7 @@ function onKeydown(event: KeyboardEvent) {
     quickAddHere()
     return
   }
-  if (isTyping(event) || quick.value) return
+  if (isTyping(event)) return
   if (!ctrl && event.shiftKey && key === 'a') {
     // Ctrl+Space is often taken by the input method switcher.
     event.preventDefault()
