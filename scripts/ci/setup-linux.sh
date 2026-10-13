@@ -16,10 +16,13 @@ export MISE_TRUSTED_CONFIG_PATHS="$CI_PROJECT_DIR"
 if [[ -f /etc/mwt-ci-image ]]; then
   # The tools are baked in; `mise run` would otherwise re-run rustup first.
   export MISE_TASK_RUN_AUTO_INSTALL=false
-  # Cargo's download cache lives in the project so GitLab can keep it.
-  mkdir -p "$CI_PROJECT_DIR/.cache/cargo-registry"
-  rm -rf "$CARGO_HOME/registry"
-  ln -s "$CI_PROJECT_DIR/.cache/cargo-registry" "$CARGO_HOME/registry"
+  # Cargo's download cache lives in the project so GitLab can keep it. The
+  # node image has no Rust (and no $CARGO_HOME): nothing to link there.
+  if command -v cargo >/dev/null; then
+    mkdir -p "$CI_PROJECT_DIR/.cache/cargo-registry" "$CARGO_HOME"
+    rm -rf "$CARGO_HOME/registry"
+    ln -s "$CI_PROJECT_DIR/.cache/cargo-registry" "$CARGO_HOME/registry"
+  fi
 else
   export DEBIAN_FRONTEND=noninteractive
   # shellcheck source=scripts/ci/apt-packages.sh
