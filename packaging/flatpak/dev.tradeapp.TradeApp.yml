@@ -1,0 +1,44 @@
+# Flatpak of the CI-built Linux binary (repackaged, like Tauri's guide does
+# with the .deb). CI puts the tarball next to this file as
+# trade-app-linux-x86_64.tar.gz and clones flathub/shared-modules here.
+#
+#   flatpak-builder --user --install-deps-from=flathub --force-clean \
+#     build-dir packaging/flatpak/dev.tradeapp.TradeApp.yml
+id: dev.tradeapp.TradeApp
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: trade-app
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Reminders, the tray and the OS keyring that keeps the notification key.
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.secrets
+
+modules:
+  # The system tray (tauri tray-icon loads libayatana-appindicator at runtime).
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
+  - name: trade-app
+    buildsystem: simple
+    sources:
+      - type: archive
+        path: trade-app-linux-x86_64.tar.gz
+      - type: file
+        path: dev.tradeapp.TradeApp.metainfo.xml
+    build-commands:
+      - install -Dm755 usr/bin/trade-app /app/bin/trade-app
+      - install -Dm644 usr/share/applications/*.desktop /app/share/applications/dev.tradeapp.TradeApp.desktop
+      - desktop-file-edit --set-icon=dev.tradeapp.TradeApp --set-key=Exec --set-value=trade-app
+        /app/share/applications/dev.tradeapp.TradeApp.desktop
+      - |
+        for size in 32x32 128x128; do
+          install -Dm644 usr/share/icons/hicolor/$size/apps/*.png \
+            /app/share/icons/hicolor/$size/apps/dev.tradeapp.TradeApp.png
+        done
+      - install -Dm644 dev.tradeapp.TradeApp.metainfo.xml /app/share/metainfo/dev.tradeapp.TradeApp.metainfo.xml
