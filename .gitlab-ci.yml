@@ -164,8 +164,6 @@ secret_detection:
   before_script:
     - source scripts/ci/setup-linux.sh
     - mkdir -p dist # frontendDist for tauri::generate_context!; the UI is not built here
-  after_script:
-    - sccache --show-stats || true
 
 .cargo-cache: &cargo-cache
   key: cargo-registry
@@ -221,7 +219,6 @@ rust:fmt:
     - source scripts/ci/setup-linux.sh
   script:
     - cargo fmt --all -- --check
-  after_script: []
 
 rust:clippy:
   extends: [.rust, .rust-rules]

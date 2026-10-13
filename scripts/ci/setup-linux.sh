@@ -61,6 +61,9 @@ if command -v sccache >/dev/null; then
   export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-3G}"
   export CARGO_INCREMENTAL=0
   sccache --start-server >/dev/null 2>&1 || true
+  # In this shell, not after_script: that runs in a fresh container where the
+  # server (and its numbers) is gone. Printed on success and failure alike.
+  trap 'sccache --show-stats | grep -E "^(Compile requests|Cache hits|Cache misses) " || true' EXIT
 fi
 
 if [[ -z "${CI_MISE_TOOLS:-}" || "$CI_MISE_TOOLS" == *pnpm* ]]; then
