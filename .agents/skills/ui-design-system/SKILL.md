@@ -1,225 +1,176 @@
 ---
 name: ui-design-system
-description: Enforces Multi Wallet Tracker UI consistency — spacing tokens, semantic colors, typography, form layout, dialogs and feedback. Use when adding or changing any UI in src/** — new screen, form, table, dialog, toast, loading or error state, button, card. Triggers on .vue, view, component, form, button, card, dialog, toast, sonner, spinner, skeleton, badge, notification, loading state, empty state.
+description: >
+  Как выглядит и ведёт себя интерфейс Multi Wallet Tracker: какой общий компонент
+  взять (EmptyState, SectionState, DataTable, FormDialog, PageHeader, StatCard,
+  Money/PnlText, SettingsSection, AdvancedFields, ConfirmButton), токены цвета и
+  шкала заголовков, формы и проверка полей, уведомление о каждом действии
+  (`meta` у useMutation, `notify`), загрузка/ошибка/пусто, таблицы и деньги,
+  клавиатура и фокус, тексты. Загружать перед любой вёрсткой в src/**/*.vue:
+  экран, диалог, форма, таблица, кнопка, карточка, toast, пустое состояние,
+  загрузка, сумма, P&L, тёмная тема, UI-ревью.
+paths: src/**/*.vue
 ---
 
-# Skill: Multi Wallet Tracker UI Design System
+# UI Multi Wallet Tracker
 
-Consistent UI across Multi Wallet Tracker. Load this **together with** `shadcn-vue` (in
-`.agents/skills/shadcn-vue/`) whenever you touch a component: that skill knows
-how to add and compose shadcn primitives, this one knows how Multi Wallet Tracker looks.
+Скилл отвечает на два вопроса: **из чего собрать** экран и **как он должен
+себя вести**. Как добавить или починить сам компонент shadcn-vue — скилл
+`shadcn-vue`; где лежит код и куда его импортировать — `feature-sliced-design`
+и `frontend-feature`; туры и «Что нового» — `onboarding`.
 
-Primitives live in `src/shared/ui/<name>/` — one folder per component with
-an `index.ts` (AGENTS.md rule 11). shadcn-vue's CLI writes there directly
-(`components.json` aliases); answer "no" to overwriting the hand-made
-button/input, and drop any `@lucide/vue` it adds — the project uses
-`lucide-vue-next`.
+**Не применять:** Rust, CI, чистая логика в `lib/`/`model/` без разметки.
 
----
+## Отличия проекта от скилла shadcn-vue
 
-## Quick Reference
+`shadcn-vue` ставится из реестра и не правится, поэтому расхождения
+записаны здесь. В этих пунктах проект главнее:
 
-### Spacing Tokens (use these, never raw values)
-```ts
-formGap: 1.5      // label → input
-formFieldGap: 4   // field → field
-formSectionGap: 6 // section → section
-cardPadding: 3    // p-3 (Card size="md": p-3 sm:p-4)
-cardPaddingLg: 4  // p-4
-sectionGap: 4     // gap-4
-btnGap: 2
-inputGap: 2
-iconSize: 4       // 16px
-```
-
-### Typography Scale
-| Role | Size | Weight |
-|------|------|--------|
-| Meta / caption | 12px | 400 |
-| Body / UI | 14px | 400 |
-| Body emphasized | 14px | 500 |
-| H3 | 16px | 600 |
-| H2 | 18px | 600 |
-| H1 | 20px | 600 |
-
-### Semantic Colors Only
-- `text-foreground`, `text-muted-foreground`
-- `bg-background`, `bg-card`, `bg-muted`
-- `border-border`, `bg-primary`, `bg-destructive`
-- **No hardcoded hex**
-
-### Border Radius
-- `rounded-md` (6px) default UI
-- `rounded-lg` (8px) cards
-- `rounded-full` pills/avatars
-
-### Forms
-- Label→input: `gap-1.5`
-- Field→field: `gap-4`
-- **Required fields carry a red `*`** — `<FormField required>` / `<Label required>`;
-  `AssetInput` and `CurrencyPicker` take `required` and `error` themselves.
-- **The save button stays enabled.** Only a save in flight (`isPending`) or a
-  backend refusal whose reason is shown next to it may disable it.
-- **Errors appear on save, under the field.** Pressing save with a missing or
-  wrong field does not save: each such field gets its message
-  (`text-xs text-destructive`, `role="alert"`) and a red border, and the focus
-  goes to the first one. After that the messages follow the input.
-- One flow for all of it — `useFormValidation` from `@/shared/lib/form`:
-
-```vue
-<script setup lang="ts">
-const form = useFormValidation(
-  () => ({
-    name: required(name.value),
-    limit: positiveAmount(limit.value),        // blank / not a number / ≤ 0
-    currency: required(currency.value, 'pick'), // «Выберите значение»
-  }),
-  { resetOn: open },                            // a reopened dialog starts clean
-)
-</script>
-
-<template>
-  <form id="budget-form" @submit.prevent="form.submit(save.mutate, $event)">
-    <FormField for="budget-limit" :label="t('budget.limit')" required :error="form.error('limit')">
-      <AmountInput id="budget-limit" v-model="limit" />
-    </FormField>
-  </form>
-  <Button form="budget-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
-</template>
-```
-
-- A button outside a `<form>`: `@click="form.submit(save.mutate, $event)"`.
-- A one-line «add» row with no labels: wrap each control in
-  `<span class="contents" :data-invalid="form.invalidAttr('name')">` and put
-  `form.firstMessage()` in one line under the row; call `form.reset()` after
-  a successful add, or the cleared field shows its error at once.
-- Validators (`validators.ts`): `required`, `decimal`, `positiveAmount`,
-  `nonNegativeAmount`, `integerInRange`, `minLength`, `firstError`. Texts live
-  under `validation.*` and say how to fix it.
-- Mirror backend rules the form can know (a top-up or payment needs a
-  category, V5): a bare «Invalid input» toast after saving is a form bug.
-- Gate: `mise run check-forms` (part of `mise run check`).
-
-### Choosing an account, an asset, a currency (rule 14)
-Never a hand-made `<Select>` + `<option v-for>` or an `<Input>` for a code —
-the ready component, everywhere (forms, filters, settings, workflow fields):
-
-| What | Component | Notes |
-|---|---|---|
-| wallet / sub-account | `StoreNodeSelect` (`entities/store`) | shows the path «Wallet › Sub»; `flat` for a filtered list, `placeholder` (required pick), `emptyLabel` («none»), `invalid` |
-| wallet, contact or free text in an operation | `AccountRefPicker` (`features/transaction-create`) | |
-| any asset (search) | `AssetInput` (`entities/asset`) | `required`, `error` |
-| one of known assets (held) | `AssetSelect` (`entities/asset`) | model is the `AssetRef`; `placeholder`, `invalid` |
-| currency | `CurrencyPicker` (`entities/currency`) | favourites first; `extra`, `kinds`, `allowEmpty`, `required`, `error` |
-
-A case the component cannot do → add a prop to it, don't write a list next
-to it. `check-forms` flags `<option v-for>` over wallets/assets/currency codes
-and `<Input v-model="…currency…">`.
-
-### Buttons
-Use `shared/ui/button` variants: `default`, `outline`, `ghost`, `destructive`, `link`
-
-### Modals
-- **One dialog per action.** Two buttons that do different things open two
-  dialogs (see `TransactionCreateDialog` / `PlanCalculatorDialog`); never one
-  dialog that switches content with tabs. Hand-offs close one, open the next.
-- **No chrome inside a dialog:** no Card, no second title. The dialog has the
-  title; content is bare; the primary action sits in `#footer` (right-aligned,
-  `form="…"` for submit). `Dialog` brings its own close button.
-- Content with `@sm:`/`@lg:` container queries needs a `@container` wrapper
-  inside the dialog — the portal is outside the page container.
-- **NO NESTED MODALS.** Max width: `sm` (forms), `lg` (content), `xl` (full).
-
-### Destructive actions
-- Confirm in place with `shared/ui/confirm-button` (click → "Delete?" → click),
-  not with a modal. Disable the action with the reason when the backend
-  would refuse it (e.g. deleting a wallet that has history).
-
-### Charts (vue-echarts)
-- Put the height on a wrapper: `<div class="h-80"><Chart … /></div>`.
-  vue-echarts 8 forces `height: 100%` on its element from an unlayered
-  stylesheet that beats Tailwind's utilities, so `h-*` on `<Chart>` itself
-  yields a 0px canvas.
-
----
-
-## Feedback: everything that loads or sends a request must notify
-
-**Правило: любой экран, который что-то грузит или отправляет, обязан сообщать
-об этом пользователю — если задача не говорит об обратном.**
-
-A request that finishes silently reads as a dead button. A request that fails
-silently is worse: the user changes a setting, sees nothing, and assumes it
-saved.
-
-Applies to **every** `call<T>()` / `useMutation` / `onEvent` call:
-
-| Situation | What to show |
+| shadcn-vue говорит | В проекте |
 |---|---|
-| Save succeeded | `toast.success(t('...'))` |
-| Save failed | `toast.error(...)` — **never** only `console.error` |
-| Long operation running | pending state on the control (`disabled` + spinner) |
-| Background refresh finished | toast only if it changed something user-facing |
-| Destructive action | confirm, then toast on the outcome |
+| иконки `@lucide/vue` | `lucide-vue-next`; после `shadcn-vue add` замени импорт |
+| удаление подтверждает `AlertDialog` | `ConfirmButton` на месте (клик → «Удалить?» → клик), для обратимого — «Отменить» в уведомлении |
+| формы на `FieldGroup` + `Field` | `FormField` (обёртка над shadcn `Field`: `label`, `required`, `error`, `hint`); `FieldSet`/`FieldGroup` вокруг — можно |
+| `CardHeader`/`CardContent`/… | `Card` со слотами `#header` / default / `#footer` (части размечены `data-slot`) |
+| `Button` без состояния загрузки, рядом `Spinner` | так же; в диалоге формы это уже делает `FormDialog` |
+| слой widgets не нужен (скилл FSD) | widgets есть — правило 10 AGENTS.md |
 
-### How
+Компоненты shadcn живут в `src/shared/ui/<name>/` (алиасы `components.json`).
+CLI не умеет пробный прогон: ставь во временную копию проекта и переноси
+нужные папки, чтобы не затереть доработанные `button`, `input`, `label`,
+`dialog`.
 
-Toasts are `vue-sonner`. `<Toaster />` is mounted once in `AppShell`, so a view
-only needs the import:
+## Критичные правила
 
-```ts
-import { toast } from 'vue-sonner'
-import { t } from '@/i18n'          // or useI18n() inside setup
+У каждого правила — чем оно проверяется. «Ревью» значит: скрипта нет, следи сам.
 
-toast.success(t('wallet.saved'))
-toast.error(errorText(parseError(err)))
-```
+1. **Готовый компонент вместо разметки.** Сначала каталог ниже, потом реестр
+   shadcn-vue, только потом своя композиция из компонентов shadcn в
+   `shared/ui`. Похожая разметка в трёх местах — повод вынести общий
+   компонент. → `check-ui` (raw-button, raw-check, raw-table, hand-empty)
+2. **Каждое действие сообщает исход.** У `useMutation` есть
+   `meta: { success, error }` (и `undo` для обратимого) либо
+   `meta: { silent: '<почему>' }` — тогда ошибку показывает свой `onError`
+   через `notify.error`. Уведомление показывает `MutationCache`, а не
+   компонент. → `check-ui` (mutation-meta),
+   [feedback.md](references/feedback.md)
+3. **Загрузка, ошибка и «пусто» различимы.** Ложное «Ничего нет», пока данные
+   ещё едут, — баг. `SectionState` по `isPending`/`error`/пусто. → ревью
+4. **Деньги — через `Money`/`PnlText`/`format.ts`.** Цифры `tabular-nums`, в
+   таблице по правому краю; у P&L знак, ноль нейтральный. → `check-ui`
+   (to-fixed), [data-display.md](references/data-display.md)
+5. **Цвет не единственный носитель смысла.** Рост/падение — знак и цвет,
+   статус — текст или иконка и цвет. → ревью
+6. **Только токены.** `text-success`, `text-warning`, `text-destructive`,
+   `bg-muted`…; без `emerald-*`/`red-*`, hex и ручных `dark:`. → `check-ui`
+   (raw-color), [tokens.md](references/tokens.md)
+7. **Кнопка сохранения активна**, поля проверяются при нажатии и показывают
+   ошибку под собой. → `check-forms`, [forms.md](references/forms.md)
+8. **Счёт, актив, валюта — только готовыми пикерами** (правило 14). →
+   `check-forms`
+9. **Enter отправляет форму** (диалог формы — `FormDialog` или `<form>`), Esc
+   закрывает окно, фокус виден (`focus-visible:ring`). → ревью,
+   [a11y-motion.md](references/a11y-motion.md)
+10. **Опасное действие — подтверждение на месте или «Отменить».** →
+    ревью
+11. **Анимация только там, где помогает понять**, без `transition-all`;
+    `prefers-reduced-motion` гасит всё глобально (`styles.css`). →
+    `check-ui` (transition-all)
+12. **Состояние экрана переживает переход:** вкладка и фильтры — в
+    query-параметрах URL. → ревью
+13. **Длинный список не рисуется целиком:** больше ~50 строк — «Показать
+    ещё N» постранично (образец — `TransactionsList`). → ревью
+14. **Тексты — в обоих локалях**, по правилам [copy.md](references/copy.md). →
+    `check-onboarding` (совпадение ключей)
+15. **Файл — одна смысловая часть:** `.vue` до 250 строк, `.ts` до 300;
+    длиннее — дели на `model/`, `lib/`, `ui/`. → `check-ui` (file-size)
 
-Rules for the messages themselves:
+## Каталог: задача → компонент
 
-- **Through `t()`.** No hardcoded strings — the UI is bilingual.
-- **`toast.error` on every failure path.** An empty `catch {}` is a bug, not a
-  style choice.
-- **Never both a toast and an inline `<p>` for the same event.** Pick the toast
-  for the transient outcome; keep inline text only for state that must stay
-  visible while the user looks at the field (validation, sync status).
-- **No toast per keystroke.** Debounce, and skip repeats of the same message.
+| Задача | Компонент | Где |
+|---|---|---|
+| шапка страницы: крошки, заголовок, действия | `PageHeader` | `shared/ui/page-header` |
+| загрузка / ошибка с «Повторить» / пусто / данные | `SectionState` | `shared/ui/section-state` |
+| пустое состояние с кнопкой «Создать» | `EmptyState` | `shared/ui/empty-state` |
+| таблица с сортировкой, числа справа | `DataTable` (колонки `ColumnDef`, `meta.align`) | `shared/ui/data-table` |
+| подпись + крупное число | `StatCard` | `shared/ui/stat-card` |
+| сумма с валютой и подсказкой курса | `Money` (`colored` — знак и цвет) | `entities/currency` |
+| прибыль/убыток, с процентом | `PnlText` | `entities/currency` |
+| диалог с одной формой | `FormDialog` (`form-id`, `pending`, `@submit`) | `shared/ui/form-dialog` |
+| поле формы с `*`, ошибкой, подсказкой | `FormField` | `shared/ui/form-field` |
+| блок настроек с одним заголовком | `SettingsSection` | `shared/ui/settings-section` |
+| редкие поля формы под «Дополнительно» | `AdvancedFields` | `shared/ui/advanced-fields` |
+| строка списка или карточка — одна большая кнопка | `Button size="block"` (сама раскладка — классами) | `shared/ui/button` |
+| маленький «×» в чипе или строке | `Button variant="ghost" size="icon-xs"` (`icon-sm` — 32 px) | `shared/ui/button` |
+| таблица без сортировки (месяцы по порядку, ячейка на несколько колонок) | части shadcn `Table` | `shared/ui/table` |
+| удалить / убрать с подтверждением | `ConfirmButton` | `shared/ui/confirm-button` |
+| меню «⋯» строки или карточки | `ActionMenu` | `shared/ui/action-menu` |
+| виджет Главной | `WidgetFrame` | `shared/ui/widget-frame` |
+| выноска-предупреждение, ошибка на месте | `Alert` | `shared/ui/alert` |
+| поповер, команда, список с поиском | `Popover`, `Command`, `Combobox` | `shared/ui/…` |
+| выбор из 2–7 вариантов | `ToggleGroup` | `shared/ui/toggle-group` |
+| радио, чекбокс, переключатель | `RadioGroup`, `Checkbox`, `Switch` | `shared/ui/…` |
+| хлебные крошки отдельно | `Breadcrumb…` | `shared/ui/breadcrumb` |
+| ожидание на кнопке | `Spinner` | `shared/ui/spinner` |
+| заглушка загрузки | `Skeleton` (обычно через `SectionState`) | `shared/ui/skeleton` |
+| горячая клавиша в подсказке | `Kbd` | `shared/ui/kbd` |
+| счёт / кошелёк | `StoreNodeSelect`, в операции — `AccountRefPicker` | `entities/store`, `features/transaction-create` |
+| актив | `AssetInput` (поиск), `AssetSelect` (из известных) | `entities/asset` |
+| валюта | `CurrencyPicker` | `entities/currency` |
 
-### What is *not* a notification
+Полный список — папки `src/shared/ui/*` (каждая с `index.ts`). Нет нужного —
+`pnpm dlx shadcn-vue@latest search`, затем `add`.
 
-Persistent, glanceable state is not a toast and must not become one:
+## Порядок работы
 
-- empty-state copy, sync badges, persistent warnings, validation hints.
+1. **Проверь, нет ли этого уже.** Поищи IPC-команду и ключ i18n
+   (`grep -rn "delete_contact" src`): действие может уже жить в другой фиче.
+2. **Проверь контракт бэкенда** до вёрстки формы: DTO в `ipc.gen.d.ts` и
+   проверки в `crates/core/src/service/*` — обязательные поля и отказы,
+   которые форма должна поймать сама (правило 13).
+3. **Собери из каталога.** Каталог главнее существующего кода: старые экраны
+   ещё переводятся на общие компоненты (`check-ui.baseline.json`), поэтому
+   «сделай как в соседнем файле» может привести к старому шаблону. Своё —
+   только композиция в `shared/ui` (папка + `index.ts` + `*.types.ts`,
+   правило 11).
+4. Подключи исход каждого действия (`meta`), три состояния данных
+   (`SectionState`), тексты в обоих локалях.
+5. Обучение (скилл `onboarding`): новый экран — тур в `tours.ts`; новый
+   заметный элемент — шаг в тур его экрана и `data-tour`; смена поведения —
+   пункт в текущей записи `whats-new.ts`.
+6. Проверь глазами в `pnpm dev` (мок, пароль `secret`): светлая и тёмная
+   тема, окно 1280 и узкое ~800, загрузка (ложного «пусто» нет).
+7. `mise run check` (Biome, vue-tsc, `check-onboarding`, `check-forms`,
+   `check-ui`, clippy, тесты).
 
-A toast is transient. If the information must survive the toast's lifetime, it
-belongs on the screen.
+## Проверки
 
----
+| Скрипт | Ловит |
+|---|---|
+| `mise run check-ui` | сырые `button`/`checkbox`/`radio`/`table`, ручное пустое состояние, `emerald`/`red`/hex, `transition-all`, `toFixed` в `.vue`, `div @click` без роли, `useMutation` без `meta`, файл длиннее лимита |
+| `mise run check-forms` | кнопка сохранения заблокирована проверкой полей, ручная проверка в `@submit`, самодельные списки счетов/активов/валют |
+| `mise run check-onboarding` | экран без тура, шаг без элемента, нет текста, ключи ru ≠ en |
 
-## Pre-Commit Checklist
-- [ ] Spacing uses semantic tokens
-- [ ] No hardcoded hex colors
-- [ ] Typography follows hierarchy
-- [ ] Forms: label→input `gap-1.5`, field→field `gap-4`
-- [ ] Forms: required fields have `*`, save stays enabled, errors under fields via `useFormValidation`
-- [ ] Accounts, assets, currencies are picked with `StoreNodeSelect` / `AccountRefPicker` / `AssetInput` / `AssetSelect` / `CurrencyPicker` (rule 14)
-- [ ] Buttons use standard variants
-- [ ] No nested modals
-- [ ] Focus rings on all interactive elements
-- [ ] Labels on all inputs
-- [ ] **Every request reports success and failure** (toast), or the task
-      explicitly says otherwise
-- [ ] No `console.error` standing in for user-visible feedback
-- [ ] All new UI strings exist in **both** `ru.json` and `en.json`
-- [ ] `mise run check` passes
+Долги, которые были до правила, записаны в `scripts/check-ui.baseline.json`.
+Файл не может стать хуже своей записи. Исправил — `node scripts/check-ui.mjs
+--update`, запись уменьшится. Новый файл должен быть чистым.
 
----
+## UI-ревью: формат отчёта
 
-## For Agents: When Editing UI
+Находки по файлам, `файл:строка`, одна строка на находку, сначала то, что
+мешает пользователю (ложное «пусто», молчащее действие, недоступная
+клавиатурой кнопка), потом единообразие. Без вступлений.
 
-1. **Read existing patterns first** — `grep -r "pattern" src/components/`
-2. **Check `src/shared/ui/`** before adding a primitive; prefer the shadcn
-   CLI (`pnpm dlx shadcn-vue@latest add <component>`)
-3. **Use semantic tokens** — never raw `text-blue-500`
-4. **Wire the feedback** — see the rule above; it is not optional
-5. **Run `mise run check`** before done (lint + typecheck + tests)
+## Справочник
+
+- [tokens.md](references/tokens.md) — цвета, шкала заголовков, отступы, радиусы, тёмная тема
+- [forms.md](references/forms.md) — правила 13 и 14 полностью, `useFormValidation`, `FormDialog`
+- [feedback.md](references/feedback.md) — уведомления, загрузка, ошибки, пусто, подтверждение и «Отменить»
+- [data-display.md](references/data-display.md) — таблицы, деньги, проценты, даты, P&L, графики, длинные списки
+- [layout.md](references/layout.md) — страница, диалог, Sheet, вкладки, узкие окна
+- [a11y-motion.md](references/a11y-motion.md) — клавиатура, фокус, ARIA, контраст, анимация
+- [copy.md](references/copy.md) — тексты интерфейса на ru и en, словарь терминов
+
+Откуда правила: Vercel Web Interface Guidelines, скилл `unovue/shadcn-vue`,
+Anthropic Agent Skills best practices, Rauno Freiberg «Interfaces»,
+Pencil & Paper — таблицы с данными (ссылки — в `references/`).
