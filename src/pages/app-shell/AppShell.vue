@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -39,7 +39,6 @@ useBackendNotices()
 const { summary, isOnline } = useConnectivity()
 const { tour, routeTour } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
-const paletteOpen = ref(false)
 
 /** A wallet page carries its own name and parents; the shell only says where you are. */
 const pageTitle = computed(() =>
@@ -59,8 +58,11 @@ const pageTitle = computed(() =>
         :has-tour="tour.hasTour(routeTour)"
         @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
-        @palette="paletteOpen = true"
-      />
+      >
+        <template #search>
+          <CommandPalette @quick-add="quickAddOpen = true" @settings="openSettings()" @lock="lock" />
+        </template>
+      </AppHeader>
 
       <div class="@container min-h-0 flex-1 overflow-y-auto p-3 md:p-4">
         <!-- Keyed by path: /stores/a → /stores/b reuses the page component, and its
@@ -71,12 +73,6 @@ const pageTitle = computed(() =>
 
     <SettingsShell />
     <QuickAddDialog v-model:open="quickAddOpen" />
-    <CommandPalette
-      v-model:open="paletteOpen"
-      @quick-add="quickAddOpen = true"
-      @settings="openSettings()"
-      @lock="lock"
-    />
     <WhatsNewDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>

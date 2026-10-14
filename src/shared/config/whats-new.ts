@@ -26,6 +26,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [
       { key: 'quickAddOnly', route: 'workflow-new' },
       { key: 'flowsInInspector', route: 'workflow-new' },
+      { key: 'search', route: 'dashboard' },
     ],
   },
   {

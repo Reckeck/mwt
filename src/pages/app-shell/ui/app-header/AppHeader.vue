@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { CircleHelp, Plus, Search, WifiOff } from 'lucide-vue-next'
+import { CircleHelp, Plus, WifiOff } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { NotificationBell } from '@/widgets/notification-bell'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Kbd } from '@/shared/ui/kbd'
 import { Separator } from '@/shared/ui/separator'
 import { SidebarTrigger } from '@/shared/ui/sidebar'
 
@@ -18,7 +17,7 @@ const props = defineProps<{
   /** The screen has a tour to start with «?». */
   hasTour: boolean
 }>()
-const emit = defineEmits<{ quickAdd: []; startTour: []; palette: [] }>()
+const emit = defineEmits<{ quickAdd: []; startTour: [] }>()
 
 const { t } = useI18n()
 </script>
@@ -38,18 +37,7 @@ const { t } = useI18n()
       <Money :amount="props.summary.total_base" :currency="props.summary.base_currency" :decimals="2" />
     </span>
 
-    <Button
-      variant="outline"
-      size="sm"
-      class="shrink-0 text-muted-foreground"
-      :aria-label="t('palette.title')"
-      data-tour="command-palette"
-      @click="emit('palette')"
-    >
-      <Search class="size-4" />
-      <span class="hidden lg:inline">{{ t('palette.open') }}</span>
-      <Kbd class="hidden lg:inline-flex">Ctrl K</Kbd>
-    </Button>
+    <slot name="search" />
     <Button size="sm" class="shrink-0" :title="t('quickAdd.title')" @click="emit('quickAdd')">
       <Plus class="size-4" />
       <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>

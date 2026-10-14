@@ -1,3 +1,5 @@
+import type { Component } from 'vue'
+
 export interface AccountRefPickerProps {
   /** Offer the user's own wallets. */
   stores?: boolean
@@ -27,4 +29,7 @@ export interface AccountOption {
   parent?: string
   /** What kind of account this is, for the icon. */
   detailKind?: DetailKind
+  /** A wallet's own icon and colour. */
+  icon?: Component
+  color?: string
 }

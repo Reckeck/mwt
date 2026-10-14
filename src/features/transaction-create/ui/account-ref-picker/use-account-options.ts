@@ -3,8 +3,8 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { Building2, CreditCard, Hash, Landmark, Link, PenLine, Phone, User, Wallet } from 'lucide-vue-next'
 
+import { walletRow } from '@/entities/store'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -37,6 +37,7 @@ const DETAIL_ICONS: Record<DetailKind, typeof User> = {
 
 export function iconOf(row: AccountOption) {
   if (row.detailKind) return DETAIL_ICONS[row.detailKind]
+  if (row.icon) return row.icon
   return row.value.startsWith('store:') ? Building2 : row.value === RAW ? PenLine : User
 }
 
@@ -65,17 +66,15 @@ export function useAccountOptions(
     flattenStoreTree(tree.data.value ?? [])
       .filter((node) => !node.store.archived && node.store.id !== props.excludeStoreId)
       .map((node) => {
-        const parent = node.path.slice(0, -1).join(' › ')
-        const binding =
-          typeof node.store.binding === 'object' && 'asset' in node.store.binding ? node.store.binding.asset.symbol : ''
-        const balance = formatMoney(node.subtree_base, { currency: settings.baseCurrency })
-        const detail = [parent || t(`stores.kind.${node.store.kind}`), binding, balance].filter(Boolean).join(' · ')
+        const row = walletRow(node, t, settings.baseCurrency)
         return {
-          value: `store:${node.store.id}`,
-          title: node.store.name,
-          detail,
+          value: `store:${row.id}`,
+          title: row.title,
+          detail: row.detail,
           group: t('tx.side.myWallets'),
-          haystack: `${node.path.join(' ')} ${binding}`.toLowerCase(),
+          haystack: row.haystack,
+          icon: row.icon,
+          color: row.color,
         }
       }),
   )

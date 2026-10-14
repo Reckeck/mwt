@@ -135,7 +135,13 @@ const current = computed(() => allOptions.value.find((row) => row.value === choi
               :class="row.parent && 'ml-4 w-[calc(100%-1rem)] rounded-l-none border-l border-border py-1'"
             >
               <Check v-if="row.value === choice" class="size-3.5 text-primary" aria-hidden="true" />
-              <component :is="iconOf(row)" v-else class="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <component
+                :is="iconOf(row)"
+                v-else
+                class="size-3.5 text-muted-foreground"
+                :style="row.color ? { color: row.color } : undefined"
+                aria-hidden="true"
+              />
               <span class="grid min-w-0 leading-tight">
                 <span class="truncate" :class="row.parent ? 'text-[13px]' : 'font-medium'">{{ row.title }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ row.detail }}</span>
