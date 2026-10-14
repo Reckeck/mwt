@@ -1,141 +1,8 @@
-/**
- * Browser-mock half of the ledger: transactions, contacts, categories and
- * rules for `pnpm dev`. Mirrors the Rust shapes closely enough to click
- * through the UI; the real rules (V1–V14) live only in the backend.
- */
+/** A transaction built from form input, like the backend would store it. */
 
-const GROUPS: Array<[CategoryGroup, string[]]> = [
-  [
-    'income',
-    [
-      'salary',
-      'advance',
-      'bonus',
-      'freelance',
-      'side_job',
-      'gift_received',
-      'cashback',
-      'deposit_interest',
-      'income_other',
-    ],
-  ],
-  [
-    'fixed',
-    [
-      'rent_mortgage',
-      'utilities',
-      'internet',
-      'mobile',
-      'loan_payment',
-      'loan_interest',
-      'installments',
-      'taxes',
-      'insurance',
-      'subscriptions',
-    ],
-  ],
-  [
-    'daily',
-    [
-      'groceries',
-      'food_delivery',
-      'transport',
-      'taxi',
-      'fuel',
-      'medicine',
-      'pharmacy',
-      'therapy',
-      'sport',
-      'education',
-      'clothing',
-      'beauty',
-      'household_chemicals',
-      'pets',
-      'family_help',
-      'gifts',
-      'repair',
-      'household',
-      'entertainment',
-      'travel',
-      'other',
-    ],
-  ],
-  ['savings', ['savings']],
-  ['service', ['trading', 'fee', 'transfer', 'exchange', 'opening_balance']],
-]
+import { mockRules } from './seed'
 
-/** Same defaults as `default_categories()` in Rust. */
-export const mockCategories: Category[] = GROUPS.flatMap(([group, keys]) =>
-  keys.map((key) => ({ key, name: null, group, archived: false })),
-)
-
-export const mockContacts: Contact[] = [
-  {
-    id: 'mock-contact-sky',
-    name: 'skycapital',
-    kind: 'exchanger',
-    accounts: [
-      {
-        id: 'mock-account-usdt',
-        group: 'USDT',
-        label: 'TRC-20',
-        kind: 'crypto_address',
-        value: 'TXa1b2c3d4e5',
-        currency: 'usdt',
-        network: 'tron',
-        active: true,
-      },
-    ],
-    note: '',
-    archived: false,
-    created_at: new Date().toISOString(),
-    group: 'P2P',
-  },
-  {
-    id: 'mock-contact-mom',
-    name: 'Мама',
-    kind: 'person',
-    accounts: [
-      {
-        id: 'mock-account-card',
-        group: null,
-        label: 'Карта',
-        kind: 'card',
-        value: '4276 1234 5678 9012',
-        currency: 'rub',
-        network: null,
-        active: true,
-      },
-    ],
-    note: '',
-    archived: false,
-    created_at: new Date().toISOString(),
-    group: '',
-  },
-]
-
-export const mockRules: CategorizationRule[] = [
-  { id: 'mock-rule-taxi', pattern: 'такси', category: 'taxi', active: true, order: 0 },
-]
-
-/** Mirrors `allowed_kinds` / `default_kind` in Rust. */
-export function mockKindsFor(kind: StoreKind): TransactionKinds {
-  const verbs: TxKind[] = ['topup', 'payment', 'transfer', 'convert']
-  switch (kind) {
-    case 'exchange':
-      return { verbs, special: ['trade_spot', 'trade_futures'], default: 'trade_spot' }
-    case 'crypto':
-      return { verbs, special: ['defi'], default: 'transfer' }
-    case 'property':
-      return { verbs: ['topup'], special: ['asset_sell'], default: 'topup' }
-    case 'liability':
-      return { verbs: ['payment', 'transfer'], special: [], default: 'transfer' }
-    default:
-      return { verbs, special: [], default: 'payment' }
-  }
-}
-
-function asset(ident: AssetIdent): AssetRef {
+export function asset(ident: AssetIdent): AssetRef {
   const symbol = ident.symbol.trim().toUpperCase()
   return {
     symbol,
@@ -154,7 +21,7 @@ function fee(input: FeeInput | null): Fee | null {
   return input && Number(input.amount) ? { asset: asset(input.asset), amount: input.amount, price: noStamp } : null
 }
 
-function meta(common: TxCommonInput, id?: string, origin?: TxOrigin): TxMeta {
+export function meta(common: TxCommonInput, id?: string, origin?: TxOrigin): TxMeta {
   return {
     id: id ?? crypto.randomUUID(),
     timestamp: common.timestamp || new Date().toISOString(),
@@ -352,65 +219,4 @@ export function mockTransactionFrom(
   categorize(tx)
   check(tx)
   return tx
-}
-
-/** Personal debts per contact and asset, like `contact_balances` in Rust. */
-export function mockContactBalances(txs: Transaction[]): ContactBalance[] {
-  const out = new Map<string, ContactBalance>()
-  for (const tx of txs) {
-    if (!('transfer' in tx) || !tx.transfer.debt) continue
-    const { from, to, debt, amount } = tx.transfer
-    const contact = 'contact' in from ? from.contact.contact_id : 'contact' in to ? to.contact.contact_id : null
-    if (!contact) continue
-    const key = `${contact}:${tx.transfer.asset.symbol}`
-    const row = out.get(key) ?? { contact_id: contact, asset: tx.transfer.asset, receivable: '0', payable: '0' }
-    const delta = Number(amount)
-    if (debt === 'lend') row.receivable = String(Number(row.receivable) + delta)
-    if (debt === 'collect') row.receivable = String(Number(row.receivable) - delta)
-    if (debt === 'borrow') row.payable = String(Number(row.payable) + delta)
-    if (debt === 'repay') row.payable = String(Number(row.payable) - delta)
-    out.set(key, row)
-  }
-  return [...out.values()].filter((row) => Number(row.receivable) || Number(row.payable))
-}
-
-/** Sent and received per asset with one contact, from principal legs. */
-export function mockTurnover(
-  txs: Transaction[],
-  contactId: string,
-  accountId: string | null,
-  legsOf: (tx: Transaction) => Array<{ asset: AssetRef; amount: string; role: LegRole }>,
-): ContactTurnover {
-  const rows = new Map<string, TurnoverRow>()
-  let count = 0
-  for (const tx of txs) {
-    const kind = Object.keys(tx)[0] as TxKind
-    const record = (tx as unknown as Record<TxKind, { meta: TxMeta; from?: AccountRef; to?: AccountRef }>)[kind]
-    const sides = [record.from, record.to].filter((side): side is AccountRef =>
-      Boolean(side && typeof side === 'object'),
-    )
-    const named = sides.some(
-      (side) =>
-        'contact' in side &&
-        side.contact.contact_id === contactId &&
-        (!accountId || side.contact.account_id === accountId),
-    )
-    if (!named && (accountId || record.meta.contact_id !== contactId)) continue
-    count += 1
-    for (const leg of legsOf(tx).filter((entry) => entry.role === 'principal')) {
-      const row = rows.get(leg.asset.symbol) ?? { asset: leg.asset, sent: '0', received: '0' }
-      if (leg.amount.startsWith('-')) row.sent = String(Number(row.sent) + Math.abs(Number(leg.amount)))
-      else row.received = String(Number(row.received) + Number(leg.amount))
-      rows.set(leg.asset.symbol, row)
-    }
-  }
-  return {
-    contact_id: contactId,
-    account_id: accountId,
-    base_currency: 'usd',
-    rows: [...rows.values()],
-    sent_base: '0',
-    received_base: '0',
-    tx_count: count,
-  }
 }

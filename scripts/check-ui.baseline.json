@@ -1,11 +1,6 @@
 {
   "file-size src/features/exchange-import-settings/ImportSettingsForm.vue": 276,
   "file-size src/features/plan-calculator/PlanCalculator.vue": 270,
-  "file-size src/shared/api/mock/analytics.ts": 314,
-  "file-size src/shared/api/mock/index.ts": 2104,
-  "file-size src/shared/api/mock/ledger.ts": 417,
-  "file-size src/shared/api/mock/planning.ts": 807,
-  "file-size src/shared/api/mock/workflows.ts": 358,
   "file-size src/widgets/exchange-terminal/ExchangeTerminal.vue": 263,
   "raw-button src/widgets/workflow-editor/ui/WorkflowEditor.vue": 1
 }
