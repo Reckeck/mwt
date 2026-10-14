@@ -7,7 +7,7 @@ description: >
   (vault_schema, dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
   dev_reload_vault_json_from_editor), crates/core/src/model/vault.rs (json_schema),
   src/shared/lib/editor.ts, src/shared/lib/json.ts, src/shared/lib/json-schema-reader.ts,
-  src/widgets/vault-json-editor/ui/VaultJsonEditor.vue, а также на задачах «редактор vault»,
+  src/widgets/vault-json-editor/VaultJsonEditor.vue, а также на задачах «редактор vault»,
   «JSON vault», «правка документа», «подсказки полей», «Ctrl+S», «схема vault»,
   «autocomplete JSON», «VaultFile::backup», «отклонён документ», «черновик»,
   «dev_apply_vault_json», «vault_schema», «Открыть в редакторе».
@@ -16,7 +16,7 @@ description: >
 # Редактор vault в формате JSON
 
 Документ vault показывается и правится как есть: расшифрованный `VaultDoc` в
-CodeMirror. Экран живёт в `src/widgets/vault-json-editor/ui/VaultJsonEditor.vue`,
+CodeMirror. Экран живёт в `src/widgets/vault-json-editor/VaultJsonEditor.vue`,
 схема приходит из Rust по IPC. Полное описание — `docs/json-editor.md`;
 здесь только то, что нужно, чтобы не сломать.
 
@@ -41,7 +41,7 @@ CodeMirror. Экран живёт в `src/widgets/vault-json-editor/ui/VaultJson
 | Разбор `$ref` / `anyOf` / `oneOf` | `src/shared/lib/json-schema-reader.ts` |
 | Расширения CodeMirror, тема, autocomplete | `src/shared/lib/editor.ts` |
 | `parseJson` / `normalizeJson` | `src/shared/lib/json.ts` |
-| Компонент + статус-бейдж | `src/widgets/vault-json-editor/ui/VaultJsonEditor.vue` |
+| Компонент + статус-бейдж | `src/widgets/vault-json-editor/VaultJsonEditor.vue` |
 
 ## Что менять и где
 

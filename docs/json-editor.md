@@ -12,9 +12,9 @@
 | Схема | `crates/core/src/model/vault.rs` → `json_schema()` | единственный источник формы документа (`schemars` по `VaultDoc`) |
 | IPC | `crates/app/src/commands/settings.rs` | `vault_schema`, `dev_dump_vault`, `dev_apply_vault_json`, `dev_open_vault_json_in_editor`, `dev_reload_vault_json_from_editor` |
 | Автодополнение | `src/shared/lib/json-schema-reader.ts` | `$ref` / `anyOf` / `oneOf` / `type: [...]` → плоские подсказки |
-| Редактор | `src/shared/lib/editor.ts` | расширения CodeMirror: тема, autocomplete по JSON-пути, lint, history, folding |
+| Редактор | `src/shared/lib/editor/` (`theme`, `json-path`, `completions`, `extensions`) | расширения CodeMirror: тема, autocomplete по JSON-пути, lint, history, folding |
 | JSON-хелперы | `src/shared/lib/json.ts` | `parseJson` (разбирается ли draft) и `normalizeJson` (канонический вид для сравнения) |
-| Компонент | `src/components/settings/VaultJsonEditor.vue` | склейка: CodeMirror + IPC + статус |
+| Компонент | `src/widgets/vault-json-editor/VaultJsonEditor.vue` | склейка: CodeMirror + IPC + статус |
 
 Формы документа на фронтенде нет ни в одном месте: редактор спрашивает схему у
 бэкенда. Добавил поле в `VaultDoc` — оно появилось в подсказках само.

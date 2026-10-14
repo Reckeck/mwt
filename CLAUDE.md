@@ -47,7 +47,7 @@ mise артефакты окажутся в `target/`, и сборка пойд�
 - **Ошибки через IPC.** Rust отдаёт строку `"CODE: message"` (`Error::code()`),
   `parseError` в `src/shared/api/ipc.ts` разбирает её в `{ code, message }`.
 - **`pnpm dev` без Tauri.** `call()` в `ipc.ts` при отсутствии
-  `__TAURI_INTERNALS__` уходит в in-memory мок (пароль — `secret`). Новая
+  `__TAURI_INTERNALS__` лениво грузит in-memory мок `src/shared/api/mock/` (пароль — `secret`). Новая
   команда, которую нужно гонять в браузере, требует ветки в этом моке.
 - **Добавление команды** затрагивает: DTO в `ipc_contract.rs` → логика в
   `service.rs`/core → хендлер в `crates/app/src/commands/*` →
@@ -59,6 +59,15 @@ mise артефакты окажутся в `target/`, и сборка пойд�
 Правило 12 из `AGENTS.md`: видимая пользователю фича выходит с туром,
 подсказками и пунктом «Что нового». Перед правкой UI загружай скилл
 `onboarding`; гейт проверяет это скриптом `scripts/check-onboarding.mjs`.
+
+## Интерфейс: общие компоненты и исход каждого действия
+
+Правило 15 из `AGENTS.md`. Перед вёрсткой загружай скилл `ui-design-system`
+(каталог компонентов, справочник `references/`). Уведомления показывает
+`MutationCache` в `src/app/providers/query` по `meta` мутации — `toast` в
+компоненте не вызывается. `mise run check-ui` держит базу старых долгов
+(`scripts/check-ui.baseline.json`): исправил — `node scripts/check-ui.mjs
+--update`.
 
 ## Коммиты из Claude Code
 
