@@ -1626,7 +1626,7 @@
   "tour.dashboard.wallets.title": "Wallets by kind",
   "tour.dashboard.wallets.body": "Cash is there from the start. Banks, crypto, exchanges, property and loans are added here or with «+» on their group.",
   "tour.dashboard.palette.title": "Go to",
-  "tour.dashboard.palette.body": "Ctrl+K or this button: type a few letters to open a screen, a wallet or an action.",
+  "tour.dashboard.palette.body": "Search screens, wallets and actions right in the header. Ctrl+K puts the cursor here from anywhere, Enter opens, Esc closes.",
   "tour.dashboard.settings.title": "Settings",
   "tour.dashboard.settings.body": "Theme, language, currency, categories and budget — in one window with sections on the left.",
   "tour.dashboard.contextMenu.title": "Help is always near",
@@ -2510,9 +2510,7 @@
   "tx.futuresCategory.linear": "Linear (in USDT)",
   "tx.futuresCategory.inverse": "Inverse (in the coin)",
   "palette.title": "Go to",
-  "palette.hint": "A screen, a wallet or an action — start typing. Opens from anywhere with Ctrl+K.",
-  "palette.open": "Go to…",
-  "palette.placeholder": "For instance: Tinkoff, reports, refresh prices",
+  "palette.placeholder": "Search…",
   "palette.nothing": "Nothing found — try another word",
   "palette.actions": "Actions",
   "palette.screens": "Screens",
@@ -2525,5 +2523,6 @@
   "whatsNew.workflows2.title": "Workflows: simpler to build, clearer wires",
   "whatsNew.workflows2.quickAddOnly": "Nodes are added one way — Ctrl+Space (or Shift+A) at the cursor. The node list on the left and the «Node» button are gone: the canvas is wider.",
   "whatsNew.workflows2.flowsInInspector": "The node panel has a «Flow» section: where the run comes from and goes, and a button to cut a wire. Long names no longer spill past the panel.",
+  "whatsNew.workflows2.search": "Quick jump is now a search field in the header: results drop down right under it, no separate window. Wallets look like in «To» — with the parent, asset and balance.",
   "filter.more": "More filters"
 }
