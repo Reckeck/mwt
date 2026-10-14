@@ -17,6 +17,7 @@ import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
 import { Switch } from '@/shared/ui/switch'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { SCHEDULE_KINDS, type ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
@@ -193,7 +194,7 @@ const save = useMutation({
           <Input id="automation-days" v-model="everyDays" type="number" min="1" />
         </FormField>
         <FormField for="automation-start" :label="t('automation.startsAt')" required :error="fields.error('startsAt')">
-          <Input id="automation-start" v-model="startsAt" type="date" />
+          <DateTimePicker id="automation-start" v-model="startsAt" />
         </FormField>
       </div>
 

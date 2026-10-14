@@ -9,6 +9,7 @@ import { Input } from '@/shared/ui/input'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { DebtPanelProps } from './debt-manage.types'
 
@@ -95,12 +96,11 @@ const ACTIONS: { effect: DebtEffect; icon: typeof ArrowUpRight }[] = [
           </span>
         </div>
         <div class="grid gap-2 @md:grid-cols-[10rem_1fr]">
-          <Input
-            type="date"
+          <DateTimePicker
             class="h-8"
             :model-value="entry.terms?.due_at ?? ''"
             :aria-label="t('debt.dueDate')"
-            @change="(event: Event) => saveTerms(entry.row.asset.symbol, entry.terms, { due_at: (event.target as HTMLInputElement).value })"
+            @update:model-value="(value) => saveTerms(entry.row.asset.symbol, entry.terms, { due_at: value ?? '' })"
           />
           <Input
             class="h-8"

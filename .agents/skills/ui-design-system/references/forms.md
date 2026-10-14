@@ -105,8 +105,12 @@ const save = useMutation({
 ## Числа и даты в полях
 
 - Суммы — `AmountInput` (`inputmode="decimal"`, запятая и точка).
-- Дата — `<Input type="date">`, дата со временем — `type="datetime-local"`;
-  в ISO для бэкенда — `dateInputToIso` / `toIsoTimestamp`, обратно —
+- Дата, дата со временем, месяц — `DateTimePicker` (`shared/ui/date-time-picker`,
+  `mode="date|datetime|month"`), не `<Input type="date|datetime-local|month">`:
+  модель — та же строка, что у нативного поля (`2026-10-14`,
+  `2026-10-14T09:30`, `2026-10`), `min`/`max`, `required` (без «Очистить»),
+  `invalid` для поля с ошибкой. Только время — `<Input type="time">`.
+  В ISO для бэкенда — `dateInputToIso` / `toIsoTimestamp`, обратно —
   `localDate` / `toLocalInput` (`shared/lib/planning`, `shared/lib/datetime`).
   Необязательная дата — пустая строка → `null`.
 - Коды, тикеры, хэши — `spellcheck="false"`, без автозаглавной.

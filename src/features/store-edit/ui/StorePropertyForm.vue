@@ -9,6 +9,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { useSettingsStore } from '@/shared/store/settings'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
@@ -83,7 +84,7 @@ function submit() {
     <div class="grid gap-4 @md:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="property-purchased">{{ t('property.purchasedAt') }}</Label>
-        <Input id="property-purchased" v-model="purchasedAt" type="date" />
+        <DateTimePicker id="property-purchased" v-model="purchasedAt" />
       </div>
       <div class="grid gap-1.5">
         <Label for="property-price">{{ t('property.purchasePrice') }}</Label>

@@ -10,7 +10,6 @@ import { StoreNodeSelect } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
@@ -19,6 +18,7 @@ import { toIsoTimestamp } from '@/shared/lib/datetime'
 import { useFormValidation } from '@/shared/lib/form'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { notify } from '@/shared/lib/notify'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { IMPORT_ACCOUNTS, IMPORT_KINDS } from './exchange-import-settings.constants'
 import type { ImportRouteMode, ImportSettingsFormProps } from './exchange-import-settings.types'
@@ -213,7 +213,7 @@ const save = useMutation({
         <p class="text-xs text-muted-foreground">{{ t('importSettings.coinsHint') }}</p>
       </div>
       <FormField for="import-since" :label="t('importSettings.since')" :error="form.error('since')" :hint="t('importSettings.sinceHint')" class="@md:max-w-64">
-        <Input id="import-since" v-model="since" type="date" />
+        <DateTimePicker id="import-since" v-model="since" />
       </FormField>
     </section>
 

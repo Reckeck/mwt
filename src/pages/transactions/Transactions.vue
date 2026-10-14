@@ -88,13 +88,15 @@ function rowActions(tx: Transaction): UiAction[] {
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div class="min-w-0 flex-1 basis-80" data-tour="tx-filter"><TransactionFilterBar v-model="filter" /></div>
-
-      <Button variant="outline" size="sm" class="h-9" @click="refresh">
-        <RefreshCw class="size-4" />
-        {{ t('store.refresh') }}
-      </Button>
+    <div data-tour="tx-filter">
+      <TransactionFilterBar v-model="filter">
+        <template #actions>
+          <Button variant="outline" @click="refresh">
+            <RefreshCw class="size-4" />
+            {{ t('store.refresh') }}
+          </Button>
+        </template>
+      </TransactionFilterBar>
     </div>
 
     <Card>

@@ -14,6 +14,7 @@ import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 /** A bonus programme: what its points are called, what one is worth, when some burn. */
 const props = defineProps<{ store: Store }>()
@@ -90,7 +91,7 @@ const save = useMutation({
     <div class="grid gap-4 @sm:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="loyalty-expires">{{ t('loyalty.expiresAt') }}</Label>
-        <Input id="loyalty-expires" v-model="expiresAt" type="date" />
+        <DateTimePicker id="loyalty-expires" v-model="expiresAt" />
       </div>
       <FormField for="loyalty-expiring" :label="t('loyalty.expiringPoints')" :error="form.error('expiring')">
         <AmountInput id="loyalty-expiring" v-model="expiring" />

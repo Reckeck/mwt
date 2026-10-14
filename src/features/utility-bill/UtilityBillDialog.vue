@@ -10,13 +10,13 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { Checkbox } from '@/shared/ui/checkbox'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { UtilityBillDialogProps } from './utility-bill.types'
 
@@ -155,7 +155,7 @@ const pay = useMutation({
     <form id="utility-bill-form" class="@container grid gap-4" @submit.prevent="form.submit(pay.mutate, $event)">
       <div class="grid gap-3 @sm:grid-cols-2">
         <FormField for="bill-date" :label="t('utilityBill.date')" required :error="form.error('when')">
-          <Input id="bill-date" v-model="when" type="datetime-local" />
+          <DateTimePicker id="bill-date" v-model="when" mode="datetime" />
           <p v-if="bill.data.value?.pay_day" class="text-xs text-muted-foreground">
             {{ t('utilityBill.payDay', { day: bill.data.value.pay_day }) }}
           </p>

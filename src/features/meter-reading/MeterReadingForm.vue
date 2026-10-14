@@ -5,10 +5,10 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
-import { Input } from '@/shared/ui/input'
 import { call } from '@/shared/api/ipc'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { MeterReadingFormProps } from './meter-reading.types'
 
@@ -49,11 +49,11 @@ const save = useMutation({
   <form class="grid gap-1" @submit.prevent="form.submit(save.mutate, $event)">
     <div class="flex flex-wrap items-center gap-2">
       <span class="contents" :data-invalid="form.invalidAttr('date')">
-        <Input
+        <DateTimePicker
           v-model="date"
-          type="date"
           class="h-8 w-40"
           :max="localDate(new Date())"
+          :invalid="Boolean(form.error('date'))"
           :aria-label="t('utilities.day')"
           :title="t('utilities.day')"
         />

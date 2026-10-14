@@ -12,6 +12,7 @@ import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { categoryGroupsFor } from '../../transaction-form.model'
 import { useTxForm } from '../../model/use-tx-form'
@@ -37,7 +38,7 @@ const hasAdvanced = computed(() => Boolean(form.network || form.txHash || form.c
     </div>
     <div v-if="!props.template" class="grid min-w-0 gap-1.5">
       <Label for="tx-date">{{ t('form.date') }}</Label>
-      <Input id="tx-date" v-model="form.timestamp" type="datetime-local" class="min-w-0 px-2" />
+      <DateTimePicker id="tx-date" v-model="form.timestamp" mode="datetime" class="min-w-0 px-2" />
       <p v-if="rateHint && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="text-xs text-muted-foreground">
         {{ rateHint }}
       </p>

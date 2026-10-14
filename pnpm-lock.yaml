@@ -32,6 +32,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.13
         version: 6.43.13
+      '@internationalized/date':
+        specifier: 3.12.1
+        version: 3.12.1
       '@lezer/highlight':
         specifier: ^1.2.5
         version: 1.2.5
@@ -422,8 +425,8 @@ packages:
   '@interactjs/types@1.10.28':
     resolution: {integrity: sha512-vPmu4HWmsg0Fub3BPKGk7DuozkhgVK84TVkziY47v8Uh0A14gph55/vVRaQN4oZov0lGNJNK6Jyddim2qd/4vw==}
 
-  '@internationalized/date@3.12.4':
-    resolution: {integrity: sha512-M1dEn4c1U1HsSlaVR8upZtSqvXrTkHDfv18H01uCSJyjVLDxnBR38v/fMxecmlwXKR4i9HeZcmgQAPE6A+aGJQ==}
+  '@internationalized/date@3.12.1':
+    resolution: {integrity: sha512-6IedsVWXyq4P9Tj+TxuU8WGWM70hYLl12nbYU8jkikVpa6WXapFazPUcHUMDMoWftIDE2ILDkFFte6W2nFCkRQ==}
 
   '@internationalized/number@3.6.8':
     resolution: {integrity: sha512-8UmMFia46DUt+k97zKd9fKWXcWHR+k8ae3eYzILETuT2KbIvLyOfac7zesw+sJdRAAZ7Q9pM1Mk22aXp2LD0Ig==}
@@ -1901,7 +1904,7 @@ snapshots:
 
   '@interactjs/types@1.10.28': {}
 
-  '@internationalized/date@3.12.4':
+  '@internationalized/date@3.12.1':
     dependencies:
       '@swc/helpers': 0.5.23
 
@@ -2822,7 +2825,7 @@ snapshots:
     dependencies:
       '@floating-ui/dom': 1.8.0
       '@floating-ui/vue': 1.1.11(vue@3.5.43(typescript@5.8.3))
-      '@internationalized/date': 3.12.4
+      '@internationalized/date': 3.12.1
       '@internationalized/number': 3.6.8
       '@tanstack/vue-virtual': 3.13.39(vue@3.5.43(typescript@5.8.3))
       '@vueuse/core': 14.4.0(vue@3.5.43(typescript@5.8.3))

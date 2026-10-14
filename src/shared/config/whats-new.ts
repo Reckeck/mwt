@@ -36,6 +36,8 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'tables', route: 'analytics-categories' },
       { key: 'moved', route: 'analytics-losses' },
       { key: 'palette' },
+      { key: 'dates' },
+      { key: 'filters', route: 'transactions' },
     ],
   },
   {

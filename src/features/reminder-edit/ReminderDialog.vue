@@ -12,6 +12,7 @@ import { Select } from '@/shared/ui/select'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { REPEAT_UNITS } from './reminder-edit.constants'
 import type { ReminderDialogProps } from './reminder-edit.types'
@@ -84,7 +85,7 @@ const save = useMutation({
       </FormField>
       <div class="grid grid-cols-[1fr_8rem] gap-3">
         <FormField for="reminder-date" :label="t('reminder.date')" required :error="form.error('date')">
-          <Input id="reminder-date" v-model="date" type="date" />
+          <DateTimePicker id="reminder-date" v-model="date" />
         </FormField>
         <FormField for="reminder-time" :label="t('reminder.time')" required :error="form.error('time')">
           <Input id="reminder-time" v-model="time" type="time" />

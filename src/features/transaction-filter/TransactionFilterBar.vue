@@ -7,6 +7,7 @@ import { Link2, X } from 'lucide-vue-next'
 
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
+import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
@@ -15,10 +16,13 @@ import { STORE_TREE_QUERY_KEY, flattenStoreTree, storeDescendants } from '@/shar
 import { TX_KINDS } from '@/shared/lib/transactions'
 import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
 import { Checkbox } from '@/shared/ui/checkbox'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { TransactionFilterBarProps } from './transaction-filter.types'
 
 const props = withDefaults(defineProps<TransactionFilterBarProps>(), { fixedScope: false, idPrefix: 'tx-filter' })
+/** Things that belong to the row but are not filters (refresh, export). */
+defineSlots<{ actions?(): unknown }>()
 const filter = defineModel<TxFilter>({ required: true })
 
 const { t } = useI18n()
@@ -90,6 +94,10 @@ watch(
 )
 
 const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && storeId.value ? 1 : 0))
+/** Set filters among the folded ones. */
+const moreActive = computed(
+  () => [filter.value.contact_id, filter.value.from || filter.value.to, filter.value.hide_internal].filter(Boolean).length,
+)
 function reset() {
   const kept = props.fixedScope ? { scope: filter.value.scope } : {}
   filter.value = emptyTxFilter(kept)
@@ -97,54 +105,30 @@ function reset() {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-end gap-3">
-    <div v-if="!props.fixedScope" class="grid min-w-40 flex-1 gap-1.5 @3xl:flex-none">
+  <FilterBar :active="active" :more-active="moreActive" @reset="reset">
+    <div v-if="!props.fixedScope" :class="FILTER_FIELD_CLASS">
       <Label :for="field('scope')">{{ t('filter.scope') }}</Label>
       <StoreNodeSelect :id="field('scope')" v-model="storeId" :nodes="nodes" :empty-label="t('tx.allStores')" class="w-full @3xl:w-56" />
     </div>
-    <label
-      v-if="!props.fixedScope && storeId && childCount"
-      for="filter-with-children"
-      class="flex h-9 items-center gap-2 text-sm"
-    >
-      <Checkbox id="filter-with-children" v-model="includeChildren" />
+    <label v-if="!props.fixedScope && storeId && childCount" :for="field('children')" class="flex h-9 items-center gap-2 text-sm">
+      <Checkbox :id="field('children')" v-model="includeChildren" />
       {{ t('filter.withChildren', { count: childCount }) }}
     </label>
-    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
+    <div :class="FILTER_FIELD_CLASS">
       <Label :for="field('kind')">{{ t('form.kind') }}</Label>
       <Select :id="field('kind')" v-model="kind" class="w-full @3xl:w-40">
         <option value="">{{ t('hist.allKinds') }}</option>
         <option v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</option>
       </Select>
     </div>
-    <div v-if="contacts.data.value?.length" class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
-      <Label :for="field('contact')">{{ t('filter.contact') }}</Label>
-      <Select :id="field('contact')" v-model="contactId" class="w-full @3xl:w-44">
-        <option value="">{{ t('filter.anyContact') }}</option>
-        <option v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</option>
-      </Select>
-    </div>
-    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
-      <Label :for="field('from')">{{ t('filter.from') }}</Label>
-      <Input :id="field('from')" v-model="from" type="date" class="w-full @3xl:w-40" />
-    </div>
-    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
-      <Label :for="field('to')">{{ t('filter.to') }}</Label>
-      <Input :id="field('to')" v-model="to" type="date" class="w-full @3xl:w-40" />
-    </div>
-    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
+    <div :class="FILTER_FIELD_CLASS">
       <Label :for="field('text')">{{ t('filter.search') }}</Label>
       <Input :id="field('text')" v-model="search" class="w-full @3xl:w-52" :placeholder="t('hist.search')" />
     </div>
-    <label for="filter-hide-internal" class="flex h-9 items-center gap-2 text-sm">
-      <Checkbox id="filter-hide-internal" v-model="hideInternal" />
-      {{ t('filter.hideInternal') }}
-    </label>
     <Button
       v-if="filter.flow_id"
       variant="secondary"
-      size="sm"
-      class="h-9"
+      class="shrink-0"
       :title="t('filter.clearFlow')"
       @click="filter = { ...filter, flow_id: null }"
     >
@@ -152,8 +136,31 @@ function reset() {
       {{ t('filter.flow') }}
       <X class="size-3.5" />
     </Button>
-    <Button v-if="active > 0" variant="ghost" size="sm" class="h-9" @click="reset">
-      {{ t('filter.reset', { count: active }) }}
-    </Button>
-  </div>
+
+    <!-- Used less often: folded under «Ещё фильтры», with a count of what is set. -->
+    <template #more>
+      <div v-if="contacts.data.value?.length" class="grid gap-1.5">
+        <Label :for="field('contact')">{{ t('filter.contact') }}</Label>
+        <Select :id="field('contact')" v-model="contactId">
+          <option value="">{{ t('filter.anyContact') }}</option>
+          <option v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</option>
+        </Select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="grid min-w-0 gap-1.5">
+          <Label :for="field('from')">{{ t('filter.from') }}</Label>
+          <DateTimePicker :id="field('from')" v-model="from" :max="to || undefined" />
+        </div>
+        <div class="grid min-w-0 gap-1.5">
+          <Label :for="field('to')">{{ t('filter.to') }}</Label>
+          <DateTimePicker :id="field('to')" v-model="to" :min="from || undefined" />
+        </div>
+      </div>
+      <label :for="field('internal')" class="flex items-center gap-2 text-sm">
+        <Checkbox :id="field('internal')" v-model="hideInternal" />
+        {{ t('filter.hideInternal') }}
+      </label>
+    </template>
+    <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+  </FilterBar>
 </template>

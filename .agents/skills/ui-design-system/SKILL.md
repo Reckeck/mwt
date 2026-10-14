@@ -100,6 +100,8 @@ CLI не умеет пробный прогон: ставь во временн�
 | поле формы с `*`, ошибкой, подсказкой | `FormField` | `shared/ui/form-field` |
 | блок настроек с одним заголовком | `SettingsSection` | `shared/ui/settings-section` |
 | редкие поля формы под «Дополнительно» | `AdvancedFields` | `shared/ui/advanced-fields` |
+| дата / дата и время / месяц | `DateTimePicker` (`mode`) | `shared/ui/date-time-picker` |
+| панель фильтров списка или отчёта | `FilterBar` (частые — в слоте, редкие — `#more`, `active` → «Сбросить (N)»; поле — `FILTER_FIELD_CLASS`) | `shared/ui/filter-bar` |
 | строка списка или карточка — одна большая кнопка | `Button size="block"` (сама раскладка — классами) | `shared/ui/button` |
 | маленький «×» в чипе или строке | `Button variant="ghost" size="icon-xs"` (`icon-sm` — 32 px) | `shared/ui/button` |
 | таблица без сортировки (месяцы по порядку, ячейка на несколько колонок) | части shadcn `Table` | `shared/ui/table` |
