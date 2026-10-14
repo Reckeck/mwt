@@ -8,6 +8,9 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 
+import type { TriggerChoice } from '../model/trigger-choices'
+import RunFromMenu from './RunFromMenu.vue'
+
 /** The editor's top row: name, on/off, mode, and the actions on the whole workflow. */
 defineProps<{
   nameError?: string
@@ -20,11 +23,13 @@ defineProps<{
   emulating: boolean
   running: boolean
   saving: boolean
+  /** Triggers the run buttons can start from, the default first. */
+  triggers: TriggerChoice[]
 }>()
 const emit = defineEmits<{
   note: []
-  emulate: []
-  run: []
+  emulate: [triggerId: string | null]
+  run: [triggerId: string | null]
   discard: []
   save: [event: Event]
 }>()
@@ -68,20 +73,24 @@ const { t } = useI18n()
     <Button variant="ghost" size="icon" :aria-label="t('workflow.note.add')" :title="t('workflow.note.add')" @click="emit('note')">
       <StickyNote class="size-4" />
     </Button>
-    <Button variant="outline" data-tour="workflow-emulate" :disabled="emulating || !hasNodes" @click="emit('emulate')">
-      <FlaskConical class="size-4" />
-      {{ t('workflow.emulate') }}
-    </Button>
-    <Button
+    <RunFromMenu
+      :label="t('workflow.emulate')"
+      :icon="FlaskConical"
+      :triggers="triggers"
+      :disabled="emulating || !hasNodes"
+      data-tour="workflow-emulate"
+      @run="(id) => emit('emulate', id)"
+    />
+    <RunFromMenu
       v-if="canRun"
-      variant="outline"
+      :label="t('workflow.runNow')"
+      :icon="Play"
+      :triggers="triggers"
       :disabled="running || dirty"
       :title="dirty ? t('workflow.saveFirst') : undefined"
-      @click="emit('run')"
-    >
-      <Play class="size-4" />
-      {{ t('workflow.runNow') }}
-    </Button>
+      data-tour="workflow-run"
+      @run="(id) => emit('run', id)"
+    />
     <ConfirmButton
       v-if="canDiscard"
       :label="t('workflow.discard.button')"

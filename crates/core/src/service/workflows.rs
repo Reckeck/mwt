@@ -1036,8 +1036,14 @@ impl UnlockedVault {
         }
         let trigger = pick_trigger(&graph, trigger_node)?;
         let mut ctx = self.context(&workflow, &trigger, now, zone);
-        ctx.trigger_label = trigger_label("manual", "");
-        ctx.trigger_values = self.sample_trigger_values(&trigger, now);
+        // «Запуск вручную» is the button's own trigger; any other is started
+        // by hand to try it, and the journal says so.
+        ctx.trigger_label = if trigger.kind == "trigger.manual" {
+            trigger_label("manual", "")
+        } else {
+            trigger_label(&trigger.kind, "by hand")
+        };
+        ctx.trigger_values = self.sample_trigger_values(&trigger, now, zone);
         let mut pass = WorkflowPass::default();
         let report = exec::run(self, &graph, &ctx);
         self.keep_run(&report, &mut pass);
@@ -1072,7 +1078,7 @@ impl UnlockedVault {
         ctx.max_amount = max_amount;
         ctx.mode = RunMode::DryRun;
         ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
-        ctx.trigger_values = self.sample_trigger_values(&trigger, now);
+        ctx.trigger_values = self.sample_trigger_values(&trigger, now, zone);
         ctx.answers = answers;
         let mut report = exec::run(&mut sandbox, &graph, &ctx);
         // The workflows its events start run too, on the same copy, so the
@@ -1092,9 +1098,23 @@ impl UnlockedVault {
 
     /// What a trigger would hand on now: for an operation trigger the latest
     /// matching operation, for thresholds the current value.
-    fn sample_trigger_values(&self, trigger: &Node, now: i64) -> BTreeMap<String, WfValue> {
+    fn sample_trigger_values(
+        &self,
+        trigger: &Node,
+        now: i64,
+        zone: &str,
+    ) -> BTreeMap<String, WfValue> {
         let at = || BTreeMap::from([("at".to_string(), WfValue::Date(crate::calendar::iso(now)))]);
         match trigger.kind.as_str() {
+            // As if the schedule fired at its latest planned moment.
+            "trigger.schedule" => {
+                let (moments, _) = schedule_moments(&trigger.params, &Calendar::new(zone), 0, now);
+                let moment = moments.last().copied().unwrap_or(now);
+                BTreeMap::from([(
+                    "at".to_string(),
+                    WfValue::Date(crate::calendar::iso(moment)),
+                )])
+            }
             "trigger.transaction" => self
                 .doc
                 .transactions

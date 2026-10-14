@@ -34,6 +34,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
   { target: 'workflow-tests', key: 'workflowEditor.tests', side: 'left' },
   { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },
+  { target: 'workflow-run', key: 'workflowEditor.runFrom', side: 'bottom' },
   { target: 'workflow-emulation-question', key: 'workflowEditor.question', side: 'top' },
   { target: 'workflow-event-runs', key: 'workflowEditor.eventRuns', side: 'top' },
   { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },

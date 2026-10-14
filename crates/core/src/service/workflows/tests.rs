@@ -1866,3 +1866,40 @@ fn a_wait_from_an_older_app_still_reads() {
     let from_pack: WorkflowWait = rmp_serde::from_slice(&packed).unwrap();
     assert_eq!(from_pack, from_json);
 }
+
+#[test]
+fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
+    let (_dir, mut vault) = empty_vault();
+    let nodes = vec![
+        node("m", "trigger.manual", json!({})),
+        node(
+            "s",
+            "trigger.schedule",
+            json!({ "every": "day", "time": "09:00" }),
+        ),
+        node("text", "logic.text", json!({ "template": "{a}" })),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("m", "out", "n", "in"),
+        wire("s", "out", "n", "in"),
+        wire("s", "at", "text", "a"),
+        wire("text", "text", "n", "text"),
+    ];
+    let workflow = save(&mut vault, "Pick", graph_v3(nodes, edges));
+    let now = unix_secs("2026-03-05T15:30:00Z").unwrap();
+    let report = vault
+        .run_workflow_now(&workflow.id, Some("s"), now, "UTC")
+        .unwrap();
+    assert_eq!(report.run.trigger, "schedule by hand");
+    assert!(
+        report.notices[0].body.contains("2026-03-05T09:00:00"),
+        "{}",
+        report.notices[0].body
+    );
+    // With no trigger named, the button starts «Запуск вручную».
+    let manual = vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    assert_eq!(manual.run.trigger, "manual");
+}

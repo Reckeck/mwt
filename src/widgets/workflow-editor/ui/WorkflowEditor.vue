@@ -16,6 +16,7 @@ import { useEditorGraph } from '../model/use-editor-graph'
 import { useEditorHotkeys } from '../model/use-editor-hotkeys'
 import { useGraphClipboard } from '../model/use-graph-clipboard'
 import { useGraphValidation } from '../model/use-graph-validation'
+import { triggerChoices } from '../model/trigger-choices'
 import { useRedundantFlows } from '../model/use-redundant-flows'
 import { useRunReport } from '../model/use-run-report'
 import { useSelection } from '../model/use-selection'
@@ -68,6 +69,8 @@ const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, se
 function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
   if (selectedNode.value) insert.quickAddFrom(selectedNode.value.id, port, side, event)
 }
+
+const triggers = computed(() => triggerChoices(nodes.value, editor.def, locale.value))
 
 const helpOpen = ref(false)
 const hotkeysOpen = ref(false)
@@ -140,8 +143,9 @@ defineExpose({
       :emulating="actions.dryRun.isPending.value"
       :running="actions.runNow.isPending.value"
       :saving="actions.save.isPending.value"
+      :triggers="triggers"
       @note="editor.addNote"
-      @emulate="run.emulate()"
+      @emulate="(id) => run.emulate(false, id)"
       @run="run.runNow"
       @discard="doc.discardEdits"
       @save="(event) => form.submit(save, event)"
