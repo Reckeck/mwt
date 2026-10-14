@@ -1,5 +1,7 @@
 import type { Component } from 'vue'
 
+import type { DashboardWidgetDef } from './dashboard-registry.types'
+
 import { CashbackBonuses } from '@/widgets/cashback-bonuses'
 import { DailyBudget } from '@/widgets/daily-budget'
 import { DashboardAllocation } from '@/widgets/dashboard-allocation'
@@ -26,280 +28,61 @@ export const DASHBOARD_COLS = 12
 /** Height of one grid row, px. */
 export const DASHBOARD_ROW_HEIGHT = 40
 
-export interface DashboardWidgetDef {
-  id: string
-  titleKey: string
-  descriptionKey: string
-  component: Component
-  /** Props the component needs on the dashboard. */
-  props?: Record<string, unknown>
-  /** Default size in grid cells. */
-  w: number
-  h: number
-  minW: number
-  minH: number
-  /**
-   * Only offered when the vault has an exchange; the catalog asks which one,
-   * and the widget gets it as `storeId`.
-   */
-  requires?: 'exchange'
+/** A widget whose texts are `dashboard.widget.<id>` and `dashboard.widgetHint.<id>`. */
+function widget(
+  id: string,
+  component: Component,
+  [width, height, minW, minH]: [number, number, number, number],
+  extra: Partial<DashboardWidgetDef> = {},
+): DashboardWidgetDef {
+  return {
+    id,
+    titleKey: `dashboard.widget.${id}`,
+    descriptionKey: `dashboard.widgetHint.${id}`,
+    component,
+    w: width,
+    h: height,
+    minW,
+    minH,
+    ...extra,
+  }
 }
 
-/** Every widget the dashboard can hold, in the catalog's order. */
+/** Every widget the dashboard can hold, in the catalog's order; sizes are `[w, h, minW, minH]` in grid cells. */
 export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
-  {
-    id: 'onboarding',
-    titleKey: 'dashboard.widget.onboarding',
-    descriptionKey: 'dashboard.widgetHint.onboarding',
-    component: OnboardingChecklist,
-    w: 12,
-    h: 6,
-    minW: 6,
-    minH: 5,
-  },
-  {
-    id: 'dailyBudget',
-    titleKey: 'dashboard.widget.dailyBudget',
-    descriptionKey: 'dashboard.widgetHint.dailyBudget',
-    component: DailyBudget,
-    w: 4,
-    h: 5,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'monthSummary',
-    titleKey: 'dashboard.widget.monthSummary',
-    descriptionKey: 'dashboard.widgetHint.monthSummary',
-    component: MonthSummary,
-    w: 4,
-    h: 6,
-    minW: 3,
-    minH: 5,
-  },
-  {
-    id: 'upcoming',
-    titleKey: 'dashboard.widget.upcoming',
-    descriptionKey: 'dashboard.widgetHint.upcoming',
-    component: UpcomingList,
-    props: { days: 14, limit: 6 },
-    w: 4,
-    h: 7,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'total',
-    titleKey: 'dashboard.widget.total',
-    descriptionKey: 'dashboard.widgetHint.total',
-    component: DashboardTotal,
-    w: 4,
-    h: 4,
-    minW: 3,
-    minH: 3,
-  },
-  {
-    id: 'netWorth',
-    titleKey: 'dashboard.widget.netWorth',
-    descriptionKey: 'dashboard.widgetHint.netWorth',
-    component: NetWorthCard,
-    w: 4,
-    h: 6,
-    minW: 3,
-    minH: 5,
-  },
-  {
-    id: 'fx',
-    titleKey: 'dashboard.widget.fx',
-    descriptionKey: 'dashboard.widgetHint.fx',
-    component: DashboardFx,
-    w: 4,
-    h: 4,
-    minW: 2,
-    minH: 3,
-  },
-  {
-    id: 'spending7d',
-    titleKey: 'dashboard.widget.spending7d',
-    descriptionKey: 'dashboard.widgetHint.spending7d',
-    component: Spending7d,
-    w: 4,
-    h: 6,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'miniCalendar',
-    titleKey: 'dashboard.widget.miniCalendar',
-    descriptionKey: 'dashboard.widgetHint.miniCalendar',
-    component: MiniCalendar,
-    w: 4,
-    h: 8,
-    minW: 3,
-    minH: 6,
-  },
-  {
-    id: 'assets',
-    titleKey: 'dashboard.widget.assets',
-    descriptionKey: 'dashboard.widgetHint.assets',
-    component: DashboardAssets,
-    w: 4,
-    h: 7,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'goals',
-    titleKey: 'dashboard.widget.goals',
-    descriptionKey: 'dashboard.widgetHint.goals',
-    component: DashboardGoals,
-    w: 6,
-    h: 6,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'budgets',
-    titleKey: 'dashboard.widget.budgets',
-    descriptionKey: 'dashboard.widgetHint.budgets',
-    component: DashboardBudgets,
-    w: 6,
-    h: 6,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'utilitiesDue',
-    titleKey: 'dashboard.widget.utilitiesDue',
-    descriptionKey: 'dashboard.widgetHint.utilitiesDue',
-    component: UtilitiesDue,
-    w: 4,
-    h: 5,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'utilityStats',
-    titleKey: 'dashboard.widget.utilityStats',
-    descriptionKey: 'dashboard.widgetHint.utilityStats',
-    component: UtilityStats,
-    w: 8,
-    h: 6,
-    minW: 4,
-    minH: 5,
-  },
-  {
-    id: 'cashback',
-    titleKey: 'dashboard.widget.cashback',
-    descriptionKey: 'dashboard.widgetHint.cashback',
-    component: CashbackBonuses,
-    w: 4,
-    h: 6,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'interestTax',
-    titleKey: 'dashboard.widget.interestTax',
-    descriptionKey: 'dashboard.widgetHint.interestTax',
-    component: InterestTax,
-    w: 4,
-    h: 4,
-    minW: 3,
-    minH: 3,
-  },
-  {
-    id: 'fixedCosts',
-    titleKey: 'dashboard.widget.fixedCosts',
-    descriptionKey: 'dashboard.widgetHint.fixedCosts',
-    component: FixedCosts,
-    w: 6,
-    h: 5,
-    minW: 3,
-    minH: 4,
-  },
-  {
-    id: 'byChain',
-    titleKey: 'dashboard.widget.byChain',
-    descriptionKey: 'dashboard.widgetHint.byChain',
-    component: DashboardAllocation,
-    props: { by: 'chain' },
-    w: 6,
-    h: 8,
-    minW: 4,
-    minH: 6,
-  },
-  {
-    id: 'byStore',
-    titleKey: 'dashboard.widget.byStore',
-    descriptionKey: 'dashboard.widgetHint.byStore',
-    component: DashboardAllocation,
-    props: { by: 'store' },
-    w: 6,
-    h: 8,
-    minW: 4,
-    minH: 6,
-  },
-  {
-    id: 'exchangeBalances',
-    titleKey: 'dashboard.widget.exchangeBalances',
-    descriptionKey: 'dashboard.widgetHint.exchangeBalances',
-    component: ExchangeBalances,
-    w: 8,
-    h: 7,
-    minW: 6,
-    minH: 5,
-    requires: 'exchange',
-  },
-  {
-    id: 'bybitSync',
-    titleKey: 'dashboard.widget.bybitSync',
-    descriptionKey: 'dashboard.widgetHint.bybitSync',
-    component: DashboardBybitSync,
-    w: 8,
-    h: 8,
-    minW: 6,
-    minH: 5,
-    requires: 'exchange',
-  },
+  widget('onboarding', OnboardingChecklist, [12, 6, 6, 5]),
+  widget('dailyBudget', DailyBudget, [4, 5, 3, 4]),
+  widget('monthSummary', MonthSummary, [4, 6, 3, 5]),
+  widget('upcoming', UpcomingList, [4, 7, 3, 4], { props: { days: 14, limit: 6 } }),
+  widget('total', DashboardTotal, [4, 4, 3, 3]),
+  widget('netWorth', NetWorthCard, [4, 6, 3, 5], { link: { name: 'analytics-networth' } }),
+  widget('fx', DashboardFx, [4, 4, 2, 3]),
+  widget('spending7d', Spending7d, [4, 6, 3, 4], { link: { name: 'transactions-calendar' } }),
+  widget('miniCalendar', MiniCalendar, [4, 8, 3, 6], { link: { name: 'transactions-calendar' } }),
+  widget('assets', DashboardAssets, [4, 7, 3, 4]),
+  widget('goals', DashboardGoals, [6, 6, 3, 4], { link: { name: 'planning-goals' } }),
+  widget('budgets', DashboardBudgets, [6, 6, 3, 4], { link: { name: 'planning-budgets' } }),
+  widget('utilitiesDue', UtilitiesDue, [4, 5, 3, 4]),
+  widget('utilityStats', UtilityStats, [8, 6, 4, 5]),
+  widget('cashback', CashbackBonuses, [4, 6, 3, 4]),
+  widget('interestTax', InterestTax, [4, 4, 3, 3]),
+  widget('fixedCosts', FixedCosts, [6, 5, 3, 4]),
+  widget('byChain', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'chain' } }),
+  widget('byStore', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'store' } }),
+  widget('exchangeBalances', ExchangeBalances, [8, 7, 6, 5], { requires: 'exchange' }),
+  widget('bybitSync', DashboardBybitSync, [8, 8, 6, 5], { requires: 'exchange' }),
 ]
 
-/** Widgets a fresh vault starts with. */
+/**
+ * Widgets a fresh vault starts with. Net worth once: `netWorth` (breakdown,
+ * a year's line, a link to the report) rather than `total` next to it.
+ */
 export const DEFAULT_DASHBOARD = [
   'onboarding',
   'dailyBudget',
   'monthSummary',
   'upcoming',
-  'total',
   'netWorth',
   'spending7d',
   'utilitiesDue',
 ]
-
-export function widgetDef(id: string): DashboardWidgetDef | undefined {
-  return DASHBOARD_WIDGETS.find((def) => def.id === id)
-}
-
-/**
- * Place widgets left to right, top to bottom in a 12-column grid. The grid
- * compacts upwards afterwards, so this only needs to avoid overlaps.
- */
-export function packWidgets(ids: string[]): DashboardWidgetCfg[] {
-  const out: DashboardWidgetCfg[] = []
-  let column = 0
-  let row = 0
-  let rowHeight = 0
-  for (const id of ids) {
-    const def = widgetDef(id)
-    if (!def) continue
-    if (column + def.w > DASHBOARD_COLS) {
-      column = 0
-      row += rowHeight
-      rowHeight = 0
-    }
-    out.push({ id, col: column, row, width: def.w, height: def.h, pinned: false, store_id: null })
-    column += def.w
-    rowHeight = Math.max(rowHeight, def.h)
-  }
-  return out
-}

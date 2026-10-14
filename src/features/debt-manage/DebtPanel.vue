@@ -3,14 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, Undo2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { DebtPanelProps } from './debt-manage.types'
 
@@ -43,7 +41,7 @@ const setTerms = useMutation({
     void queryClient.invalidateQueries({ queryKey: ['debt-terms'] })
     void queryClient.invalidateQueries({ queryKey: ['upcoming'] })
   },
-  onError: (err) => toast.error(t('debt.termsFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { success: 'debt.termsSaved', error: 'debt.termsFailed' },
 })
 
 function saveTerms(asset: string, current: DebtTerms | null, patch: { due_at?: string; note?: string }) {
@@ -86,7 +84,7 @@ const ACTIONS: { effect: DebtEffect; icon: typeof ArrowUpRight }[] = [
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <span
             class="text-base font-semibold tabular-nums"
-            :class="entry.net > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'"
+            :class="entry.net > 0 ? 'text-success' : 'text-destructive'"
           >
             {{ entry.net > 0 ? t('debt.owesMe') : t('debt.iOwe') }}:
             {{ formatMoney(Math.abs(entry.net), { currency: entry.row.asset.symbol }) }}

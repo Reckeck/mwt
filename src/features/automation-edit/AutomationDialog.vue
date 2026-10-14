@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { TransactionForm } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
@@ -12,12 +11,12 @@ import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, WEEKDAYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Switch } from '@/shared/ui/switch'
 
 import { SCHEDULE_KINDS, type ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
@@ -102,6 +101,17 @@ const fields = useFormValidation(
   { resetOn: open },
 )
 
+/**
+ * Enter in the schedule fields saves, as in any form. The operation below is
+ * a form of its own (forms cannot nest) and saves on Enter by itself.
+ */
+function saveOnEnter(event: KeyboardEvent) {
+  const target = event.target as HTMLElement
+  if (target.closest('form') || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return
+  event.preventDefault()
+  trySave(event)
+}
+
 /** Both halves are checked at once: the schedule above and the operation below. */
 function trySave(event?: Event) {
   form.value?.showErrors()
@@ -125,12 +135,17 @@ const save = useMutation({
       : call<Automation>('create_automation', { input })
   },
   onSuccess: (automation) => {
-    toast.success(props.automation ? t('automation.saved') : t('automation.created'), { description: automation.name })
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
     open.value = false
     emit('saved', automation)
   },
-  onError: (err) => toast.error(t('automation.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: {
+    error: 'automation.saveFailed',
+    success: (data) => ({
+      text: props.automation ? t('automation.saved') : t('automation.created'),
+      description: (data as Automation).name,
+    }),
+  },
 })
 </script>
 
@@ -140,7 +155,8 @@ const save = useMutation({
     :title="props.automation ? t('automation.edit') : props.preset ? t(`preset.${props.preset.preset}`) : t('automation.new')"
     size="lg"
   >
-    <div class="@container grid gap-4">
+    <!-- biome-ignore lint/a11y/useSemanticElements: a fieldset would wrap the operation form inside; this only catches Enter from the schedule fields. -->
+    <div class="@container grid gap-4" role="group" @keydown.enter="saveOnEnter">
       <div class="grid gap-3 @sm:grid-cols-2">
         <FormField for="automation-name" :label="t('automation.name')" required :error="fields.error('name')">
           <Input id="automation-name" v-model="name" :placeholder="t('automation.namePlaceholder')" />
@@ -181,10 +197,10 @@ const save = useMutation({
         </FormField>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="active" type="checkbox" class="size-4 accent-primary" />
-        {{ t('automation.active') }}
-      </label>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="automation-active">{{ t('automation.active') }}</Label>
+        <Switch id="automation-active" v-model="active" />
+      </div>
 
       <p class="text-xs text-muted-foreground">{{ t('automation.checkHint') }}</p>
 

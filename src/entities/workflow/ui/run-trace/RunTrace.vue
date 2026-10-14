@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { CheckCircle2, CircleDashed, Clock, Hand, OctagonX, XCircle } from 'lucide-vue-next'
 
 import { cn } from '@/shared/lib/utils'
+import { Button } from '@/shared/ui/button'
 
 /** A run in words, step by step, with the values each node gave. */
 const props = defineProps<{ steps: TraceStep[] }>()
@@ -31,9 +32,10 @@ const COLOR: Record<StepStatus, string> = {
 <template>
   <ol v-if="props.steps.length" class="grid gap-1.5">
     <li v-for="(step, index) in props.steps" :key="index">
-      <button
-        type="button"
-        class="flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      <Button
+        variant="ghost"
+        size="block"
+        class="flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
         @click="emit('focus', step.node_id)"
       >
         <component :is="ICON[step.status]" :class="cn('mt-0.5 size-4 shrink-0', COLOR[step.status])" />
@@ -47,7 +49,7 @@ const COLOR: Record<StepStatus, string> = {
             }}
           </span>
         </span>
-      </button>
+      </Button>
     </li>
   </ol>
   <p v-else class="text-sm text-muted-foreground">{{ t('workflow.trace.empty') }}</p>

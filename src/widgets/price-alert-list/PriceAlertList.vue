@@ -3,16 +3,15 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { PriceAlertDialog } from '@/features/price-alert-edit'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatDateTime, formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 /** With `storeId`, only that exchange's alerts are listed and new ones belong to it. */
 const props = withDefaults(defineProps<{ storeId?: string | null }>(), { storeId: null })
@@ -27,10 +26,9 @@ const shown = computed(() =>
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_price_alert', { id }),
   onSuccess: () => {
-    toast.success(t('alert.deleted'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('alert.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'alert.deleteFailed', success: 'alert.deleted' },
 })
 
 const dialogOpen = ref(false)
@@ -56,13 +54,7 @@ function openEdit(alert: PriceAlert) {
       </Button>
     </div>
 
-    <div
-      v-if="alerts.isSuccess.value && !shown.length"
-      class="rounded-xl border border-dashed border-border text-center text-sm text-muted-foreground"
-      :class="props.storeId ? 'p-4' : 'p-8'"
-    >
-      {{ t('alert.empty') }}
-    </div>
+    <EmptyState v-if="alerts.isSuccess.value && !shown.length" compact :title="t('alert.empty')" />
 
     <ul class="grid gap-1">
       <li

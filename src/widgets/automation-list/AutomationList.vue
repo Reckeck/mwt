@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ChevronDown, FlaskConical, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { AutomationDialog, AutomationRunActions } from '@/features/automation-edit'
 import { AutomationSimulationDialog } from '@/features/automation-simulate'
@@ -11,14 +10,15 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { EmptyState } from '@/shared/ui/empty-state'
+import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS, rejectText, scheduleText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txKind, txLegs } from '@/shared/lib/transactions'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { AutomationListProps } from './automation-list.types'
+import { useNewFromRoute } from './model/use-new-from-route'
 
 const props = withDefaults(defineProps<AutomationListProps>(), { storeId: '', presets: () => [] })
 
@@ -68,6 +68,12 @@ function openNew(from: PresetInfo | null = null) {
   preset.value = from
   dialogOpen.value = true
 }
+useNewFromRoute(
+  () => !props.readonly,
+  () => props.presets,
+  (from) => openNew(from),
+)
+
 function openEdit(automation: Automation) {
   editing.value = automation
   preset.value = null
@@ -89,19 +95,17 @@ function refresh() {
 const runNow = useMutation({
   mutationFn: (id: string) => call<Transaction>('run_automation', { id }),
   onSuccess: () => {
-    toast.success(t('automation.ranNow'))
     refresh()
   },
-  onError: (err) => toast.error(t('automation.runFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'automation.runFailed', success: 'automation.ranNow' },
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_automation', { id }),
   onSuccess: () => {
-    toast.success(t('automation.deleted'))
     refresh()
   },
-  onError: (err) => toast.error(t('automation.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'automation.deleteFailed', success: 'automation.deleted' },
 })
 
 function outcomeText(run: AutomationRun): string {
@@ -124,7 +128,7 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
           <FlaskConical class="size-4" />
           {{ t('simulation.open') }}
         </Button>
-        <Button v-if="!props.readonly" variant="outline" @click="openNew()">
+        <Button v-if="!props.readonly" @click="openNew()">
           <Plus class="size-4" />
           {{ t('automation.new') }}
         </Button>
@@ -139,9 +143,9 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
       </Button>
     </div>
 
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('automation.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('automation.empty')" :description="t('automation.intro')">
+      <Button v-if="!props.readonly" @click="openNew()"><Plus class="size-4" />{{ t('automation.new') }}</Button>
+    </EmptyState>
 
     <Card v-for="automation in shown" :key="automation.id">
       <div class="grid gap-3">
@@ -200,15 +204,16 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
           </div>
         </div>
 
-        <button
-          type="button"
-          class="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="block"
+          class="w-fit px-1 py-0.5 text-xs flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           :aria-expanded="expanded === automation.id"
           @click="expanded = expanded === automation.id ? null : automation.id"
         >
           <ChevronDown class="size-3.5 transition-transform" :class="expanded === automation.id && 'rotate-180'" />
           {{ t('automation.history', { count: runsOf(automation.id).length }) }}
-        </button>
+        </Button>
 
         <ul v-if="expanded === automation.id" class="grid gap-1">
           <li v-if="!runsOf(automation.id).length" class="text-xs text-muted-foreground">{{ t('automation.noRuns') }}</li>

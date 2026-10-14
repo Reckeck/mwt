@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -10,7 +9,6 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
-import { vaultErrorMessage } from '@/shared/lib/vault-error'
 
 const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
@@ -42,10 +40,9 @@ const change = useMutation({
       input: { current_password: current.value, new_password: next.value } satisfies ChangePasswordInput,
     }),
   onSuccess: () => {
-    toast.success(t('vault.password.changed'))
     open.value = false
   },
-  onError: (err) => toast.error(t('vault.password.failed'), { description: vaultErrorMessage(err, t) }),
+  meta: { success: 'vault.password.changed', error: 'vault.password.failed' },
 })
 </script>
 

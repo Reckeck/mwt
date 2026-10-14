@@ -65,8 +65,9 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
+    { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
     { target: 'notification-bell', key: 'dashboard.bell', side: 'bottom' },
-    { target: 'open-settings', key: 'dashboard.settings', side: 'bottom' },
+    { target: 'open-settings', key: 'dashboard.settings', side: 'right' },
     { target: 'tour-help', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
   stores: [
@@ -98,10 +99,6 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'tx-filter', key: 'transactions.filter', side: 'bottom' },
     { target: 'section-content', key: 'transactions.list', side: 'top' },
   ],
-  'transactions-losses': [
-    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
-    { target: 'section-content', key: 'transactionsLosses.content', side: 'top' },
-  ],
   'transactions-graph': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'section-content', key: 'transactionsGraph.content', side: 'top' },
@@ -124,10 +121,6 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'contact-groups', key: 'directory.groups', side: 'right' },
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
-  ],
-  'directory-rates': [
-    { target: 'section-tabs', key: 'directory.tabs', side: 'bottom' },
-    { target: 'section-content', key: 'directory.rates', side: 'top' },
   ],
   'planning-automations': planning([
     { target: 'section-content', key: 'planningAutomations.content', side: 'top' },

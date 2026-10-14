@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
-import { isFiatCode, moneyParts } from '@/shared/lib/format'
+import { isFiatCode, moneyParts, signClass } from '@/shared/lib/format'
+import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { MoneyConversions } from '../money-conversions'
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
   currency: '',
   decimals: undefined,
   signed: false,
+  colored: false,
   compact: false,
   convert: undefined,
 })
@@ -27,8 +29,14 @@ const settings = useSettingsStore()
 
 const code = computed(() => (props.currency || settings.baseCurrency).toLowerCase())
 const parts = computed(() =>
-  moneyParts(props.amount, { currency: code.value, decimals: props.decimals, signed: props.signed, compact: props.compact }),
+  moneyParts(props.amount, {
+    currency: code.value,
+    decimals: props.decimals,
+    signed: props.signed || props.colored,
+    compact: props.compact,
+  }),
 )
+const tone = computed(() => (props.colored ? signClass(props.amount) : ''))
 const numeric = computed(() => Number(props.amount))
 const known = computed(
   () =>
@@ -46,7 +54,7 @@ const hovered = ref(false)
 <template>
   <Tooltip v-if="convertible" @update:open="(isOpen: boolean) => isOpen && (hovered = true)">
     <TooltipTrigger as-child>
-      <span class="money inline-flex cursor-default items-baseline gap-[0.25em] whitespace-nowrap tabular-nums">
+      <span :class="cn('money inline-flex cursor-default items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone)">
         <span>{{ parts.number }}</span>
         <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
       </span>
@@ -55,7 +63,7 @@ const hovered = ref(false)
       <MoneyConversions v-if="hovered" :amount="numeric" :currency="code" />
     </TooltipContent>
   </Tooltip>
-  <span v-else class="money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums">
+  <span v-else :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone)">
     <span>{{ parts.number }}</span>
     <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
   </span>

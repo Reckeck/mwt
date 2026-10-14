@@ -75,7 +75,7 @@ const warningTexts = computed(() =>
         <span class="tabular-nums text-muted-foreground">{{ qty(row.before, row.asset) }}</span>
         <ArrowRight class="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span class="font-medium tabular-nums" :class="row.warned && 'text-destructive'">{{ qty(row.after, row.asset) }}</span>
-        <span class="w-24 text-right text-xs tabular-nums" :class="row.delta < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'">
+        <span class="w-24 text-right text-xs tabular-nums" :class="row.delta < 0 ? 'text-destructive' : 'text-success'">
           {{ row.delta > 0 ? '+' : '' }}{{ qty(String(row.delta), row.asset) }}
         </span>
       </li>
@@ -83,7 +83,7 @@ const warningTexts = computed(() =>
 
     <p v-if="flowText" class="text-xs text-muted-foreground">{{ flowText }}</p>
 
-    <p v-for="text in warningTexts" :key="text" class="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+    <p v-for="text in warningTexts" :key="text" class="flex items-start gap-1.5 text-xs text-warning">
       <AlertTriangle class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       {{ text }}
     </p>

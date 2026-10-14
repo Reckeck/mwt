@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
@@ -13,12 +12,12 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
+import { Switch } from '@/shared/ui/switch'
 
 import { BUDGET_PERIODS, BUDGET_TARGETS, type BudgetTargetKind } from './budget-edit.constants'
 import type { BudgetDialogProps } from './budget-edit.types'
@@ -85,11 +84,10 @@ const save = useMutation({
       : call<Budget>('create_budget', { input })
   },
   onSuccess: () => {
-    toast.success(props.budget ? t('budget.saved') : t('budget.created'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('budget.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'budget.saveFailed', success: () => props.budget ? t('budget.saved') : t('budget.created') },
 })
 </script>
 
@@ -143,10 +141,10 @@ const save = useMutation({
         </FormField>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="active" type="checkbox" class="size-4 accent-primary" />
-        {{ t('budget.active') }}
-      </label>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="budget-active">{{ t('budget.active') }}</Label>
+        <Switch id="budget-active" v-model="active" />
+      </div>
       <p class="text-xs text-muted-foreground">{{ t('budget.hint') }}</p>
     </form>
 

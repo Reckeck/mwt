@@ -3,19 +3,18 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { BudgetDialog } from '@/features/budget-edit'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { EmptyState } from '@/shared/ui/empty-state'
+import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -49,10 +48,9 @@ function openEdit(budget: Budget) {
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_budget', { id }),
   onSuccess: () => {
-    toast.success(t('budget.deleted'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('budget.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'budget.deleteFailed', success: 'budget.deleted' },
 })
 
 const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.length)
@@ -68,9 +66,9 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
       </Button>
     </div>
 
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('budget.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('budget.empty')">
+      <Button @click="openNew"><Plus class="size-4" />{{ t('budget.new') }}</Button>
+    </EmptyState>
 
     <div class="grid gap-4 @lg:grid-cols-2">
       <Card v-for="budget in budgets.data.value ?? []" :key="budget.id">
@@ -107,7 +105,7 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
           <div v-if="budget.active" class="grid gap-1">
             <div class="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" :aria-valuenow="usedPct(statusOf(budget.id))" aria-valuemin="0" aria-valuemax="100">
               <div
-                class="h-full rounded-full transition-all"
+                class="h-full rounded-full transition-[width] motion-reduce:transition-none"
                 :class="Number(statusOf(budget.id)?.remaining ?? 1) < 0 ? 'bg-destructive' : 'bg-primary'"
                 :style="{ width: `${usedPct(statusOf(budget.id))}%` }"
               />

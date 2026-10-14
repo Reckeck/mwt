@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { AutomationRunActionsProps } from './automation-edit.types'
 
@@ -23,19 +21,17 @@ function refresh() {
 const retry = useMutation({
   mutationFn: () => call<Transaction>('retry_automation_run', { runId: props.run.id }),
   onSuccess: () => {
-    toast.success(t('automation.run.retried'))
     refresh()
   },
-  onError: (err) => toast.error(t('automation.run.retryFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'automation.run.retryFailed', success: 'automation.run.retried' },
 })
 
 const skip = useMutation({
   mutationFn: () => call<AutomationRun>('skip_automation_run', { runId: props.run.id }),
   onSuccess: () => {
-    toast.success(t('automation.run.skipped'))
     refresh()
   },
-  onError: (err) => toast.error(t('automation.run.skipFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'automation.run.skipFailed', success: 'automation.run.skipped' },
 })
 </script>
 

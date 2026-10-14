@@ -56,7 +56,7 @@ function line(tx: Transaction): string {
         <MessageCircleQuestion class="mt-0.5 size-4 shrink-0 text-primary" />
         <div class="grid gap-1">
           <span class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.question') }}</span>
-          <button type="button" class="text-left font-medium hover:underline" @click="emit('focus', question.nodeId)">{{ question.question || t('workflow.defaultQuestion') }}</button>
+          <Button variant="link" size="block" class="p-0 font-medium text-foreground text-left font-medium hover:underline" @click="emit('focus', question.nodeId)">{{ question.question || t('workflow.defaultQuestion') }}</Button>
         </div>
       </div>
       <p class="text-xs text-muted-foreground">{{ t('workflow.runPanel.questionHint') }}</p>

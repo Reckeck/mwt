@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { FormField } from '@/shared/ui/form-field'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -12,10 +11,10 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { integerInRange, nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Switch } from '@/shared/ui/switch'
 
 import { CAPITALIZATIONS, INCOME_BRACKETS } from './deposit-terms.constants'
 import type { DepositTermsFormProps } from './deposit-terms.types'
@@ -94,10 +93,9 @@ const save = useMutation({
       } satisfies SetDepositTermsInput,
     }),
   onSuccess: () => {
-    toast.success(t('settings.saved'))
     for (const queryKey of [STORE_TREE_QUERY_KEY, ['store'], ['deposit-report']]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'settings.saveFailed', success: 'settings.saved' },
 })
 </script>
 
@@ -153,10 +151,10 @@ const save = useMutation({
       </template>
     </div>
 
-    <label class="flex items-center gap-2 text-sm">
-      <input v-model="autoAccrue" type="checkbox" class="size-4 accent-primary" />
-      {{ t('deposit.autoAccrue') }}
-    </label>
+    <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+      <Label for="deposit-auto-accrue">{{ t('deposit.autoAccrue') }}</Label>
+      <Switch id="deposit-auto-accrue" v-model="autoAccrue" />
+    </div>
 
     <div v-if="isPds" class="grid gap-3 rounded-lg border border-border p-3">
       <p class="text-sm font-medium">{{ t('deposit.pds.title') }}</p>

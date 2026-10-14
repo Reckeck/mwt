@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
 import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
@@ -11,10 +10,10 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { notify } from '@/shared/lib/notify'
 
 import { connectBybit } from './connect-bybit'
 import type { ExchangeKeyFormProps } from './exchange-key.types'
@@ -47,11 +46,11 @@ async function save() {
     apiKey.value = ''
     apiSecret.value = ''
     form.reset()
-    toast.success(t('wallet.bybit.keySaved'), { description: t('wallet.bybit.accountsReady', { count }) })
+    notify.success('wallet.bybit.keySaved', { description: t('wallet.bybit.accountsReady', { count }) })
     for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
     await status.refetch()
   } catch (err) {
-    toast.error(t('wallet.bybit.keySaveFailed'), { description: parseError(err).message })
+    notify.error(err, 'wallet.bybit.keySaveFailed')
   } finally {
     busy.value = false
   }
@@ -85,10 +84,9 @@ const setTargets = useMutation({
       },
     }),
   onSuccess: () => {
-    toast.success(t('settings.saved'))
     void status.refetch()
   },
-  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'settings.saveFailed', success: 'settings.saved' },
 })
 
 /* --- Bybit's own split: Funding, Unified Trading, Earn --- */
@@ -114,20 +112,19 @@ const createAccounts = useMutation({
       } satisfies CreateBybitAccountsInput,
     }),
   onSuccess: () => {
-    toast.success(t('wallet.bybit.accountsCreated'))
     for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'settings.saveFailed', success: 'wallet.bybit.accountsCreated' },
 })
 
 async function remove() {
   busy.value = true
   try {
     await call('clear_exchange_key', { input: { store_id: props.storeId } })
-    toast.success(t('wallet.bybit.keyRemoved'))
+    notify.success('wallet.bybit.keyRemoved')
     await status.refetch()
   } catch (err) {
-    toast.error(t('wallet.bybit.keyRemoveFailed'), { description: parseError(err).message })
+    notify.error(err, 'wallet.bybit.keyRemoveFailed')
   } finally {
     busy.value = false
   }

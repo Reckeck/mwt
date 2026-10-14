@@ -2,16 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { useWalletCatalog } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
@@ -52,10 +50,9 @@ const setInterval = useMutation({
   mutationFn: (seconds: number) =>
     call('set_import_interval', { input: { store_id: props.store.id, interval_sec: seconds } }),
   onSuccess: () => {
-    toast.success(t('stores.saved'))
     void queryClient.invalidateQueries({ queryKey: ['store'] })
   },
-  onError: (err) => toast.error(t('stores.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'stores.saveFailed', success: 'stores.saved' },
 })
 
 function intervalLabel(seconds: number): string {
@@ -70,15 +67,14 @@ function intervalLabel(seconds: number): string {
     <div class="grid gap-2">
       <Label>{{ t('provider.title') }}</Label>
       <div class="grid gap-2 @md:grid-cols-3">
-        <button
+        <Button variant="outline" size="block" class="h-auto justify-between"
           v-for="info in catalog.data.value?.providers ?? []"
           :key="info.provider"
-          type="button"
           :disabled="!info.supported || save.isPending.value"
           :aria-pressed="provider === info.provider"
           :class="
             cn(
-              'flex items-center justify-between rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              'flex items-center justify-between rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50',
               provider === info.provider && 'border-primary bg-primary/5',
             )
           "
@@ -86,7 +82,7 @@ function intervalLabel(seconds: number): string {
         >
           <span class="text-sm font-medium">{{ t(`provider.${info.provider}`) }}</span>
           <span v-if="!info.supported" class="text-xs text-muted-foreground">{{ t('provider.soon') }}</span>
-        </button>
+        </Button>
       </div>
       <p v-if="!provider" class="text-sm text-muted-foreground">{{ t('provider.pickFirst') }}</p>
     </div>

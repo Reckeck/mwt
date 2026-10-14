@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { EyeOff, GripVertical, MoreHorizontal, PinOff, X } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
+import { GripVertical, PinOff } from 'lucide-vue-next'
 
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { ContextMenu } from '@/shared/ui/context-menu'
-import { DropdownMenu } from '@/shared/ui/dropdown-menu'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 
 import type { WidgetFrameProps } from './widget-frame.types'
 
-const props = withDefaults(defineProps<WidgetFrameProps>(), { pinned: false, actions: () => [] })
-const emit = defineEmits<{ pin: [pinned: boolean]; remove: [] }>()
+const props = withDefaults(defineProps<WidgetFrameProps>(), { pinned: false, actions: () => [], to: undefined })
+const emit = defineEmits<{ pin: [pinned: boolean] }>()
 const { t } = useI18n()
 </script>
 
@@ -22,26 +22,18 @@ const { t } = useI18n()
       class="widget-drag-handle flex h-7 shrink-0 cursor-grab items-center gap-1 px-1 text-xs text-muted-foreground active:cursor-grabbing"
     >
       <GripVertical class="size-3.5 opacity-40 group-hover/frame:opacity-100" aria-hidden="true" />
-      <span class="min-w-0 flex-1 truncate font-medium">{{ props.title }}</span>
-      <DropdownMenu align="end">
-        <template #trigger>
-          <button
-            type="button"
-            class="flex size-6 items-center justify-center rounded opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover/frame:opacity-100"
-            :aria-label="t('widgetFrame.menu', { title: props.title })"
-          >
-            <MoreHorizontal class="size-4" />
-          </button>
-        </template>
-        <DropdownMenuItem value="pin" @select="emit('pin', true)">
-          <EyeOff class="size-4 shrink-0" />
-          {{ t('widgetFrame.pin') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem value="remove" destructive @select="emit('remove')">
-          <X class="size-4 shrink-0" />
-          {{ t('widgetFrame.remove') }}
-        </DropdownMenuItem>
-      </DropdownMenu>
+      <RouterLink
+        v-if="props.to"
+        :to="props.to"
+        class="min-w-0 flex-1 truncate font-medium hover:text-foreground hover:underline"
+        @mousedown.stop
+      >
+        {{ props.title }}
+      </RouterLink>
+      <span v-else class="min-w-0 flex-1 truncate font-medium">{{ props.title }}</span>
+      <span class="opacity-0 transition-opacity focus-within:opacity-100 group-hover/frame:opacity-100">
+        <ActionMenu :actions="props.actions" :label="t('widgetFrame.menu', { title: props.title })" />
+      </span>
     </div>
     <button
       v-else

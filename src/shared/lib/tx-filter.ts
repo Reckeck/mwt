@@ -31,3 +31,45 @@ export function activeFilterCount(filter: TxFilter): number {
     Boolean(filter.text?.trim()),
   ].filter(Boolean).length
 }
+
+type Query = Record<string, string | null | (string | null)[] | undefined>
+
+/** The filter as short query keys, only what is set: `?store=…&kind=payment&q=кофе`. */
+export function txFilterToQuery(filter: TxFilter): Record<string, string | undefined> {
+  return {
+    store: filter.scope.store_ids[0] || undefined,
+    children: filter.scope.store_ids.length && !filter.scope.include_children ? '0' : undefined,
+    kind: filter.kinds[0] || undefined,
+    contact: filter.contact_id || undefined,
+    flow: filter.flow_id || undefined,
+    from: filter.from || undefined,
+    to: filter.to || undefined,
+    internal: filter.hide_internal ? 'hide' : undefined,
+    q: filter.text?.trim() || undefined,
+  }
+}
+
+/** The query keys a filter may use. */
+export const TX_FILTER_QUERY_KEYS = ['store', 'children', 'kind', 'contact', 'flow', 'from', 'to', 'internal', 'q']
+
+/** Back from the query; `null` when the address carries no filter at all. */
+export function txFilterFromQuery(query: Query): TxFilter | null {
+  const one = (key: string) => {
+    const value = query[key]
+    const first = Array.isArray(value) ? value[0] : value
+    return typeof first === 'string' && first ? first : null
+  }
+  if (!TX_FILTER_QUERY_KEYS.some((key) => one(key))) return null
+  const store = one('store')
+  const kind = one('kind')
+  return emptyTxFilter({
+    scope: { store_ids: store ? [store] : [], include_children: one('children') !== '0' },
+    kinds: kind ? [kind as TxKind] : [],
+    contact_id: one('contact'),
+    flow_id: one('flow'),
+    from: one('from'),
+    to: one('to'),
+    hide_internal: one('internal') === 'hide',
+    text: one('q'),
+  })
+}

@@ -14,6 +14,7 @@ import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree, storeDescendants } from '@/shared/lib/store-tree'
 import { TX_KINDS } from '@/shared/lib/transactions'
 import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 import type { TransactionFilterBarProps } from './transaction-filter.types'
 
@@ -97,42 +98,46 @@ function reset() {
 
 <template>
   <div class="flex flex-wrap items-end gap-3">
-    <div v-if="!props.fixedScope" class="grid gap-1.5">
+    <div v-if="!props.fixedScope" class="grid min-w-40 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('scope')">{{ t('filter.scope') }}</Label>
-      <StoreNodeSelect :id="field('scope')" v-model="storeId" :nodes="nodes" :empty-label="t('tx.allStores')" class="w-56" />
+      <StoreNodeSelect :id="field('scope')" v-model="storeId" :nodes="nodes" :empty-label="t('tx.allStores')" class="w-full @3xl:w-56" />
     </div>
-    <label v-if="!props.fixedScope && storeId && childCount" class="flex h-9 items-center gap-2 text-sm">
-      <input v-model="includeChildren" type="checkbox" class="size-4 accent-primary" />
+    <label
+      v-if="!props.fixedScope && storeId && childCount"
+      for="filter-with-children"
+      class="flex h-9 items-center gap-2 text-sm"
+    >
+      <Checkbox id="filter-with-children" v-model="includeChildren" />
       {{ t('filter.withChildren', { count: childCount }) }}
     </label>
-    <div class="grid gap-1.5">
+    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('kind')">{{ t('form.kind') }}</Label>
-      <Select :id="field('kind')" v-model="kind" class="w-40">
+      <Select :id="field('kind')" v-model="kind" class="w-full @3xl:w-40">
         <option value="">{{ t('hist.allKinds') }}</option>
         <option v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</option>
       </Select>
     </div>
-    <div v-if="contacts.data.value?.length" class="grid gap-1.5">
+    <div v-if="contacts.data.value?.length" class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('contact')">{{ t('filter.contact') }}</Label>
-      <Select :id="field('contact')" v-model="contactId" class="w-44">
+      <Select :id="field('contact')" v-model="contactId" class="w-full @3xl:w-44">
         <option value="">{{ t('filter.anyContact') }}</option>
         <option v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</option>
       </Select>
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('from')">{{ t('filter.from') }}</Label>
-      <Input :id="field('from')" v-model="from" type="date" class="w-40" />
+      <Input :id="field('from')" v-model="from" type="date" class="w-full @3xl:w-40" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('to')">{{ t('filter.to') }}</Label>
-      <Input :id="field('to')" v-model="to" type="date" class="w-40" />
+      <Input :id="field('to')" v-model="to" type="date" class="w-full @3xl:w-40" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid min-w-36 flex-1 gap-1.5 @3xl:flex-none">
       <Label :for="field('text')">{{ t('filter.search') }}</Label>
-      <Input :id="field('text')" v-model="search" class="w-52" :placeholder="t('hist.search')" />
+      <Input :id="field('text')" v-model="search" class="w-full @3xl:w-52" :placeholder="t('hist.search')" />
     </div>
-    <label class="flex h-9 items-center gap-2 text-sm">
-      <input v-model="hideInternal" type="checkbox" class="size-4 accent-primary" />
+    <label for="filter-hide-internal" class="flex h-9 items-center gap-2 text-sm">
+      <Checkbox id="filter-hide-internal" v-model="hideInternal" />
       {{ t('filter.hideInternal') }}
     </label>
     <Button

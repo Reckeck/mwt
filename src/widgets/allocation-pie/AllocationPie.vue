@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
@@ -45,9 +46,18 @@ const option = computed<ChartOption>(() => ({
     </template>
     <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
          so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
-    <div v-if="slices.length > 0" class="h-80 w-full">
-      <Chart :option="option" autoresize />
-    </div>
-    <p v-else class="py-12 text-center text-sm text-muted-foreground">{{ t('store.empty') }}</p>
+    <SectionState
+      :loading="summary.isPending.value"
+      :error="summary.error.value"
+      :empty="!(slices.length > 0)"
+      :empty-title="t('store.empty')"
+      skeleton="chart"
+      compact
+      @retry="summary.refetch()"
+    >
+      <div class="h-80 w-full">
+        <Chart :option="option" autoresize />
+      </div>
+    </SectionState>
   </Card>
 </template>

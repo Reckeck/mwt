@@ -48,3 +48,17 @@ export function codeErrorMessage(err: AppError, t: Translate): string {
   if (known === key) return err.message
   return DETAILED_CODES.has(err.code) ? `${known}: ${err.message}` : known
 }
+
+/**
+ * The best wording for any failure: the vault's own messages first (wrong
+ * password, file busy…), then the `errors.*` text for the code, then the raw message.
+ */
+export function anyErrorMessage(err: unknown, t: Translate): string {
+  const parsed = parseError(err)
+  const key = VAULT_ERROR_KEYS[parsed.code]
+  if (key) {
+    const known = t(key)
+    if (known !== key) return known
+  }
+  return codeErrorMessage(parsed, t)
+}

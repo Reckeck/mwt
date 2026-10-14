@@ -52,7 +52,7 @@ const dialogOpen = computed({
         <p v-if="row" class="text-sm text-muted-foreground">
           {{ t('loyalty.worth') }} <Money :amount="row.value_base" :currency="report.data.value?.base_currency" />
         </p>
-        <p v-if="row?.expires_at" class="text-xs text-amber-600 dark:text-amber-400">
+        <p v-if="row?.expires_at" class="text-xs text-warning">
           {{ t('loyalty.expiring', { points: row.expiring_points ?? '', date: formatDate(row.expires_at) }) }}
         </p>
       </div>

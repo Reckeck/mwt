@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -12,6 +11,8 @@ import { call, parseError } from '@/shared/api/ipc'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
+import { copyText } from '@/shared/lib/clipboard'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -28,14 +29,7 @@ const failed = ref('')
 /** Wayland gives apps no global keys: there the compositor binds a key to a command. */
 const support = useQuery({ queryKey: ['shortcut-support'], queryFn: () => call<ShortcutSupport>('get_shortcut_support') })
 const binding = computed(() => `bind = SUPER SHIFT, A, exec, ${support.data.value?.launch_command ?? 'multi-wallet-tracker --quick-add'}`)
-async function copyBinding() {
-  try {
-    await navigator.clipboard.writeText(binding.value)
-    toast.success(t('quickAdd.copied'))
-  } catch {
-    /* the line stays visible to copy by hand */
-  }
-}
+const copyBinding = () => void copyText(binding.value, 'quickAdd.copied')
 
 const MODIFIER_CODES = new Set(['ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'])
 
@@ -65,7 +59,7 @@ async function save(shortcut: string | null) {
   failed.value = ''
   try {
     await settings.setQuickAddShortcut(shortcut)
-    toast.success(t(shortcut ? 'quickAdd.shortcutSaved' : 'quickAdd.shortcutOff'))
+    notify.success(t(shortcut ? 'quickAdd.shortcutSaved' : 'quickAdd.shortcutOff'))
   } catch (err) {
     const error = parseError(err)
     failed.value = error.code === 'SHORTCUT_FAILED' ? t('quickAdd.shortcutTaken') : codeErrorMessage(error, t)
@@ -76,8 +70,8 @@ async function save(shortcut: string | null) {
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('quickAdd.settingsTitle') }}</p>
-      <p class="text-xs text-muted-foreground">{{ t('quickAdd.settingsHint') }}</p>
+      <h3 class="heading-card">{{ t('quickAdd.settingsTitle') }}</h3>
+      <p class="text-sm text-muted-foreground">{{ t('quickAdd.settingsHint') }}</p>
     </template>
     <div v-if="support.data.value && !support.data.value.global_keys" class="grid gap-2">
       <p class="text-sm">{{ t('quickAdd.waylandHint') }}</p>

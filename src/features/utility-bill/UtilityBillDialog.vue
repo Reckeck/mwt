@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
@@ -13,11 +12,11 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 import type { UtilityBillDialogProps } from './utility-bill.types'
 
@@ -91,7 +90,7 @@ function onReading(row: Row, value: string | number) {
   const kind = row.line.item.kind
   if (!('metered' in kind) || !row.reading || row.line.previous_reading === null) return
   const used = Number(row.reading) - Number(row.line.previous_reading)
-  if (used >= 0) row.amount = (used * Number(kind.metered.tariff)).toFixed(2)
+  if (used >= 0) row.amount = String(Math.round(used * Number(kind.metered.tariff) * 100) / 100)
   row.include = true
 }
 
@@ -138,14 +137,16 @@ const pay = useMutation({
       } satisfies PayUtilityBillInput,
     }),
   onSuccess: (saved) => {
-    toast.success(t('utilityBill.paid', { count: saved.length }))
     for (const queryKey of [...LEDGER_KEYS, ...PLANNING_KEYS, ['utility-trend'], ['utility-bill'], ['utilities']]) {
       void queryClient.invalidateQueries({ queryKey })
     }
     emit('paid', saved.length)
     open.value = false
   },
-  onError: (err) => toast.error(t('utilityBill.failed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: {
+    error: 'utilityBill.failed',
+    success: (data) => t('utilityBill.paid', { count: (data as Transaction[]).length }),
+  },
 })
 </script>
 
@@ -180,12 +181,7 @@ const pay = useMutation({
         :data-invalid="form.error('lines') ? '' : undefined"
       >
         <li v-for="row in rows" :key="row.line.item.id" class="grid items-center gap-2 p-2.5 @sm:grid-cols-[1.5rem_1fr_9rem_9rem]">
-          <input
-            v-model="row.include"
-            type="checkbox"
-            class="size-4 accent-primary"
-            :aria-label="t('utilityBill.include', { name: row.line.item.name })"
-          />
+          <Checkbox v-model="row.include" :aria-label="t('utilityBill.include', { name: row.line.item.name })" />
           <div class="min-w-0">
             <p class="flex items-center gap-2 truncate text-sm font-medium">
               {{ row.line.item.name }}

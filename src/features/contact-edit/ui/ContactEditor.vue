@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ClipboardPaste, Copy, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -14,6 +13,7 @@ import { call } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { detectDetail } from '@/shared/lib/detect-detail'
 import { required, useFormValidation } from '@/shared/lib/form'
+import { copyText } from '@/shared/lib/clipboard'
 
 import { CONTACT_KINDS, DETAIL_KINDS } from '../contact-edit.constants'
 import type { ContactEditorProps } from '../contact-edit.types'
@@ -103,14 +103,7 @@ function addPasted() {
   })
 }
 
-async function copy(value: string) {
-  try {
-    await navigator.clipboard.writeText(value)
-    toast.success(t('contacts.copied'))
-  } catch {
-    toast.error(t('contacts.copyFailed'))
-  }
-}
+const copy = (value: string) => void copyText(value)
 
 const inlineInput =
   'h-8 border-transparent bg-transparent px-1.5 shadow-none hover:border-input focus-visible:border-input'

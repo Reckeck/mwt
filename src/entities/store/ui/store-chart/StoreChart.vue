@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { ChartCurrencySwitch, useChartCurrency, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
@@ -84,9 +85,18 @@ const option = computed<ChartOption>(() => ({
 
     <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
          so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
-    <div v-if="points.length > 1" class="h-56 w-full">
-      <Chart :option="option" autoresize />
-    </div>
-    <p v-else class="py-8 text-center text-sm text-muted-foreground">{{ t('wallet.chartEmpty') }}</p>
+    <SectionState
+      :loading="history.isPending.value"
+      :error="history.error.value"
+      :empty="!(points.length > 1)"
+      :empty-title="t('wallet.chartEmpty')"
+      skeleton="chart"
+      compact
+      @retry="history.refetch()"
+    >
+      <div class="h-56 w-full">
+        <Chart :option="option" autoresize />
+      </div>
+    </SectionState>
   </Card>
 </template>

@@ -38,7 +38,7 @@ const rows = computed(() => {
         <dd class="text-right">{{ money(row.amount) }}</dd>
       </template>
       <dt class="text-muted-foreground">{{ t('monthSummary.savedPct') }}</dt>
-      <dd class="text-right" :class="Number(data.deviation) < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'">
+      <dd class="text-right" :class="Number(data.deviation) < 0 ? 'text-destructive' : 'text-success'">
         {{ data.saved_pct }}%
       </dd>
     </dl>

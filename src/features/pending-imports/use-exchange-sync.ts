@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
+import { notify } from '@/shared/lib/notify'
 
 /** Everything a sync, a confirmation or a discard can change. */
 export const EXCHANGE_SYNC_KEYS: ReadonlyArray<readonly unknown[]> = [
@@ -30,40 +30,51 @@ export function useExchangeSync() {
       call<ImportBybitHistoryOutput>('import_bybit_history', { input: { store_id: storeId } }),
     onSuccess: async (result) => {
       await refresh()
-      if (result.notice) {
-        toast.warning(t(`import.notice.${result.notice}`))
-        return
-      }
-      const run = result.run
-      toast.success(t('import.synced'), {
-        description: t('import.syncedDetail', {
-          staged: run?.staged ?? result.staged,
-          known: run?.known ?? 0,
-          confirmed: run?.confirmed ?? 0,
-        }),
-      })
+      if (result.notice) notify.warning(`import.notice.${result.notice}`)
     },
-    onError: (err) => toast.error(t('import.notice.unreachable'), { description: parseError(err).message }),
+    meta: {
+      error: 'import.notice.unreachable',
+      // A notice (no key, nothing new) is a warning of its own, not a success.
+      success: (data) => {
+        const result = data as ImportBybitHistoryOutput
+        if (result.notice) return ''
+        const run = result.run
+        return {
+          text: t('import.synced'),
+          description: t('import.syncedDetail', {
+            staged: run?.staged ?? result.staged,
+            known: run?.known ?? 0,
+            confirmed: run?.confirmed ?? 0,
+          }),
+        }
+      },
+    },
   })
 
   const confirm = useMutation({
     mutationFn: (execIds: string[]) =>
       call<ConfirmPendingImportsOutput>('confirm_pending_imports', { input: { exec_ids: execIds } }),
-    onSuccess: async (result) => {
-      await refresh()
-      toast.success(t('import.confirmed'), { description: String(result.confirmed) })
+    onSuccess: refresh,
+    meta: {
+      error: 'import.confirmFailed',
+      success: (data) => ({
+        text: t('import.confirmed'),
+        description: String((data as ConfirmPendingImportsOutput).confirmed),
+      }),
     },
-    onError: (err) => toast.error(t('import.confirmFailed'), { description: parseError(err).message }),
   })
 
   const discard = useMutation({
     mutationFn: (execIds: string[]) =>
       call<DiscardPendingImportsOutput>('discard_pending_imports', { input: { exec_ids: execIds } }),
-    onSuccess: async (result) => {
-      await refresh()
-      toast.success(t('import.discarded'), { description: String(result.discarded) })
+    onSuccess: refresh,
+    meta: {
+      error: 'import.discardFailed',
+      success: (data) => ({
+        text: t('import.discarded'),
+        description: String((data as DiscardPendingImportsOutput).discarded),
+      }),
     },
-    onError: (err) => toast.error(t('import.discardFailed'), { description: parseError(err).message }),
   })
 
   return { syncNow, confirm, discard }

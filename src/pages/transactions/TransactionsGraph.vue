@@ -8,9 +8,9 @@ import { TxGraphView } from '@/widgets/tx-graph'
 import { call } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 
-import { sharedTxFilter } from './tx-filter.state'
+import { useTxFilterInUrl } from './tx-filter.state'
 
-const filter = sharedTxFilter
+const filter = useTxFilterInUrl()
 
 // Same key as the list tab: the details panel reads the operation from there.
 const txs = useQuery({
@@ -28,7 +28,7 @@ function openDetails(id: string) {
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <TransactionFilterBar v-model="filter" id-prefix="graph-filter" />
     <TxGraphView :filter="filter" @open="openDetails" />
     <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />

@@ -27,7 +27,7 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
       <li v-for="item in progress.data.value" :key="item.goal.id" class="grid gap-1">
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="flex min-w-0 items-center gap-1.5 truncate">
-            <CircleAlert v-if="!item.realistic" class="size-3.5 shrink-0 text-amber-500" :aria-label="t('goal.revise')" />
+            <CircleAlert v-if="!item.realistic" class="size-3.5 shrink-0 text-warning" :aria-label="t('goal.revise')" />
             {{ item.goal.name }}
           </span>
           <span class="shrink-0 tabular-nums text-muted-foreground">{{ item.pct }}%</span>

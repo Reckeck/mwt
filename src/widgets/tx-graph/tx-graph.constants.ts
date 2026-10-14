@@ -1,3 +1,4 @@
+// check-ui-ignore raw-color: a canvas palette by operation kind, mid-tones that read on both themes
 /** Node colour per kind: the four verbs stand apart, trading shares warm tones. */
 export const KIND_COLORS: Record<TxKind, string> = {
   topup: '#16a34a',

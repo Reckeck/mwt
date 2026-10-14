@@ -2,10 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleCheck, FlaskConical, GraduationCap, Lightbulb } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { type Lesson, WORKFLOW_LESSONS, markLessonDone } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
+import { notify } from '@/shared/lib/notify'
 
 /**
  * A lesson beside the canvas: the task, a checklist that ticks as the graph
@@ -28,7 +28,7 @@ const next = computed(() => {
 watch(finished, (done) => {
   if (!done) return
   markLessonDone(props.lesson.id)
-  toast.success(t('workflow.lesson.done'), { description: t(`workflow.lesson.${props.lesson.id}.title`) })
+  notify.success('workflow.lesson.done', { description: t(`workflow.lesson.${props.lesson.id}.title`) })
 })
 </script>
 

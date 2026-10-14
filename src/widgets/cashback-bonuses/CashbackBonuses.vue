@@ -63,7 +63,7 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
               <span class="text-muted-foreground">≈ <Money :amount="row.value_base" :currency="data.base_currency" :convert="false" /></span>
             </span>
           </div>
-          <p v-if="row.expires_at" class="text-xs" :class="soon(row.expires_at) ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">
+          <p v-if="row.expires_at" class="text-xs" :class="soon(row.expires_at) ? 'text-warning' : 'text-muted-foreground'">
             {{ t('loyalty.expiring', { points: row.expiring_points ?? '', date: formatDate(row.expires_at) }) }}
           </p>
         </li>

@@ -19,13 +19,14 @@ const calculator = ref<InstanceType<typeof PlanCalculator> | null>(null)
 
 <template>
   <Dialog v-model:open="open" :title="t('wallet.plan')" :description="t('calc.hint')" size="lg">
-    <div class="@container">
+    <!-- A form, so Enter in any field applies the plan like the button does. -->
+    <form id="plan-calculator-form" class="@container" @submit.prevent="calculator?.apply($event)">
       <PlanCalculator ref="calculator" :base-currency="props.baseCurrency" @apply="(plan) => emit('apply', plan)" />
-    </div>
+    </form>
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.close') }}</Button>
-      <Button @click="calculator?.apply($event)">{{ t('calc.apply') }}</Button>
+      <Button type="submit" form="plan-calculator-form">{{ t('calc.apply') }}</Button>
     </template>
   </Dialog>
 </template>

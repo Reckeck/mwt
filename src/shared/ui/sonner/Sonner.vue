@@ -2,6 +2,9 @@
 import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert, X } from 'lucide-vue-next'
 import type { ToasterProps } from 'vue-sonner'
 import { Toaster } from 'vue-sonner'
+// vue-sonner 2 ships its styles apart; without them the toasts render below the
+// window, where `body { overflow: hidden }` hides every one of them.
+import 'vue-sonner/style.css'
 import { cn } from '@/shared/lib/utils'
 
 const props = defineProps<ToasterProps>()

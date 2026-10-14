@@ -32,7 +32,7 @@ const unset = computed(
 
     <div v-if="unset" class="grid gap-2">
       <p class="text-sm text-muted-foreground">{{ t('dailyBudget.noIncome') }}</p>
-      <RouterLink :to="{ name: 'planning-automations' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })" class="w-fit">
+      <RouterLink :to="{ name: 'planning-automations', query: { new: 'salary' } }" :class="buttonVariants({ variant: 'outline', size: 'sm' })" class="w-fit">
         {{ t('dailyBudget.addSalary') }}
       </RouterLink>
     </div>

@@ -56,7 +56,7 @@ const data = computed(() => report.data.value ?? null)
         </div>
         <div class="grid gap-0.5">
           <dt class="text-xs text-muted-foreground">{{ t('deposit.projectedYear') }}</dt>
-          <dd class="font-medium text-emerald-600 dark:text-emerald-400">
+          <dd class="font-medium text-success">
             +<Money :amount="data.projected_year" :currency="data.currency" />
           </dd>
         </div>
@@ -75,7 +75,7 @@ const data = computed(() => report.data.value ?? null)
           <dt class="text-muted-foreground">{{ t('deposit.pds.contributions') }}</dt>
           <dd class="text-right"><Money :amount="data.pds.contributions" currency="rub" /></dd>
           <dt class="text-muted-foreground">{{ t('deposit.pds.cofinancing', { ratio: data.pds.ratio }) }}</dt>
-          <dd class="text-right font-medium text-emerald-600 dark:text-emerald-400">
+          <dd class="text-right font-medium text-success">
             <Money :amount="data.pds.cofinancing" currency="rub" />
           </dd>
           <template v-if="Number(data.pds.to_full_cofinancing) > 0">

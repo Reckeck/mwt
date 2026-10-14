@@ -9,6 +9,7 @@ import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
 import { monthLabel } from '../use-report'
 import { categoryChart, num } from './chart'
@@ -39,34 +40,34 @@ const columns = ['income', 'fixed', 'daily', 'savings_moved', 'budget_in', 'budg
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <Card>
       <div class="h-80 w-full"><Chart :option="option" autoresize /></div>
     </Card>
     <Card>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm tabular-nums">
-          <thead class="text-xs text-muted-foreground">
-            <tr>
-              <th class="py-1 pr-2 text-left font-normal">{{ t('report.month') }}</th>
-              <th v-for="column in columns" :key="column" class="px-2 py-1 text-right font-normal">
+        <Table class="w-full text-sm tabular-nums">
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="text-left">{{ t('report.month') }}</TableHead>
+              <TableHead v-for="column in columns" :key="column" class="text-right">
                 {{ t(`report.cashflow.${column}`) }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in props.report.rows" :key="row.month" class="border-t border-border">
-              <td class="py-1.5 pr-2">{{ monthLabel(row.month, activeLocale) }}</td>
-              <td v-for="column in columns" :key="column" class="px-2 py-1.5 text-right">{{ money(row[column]) }}</td>
-            </tr>
-            <tr class="border-t-2 border-border font-medium">
-              <td class="py-1.5 pr-2">{{ t('report.total') }}</td>
-              <td v-for="column in columns" :key="column" class="px-2 py-1.5 text-right">
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in props.report.rows" :key="row.month">
+              <TableCell>{{ monthLabel(row.month, activeLocale) }}</TableCell>
+              <TableCell v-for="column in columns" :key="column" class="text-right">{{ money(row[column]) }}</TableCell>
+            </TableRow>
+            <TableRow class="font-medium">
+              <TableCell>{{ t('report.total') }}</TableCell>
+              <TableCell v-for="column in columns" :key="column" class="text-right">
                 {{ money(props.report.total[column]) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
       <p class="mt-3 text-xs text-muted-foreground">
         {{ t('report.currencyNote', { currency: props.report.meta.currency.toUpperCase() }) }}

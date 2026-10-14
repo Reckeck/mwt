@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Copy, CopyPlus, ExternalLink, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete, useTransactionDelete } from '@/features/transaction-delete'
@@ -13,17 +12,19 @@ import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { TransactionsList } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { Dialog } from '@/shared/ui/dialog'
 import { call, onEvent } from '@/shared/api/ipc'
 import { txId, txStoreId } from '@/shared/lib/transactions'
+import { copyText } from '@/shared/lib/clipboard'
 
-import { sharedTxFilter } from './tx-filter.state'
+import { useTxFilterInUrl } from './tx-filter.state'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const filter = sharedTxFilter
+const filter = useTxFilterInUrl()
 
 // The filter is part of the key, so changing it fetches (and caches) by itself.
 const txs = useQuery({
@@ -72,14 +73,7 @@ const duplicateOpen = computed({
 const deleting = ref<Transaction | null>(null)
 const remove = useTransactionDelete()
 
-async function copyId(tx: Transaction) {
-  try {
-    await navigator.clipboard.writeText(txId(tx))
-    toast.success(t('contacts.copied'))
-  } catch {
-    toast.error(t('contacts.copyFailed'))
-  }
-}
+const copyId = (tx: Transaction) => void copyText(txId(tx))
 
 function rowActions(tx: Transaction): UiAction[] {
   return [
@@ -87,15 +81,15 @@ function rowActions(tx: Transaction): UiAction[] {
     { id: 'edit', label: t('tx.edit'), icon: Pencil, run: () => (editing.value = tx) },
     { id: 'duplicate', label: t('tx.duplicate'), icon: CopyPlus, run: () => (duplicate.value = tx) },
     { id: 'copy', label: t('tx.copyId'), icon: Copy, separated: true, run: () => void copyId(tx) },
-    { id: 'delete', label: t('tx.delete'), icon: Trash2, destructive: true, separated: true, run: () => (deleting.value = tx) },
+    { id: 'delete', label: t('tx.deleteMenu'), icon: Trash2, destructive: true, separated: true, run: () => (deleting.value = tx) },
   ]
 }
 </script>
 
 <template>
-  <div class="grid gap-4 @container">
+  <div class="grid grid-cols-1 gap-4 @container">
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <div data-tour="tx-filter"><TransactionFilterBar v-model="filter" /></div>
+      <div class="min-w-0 flex-1 basis-80" data-tour="tx-filter"><TransactionFilterBar v-model="filter" /></div>
 
       <Button variant="outline" size="sm" class="h-9" @click="refresh">
         <RefreshCw class="size-4" />
@@ -104,23 +98,30 @@ function rowActions(tx: Transaction): UiAction[] {
     </div>
 
     <Card>
-      <p v-if="txs.isSuccess.value && !txs.data.value?.length" class="text-sm text-muted-foreground">
-        {{ t('filter.empty') }}
-      </p>
-      <div v-else class="-my-3">
-        <TransactionsList
-          :transactions="txs.data.value ?? []"
-          :losses="losses.data.value ?? null"
-          openable
-          :row-actions="rowActions"
-          @open="openDetails"
-        >
-          <template #actions="{ tx }">
-            <TransactionEditButton :tx="tx" />
-            <TransactionDelete :id="txId(tx)" />
-          </template>
-        </TransactionsList>
-      </div>
+      <SectionState
+        :loading="txs.isPending.value"
+        :error="txs.error.value"
+        :empty="!txs.data.value?.length"
+        :empty-title="t('filter.empty')"
+        :empty-description="t('ui.noDataHint')"
+        compact
+        @retry="txs.refetch()"
+      >
+        <div class="-my-3">
+          <TransactionsList
+            :transactions="txs.data.value ?? []"
+            :losses="losses.data.value ?? null"
+            openable
+            :row-actions="rowActions"
+            @open="openDetails"
+          >
+            <template #actions="{ tx }">
+              <TransactionEditButton :tx="tx" />
+              <TransactionDelete :id="txId(tx)" />
+            </template>
+          </TransactionsList>
+        </div>
+      </SectionState>
     </Card>
 
     <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
@@ -131,7 +132,8 @@ function rowActions(tx: Transaction): UiAction[] {
       :store-id="txStoreId(duplicate)"
       :prefill="duplicate"
     />
-    <!-- Deleting from a menu asks first: the row is gone for good. -->
+    <!-- Deleting from a menu asks first: the row is gone for good, and a menu has no room
+         for the two-step button the row itself uses. -->
     <Dialog
       :open="deleting !== null"
       :title="t('tx.deleteConfirmTitle')"
@@ -147,7 +149,7 @@ function rowActions(tx: Transaction): UiAction[] {
           @click="deleting && remove.mutate(txId(deleting), { onSettled: () => (deleting = null) })"
         >
           <Trash2 class="size-4" />
-          {{ t('tx.delete') }}
+          {{ t('tx.deleteForGood') }}
         </Button>
       </template>
     </Dialog>

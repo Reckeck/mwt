@@ -7,6 +7,7 @@ import { TransactionFilterBar } from '@/features/transaction-filter'
 import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { TransactionsList } from '@/entities/transaction'
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 import { storeTxFilter } from '@/shared/lib/tx-filter'
@@ -52,16 +53,23 @@ function openDetails(tx: Transaction) {
         <TransactionFilterBar v-model="filter" fixed-scope id-prefix="store-hist" />
       </div>
     </template>
-    <p v-if="txs.isSuccess.value && !txs.data.value?.length" class="text-sm text-muted-foreground">
-      {{ t('filter.empty') }}
-    </p>
-    <div v-else class="-my-3">
-      <TransactionsList :transactions="txs.data.value ?? []" :store-id="props.storeId" openable @open="openDetails">
-        <template #actions="{ tx }">
-          <slot name="actions" :tx="tx" />
-        </template>
-      </TransactionsList>
-    </div>
+    <SectionState
+      :loading="txs.isPending.value"
+      :error="txs.error.value"
+      :empty="!txs.data.value?.length"
+      :empty-title="t('filter.empty')"
+      :empty-description="t('ui.noDataHint')"
+      compact
+      @retry="txs.refetch()"
+    >
+      <div class="-my-3">
+        <TransactionsList :transactions="txs.data.value ?? []" :store-id="props.storeId" openable @open="openDetails">
+          <template #actions="{ tx }">
+            <slot name="actions" :tx="tx" />
+          </template>
+        </TransactionsList>
+      </div>
+    </SectionState>
     <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
   </Card>
 </template>

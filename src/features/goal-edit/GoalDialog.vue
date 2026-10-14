@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Search, Star } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
@@ -15,10 +14,9 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { GoalDialogProps } from './goal-edit.types'
@@ -104,12 +102,14 @@ const save = useMutation({
       : call<Goal>('create_goal', { input })
   },
   onSuccess: (goal) => {
-    toast.success(props.goal ? t('goal.saved') : t('goal.created'), { description: goal.name })
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
     open.value = false
     emit('saved', goal)
   },
-  onError: (err) => toast.error(t('goal.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: {
+    error: 'goal.saveFailed',
+    success: (data) => ({ text: props.goal ? t('goal.saved') : t('goal.created'), description: (data as Goal).name }),
+  },
 })
 </script>
 
@@ -149,17 +149,18 @@ const save = useMutation({
       <div class="grid gap-1.5">
         <Label>{{ t('goal.priority') }}</Label>
         <div class="flex items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             v-for="level in 5"
             :key="level"
-            type="button"
             :aria-pressed="priority === level"
             :aria-label="String(level)"
-            class="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="motion-reduce:transform-none rounded p-0.5 transition-transform hover:scale-110"
             @click="priority = level"
           >
-            <Star class="size-5" :class="level <= priority ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'" />
-          </button>
+            <Star class="size-5" :class="level <= priority ? 'fill-warning text-warning' : 'text-muted-foreground'" />
+          </Button>
         </div>
       </div>
 

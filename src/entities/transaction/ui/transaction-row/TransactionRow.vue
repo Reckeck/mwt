@@ -72,15 +72,16 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
 </script>
 
 <template>
-  <div class="flex items-start gap-3 py-3">
+  <div class="flex flex-wrap items-start gap-x-3 gap-y-1 py-3">
     <Badge :variant="TX_KIND_BADGE[kind] ?? DEFAULT_TX_BADGE" class="mt-0.5 shrink-0">
       {{ t(`tx.kind.${kind}`) }}
     </Badge>
 
-    <button
+    <Button
+      variant="ghost"
+      size="block"
       v-if="props.openable"
-      type="button"
-      class="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="block min-w-0 flex-1 basis-56 rounded-sm p-0 text-left hover:bg-transparent"
       :title="t('txDetails.open')"
       @click="emit('open', props.tx)"
     >
@@ -107,8 +108,8 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
         {{ txDetails(props.tx).map(([key, value]) => `${t(key)}: ${value}`).join(' · ') }}
       </p>
       <p v-if="meta.comment" class="truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
-    </button>
-    <div v-else class="min-w-0 flex-1">
+    </Button>
+    <div v-else class="min-w-0 flex-1 basis-56">
       <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
@@ -134,21 +135,22 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
       <p v-if="meta.comment" class="truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
     </div>
 
-    <div class="shrink-0 text-right">
+    <!-- On a narrow screen the amounts and actions wrap under the text instead of squeezing it. -->
+    <div class="ml-auto shrink-0 text-right">
       <p
         v-for="leg in shownLegs"
         :key="leg.store_id + leg.asset.symbol"
         class="whitespace-nowrap font-medium tabular-nums"
         :class="amountClass(leg.amount)"
       >
-        {{ leg.amount }} {{ leg.asset.symbol }}
+        {{ formatMoney(leg.amount, { currency: leg.asset.symbol, signed: true }) }}
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-        {{ t('tx.fee') }} {{ fee.amount }} {{ fee.asset }}
+        {{ t('tx.fee') }} {{ formatMoney(fee.amount, { currency: fee.asset }) }}
       </p>
       <p
         v-if="props.loss && Number(props.loss.total) > 0"
-        class="whitespace-nowrap text-xs text-amber-600 tabular-nums dark:text-amber-400"
+        class="whitespace-nowrap text-xs text-warning tabular-nums"
         :title="t('losses.rowHint')"
       >
         {{ t('losses.rowLabel') }} {{ formatMoney(props.loss.total, { currency: props.loss.currency }) }}

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
@@ -20,6 +21,7 @@ const calendar = useQuery({
 
 const monthName = (key: string) =>
   new Intl.DateTimeFormat(activeLocale.value, { month: 'short' }).format(new Date(`${key}-01T12:00`))
+const money = (value: string) => formatMoney(value, { currency: calendar.data.value?.currency })
 const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
 </script>
 
@@ -27,7 +29,7 @@ const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
   <Card>
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <p class="font-medium">{{ t('goalCalendar.title') }}</p>
+        <h3 class="heading-card">{{ t('goalCalendar.title') }}</h3>
         <div class="flex items-center gap-1">
           <Button variant="ghost" size="icon" class="size-8" :aria-label="t('goalCalendar.prev')" @click="year -= 1">
             <ChevronLeft class="size-4" />
@@ -40,31 +42,30 @@ const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
       </div>
     </template>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm tabular-nums">
-        <thead class="text-xs text-muted-foreground">
-          <tr>
-            <th class="py-1 pr-2 text-left font-normal">{{ t('goalCalendar.month') }}</th>
-            <th class="px-2 py-1 text-right font-normal">{{ t('goalCalendar.need') }}</th>
-            <th class="px-2 py-1 text-right font-normal">{{ t('goalCalendar.saved') }}</th>
-            <th class="py-1 pl-2 text-right font-normal">{{ t('goalCalendar.status') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="month in calendar.data.value?.months ?? []" :key="month.month" class="border-t border-border">
-            <td class="py-1.5 pr-2 capitalize">{{ monthName(month.month) }}</td>
-            <td class="px-2 py-1.5 text-right">{{ formatMoney(month.need, { currency: calendar.data.value?.currency }) }}</td>
-            <td class="px-2 py-1.5 text-right">{{ formatMoney(month.saved, { currency: calendar.data.value?.currency }) }}</td>
-            <td class="py-1.5 pl-2 text-right text-xs">
+      <!-- Months in calendar order: nothing to sort, so the plain shadcn Table. -->
+      <Table class="tabular-nums">
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead>{{ t('goalCalendar.month') }}</TableHead>
+            <TableHead class="text-right">{{ t('goalCalendar.need') }}</TableHead>
+            <TableHead class="text-right">{{ t('goalCalendar.saved') }}</TableHead>
+            <TableHead class="text-right">{{ t('goalCalendar.status') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="month in calendar.data.value?.months ?? []" :key="month.month">
+            <TableCell class="capitalize">{{ monthName(month.month) }}</TableCell>
+            <TableCell class="text-right">{{ money(month.need) }}</TableCell>
+            <TableCell class="text-right">{{ money(month.saved) }}</TableCell>
+            <TableCell class="text-right text-xs">
               <span v-if="Number(month.need) === 0" class="text-muted-foreground">—</span>
-              <span v-else-if="month.done" class="text-emerald-600 dark:text-emerald-400">✓</span>
+              <span v-else-if="month.done" class="text-success">✓ {{ t('goalCalendar.done') }}</span>
               <span v-else-if="isFuture(month.month)" class="text-muted-foreground">{{ t('goalCalendar.ahead') }}</span>
-              <span v-else class="text-amber-600 dark:text-amber-400">
-                {{ t('goalCalendar.short', { amount: formatMoney(month.shortfall, { currency: calendar.data.value?.currency }) }) }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <span v-else class="text-warning">{{ t('goalCalendar.short', { amount: money(month.shortfall) }) }}</span>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
   </Card>
 </template>

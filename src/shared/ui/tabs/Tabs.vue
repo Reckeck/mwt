@@ -15,12 +15,12 @@ defineSlots<Record<string, () => unknown>>()
     :model-value="props.modelValue"
     @update:model-value="(value) => emit('update:modelValue', String(value))"
   >
-    <TabsList class="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
+    <TabsList class="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1">
       <TabsTrigger
         v-for="tab in props.tabs"
         :key="tab.value"
         :value="tab.value"
-        class="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow"
+        class="shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow"
       >
         {{ tab.label }}
       </TabsTrigger>

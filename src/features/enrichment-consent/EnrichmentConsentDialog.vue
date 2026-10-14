@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -18,9 +16,9 @@ async function answer(consent: boolean) {
   try {
     await settings.updateApp({ enrichment_opt_in: consent })
     open.value = false
-    if (consent) toast.success(t('enrichment.consent.on'))
+    if (consent) notify.success('enrichment.consent.on')
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'settings.saveFailed')
   }
 }
 </script>

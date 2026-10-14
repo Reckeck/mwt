@@ -2,13 +2,13 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Eye } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Dialog } from '@/shared/ui/dialog'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
+import { notify } from '@/shared/lib/notify'
 
 /**
  * The viewer is a slot, not an import: the JSON editor is a widget of its own,
@@ -25,9 +25,9 @@ async function devDumpVault() {
     // Native save dialog + write happen in Rust: the webview cannot download
     // files on its own, and `dev_export_vault` returns null when cancelled.
     const written = await call<string | null>('dev_export_vault')
-    if (written) toast.success(t('settings.dev.savedTo'), { description: written })
+    if (written) notify.success('settings.dev.savedTo', { description: written })
   } catch (err) {
-    toast.error(t('settings.dev.dumpFailed'), { description: errorText(parseError(err)) })
+    notify.error(null, 'settings.dev.dumpFailed', { description: errorText(parseError(err)) })
   }
 }
 

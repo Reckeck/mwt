@@ -10,16 +10,19 @@ import { BudgetSettings } from '@/widgets/budget-settings'
 import { CategorizationRules } from '@/widgets/categorization-rules'
 import { CategoryManager } from '@/widgets/category-manager'
 import { EnrichmentSettings } from '@/widgets/enrichment-settings'
+import { FxRates } from '@/widgets/fx-rates'
 import { InflationSettings } from '@/widgets/inflation-settings'
 import { NotificationSettings } from '@/widgets/notification-settings'
 import { QuickAddSettings } from '@/widgets/quick-add-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { VaultSettings } from '@/widgets/vault-settings'
+import { Button } from '@/shared/ui/button'
+import { SettingsSection } from '@/shared/ui/settings-section'
 import { settingsQuery, withoutSettings } from '@/shared/lib/settings-link'
 import { cn } from '@/shared/lib/utils'
 
-import { SETTINGS_TABS } from './settings-shell.constants'
+import { SETTINGS_ALIASES, SETTINGS_TABS } from './settings-shell.constants'
 import TourSettings from './TourSettings.vue'
 
 const { t } = useI18n()
@@ -36,19 +39,23 @@ const open = computed({
     if (!value) void router.replace({ query: withoutSettings(route.query) })
   },
 })
-const activeTab = computed(() => tabs.find((tab) => tab.id === route.query.settings) ?? tabs[0])
+const alias = computed(() => SETTINGS_ALIASES[String(route.query.settings)])
+const activeTab = computed(
+  () => tabs.find((tab) => tab.id === (alias.value?.tab ?? route.query.settings)) ?? tabs[0],
+)
 
 function selectTab(id: string) {
   void router.replace({ query: settingsQuery(route.query, id) })
 }
 
-/* --- sections: clicking or hovering a sub-tab scrolls to it; scrolling lights it up --- */
+/* --- sections: clicking a sub-tab scrolls to it; scrolling lights it up --- */
 const scroller = ref<HTMLElement | null>(null)
 const visibleSection = ref('')
 
 function scrollTo(id: string, smooth = true) {
   const target = scroller.value?.querySelector<HTMLElement>(`[data-section="${id}"]`)
-  target?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  target?.scrollIntoView({ behavior: smooth && !reduce ? 'smooth' : 'auto', block: 'start' })
 }
 
 let observer: IntersectionObserver | null = null
@@ -76,7 +83,7 @@ watch(
     await nextTick()
     visibleSection.value = activeTab.value.sections[0]?.id ?? ''
     observeSections()
-    const wanted = route.query.section
+    const wanted = alias.value?.section ?? route.query.section
     if (typeof wanted === 'string') scrollTo(wanted, false)
     else scroller.value?.scrollTo({ top: 0 })
   },
@@ -97,68 +104,61 @@ watch(
           <DialogTitle class="px-2 pb-2 text-sm font-semibold max-md:sr-only">{{ t('settingsShell.title') }}</DialogTitle>
           <DialogDescription class="sr-only">{{ t('settingsShell.description') }}</DialogDescription>
           <template v-for="tab in tabs" :key="tab.id">
-            <button
-              type="button"
-              :class="
-                cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  activeTab.id === tab.id && 'bg-accent text-accent-foreground',
-                )
-              "
+            <Button
+              variant="ghost"
+              size="block"
+              :class="cn('gap-2 font-medium max-md:justify-center', activeTab.id === tab.id && 'bg-accent text-accent-foreground')"
               :title="t(tab.titleKey)"
               :aria-current="activeTab.id === tab.id ? 'page' : undefined"
               @click="selectTab(tab.id)"
             >
               <component :is="tab.icon" class="size-4 shrink-0 text-muted-foreground" />
               <span class="truncate max-md:sr-only">{{ t(tab.titleKey) }}</span>
-            </button>
+            </Button>
             <ul v-if="activeTab.id === tab.id && tab.sections.length > 1" class="mb-1 ml-6 grid gap-0.5 max-md:hidden">
               <li v-for="section in tab.sections" :key="section.id">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="block"
                   :class="
                     cn(
-                      'w-full truncate rounded px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground',
-                      visibleSection === section.id && 'text-foreground font-medium',
+                      'w-full px-2 py-1 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground',
+                      visibleSection === section.id && 'font-medium text-foreground',
                     )
                   "
                   @click="scrollTo(section.id)"
-                  @mouseenter="scrollTo(section.id)"
                 >
                   {{ t(section.titleKey) }}
-                </button>
+                </Button>
               </li>
             </ul>
           </template>
         </nav>
 
         <div class="flex min-w-0 flex-1 flex-col">
-          <header class="flex items-center gap-3 border-b border-border px-5 py-3">
-            <h2 class="min-w-0 flex-1 truncate font-semibold">{{ t(activeTab.titleKey) }}</h2>
-            <DialogClose
-              class="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <X class="size-4" />
-              <span class="sr-only">{{ t('actions.close') }}</span>
+          <header class="flex items-center gap-3 border-b border-border px-4 py-3">
+            <h2 class="heading-section min-w-0 flex-1 truncate">{{ t(activeTab.titleKey) }}</h2>
+            <DialogClose as-child>
+              <Button variant="ghost" size="icon-sm" :aria-label="t('actions.close')">
+                <X class="size-4" />
+              </Button>
             </DialogClose>
           </header>
 
-          <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-5 @container">
-            <div class="mx-auto grid max-w-3xl gap-6">
+          <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-4 @container">
+            <div class="mx-auto grid max-w-3xl gap-4">
               <section
                 v-for="section in activeTab.sections"
                 :key="section.id"
                 :data-section="section.id"
-                class="grid scroll-mt-4 gap-3"
+                class="grid scroll-mt-4"
               >
-                <h3 v-if="activeTab.sections.length > 1" class="text-sm font-semibold text-muted-foreground">
-                  {{ t(section.titleKey) }}
-                </h3>
-                <AppSettingsPanel v-if="section.id === 'app'" />
+                <SettingsSection v-if="section.id === 'app'" :title="t('settingsShell.section.app')" :description="t('settings.appScopeHint')"><AppSettingsPanel /></SettingsSection>
                 <QuickAddSettings v-else-if="section.id === 'quick-add'" />
                 <TourSettings v-else-if="section.id === 'tours'" />
-                <NotificationSettings v-else-if="section.id === 'notifications'" />
+                <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
                 <VaultSettings v-else-if="section.id === 'vault'" />
+                <FxRates v-else-if="section.id === 'rates'" />
                 <BudgetSettings v-else-if="section.id === 'budget'" />
                 <CategoryManager v-else-if="section.id === 'categories'" />
                 <CategorizationRules v-else-if="section.id === 'rules'" />

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { WorkflowEditor } from '@/widgets/workflow-editor'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -16,6 +17,12 @@ const template = computed(() => (typeof route.query.template === 'string' ? rout
 const lesson = computed(() => (typeof route.query.lesson === 'string' ? route.query.lesson : null))
 const editor = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 let leaving = false
+
+/** Back to the list goes through the same «unsaved edits» question as any other way out. */
+const crumbs = computed<PageCrumb[]>(() => [
+  { label: t('nav.workflows'), to: { name: 'workflows' } },
+  { label: lesson.value ? t('workflow.crumb.lesson') : workflowId.value ? t('workflow.crumb.edit') : t('workflow.crumb.new') },
+])
 
 /** A new workflow, once saved, gets its own address. */
 function onSaved(id: string) {
@@ -72,8 +79,10 @@ function throwAway() {
 </script>
 
 <template>
-  <div class="h-[calc(100dvh-7rem)] min-h-[36rem] @container">
+  <div class="flex h-[calc(100dvh-7rem)] min-h-[36rem] flex-col gap-3 @container">
+    <PageHeader :crumbs="crumbs" />
     <WorkflowEditor
+      class="min-h-0 flex-1"
       :key="workflowId ?? `new-${template ?? ''}-${lesson ?? ''}`"
       ref="editor"
       :workflow-id="workflowId"

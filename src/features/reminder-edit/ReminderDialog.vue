@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -11,9 +10,8 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import { REPEAT_UNITS } from './reminder-edit.constants'
 import type { ReminderDialogProps } from './reminder-edit.types'
@@ -71,11 +69,10 @@ const save = useMutation({
       : call<Reminder>('create_reminder', { input })
   },
   onSuccess: () => {
-    toast.success(props.reminder ? t('reminder.saved') : t('reminder.created'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('reminder.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'reminder.saveFailed', success: () => props.reminder ? t('reminder.saved') : t('reminder.created') },
 })
 </script>
 

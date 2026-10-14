@@ -4,13 +4,11 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, Shuffle, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { StoreChangeDialog } from '@/features/store-change'
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { call } from '@/shared/api/ipc'
 
 import { STORE_STALE_KEYS } from '../model/use-store-update'
 import type { StoreDangerZoneProps } from '../store-edit.types'
@@ -37,21 +35,20 @@ const refresh = () => {
 
 const toggleArchive = useMutation({
   mutationFn: (archived: boolean) => call('archive_store', { id: props.store.id, archived }),
-  onSuccess: (_result, archived) => {
-    toast.success(archived ? t('wallet.archived') : t('wallet.unarchived'))
-    refresh()
+  onSuccess: refresh,
+  meta: {
+    error: 'wallet.archiveFailed',
+    success: (_data, archived) => (archived ? t('wallet.archived') : t('wallet.unarchived')),
   },
-  onError: (err) => toast.error(t('wallet.archiveFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 
 const destroy = useMutation({
   mutationFn: () => call('delete_store', { id: props.store.id }),
   onSuccess: () => {
-    toast.success(t('wallet.deleted'))
     refresh()
     void router.push({ name: 'dashboard' })
   },
-  onError: (err) => toast.error(t('wallet.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'wallet.deleteFailed', success: 'wallet.deleted' },
 })
 </script>
 

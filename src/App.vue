@@ -13,7 +13,7 @@ const router = useRouter()
 const vault = useVaultStore()
 const settingsStore = useSettingsStore()
 
-useTheme()
+const { resolved: theme } = useTheme()
 useLocale()
 
 // Loaded before any vault work: the theme and language follow the user, not the
@@ -69,5 +69,5 @@ watch(
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <Sonner position="bottom-right" rich-colors close-button />
+  <Sonner position="bottom-right" :theme="theme" rich-colors close-button />
 </template>

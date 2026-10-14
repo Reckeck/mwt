@@ -6,6 +6,7 @@ import { Plus } from 'lucide-vue-next'
 
 import { UtilityDialog } from '@/features/utility-edit'
 import { Button } from '@/shared/ui/button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 
 import UtilityCard from './UtilityCard.vue'
@@ -29,12 +30,9 @@ const createOpen = ref(false)
         {{ t('utilities.new') }}
       </Button>
     </div>
-    <div
-      v-if="items.isSuccess.value && !own.length"
-      class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
-    >
-      {{ t('utilities.empty') }}
-    </div>
+    <EmptyState v-if="items.isSuccess.value && !own.length" compact :title="t('utilities.empty')">
+      <Button @click="createOpen = true"><Plus class="size-4" />{{ t('utilities.new') }}</Button>
+    </EmptyState>
     <div class="grid gap-4 @lg:grid-cols-2">
       <UtilityCard v-for="item in own" :key="item.id" :item="item" />
     </div>

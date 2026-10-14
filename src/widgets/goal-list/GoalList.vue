@@ -3,16 +3,15 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CircleAlert, CircleCheck, Pencil, Plus, Star, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { GoalDialog } from '@/features/goal-edit'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { EmptyState } from '@/shared/ui/empty-state'
+import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import GoalCalendarTable from './GoalCalendarTable.vue'
 
@@ -52,10 +51,9 @@ function openEdit(goal: Goal) {
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_goal', { id }),
   onSuccess: () => {
-    toast.success(t('goal.deleted'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('goal.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'goal.deleteFailed', success: 'goal.deleted' },
 })
 
 const empty = computed(() => goals.isSuccess.value && !goals.data.value?.length)
@@ -72,9 +70,9 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
       </Button>
     </div>
 
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('goal.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('goal.empty')">
+      <Button @click="openNew"><Plus class="size-4" />{{ t('goal.new') }}</Button>
+    </EmptyState>
 
     <div class="grid gap-4 @lg:grid-cols-2">
       <Card v-for="goal in goals.data.value ?? []" :key="goal.id" :class="!goal.active && 'opacity-60'">
@@ -87,7 +85,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                   v-for="level in 5"
                   :key="level"
                   class="size-3.5"
-                  :class="level <= goal.priority ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'"
+                  :class="level <= goal.priority ? 'fill-warning text-warning' : 'text-muted-foreground/40'"
                 />
               </div>
             </div>
@@ -139,12 +137,12 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
             </dl>
             <p
               v-if="progressOf(goal.id)?.realistic"
-              class="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"
+              class="flex items-center gap-1.5 text-xs text-success"
             >
               <CircleCheck class="size-3.5" />
               {{ t('goal.realistic') }}
             </p>
-            <div v-else class="grid gap-1 text-xs text-amber-600 dark:text-amber-400">
+            <div v-else class="grid gap-1 text-xs text-warning">
               <p class="flex items-center gap-1.5 font-medium">
                 <CircleAlert class="size-3.5" />
                 {{ t('goal.revise') }}

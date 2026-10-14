@@ -17,7 +17,7 @@ const { t } = useI18n()
       <div v-for="row in props.turnover.rows" :key="row.asset.symbol" class="flex flex-wrap gap-x-4 text-sm tabular-nums">
         <span class="w-16 font-medium">{{ row.asset.symbol }}</span>
         <span class="text-destructive">{{ t('contacts.sent') }} {{ formatMoney(row.sent) }}</span>
-        <span class="text-emerald-600 dark:text-emerald-400">{{ t('contacts.received') }} {{ formatMoney(row.received) }}</span>
+        <span class="text-success">{{ t('contacts.received') }} {{ formatMoney(row.received) }}</span>
       </div>
     </template>
   </div>

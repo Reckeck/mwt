@@ -12,6 +12,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
+import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
@@ -86,10 +87,11 @@ function submit() {
 
     <fieldset v-if="purposeEditable" class="grid gap-2" data-tour="wallet-purpose">
       <legend class="mb-1 text-sm font-medium">{{ t('purpose.title') }}</legend>
-      <div class="grid gap-2 @md:grid-cols-2">
+      <RadioGroup v-model="purpose" class="grid gap-2 @md:grid-cols-2">
         <label
           v-for="entry in PURPOSES"
           :key="entry"
+          :for="`store-purpose-${entry}`"
           :class="
             cn(
               'flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
@@ -97,14 +99,14 @@ function submit() {
             )
           "
         >
-          <input v-model="purpose" type="radio" name="store-purpose" :value="entry" class="mt-1 size-4 accent-primary">
+          <RadioGroupItem :id="`store-purpose-${entry}`" :value="entry" class="mt-0.5" />
           <span class="grid gap-0.5">
             <span class="text-sm font-medium">{{ t(`purpose.${entry}`) }}</span>
             <span class="text-xs text-muted-foreground">{{ t(`purpose.${entry}Hint`) }}</span>
             <span class="text-xs italic text-muted-foreground">{{ t(`purpose.${entry}Example`) }}</span>
           </span>
         </label>
-      </div>
+      </RadioGroup>
     </fieldset>
 
     <div v-if="isRoot" class="grid gap-1.5">

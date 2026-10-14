@@ -1,9 +1,9 @@
 import type { Component } from 'vue'
-import { Bell, Bug, Cpu, FolderTree, Landmark, Percent, Radar, Settings2 } from 'lucide-vue-next'
+import { Bell, Bug, Coins, FolderTree, HardDrive, Settings2 } from 'lucide-vue-next'
 
 export interface SettingsSection {
   id: string
-  /** i18n key of the section title (also its sub-tab in the sidebar). */
+  /** i18n key of the section's name in the window's sidebar. */
   titleKey: string
 }
 
@@ -15,7 +15,11 @@ export interface SettingsTab {
   devOnly?: boolean
 }
 
-/** Tabs and their sections in sidebar order; the shell renders a widget per section id. */
+/**
+ * Tabs and their sections in sidebar order; the shell renders a widget per
+ * section id. Everything about money (currencies and rates, budget defaults,
+ * inflation) sits in one tab, the vault file and what leaves it in another.
+ */
 export const SETTINGS_TABS: SettingsTab[] = [
   {
     id: 'general',
@@ -34,16 +38,14 @@ export const SETTINGS_TABS: SettingsTab[] = [
     sections: [{ id: 'notifications', titleKey: 'settingsShell.section.notifications' }],
   },
   {
-    id: 'vault',
-    titleKey: 'settingsShell.tab.vault',
-    icon: Cpu,
-    sections: [{ id: 'vault', titleKey: 'settingsShell.section.vault' }],
-  },
-  {
-    id: 'budget',
-    titleKey: 'settingsShell.tab.budget',
-    icon: Landmark,
-    sections: [{ id: 'budget', titleKey: 'settingsShell.section.budget' }],
+    id: 'money',
+    titleKey: 'settingsShell.tab.money',
+    icon: Coins,
+    sections: [
+      { id: 'rates', titleKey: 'settingsShell.section.rates' },
+      { id: 'budget', titleKey: 'settingsShell.section.budget' },
+      { id: 'inflation', titleKey: 'settingsShell.section.inflation' },
+    ],
   },
   {
     id: 'categories',
@@ -55,16 +57,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
     ],
   },
   {
-    id: 'inflation',
-    titleKey: 'settingsShell.tab.inflation',
-    icon: Percent,
-    sections: [{ id: 'inflation', titleKey: 'settingsShell.section.inflation' }],
-  },
-  {
-    id: 'enrichment',
-    titleKey: 'settingsShell.tab.enrichment',
-    icon: Radar,
-    sections: [{ id: 'enrichment', titleKey: 'settingsShell.section.enrichment' }],
+    id: 'vault',
+    titleKey: 'settingsShell.tab.vault',
+    icon: HardDrive,
+    sections: [
+      { id: 'vault', titleKey: 'settingsShell.section.vault' },
+      { id: 'enrichment', titleKey: 'settingsShell.section.enrichment' },
+    ],
   },
   {
     id: 'dev',
@@ -74,3 +73,11 @@ export const SETTINGS_TABS: SettingsTab[] = [
     sections: [{ id: 'devtools', titleKey: 'settingsShell.section.devtools' }],
   },
 ]
+
+/** Tabs that became sections: old `?settings=budget` links open the tab and scroll there. */
+export const SETTINGS_ALIASES: Record<string, { tab: string; section: string }> = {
+  budget: { tab: 'money', section: 'budget' },
+  inflation: { tab: 'money', section: 'inflation' },
+  rates: { tab: 'money', section: 'rates' },
+  enrichment: { tab: 'vault', section: 'enrichment' },
+}

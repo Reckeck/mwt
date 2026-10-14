@@ -8,6 +8,7 @@ import { WorkflowVarDialog, useWorkflowActions } from '@/features/workflow-manag
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -46,17 +47,15 @@ const empty = computed(() => vars.isSuccess.value && !(vars.data.value ?? []).le
 </script>
 
 <template>
-  <div class="grid gap-2" data-tour="workflow-vars">
+  <div class="grid gap-4" data-tour="workflow-vars">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="max-w-2xl text-sm text-muted-foreground">{{ t('workflow.vars.intro') }}</p>
-      <Button variant="outline" @click="open(null)">
+      <Button @click="open(null)">
         <Plus class="size-4" />
         {{ t('workflow.vars.new') }}
       </Button>
     </div>
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('workflow.vars.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('workflow.vars.empty')" />
     <Card v-for="variable in vars.data.value ?? []" :key="`${JSON.stringify(variable.scope)}:${variable.name}`" size="sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="grid min-w-0 flex-1 gap-0.5">

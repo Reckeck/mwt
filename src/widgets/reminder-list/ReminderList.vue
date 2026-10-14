@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlarmClock, ExternalLink, MoreVertical, Pencil, Plus, Repeat, Trash2 } from 'lucide-vue-next'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
-import { toast } from 'vue-sonner'
 
 import { ReminderDialog } from '@/features/reminder-edit'
 import { Badge } from '@/shared/ui/badge'
@@ -14,10 +13,11 @@ import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { onEvent } from '@/shared/api/ipc'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { EmptyState } from '@/shared/ui/empty-state'
+import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -68,7 +68,10 @@ function refresh() {
 const setDone = useMutation({
   mutationFn: (reminder: Reminder) => call<Reminder>('set_reminder_done', { id: reminder.id, done: !reminder.done }),
   onSuccess: refresh,
-  onError: (err) => toast.error(t('reminder.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: {
+    error: 'reminder.saveFailed',
+    success: (_data, reminder) => ((reminder as Reminder).done ? t('reminder.reopened') : t('reminder.done')),
+  },
 })
 
 /* --- put off: in ten minutes, in an hour, tomorrow morning --- */
@@ -86,28 +89,26 @@ function snoozeUntil(choice: (typeof SNOOZES)[number]): string {
 const snooze = useMutation({
   mutationFn: ({ reminder, choice }: { reminder: Reminder; choice: (typeof SNOOZES)[number] }) =>
     call<Reminder>('snooze_reminder', { input: { id: reminder.id, until: snoozeUntil(choice) } }),
-  onSuccess: (reminder) => {
-    toast.success(t('reminder.snoozed', { when: formatDateTime(reminder.snoozed_until) }))
-    refresh()
+  onSuccess: refresh,
+  meta: {
+    error: 'reminder.saveFailed',
+    success: (data) => t('reminder.snoozed', { when: formatDateTime((data as Reminder).snoozed_until) }),
   },
-  onError: (err) => toast.error(t('reminder.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
 })
 const finish = useMutation({
   mutationFn: (reminder: Reminder) => call<Reminder>('finish_reminder_series', { id: reminder.id }),
   onSuccess: () => {
-    toast.success(t('reminder.seriesFinished'))
     refresh()
   },
-  onError: (err) => toast.error(t('reminder.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'reminder.saveFailed', success: 'reminder.seriesFinished' },
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_reminder', { id }),
   onSuccess: () => {
-    toast.success(t('reminder.deleted'))
     refresh()
   },
-  onError: (err) => toast.error(t('reminder.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'reminder.deleteFailed', success: 'reminder.deleted' },
 })
 
 const dialogOpen = ref(false)
@@ -146,12 +147,9 @@ function openEdit(reminder: Reminder) {
       <ToggleGroupItem value="auto">{{ t('reminder.filterAuto') }}</ToggleGroupItem>
     </ToggleGroup>
 
-    <div
-      v-if="reminders.isSuccess.value && !list.length"
-      class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
-    >
-      {{ t('reminder.empty') }}
-    </div>
+    <EmptyState v-if="reminders.isSuccess.value && !list.length" compact :title="t('reminder.empty')">
+      <Button @click="openNew"><Plus class="size-4" />{{ t('reminder.new') }}</Button>
+    </EmptyState>
 
     <ul class="grid gap-1">
       <li
@@ -160,13 +158,11 @@ function openEdit(reminder: Reminder) {
         class="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent/50"
         :class="reminder.done && 'opacity-60'"
       >
-        <input
-          type="checkbox"
-          class="size-4 shrink-0 accent-primary"
-          :checked="reminder.done"
+        <Checkbox
+          :model-value="reminder.done"
           :aria-label="t('reminder.done')"
           :title="reminder.repeat ? t('reminder.doneRepeatHint') : t('reminder.done')"
-          @change="setDone.mutate(reminder)"
+          @update:model-value="setDone.mutate(reminder)"
         />
         <span class="flex min-w-0 flex-1 items-center gap-2">
           <span class="truncate text-sm" :class="reminder.done && 'line-through'">{{ reminder.text }}</span>

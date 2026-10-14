@@ -10,6 +10,7 @@ import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 import type { ReportFilterBarProps } from './report-filter.types'
 
@@ -55,30 +56,30 @@ const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation
 <template>
   <div class="flex flex-wrap items-end gap-3">
     <template v-if="props.kind === 'year'">
-      <div class="grid gap-1.5">
+      <div class="grid min-w-32 flex-1 gap-1.5 @3xl:flex-none">
         <Label for="report-year">{{ t('report.filter.year') }}</Label>
-        <Select id="report-year" v-model="year" class="w-28">
+        <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
           <option v-for="entry in years" :key="entry" :value="entry">{{ entry }}</option>
         </Select>
       </div>
     </template>
     <template v-else>
-      <div class="grid gap-1.5">
+      <div class="grid min-w-32 flex-1 gap-1.5 @3xl:flex-none">
         <Label for="report-from">{{ t('report.filter.from') }}</Label>
-        <Input id="report-from" v-model="fromMonth" type="month" class="w-40" />
+        <Input id="report-from" v-model="fromMonth" type="month" class="w-full @3xl:w-40" />
       </div>
-      <div class="grid gap-1.5">
+      <div class="grid min-w-32 flex-1 gap-1.5 @3xl:flex-none">
         <Label for="report-to">{{ t('report.filter.to') }}</Label>
-        <Input id="report-to" v-model="toMonth" type="month" class="w-40" />
+        <Input id="report-to" v-model="toMonth" type="month" class="w-full @3xl:w-40" />
       </div>
     </template>
-    <div v-if="scoped" class="grid gap-1.5">
+    <div v-if="scoped" class="grid min-w-40 flex-1 gap-1.5 @3xl:flex-none">
       <Label for="report-scope">{{ t('report.filter.scope') }}</Label>
-      <StoreNodeSelect id="report-scope" v-model="storeId" :nodes="nodes" :empty-label="t('report.filter.allWallets')" class="w-56" />
+      <StoreNodeSelect id="report-scope" v-model="storeId" :nodes="nodes" :empty-label="t('report.filter.allWallets')" class="w-full @3xl:w-56" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid min-w-32 flex-1 gap-1.5 @3xl:flex-none">
       <Label for="report-currency">{{ t('report.filter.currency') }}</Label>
-      <div class="w-44">
+      <div class="w-full @3xl:w-44">
         <CurrencyPicker
           id="report-currency"
           allow-empty
@@ -88,8 +89,8 @@ const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation
         />
       </div>
     </div>
-    <label v-if="props.kind !== 'inflation'" class="flex h-9 items-center gap-2 text-sm">
-      <input v-model="filter.real_terms" type="checkbox" class="size-4 accent-primary" />
+    <label v-if="props.kind !== 'inflation'" for="report-real-terms" class="flex h-9 items-center gap-2 text-sm">
+      <Checkbox id="report-real-terms" v-model="filter.real_terms" />
       {{ t('report.filter.realTerms') }}
     </label>
   </div>

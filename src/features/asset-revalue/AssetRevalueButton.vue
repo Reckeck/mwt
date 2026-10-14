@@ -3,7 +3,6 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Tag } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
@@ -11,8 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { AssetRevalueButtonProps } from './asset-revalue.types'
@@ -54,21 +52,19 @@ const save = useMutation({
       input: { asset_key: assetKey(), unit_price: price.value.trim().replace(',', '.'), currency: currency.value },
     }),
   onSuccess: () => {
-    toast.success(t('asset.revalued'))
     refresh()
     open.value = false
   },
-  onError: (err) => toast.error(t('asset.revalueFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'asset.revalueFailed', success: 'asset.revalued' },
 })
 
 const reset = useMutation({
   mutationFn: () => call('clear_manual_price', { assetKey: assetKey() }),
   onSuccess: () => {
-    toast.success(t('asset.revalueCleared'))
     refresh()
     open.value = false
   },
-  onError: (err) => toast.error(t('asset.revalueFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'asset.revalueFailed', success: 'asset.revalueCleared' },
 })
 </script>
 

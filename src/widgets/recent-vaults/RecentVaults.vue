@@ -6,6 +6,8 @@ import { FolderOpen, LockKeyhole, X } from 'lucide-vue-next'
 import { VaultUnlockDialog } from '@/features/vault-unlock'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { notify } from '@/shared/lib/notify'
 import { useVaultStore } from '@/shared/store/vault'
 
 const { t } = useI18n()
@@ -20,6 +22,16 @@ onMounted(async () => {
   await vault.refreshStatus().catch(() => {})
   await vault.loadRecents()
 })
+
+/** Only the entry in the list goes; the file itself stays where it is. */
+async function forget(path: string) {
+  try {
+    await vault.forgetRecent(path)
+    notify.success('auth.forgotten', { description: path })
+  } catch (err) {
+    notify.error(err, 'auth.forgetFailed')
+  }
+}
 
 function openUnlock(path: string | null) {
   unlockPath.value = path
@@ -40,9 +52,10 @@ function openUnlock(path: string | null) {
     <div class="grid gap-3">
       <div v-if="vault.recents.length" class="grid max-h-64 gap-1.5 overflow-y-auto">
         <div v-for="recent in vault.recents" :key="recent.path" class="flex items-center gap-1 rounded-md border border-border">
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-l-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
+          <Button
+            variant="ghost"
+            size="block"
+            class="rounded-r-none flex min-w-0 flex-1 items-center gap-2 rounded-l-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
             :class="{ 'text-destructive': !recent.exists }"
             @click="openUnlock(recent.path)"
           >
@@ -51,17 +64,10 @@ function openUnlock(path: string | null) {
               <p class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
             </div>
             <span v-if="!recent.exists" class="shrink-0 text-xs text-destructive">{{ t('auth.missing') }}</span>
-          </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-8 shrink-0 text-muted-foreground"
-            :aria-label="t('auth.forget')"
-            :title="t('auth.forget')"
-            @click="vault.forgetRecent(recent.path)"
-          >
-            <X class="size-3.5" />
           </Button>
+          <ConfirmButton :label="t('auth.forget')" :confirm-label="t('auth.forgetConfirm')" @confirm="forget(recent.path)">
+            <X class="size-3.5" />
+          </ConfirmButton>
         </div>
       </div>
 

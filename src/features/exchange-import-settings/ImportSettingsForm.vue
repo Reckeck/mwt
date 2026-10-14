@@ -3,7 +3,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Eye, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { CategorySelect } from '@/features/category-select'
 import { AssetInput } from '@/entities/asset'
@@ -15,11 +14,11 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp } from '@/shared/lib/datetime'
 import { useFormValidation } from '@/shared/lib/form'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { notify } from '@/shared/lib/notify'
 
 import { IMPORT_ACCOUNTS, IMPORT_KINDS } from './exchange-import-settings.constants'
 import type { ImportRouteMode, ImportSettingsFormProps } from './exchange-import-settings.types'
@@ -123,9 +122,9 @@ const preview = useMutation({
       input: { store_id: props.storeId, settings: currentSettings() },
     }),
   onSuccess: (result) => {
-    if (result.notice) toast.warning(t(`import.notice.${result.notice}`))
+    if (result.notice) notify.warning(`import.notice.${result.notice}`)
   },
-  onError: (err) => toast.error(t('importSettings.previewFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { silent: 'the preview table below is the result', error: 'importSettings.previewFailed' },
 })
 /** Rows the preview lists; the counts above cover them all. */
 const PREVIEW_ROWS = 20
@@ -137,9 +136,8 @@ const save = useMutation({
   },
   onSuccess: (saved) => {
     queryClient.setQueryData(queryKey.value, saved)
-    toast.success(t('importSettings.saved'))
   },
-  onError: (err) => toast.error(t('importSettings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'importSettings.saveFailed', success: 'importSettings.saved' },
 })
 </script>
 
@@ -200,14 +198,15 @@ const save = useMutation({
         <div v-if="coins.length" class="flex flex-wrap gap-1.5">
           <Badge v-for="coin in coins" :key="coin" variant="secondary" class="gap-1">
             {{ coin }}
-            <button
-              type="button"
-              class="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              class="size-4 rounded-sm"
               :aria-label="t('importSettings.removeCoin', { coin })"
               @click="coins = coins.filter((entry) => entry !== coin)"
             >
               <X class="size-3" />
-            </button>
+            </Button>
           </Badge>
         </div>
         <AssetInput v-model="coinPick" label="" :placeholder="t('importSettings.addCoin')" />

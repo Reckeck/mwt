@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, Minus, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -13,9 +12,8 @@ import { Input } from '@/shared/ui/input'
 import { AssetSelect } from '@/entities/asset'
 import { assetKey } from '@/shared/lib/asset-ref'
 import { nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { EnvelopeManagerProps } from './envelope-manage.types'
 
@@ -32,7 +30,6 @@ const refresh = () => {
   void queryClient.invalidateQueries({ queryKey: ['envelopes'] })
   void queryClient.invalidateQueries({ queryKey: ['goals'] })
 }
-const fail = (err: unknown) => toast.error(t('envelope.failed'), { description: codeErrorMessage(parseError(err), t) })
 
 /* --- new envelope --- */
 const name = ref('')
@@ -68,10 +65,9 @@ const create = useMutation({
     name.value = ''
     form.reset()
     target.value = ''
-    toast.success(t('envelope.created'))
     refresh()
   },
-  onError: fail,
+  meta: { success: 'envelope.created', error: 'envelope.failed' },
 })
 
 /* --- earmark / release, one amount box per row --- */
@@ -83,13 +79,13 @@ const fund = useMutation({
     amounts.value[id] = ''
     refresh()
   },
-  onError: fail,
+  meta: { success: 'envelope.funded', error: 'envelope.failed' },
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_envelope', { id }),
   onSuccess: refresh,
-  onError: fail,
+  meta: { success: 'envelope.deleted', error: 'envelope.failed' },
 })
 
 function apply(id: string, sign: 1 | -1) {
@@ -130,7 +126,7 @@ const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals:
         <div v-if="view.pct !== null" class="h-1.5 overflow-hidden rounded-full bg-muted">
           <div class="h-full rounded-full bg-primary" :style="{ width: `${Math.min(100, view.pct)}%` }" />
         </div>
-        <p v-if="view.short" class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <p v-if="view.short" class="flex items-center gap-1.5 text-xs text-warning">
           <AlertTriangle class="size-3.5" />
           {{ t('envelope.short', { free: qty(view.free, view.envelope.asset.symbol) }) }}
         </p>

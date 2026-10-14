@@ -3,17 +3,16 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { CategorySelect } from '@/features/category-select'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { CATEGORY_GROUPS } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -23,22 +22,21 @@ const rules = useQuery({
   queryFn: () => call<CategorizationRule[]>('list_categorization_rules'),
 })
 const refresh = () => void queryClient.invalidateQueries({ queryKey: ['categorization-rules'] })
-const fail = (err: unknown) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
 
 const update = useMutation({
   mutationFn: (input: UpdateRuleInput) => call<CategorizationRule>('update_categorization_rule', { input }),
   onSuccess: refresh,
-  onError: fail,
+  meta: { success: 'rules.saved', error: 'settings.saveFailed' },
 })
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_categorization_rule', { id }),
   onSuccess: refresh,
-  onError: fail,
+  meta: { success: 'rules.deleted', error: 'settings.saveFailed' },
 })
 const reorder = useMutation({
   mutationFn: (ids: string[]) => call('reorder_categorization_rules', { ids }),
   onSuccess: refresh,
-  onError: fail,
+  meta: { success: 'rules.reordered', error: 'settings.saveFailed' },
 })
 
 /** Swap a rule with its neighbour: rules run top to bottom. */
@@ -57,19 +55,18 @@ const create = useMutation({
   mutationFn: () =>
     call<CategorizationRule>('create_categorization_rule', { input: { pattern: pattern.value.trim(), category: category.value } }),
   onSuccess: () => {
-    toast.success(t('rules.created'))
     pattern.value = ''
     adder.reset()
     refresh()
   },
-  onError: fail,
+  meta: { success: 'rules.created', error: 'settings.saveFailed' },
 })
 </script>
 
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('rules.title') }}</p>
+      <h3 class="heading-card">{{ t('rules.title') }}</h3>
     </template>
 
     <div class="grid gap-4">
@@ -98,13 +95,11 @@ const create = useMutation({
 
       <p v-if="!rules.data.value?.length" class="text-sm text-muted-foreground">{{ t('rules.empty') }}</p>
       <div v-for="(rule, index) in rules.data.value ?? []" :key="rule.id" class="flex items-center gap-2" :class="!rule.active && 'opacity-60'">
-        <input
-          type="checkbox"
-          class="size-4"
-          :checked="rule.active"
+        <Checkbox
+          :model-value="rule.active"
           :aria-label="t('rules.active')"
-          @change="update.mutate({ ...rule, active: !rule.active })"
-        >
+          @update:model-value="update.mutate({ ...rule, active: !rule.active })"
+        />
         <Input
           class="h-8 min-w-0 flex-1"
           :model-value="rule.pattern"

@@ -11,6 +11,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Switch } from '@/shared/ui/switch'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -65,9 +66,7 @@ const importOpen = ref(false)
       </div>
     </section>
 
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('workflow.list.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('workflow.list.empty')" />
 
     <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
       <div class="flex flex-wrap items-start gap-3">
