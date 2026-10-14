@@ -8,11 +8,16 @@ import { Textarea } from '@/shared/ui/textarea'
 import { Button } from '@/shared/ui/button'
 
 /** With nothing selected: the workflow's own settings and its problems. */
-const props = defineProps<{ issues: GraphIssue[]; base: string }>()
+const props = defineProps<{
+  issues: GraphIssue[]
+  base: string
+  /** Flow wires that repeat a data wire: one button removes them. */
+  redundant: number
+}>()
 const description = defineModel<string>('description', { required: true })
 const maxAmount = defineModel<string>('maxAmount', { required: true })
 const react = defineModel<boolean>('react', { required: true })
-const emit = defineEmits<{ focus: [nodeId: string] }>()
+const emit = defineEmits<{ focus: [nodeId: string]; dropRedundant: [] }>()
 
 const { t, locale } = useI18n()
 const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.text_ru : issue.text_en)
@@ -61,6 +66,9 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
         </li>
       </ul>
       <p v-else class="text-xs text-muted-foreground">{{ t('workflow.settings.noIssues') }}</p>
+      <Button v-if="props.redundant" variant="outline" size="sm" class="justify-self-start" @click="emit('dropRedundant')">
+        {{ t('workflow.settings.dropRedundant', { count: props.redundant }) }}
+      </Button>
     </div>
   </div>
 </template>

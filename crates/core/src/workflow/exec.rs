@@ -5,8 +5,12 @@
 //! - A data input is computed when a node asks for it, once per run (a pure
 //!   data node is computed again on each pass of «Для каждого»).
 //! - A wire into an input wins over the field of the same name.
-//! - A failing node takes its «Ошибка» way if it has one wired; otherwise the
-//!   whole run fails and nothing it did is kept.
+//! - An action with no flow wire into it runs after the actions it takes
+//!   data from (data order), once each of them has run in this pass.
+//! - A failing node takes its «Ошибка» way if it has one wired. Otherwise,
+//!   inside one of several branches, only that branch is undone and the others
+//!   go on (the run ends «partly»); on the main line the whole run fails and
+//!   nothing it did is kept.
 //! - Limits keep a mistake from running away: steps, actions, list items.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -95,7 +99,6 @@ pub struct Resume {
     /// The output it goes on from: «Дальше», or «Да»/«Нет» after a question.
     pub port: String,
     pub memo: String,
-    pub queue_mode: bool,
 }
 
 /// What a run starts from.
@@ -264,7 +267,6 @@ pub(crate) struct Executor<'run> {
     evaluating: HashSet<String>,
     steps: usize,
     pub actions: usize,
-    pub queue_mode: bool,
     /// Value moved so far, in the base currency, against `max_amount`.
     pub moved: Amount,
     pub created: Vec<Transaction>,
@@ -276,7 +278,32 @@ pub(crate) struct Executor<'run> {
     /// the nodes after it see the moment the real run would go on at.
     clock_shift: i64,
     trace: Vec<TraceStep>,
+    /// Data order: node → the actions it runs after (`Graph::data_order`).
+    after: HashMap<String, Vec<String>>,
+    /// Data order the other way: action → the nodes waiting on it.
+    waiting_on: HashMap<String, Vec<String>>,
+    /// How many times each flow node has run in this run.
+    ran: HashMap<String, u64>,
+    /// Branches that failed and were undone, one line each.
+    pub branch_errors: Vec<String>,
 }
+
+/// Where a branch started: what to put back if it fails.
+struct Savepoint {
+    doc: crate::model::vault::VaultDoc,
+    memo: HashMap<(String, String), WfValue>,
+    ran: HashMap<String, u64>,
+    created: usize,
+    queued: usize,
+    notices: usize,
+    events: usize,
+    reminders: usize,
+    actions: usize,
+    moved: Amount,
+}
+
+/// The memo port that keeps run counts across a wait.
+const RAN_PORT: &str = "__ran";
 
 /// Run a workflow on `vault`. A live run that fails leaves the vault as it was.
 pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunReport {
@@ -286,9 +313,18 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
     let result = exec.start();
     let edge_values = exec.edge_values();
     let mut wait = None;
+    let branch_errors = std::mem::take(&mut exec.branch_errors);
+    let done = || {
+        if branch_errors.is_empty() {
+            RunOutcome::Done
+        } else {
+            RunOutcome::Partial {
+                failed: branch_errors.clone(),
+            }
+        }
+    };
     let outcome = match result {
-        Ok(()) => RunOutcome::Done,
-        Err(Halt::Return(_) | Halt::Break) => RunOutcome::Done,
+        Ok(()) | Err(Halt::Return(_) | Halt::Break) => done(),
         Err(Halt::Stop(reason)) => RunOutcome::Stopped { reason },
         Err(Halt::Fail(message)) => RunOutcome::Failed { message },
         Err(Halt::Wait(asleep)) => {
@@ -369,7 +405,6 @@ impl<'run> Executor<'run> {
             evaluating: HashSet::new(),
             steps: 0,
             actions: 0,
-            queue_mode: false,
             moved: Amount::ZERO,
             created: Vec::new(),
             queued: Vec::new(),
@@ -378,7 +413,39 @@ impl<'run> Executor<'run> {
             reminders: Vec::new(),
             clock_shift: 0,
             trace: Vec::new(),
+            after: HashMap::new(),
+            waiting_on: HashMap::new(),
+            ran: HashMap::new(),
+            branch_errors: Vec::new(),
         }
+        .with_data_order()
+    }
+
+    fn with_data_order(mut self) -> Self {
+        let after = self.graph.data_order();
+        for (node, sources) in &after {
+            for source in sources {
+                self.waiting_on
+                    .entry(source.clone())
+                    .or_default()
+                    .push(node.clone());
+            }
+        }
+        for dependents in self.waiting_on.values_mut() {
+            // Run in the order they sit on the canvas, top to bottom.
+            dependents.sort_by(|left, right| {
+                let at = |id: &String| {
+                    self.graph
+                        .node(id)
+                        .map(|node| (node.position.top, node.position.left))
+                };
+                at(left)
+                    .partial_cmp(&at(right))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        self.after = after;
+        self
     }
 
     /// The moment the run is at: the start, moved on by emulated waits.
@@ -408,9 +475,18 @@ impl Executor<'_> {
             let saved: Vec<(String, String, WfValue)> =
                 serde_json::from_str(&resume.memo).unwrap_or_default();
             for (node, port, value) in saved {
-                self.memo.insert((node, port), value);
+                if port == RAN_PORT {
+                    let count = value.as_number().map_or(0, |count| {
+                        rust_decimal::prelude::ToPrimitive::to_u64(&count.into_inner()).unwrap_or(0)
+                    });
+                    self.ran.insert(node, count);
+                } else {
+                    self.memo.insert((node, port), value);
+                }
             }
-            self.queue_mode = resume.queue_mode;
+            // Balances, prices and variables may have moved while it slept:
+            // what the data nodes worked out before is worked out again.
+            self.forget_pure_data();
             let node_id = resume.node_id.clone();
             let (ru, en) = match resume.port.as_str() {
                 "true" => (
@@ -428,7 +504,13 @@ impl Executor<'_> {
             };
             self.push_trace(&node_id, StepStatus::Ok, ru.into(), en.into());
             let port = resume.port.clone();
-            return self.follow(&node_id, &port);
+            self.mark_ran(&node_id);
+            let targets = self.targets(&node_id, &port);
+            let ready = self.ready_after(&node_id);
+            self.run_branches(targets, ready)?;
+            // Nodes standing apart run once the whole run is through, after
+            // its last wait too.
+            return self.run_free_nodes();
         }
         let trigger = ctx.trigger_node.clone();
         let Some(node) = self.graph.node(&trigger) else {
@@ -458,6 +540,8 @@ impl Executor<'_> {
             .nodes
             .iter()
             .filter(|node| !node.disabled && FREE_RUNNING.contains(&node.kind.as_str()))
+            // One that takes data from an action runs right after it instead.
+            .filter(|node| !self.after.contains_key(&node.id))
             .filter(|node| {
                 graph
                     .edges
@@ -501,15 +585,121 @@ impl Executor<'_> {
 
     /// Run every node a flow output leads to, in the order drawn.
     pub(crate) fn follow(&mut self, node_id: &str, port: &str) -> Result<(), Halt> {
-        let targets: Vec<String> = self
-            .graph
+        let targets = self.targets(node_id, port);
+        self.run_branches(targets, Vec::new())
+    }
+
+    fn targets(&self, node_id: &str, port: &str) -> Vec<String> {
+        self.graph
             .edges_from(node_id, port)
             .map(|edge| edge.to.clone())
-            .collect();
-        for target in targets {
-            self.visit(&target)?;
+            .collect()
+    }
+
+    fn mark_ran(&mut self, node_id: &str) {
+        *self.ran.entry(node_id.to_string()).or_default() += 1;
+    }
+
+    fn runs_of(&self, node_id: &str) -> u64 {
+        self.ran.get(node_id).copied().unwrap_or(0)
+    }
+
+    /// Whether a data-ordered node's actions have all run since it last did.
+    fn ready(&self, node_id: &str) -> bool {
+        let own = self.runs_of(node_id);
+        self.after
+            .get(node_id)
+            .is_some_and(|sources| sources.iter().all(|source| self.runs_of(source) > own))
+    }
+
+    /// The nodes waiting on `node_id` by data that may run now.
+    fn ready_after(&self, node_id: &str) -> Vec<String> {
+        self.waiting_on
+            .get(node_id)
+            .map(|nodes| {
+                nodes
+                    .iter()
+                    .filter(|node| self.ready(node))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Run the next nodes: the flow targets, then the data-ordered ones that
+    /// became ready. When there are several, each is a branch of its own: one
+    /// that fails is undone, and the others go on.
+    fn run_branches(&mut self, targets: Vec<String>, ready: Vec<String>) -> Result<(), Halt> {
+        let several = targets.len() + ready.len() > 1;
+        let next = targets
+            .into_iter()
+            .map(|id| (id, false))
+            .chain(ready.into_iter().map(|id| (id, true)));
+        for (target, by_data) in next {
+            // A loop may have run it already on another source's account.
+            if by_data && !self.ready(&target) {
+                continue;
+            }
+            if !several {
+                self.visit(&target)?;
+                continue;
+            }
+            let point = self.savepoint();
+            match self.visit(&target) {
+                Err(Halt::Fail(message)) => self.undo_branch(&target, point, message),
+                other => other?,
+            }
         }
         Ok(())
+    }
+
+    fn savepoint(&self) -> Savepoint {
+        Savepoint {
+            doc: self.vault.doc.clone(),
+            memo: self.memo.clone(),
+            ran: self.ran.clone(),
+            created: self.created.len(),
+            queued: self.queued.len(),
+            notices: self.notices.len(),
+            events: self.events.len(),
+            reminders: self.reminders.len(),
+            actions: self.actions,
+            moved: self.moved,
+        }
+    }
+
+    /// A failed branch: everything it did is put back; the run goes on.
+    fn undo_branch(&mut self, start: &str, point: Savepoint, message: String) {
+        self.vault.doc = point.doc;
+        self.memo = point.memo;
+        self.ran = point.ran;
+        self.created.truncate(point.created);
+        self.queued.truncate(point.queued);
+        self.notices.truncate(point.notices);
+        self.events.truncate(point.events);
+        self.reminders.truncate(point.reminders);
+        self.actions = point.actions;
+        self.moved = point.moved;
+        let title = self
+            .graph
+            .node(start)
+            .and_then(|node| node_def(&node.kind))
+            .map(|def| def.title);
+        let (ru, en) = title.map_or(("ветка".into(), "branch".into()), |title| {
+            (
+                format!("ветка с «{}»", title.ru),
+                format!("the branch from «{}»", title.en),
+            )
+        });
+        self.push_trace(
+            start,
+            StepStatus::Error,
+            format!(
+                "Не удалась {ru}: {message} — её действия отменены, остальные ветки идут дальше"
+            ),
+            format!("Failed: {en}: {message}; its actions are undone, the other branches go on"),
+        );
+        self.branch_errors.push(message);
     }
 
     fn count_step(&mut self) -> Result<(), Halt> {
@@ -554,10 +744,13 @@ impl Executor<'_> {
                     self.forget_pure_data();
                 }
                 self.push_trace(node_id, step.status, step.ru, step.en);
+                self.mark_ran(node_id);
+                let mut targets = Vec::new();
                 for port in step.next {
-                    self.follow(node_id, port)?;
+                    targets.extend(self.targets(node_id, port));
                 }
-                Ok(())
+                let ready = self.ready_after(node_id);
+                self.run_branches(targets, ready)
             }
             Err(Fault::Error(message)) => {
                 let has_error_way = def.output("error").is_some()
@@ -683,7 +876,11 @@ impl Executor<'_> {
             memo_key(&node.id, "index"),
             WfValue::Number(Amount::new(rust_decimal::Decimal::from(index as u64))),
         );
-        match self.follow(&node.id, "each") {
+        // Each pass is a run of the loop for the nodes that take its item.
+        self.mark_ran(&node.id);
+        let targets = self.targets(&node.id, "each");
+        let ready = self.ready_after(&node.id);
+        match self.run_branches(targets, ready) {
             Ok(()) => Ok(true),
             Err(Halt::Break) => Ok(false),
             Err(other) => Err(other),
@@ -885,10 +1082,22 @@ impl Executor<'_> {
 
     /// Node outputs so far, as JSON, for a run that sleeps.
     pub(crate) fn memo_json(&self) -> String {
+        let counts: Vec<(String, WfValue)> = self
+            .ran
+            .iter()
+            .map(|(node, count)| {
+                (
+                    node.clone(),
+                    WfValue::Number(Amount::new(rust_decimal::Decimal::from(*count))),
+                )
+            })
+            .collect();
+        let ran_port = RAN_PORT.to_string();
         let saved: Vec<(&String, &String, &WfValue)> = self
             .memo
             .iter()
             .map(|((node, port), value)| (node, port, value))
+            .chain(counts.iter().map(|(node, value)| (node, &ran_port, value)))
             .collect();
         serde_json::to_string(&saved).unwrap_or_default()
     }

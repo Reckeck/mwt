@@ -1508,3 +1508,361 @@ fn a_question_without_text_is_left_for_the_app_to_word() {
     assert!(step.text_en.contains("Go on?"), "{}", step.text_en);
     assert!(vault.workflow_waits()[0].question.is_empty());
 }
+
+/* --- data order, branches, waits (graph v3) ----------------------------------- */
+
+fn graph_v3(nodes: Vec<Value>, edges: Vec<Value>) -> String {
+    json!({ "version": 3, "nodes": nodes, "edges": edges }).to_string()
+}
+
+/// The trace's node ids in the order they ran.
+fn ran_order(report: &RunReport) -> Vec<String> {
+    report
+        .run
+        .trace
+        .iter()
+        .map(|step| step.node_id.clone())
+        .collect()
+}
+
+#[test]
+fn an_action_runs_after_the_action_it_takes_data_from_without_a_flow_wire() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("pay", &card, &savings, "100"),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "pay", "in"),
+        wire("pay", "transaction", "n", "text"),
+    ];
+    let workflow = save(&mut vault, "Order", graph_v3(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.run.outcome, RunOutcome::Done);
+    assert_eq!(report.notices.len(), 1);
+    let order = ran_order(&report);
+    let at = |id: &str| order.iter().position(|step| step == id).unwrap();
+    assert!(at("pay") < at("n"), "{order:?}");
+}
+
+#[test]
+fn an_action_waiting_on_a_branch_that_did_not_run_does_not_run() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        // 0 days > 0 is false: the branch goes «No».
+        node("diff", "date.diff", json!({})),
+        node("cmp", "logic.compare", json!({ "op": "gt", "b": "0" })),
+        node("b", "logic.branch", json!({})),
+        transfer_node("pay", &card, &savings, "100"),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("diff", "days", "cmp", "a"),
+        wire("cmp", "result", "b", "condition"),
+        wire("t", "out", "b", "in"),
+        wire("b", "true", "pay", "in"),
+        wire("pay", "transaction", "n", "text"),
+    ];
+    let workflow = save(&mut vault, "Gated", graph_v3(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(report.transactions.is_empty());
+    assert!(
+        report.notices.is_empty(),
+        "the notice waits on a payment that never happened"
+    );
+}
+
+#[test]
+fn data_order_reaches_through_pure_data_nodes() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("pay", &card, &savings, "100"),
+        node("text", "logic.text", json!({ "template": "Ушло: {a}" })),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "pay", "in"),
+        wire("pay", "transaction", "text", "a"),
+        wire("text", "text", "n", "text"),
+    ];
+    let workflow = save(&mut vault, "Through", graph_v3(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.notices.len(), 1);
+    assert!(
+        report.notices[0].body.starts_with("Ушло:"),
+        "{}",
+        report.notices[0].body
+    );
+}
+
+#[test]
+fn a_failing_branch_is_undone_and_its_sibling_goes_on() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        // More than the card holds: fails, with no «Error» way.
+        transfer_node("bad", &card, &savings, "99999"),
+        transfer_node("good", &card, &savings, "100"),
+    ];
+    let edges = vec![
+        wire("t", "out", "bad", "in"),
+        wire("t", "out", "good", "in"),
+    ];
+    let workflow = save(&mut vault, "Branches", graph_v3(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&report.run.outcome, RunOutcome::Partial { failed } if failed.len() == 1),
+        "{:?}",
+        report.run.outcome
+    );
+    assert_eq!(report.transactions.len(), 1, "the good branch is kept");
+}
+
+#[test]
+fn a_failure_on_the_main_line_still_undoes_the_whole_run() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("good", &card, &savings, "100"),
+        transfer_node("bad", &card, &savings, "99999"),
+    ];
+    let edges = vec![
+        wire("t", "out", "good", "in"),
+        wire("good", "out", "bad", "in"),
+    ];
+    let workflow = save(&mut vault, "Line", graph_v3(nodes, edges));
+    let before = vault.doc.transactions.len();
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(report.run.outcome, RunOutcome::Failed { .. }),
+        "{:?}",
+        report.run.outcome
+    );
+    assert_eq!(vault.doc.transactions.len(), before);
+}
+
+#[test]
+fn a_nested_fork_catches_its_own_failure() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("a", &card, &savings, "10"),
+        transfer_node("b", &card, &savings, "20"),
+        transfer_node("bad", &card, &savings, "99999"),
+        transfer_node("c", &card, &savings, "30"),
+    ];
+    let edges = vec![
+        wire("t", "out", "a", "in"),
+        wire("t", "out", "c", "in"),
+        wire("a", "out", "bad", "in"),
+        wire("a", "out", "b", "in"),
+    ];
+    let workflow = save(&mut vault, "Nested", graph_v3(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(report.run.outcome, RunOutcome::Partial { .. }),
+        "{:?}",
+        report.run.outcome
+    );
+    // «a» and «b» around the failed «bad», and «c» on the other side.
+    assert_eq!(report.transactions.len(), 3);
+}
+
+#[test]
+fn an_older_graph_keeps_switched_off_what_data_order_would_wake() {
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("pay", "action.transaction", json!({})),
+        node("late", "action.transaction", json!({})),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "pay", "in"),
+        wire("pay", "transaction", "late", "amount"),
+        wire("pay", "transaction", "n", "text"),
+    ];
+    let json = json!({ "version": 2, "nodes": nodes, "edges": edges }).to_string();
+    let graph = Graph::parse(&json).unwrap();
+    assert_eq!(graph.version, crate::workflow::graph::GRAPH_VERSION);
+    let disabled = |id: &str| graph.node(id).unwrap().disabled;
+    assert!(disabled("late"), "it never ran before: it stays that way");
+    assert!(!disabled("n"), "a notice apart from the flow always ran");
+    assert!(!disabled("pay"));
+}
+
+#[test]
+fn a_flow_wire_that_repeats_a_data_wire_is_pointed_out() {
+    let (_dir, _vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("pay", &card, &savings, "100"),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "pay", "in"),
+        wire("pay", "out", "n", "in"),
+        wire("pay", "transaction", "n", "text"),
+    ];
+    let graph = Graph::parse(&graph_v3(nodes, edges)).unwrap();
+    let issues = validate(&graph);
+    assert!(
+        issues.iter().any(|issue| issue.code == "redundant_flow"
+            && issue.edge_id.as_deref() == Some("pay.out>n.in")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn reading_an_action_that_runs_later_is_a_warning() {
+    let (_dir, _vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("n", "action.notify", json!({})),
+        transfer_node("pay", &card, &savings, "100"),
+    ];
+    let edges = vec![
+        wire("t", "out", "n", "in"),
+        wire("t", "out", "pay", "in"),
+        wire("pay", "transaction", "n", "text"),
+    ];
+    let graph = Graph::parse(&graph_v3(nodes, edges)).unwrap();
+    let issues = validate(&graph);
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "late_data" && issue.node_id.as_deref() == Some("n")),
+        "{issues:?}"
+    );
+}
+
+/// «Run → wait 2 h → notice», with a free counter that adds up on each finish.
+fn waiting_graph() -> String {
+    graph_v3(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("w", "action.wait", json!({ "hours": "2" })),
+            node("n", "action.notify", json!({ "text": "готово" })),
+            node(
+                "count",
+                "var.add",
+                json!({ "name": "finished", "value": "1" }),
+            ),
+        ],
+        vec![wire("t", "out", "w", "in"), wire("w", "out", "n", "in")],
+    )
+}
+
+#[test]
+fn free_nodes_run_after_the_last_wait() {
+    let (_dir, mut vault) = empty_vault();
+    let workflow = save(&mut vault, "Free", waiting_graph());
+    let now = later();
+    vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    assert_eq!(
+        count_of(&vault, &workflow, "finished"),
+        None,
+        "not before the wait is over"
+    );
+    vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    assert_eq!(
+        count_of(&vault, &workflow, "finished"),
+        Some(Amount::new(rust_decimal::Decimal::ONE))
+    );
+}
+
+#[test]
+fn a_sleeping_run_goes_on_along_the_graph_it_fell_asleep_on() {
+    let (_dir, mut vault) = empty_vault();
+    let workflow = save(&mut vault, "Edited", waiting_graph());
+    let now = later();
+    vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    // Edited while asleep: the notice is gone from the current graph.
+    let edited = graph_v3(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("w", "action.wait", json!({ "hours": "2" })),
+        ],
+        vec![wire("t", "out", "w", "in")],
+    );
+    vault
+        .save_workflow(Some(&workflow.id), draft("Edited", edited), now)
+        .unwrap();
+    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    assert_eq!(
+        pass.notices.len(),
+        1,
+        "the run had a notice when it fell asleep"
+    );
+}
+
+#[test]
+fn a_wait_of_a_switched_off_workflow_is_journalled_as_dropped() {
+    let (_dir, mut vault) = empty_vault();
+    let workflow = save(&mut vault, "Off", waiting_graph());
+    let now = later();
+    vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    vault.set_workflow_active(&workflow.id, false, now).unwrap();
+    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    assert!(pass.notices.is_empty());
+    assert!(
+        pass.runs.iter().any(|run| run.outcome
+            == RunOutcome::Dropped {
+                reason: "off".into()
+            }),
+        "{:?}",
+        pass.runs
+    );
+    assert!(vault.doc.workflow_waits.is_empty());
+}
+
+#[test]
+fn a_question_of_a_switched_off_workflow_cannot_be_answered() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, ""));
+    let now = later();
+    vault
+        .run_workflow_now(&workflow.id, None, now, "UTC")
+        .unwrap();
+    let wait = vault.doc.workflow_waits[0].id.clone();
+    vault.set_workflow_active(&workflow.id, false, now).unwrap();
+    assert!(vault.answer_workflow_wait(&wait, true, now, "UTC").is_err());
+    assert_eq!(
+        vault.doc.workflow_waits.len(),
+        1,
+        "the question stays for later"
+    );
+}
+
+#[test]
+fn a_wait_from_an_older_app_still_reads() {
+    let old = json!({
+        "id": "w1", "workflow_id": "wf", "run_id": "r", "node_id": "n",
+        "resume_at": "", "memo": "[]", "queue_mode": true, "trigger": "manual",
+    });
+    let from_json: WorkflowWait = serde_json::from_value(old.clone()).unwrap();
+    assert!(from_json.graph.is_empty());
+    let packed = rmp_serde::to_vec_named(&old).unwrap();
+    let from_pack: WorkflowWait = rmp_serde::from_slice(&packed).unwrap();
+    assert_eq!(from_pack, from_json);
+}

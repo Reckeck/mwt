@@ -2,13 +2,21 @@
 //! can grow without a vault format change; `version` lets a later app migrate
 //! an older graph when it loads it.
 
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
+
+use super::catalog::node_def;
+use super::types::PortType;
 
 /// Current graph format.
 ///
 /// - 2: «Ждать подтверждения» answers with «Да»/«Нет» instead of one «Дальше»;
 ///   a wire from its old «Дальше» now leaves «Да».
-pub const GRAPH_VERSION: u32 = 2;
+/// - 3: data sets the order: an action with no flow wire into it runs after
+///   the actions it takes data from. A node that this would bring to life in
+///   an older graph (it never ran there) is switched off, so nothing changes.
+pub const GRAPH_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[ts(rename = "WorkflowPosition")]
@@ -127,6 +135,22 @@ impl Graph {
                 }
             }
         }
+        if self.version < 3 {
+            let woken: Vec<String> = self
+                .data_order()
+                .into_keys()
+                .filter(|id| {
+                    self.node(id).is_some_and(|node| {
+                        !super::exec::FREE_RUNNING.contains(&node.kind.as_str())
+                    })
+                })
+                .collect();
+            for node in &mut self.nodes {
+                if woken.contains(&node.id) {
+                    node.disabled = true;
+                }
+            }
+        }
         self.version = GRAPH_VERSION;
         true
     }
@@ -162,5 +186,73 @@ impl Graph {
         self.edges
             .iter()
             .find(|edge| edge.to == node && edge.to_port == port)
+    }
+
+    /// Data order: each node with a flow input but no flow wire into it,
+    /// and the actions it takes data from (`action_sources`). It runs once
+    /// they all have; one that takes data from no action is left out.
+    pub fn data_order(&self) -> HashMap<String, Vec<String>> {
+        let mut out = HashMap::new();
+        for node in self.nodes.iter().filter(|node| !node.disabled) {
+            let Some(def) = node_def(&node.kind) else {
+                continue;
+            };
+            let flow_input = def.inputs.iter().any(|port| port.ty == PortType::Flow);
+            if def.is_trigger() || !flow_input || self.has_flow_in(node) {
+                continue;
+            }
+            let sources = self.action_sources(&node.id);
+            if !sources.is_empty() {
+                out.insert(node.id.clone(), sources);
+            }
+        }
+        out
+    }
+
+    /// Whether a wire comes into one of `node`'s flow inputs.
+    pub fn has_flow_in(&self, node: &Node) -> bool {
+        let Some(def) = node_def(&node.kind) else {
+            return false;
+        };
+        self.edges.iter().any(|edge| {
+            edge.to == node.id
+                && def
+                    .input(&edge.to_port)
+                    .is_some_and(|port| port.ty == PortType::Flow)
+        })
+    }
+
+    /// The actions (flow nodes other than triggers) whose outputs reach the
+    /// data inputs of `node_id`, directly or through pure data nodes.
+    pub fn action_sources(&self, node_id: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut seen = HashSet::new();
+        self.collect_sources(node_id, &mut seen, &mut found);
+        found
+    }
+
+    fn collect_sources(&self, node_id: &str, seen: &mut HashSet<String>, found: &mut Vec<String>) {
+        let Some(def) = self.node(node_id).and_then(|node| node_def(&node.kind)) else {
+            return;
+        };
+        for edge in self.edges.iter().filter(|edge| edge.to == node_id) {
+            if def
+                .input(&edge.to_port)
+                .is_none_or(|port| port.ty == PortType::Flow)
+            {
+                continue;
+            }
+            if !seen.insert(edge.from.clone()) {
+                continue;
+            }
+            let Some(from_def) = self.node(&edge.from).and_then(|from| node_def(&from.kind)) else {
+                continue;
+            };
+            if !from_def.has_flow() {
+                self.collect_sources(&edge.from, seen, found);
+            } else if !from_def.is_trigger() {
+                found.push(edge.from.clone());
+            }
+        }
     }
 }

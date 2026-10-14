@@ -59,7 +59,7 @@ export const GROUP_COLOR: Record<NodeGroup, string> = {
 }
 
 /** The graph format the app writes; mirrors `GRAPH_VERSION` in `graph.rs`. */
-export const GRAPH_VERSION = 2
+export const GRAPH_VERSION = 3
 
 /** An empty graph of the current format. */
 export function emptyGraph(): WorkflowGraph {
@@ -98,11 +98,15 @@ export function portType(def: NodeDef | undefined, port: string, side: 'in' | 'o
 }
 
 /** The value of a run in words: the trace step's outcome as a key of `workflow.outcome.*`. */
-export function outcomeKey(outcome: RunOutcome): 'done' | 'stopped' | 'failed' | 'waiting' | 'asking' {
+export function outcomeKey(
+  outcome: RunOutcome,
+): 'done' | 'stopped' | 'failed' | 'waiting' | 'asking' | 'partial' | 'dropped' {
   if (outcome === 'done') return 'done'
   if ('stopped' in outcome) return 'stopped'
   if ('failed' in outcome) return 'failed'
   if ('asking' in outcome) return 'asking'
+  if ('partial' in outcome) return 'partial'
+  if ('dropped' in outcome) return 'dropped'
   return 'waiting'
 }
 
@@ -112,12 +116,17 @@ export function outcomeQuestion(outcome: RunOutcome): { nodeId: string; question
   return { nodeId: outcome.asking.node_id, question: outcome.asking.question }
 }
 
-/** The reason or the moment a run outcome carries. */
+/**
+ * The reason or the moment a run outcome carries. A dropped run gives its
+ * reason code (`off`, `node_removed`, `rate_limit`): `workflow.dropped.<code>`.
+ */
 export function outcomeDetail(outcome: RunOutcome): string {
   if (outcome === 'done') return ''
   if ('stopped' in outcome) return outcome.stopped.reason
   if ('failed' in outcome) return outcome.failed.message
   if ('asking' in outcome) return outcome.asking.question
+  if ('partial' in outcome) return outcome.partial.failed.join('; ')
+  if ('dropped' in outcome) return outcome.dropped.reason
   return outcome.waiting.until
 }
 

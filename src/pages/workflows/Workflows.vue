@@ -12,8 +12,12 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-/** The queue's tab shows how many wait for an answer. */
+/** The queue's tab shows how many wait for you: questions, and operations left from an older app. */
 const queue = useQuery({ queryKey: WORKFLOW_KEYS.queue, queryFn: () => call<QueuedActions[]>('list_workflow_queue') })
+const waits = useQuery({ queryKey: WORKFLOW_KEYS.waits, queryFn: () => call<WorkflowWait[]>('list_workflow_waits') })
+const waiting = computed(
+  () => (waits.data.value ?? []).filter((wait) => wait.kind === 'confirm').length + (queue.data.value?.length ?? 0),
+)
 
 const tabs = computed(() =>
   [
@@ -24,8 +28,7 @@ const tabs = computed(() =>
   ].map(([value, key]) => ({
     value,
     label:
-      key === 'queue' && queue.data.value?.length
-        ? `${t('workflow.tab.queue')} (${queue.data.value.length})`
+      key === 'queue' && waiting.value ? `${t('workflow.tab.queue')} (${waiting.value})`
         : t(`workflow.tab.${key}`),
   })),
 )

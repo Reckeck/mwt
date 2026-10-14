@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { localized } from '@/shared/lib/workflow'
+import { runsAfter } from '@/shared/lib/workflow-order'
 
 import { type EditorNode, type FlowPortLinks, isNote } from './flow'
 import type { EditorGraph } from './use-editor-graph'
@@ -61,6 +62,18 @@ export function useSelection(editor: EditorGraph) {
     return [...side(nodeDef.inputs, false), ...side(nodeDef.outputs, true)]
   })
 
+  /** The actions the node runs after by data, by name: it has no flow wire in. */
+  const dataAfter = computed<string[]>(() => {
+    const node = selectedNode.value
+    if (!node) return []
+    const edges = editor.edges.value.map((edge) => ({
+      from: edge.source,
+      to: edge.target,
+      toPort: edge.targetHandle ?? '',
+    }))
+    return runsAfter(edges, (id) => def(editor.kindOf(id)), node.id).map(nodeTitle)
+  })
+
   function setParam(param: string, value: unknown) {
     const node = selectedNode.value
     if (node) editor.patchNode(node.id, (data) => ({ ...data, params: { ...data.params, [param]: value } }))
@@ -76,5 +89,5 @@ export function useSelection(editor: EditorGraph) {
     if (node) editor.unwire(node.id, port)
   }
 
-  return { selectedNode, selectedDef, wiredFrom, flowLinks, setParam, setLabel, unwire }
+  return { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, setLabel, unwire }
 }

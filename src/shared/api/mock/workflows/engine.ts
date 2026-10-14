@@ -1,11 +1,41 @@
 /** Checking a graph and walking its flow wires for a fake run. */
 
 import { portAccepts, portType } from '@/shared/lib/workflow'
+import { type OrderEdge, actionSources, runsAfter } from '@/shared/lib/workflow-order'
 import { defs, issue, now, uuid, waits } from './state'
+
+const orderEdges = (graph: WorkflowGraph): OrderEdge[] =>
+  graph.edges.map((edge) => ({ from: edge.from, to: edge.to, toPort: edge.to_port }))
+const defOfIn = (graph: WorkflowGraph) => (id: string) =>
+  defs.get(graph.nodes.find((node) => node.id === id)?.kind ?? '')
+
+/** A flow wire into a node that already waits on its source by data: it can go. */
+function redundantFlows(graph: WorkflowGraph): GraphIssue[] {
+  const edges = orderEdges(graph)
+  const defOf = defOfIn(graph)
+  return graph.nodes.flatMap((node) => {
+    const flowIn = graph.edges.filter(
+      (edge) =>
+        edge.to === node.id &&
+        defOf(node.id)?.inputs.some((port) => port.name === edge.to_port && port.type === 'flow'),
+    )
+    const only = flowIn.length === 1 ? flowIn[0] : undefined
+    if (only?.from_port !== 'out' || !actionSources(edges, defOf, node.id).includes(only.from)) return []
+    return [
+      issue(
+        'redundant_flow',
+        'Поток повторяет связь по данным: его можно убрать, порядок останется',
+        'The flow repeats the data wire: it can go, the order stays',
+        null,
+        only.id,
+      ),
+    ]
+  })
+}
 
 /** The checks that matter while clicking around; the full set is in Rust. */
 export function validate(graph: WorkflowGraph): GraphIssue[] {
-  const out: GraphIssue[] = []
+  const out: GraphIssue[] = [...redundantFlows(graph)]
   for (const node of graph.nodes) {
     if (!defs.has(node.kind)) out.push(issue('unknown_node', 'Неизвестный узел', 'Unknown node', node.id))
   }
@@ -54,6 +84,8 @@ export function fakeRun(
     triggers[0]
   const trace: TraceStep[] = []
   const seen = new Set<string>()
+  const edges = orderEdges(graph)
+  const defOf = defOfIn(graph)
   let asking: { node_id: string; question: string; until: string | null } | null = null
   const follow = (id: string, port: string) => {
     for (const edge of graph.edges.filter((entry) => entry.from === id && entry.from_port === port)) {
@@ -95,6 +127,12 @@ export function fakeRun(
     )
     for (const output of def.outputs) {
       if (output.type === 'flow' && !MOCK_SKIPPED_PORTS.has(output.name)) follow(id, output.name)
+    }
+    if (node.disabled) return
+    // Data order: nodes with no flow wire in run once all the actions they read have.
+    for (const waiting of graph.nodes) {
+      const sources = runsAfter(edges, defOf, waiting.id)
+      if (!waiting.disabled && sources.includes(id) && sources.every((source) => seen.has(source))) visit(waiting.id)
     }
   }
   if (resume) follow(resume.nodeId, resume.port)

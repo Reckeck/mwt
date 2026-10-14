@@ -24,6 +24,8 @@ const props = defineProps<{
   wiredFrom: Record<string, string>
   /** Flow ports and their wires. */
   flows: FlowPortLinks[]
+  /** The actions it runs after by data. */
+  dataAfter: string[]
   issues: GraphIssue[]
 }>()
 const help = defineModel<boolean>('help', { default: false })
@@ -106,6 +108,7 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
 
     <NodeFlows
       :ports="props.flows"
+      :after="props.dataAfter"
       @unlink="(edgeId) => emit('unlink', edgeId)"
       @add="(port, side, event) => emit('addFlow', port, side, event)"
     />

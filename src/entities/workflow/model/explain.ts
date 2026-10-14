@@ -33,7 +33,9 @@ export function explainRun(report: RunReport, t: Translate, locale: string): str
   }
   const key = outcomeKey(report.run.outcome)
   // A question the node did not word is shown in the app's own words.
-  const detail = outcomeDetail(report.run.outcome) || (key === 'asking' ? t('workflow.defaultQuestion') : '')
+  const raw = outcomeDetail(report.run.outcome)
+  const detail =
+    key === 'dropped' ? t(`workflow.dropped.${raw}`) : raw || (key === 'asking' ? t('workflow.defaultQuestion') : '')
   if (key !== 'done') sentences.push(t(`workflow.explain.${key}`, { detail }))
   return sentences.join(' ')
 }

@@ -15,11 +15,14 @@ use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::pricing::history::{secs_or_now, unix_secs};
-use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
+use crate::workflow::exec::{
+    self, EmittedEvent, Resume, RunContext, RunMode, RunReport, StepStatus, TraceStep,
+};
 use crate::workflow::graph::Graph;
 use crate::workflow::model::{
-    GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, TestExpect, VarScope,
-    WaitKind, Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar, WorkflowWait,
+    GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, RunOutcome, TestExpect,
+    VarScope, WaitKind, Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar,
+    WorkflowWait,
 };
 use crate::workflow::nodes::triggers::{schedule_moments, tx_matches, tx_trigger_values};
 use crate::workflow::types::WfValue;
@@ -82,13 +85,14 @@ pub struct WorkflowTestResult {
     pub report: RunReport,
 }
 
-const OUTCOMES: [&str; 4] = ["done", "stopped", "failed", "waiting"];
+const OUTCOMES: [&str; 5] = ["done", "stopped", "failed", "waiting", "partial"];
 
 fn outcome_word(outcome: &crate::workflow::RunOutcome) -> &'static str {
     use crate::workflow::RunOutcome::*;
     match outcome {
         Done => "done",
-        Stopped { .. } => "stopped",
+        Stopped { .. } | Dropped { .. } => "stopped",
+        Partial { .. } => "partial",
         Failed { .. } => "failed",
         Waiting { .. } | Asking { .. } => "waiting",
     }
@@ -314,14 +318,6 @@ impl UnlockedVault {
             saved.push(tx);
         }
         Ok(saved)
-    }
-
-    /// Whether the operations would be accepted, without keeping them.
-    pub(crate) fn wf_check(
-        &self,
-        txs: Vec<Transaction>,
-    ) -> std::result::Result<Vec<Transaction>, String> {
-        self.sandbox().wf_insert(txs)
     }
 
     fn wf_state_mut(&mut self, workflow_id: &str) -> &mut WorkflowState {
@@ -827,9 +823,19 @@ impl UnlockedVault {
             .find(|wait| wait.id == id && wait.kind == WaitKind::Confirm)
             .cloned()
             .ok_or_else(|| Error::Missing(format!("question {id}")))?;
-        self.doc.workflow_waits.retain(|known| known.id != id);
         let workflow = self.workflow(&wait.workflow_id)?;
-        let graph = Graph::parse(&workflow.graph)?;
+        if !workflow.active {
+            return Err(Error::InvalidInput(
+                "the workflow is switched off: switch it on to answer".into(),
+            ));
+        }
+        if self.runs_last_hour(&workflow.id, now) >= MAX_RUNS_PER_HOUR {
+            return Err(Error::InvalidInput(format!(
+                "the workflow ran {MAX_RUNS_PER_HOUR} times this hour: answer a bit later"
+            )));
+        }
+        self.doc.workflow_waits.retain(|known| known.id != id);
+        let graph = wait_graph(&wait, &workflow)?;
         if graph.node(&wait.node_id).is_none() {
             self.persist()?;
             return Err(Error::InvalidInput(
@@ -843,7 +849,6 @@ impl UnlockedVault {
             node_id: wait.node_id.clone(),
             port: if yes { "true" } else { "false" }.into(),
             memo: wait.memo.clone(),
-            queue_mode: wait.queue_mode,
         });
         let mut pass = WorkflowPass::default();
         let report = exec::run(self, &graph, &ctx);
@@ -931,11 +936,60 @@ impl UnlockedVault {
         pass.runs.push(report.run.clone());
     }
 
+    /// A run that never happened, in the journal with its reason, so nothing
+    /// is lost without a trace.
+    fn keep_dropped(
+        &mut self,
+        workflow_id: &str,
+        trigger: &str,
+        reason: &str,
+        now: i64,
+        pass: &mut WorkflowPass,
+    ) {
+        let (ru, en) = match reason {
+            "off" => (
+                "Схема выключена, пока запуск ждал: продолжения не будет",
+                "The workflow was switched off while the run slept: it does not go on",
+            ),
+            "node_removed" => (
+                "Узел ожидания удалён из схемы: продолжения не будет",
+                "The wait node was removed from the workflow: the run does not go on",
+            ),
+            _ => (
+                "Больше 60 запусков за час: этот пропущен",
+                "More than 60 runs this hour: this one is skipped",
+            ),
+        };
+        let run = WorkflowRun {
+            id: uuid::Uuid::new_v4().to_string(),
+            workflow_id: workflow_id.to_string(),
+            trigger: trigger.to_string(),
+            started_at: crate::calendar::iso(now),
+            outcome: RunOutcome::Dropped {
+                reason: reason.to_string(),
+            },
+            created: Vec::new(),
+            queued: 0,
+            trace: vec![TraceStep {
+                node_id: String::new(),
+                kind: String::new(),
+                status: StepStatus::Skipped,
+                text_ru: ru.into(),
+                text_en: en.into(),
+                values: Default::default(),
+            }],
+            dry_run: false,
+        };
+        self.doc.workflow_runs.push(run.clone());
+        pass.runs.push(run);
+    }
+
     fn runs_last_hour(&self, workflow_id: &str, now: i64) -> usize {
         self.doc
             .workflow_runs
             .iter()
             .filter(|run| run.workflow_id == workflow_id && !run.dry_run)
+            .filter(|run| !matches!(run.outcome, RunOutcome::Dropped { .. }))
             .filter(|run| unix_secs(&run.started_at).is_some_and(|secs| now - secs < 3600))
             .count()
     }
@@ -949,6 +1003,13 @@ impl UnlockedVault {
         pass: &mut WorkflowPass,
     ) -> Vec<EmittedEvent> {
         if self.runs_last_hour(&workflow.id, ctx.now) >= MAX_RUNS_PER_HOUR {
+            self.keep_dropped(
+                &workflow.id,
+                &ctx.trigger_label,
+                "rate_limit",
+                ctx.now,
+                pass,
+            );
             return Vec::new();
         }
         ctx.mode = RunMode::Live;
@@ -1176,14 +1237,24 @@ impl UnlockedVault {
             .cloned()
             .collect();
         for wait in due {
-            self.doc.workflow_waits.retain(|known| known.id != wait.id);
             let Ok(workflow) = self.workflow(&wait.workflow_id) else {
+                self.doc.workflow_waits.retain(|known| known.id != wait.id);
                 continue;
             };
-            let Ok(graph) = Graph::parse(&workflow.graph) else {
+            // Over the hourly limit: the run sleeps on and goes on at a later tick.
+            if workflow.active && self.runs_last_hour(&workflow.id, now) >= MAX_RUNS_PER_HOUR {
                 continue;
+            }
+            self.doc.workflow_waits.retain(|known| known.id != wait.id);
+            let graph = match wait_graph(&wait, &workflow) {
+                Ok(graph) if graph.node(&wait.node_id).is_some() => graph,
+                _ => {
+                    self.keep_dropped(&workflow.id, &wait.trigger, "node_removed", now, &mut pass);
+                    continue;
+                }
             };
-            if !workflow.active || graph.node(&wait.node_id).is_none() {
+            if !workflow.active {
+                self.keep_dropped(&workflow.id, &wait.trigger, "off", now, &mut pass);
                 continue;
             }
             let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
@@ -1197,7 +1268,6 @@ impl UnlockedVault {
                     WaitKind::Confirm => "false".into(),
                 },
                 memo: wait.memo.clone(),
-                queue_mode: wait.queue_mode,
             });
             events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
         }
@@ -1334,3 +1404,13 @@ fn pick_trigger(graph: &Graph, wanted: Option<&str>) -> Result<Node> {
 
 #[cfg(test)]
 mod tests;
+
+/// The graph a sleeping run goes on along: the one it fell asleep on, or the
+/// workflow's current one for a wait from an older app.
+fn wait_graph(wait: &WorkflowWait, workflow: &Workflow) -> Result<Graph> {
+    if wait.graph.trim().is_empty() {
+        Graph::parse(&workflow.graph)
+    } else {
+        Graph::parse(&wait.graph)
+    }
+}

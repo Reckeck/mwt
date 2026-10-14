@@ -1158,8 +1158,8 @@ fn build() -> Vec<NodeDef> {
         title: txt("Создать операцию", "Create an operation"),
         description: txt("Пополнение, оплата, перевод или обмен.", "A top-up, payment, transfer or exchange."),
         help: txt(
-            "Проходит те же проверки, что операция из формы. Если денег не хватит или правило нарушено — выход «Ошибка» (или запуск отклоняется). Перед узлом «Ждать подтверждения» операция ждёт вашего «да» в очереди.",
-            "Goes through the same checks as an operation from the form. Not enough money or a broken rule takes the «Error» way (or rejects the run). After a «Wait for confirmation» node it waits for your yes in the queue.",
+            "Проходит те же проверки, что операция из формы. Если денег не хватит или правило нарушено — выход «Ошибка» (или запуск отклоняется). Чтобы спросить вас перед операцией, поставьте перед ней «Ждать подтверждения».",
+            "Goes through the same checks as an operation from the form. Not enough money or a broken rule takes the «Error» way (or rejects the run). To be asked first, put a «Wait for confirmation» node before it.",
         ),
         inputs,
         outputs: vec![
@@ -1622,7 +1622,32 @@ fn build() -> Vec<NodeDef> {
     });
 
     super::catalog_more::more_nodes(&mut out);
+    with_error_ways(&mut out);
     out
+}
+
+/// Nodes that end the run themselves: nothing to catch after them.
+const NO_ERROR_WAY: [&str; 2] = ["action.stop", "action.return"];
+
+/// Every action and variable node can fail; each gets an «Ошибка» way and the
+/// reason, so a failure can be caught there instead of undoing the run.
+fn with_error_ways(defs: &mut [NodeDef]) {
+    for def in defs.iter_mut().filter(|def| {
+        matches!(def.group, NodeGroup::Action | NodeGroup::Variable)
+            && def.input("in").is_some()
+            && !NO_ERROR_WAY.contains(&def.kind)
+    }) {
+        if def.output("error").is_none() {
+            def.outputs.push(error_out());
+        }
+        if def.output("reason").is_none() {
+            def.outputs.push(port(
+                "reason",
+                PortType::Text,
+                txt("Причина ошибки", "Error reason"),
+            ));
+        }
+    }
 }
 
 /// The catalog as JSON for the browser mock, under `src/shared/api/` (the mock
@@ -1660,6 +1685,26 @@ mod tests {
             "{} is stale: run `mise run gen-types`",
             path.display()
         );
+    }
+
+    #[test]
+    fn every_action_that_can_fail_has_an_error_way() {
+        for def in catalog().iter().filter(|def| {
+            matches!(def.group, NodeGroup::Action | NodeGroup::Variable)
+                && def.input("in").is_some()
+                && !NO_ERROR_WAY.contains(&def.kind)
+        }) {
+            assert!(
+                def.output("error").is_some(),
+                "{} has no error way",
+                def.kind
+            );
+            assert!(
+                def.output("reason").is_some(),
+                "{} has no error reason",
+                def.kind
+            );
+        }
     }
 
     #[test]

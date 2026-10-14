@@ -84,6 +84,7 @@ fn optional_input(kind: &str, port: &str) -> bool {
 /// Every problem of the graph, errors first.
 pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
     let mut out = Vec::new();
+    let order = graph.data_order();
     let mut defs: HashMap<&str, &'static NodeDef> = HashMap::new();
     let mut ids = HashSet::new();
     for node in &graph.nodes {
@@ -249,7 +250,8 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
                 .edges
                 .iter()
                 .any(|edge| edge.to == node.id && edge.to_port == "in");
-            if !reached {
+            // One that takes data from an action runs after it by data order.
+            if !reached && !order.contains_key(&node.id) {
                 out.push(
                     GraphIssue::warning(
                         "unreachable",
@@ -264,6 +266,8 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
             }
         }
     }
+
+    out.extend(order_issues(graph, &order));
 
     if let Some(node_id) = find_cycle(graph, &defs, true) {
         out.push(
@@ -335,6 +339,96 @@ fn find_cycle(graph: &Graph, defs: &HashMap<&str, &'static NodeDef>, flow: bool)
 }
 
 /// Whether a graph has errors that keep it from running.
+/// A node's name for a message: its label, else its catalog title.
+fn name_of(graph: &Graph, id: &str) -> (String, String) {
+    let node = graph.node(id);
+    let label = node
+        .map(|node| node.label.trim().to_string())
+        .unwrap_or_default();
+    match node.and_then(|node| node_def(&node.kind)) {
+        _ if !label.is_empty() => (label.clone(), label),
+        Some(def) => (def.title.ru.to_string(), def.title.en.to_string()),
+        None => (id.to_string(), id.to_string()),
+    }
+}
+
+/// Whether `port` of node `id` is a flow input.
+fn is_flow_input(graph: &Graph, id: &str, port: &str) -> bool {
+    graph
+        .node(id)
+        .and_then(|node| node_def(&node.kind))
+        .and_then(|def| def.input(port))
+        .is_some_and(|input| input.ty == PortType::Flow)
+}
+
+/// Everything that runs before `id`: back along flow wires and data order.
+fn ancestors(graph: &Graph, order: &HashMap<String, Vec<String>>, id: &str) -> HashSet<String> {
+    let mut seen = HashSet::new();
+    let mut todo = vec![id.to_string()];
+    while let Some(current) = todo.pop() {
+        let flow_in = graph
+            .edges
+            .iter()
+            .filter(|edge| edge.to == current && is_flow_input(graph, &edge.to, &edge.to_port))
+            .map(|edge| edge.from.clone());
+        let by_data = order.get(&current).cloned().unwrap_or_default();
+        for before in flow_in.chain(by_data) {
+            if seen.insert(before.clone()) {
+                todo.push(before);
+            }
+        }
+    }
+    seen
+}
+
+/// Data order mistakes: an input read from an action that only runs later,
+/// and a flow wire that repeats what the data wires already say.
+fn order_issues(graph: &Graph, order: &HashMap<String, Vec<String>>) -> Vec<GraphIssue> {
+    let mut out = Vec::new();
+    for node in graph
+        .nodes
+        .iter()
+        .filter(|node| !node.disabled && graph.has_flow_in(node))
+    {
+        let before = ancestors(graph, order, &node.id);
+        for source in graph.action_sources(&node.id) {
+            if !before.contains(&source) {
+                let ((who_ru, who_en), (from_ru, from_en)) =
+                    (name_of(graph, &node.id), name_of(graph, &source));
+                out.push(
+                    GraphIssue::warning(
+                        "late_data",
+                        format!("«{who_ru}» берёт данные у «{from_ru}», но поток доходит до него раньше — значение будет пустым"),
+                        format!("«{who_en}» takes data from «{from_en}», but the flow reaches it first: the value will be empty"),
+                    )
+                    .on_node(&node.id),
+                );
+            }
+        }
+        let flow_in: Vec<_> = graph
+            .edges
+            .iter()
+            .filter(|edge| edge.to == node.id && is_flow_input(graph, &edge.to, &edge.to_port))
+            .collect();
+        if let [only] = flow_in.as_slice()
+            && only.from_port == "out"
+            && graph.action_sources(&node.id).contains(&only.from)
+        {
+            let ((from_ru, from_en), (to_ru, to_en)) =
+                (name_of(graph, &only.from), name_of(graph, &node.id));
+            out.push(
+                GraphIssue::warning(
+                    "redundant_flow",
+                    format!("Поток «{from_ru}» → «{to_ru}» повторяет связь по данным: его можно убрать, порядок останется"),
+                    format!("The flow «{from_en}» → «{to_en}» repeats the data wire: it can go, the order stays"),
+                )
+                .on_edge(&only.id),
+            );
+        }
+    }
+    out
+}
+
 pub fn has_errors(issues: &[GraphIssue]) -> bool {
     issues.iter().any(|issue| issue.level == IssueLevel::Error)
 }

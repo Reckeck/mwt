@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 
+import { portAccepts } from '@/shared/lib/workflow'
 import type { QuickAddChoice, QuickAddContext } from '@/features/workflow-quick-add'
 
 import type { EditorGraph } from './use-editor-graph'
@@ -55,6 +56,24 @@ export function useCanvasInsert(editor: EditorGraph) {
     if (type) openQuickAdd(event.clientX, event.clientY, { mode: 'port', nodeId, port, type, side })
   }
 
+  /**
+   * After an action's «Дальше»: when the new node takes one of the action's
+   * values, a data wire joins them and is enough to order them (data order).
+   */
+  function joinByData(sourceId: string, port: string, targetId: string): boolean {
+    const source = def(editor.kindOf(sourceId))
+    const target = def(editor.kindOf(targetId))
+    if (port !== 'out' || !source || !target || source.group === 'trigger') return false
+    for (const output of source.outputs.filter((entry) => entry.type !== 'flow')) {
+      const input = target.inputs.find((entry) => entry.type !== 'flow' && portAccepts(entry.type, output.type))
+      if (input) {
+        connect(sourceId, output.name, targetId, input.name)
+        return true
+      }
+    }
+    return false
+  }
+
   function onQuickPick(choice: QuickAddChoice) {
     const state = quick.value
     quick.value = null
@@ -62,8 +81,10 @@ export function useCanvasInsert(editor: EditorGraph) {
     const node = add(choice.kind, state.at, choice.params)
     const context = state.context
     if (context.mode === 'port' && choice.port) {
-      if (context.side === 'out') connect(context.nodeId, context.port, node.id, choice.port)
-      else connect(node.id, choice.port, context.nodeId, context.port)
+      if (context.side === 'in') connect(node.id, choice.port, context.nodeId, context.port)
+      // A data wire, when there is one to draw, orders them by itself.
+      else if (!joinByData(context.nodeId, context.port, node.id))
+        connect(context.nodeId, context.port, node.id, choice.port)
     } else if (context.mode === 'edge' && choice.port) {
       const old = editor.edges.value.find((edge) => edge.id === context.edgeId)
       const source = old && editor.nodeById(old.source)

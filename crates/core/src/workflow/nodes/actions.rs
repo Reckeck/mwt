@@ -16,11 +16,10 @@ use crate::model::transaction::{
 use crate::workflow::catalog::NodeDef;
 use crate::workflow::exec::{
     EmittedEvent, Executor, Fault, Halt, MAX_ACTIONS, MAX_CALL_DEPTH, RunContext, RunMode, Step,
-    StepStatus,
 };
 use crate::workflow::graph::Graph;
 use crate::workflow::graph::Node;
-use crate::workflow::model::{QueuedActions, WaitKind, WorkflowWait};
+use crate::workflow::model::{WaitKind, WorkflowWait};
 use crate::workflow::types::WfValue;
 
 use super::{json_account, json_number};
@@ -127,13 +126,8 @@ impl Executor<'_> {
         })
     }
 
-    /// Make the operations, or queue them after «Ждать подтверждения». All of
-    /// them are kept or none.
-    fn commit(
-        &mut self,
-        txs: Vec<Transaction>,
-        summary: &str,
-    ) -> Result<(Vec<Transaction>, bool), Fault> {
+    /// Make the operations: all of them are kept or none.
+    fn commit(&mut self, txs: Vec<Transaction>) -> Result<Vec<Transaction>, Fault> {
         self.actions += 1;
         if self.actions > MAX_ACTIONS {
             return Err(Halt::Fail(format!("more than {MAX_ACTIONS} actions in one run")).into());
@@ -151,23 +145,10 @@ impl Executor<'_> {
             ))
             .into());
         }
-        if self.queue_mode {
-            let checked = self.vault.wf_check(txs)?;
-            self.queued.push(QueuedActions {
-                id: uuid::Uuid::new_v4().to_string(),
-                workflow_id: self.ctx.workflow_id.clone(),
-                run_id: self.ctx.run_id.clone(),
-                created_at: crate::calendar::iso(self.now()),
-                summary: summary.to_string(),
-                transactions: checked.clone(),
-            });
-            self.moved += value;
-            return Ok((checked, true));
-        }
         let saved = self.vault.wf_insert(txs)?;
         self.moved += value;
         self.created.extend(saved.iter().cloned());
-        Ok((saved, false))
+        Ok(saved)
     }
 
     fn build_transaction(&mut self, node: &Node) -> Result<Transaction, String> {
@@ -321,23 +302,14 @@ impl Executor<'_> {
             .collect())
     }
 
-    fn said_commit(&self, def: &NodeDef, txs: &[Transaction], queued: bool) -> Step {
+    fn said_commit(&self, def: &NodeDef, txs: &[Transaction]) -> Step {
         let (ru, en): (Vec<String>, Vec<String>) = txs.iter().map(|tx| self.describe(tx)).unzip();
         let (ru, en) = (ru.join("; "), en.join("; "));
-        if queued {
-            Step::next(
-                "out",
-                format!("«{}»: в очередь на подтверждение — {ru}", def.title.ru),
-                format!("«{}»: queued for confirmation: {en}", def.title.en),
-            )
-            .with_status(StepStatus::Queued)
-        } else {
-            Step::next(
-                "out",
-                format!("«{}»: {ru}", def.title.ru),
-                format!("«{}»: {en}", def.title.en),
-            )
-        }
+        Step::next(
+            "out",
+            format!("«{}»: {ru}", def.title.ru),
+            format!("«{}»: {en}", def.title.en),
+        )
     }
 
     pub(crate) fn run_action(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
@@ -345,8 +317,7 @@ impl Executor<'_> {
         match node.kind.as_str() {
             "action.transaction" => {
                 let tx = self.build_transaction(node)?;
-                let summary = self.describe(&tx).0;
-                let (saved, queued) = self.commit(vec![tx], &summary)?;
+                let saved = self.commit(vec![tx])?;
                 if let Some(first) = saved.first() {
                     self.set_output(
                         node,
@@ -354,22 +325,17 @@ impl Executor<'_> {
                         WfValue::Transaction(Box::new(first.clone())),
                     );
                 }
-                Ok(self.said_commit(def, &saved, queued))
+                Ok(self.said_commit(def, &saved))
             }
             "action.distribute" => {
                 let txs = self.build_distribution(node)?;
-                let summary = txs
-                    .iter()
-                    .map(|tx| self.describe(tx).0)
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                let (saved, queued) = self.commit(txs, &summary)?;
+                let saved = self.commit(txs)?;
                 let list = saved
                     .iter()
                     .map(|tx| WfValue::Transaction(Box::new(tx.clone())))
                     .collect();
                 self.set_output(node, "created", WfValue::List(list));
-                Ok(self.said_commit(def, &saved, queued))
+                Ok(self.said_commit(def, &saved))
             }
             "action.notify" => {
                 let text = self.input(node, "text")?.as_text();
@@ -476,7 +442,8 @@ impl Executor<'_> {
                     node_id: node.id.clone(),
                     resume_at,
                     memo: self.memo_json(),
-                    queue_mode: self.queue_mode,
+                    queue_mode: false,
+                    graph: self.graph.to_json(),
                     trigger: self.ctx.trigger_label.clone(),
                     kind: WaitKind::Confirm,
                     question,
@@ -538,7 +505,8 @@ impl Executor<'_> {
                     node_id: node.id.clone(),
                     resume_at,
                     memo: self.memo_json(),
-                    queue_mode: self.queue_mode,
+                    queue_mode: false,
+                    graph: self.graph.to_json(),
                     trigger: self.ctx.trigger_label.clone(),
                     kind: WaitKind::Timer,
                     question: String::new(),
@@ -587,10 +555,9 @@ impl Executor<'_> {
         ctx.trigger_label = format!("call from {}", self.ctx.workflow_name);
         ctx.trigger_values = std::collections::BTreeMap::from([("payload".to_string(), payload)]);
 
-        let (actions, queue_mode, moved) = (self.actions, self.queue_mode, self.moved);
+        let (actions, moved) = (self.actions, self.moved);
         let mut child = Executor::new(&mut *self.vault, &graph, &ctx);
         child.actions = actions;
-        child.queue_mode = queue_mode;
         child.moved = moved;
         let result = child.start();
         let steps = child.take_trace();
@@ -602,8 +569,10 @@ impl Executor<'_> {
             notices,
             events,
             reminders,
+            branch_errors,
             ..
         } = child;
+        self.branch_errors.extend(branch_errors);
         self.actions = actions;
         self.moved = moved;
         self.created.extend(created);
