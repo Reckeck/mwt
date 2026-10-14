@@ -30,6 +30,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'branches', route: 'workflows-runs' },
       { key: 'errorPorts', route: 'workflow-new' },
       { key: 'runFrom', route: 'workflow-new' },
+      { key: 'queueNode', route: 'workflow-new' },
       { key: 'search', route: 'dashboard' },
       { key: 'utilityReminders', route: 'wallet' },
     ],
