@@ -69,6 +69,15 @@ mise артефакты окажутся в `target/`, и сборка пойд�
 (`scripts/check-ui.baseline.json`): исправил — `node scripts/check-ui.mjs
 --update`.
 
+## Рабочая копия в Claude Code
+
+Правило «Рабочие копии» из `AGENTS.md` главнее встроенной изоляции Claude
+Code: **не вызывай `EnterWorktree`** и не запускай агентов с
+`isolation: "worktree"` — они создают git worktree в `.claude/worktrees/`,
+куда пользователь не может переключиться. Если среда требует изолировать
+правки (фоновая задача), сделай `jjw-start <slug>`, работай в
+`/home/wd/apps/work-app-<slug>/` и сразу напиши пользователю этот путь.
+
 ## Коммиты из Claude Code
 
 Правила jj из `AGENTS.md` действуют полностью: `git commit`/`git add` запрещены,
