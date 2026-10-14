@@ -2,18 +2,18 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, ChevronDown, Star } from 'lucide-vue-next'
+import { ComboboxVirtualizer } from 'reka-ui'
+
+import { Button } from '@/shared/ui/button'
 import {
   ComboboxAnchor,
-  ComboboxContent,
   ComboboxInput,
   ComboboxItem,
-  ComboboxPortal,
+  ComboboxList,
   ComboboxRoot,
   ComboboxTrigger,
   ComboboxViewport,
-  ComboboxVirtualizer,
-} from 'reka-ui'
-
+} from '@/shared/ui/combobox'
 import { Label } from '@/shared/ui/label'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -24,8 +24,8 @@ import { useCurrencyOptions } from './useCurrencyOptions'
 /**
  * The one currency control of the app: a select-looking trigger that opens a
  * searchable, virtualized list of the whole catalog (fiat + thousands of crypto
- * tickers). Only the visible rows exist in the DOM, so there is no cap on how
- * many matches can be scrolled through.
+ * tickers). Built from the shadcn-vue combobox parts; only the list is Reka's
+ * virtualizer (shadcn has none), so only the visible rows exist in the DOM.
  */
 const props = withDefaults(defineProps<CurrencyPickerProps>(), {
   label: '',
@@ -101,15 +101,17 @@ function onOpen(isOpen: boolean) {
       open-on-click
       @update:open="onOpen"
     >
-      <!-- Reka hardcodes `tabindex="-1"` and an English `aria-label` on its trigger;
-           both are overridden: this button is the only tab stop while closed. -->
-      <ComboboxAnchor as-child>
-        <ComboboxTrigger as-child :tabindex="0" :aria-label="props.label || t('settings.currencySelect')">
-          <button
+      <!-- Reka hardcodes an English `aria-label` on its trigger; it is overridden,
+           and the button is the only tab stop while closed. -->
+      <ComboboxAnchor as-child class="w-full">
+        <ComboboxTrigger as-child :aria-label="props.label || t('settings.currencySelect')">
+          <Button
             :id="triggerId"
-            type="button"
+            variant="outline"
             :aria-expanded="open"
-            class="flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:border-primary"
+            :aria-invalid="props.error ? true : undefined"
+            class="w-full min-w-0 justify-between gap-2 px-3 font-normal data-[state=open]:border-primary"
+            :class="props.error && 'border-destructive'"
           >
             <span v-if="selected" class="flex min-w-0 items-baseline gap-1.5">
               <span class="font-medium uppercase">{{ selected }}</span>
@@ -119,60 +121,49 @@ function onOpen(isOpen: boolean) {
               {{ props.placeholder || t('settings.currencySearchPlaceholder') }}
             </span>
             <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
-          </button>
+          </Button>
         </ComboboxTrigger>
       </ComboboxAnchor>
 
-      <ComboboxPortal>
-        <ComboboxContent
-          position="popper"
-          class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-56 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
-          :side-offset="4"
-        >
-          <div class="border-b border-border p-1.5">
-            <ComboboxInput
-              v-model="search"
-              auto-focus
-              autocomplete="off"
-              spellcheck="false"
-              :display-value="() => search"
-              :placeholder="t('settings.currencySearchPlaceholder')"
-              class="h-8 w-full rounded border border-input bg-transparent px-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
+      <!-- Above dialogs (z-50): the picker opens inside forms in dialogs. -->
+      <ComboboxList class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-56" align="start">
+        <ComboboxInput
+          v-model="search"
+          auto-focus
+          autocomplete="off"
+          spellcheck="false"
+          :display-value="() => search"
+          :placeholder="t('settings.currencySearchPlaceholder')"
+        />
 
-          <ComboboxViewport class="max-h-72 overflow-y-auto p-1">
-            <ComboboxVirtualizer
-              v-slot="{ option }"
-              :options="options"
-              :estimate-size="CURRENCY_ROW_HEIGHT"
-              :overscan="8"
-              :text-content="(row: CurrencyOption) => row.code"
-            >
-              <ComboboxItem
-                :value="option.code"
-                class="flex h-8 w-full cursor-pointer select-none items-center gap-2 rounded px-2 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
-              >
-                <Check v-if="option.code === picked" class="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                <Star v-else-if="option.favorite" class="size-3.5 shrink-0 text-warning" aria-hidden="true" />
-                <span v-else class="size-3.5 shrink-0" aria-hidden="true" />
-                <template v-if="option.code !== NONE">
-                  <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>
-                  <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ option.name }}</span>
-                  <span class="shrink-0 text-[10px] uppercase text-muted-foreground">
-                    {{ t(`currency.kind.${option.kind}`) }}
-                  </span>
-                </template>
-                <span v-else class="text-muted-foreground">{{ t('currency.none') }}</span>
-              </ComboboxItem>
-            </ComboboxVirtualizer>
+        <ComboboxViewport class="max-h-72 p-1">
+          <ComboboxVirtualizer
+            v-slot="{ option }"
+            :options="options"
+            :estimate-size="CURRENCY_ROW_HEIGHT"
+            :overscan="8"
+            :text-content="(row: CurrencyOption) => row.code"
+          >
+            <ComboboxItem :value="option.code" class="h-8 w-full cursor-pointer">
+              <Check v-if="option.code === picked" class="size-3.5 text-primary" aria-hidden="true" />
+              <Star v-else-if="option.favorite" class="size-3.5 text-warning" aria-hidden="true" />
+              <span v-else class="size-3.5 shrink-0" aria-hidden="true" />
+              <template v-if="option.code !== NONE">
+                <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>
+                <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ option.name }}</span>
+                <span class="shrink-0 text-[10px] uppercase text-muted-foreground">
+                  {{ t(`currency.kind.${option.kind}`) }}
+                </span>
+              </template>
+              <span v-else class="text-muted-foreground">{{ t('currency.none') }}</span>
+            </ComboboxItem>
+          </ComboboxVirtualizer>
 
-            <p v-if="options.length === 0" class="px-2 py-3 text-center text-xs text-muted-foreground">
-              {{ settingsStore.currenciesLoading ? t('settings.currencyLoading') : t('settings.currencyNoMatches') }}
-            </p>
-          </ComboboxViewport>
-        </ComboboxContent>
-      </ComboboxPortal>
+          <p v-if="options.length === 0" class="px-2 py-3 text-center text-xs text-muted-foreground">
+            {{ settingsStore.currenciesLoading ? t('settings.currencyLoading') : t('settings.currencyNoMatches') }}
+          </p>
+        </ComboboxViewport>
+      </ComboboxList>
     </ComboboxRoot>
 
     <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>

@@ -25,7 +25,8 @@ import { useTxForm } from '../../model/use-tx-form'
 const { t } = useI18n()
 const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, contacts } = useTxForm()
 
-const hasAdvanced = computed(() => Boolean(form.network || form.txHash || form.contactId))
+// The network fills in by itself from the asset, so only what the user set opens the section.
+const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
 </script>
 
 <template>

@@ -38,6 +38,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'palette' },
       { key: 'dates' },
       { key: 'filters', route: 'transactions' },
+      { key: 'pickers' },
     ],
   },
   {
