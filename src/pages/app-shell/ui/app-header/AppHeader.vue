@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { CircleHelp, Clock, Plus, Search, WifiOff } from 'lucide-vue-next'
+import { CircleHelp, Plus, Search, WifiOff } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { NotificationBell } from '@/widgets/notification-bell'
@@ -10,12 +10,11 @@ import { Kbd } from '@/shared/ui/kbd'
 import { Separator } from '@/shared/ui/separator'
 import { SidebarTrigger } from '@/shared/ui/sidebar'
 
-/** The top bar: where you are, whether the numbers are fresh, the net worth, and the global actions. */
+/** The top bar: where you are, whether the app is online, the net worth, and the global actions. */
 const props = defineProps<{
   title: string
   summary: PortfolioSummary | undefined
   online: boolean
-  stalePrices: string | null
   /** The screen has a tour to start with «?». */
   hasTour: boolean
 }>()
@@ -33,10 +32,6 @@ const { t } = useI18n()
     <Badge v-if="!props.online" variant="destructive" class="gap-1">
       <WifiOff class="size-3" />
       {{ t('app.offline') }}
-    </Badge>
-    <Badge v-else-if="props.stalePrices" variant="secondary" class="gap-1" :title="t('app.pricesStaleHint')">
-      <Clock class="size-3" />
-      {{ t('app.pricesAsOf', { time: props.stalePrices }) }}
     </Badge>
 
     <span v-if="props.summary" class="hidden text-sm font-medium sm:inline">

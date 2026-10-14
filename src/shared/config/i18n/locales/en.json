@@ -300,8 +300,6 @@
   "dashboard.widget.byStore": "By wallet",
   "dashboard.widget.exchangeBalances": "Exchange check",
   "app.offline": "Offline",
-  "app.pricesAsOf": "Prices as of {time}",
-  "app.pricesStaleHint": "Prices have not been refreshed for a while: the provider did not answer. Totals use the last saved prices.",
   "import.title": "Bybit trade import",
   "import.hint": "Fills land in the pending list and only become transactions after you confirm them.",
   "import.load": "Load history",
@@ -2522,5 +2520,6 @@
   "whatsNew.interface.dates": "Dates and months are picked in a calendar in the app's language, with «Today» and «Clear» — the same on every system.",
   "whatsNew.interface.filters": "The filter bar is shorter: wallet, kind and search stay in view, the rest sits under «More filters» with a count of what is set.",
   "whatsNew.interface.pickers": "Asset, currency and account search works from the keyboard: arrows move, Enter picks, Esc closes.",
+  "whatsNew.interface.header": "The «Prices as of …» badge left the header: hover the total to see the rate date.",
   "filter.more": "More filters"
 }
