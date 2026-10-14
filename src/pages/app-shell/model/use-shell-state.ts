@@ -1,20 +1,16 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { useEventListener, useIntervalFn, useNow, useOnline } from '@vueuse/core'
+import { useEventListener, useOnline } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 
 import { usePriceRefresh } from '@/features/price-refresh'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
-import { formatAsOf } from '@/shared/lib/format'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { tourIdOf, useTour } from '@/shared/lib/tour'
 import { useVaultStore } from '@/shared/store/vault'
 
-/** Prices older than this are flagged next to the net worth. */
-const STALE_PRICES_MS = 60 * 60_000
-
-/** The net worth in the header, and whether it can be trusted right now. */
+/** The net worth in the header, and whether the app is online. */
 export function useConnectivity() {
   // Deduped with the identical query inside the sidebar widgets.
   const summary = useQuery({
@@ -23,15 +19,7 @@ export function useConnectivity() {
     staleTime: 60_000,
   })
   const isOnline = useOnline()
-  const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 60_000) })
-  // Only a real age is reported; "offline" stays a separate, honest signal.
-  const stalePrices = computed(() => {
-    const asOf = summary.data.value?.prices_as_of
-    if (!asOf) return null
-    const age = now.value.getTime() - new Date(asOf).getTime()
-    return age > STALE_PRICES_MS ? formatAsOf(asOf) : null
-  })
-  return { summary, isOnline, stalePrices }
+  return { summary, isOnline }
 }
 
 /** Guided tours: «?» starts the page's tour; a first visit starts it once. */

@@ -36,7 +36,7 @@ useNativeMenuBlock()
 useCacheEvents()
 useBackendNotices()
 
-const { summary, isOnline, stalePrices } = useConnectivity()
+const { summary, isOnline } = useConnectivity()
 const { tour, routeTour } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 const paletteOpen = ref(false)
@@ -56,7 +56,6 @@ const pageTitle = computed(() =>
         :title="pageTitle"
         :summary="summary.data.value"
         :online="isOnline"
-        :stale-prices="stalePrices"
         :has-tour="tour.hasTour(routeTour)"
         @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
