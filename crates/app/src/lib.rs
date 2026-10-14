@@ -256,6 +256,7 @@ pub fn run() {
             planning::update_meter_reading,
             planning::get_utility_bill,
             planning::pay_utility_bill,
+            planning::preview_utility_formula,
             planning::get_meter_trend,
             planning::get_property_summary,
             planning::get_utility_payment_draft,

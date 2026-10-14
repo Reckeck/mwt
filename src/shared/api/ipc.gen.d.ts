@@ -1131,6 +1131,20 @@ loss: Amount,
 difference: Amount, };
 
 /**
+ * What is wrong with a formula, worded for the form, and where (1-based character).
+ */
+type FormulaIssue = { position: number, text_ru: string, text_en: string, };
+
+/**
+ * One zone's readings for a formula preview.
+ */
+type FormulaZoneReading = { 
+/**
+ * `None` for a one-rate meter.
+ */
+zone: string | null, previous: Amount, current: Amount, };
+
+/**
  * `amount > 0` earmarks from the free balance, `< 0` releases.
  */
 type FundEnvelopeInput = { id: string, amount: Amount, };
@@ -1692,7 +1706,11 @@ period: string, recorded_at: string,
  * A month may hold several readings: moving out on the 15th and the
  * next flat's first reading the same day.
  */
-day: number | null, };
+day: number | null, 
+/**
+ * The tariff zone of a multi-rate meter; `None` for a one-rate one.
+ */
+zone: string | null, };
 
 type MeterReadingInput = { item_id: string, value: Amount, 
 /**
@@ -1702,7 +1720,11 @@ period: string,
 /**
  * Day of the month (1–31); `None` = the month's end.
  */
-day: number | null, };
+day: number | null, 
+/**
+ * The zone of a multi-rate meter; `None` for a one-rate one.
+ */
+zone: string | null, };
 
 /**
  * Totals of one calendar month in the budget currency.
@@ -1911,7 +1933,11 @@ reading: Amount | null,
 /**
  * Metered: the day of the month the meter was read; `None` = its end.
  */
-reading_day: number | null, };
+reading_day: number | null, 
+/**
+ * A multi-rate meter: the readings per zone (instead of `reading`).
+ */
+zone_readings: Array<ZoneReadingInput>, };
 
 /**
  * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
@@ -3296,7 +3322,27 @@ amount: Amount | null,
 /**
  * Already paid for this month, in the item's currency.
  */
-paid: Amount, includes_deposit: boolean, };
+paid: Amount, includes_deposit: boolean, 
+/**
+ * A multi-rate meter: the previous and this month's reading per zone.
+ */
+zones: Array<ZoneBillLine>, };
+
+/**
+ * What a meter's bill would be: the form's preview and the bill dialog's
+ * re-pricing as a reading is typed. Needs no vault.
+ */
+type UtilityFormulaInput = { tariff: Amount, 
+/**
+ * Empty = consumption × tariff.
+ */
+formula: string | null, zones: Array<string>, readings: Array<FormulaZoneReading>, 
+/**
+ * Days between the readings; a month when not given.
+ */
+days: number | null, };
+
+type UtilityFormulaPreview = { amount: Amount | null, consumption: Amount | null, issue: FormulaIssue | null, };
 
 type UtilityInput = { name: string, active: boolean, kind: UtilityKind, currency: string, 
 /**
@@ -3322,7 +3368,16 @@ store_id: string | null,
  */
 category: string, };
 
-type UtilityKind = { "metered": { unit: string, tariff: Amount, } } | { "static": { amount: Amount, } } | { "housing": { amount: Amount, deposit: Amount | null, due_day: number, automation_id: string | null, } };
+type UtilityKind = { "metered": { unit: string, tariff: Amount, 
+/**
+ * The bill by a formula (`utilities_formula`); `None` = consumption × tariff.
+ */
+formula: string | null, 
+/**
+ * Tariff zones of a multi-rate meter («день», «ночь»): a reading per
+ * zone; empty = one reading.
+ */
+zones: Array<string>, } } | { "static": { amount: Amount, } } | { "housing": { amount: Amount, deposit: Amount | null, due_day: number, automation_id: string | null, } };
 
 /**
  * One month of an item's bills.
@@ -3355,7 +3410,11 @@ payments: Array<Transaction>,
 /**
  * Metered: every reading of the month, oldest first, with its day.
  */
-readings: Array<MeterReading>, };
+readings: Array<MeterReading>, 
+/**
+ * A multi-rate meter: each zone's reading and consumption.
+ */
+zones: Array<ZoneMonth>, };
 
 /**
  * A payment the form opens with, for one month of one item.
@@ -3674,3 +3733,15 @@ type YearRow = { month: string, income: Amount, fixed: Amount, daily: Amount, sa
  * No income and no spending: left out of the average.
  */
 empty: boolean, };
+
+type ZoneBillLine = { zone: string, previous_reading: Amount | null, reading: Amount | null, };
+
+/**
+ * One tariff zone of a month («день»: 800, used 200).
+ */
+type ZoneMonth = { zone: string, reading: Amount, consumption: Amount | null, };
+
+/**
+ * A zone's reading typed into the bill.
+ */
+type ZoneReadingInput = { zone: string, reading: Amount, };

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
@@ -9,6 +9,7 @@ import { call } from '@/shared/api/ipc'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { Select } from '@/shared/ui/select'
 
 import type { MeterReadingFormProps } from './meter-reading.types'
 
@@ -21,6 +22,10 @@ const queryClient = useQueryClient()
 const date = ref(localDate(new Date()))
 const value = ref('')
 const parts = computed(() => readingDateParts(date.value))
+/** A day/night meter takes a reading per zone. */
+const zones = computed(() => ('metered' in props.item.kind ? props.item.kind.metered.zones : []))
+const zone = ref('')
+watch(zones, (list) => (zone.value = list.includes(zone.value) ? zone.value : (list[0] ?? '')), { immediate: true })
 const form = useFormValidation(() => ({
   date: parts.value ? null : t('validation.date'),
   value: positiveAmount(value.value),
@@ -34,6 +39,7 @@ const save = useMutation({
         value: value.value.trim(),
         period: parts.value?.period ?? '',
         day: parts.value?.day ?? null,
+        zone: zones.value.length ? zone.value : null,
       } satisfies MeterReadingInput,
     }),
   onSuccess: () => {
@@ -58,6 +64,9 @@ const save = useMutation({
           :title="t('utilities.day')"
         />
       </span>
+      <Select v-if="zones.length" v-model="zone" class="h-8 w-28" :aria-label="t('utilities.zone')">
+        <option v-for="entry in zones" :key="entry" :value="entry">{{ entry }}</option>
+      </Select>
       <span class="contents" :data-invalid="form.invalidAttr('value')">
         <AmountInput
           v-model="value"

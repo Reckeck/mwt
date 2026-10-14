@@ -4,6 +4,7 @@ import { money } from './budget-calc'
 import { fail, iso, now, readings, remove, replace, utilities, uuid } from './state'
 import type { PlanningMockContext } from './state'
 import { paymentsOf, utilityTrend } from './utility-calc'
+import { meterBill, previewFormula } from './utility-formula'
 
 /** Planning commands: Utility bills: items, meter readings, bills and payments. `undefined` when `cmd` is not one. */
 export function planUtilities(
@@ -30,8 +31,16 @@ export function planUtilities(
       return {}
     case 'add_meter_reading': {
       const input = body as MeterReadingInput
-      const reading: MeterReading = { id: uuid(), ...input, day: input.day ?? null, recorded_at: iso(now()) }
-      const index = readings.findIndex((entry) => entry.item_id === input.item_id && entry.period === input.period)
+      const reading: MeterReading = {
+        id: uuid(),
+        ...input,
+        day: input.day ?? null,
+        zone: input.zone ?? null,
+        recorded_at: iso(now()),
+      }
+      const index = readings.findIndex(
+        (entry) => entry.item_id === input.item_id && entry.period === input.period && entry.zone === reading.zone,
+      )
       if (index >= 0) readings.splice(index, 1)
       readings.push(reading)
       return reading
@@ -53,12 +62,23 @@ export function planUtilities(
       const lines: UtilityBillLine[] = utilities
         .filter((item) => item.active && item.property_id === propertyId)
         .map((item) => {
-          const own = readings
-            .filter((entry) => entry.item_id === item.id)
-            .sort((left, right) => left.period.localeCompare(right.period))
-          const previous = own.filter((entry) => entry.period < period).at(-1)?.value ?? null
-          const current = own.find((entry) => entry.period === period)?.value ?? null
-          const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
+          const zones = 'metered' in item.kind ? item.kind.metered.zones : []
+          const readingsOf = (zone: string | null) => {
+            const own = readings
+              .filter((entry) => entry.item_id === item.id && (entry.zone ?? null) === zone)
+              .sort((left, right) => left.period.localeCompare(right.period))
+            return {
+              zone,
+              previous: own.filter((entry) => entry.period < period).at(-1)?.value ?? null,
+              current: own.find((entry) => entry.period === period)?.value ?? null,
+            }
+          }
+          const parts = zones.length ? zones.map(readingsOf) : [readingsOf(null)]
+          const sum = (key: 'previous' | 'current') =>
+            parts.every((part) => part[key] !== null)
+              ? String(parts.reduce((total, part) => total + Number(part[key]), 0))
+              : null
+          const [previous, current] = [sum('previous'), sum('current')]
           const fixed =
             'static' in item.kind ? item.kind.static.amount : 'housing' in item.kind ? item.kind.housing.amount : null
           const consumption = current !== null && previous !== null ? Number(current) - Number(previous) : null
@@ -71,9 +91,28 @@ export function planUtilities(
             previous_reading: previous,
             reading: current,
             consumption: consumption === null ? null : String(consumption),
-            amount: 'metered' in item.kind ? (consumption === null ? null : money(consumption * tariff)) : fixed,
+            amount:
+              'metered' in item.kind
+                ? consumption === null
+                  ? null
+                  : money(
+                      meterBill(
+                        item,
+                        parts.map((part) => ({
+                          zone: part.zone,
+                          previous: part.previous ?? '0',
+                          current: part.current ?? '0',
+                        })),
+                      ),
+                    )
+                : fixed,
             paid: money(paid),
             includes_deposit: false,
+            zones: zones.map((zone, index) => ({
+              zone,
+              previous_reading: parts[index].previous,
+              reading: parts[index].current,
+            })),
           }
         })
       const day = String(Math.min(payDay ?? now().getDate(), 28)).padStart(2, '0')
@@ -90,18 +129,25 @@ export function planUtilities(
       const saved: Transaction[] = []
       for (const line of input.lines) {
         const item = utilities.find((entry) => entry.id === line.item_id) ?? fail('not found', 'MISSING')
-        if (line.reading) {
+        const typed = line.zone_readings.length
+          ? line.zone_readings
+          : line.reading
+            ? [{ zone: null, reading: line.reading }]
+            : []
+        for (const { zone, reading } of typed) {
           remove(
             readings,
-            readings.find((entry) => entry.item_id === item.id && entry.period === input.period)?.id ?? '',
+            readings.find((entry) => entry.item_id === item.id && entry.period === input.period && entry.zone === zone)
+              ?.id ?? '',
           )
           readings.push({
             id: uuid(),
             item_id: item.id,
-            value: line.reading,
+            value: reading,
             period: input.period,
             recorded_at: iso(now()),
             day: line.reading_day ?? null,
+            zone,
           })
         }
         const code = item.currency.toUpperCase()
@@ -152,6 +198,8 @@ export function planUtilities(
       }
       return summary
     }
+    case 'preview_utility_formula':
+      return previewFormula(body as UtilityFormulaInput)
     case 'get_meter_trend': {
       const item = utilities.find((entry) => entry.id === args?.itemId) ?? fail('not found', 'MISSING')
       return utilityTrend(item)

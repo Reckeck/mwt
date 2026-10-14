@@ -20,13 +20,15 @@ import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { Switch } from '@/shared/ui/switch'
 
+import MeterFields from './MeterFields.vue'
+import { type MeterMode, useFormulaPreview, zoneKey, zoneList } from './meter-formula'
 import { UTILITY_KINDS, type UtilityKindName } from './utility-edit.constants'
 import type { UtilityDialogProps } from './utility-edit.types'
 
 const props = withDefaults(defineProps<UtilityDialogProps>(), { item: null, propertyId: '' })
 const open = defineModel<boolean>('open', { required: true })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
@@ -40,6 +42,10 @@ const name = ref('')
 const kind = ref<UtilityKindName>('metered')
 const unit = ref('kWh')
 const tariff = ref('')
+const meterMode = ref<MeterMode>('tariff')
+const formula = ref('')
+const zones = ref('')
+const preview = useFormulaPreview({ tariff, mode: meterMode, formula, zones })
 const amount = ref('')
 const deposit = ref('')
 const dueDay = ref('1')
@@ -54,10 +60,13 @@ watch(open, (isOpen) => {
   if (!isOpen) return
   const item = props.item
   name.value = item?.name ?? ''
-  const current = item?.kind ?? { metered: { unit: 'kWh', tariff: '' } }
+  const current = item?.kind ?? { metered: { unit: 'kWh', tariff: '', formula: null, zones: [] } }
   kind.value = 'metered' in current ? 'metered' : 'static' in current ? 'static' : 'housing'
   unit.value = 'metered' in current ? current.metered.unit : 'kWh'
   tariff.value = 'metered' in current ? current.metered.tariff : ''
+  formula.value = 'metered' in current ? (current.metered.formula ?? '') : ''
+  meterMode.value = formula.value ? 'formula' : 'tariff'
+  zones.value = 'metered' in current ? current.metered.zones.join(', ') : ''
   amount.value = 'static' in current ? current.static.amount : 'housing' in current ? current.housing.amount : ''
   deposit.value = 'housing' in current ? (current.housing.deposit ?? '') : ''
   dueDay.value = 'housing' in current ? String(current.housing.due_day) : '1'
@@ -74,7 +83,10 @@ watch(kind, (next) => {
 
 const utilityKind = computed<UtilityKind | null>(() => {
   if (kind.value === 'metered') {
-    return unit.value.trim() && Number(tariff.value) > 0 ? { metered: { unit: unit.value.trim(), tariff: tariff.value.trim() } } : null
+    const own = meterMode.value === 'formula' ? formula.value.trim() : ''
+    return {
+      metered: { unit: unit.value.trim(), tariff: tariff.value.trim() || '0', formula: own || null, zones: zoneList(zones.value) },
+    }
   }
   if (kind.value === 'static') return Number(amount.value) > 0 ? { static: { amount: amount.value.trim() } } : null
   const day = Number(dueDay.value)
@@ -89,11 +101,23 @@ const utilityKind = computed<UtilityKind | null>(() => {
       }
     : null
 })
+/** Up to 4 zones, each named once — what `check_utility` refuses. */
+const zonesError = computed(() => {
+  const keys = zoneList(zones.value).map(zoneKey)
+  return new Set(keys).size !== keys.length || keys.length > 4 ? t('utilities.zonesInvalid') : null
+})
+const formulaError = computed(() => {
+  const issue = preview.value?.issue
+  if (!issue || !formula.value.trim()) return null
+  return t('utilities.formulaIssue', { position: issue.position, text: locale.value === 'ru' ? issue.text_ru : issue.text_en })
+})
 const form = useFormValidation(
   () => ({
     name: required(name.value),
     unit: kind.value === 'metered' ? required(unit.value) : null,
-    tariff: kind.value === 'metered' ? positiveAmount(tariff.value) : null,
+    tariff: kind.value === 'metered' && meterMode.value === 'tariff' ? positiveAmount(tariff.value) : null,
+    zones: kind.value === 'metered' ? zonesError.value : null,
+    formula: kind.value === 'metered' && meterMode.value === 'formula' ? firstError(required(formula.value), formulaError.value) : null,
     amount: kind.value === 'metered' ? null : positiveAmount(amount.value),
     deposit: kind.value === 'housing' ? nonNegativeAmount(deposit.value) : null,
     dueDay: kind.value === 'housing' ? firstError(required(dueDay.value), integerInRange(dueDay.value, 1, 31)) : null,
@@ -142,14 +166,20 @@ const save = useMutation({
       </div>
       <p class="text-xs text-muted-foreground">{{ t(`utilities.kindHint.${kind}`) }}</p>
 
-      <div v-if="kind === 'metered'" class="grid gap-3 @sm:grid-cols-2">
-        <FormField for="utility-unit" :label="t('utilities.unit')" required :error="form.error('unit')">
-          <Input id="utility-unit" v-model="unit" />
-        </FormField>
-        <FormField for="utility-tariff" :label="t('utilities.tariff', { unit })" required :error="form.error('tariff')">
-          <AmountInput id="utility-tariff" v-model="tariff" />
-        </FormField>
-      </div>
+      <MeterFields
+        v-if="kind === 'metered'"
+        v-model:unit="unit"
+        v-model:tariff="tariff"
+        v-model:mode="meterMode"
+        v-model:formula="formula"
+        v-model:zones="zones"
+        :currency="currency"
+        :preview="preview"
+        :unit-error="form.error('unit')"
+        :tariff-error="form.error('tariff')"
+        :zones-error="form.error('zones')"
+        :formula-error="form.error('formula')"
+      />
       <div v-else class="grid gap-3 @sm:grid-cols-3">
         <FormField for="utility-amount" :label="kind === 'housing' ? t('utilities.rent') : t('utilities.amount')" required :error="form.error('amount')">
           <AmountInput id="utility-amount" v-model="amount" />

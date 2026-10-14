@@ -2,36 +2,76 @@
 
 import { money } from './budget-calc'
 import { mockContext, readings, utilities, uuid } from './state'
+import { meterBill } from './utility-formula'
 
-/** Bills by month of a metered item: consumption × tariff. */
+/** One zone's months, like `zone_months` in Rust: a month runs from the last
+ * reading before it, the first month of a meter from its own first reading. */
+function zoneMonths(own: MeterReading[]) {
+  const periods = [...new Set(own.map((entry) => entry.period))]
+  return new Map(
+    periods.map((period, index) => {
+      const group = own.filter((entry) => entry.period === period)
+      const before = index ? own.filter((entry) => entry.period === periods[index - 1]).at(-1) : undefined
+      return [
+        period,
+        { group, last: group[group.length - 1], start: before ?? (group.length > 1 ? group[0] : undefined) },
+      ]
+    }),
+  )
+}
+
+const sameZone = (left: string | null, right: string | null) =>
+  (left ?? '').trim().toLowerCase() === (right ?? '').trim().toLowerCase()
+
+/** Bills by month: a meter by its formula or consumption × tariff, per zone when it has them. */
 export function utilityTrend(item: UtilityItem): UtilityTrend {
   const sortKey = (entry: MeterReading) => `${entry.period}-${String(entry.day ?? 99).padStart(2, '0')}`
   const own = readings
     .filter((entry) => entry.item_id === item.id)
     .sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
-  const tariff = 'metered' in item.kind ? Number(item.kind.metered.tariff) : 0
   const paid = paymentsOf(item)
-  // Like `monthly_readings` in Rust: a month runs from the last reading
-  // before it, the first month of a meter from its own first reading.
-  const periods = [...new Set(own.map((entry) => entry.period))]
+  const zones: (string | null)[] =
+    'metered' in item.kind && item.kind.metered.zones.length ? item.kind.metered.zones : [null]
+  const perZone = zones.map((zone) => ({ zone, months: zoneMonths(own.filter((entry) => sameZone(entry.zone, zone))) }))
+  const meterMonths = [...(perZone[0]?.months.keys() ?? [])].flatMap((period): UtilityMonth[] => {
+    const parts = perZone.map(({ zone, months }) => ({ zone, month: months.get(period) }))
+    if (parts.some((part) => !part.month)) return []
+    const started = parts.every((part) => part.month?.start)
+    const end = parts.reduce((sum, part) => sum + Number(part.month?.last.value), 0)
+    const start = parts.reduce((sum, part) => sum + Number(part.month?.start?.value ?? 0), 0)
+    const typed = parts.map((part) => ({
+      zone: part.zone,
+      previous: part.month?.start?.value ?? '0',
+      current: part.month?.last.value ?? '0',
+    }))
+    return [
+      {
+        period,
+        reading: String(end),
+        consumption: started ? String(end - start) : null,
+        amount: money(started ? meterBill(item, typed) : 0),
+        reading_id: parts[0].month?.last.id ?? null,
+        payments: paid.get(period) ?? [],
+        readings: own.filter((entry) => entry.period === period),
+        zones: parts.flatMap((part) =>
+          part.zone === null
+            ? []
+            : [
+                {
+                  zone: part.zone,
+                  reading: part.month?.last.value ?? '0',
+                  consumption: part.month?.start
+                    ? String(Number(part.month.last.value) - Number(part.month.start.value))
+                    : null,
+                },
+              ],
+        ),
+      },
+    ]
+  })
   const months: UtilityMonth[] =
     'metered' in item.kind
-      ? periods.map((period, index) => {
-          const group = own.filter((entry) => entry.period === period)
-          const last = group[group.length - 1]
-          const before = index ? own.filter((entry) => entry.period === periods[index - 1]).at(-1) : undefined
-          const start = before ?? (group.length > 1 ? group[0] : undefined)
-          const consumption = start ? Number(last.value) - Number(start.value) : null
-          return {
-            period,
-            reading: last.value,
-            consumption: consumption === null ? null : String(consumption),
-            amount: money((consumption ?? 0) * tariff),
-            reading_id: last.id,
-            payments: paid.get(period) ?? [],
-            readings: group,
-          }
-        })
+      ? meterMonths
       : [...paid.entries()]
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([period, payments]) => ({
@@ -42,6 +82,7 @@ export function utilityTrend(item: UtilityItem): UtilityTrend {
             reading_id: null,
             payments,
             readings: [],
+            zones: [],
           }))
   const billed = months.map((month) => Number(month.amount)).filter((value) => value > 0)
   const average = billed.length ? billed.reduce((sum, value) => sum + value, 0) / billed.length : null
@@ -66,7 +107,7 @@ export function seedUtilityDemo(propertyId: string) {
   const power: UtilityItem = {
     id: uuid(),
     name: 'Электричество',
-    kind: { metered: { unit: 'кВт·ч', tariff: '6.5' } },
+    kind: { metered: { unit: 'кВт·ч', tariff: '6.5', formula: null, zones: [] } },
     ...base,
   }
   const net: UtilityItem = { id: uuid(), name: 'Интернет', kind: { static: { amount: '700' } }, ...base }
@@ -84,6 +125,7 @@ export function seedUtilityDemo(propertyId: string) {
       period,
       recorded_at: month.toISOString(),
       day: null,
+      zone: null,
     })
   }
 }

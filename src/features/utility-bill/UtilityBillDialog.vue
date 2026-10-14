@@ -6,8 +6,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
-import { AmountInput } from '@/shared/ui/amount-input'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { required, useFormValidation } from '@/shared/lib/form'
@@ -15,10 +13,10 @@ import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { Checkbox } from '@/shared/ui/checkbox'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
-import type { UtilityBillDialogProps } from './utility-bill.types'
+import BillLineRow from './BillLineRow.vue'
+import type { BillRow, UtilityBillDialogProps } from './utility-bill.types'
 
 /**
  * The month's utilities as one bill: meters get their reading typed in place
@@ -51,13 +49,7 @@ const payable = computed(() =>
   ),
 )
 
-interface Row {
-  line: UtilityBillLine
-  include: boolean
-  reading: string
-  amount: string
-}
-const rows = ref<Row[]>([])
+const rows = ref<BillRow[]>([])
 const storeId = ref('')
 const when = ref('')
 
@@ -70,6 +62,7 @@ watch(
       // Already paid this month: left out unless ticked again.
       include: Number(line.paid) === 0,
       reading: line.reading ?? '',
+      zoneReadings: Object.fromEntries(line.zones.map((zone) => [zone.zone, zone.reading ?? ''])),
       amount: line.amount ?? '',
     }))
     when.value = toLocalInput(data.due_at)
@@ -81,21 +74,6 @@ watch(
   },
   { immediate: true },
 )
-
-const unitOf = (item: UtilityItem) => ('metered' in item.kind ? item.kind.metered.unit : '')
-
-/** A typed reading re-prices its meter line: (reading − previous) × tariff. */
-function onReading(row: Row, value: string | number) {
-  row.reading = String(value)
-  const kind = row.line.item.kind
-  if (!('metered' in kind) || !row.reading || row.line.previous_reading === null) return
-  const used = Number(row.reading) - Number(row.line.previous_reading)
-  if (used >= 0) row.amount = String(Math.round(used * Number(kind.metered.tariff) * 100) / 100)
-  row.include = true
-}
-
-const consumption = (row: Row) =>
-  row.reading && row.line.previous_reading !== null ? Number(row.reading) - Number(row.line.previous_reading) : null
 
 const totals = computed(() => {
   const sums = new Map<string, number>()
@@ -120,6 +98,13 @@ const form = useFormValidation(
   { resetOn: open },
 )
 
+/** A multi-rate meter's readings typed here (not the ones already stored). */
+const zoneReadings = (row: BillRow): ZoneReadingInput[] =>
+  row.line.zones.flatMap((zone) => {
+    const typed = row.zoneReadings[zone.zone]
+    return typed && typed !== zone.reading ? [{ zone: zone.zone, reading: typed }] : []
+  })
+
 const pay = useMutation({
   mutationFn: () =>
     call<Transaction[]>('pay_utility_bill', {
@@ -133,6 +118,7 @@ const pay = useMutation({
           amount: row.amount,
           reading: 'metered' in row.line.item.kind && row.reading && row.reading !== row.line.reading ? row.reading : null,
           reading_day: null,
+          zone_readings: zoneReadings(row),
         })),
       } satisfies PayUtilityBillInput,
     }),
@@ -180,40 +166,7 @@ const pay = useMutation({
         :class="form.error('lines') ? 'border-destructive' : 'border-border'"
         :data-invalid="form.error('lines') ? '' : undefined"
       >
-        <li v-for="row in rows" :key="row.line.item.id" class="grid items-center gap-2 p-2.5 @sm:grid-cols-[1.5rem_1fr_9rem_9rem]">
-          <Checkbox v-model="row.include" :aria-label="t('utilityBill.include', { name: row.line.item.name })" />
-          <div class="min-w-0">
-            <p class="flex items-center gap-2 truncate text-sm font-medium">
-              {{ row.line.item.name }}
-              <Badge v-if="Number(row.line.paid) > 0" variant="secondary">
-                {{ t('utilityBill.alreadyPaid') }} <Money :amount="row.line.paid" :currency="row.line.item.currency" :convert="false" />
-              </Badge>
-            </p>
-            <p v-if="'metered' in row.line.item.kind" class="text-xs text-muted-foreground tabular-nums">
-              {{ t('utilityBill.previous', { value: row.line.previous_reading ?? '—', unit: unitOf(row.line.item) }) }}
-              <template v-if="consumption(row) !== null">
-                · {{ t('utilities.consumption') }}: {{ consumption(row) }} {{ unitOf(row.line.item) }}
-              </template>
-            </p>
-            <p v-if="'metered' in row.line.item.kind && !row.reading" class="text-xs text-muted-foreground">
-              {{ t('utilityBill.enterReading') }}
-            </p>
-            <p v-else-if="row.line.includes_deposit" class="text-xs text-muted-foreground">{{ t('utilities.depositIncluded') }}</p>
-          </div>
-          <AmountInput
-            v-if="'metered' in row.line.item.kind"
-            :model-value="row.reading"
-            :placeholder="t('utilities.reading')"
-            :aria-label="t('utilities.reading')"
-            @update:model-value="(value) => onReading(row, value)"
-          />
-          <span v-else class="hidden @sm:block" />
-          <AmountInput v-model="row.amount" :decimals="2" :aria-label="t('utilities.amount')">
-            <template #suffix>
-              <span class="px-2 text-xs uppercase text-muted-foreground">{{ row.line.item.currency }}</span>
-            </template>
-          </AmountInput>
-        </li>
+        <BillLineRow v-for="row in rows" :key="row.line.item.id" :row="row" />
       </ul>
     </form>
     <template #footer>

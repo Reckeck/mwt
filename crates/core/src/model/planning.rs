@@ -364,8 +364,18 @@ pub struct CategorizationRule {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UtilityKind {
-    /// Billed by meter: consumption × tariff.
-    Metered { unit: String, tariff: Amount },
+    /// Billed by meter: consumption × tariff, or the user's own formula.
+    Metered {
+        unit: String,
+        tariff: Amount,
+        /// The bill by a formula (`utilities_formula`); `None` = consumption × tariff.
+        #[serde(default)]
+        formula: Option<String>,
+        /// Tariff zones of a multi-rate meter («день», «ночь»): a reading per
+        /// zone; empty = one reading.
+        #[serde(default)]
+        zones: Vec<String>,
+    },
     /// A fixed amount, re-used from last time.
     Static { amount: Amount },
     /// Rent: a monthly amount, a deposit with the first payment, a due day.
@@ -406,6 +416,9 @@ pub struct MeterReading {
     /// next flat's first reading the same day.
     #[serde(default)]
     pub day: Option<u8>,
+    /// The tariff zone of a multi-rate meter; `None` for a one-rate one.
+    #[serde(default)]
+    pub zone: Option<String>,
 }
 
 impl MeterReading {
