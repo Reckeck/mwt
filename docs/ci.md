@@ -75,9 +75,9 @@
   `storage.googleapis.com/gitlab-com-runners-cache` — промах кэша, не ошибка.
 - **Большие раннеры для компиляции.** `rust:clippy`, `rust:test`,
   `build:linux`, `build:android` идут на `CI_HEAVY_RUNNER_TAG`
-  (`saas-linux-large-amd64`, 8 vCPU; лёгкие job'ы — на small, 2 vCPU). Если
-  этого размера нет в плане GitLab, job'ы будут вечно ждать раннер — тогда
-  поставить `saas-linux-medium-amd64` или `saas-linux-small-amd64`.
+  (`saas-linux-medium-amd64`, 4 vCPU; лёгкие job'ы — на small, 2 vCPU).
+  Быстрее — `saas-linux-large-amd64` (8 vCPU: `build:linux` 433 с против 1113 с
+  на small), дешевле — `saas-linux-small-amd64`.
 - **Пре-релизы — thin LTO.** В `development` (и ручных/плановых пайплайнах)
   `CARGO_PROFILE_RELEASE_LTO=thin` и `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`:
   финальная оптимизация идёт параллельно, а не в один поток. Релизы из
