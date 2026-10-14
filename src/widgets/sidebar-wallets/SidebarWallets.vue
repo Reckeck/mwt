@@ -74,8 +74,8 @@ const addLabel = (kind: StoreKind) => t('stores.addOfKind', { kind: t(`stores.ki
 
 <template>
   <template v-if="tree.isPending.value">
-    <SidebarGroup>
-      <SidebarGroupLabel>{{ t('nav.wallets') }}</SidebarGroupLabel>
+    <SidebarGroup class="py-1">
+      <SidebarGroupLabel class="h-6 group-data-[collapsible=icon]:-mt-6">{{ t('nav.wallets') }}</SidebarGroupLabel>
       <SidebarMenu>
         <SidebarMenuItem v-for="index in 3" :key="index">
           <SidebarMenuSkeleton show-icon />
@@ -84,9 +84,9 @@ const addLabel = (kind: StoreKind) => t('stores.addOfKind', { kind: t(`stores.ki
     </SidebarGroup>
   </template>
 
-  <SidebarGroup v-for="group in groups" :key="group.info.kind" :data-tour="`sidebar-group-${group.info.kind}`">
+  <SidebarGroup v-for="group in groups" :key="group.info.kind" class="py-1" :data-tour="`sidebar-group-${group.info.kind}`">
     <ContextMenu :actions="groupActions(group.info, group.nodes.length)">
-      <SidebarGroupLabel class="flex items-center gap-2">
+      <SidebarGroupLabel class="flex items-center gap-2 h-6 group-data-[collapsible=icon]:-mt-6">
         <span class="min-w-0 flex-1 truncate">{{ t(`stores.group.${group.info.kind}`) }}</span>
         <span
           v-if="groupTotal(group.nodes, settings.baseCurrency)"
@@ -98,6 +98,7 @@ const addLabel = (kind: StoreKind) => t('stores.addOfKind', { kind: t(`stores.ki
       </SidebarGroupLabel>
     </ContextMenu>
     <SidebarGroupAction
+      class="top-1.5"
       v-if="canAddOfKind(group.info, group.nodes.length)"
       :title="addLabel(group.info.kind)"
       @click="openCreate(group.info.kind)"
@@ -122,7 +123,7 @@ const addLabel = (kind: StoreKind) => t('stores.addOfKind', { kind: t(`stores.ki
     </SidebarGroupContent>
   </SidebarGroup>
 
-  <SidebarGroup v-if="tree.isSuccess.value">
+  <SidebarGroup v-if="tree.isSuccess.value" class="py-1">
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton :tooltip="t('nav.addWallet')" data-tour="sidebar-add-wallet" @click="openCreate(null)">

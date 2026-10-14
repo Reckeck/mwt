@@ -60,9 +60,9 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
       </SidebarMenu>
     </SidebarHeader>
 
-    <SidebarContent>
-      <SidebarGroup v-for="group in NAV_GROUPS" :key="group.key ?? 'main'">
-        <SidebarGroupLabel v-if="group.key">{{ t(group.key) }}</SidebarGroupLabel>
+    <SidebarContent class="gap-0">
+      <SidebarGroup v-for="group in NAV_GROUPS" :key="group.key ?? 'main'" class="py-1">
+        <SidebarGroupLabel v-if="group.key" class="h-6 group-data-[collapsible=icon]:-mt-6">{{ t(group.key) }}</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem v-for="item in group.items" :key="item.name">
@@ -77,7 +77,7 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <SidebarSeparator />
+      <SidebarSeparator class="my-1" />
 
       <SidebarWallets />
     </SidebarContent>
