@@ -211,8 +211,8 @@ fn build() -> Vec<NodeDef> {
             "The workflow runs from the «Run» button in the editor or the list.",
         ),
         help: txt(
-            "Удобно для разовых действий и чтобы проверить схему. Пример: «Запуск вручную» → «Распределить» остаток карты по конвертам.",
-            "Handy for one-off actions and to try a workflow out. Example: «Run by hand» → «Distribute» a card's balance into envelopes.",
+            "Сам по себе не срабатывает никогда — только по кнопке «Запустить» (и он для неё по умолчанию). Нужен для схем, которые работают лишь по вашему решению. Другие триггеры кнопка тоже умеет запустить — стрелка «Запустить от…», чтобы проверить их сейчас. Пример: «Запуск вручную» → «Распределить» остаток карты по конвертам.",
+            "Never fires by itself — only from the «Run» button (it is the button's default). For workflows that run only when you decide. The button can start the other triggers too — the «Run from…» arrow, to try them now. Example: «Run by hand» → «Distribute» a card's balance into envelopes.",
         ),
         inputs: vec![],
         outputs: vec![flow_out(), port("at", Ty::Date, txt("Когда", "When"))],

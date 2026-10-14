@@ -30,10 +30,19 @@ export function useRunReport(
     editor.edges.value = editor.edges.value.map((edge) => ({ ...edge, label: labels[edge.id] ?? undefined }))
   })
 
-  function emulate(keepAnswers = false) {
+  /** The trigger the last emulation started from: an answer goes on from it. */
+  const fromTrigger = ref<string | null>(null)
+
+  function emulate(keepAnswers = false, triggerNode?: string | null) {
     if (keepAnswers !== true) answers.value = {}
+    if (triggerNode !== undefined) fromTrigger.value = triggerNode
     actions.dryRun.mutate(
-      { graph: editor.graphJson.value, workflowId: workflowId(), answers: answers.value },
+      {
+        graph: editor.graphJson.value,
+        workflowId: workflowId(),
+        triggerNode: fromTrigger.value,
+        answers: answers.value,
+      },
       { onSuccess: (result) => (report.value = result) },
     )
   }
@@ -44,10 +53,10 @@ export function useRunReport(
     emulate(true)
   }
 
-  function runNow() {
+  function runNow(triggerNode: string | null = null) {
     const id = workflowId()
     if (!id) return
-    actions.runNow.mutate({ id }, { onSuccess: (result) => (report.value = result) })
+    actions.runNow.mutate({ id, triggerNode }, { onSuccess: (result) => (report.value = result) })
   }
 
   /** Keep what the last emulation did as a test of this workflow. */
