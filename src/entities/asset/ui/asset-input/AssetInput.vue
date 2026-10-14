@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ComboboxInput } from 'reka-ui'
 
 import { useCurrencyOptions } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { fiatRef } from '@/shared/lib/asset-ref'
 import { CHAIN_LABELS } from '@/shared/lib/chains'
+import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
+import { ComboboxAnchor, ComboboxGroup, ComboboxItem, ComboboxList, ComboboxRoot, ComboboxViewport } from '@/shared/ui/combobox'
 import { Label } from '@/shared/ui/label'
 
 import type { AssetInputProps } from './asset-input.types'
@@ -14,6 +17,11 @@ import type { AssetInputProps } from './asset-input.types'
 /** Fiat rows shown at most; the full catalog is one more letter away. */
 const FIAT_LIMIT = 6
 
+/**
+ * Search any asset: fiat from the currency catalog, crypto from the backend
+ * search, or the typed code as a fiat unit. A text field with a combobox list
+ * (shadcn-vue parts): arrows move, Enter picks, Esc closes.
+ */
 const props = withDefaults(defineProps<AssetInputProps>(), {
   label: '',
   placeholder: '',
@@ -82,8 +90,7 @@ function onFocus() {
   if (!settings.currencies) void settings.loadCurrencies().catch(() => {})
 }
 
-function onInput(event: Event) {
-  const value = (event.target as HTMLInputElement).value
+function onInput(value: string) {
   query.value = value
   open.value = true
   if (asset.value !== null) {
@@ -121,11 +128,14 @@ function pickFiat(code: string) {
   close(currency.symbol)
 }
 
-function onBlur() {
-  // let the click on a dropdown row land first
-  setTimeout(() => {
-    open.value = false
-  }, 120)
+/** Rows are keyed by kind: `fiat:USD`, `hit:3`, `typed`; picking one runs its action. */
+function onPick(key: unknown) {
+  if (typeof key !== 'string') return
+  if (key.startsWith('fiat:')) pickFiat(key.slice(5))
+  else if (key.startsWith('hit:')) {
+    const hit = hits.value[Number(key.slice(4))]
+    if (hit) pick(hit)
+  } else if (key === 'typed') pickFiat(query.value)
 }
 
 /** Free text is offered only when neither the catalog nor the search knows the code. */
@@ -148,77 +158,74 @@ const subtitle = (value: AssetRef) => {
 </script>
 
 <template>
-  <div class="relative grid content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
+  <div class="grid content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
     <Label v-if="props.label" :for="inputId" :required="props.required">{{ props.label }}</Label>
-    <div class="relative">
-      <input
-        :id="inputId"
-        :value="query"
-        type="text"
-        autocomplete="off"
-        spellcheck="false"
-        :placeholder="props.placeholder || t('asset.searchPlaceholder')"
-        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        :class="(props.invalid || props.error) && 'border-destructive'"
-        @input="onInput"
-        @focus="onFocus"
-        @blur="onBlur"
+    <ComboboxRoot
+      v-model:open="open"
+      :model-value="undefined"
+      :ignore-filter="true"
+      :reset-search-term-on-blur="false"
+      :reset-search-term-on-select="false"
+      @update:model-value="onPick"
+    >
+      <ComboboxAnchor class="relative w-full">
+        <ComboboxInput
+          :id="inputId"
+          :model-value="query"
+          :display-value="() => query"
+          autocomplete="off"
+          spellcheck="false"
+          :aria-invalid="props.invalid || props.error ? true : undefined"
+          :placeholder="props.placeholder || t('asset.searchPlaceholder')"
+          :class="
+            cn(
+              'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              (props.invalid || props.error) && 'border-destructive',
+            )
+          "
+          @update:model-value="onInput"
+          @focus="onFocus"
+        />
+        <span v-if="loading" class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
+          …
+        </span>
+      </ComboboxAnchor>
+
+      <ComboboxList
+        v-if="hasRows"
+        class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-64"
+        align="start"
+        @open-auto-focus.prevent
       >
-      <span v-if="loading" class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
-        …
-      </span>
-    </div>
+        <ComboboxViewport class="max-h-72 p-1">
+          <ComboboxGroup v-if="fiatHits.length" :heading="t('asset.group.fiat')">
+            <ComboboxItem v-for="row in fiatHits" :key="`fiat-${row.code}`" :value="`fiat:${row.code}`">
+              <span class="w-20 shrink-0 truncate font-medium uppercase">{{ row.code }}</span>
+              <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ row.name }}</span>
+            </ComboboxItem>
+          </ComboboxGroup>
+          <ComboboxGroup v-if="hits.length" :heading="t('asset.group.crypto')">
+            <ComboboxItem
+              v-for="(hit, index) in hits"
+              :key="`${hit.coingecko_id ?? hit.symbol}-${hit.contract ?? ''}`"
+              :value="`hit:${index}`"
+            >
+              <span class="w-20 shrink-0 truncate font-medium">{{ hit.symbol.toUpperCase() }}</span>
+              <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ hit.name }}</span>
+              <span v-if="hit.chain && hit.chain !== 'fiat'" class="shrink-0 text-xs text-muted-foreground">
+                {{ CHAIN_LABELS[hit.chain] }}
+              </span>
+            </ComboboxItem>
+          </ComboboxGroup>
+          <ComboboxItem v-if="canOfferFiat" value="typed">
+            <span class="shrink-0 font-medium">{{ typed }}</span>
+            <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ t('asset.useAsFiat') }}</span>
+          </ComboboxItem>
+        </ComboboxViewport>
+      </ComboboxList>
+    </ComboboxRoot>
 
     <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>
     <p v-else-if="asset" class="truncate text-xs text-muted-foreground">{{ subtitle(asset) }}</p>
-
-    <ul
-      v-if="open && hasRows"
-      class="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
-    >
-      <template v-if="fiatHits.length">
-        <li class="px-2 pb-0.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {{ t('asset.group.fiat') }}
-        </li>
-        <li v-for="row in fiatHits" :key="`fiat-${row.code}`">
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-            @mousedown.prevent="pickFiat(row.code)"
-          >
-            <span class="w-20 shrink-0 truncate font-medium uppercase">{{ row.code }}</span>
-            <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ row.name }}</span>
-          </button>
-        </li>
-      </template>
-      <template v-if="hits.length">
-        <li class="px-2 pb-0.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {{ t('asset.group.crypto') }}
-        </li>
-        <li v-for="hit in hits" :key="`${hit.coingecko_id ?? hit.symbol}-${hit.contract ?? ''}`">
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-            @mousedown.prevent="pick(hit)"
-          >
-            <span class="w-20 shrink-0 truncate font-medium">{{ hit.symbol.toUpperCase() }}</span>
-            <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ hit.name }}</span>
-            <span v-if="hit.chain && hit.chain !== 'fiat'" class="shrink-0 text-xs text-muted-foreground">
-              {{ CHAIN_LABELS[hit.chain] }}
-            </span>
-          </button>
-        </li>
-      </template>
-      <li v-if="canOfferFiat">
-        <button
-          type="button"
-          class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-          @mousedown.prevent="pickFiat(query)"
-        >
-          <span class="shrink-0 font-medium">{{ typed }}</span>
-          <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ t('asset.useAsFiat') }}</span>
-        </button>
-      </li>
-    </ul>
   </div>
 </template>

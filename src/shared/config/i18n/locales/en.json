@@ -2521,5 +2521,6 @@
   "whatsNew.interface.palette": "Ctrl+K (or «Go to…» at the top) opens quick navigation: any screen, wallet or action by a few letters.",
   "whatsNew.interface.dates": "Dates and months are picked in a calendar in the app's language, with «Today» and «Clear» — the same on every system.",
   "whatsNew.interface.filters": "The filter bar is shorter: wallet, kind and search stay in view, the rest sits under «More filters» with a count of what is set.",
+  "whatsNew.interface.pickers": "Asset, currency and account search works from the keyboard: arrows move, Enter picks, Esc closes.",
   "filter.more": "More filters"
 }
