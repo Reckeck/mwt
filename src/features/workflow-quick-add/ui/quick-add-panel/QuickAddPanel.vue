@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onClickOutside } from '@vueuse/core'
 import { Sparkles } from 'lucide-vue-next'
 
 import { useNodeCatalog } from '@/entities/workflow'
@@ -26,6 +27,10 @@ const query = ref('')
 const active = ref(0)
 const field = ref<InstanceType<typeof Input> | null>(null)
 const list = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
+
+// A click anywhere else closes the panel, like Escape.
+onClickOutside(panel, () => emit('close'))
 
 interface Row {
   choice: QuickAddChoice
@@ -94,6 +99,7 @@ onMounted(() => {
 
 <template>
   <div
+    ref="panel"
     class="fixed z-50 grid w-80 gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg"
     :style="{ left: `${props.left}px`, top: `${props.top}px` }"
     data-tour="workflow-quick-add"
