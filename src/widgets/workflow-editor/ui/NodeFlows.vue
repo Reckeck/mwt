@@ -11,7 +11,11 @@ import type { FlowPortLinks } from '../model/flow'
  * where it goes next. A wire can be cut here without hunting for it on the
  * canvas; an empty output offers the node search right there.
  */
-const props = defineProps<{ ports: FlowPortLinks[] }>()
+const props = defineProps<{
+  ports: FlowPortLinks[]
+  /** The actions it runs after by data, when no flow wire leads in. */
+  after: string[]
+}>()
 const emit = defineEmits<{
   unlink: [edgeId: string]
   add: [port: string, side: 'in' | 'out', event: MouseEvent]
@@ -44,8 +48,14 @@ const { t } = useI18n()
           <Link2Off class="size-3.5" />
         </Button>
       </div>
+      <p
+        v-if="port.side === 'in' && !port.links.length && props.after.length"
+        class="rounded-md border border-dashed border-border px-2 py-1 text-sm text-muted-foreground"
+      >
+        {{ t('workflow.inspector.runsAfter', { nodes: props.after.map((name) => `«${name}»`).join(', ') }) }}
+      </p>
       <Button
-        v-if="!port.links.length"
+        v-else-if="!port.links.length"
         variant="ghost"
         size="sm"
         class="justify-start border border-dashed border-border font-normal text-muted-foreground"

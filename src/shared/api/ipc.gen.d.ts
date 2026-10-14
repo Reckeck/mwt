@@ -2352,7 +2352,7 @@ type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
 
 type RunMode = "live" | "dry_run";
 
-type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } };
+type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } } | { "partial": { failed: Array<string>, } } | { "dropped": { reason: string, } };
 
 /**
  * Everything a run did. The vault already holds its operations; the caller
@@ -3646,7 +3646,8 @@ resume_at: string,
  */
 memo: string, 
 /**
- * Whether operations after it go to the confirmation queue.
+ * Unused: the confirmation queue is gone (a «Ждать подтверждения» node
+ * asks instead). Kept so older vaults read.
  */
 queue_mode: boolean, trigger: string, kind: WaitKind, 
 /**

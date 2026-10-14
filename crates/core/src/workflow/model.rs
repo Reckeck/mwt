@@ -102,6 +102,13 @@ pub enum RunOutcome {
         #[serde(default)]
         until: Option<String>,
     },
+    /// Ran to the end, but some branches failed: each failed branch was
+    /// undone, the rest kept. One line per failed branch.
+    Partial { failed: Vec<String> },
+    /// Never ran: `off` (the workflow was switched off while a run slept),
+    /// `node_removed` (its wait node is gone) or `rate_limit` (too many runs
+    /// this hour).
+    Dropped { reason: String },
 }
 
 /// One run of a workflow, with its trace for the journal.
@@ -192,7 +199,8 @@ pub struct WorkflowWait {
     pub resume_at: String,
     /// Node outputs computed before the wait, as JSON.
     pub memo: String,
-    /// Whether operations after it go to the confirmation queue.
+    /// Unused: the confirmation queue is gone (a «Ждать подтверждения» node
+    /// asks instead). Kept so older vaults read.
     pub queue_mode: bool,
     pub trigger: String,
     #[serde(default)]
@@ -203,4 +211,10 @@ pub struct WorkflowWait {
     /// When the run fell asleep (RFC3339).
     #[serde(default)]
     pub created_at: String,
+    /// The graph as it was when the run fell asleep, as JSON: the run goes
+    /// on along it even if the workflow was edited since. Empty for a wait
+    /// from an older app, which goes on along the current graph.
+    #[serde(default)]
+    #[ts(skip)]
+    pub graph: String,
 }

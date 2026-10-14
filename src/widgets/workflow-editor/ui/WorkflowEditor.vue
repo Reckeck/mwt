@@ -16,6 +16,7 @@ import { useEditorGraph } from '../model/use-editor-graph'
 import { useEditorHotkeys } from '../model/use-editor-hotkeys'
 import { useGraphClipboard } from '../model/use-graph-clipboard'
 import { useGraphValidation } from '../model/use-graph-validation'
+import { useRedundantFlows } from '../model/use-redundant-flows'
 import { useRunReport } from '../model/use-run-report'
 import { useSelection } from '../model/use-selection'
 import { useWorkflowDocument } from '../model/use-workflow-document'
@@ -49,6 +50,7 @@ const editor = useEditorGraph(catalog)
 const { flow, nodes } = editor
 const simple = useLocalStorage('workflow.editor.simple', true)
 const { issues, issuesOf, errors } = useGraphValidation(editor.graphJson)
+const redundant = useRedundantFlows(editor, issues)
 const run = useRunReport(editor, actions, () => props.workflowId)
 const { report, answers } = run
 const doc = useWorkflowDocument(editor, catalog.query, actions, report, {
@@ -60,7 +62,7 @@ const { name, description, active, react, maxAmount, lesson, dirty } = doc
 const insert = useCanvasInsert(editor)
 const { quick } = insert
 const clipboard = useGraphClipboard(editor)
-const { selectedNode, selectedDef, wiredFrom, flowLinks, setParam, setLabel, unwire } = useSelection(editor)
+const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, setLabel, unwire } = useSelection(editor)
 
 /** An empty flow port in the inspector: the node search, joined to that port. */
 function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
@@ -188,6 +190,7 @@ defineExpose({
             :def="selectedDef"
             :wired-from="wiredFrom"
             :flows="flowLinks"
+            :data-after="dataAfter"
             :issues="issuesOf(selectedNode.id)"
             @param="setParam"
             @label="setLabel"
@@ -203,8 +206,10 @@ defineExpose({
             v-model:max-amount="maxAmount"
             v-model:react="react"
             :issues="issues"
+            :redundant="redundant.count.value"
             :base="settings.baseCurrency"
             @focus="editor.focusNode"
+            @drop-redundant="redundant.removeAll"
           />
           <WorkflowHistoryPanel
             v-if="!selectedNode && doc.workflow.data.value"
