@@ -220,6 +220,5 @@ defineExpose({
       @pick="insert.onQuickPick"
       @close="quick = null"
     />
-    <button v-if="quick" type="button" class="fixed inset-0 z-40 cursor-default" :aria-label="t('actions.close')" @click="quick = null" />
   </div>
 </template>

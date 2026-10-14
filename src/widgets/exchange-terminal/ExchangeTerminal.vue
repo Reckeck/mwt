@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { useDebounceFn } from '@vueuse/core'
 import { ArrowUpToLine, LineChart, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 import { PriceAlertList } from '@/widgets/price-alert-list'
@@ -11,13 +10,15 @@ import { PriceAlertDialog, type PriceAlertPreset } from '@/features/price-alert-
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { SectionState } from '@/shared/ui/section-state'
+import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { notify } from '@/shared/lib/notify'
 
 import type { ExchangeTerminalProps } from './exchange-terminal.types'
+import { baseOf, pairOf } from './lib/pair'
+import { useTerminalDrawings } from './model/use-terminal-drawings'
 
 const props = defineProps<ExchangeTerminalProps>()
 const { t } = useI18n()
@@ -40,13 +41,6 @@ const patch = useMutation({
   meta: { silent: 'the layout saves as you work on it; the chart shows the change' },
 })
 
-/** Watchlist entries are pairs against USDT; the chart takes the base ticker. */
-const baseOf = (pair: string) => pair.toUpperCase().replace(/USDT$/, '')
-const pairOf = (raw: string) => {
-  const base = raw.trim().toUpperCase().replace(/[/\-_ ]/g, '').replace(/USDT?$/, '')
-  return base ? `${base}USDT` : ''
-}
-
 const watchlist = computed(() => terminal.data.value?.watchlist ?? [])
 const active = ref('')
 watch(
@@ -57,6 +51,15 @@ watch(
   { immediate: true },
 )
 
+const drawings = useTerminalDrawings({
+  storeId: () => props.storeId,
+  queryKey,
+  state: () => terminal.data.value,
+  active,
+  fail,
+})
+const { chartNonce } = drawings
+
 function select(pair: string) {
   active.value = pair
   patch.mutate({ watchlist: null, active_symbol: pair, timeframe: null, indicators: null, layout: null })
@@ -65,35 +68,6 @@ function select(pair: string) {
 function moveTop(pair: string) {
   const next = [pair, ...watchlist.value.filter((entry) => entry !== pair)]
   patch.mutate({ watchlist: next, active_symbol: null, timeframe: null, indicators: null, layout: null })
-}
-
-/** Bumped to remount the chart when its drawings change from outside it. */
-const chartNonce = ref(0)
-
-/** Write one pair's drawings and show them; `json` of `'[]'` clears them. */
-async function writeDrawings(pair: string, json: string) {
-  await call('save_terminal_drawings', { input: { store_id: props.storeId, symbol: pair, json } })
-  queryClient.setQueryData<TerminalState>(queryKey.value, (old) => {
-    if (!old) return old
-    const { [pair]: _previous, ...drawings } = old.drawings
-    return { ...old, drawings: json === '[]' ? drawings : { ...drawings, [pair]: json } }
-  })
-  if (pair === active.value) chartNonce.value += 1
-}
-
-async function clearDrawings(pair: string) {
-  pendingDrawings.delete(pair)
-  const before = terminal.data.value?.drawings[pair]
-  try {
-    await writeDrawings(pair, '[]')
-    notify.success(t('terminal.drawingsCleared', { symbol: baseOf(pair) }), {
-      action: before
-        ? { label: t('actions.undo'), onClick: () => void writeDrawings(pair, before).catch(fail) }
-        : undefined,
-    })
-  } catch (err) {
-    fail(err)
-  }
 }
 
 function watchActions(pair: string): UiAction[] {
@@ -106,7 +80,7 @@ function watchActions(pair: string): UiAction[] {
       icon: Trash2,
       separated: true,
       disabled: !terminal.data.value?.drawings[pair],
-      run: () => void clearDrawings(pair),
+      run: () => void drawings.clear(pair),
     },
     { id: 'remove', label: t('terminal.remove', { symbol: pair }), icon: X, destructive: true, run: () => removeFromList(pair) },
   ]
@@ -140,43 +114,6 @@ function removeFromList(pair: string) {
   })
 }
 
-/* --- chart state goes to the vault, debounced: a drag fires many changes --- */
-const pendingDrawings = new Map<string, string>()
-const flushDrawings = useDebounceFn(async () => {
-  const batch = [...pendingDrawings.entries()]
-  pendingDrawings.clear()
-  try {
-    for (const [symbol, json] of batch) {
-      await call('save_terminal_drawings', { input: { store_id: props.storeId, symbol, json } })
-    }
-    queryClient.setQueryData<TerminalState>(queryKey.value, (old) => {
-      if (!old) return old
-      const drawings = { ...old.drawings }
-      for (const [symbol, json] of batch) {
-        if (json.trim() === '[]' || !json.trim()) delete drawings[symbol]
-        else drawings[symbol] = json
-      }
-      return { ...old, drawings }
-    })
-  } catch (err) {
-    fail(err)
-  }
-}, 1000)
-
-function onDrawings(symbol: string, json: string) {
-  pendingDrawings.set(pairOf(symbol), json)
-  void flushDrawings()
-}
-
-/** The chart keys drawings by its base ticker; the vault by pair. */
-const savedDrawings = computed(() => {
-  const out: Record<string, string> = {}
-  for (const [pair, json] of Object.entries(terminal.data.value?.drawings ?? {})) {
-    if (json) out[baseOf(pair)] = json
-  }
-  return out
-})
-
 const indicatorKeys = computed<IndicatorKey[]>(() =>
   (terminal.data.value?.indicators ?? [])
     .map((entry) => entry.kind as IndicatorKey)
@@ -208,14 +145,13 @@ function onIndicators(keys: IndicatorKey[]) {
 </script>
 
 <template>
-  <div v-if="terminal.isPending.value" class="py-16 text-center text-sm text-muted-foreground">
-    {{ t('store.loading') }}
-  </div>
-  <div v-else-if="terminal.isError.value" class="py-16 text-center text-sm text-destructive">
-    {{ codeErrorMessage(parseError(terminal.error.value), t) }}
-  </div>
-
-  <div v-else class="grid min-h-[32rem] gap-3 @container lg:grid-cols-[14rem_1fr]" data-tour="exchange-terminal">
+  <SectionState
+    :loading="terminal.isPending.value"
+    :error="terminal.error.value"
+    skeleton="chart"
+    @retry="terminal.refetch()"
+  >
+  <div class="grid min-h-[32rem] gap-3 @container lg:grid-cols-[14rem_1fr]" data-tour="exchange-terminal">
     <aside class="flex flex-col gap-2 rounded-lg border border-border p-2">
       <form class="grid gap-1" @submit.prevent="adder.submit(add, $event)">
         <div class="flex items-center gap-1">
@@ -266,16 +202,17 @@ function onIndicators(keys: IndicatorKey[]) {
     <TradingChart
       :key="`${props.storeId}:${chartNonce}`"
       :symbol="baseOf(active || 'BTCUSDT')"
-      :saved-drawings="savedDrawings"
+      :saved-drawings="drawings.saved.value"
       :timeframe="terminal.data.value?.timeframe ?? '1h'"
       :indicators="indicatorKeys.length ? indicatorKeys : ['sma']"
       class="min-h-[30rem]"
       can-alert
       @alert="onAlert"
-      @drawings="onDrawings"
+      @drawings="drawings.onDrawings"
       @timeframe="onTimeframe"
       @indicators="onIndicators"
     />
     <PriceAlertDialog v-model:open="alertOpen" :store-id="props.storeId" :preset="alertPreset" />
   </div>
+  </SectionState>
 </template>

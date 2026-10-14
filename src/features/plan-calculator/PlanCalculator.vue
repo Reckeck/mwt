@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AssetInput } from '@/entities/asset'
@@ -7,10 +7,11 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { call, parseError } from '@/shared/api/ipc'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
 
+import { type ResultRow, resultRows } from './lib/result-rows'
+import { useCalcPreview } from './model/use-calc-preview'
 import type { CalculatorPlan, PlanCalculatorProps } from './plan-calculator.types'
 
 const props = defineProps<PlanCalculatorProps>()
@@ -22,146 +23,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const mode = ref<CalcMode>('converter')
-const from = ref<AssetRef | null>(null)
-const to = ref<AssetRef | null>(null)
-const amount = ref('')
-const priceIn = ref('')
-const priceOut = ref('')
-const targetPrice = ref('')
-const stopPrice = ref('')
-const feePct = ref('0.1')
+const { mode, from, to, amount, priceIn, priceOut, targetPrice, stopPrice, feePct, result, error, impliedRate } =
+  useCalcPreview()
 
-const result = ref<CalcResult | null>(null)
-const error = ref<string | null>(null)
-
-const resultKey = computed(
-  () => [mode.value, amount.value, priceIn.value, priceOut.value, targetPrice.value, stopPrice.value, feePct.value].join('|'),
+const rows = computed<ResultRow[]>(() =>
+  result.value ? resultRows(result.value, mode.value, props.baseCurrency, to.value?.symbol, t) : [],
 )
-
-let timer: ReturnType<typeof setTimeout> | undefined
-
-watch(
-  resultKey,
-  () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => void run(), 200)
-  },
-  { immediate: true },
-)
-
-async function run() {
-  if (!amount.value.trim() || !priceIn.value.trim()) {
-    result.value = null
-    return
-  }
-  try {
-    result.value = await call<CalcResult>('calc_preview', {
-      input: {
-        mode: mode.value,
-        from_symbol: from.value?.symbol ?? '',
-        to_symbol: to.value?.symbol ?? '',
-        amount: amount.value.trim(),
-        price_in: priceIn.value.trim(),
-        price_out: priceOut.value.trim(),
-        target_price: targetPrice.value.trim() || null,
-        stop_price: stopPrice.value.trim() || null,
-        fee_pct: feePct.value.trim() || '0',
-      },
-    })
-    error.value = null
-  } catch (err) {
-    result.value = null
-    error.value = parseError(err).message
-  }
-}
-
-/** Pre-fill the entry price from the price cache when an asset is picked. */
-async function autofillPrice(target: AssetRef | null, into: 'in' | 'out') {
-  if (!target) return
-  try {
-    const res = await call<CachedPrice>('get_cached_price', {
-      input: {
-        symbol: target.symbol,
-        coingecko_id: target.coingecko_id,
-        chain: target.chain,
-        contract: target.contract,
-        at: null,
-      },
-    })
-    if (res.ts) {
-      if (into === 'in') priceIn.value = res.price_usd
-      else priceOut.value = res.price_usd
-    }
-  } catch {
-    // no cached quote — leave the field for manual input
-  }
-}
-
-watch(from, (value) => void autofillPrice(value, 'in'))
-watch(to, (value) => void autofillPrice(value, 'out'))
-
-/** 1 unit of the source priced in the target, when both prices are known. */
-const impliedRate = computed(() => {
-  const priceInUsd = Number(priceIn.value)
-  const priceOutUsd = Number(priceOut.value)
-  if (!priceInUsd || !priceOutUsd) return null
-  return (priceInUsd / priceOutUsd).toLocaleString(undefined, { maximumFractionDigits: 8 })
-})
-
-interface ResultRow {
-  key: string
-  label: string
-  value: string
-  emphasis?: boolean
-  tone?: 'positive' | 'negative'
-}
-
-const rows = computed<ResultRow[]>(() => {
-  const calc = result.value
-  if (!calc) return []
-  const base = props.baseCurrency
-  const money = (value: string) => `${value} ${base.toUpperCase()}`
-  if (mode.value === 'converter') {
-    return [
-      { key: 'gross_in', label: t('calc.grossIn'), value: money(calc.gross_in) },
-      { key: 'fee', label: t('calc.fee'), value: money(calc.fee) },
-      { key: 'gross_out', label: t('calc.grossOut'), value: money(calc.gross_out) },
-      {
-        key: 'net_out',
-        label: t('calc.netOut'),
-        value: `${calc.net_out} ${to.value?.symbol.toUpperCase() ?? ''}`.trim(),
-        emphasis: true,
-      },
-    ]
-  }
-  return [
-    { key: 'spent', label: t('calc.spent'), value: money(calc.spent) },
-    {
-      key: 'exit_value',
-      label: t('calc.exitValue'),
-      value: calc.exit_value === '0' ? '—' : money(calc.exit_value),
-    },
-    {
-      key: 'pnl',
-      label: t('calc.pnl'),
-      value: money(calc.pnl),
-      tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
-    },
-    {
-      key: 'roi_pct',
-      label: t('calc.roi'),
-      value: calc.roi_pct === '0' ? '—' : `${calc.roi_pct}%`,
-      tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
-    },
-    {
-      key: 'risk',
-      label: t('calc.risk'),
-      value: calc.risk === '0' ? '—' : `${money(calc.risk)} (${calc.risk_pct}%)`,
-      tone: 'negative',
-    },
-  ]
-})
 
 const form = useFormValidation(() => ({ amount: positiveAmount(amount.value), priceIn: positiveAmount(priceIn.value) }))
 
