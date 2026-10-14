@@ -14,7 +14,8 @@
       "*.ts",
       "*.json",
       "index.html",
-      "!**/ipc.gen.d.ts"
+      "!**/ipc.gen.d.ts",
+      "!!.claude"
     ]
   },
   "formatter": {
