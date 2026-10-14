@@ -690,7 +690,19 @@ mod tests {
             }
         }
         for reading in root["meter_readings"].as_array_mut().unwrap() {
-            reading.as_object_mut().unwrap().remove("day");
+            let reading = reading.as_object_mut().unwrap();
+            reading.remove("day");
+            reading.remove("zone");
+        }
+        for item in root["utility_items"].as_array_mut().unwrap() {
+            if let Some(meter) = item
+                .get_mut("kind")
+                .and_then(|kind| kind.get_mut("metered"))
+                .and_then(Json::as_object_mut)
+            {
+                meter.remove("formula");
+                meter.remove("zones");
+            }
         }
         let mut expected = doc.clone();
         expected.notification_log.clear();
@@ -707,6 +719,15 @@ mod tests {
         }
         for reading in &mut expected.meter_readings {
             reading.day = None;
+            reading.zone = None;
+        }
+        for item in &mut expected.utility_items {
+            if let crate::model::planning::UtilityKind::Metered { formula, zones, .. } =
+                &mut item.kind
+            {
+                *formula = None;
+                zones.clear();
+            }
         }
         (json, expected)
     }

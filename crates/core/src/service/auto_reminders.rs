@@ -724,6 +724,8 @@ mod tests {
                 UtilityKind::Metered {
                     unit: "kWh".into(),
                     tariff: amount("5"),
+                    formula: None,
+                    zones: Vec::new(),
                 },
             ),
         ] {
@@ -741,7 +743,7 @@ mod tests {
         }
         let power = vault.doc.utility_items[1].id.clone();
         vault
-            .add_meter_reading(&power, amount("2531.5"), "2026-10", Some(5))
+            .add_meter_reading(&power, amount("2531.5"), "2026-10", Some(5), None)
             .unwrap();
         let now = secs_or_now("2026-10-12T05:00:00Z");
         assert!(
@@ -855,6 +857,8 @@ mod tests {
                 kind: UtilityKind::Metered {
                     unit: "kWh".into(),
                     tariff: amount("5"),
+                    formula: None,
+                    zones: Vec::new(),
                 },
                 currency: "rub".into(),
                 property_id: flat.id.clone(),

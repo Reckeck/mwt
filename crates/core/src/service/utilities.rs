@@ -12,6 +12,7 @@ use crate::model::store::AssetRef;
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, Transaction, TxMeta};
 use crate::model::vault::now_iso;
 use crate::pricing::history::secs_or_now;
+use crate::utilities_formula::{self, FormulaInput, FormulaIssue, ZoneValues};
 
 use super::UnlockedVault;
 
@@ -48,6 +49,17 @@ pub struct UtilityMonth {
     pub payments: Vec<Transaction>,
     /// Metered: every reading of the month, oldest first, with its day.
     pub readings: Vec<MeterReading>,
+    /// A multi-rate meter: each zone's reading and consumption.
+    #[serde(default)]
+    pub zones: Vec<ZoneMonth>,
+}
+
+/// One tariff zone of a month («день»: 800, used 200).
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ZoneMonth {
+    pub zone: String,
+    pub reading: Amount,
+    pub consumption: Option<Amount>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -90,11 +102,199 @@ struct MonthReadings {
     start: Option<Amount>,
     end: Amount,
     end_id: String,
+    /// When the start and the end were read (`sort_key`), for «дней».
+    start_at: Option<(String, u8)>,
+    end_at: (String, u8),
+    /// A multi-rate meter: the same per zone; the totals above sum them.
+    zones: Vec<(String, MonthReadings)>,
 }
 
 impl MonthReadings {
     fn consumption(&self) -> Option<Amount> {
         self.start.map(|start| self.end - start)
+    }
+
+    /// Days between the start and the end reading; a month when unknown.
+    fn days(&self) -> Amount {
+        let date = |(period, day): &(String, u8)| {
+            let month = calendar::parse_month(period)?;
+            let day = u32::from(*day).clamp(1, calendar::days_in_month(month));
+            Some(first_of_month(month) + chrono::Duration::days(i64::from(day) - 1))
+        };
+        let days = self
+            .start_at
+            .as_ref()
+            .and_then(date)
+            .zip(date(&self.end_at))
+            .map_or(30, |(start, end)| (end - start).num_days().max(0));
+        Amount::new(rust_decimal::Decimal::from(days))
+    }
+
+    fn formula_input(&self, tariff: Amount) -> FormulaInput {
+        let values = |month: &MonthReadings| ZoneValues {
+            current: month.end,
+            previous: month.start.unwrap_or(month.end),
+        };
+        FormulaInput {
+            total: values(self),
+            zones: self
+                .zones
+                .iter()
+                .map(|(zone, month)| (zone.clone(), values(month)))
+                .collect(),
+            tariff,
+            days: self.days(),
+        }
+    }
+}
+
+/// The bill of a metered item for a month: consumption × tariff, or its
+/// own formula. `None` while there is no consumption yet.
+fn metered_amount(
+    item: &UtilityItem,
+    month: &MonthReadings,
+) -> std::result::Result<Option<Amount>, FormulaIssue> {
+    let UtilityKind::Metered {
+        tariff, formula, ..
+    } = &item.kind
+    else {
+        return Ok(None);
+    };
+    let Some(used) = month.consumption() else {
+        return Ok(None);
+    };
+    match formula
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
+        None => Ok(Some((used * *tariff).round(2))),
+        Some(text) => utilities_formula::evaluate(text, &month.formula_input(*tariff)).map(Some),
+    }
+}
+
+/// One zone's readings for a formula preview.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct FormulaZoneReading {
+    /// `None` for a one-rate meter.
+    #[serde(default)]
+    pub zone: Option<String>,
+    pub previous: Amount,
+    pub current: Amount,
+}
+
+/// What a meter's bill would be: the form's preview and the bill dialog's
+/// re-pricing as a reading is typed. Needs no vault.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct UtilityFormulaInput {
+    pub tariff: Amount,
+    /// Empty = consumption × tariff.
+    #[serde(default)]
+    pub formula: Option<String>,
+    #[serde(default)]
+    pub zones: Vec<String>,
+    pub readings: Vec<FormulaZoneReading>,
+    /// Days between the readings; a month when not given.
+    #[serde(default)]
+    pub days: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct UtilityFormulaPreview {
+    pub amount: Option<Amount>,
+    pub consumption: Option<Amount>,
+    pub issue: Option<FormulaIssue>,
+}
+
+/// The bill by a meter's formula (or tariff) for the readings given.
+pub fn preview_utility_formula(input: &UtilityFormulaInput) -> UtilityFormulaPreview {
+    let zoned = |zone: Option<&str>| {
+        input
+            .readings
+            .iter()
+            .find(|reading| {
+                reading.zone.as_deref().map(utilities_formula::zone_key)
+                    == zone.map(utilities_formula::zone_key)
+            })
+            .map_or(ZoneValues::default(), |reading| ZoneValues {
+                current: reading.current,
+                previous: reading.previous,
+            })
+    };
+    let zones: Vec<(String, ZoneValues)> = input
+        .zones
+        .iter()
+        .map(|zone| (zone.clone(), zoned(Some(zone))))
+        .collect();
+    let total = if zones.is_empty() {
+        zoned(None)
+    } else {
+        zones
+            .iter()
+            .fold(ZoneValues::default(), |sum, (_, values)| ZoneValues {
+                current: sum.current + values.current,
+                previous: sum.previous + values.previous,
+            })
+    };
+    let consumption = Some(total.current - total.previous);
+    let formula = input
+        .formula
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty());
+    let Some(formula) = formula else {
+        return UtilityFormulaPreview {
+            amount: consumption.map(|used| (used * input.tariff).round(2)),
+            consumption,
+            issue: None,
+        };
+    };
+    let days = Amount::new(rust_decimal::Decimal::from(input.days.unwrap_or(30)));
+    let formula_input = FormulaInput {
+        total,
+        zones,
+        tariff: input.tariff,
+        days,
+    };
+    match utilities_formula::evaluate(formula, &formula_input) {
+        Ok(amount) => UtilityFormulaPreview {
+            amount: Some(amount),
+            consumption,
+            issue: None,
+        },
+        Err(issue) => UtilityFormulaPreview {
+            amount: None,
+            consumption,
+            issue: Some(issue),
+        },
+    }
+}
+
+/// A meter as stored: zones trimmed, an empty formula dropped.
+fn tidy_meter(kind: &mut UtilityKind) {
+    if let UtilityKind::Metered { formula, zones, .. } = kind {
+        *formula = formula
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string);
+        *zones = zones
+            .iter()
+            .map(|zone| zone.trim().to_string())
+            .filter(|zone| !zone.is_empty())
+            .collect();
+    }
+}
+
+/// The zone names of an item: trimmed, without blanks.
+fn zones_of(item: &UtilityItem) -> Vec<String> {
+    match &item.kind {
+        UtilityKind::Metered { zones, .. } => zones
+            .iter()
+            .map(|zone| zone.trim().to_string())
+            .filter(|zone| !zone.is_empty())
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -160,6 +360,23 @@ pub struct UtilityBillLine {
     /// Already paid for this month, in the item's currency.
     pub paid: Amount,
     pub includes_deposit: bool,
+    /// A multi-rate meter: the previous and this month's reading per zone.
+    #[serde(default)]
+    pub zones: Vec<ZoneBillLine>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ZoneBillLine {
+    pub zone: String,
+    pub previous_reading: Option<Amount>,
+    pub reading: Option<Amount>,
+}
+
+/// A zone's reading typed into the bill.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ZoneReadingInput {
+    pub zone: String,
+    pub reading: Amount,
 }
 
 /// Every active utility of a property for one month, to be paid at once.
@@ -185,6 +402,9 @@ pub struct PayUtilityLine {
     /// Metered: the day of the month the meter was read; `None` = its end.
     #[serde(default)]
     pub reading_day: Option<u8>,
+    /// A multi-rate meter: the readings per zone (instead of `reading`).
+    #[serde(default)]
+    pub zone_readings: Vec<ZoneReadingInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -318,11 +538,43 @@ impl UnlockedVault {
             return Err(Error::Missing(format!("store {id}")));
         }
         match &draft.kind {
-            UtilityKind::Metered { unit, tariff } => {
-                if unit.trim().is_empty() || !tariff.is_positive() {
+            UtilityKind::Metered {
+                unit,
+                tariff,
+                formula,
+                zones,
+            } => {
+                let formula = formula
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty());
+                // With a formula the tariff is just one of its names, and may be 0.
+                if unit.trim().is_empty()
+                    || tariff.is_negative()
+                    || (formula.is_none() && !tariff.is_positive())
+                {
                     return Err(Error::InvalidInput(
                         "a meter needs a unit and a tariff".into(),
                     ));
+                }
+                let keys: Vec<String> = zones
+                    .iter()
+                    .map(|zone| utilities_formula::zone_key(zone))
+                    .filter(|key| !key.is_empty())
+                    .collect();
+                let unique: std::collections::BTreeSet<&String> = keys.iter().collect();
+                if unique.len() != keys.len() || keys.len() > 4 {
+                    return Err(Error::InvalidInput(
+                        "zones: up to 4, each named once".into(),
+                    ));
+                }
+                if let Some(text) = formula
+                    && let Err(issue) = utilities_formula::check(text, zones)
+                {
+                    return Err(Error::InvalidInput(format!(
+                        "formula, character {}: {}",
+                        issue.position, issue.text_en
+                    )));
                 }
             }
             UtilityKind::Static { amount } if !amount.is_positive() => {
@@ -355,8 +607,9 @@ impl UnlockedVault {
         Ok(())
     }
 
-    pub fn create_utility_item(&mut self, draft: UtilityDraft) -> Result<UtilityItem> {
+    pub fn create_utility_item(&mut self, mut draft: UtilityDraft) -> Result<UtilityItem> {
         self.check_utility(&draft)?;
+        tidy_meter(&mut draft.kind);
         let item = UtilityItem {
             id: uuid::Uuid::new_v4().to_string(),
             name: draft.name.trim().to_string(),
@@ -372,8 +625,13 @@ impl UnlockedVault {
         Ok(item)
     }
 
-    pub fn update_utility_item(&mut self, id: &str, draft: UtilityDraft) -> Result<UtilityItem> {
+    pub fn update_utility_item(
+        &mut self,
+        id: &str,
+        mut draft: UtilityDraft,
+    ) -> Result<UtilityItem> {
         self.check_utility(&draft)?;
+        tidy_meter(&mut draft.kind);
         let item = self
             .doc
             .utility_items
@@ -425,8 +683,9 @@ impl UnlockedVault {
         value: Amount,
         period: &str,
         day: Option<u8>,
+        zone: Option<&str>,
     ) -> Result<MeterReading> {
-        let reading = self.insert_reading(item_id, value, period, day)?;
+        let reading = self.insert_reading(item_id, value, period, day, zone)?;
         self.persist()?;
         Ok(reading)
     }
@@ -447,12 +706,14 @@ impl UnlockedVault {
             .position(|reading| reading.id == id)
             .ok_or_else(|| Error::Missing(format!("reading {id}")))?;
         let old = self.doc.meter_readings.remove(index);
-        match self.insert_reading(&old.item_id, value, period, day) {
+        match self.insert_reading(&old.item_id, value, period, day, old.zone.as_deref()) {
             Ok(mut reading) => {
                 // Same reading, corrected: it keeps its identity.
                 reading.id = old.id.clone();
                 if let Some(stored) = self.doc.meter_readings.iter_mut().find(|stored| {
-                    stored.item_id == reading.item_id && stored.sort_key() == reading.sort_key()
+                    stored.item_id == reading.item_id
+                        && stored.zone == reading.zone
+                        && stored.sort_key() == reading.sort_key()
                 }) {
                     stored.id = old.id;
                 }
@@ -473,6 +734,7 @@ impl UnlockedVault {
         value: Amount,
         period: &str,
         day: Option<u8>,
+        zone: Option<&str>,
     ) -> Result<MeterReading> {
         let item = self.utility_item(item_id)?;
         if !matches!(item.kind, UtilityKind::Metered { .. }) {
@@ -480,6 +742,24 @@ impl UnlockedVault {
                 "only a metered bill takes readings".into(),
             ));
         }
+        let zones = zones_of(item);
+        // A multi-rate meter takes a reading per zone, stored under the zone's own name.
+        let zone = match zone.map(utilities_formula::zone_key) {
+            None if zones.is_empty() => None,
+            None => {
+                return Err(Error::InvalidInput(format!(
+                    "pick the zone: {}",
+                    zones.join(", ")
+                )));
+            }
+            Some(key) => Some(
+                zones
+                    .iter()
+                    .find(|zone| utilities_formula::zone_key(zone) == key)
+                    .cloned()
+                    .ok_or_else(|| Error::InvalidInput(format!("the meter has no zone «{key}»")))?,
+            ),
+        };
         let month = calendar::parse_month(period)
             .ok_or_else(|| Error::InvalidInput(format!("month {period}: expected YYYY-MM")))?;
         let period = calendar::month_key(month);
@@ -501,9 +781,10 @@ impl UnlockedVault {
             period,
             recorded_at: now_iso(),
             day,
+            zone: zone.clone(),
         };
         let key = reading.sort_key();
-        let readings = self.readings_of(item_id);
+        let readings = self.readings_in(item_id, zone.as_deref());
         if let Some(before) = readings
             .iter()
             .rev()
@@ -524,9 +805,9 @@ impl UnlockedVault {
             )));
         }
         // One reading per meter per day: a second one that day corrects it.
-        self.doc
-            .meter_readings
-            .retain(|stored| !(stored.item_id == item_id && stored.sort_key() == key));
+        self.doc.meter_readings.retain(|stored| {
+            !(stored.item_id == item_id && stored.zone == zone && stored.sort_key() == key)
+        });
         self.doc.meter_readings.push(reading.clone());
         Ok(reading)
     }
@@ -553,28 +834,86 @@ impl UnlockedVault {
         out
     }
 
+    /// Readings of one zone of an item (`None` = a one-rate meter), oldest first.
+    fn readings_in(&self, item_id: &str, zone: Option<&str>) -> Vec<MeterReading> {
+        let mut out = self.readings_of(item_id);
+        out.retain(|reading| reading.zone.as_deref() == zone);
+        out
+    }
+
     /// Where the meter stood at the start and at the end of each month with a
-    /// reading. A month starts from the last reading before it; the very first
-    /// month of a meter starts from its own first reading, so a flat moved
-    /// into on the 15th counts from the 15th.
+    /// reading. A multi-rate meter counts a month once every zone is read in
+    /// it, the totals summing the zones.
     fn monthly_readings(&self, item_id: &str) -> BTreeMap<String, MonthReadings> {
+        let zones = self.utility_item(item_id).map(zones_of).unwrap_or_default();
+        if zones.is_empty() {
+            return self.zone_months(item_id, None);
+        }
+        let per_zone: Vec<(String, BTreeMap<String, MonthReadings>)> = zones
+            .iter()
+            .map(|zone| (zone.clone(), self.zone_months(item_id, Some(zone))))
+            .collect();
+        let mut out = BTreeMap::new();
+        let Some((_, first_zone)) = per_zone.first() else {
+            return out;
+        };
+        for (period, lead) in first_zone {
+            let parts: Option<Vec<(String, MonthReadings)>> = per_zone
+                .iter()
+                .map(|(zone, months)| {
+                    months
+                        .get(period)
+                        .map(|month| (zone.clone(), month.clone()))
+                })
+                .collect();
+            let Some(parts) = parts else {
+                continue;
+            };
+            let start = parts
+                .iter()
+                .map(|(_, month)| month.start)
+                .try_fold(Amount::ZERO, |sum, start| start.map(|value| sum + value));
+            out.insert(
+                period.clone(),
+                MonthReadings {
+                    start,
+                    end: parts
+                        .iter()
+                        .fold(Amount::ZERO, |sum, (_, month)| sum + month.end),
+                    end_id: lead.end_id.clone(),
+                    start_at: lead.start_at.clone(),
+                    end_at: lead.end_at.clone(),
+                    zones: parts,
+                },
+            );
+        }
+        out
+    }
+
+    /// One zone's months. A month starts from the last reading before it; the
+    /// very first month of a meter starts from its own first reading, so a
+    /// flat moved into on the 15th counts from the 15th.
+    fn zone_months(&self, item_id: &str, zone: Option<&str>) -> BTreeMap<String, MonthReadings> {
         let mut out: BTreeMap<String, MonthReadings> = BTreeMap::new();
-        let mut previous_end: Option<Amount> = None;
-        let readings = self.readings_of(item_id);
+        let mut previous: Option<&MeterReading> = None;
+        let readings = self.readings_in(item_id, zone);
         for group in readings.chunk_by(|left, right| left.period == right.period) {
             let (Some(first), Some(last)) = (group.first(), group.last()) else {
                 continue;
             };
-            let start = previous_end.or((group.len() > 1).then_some(first.value));
+            let base = previous.or((group.len() > 1).then_some(first));
             out.insert(
                 last.period.clone(),
                 MonthReadings {
-                    start,
+                    start: base.map(|reading| reading.value),
                     end: last.value,
                     end_id: last.id.clone(),
+                    start_at: base.map(MeterReading::sort_key),
+                    end_at: last.sort_key(),
+                    zones: Vec::new(),
                 },
             );
-            previous_end = Some(last.value);
+            previous = Some(last);
         }
         out
     }
@@ -673,7 +1012,7 @@ impl UnlockedVault {
         let cal = Calendar::new(zone);
         let mut payments = self.payments_by_month(&item, &cal);
         let mut months: Vec<UtilityMonth> = match &item.kind {
-            UtilityKind::Metered { tariff, .. } => {
+            UtilityKind::Metered { .. } => {
                 let readings = self.readings_of(&item.id);
                 self.monthly_readings(&item.id)
                     .into_iter()
@@ -682,9 +1021,21 @@ impl UnlockedVault {
                         UtilityMonth {
                             reading: Some(month.end),
                             consumption,
-                            amount: consumption
-                                .map_or(Amount::ZERO, |used| (used * *tariff).round(2)),
+                            // A formula that cannot be worked out (÷ 0) bills nothing.
+                            amount: metered_amount(&item, &month)
+                                .ok()
+                                .flatten()
+                                .unwrap_or(Amount::ZERO),
                             reading_id: Some(month.end_id.clone()),
+                            zones: month
+                                .zones
+                                .iter()
+                                .map(|(zone, part)| ZoneMonth {
+                                    zone: zone.clone(),
+                                    reading: part.end,
+                                    consumption: part.consumption(),
+                                })
+                                .collect(),
                             payments: Vec::new(),
                             readings: readings
                                 .iter()
@@ -777,14 +1128,23 @@ impl UnlockedVault {
         let mut consumption = None;
         let mut includes_deposit = false;
         let amount = match &item.kind {
-            UtilityKind::Metered { tariff, .. } => {
-                let used = self
-                    .billable_month(&item.id, &period, &paid)
-                    .and_then(|month| month.consumption())
-                    .unwrap_or(Amount::ZERO);
-                consumption = Some(used);
-                (used * *tariff).round(2)
-            }
+            UtilityKind::Metered { .. } => match self.billable_month(&item.id, &period, &paid) {
+                Some(month) if month.start.is_some() => {
+                    consumption = month.consumption();
+                    metered_amount(&item, &month)
+                        .map_err(|issue| {
+                            Error::InvalidInput(format!(
+                                "{}: formula, character {}: {}",
+                                item.name, issue.position, issue.text_en
+                            ))
+                        })?
+                        .unwrap_or(Amount::ZERO)
+                }
+                _ => {
+                    consumption = Some(Amount::ZERO);
+                    Amount::ZERO
+                }
+            },
             UtilityKind::Static { amount } => paid
                 .range(..period.clone())
                 .next_back()
@@ -871,11 +1231,14 @@ impl UnlockedVault {
                 amount: None,
                 paid,
                 includes_deposit: false,
+                zones: Vec::new(),
             };
             let mut unread = false;
             if let UtilityKind::Metered { .. } = item.kind {
                 let paid_months = self.paid_by_month(&item, &cal);
-                match self.billable_month(&item.id, &period, &paid_months) {
+                let billable = self.billable_month(&item.id, &period, &paid_months);
+                line.zones = self.zone_lines(&item, &period, billable.as_ref());
+                match billable {
                     // Read (this month or an unpaid one before): start to end.
                     Some(month) if month.start.is_some() => {
                         line.previous_reading = month.start;
@@ -927,6 +1290,41 @@ impl UnlockedVault {
         })
     }
 
+    /// A multi-rate meter's zones on the bill: the month's readings when it is
+    /// read, else each zone's last reading before it as the base.
+    fn zone_lines(
+        &self,
+        item: &UtilityItem,
+        period: &str,
+        billable: Option<&MonthReadings>,
+    ) -> Vec<ZoneBillLine> {
+        zones_of(item)
+            .into_iter()
+            .map(|zone| {
+                let read = billable
+                    .filter(|month| month.start.is_some())
+                    .and_then(|month| month.zones.iter().find(|(name, _)| *name == zone))
+                    .map(|(_, part)| part);
+                match read {
+                    Some(part) => ZoneBillLine {
+                        previous_reading: part.start,
+                        reading: Some(part.end),
+                        zone,
+                    },
+                    None => ZoneBillLine {
+                        previous_reading: self
+                            .zone_months(&item.id, Some(&zone))
+                            .range(..=period.to_string())
+                            .next_back()
+                            .map(|(_, month)| month.end),
+                        reading: None,
+                        zone,
+                    },
+                }
+            })
+            .collect()
+    }
+
     /// Pay a month's bill in one go: record the meter readings, then one
     /// payment per line, linked to its item. All or nothing — a line that
     /// fails leaves the vault as it was.
@@ -955,8 +1353,19 @@ impl UnlockedVault {
                         item.name
                     )));
                 }
-                if let Some(reading) = line.reading {
-                    self.insert_reading(&item.id, reading, &bill.period, line.reading_day)?;
+                if let Some(reading) = line.reading
+                    && line.zone_readings.is_empty()
+                {
+                    self.insert_reading(&item.id, reading, &bill.period, line.reading_day, None)?;
+                }
+                for zoned in &line.zone_readings {
+                    self.insert_reading(
+                        &item.id,
+                        zoned.reading,
+                        &bill.period,
+                        line.reading_day,
+                        Some(&zoned.zone),
+                    )?;
                 }
                 let store_id = item
                     .store_id
@@ -1023,6 +1432,8 @@ mod tests {
                 kind: UtilityKind::Metered {
                     unit: "kWh".into(),
                     tariff: amount("5"),
+                    formula: None,
+                    zones: Vec::new(),
                 },
                 currency: "rub".into(),
                 property_id: flat,
@@ -1037,10 +1448,10 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let item = metered(&mut vault);
         vault
-            .add_meter_reading(&item.id, amount("1000"), "2026-01", None)
+            .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
             .unwrap();
         vault
-            .add_meter_reading(&item.id, amount("1150"), "2026-02", None)
+            .add_meter_reading(&item.id, amount("1150"), "2026-02", None, None)
             .unwrap();
         let draft = vault
             .utility_payment_draft(&item.id, "2026-02", "UTC")
@@ -1054,7 +1465,7 @@ mod tests {
         // A meter only counts up.
         assert!(
             vault
-                .add_meter_reading(&item.id, amount("900"), "2026-03", None)
+                .add_meter_reading(&item.id, amount("900"), "2026-03", None, None)
                 .is_err()
         );
         let trend = vault.meter_trend(&item.id, "UTC").unwrap();
@@ -1071,10 +1482,10 @@ mod tests {
             .unwrap();
         assert_eq!(empty.consumption, Some(Amount::ZERO));
         vault
-            .add_meter_reading(&item.id, amount("1000"), "2026-01", None)
+            .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
             .unwrap();
         vault
-            .add_meter_reading(&item.id, amount("1150"), "2026-02", None)
+            .add_meter_reading(&item.id, amount("1150"), "2026-02", None, None)
             .unwrap();
         // Read in February, paid in March.
         let draft = vault
@@ -1166,7 +1577,7 @@ mod tests {
             ("2026-05", "460"),
         ] {
             vault
-                .add_meter_reading(&item.id, amount(value), period, None)
+                .add_meter_reading(&item.id, amount(value), period, None, None)
                 .unwrap();
         }
         let steady = vault.meter_trend(&item.id, "UTC").unwrap();
@@ -1176,7 +1587,7 @@ mod tests {
         assert_eq!(steady.average, Some(amount("575")));
 
         vault
-            .add_meter_reading(&item.id, amount("860"), "2026-06", None)
+            .add_meter_reading(&item.id, amount("860"), "2026-06", None, None)
             .unwrap();
         let spike = vault.meter_trend(&item.id, "UTC").unwrap();
         assert!(spike.anomaly);
@@ -1241,7 +1652,7 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let (flat, meter, internet, card) = flat_with_bills(&mut vault);
         vault
-            .add_meter_reading(&meter.id, amount("1000"), "2026-01", None)
+            .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
             .unwrap();
 
         let bill = vault.utility_bill(&flat, "2026-02", "UTC").unwrap();
@@ -1267,12 +1678,14 @@ mod tests {
                             amount: amount("500"),
                             reading: Some(amount("1100")),
                             reading_day: None,
+                            zone_readings: Vec::new(),
                         },
                         PayUtilityLine {
                             item_id: internet.id.clone(),
                             amount: amount("700"),
                             reading: None,
                             reading_day: None,
+                            zone_readings: Vec::new(),
                         },
                     ],
                 },
@@ -1302,7 +1715,7 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let (flat, meter, internet, card) = flat_with_bills(&mut vault);
         vault
-            .add_meter_reading(&meter.id, amount("1000"), "2026-01", None)
+            .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
             .unwrap();
         let before = vault.doc.transactions.len();
         let result = vault.pay_utility_bill(
@@ -1317,6 +1730,7 @@ mod tests {
                         amount: amount("700"),
                         reading: None,
                         reading_day: None,
+                        zone_readings: Vec::new(),
                     },
                     // Below last month's reading: refused.
                     PayUtilityLine {
@@ -1324,6 +1738,7 @@ mod tests {
                         amount: amount("1"),
                         reading: Some(amount("900")),
                         reading_day: None,
+                        zone_readings: Vec::new(),
                     },
                 ],
             },
@@ -1339,10 +1754,10 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let item = metered(&mut vault);
         vault
-            .add_meter_reading(&item.id, amount("1000"), "2026-01", None)
+            .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
             .unwrap();
         let feb = vault
-            .add_meter_reading(&item.id, amount("1200"), "2026-02", None)
+            .add_meter_reading(&item.id, amount("1200"), "2026-02", None, None)
             .unwrap();
         let fixed = vault
             .update_meter_reading(&feb.id, amount("1150"), "2026-02", None)
@@ -1372,13 +1787,13 @@ mod tests {
         let old_flat = metered_in(&mut vault, "Old flat");
         let new_flat = metered_in(&mut vault, "New flat");
         vault
-            .add_meter_reading(&old_flat.id, amount("100"), "2026-09", None)
+            .add_meter_reading(&old_flat.id, amount("100"), "2026-09", None, None)
             .unwrap();
         vault
-            .add_meter_reading(&old_flat.id, amount("130"), "2026-10", Some(15))
+            .add_meter_reading(&old_flat.id, amount("130"), "2026-10", Some(15), None)
             .unwrap();
         vault
-            .add_meter_reading(&new_flat.id, amount("500"), "2026-10", Some(15))
+            .add_meter_reading(&new_flat.id, amount("500"), "2026-10", Some(15), None)
             .unwrap();
 
         // Before the month ends the new flat has only its start: nothing used yet.
@@ -1397,7 +1812,7 @@ mod tests {
         assert_eq!(started.reading, None);
 
         vault
-            .add_meter_reading(&new_flat.id, amount("520"), "2026-10", None)
+            .add_meter_reading(&new_flat.id, amount("520"), "2026-10", None, None)
             .unwrap();
         let old_bill = line(&vault, &old_flat);
         assert_eq!(old_bill.previous_reading, Some(amount("100")));
@@ -1418,28 +1833,28 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let item = metered(&mut vault);
         vault
-            .add_meter_reading(&item.id, amount("100"), "2026-10", Some(10))
+            .add_meter_reading(&item.id, amount("100"), "2026-10", Some(10), None)
             .unwrap();
         assert!(
             vault
-                .add_meter_reading(&item.id, amount("90"), "2026-10", Some(20))
+                .add_meter_reading(&item.id, amount("90"), "2026-10", Some(20), None)
                 .is_err(),
             "the 20th cannot be below the 10th"
         );
         assert!(
             vault
-                .add_meter_reading(&item.id, amount("110"), "2026-10", Some(5))
+                .add_meter_reading(&item.id, amount("110"), "2026-10", Some(5), None)
                 .is_err(),
             "the 5th cannot be above the 10th"
         );
         assert!(
             vault
-                .add_meter_reading(&item.id, amount("110"), "2026-02", Some(30))
+                .add_meter_reading(&item.id, amount("110"), "2026-02", Some(30), None)
                 .is_err(),
             "February has no 30th"
         );
         vault
-            .add_meter_reading(&item.id, amount("120"), "2026-10", Some(20))
+            .add_meter_reading(&item.id, amount("120"), "2026-10", Some(20), None)
             .unwrap();
         assert_eq!(vault.readings_of(&item.id).len(), 2);
     }
@@ -1456,16 +1871,17 @@ mod tests {
             period: "2026-10".into(),
             recorded_at: "2026-10-05T09:00:00Z".into(),
             day: None,
+            zone: None,
         });
         vault
-            .add_meter_reading(&item.id, amount("2540"), "2026-10", Some(12))
+            .add_meter_reading(&item.id, amount("2540"), "2026-10", Some(12), None)
             .unwrap();
         vault
-            .add_meter_reading(&item.id, amount("2552"), "2026-10", Some(20))
+            .add_meter_reading(&item.id, amount("2552"), "2026-10", Some(20), None)
             .unwrap();
         assert!(
             vault
-                .add_meter_reading(&item.id, amount("2530"), "2026-10", Some(8))
+                .add_meter_reading(&item.id, amount("2530"), "2026-10", Some(8), None)
                 .is_err(),
             "the 8th still cannot be below the 5th"
         );
@@ -1482,13 +1898,262 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let item = metered(&mut vault);
         vault
-            .add_meter_reading(&item.id, amount("100"), "2026-10", Some(12))
+            .add_meter_reading(&item.id, amount("100"), "2026-10", Some(12), None)
             .unwrap();
         vault
-            .add_meter_reading(&item.id, amount("101"), "2026-10", Some(12))
+            .add_meter_reading(&item.id, amount("101"), "2026-10", Some(12), None)
             .unwrap();
         let readings = vault.readings_of(&item.id);
         assert_eq!(readings.len(), 1);
         assert_eq!(readings[0].value, amount("101"));
+    }
+
+    fn meter_with(vault: &mut UnlockedVault, formula: &str, zones: &[&str]) -> Result<UtilityItem> {
+        let name = format!("Dacha {}", vault.doc.stores.len());
+        let flat = store(vault, &name, StoreKind::Property, None);
+        vault.create_utility_item(UtilityDraft {
+            name: "Свет".into(),
+            active: true,
+            kind: UtilityKind::Metered {
+                unit: "kWh".into(),
+                tariff: amount("0"),
+                formula: Some(formula.into()),
+                zones: zones.iter().map(|zone| (*zone).to_string()).collect(),
+            },
+            currency: "rub".into(),
+            property_id: flat,
+            store_id: None,
+            category: "utilities".into(),
+        })
+    }
+
+    fn draft_amount(vault: &UnlockedVault, item: &UtilityItem, period: &str) -> Amount {
+        let draft = vault
+            .utility_payment_draft(&item.id, period, "UTC")
+            .unwrap();
+        let Transaction::Payment(payment) = &draft.transaction else {
+            panic!()
+        };
+        payment.amount
+    }
+
+    #[test]
+    fn a_meter_bills_by_its_own_formula() {
+        let (_dir, mut vault) = empty_vault();
+        let item = meter_with(&mut vault, " (показание - предыдущее) * 3.5 * 10 ", &[]).unwrap();
+        let UtilityKind::Metered { formula, .. } = &item.kind else {
+            panic!()
+        };
+        assert_eq!(
+            formula.as_deref(),
+            Some("(показание - предыдущее) * 3.5 * 10")
+        );
+        vault
+            .add_meter_reading(&item.id, amount("1200"), "2026-01", None, None)
+            .unwrap();
+        vault
+            .add_meter_reading(&item.id, amount("1345"), "2026-02", None, None)
+            .unwrap();
+        assert_eq!(draft_amount(&vault, &item, "2026-02"), amount("5075"));
+        let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+        assert_eq!(trend.months[1].amount, amount("5075"));
+    }
+
+    #[test]
+    fn a_wrong_formula_is_not_saved() {
+        let (_dir, mut vault) = empty_vault();
+        let err = meter_with(&mut vault, "расход * х", &[]).unwrap_err();
+        assert!(err.to_string().contains("character 10"), "{err}");
+        assert!(meter_with(&mut vault, "расход_вечер", &["день", "ночь"]).is_err());
+        assert!(meter_with(&mut vault, "расход", &["день", " День "]).is_err());
+        // Without a formula a meter still needs a tariff.
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
+        let no_tariff = vault.create_utility_item(UtilityDraft {
+            name: "Water".into(),
+            active: true,
+            kind: UtilityKind::Metered {
+                unit: "m3".into(),
+                tariff: amount("0"),
+                formula: Some("  ".into()),
+                zones: Vec::new(),
+            },
+            currency: "rub".into(),
+            property_id: flat,
+            store_id: None,
+            category: "utilities".into(),
+        });
+        assert!(no_tariff.is_err());
+    }
+
+    #[test]
+    fn a_two_rate_meter_reads_and_bills_per_zone() {
+        let (_dir, mut vault) = empty_vault();
+        let item = meter_with(
+            &mut vault,
+            "расход_день * 6 + расход_ночь * 3 + 100",
+            &["День", "Ночь"],
+        )
+        .unwrap();
+        // A zone must be named, and be one of the meter's.
+        assert!(
+            vault
+                .add_meter_reading(&item.id, amount("600"), "2026-01", None, None)
+                .is_err()
+        );
+        assert!(
+            vault
+                .add_meter_reading(&item.id, amount("600"), "2026-01", None, Some("вечер"))
+                .is_err()
+        );
+        for (value, period, zone) in [
+            ("600", "2026-01", "день"),
+            ("400", "2026-01", "ночь"),
+            ("800", "2026-02", "день"),
+            ("500", "2026-02", "ночь"),
+        ] {
+            vault
+                .add_meter_reading(&item.id, amount(value), period, None, Some(zone))
+                .unwrap();
+        }
+        // Each zone counts up on its own: night below day is fine.
+        assert_eq!(draft_amount(&vault, &item, "2026-02"), amount("1600"));
+        let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+        let february = &trend.months[1];
+        assert_eq!(february.consumption, Some(amount("300")));
+        assert_eq!(february.zones.len(), 2);
+        assert_eq!(february.zones[0].zone, "День");
+        assert_eq!(february.zones[0].consumption, Some(amount("200")));
+
+        // February is unpaid: March's bill offers it, zone by zone.
+        let bill = vault
+            .utility_bill(&item.property_id, "2026-03", "UTC")
+            .unwrap();
+        let line = &bill.lines[0];
+        assert_eq!(line.amount, Some(amount("1600")));
+        let zones: Vec<_> = line
+            .zones
+            .iter()
+            .map(|zone| (zone.previous_reading, zone.reading))
+            .collect();
+        assert_eq!(
+            zones,
+            vec![
+                (Some(amount("600")), Some(amount("800"))),
+                (Some(amount("400")), Some(amount("500"))),
+            ]
+        );
+        let card = store(&mut vault, "Card", StoreKind::Cash, None);
+        vault
+            .add_transaction(income(&card, "5000", "opening"))
+            .unwrap();
+        vault
+            .pay_utility_bill(
+                PayUtilityBillInput {
+                    property_id: item.property_id.clone(),
+                    period: "2026-03".into(),
+                    store_id: card,
+                    timestamp: Some("2026-03-10T12:00:00Z".into()),
+                    lines: vec![PayUtilityLine {
+                        item_id: item.id.clone(),
+                        amount: amount("1000"),
+                        reading: None,
+                        reading_day: None,
+                        zone_readings: vec![
+                            ZoneReadingInput {
+                                zone: "день".into(),
+                                reading: amount("900"),
+                            },
+                            ZoneReadingInput {
+                                zone: "ночь".into(),
+                                reading: amount("550"),
+                            },
+                        ],
+                    }],
+                },
+                "UTC",
+            )
+            .unwrap();
+        let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+        // 100 × 6 + 50 × 3 + 100.
+        assert_eq!(trend.months[2].amount, amount("850"));
+    }
+
+    #[test]
+    fn the_preview_prices_the_typed_readings() {
+        let zoned = preview_utility_formula(&UtilityFormulaInput {
+            tariff: amount("5"),
+            formula: Some("расход_день * тариф + расход_ночь * 2".into()),
+            zones: vec!["день".into(), "ночь".into()],
+            readings: vec![
+                FormulaZoneReading {
+                    zone: Some("день".into()),
+                    previous: amount("10"),
+                    current: amount("20"),
+                },
+                FormulaZoneReading {
+                    zone: Some("ночь".into()),
+                    previous: amount("5"),
+                    current: amount("10"),
+                },
+            ],
+            days: None,
+        });
+        assert_eq!(zoned.amount, Some(amount("60")));
+        assert_eq!(zoned.consumption, Some(amount("15")));
+        let plain = preview_utility_formula(&UtilityFormulaInput {
+            tariff: amount("5"),
+            formula: None,
+            zones: Vec::new(),
+            readings: vec![FormulaZoneReading {
+                zone: None,
+                previous: amount("100"),
+                current: amount("130"),
+            }],
+            days: None,
+        });
+        assert_eq!(plain.amount, Some(amount("150")));
+        let broken = preview_utility_formula(&UtilityFormulaInput {
+            formula: Some("расход / 0".into()),
+            ..plain_input()
+        });
+        assert!(broken.amount.is_none() && broken.issue.is_some());
+    }
+
+    fn plain_input() -> UtilityFormulaInput {
+        UtilityFormulaInput {
+            tariff: amount("5"),
+            formula: None,
+            zones: Vec::new(),
+            readings: Vec::new(),
+            days: None,
+        }
+    }
+
+    #[test]
+    fn a_meter_from_an_older_app_still_reads() {
+        let kind = serde_json::json!({ "metered": { "unit": "kWh", "tariff": "5" } });
+        let reading = serde_json::json!({
+            "id": "r", "item_id": "i", "value": "10", "period": "2026-01",
+            "recorded_at": "2026-01-31T00:00:00Z",
+        });
+        let from_json: UtilityKind = serde_json::from_value(kind.clone()).unwrap();
+        assert_eq!(
+            from_json,
+            UtilityKind::Metered {
+                unit: "kWh".into(),
+                tariff: amount("5"),
+                formula: None,
+                zones: Vec::new(),
+            }
+        );
+        let packed = rmp_serde::to_vec_named(&kind).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<UtilityKind>(&packed).unwrap(),
+            from_json
+        );
+        let old: MeterReading = serde_json::from_value(reading.clone()).unwrap();
+        assert_eq!(old.zone, None);
+        let packed = rmp_serde::to_vec_named(&reading).unwrap();
+        assert_eq!(rmp_serde::from_slice::<MeterReading>(&packed).unwrap(), old);
     }
 }

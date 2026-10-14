@@ -18,7 +18,7 @@ use crate::model::enrichment::EnrichmentRecord;
 use crate::model::notify::NotificationSettings;
 use crate::model::planning::{
     Automation, AutomationRun, Budget, CategorizationRule, Envelope, Goal, MeterReading,
-    PriceAlert, Reminder, UtilityItem,
+    PriceAlert, Reminder, UtilityItem, UtilityKind,
 };
 use crate::model::store::{Holding, Store};
 use crate::model::transaction::Transaction;
@@ -61,6 +61,74 @@ pub struct MeterReadingV1 {
     pub recorded_at: String,
 }
 
+/// `UtilityKind` before the meter formula and zones (frozen when they came).
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+#[serde(rename_all = "snake_case")]
+pub enum UtilityKindV1 {
+    Metered {
+        unit: String,
+        tariff: Amount,
+    },
+    Static {
+        amount: Amount,
+    },
+    Housing {
+        amount: Amount,
+        deposit: Option<Amount>,
+        due_day: u8,
+        automation_id: Option<String>,
+    },
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct UtilityItemV1 {
+    pub id: String,
+    pub name: String,
+    pub active: bool,
+    pub kind: UtilityKindV1,
+    pub currency: String,
+    #[serde(default)]
+    pub property_id: String,
+    pub store_id: Option<String>,
+    pub category: String,
+}
+
+impl From<UtilityItemV1> for UtilityItem {
+    fn from(old: UtilityItemV1) -> Self {
+        Self {
+            id: old.id,
+            name: old.name,
+            active: old.active,
+            kind: match old.kind {
+                UtilityKindV1::Metered { unit, tariff } => UtilityKind::Metered {
+                    unit,
+                    tariff,
+                    formula: None,
+                    zones: Vec::new(),
+                },
+                UtilityKindV1::Static { amount } => UtilityKind::Static { amount },
+                UtilityKindV1::Housing {
+                    amount,
+                    deposit,
+                    due_day,
+                    automation_id,
+                } => UtilityKind::Housing {
+                    amount,
+                    deposit,
+                    due_day,
+                    automation_id,
+                },
+            },
+            currency: old.currency,
+            property_id: old.property_id,
+            store_id: old.store_id,
+            category: old.category,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(serde::Serialize))]
 pub struct ContactV1 {
@@ -98,7 +166,7 @@ pub struct VaultDocV1 {
     pub reminders: Vec<ReminderV1>,
     pub price_alerts: Vec<PriceAlert>,
     pub categorization_rules: Vec<CategorizationRule>,
-    pub utility_items: Vec<UtilityItem>,
+    pub utility_items: Vec<UtilityItemV1>,
     pub meter_readings: Vec<MeterReadingV1>,
     pub enrichments: Vec<EnrichmentRecord>,
     pub manual_prices: Vec<ManualPrice>,
@@ -167,7 +235,7 @@ impl From<VaultDocV1> for VaultDoc {
                 .collect(),
             price_alerts: old.price_alerts,
             categorization_rules: old.categorization_rules,
-            utility_items: old.utility_items,
+            utility_items: old.utility_items.into_iter().map(Into::into).collect(),
             meter_readings: old
                 .meter_readings
                 .into_iter()
@@ -178,6 +246,7 @@ impl From<VaultDocV1> for VaultDoc {
                     period: reading.period,
                     recorded_at: reading.recorded_at,
                     day: None,
+                    zone: None,
                 })
                 .collect(),
             enrichments: old.enrichments,

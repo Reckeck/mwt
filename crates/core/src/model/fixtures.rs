@@ -375,6 +375,8 @@ pub fn full_doc() -> VaultDoc {
         UtilityKind::Metered {
             unit: "kWh".into(),
             tariff: amount("6.5"),
+            formula: Some("расход_день * 6.5 + расход_ночь * 3".into()),
+            zones: vec!["день".into(), "ночь".into()],
         },
         UtilityKind::Static {
             amount: amount("700"),
@@ -407,6 +409,7 @@ pub fn full_doc() -> VaultDoc {
         period: "2026-01".into(),
         recorded_at: "2026-01-31T00:00:00Z".into(),
         day: Some(15),
+        zone: Some("день".into()),
     }];
     doc.notification_log = vec![crate::model::notify::NoticeRecord {
         key: "reminder:rem:2026-03-01T09:00:00Z".into(),

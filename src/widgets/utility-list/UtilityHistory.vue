@@ -95,6 +95,9 @@ const txOpen = computed({
         </div>
         <p v-if="month.consumption" class="text-xs text-muted-foreground tabular-nums">
           {{ t('utilities.consumption') }}: {{ month.consumption }} {{ unit }}
+          <template v-for="zone in month.zones" :key="zone.zone">
+            · {{ zone.zone }} {{ zone.consumption ?? '—' }}
+          </template>
         </p>
         <div
           v-for="reading in month.readings"
@@ -125,7 +128,7 @@ const txOpen = computed({
           <template v-else>
             <span class="tabular-nums">
               {{ reading.day ? t('utilities.readingOnDay', { day: reading.day }) : t('utilities.readingAtEnd') }}:
-              {{ reading.value }} {{ unit }}
+              {{ reading.value }} {{ unit }}<template v-if="reading.zone"> · {{ reading.zone }}</template>
             </span>
             <Button
               variant="ghost"

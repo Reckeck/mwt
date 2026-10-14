@@ -495,7 +495,13 @@ pub async fn add_meter_reading(
     state: State<'_, AppState>,
 ) -> Result<MeterReading, String> {
     with_vault_mut(&state, |vault| {
-        vault.add_meter_reading(&input.item_id, input.value, &input.period, input.day)
+        vault.add_meter_reading(
+            &input.item_id,
+            input.value,
+            &input.period,
+            input.day,
+            input.zone.as_deref(),
+        )
     })
 }
 
@@ -563,6 +569,14 @@ pub async fn get_property_summary(
 ) -> Result<PropertySummary, String> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| vault.property_summary(&store_id, &zone))
+}
+
+/// What a meter's bill would be by its formula (or tariff); needs no vault.
+#[tauri::command]
+pub async fn preview_utility_formula(
+    input: trade_core::service::UtilityFormulaInput,
+) -> Result<trade_core::service::UtilityFormulaPreview, String> {
+    Ok(trade_core::service::preview_utility_formula(&input))
 }
 
 /// The «Оплатить» for one month (`YYYY-MM`, default: this month).

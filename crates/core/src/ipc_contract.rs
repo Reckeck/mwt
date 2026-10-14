@@ -1238,6 +1238,9 @@ pub struct MeterReadingInput {
     /// Day of the month (1–31); `None` = the month's end.
     #[serde(default)]
     pub day: Option<u8>,
+    /// The zone of a multi-rate meter; `None` for a one-rate one.
+    #[serde(default)]
+    pub zone: Option<String>,
 }
 
 /// Correct a recorded meter reading.

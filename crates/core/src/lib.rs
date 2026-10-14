@@ -17,6 +17,7 @@ pub mod pricing;
 pub mod service;
 pub mod storage;
 pub mod txinfo;
+pub mod utilities_formula;
 pub mod workflow;
 
 pub use amount::Amount;
