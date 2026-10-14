@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
@@ -15,11 +14,11 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { firstError, integerInRange, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
+import { Switch } from '@/shared/ui/switch'
 
 import { UTILITY_KINDS, type UtilityKindName } from './utility-edit.constants'
 import type { UtilityDialogProps } from './utility-edit.types'
@@ -120,11 +119,10 @@ const save = useMutation({
       : call<UtilityItem>('create_utility_item', { input })
   },
   onSuccess: () => {
-    toast.success(props.item ? t('utilities.saved') : t('utilities.created'))
     for (const queryKey of [['utilities'], ['utility-trend'], ...PLANNING_KEYS]) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('utilities.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'utilities.saveFailed', success: () => props.item ? t('utilities.saved') : t('utilities.created') },
 })
 </script>
 
@@ -198,10 +196,10 @@ const save = useMutation({
           <CategorySelect id="utility-category" v-model="category" :groups="['fixed']" />
         </div>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="active" type="checkbox" class="size-4 accent-primary" />
-        {{ t('utilities.active') }}
-      </label>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="utility-active">{{ t('utilities.active') }}</Label>
+        <Switch id="utility-active" v-model="active" />
+      </div>
     </form>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>

@@ -7,6 +7,7 @@ import { useNodeCatalog } from '@/entities/workflow'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/lib/utils'
 import { GROUP_COLOR, NODE_GROUPS, localized } from '@/shared/lib/workflow'
+import { Button } from '@/shared/ui/button'
 
 import { type QuickAddChoice, fitFor, matchScore, quickExpression } from '../../model/quick-add'
 import type { QuickAddPanelProps } from './quick-add-panel.types'
@@ -104,8 +105,9 @@ onMounted(() => {
     <Input ref="field" v-model="query" :placeholder="t('workflow.quick.placeholder')" :aria-label="t('workflow.quick.placeholder')" />
     <ul ref="list" class="max-h-72 overflow-y-auto">
       <li v-for="(row, index) in rows" :key="`${row.choice.kind}-${row.choice.hint}`">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="block"
           :data-active="index === active"
           :aria-current="index === active ? 'true' : undefined"
           :class="cn('flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm', index === active ? 'bg-accent' : 'hover:bg-muted')"
@@ -120,7 +122,7 @@ onMounted(() => {
             </span>
             <span class="block truncate text-xs text-muted-foreground">{{ localized(row.def.description, locale) }}</span>
           </span>
-        </button>
+        </Button>
       </li>
       <li v-if="!rows.length" class="px-2 py-3 text-sm text-muted-foreground">{{ t('workflow.quick.none') }}</li>
     </ul>

@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { X } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { parseError } from '@/shared/api/ipc'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
@@ -56,12 +56,13 @@ onMounted(async () => {
  * failed write must be surfaced and the store re-read, otherwise the screen
  * would show a value that is not on disk.
  */
-async function persist(patch: Partial<UpdateAppSettingsInput>) {
+/** `quiet`: the caller reports the change itself (a removal offers «Отменить»). */
+async function persist(patch: Partial<UpdateAppSettingsInput>, quiet = false) {
   try {
     await settingsStore.updateApp(patch)
-    toast.success(t('settings.saved'))
+    if (!quiet) notify.saved()
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: parseError(err).message })
+    notify.error(err, 'settings.saveFailed')
     // These are app settings: re-read them, not the vault's.
     await settingsStore.loadApp().catch(() => {
       /* the error above is the one worth showing */
@@ -78,9 +79,9 @@ function setTheme(theme: Theme) {
 async function onLocaleChange(next: string) {
   try {
     await setLocalePreference(next as Locale)
-    toast.success(t('settings.saved'))
+    notify.saved()
   } catch (err) {
-    toast.error(t('settings.localeSaveFailed'), { description: parseError(err).message })
+    notify.error(err, 'settings.localeSaveFailed')
   }
 }
 
@@ -105,8 +106,10 @@ function addFavorite() {
 }
 
 function removeFavorite(code: string) {
-  void persist({
-    favorite_currencies: settingsStore.favoriteCurrencies.filter((entry) => entry !== code),
+  const before = [...settingsStore.favoriteCurrencies]
+  void persist({ favorite_currencies: before.filter((entry) => entry !== code) }, true)
+  notify.success(t('settings.favoriteRemoved', { code: code.toUpperCase() }), {
+    action: { label: t('actions.undo'), onClick: () => void persist({ favorite_currencies: before }, true) },
   })
 }
 </script>
@@ -117,16 +120,16 @@ function removeFavorite(code: string) {
     <div class="grid gap-1.5">
       <Label>{{ t('settings.theme.title') }}</Label>
       <div class="grid grid-cols-3 gap-2">
-        <button
+        <Button
+          variant="outline"
           v-for="option in themes"
           :key="option"
-          type="button"
-          class="rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
+          class="font-normal rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
           :class="settingsStore.theme === option && 'border-primary bg-accent font-medium'"
           @click="setTheme(option)"
         >
           {{ t(`settings.theme.${option}`) }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -161,14 +164,15 @@ function removeFavorite(code: string) {
           class="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-sm text-accent-foreground"
         >
           {{ code }}
-          <button
-            type="button"
-            class="text-xs transition-colors hover:text-destructive"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            class="text-muted-foreground hover:text-destructive"
             :aria-label="t('settings.favoriteCurrencyRemove', { code })"
             @click="removeFavorite(code)"
           >
-            ×
-          </button>
+            <X class="size-3.5" />
+          </Button>
         </span>
       </div>
       <div class="flex items-end gap-2" :data-invalid="favoriteCheck.invalidAttr('favorite')">

@@ -7,6 +7,7 @@ import { Check, Clock, MessageCircleQuestion, X } from 'lucide-vue-next'
 import { useWorkflowActions } from '@/features/workflow-manage'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -33,9 +34,7 @@ const empty = computed(
 <template>
   <div class="grid gap-3" data-tour="workflow-queue">
     <p class="text-sm text-muted-foreground">{{ t('workflow.queue.intro') }}</p>
-    <div v-if="empty" class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {{ t('workflow.queue.empty') }}
-    </div>
+    <EmptyState v-if="empty" compact :title="t('workflow.queue.empty')" />
 
     <section v-if="questions.length" class="grid gap-2" data-tour="workflow-questions">
       <h3 class="text-sm font-semibold">{{ t('workflow.queue.questions') }}</h3>

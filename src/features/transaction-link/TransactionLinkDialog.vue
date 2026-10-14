@@ -2,16 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { txId, txKind, txMeta, txPrincipalLegs, txSearchText } from '@/shared/lib/transactions'
 import { useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Checkbox } from '@/shared/ui/checkbox'
 
 import type { TransactionLinkDialogProps } from './transaction-link.types'
 
@@ -65,11 +64,10 @@ const save = useMutation({
       input: { ids: [txId(props.tx), ...picked.value], flow_id: txMeta(props.tx).flow_id },
     }),
   onSuccess: () => {
-    toast.success(t('flows.linked'))
     for (const queryKey of [['transactions'], ['flows'], ['report']]) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('flows.linkFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'flows.linkFailed', success: 'flows.linked' },
 })
 </script>
 
@@ -81,8 +79,11 @@ const save = useMutation({
       <p v-if="form.firstMessage()" class="text-xs text-destructive" role="alert">{{ form.firstMessage() }}</p>
       <ul class="grid max-h-80 gap-1 overflow-y-auto" :data-invalid="form.invalidAttr('picked')">
         <li v-for="tx in candidates" :key="txId(tx)">
-          <label class="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
-            <input type="checkbox" class="size-4 accent-primary" :checked="picked.includes(txId(tx))" @change="toggle(txId(tx))" />
+          <label
+            :for="`tx-link-${txId(tx)}`"
+            class="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+          >
+            <Checkbox :id="`tx-link-${txId(tx)}`" :model-value="picked.includes(txId(tx))" @update:model-value="toggle(txId(tx))" />
             <span class="w-32 shrink-0 text-xs tabular-nums text-muted-foreground">{{ formatDateTime(txMeta(tx).timestamp) }}</span>
             <span class="shrink-0">{{ t(`tx.kind.${txKind(tx)}`) }}</span>
             <span class="min-w-0 truncate tabular-nums">

@@ -2,15 +2,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import type { MeterReadingFormProps } from './meter-reading.types'
 
@@ -39,12 +37,11 @@ const save = useMutation({
       } satisfies MeterReadingInput,
     }),
   onSuccess: () => {
-    toast.success(t('utilities.readingSaved'))
     value.value = ''
     form.reset()
     void queryClient.invalidateQueries({ queryKey: ['utility-trend'] })
   },
-  onError: (err) => toast.error(t('utilities.readingFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'utilities.readingFailed', success: 'utilities.readingSaved' },
 })
 </script>
 

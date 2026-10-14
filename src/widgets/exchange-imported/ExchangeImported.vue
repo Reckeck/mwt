@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { PendingImports } from '@/features/pending-imports'
 import { TransactionRow } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 
@@ -37,9 +38,7 @@ const total = computed(() => imported.data.value?.total ?? 0)
     </section>
     <section class="grid gap-2">
       <h3 class="text-sm font-semibold">{{ t('importedOps.booked', { count: total }) }}</h3>
-      <p v-if="imported.isSuccess.value && !items.length" class="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        {{ t('importedOps.empty') }}
-      </p>
+      <EmptyState v-if="imported.isSuccess.value && !items.length" compact :title="t('importedOps.empty')" />
       <div v-else class="grid divide-y divide-border rounded-md border border-border">
         <TransactionRow v-for="tx in items" :key="txId(tx)" :tx="tx" class="px-3 py-2" />
       </div>

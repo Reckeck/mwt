@@ -166,4 +166,4 @@ export class JsonSchemaReader {
   }
 }
 
-type LeafKind = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'enum' | 'unknown'
+export type LeafKind = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'enum' | 'unknown'

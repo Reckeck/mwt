@@ -2,7 +2,6 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
@@ -11,10 +10,9 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
 /** A bonus programme: what its points are called, what one is worth, when some burn. */
@@ -65,10 +63,9 @@ const save = useMutation({
       } satisfies SetLoyaltyInfoInput,
     }),
   onSuccess: () => {
-    toast.success(t('settings.saved'))
     for (const queryKey of [STORE_TREE_QUERY_KEY, ['cashback'], ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'settings.saveFailed', success: 'settings.saved' },
 })
 </script>
 

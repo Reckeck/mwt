@@ -3,14 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { SearchCheck } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { txChainAndHash, txId } from '@/shared/lib/transactions'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { EnrichmentBannerProps } from './enrichment-review.types'
@@ -38,23 +36,24 @@ function refresh() {
 const apply = useMutation({
   mutationFn: (recordId: string) => call<EnrichmentRecord>('apply_enrichment', { id: recordId }),
   onSuccess: () => {
-    toast.success(t('enrichment.applied'))
     refresh()
   },
-  onError: (err) => toast.error(t('enrichment.applyFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'enrichment.applyFailed', success: 'enrichment.applied' },
 })
 const reject = useMutation({
   mutationFn: (recordId: string) => call<EnrichmentRecord>('reject_enrichment', { id: recordId }),
   onSuccess: refresh,
-  onError: (err) => toast.error(t('enrichment.applyFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { success: 'enrichment.rejected', error: 'enrichment.applyFailed' },
 })
 const recheck = useMutation({
   mutationFn: () => call<EnrichmentRecord | null>('re_enrich', { txId: id.value }),
-  onSuccess: (record) => {
-    if (!record) toast.info(t('enrichment.nothing'))
+  onSuccess: () => {
     void queryClient.invalidateQueries({ queryKey: ['enrichments'] })
   },
-  onError: (err) => toast.error(t('enrichment.checkFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: {
+    error: 'enrichment.checkFailed',
+    success: (data) => (data ? t('enrichment.found') : t('enrichment.nothing')),
+  },
 })
 
 const feeText = computed(() => {

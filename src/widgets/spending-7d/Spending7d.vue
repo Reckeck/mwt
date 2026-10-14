@@ -60,7 +60,7 @@ const weekday = (date: string) =>
         <div class="flex h-24 w-full items-end">
           <div
             class="w-full rounded-t-sm"
-            :class="day.status === 'over' ? 'bg-destructive' : day.status === 'near' ? 'bg-amber-500' : 'bg-primary'"
+            :class="day.status === 'over' ? 'bg-destructive' : day.status === 'near' ? 'bg-warning' : 'bg-primary'"
             :style="{ height: `${Math.max(2, (day.daily / max) * 100)}%` }"
             :title="formatMoney(day.daily, { decimals: 0 })"
           />

@@ -2,8 +2,9 @@
 import { useI18n } from 'vue-i18n'
 
 import { Card } from '@/shared/ui/card'
-import { formatMoney } from '@/shared/lib/format'
+import { formatMoney, signClass } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
 import { monthLabel } from '../use-report'
 
@@ -15,7 +16,7 @@ const columns = ['income', 'fixed', 'daily', 'savings_plan', 'savings_fact', 'de
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-4">
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('report.year.income') }}</p>
@@ -43,41 +44,40 @@ const columns = ['income', 'fixed', 'daily', 'savings_plan', 'savings_fact', 'de
     </div>
     <Card>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm tabular-nums">
-          <thead class="text-xs text-muted-foreground">
-            <tr>
-              <th class="py-1 pr-2 text-left font-normal">{{ t('report.month') }}</th>
-              <th v-for="column in columns" :key="column" class="px-2 py-1 text-right font-normal">
+        <Table class="w-full text-sm tabular-nums">
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="text-left">{{ t('report.month') }}</TableHead>
+              <TableHead v-for="column in columns" :key="column" class="text-right">
                 {{ t(`report.year.${column}`) }}
-              </th>
-              <th class="py-1 pl-2 text-right font-normal">%</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
+              </TableHead>
+              <TableHead class="text-right">%</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow
               v-for="row in props.report.rows"
               :key="row.month"
-              class="border-t border-border"
               :class="row.empty && 'text-muted-foreground'"
             >
-              <td class="py-1.5 pr-2 capitalize">{{ monthLabel(row.month, activeLocale) }}</td>
-              <td
+              <TableCell class="capitalize">{{ monthLabel(row.month, activeLocale) }}</TableCell>
+              <TableCell
                 v-for="column in columns"
                 :key="column"
-                class="px-2 py-1.5 text-right"
-                :class="column === 'deviation' && !row.empty && (Number(row.deviation) < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')"
+                class="text-right"
+                :class="column === 'deviation' && !row.empty && signClass(row.deviation)"
               >
                 {{ row.empty ? '—' : money(row[column]) }}
-              </td>
-              <td class="py-1.5 pl-2 text-right">{{ row.empty ? '—' : `${row.saved_pct}%` }}</td>
-            </tr>
-            <tr v-for="(row, label) in { total: props.report.total, average: props.report.average }" :key="label" class="border-t-2 border-border font-medium">
-              <td class="py-1.5 pr-2">{{ t(`report.year.${label}`) }}</td>
-              <td v-for="column in columns" :key="column" class="px-2 py-1.5 text-right">{{ money(row[column]) }}</td>
-              <td class="py-1.5 pl-2 text-right">{{ row.saved_pct }}%</td>
-            </tr>
-          </tbody>
-        </table>
+              </TableCell>
+              <TableCell class="text-right">{{ row.empty ? '—' : `${row.saved_pct}%` }}</TableCell>
+            </TableRow>
+            <TableRow v-for="(row, label) in { total: props.report.total, average: props.report.average }" :key="label" class="font-medium">
+              <TableCell>{{ t(`report.year.${label}`) }}</TableCell>
+              <TableCell v-for="column in columns" :key="column" class="text-right">{{ money(row[column]) }}</TableCell>
+              <TableCell class="text-right">{{ row.saved_pct }}%</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
       <p class="mt-3 text-xs text-muted-foreground">{{ t('report.year.averageNote') }}</p>
     </Card>

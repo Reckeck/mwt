@@ -255,7 +255,7 @@ defineExpose({ apply })
           class="truncate font-medium tabular-nums"
           :class="cn(
             row.emphasis && 'text-base',
-            row.tone === 'positive' && 'text-emerald-600 dark:text-emerald-400',
+            row.tone === 'positive' && 'text-success',
             row.tone === 'negative' && 'text-destructive',
           )"
         >

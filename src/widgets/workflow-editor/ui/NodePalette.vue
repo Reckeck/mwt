@@ -7,6 +7,7 @@ import { useNodeCatalog } from '@/entities/workflow'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/lib/utils'
 import { GROUP_COLOR, NODE_GROUPS, localized } from '@/shared/lib/workflow'
+import { Button } from '@/shared/ui/button'
 
 /** Every node by group: drag one onto the canvas or click to add it. */
 const props = defineProps<{ simple: boolean }>()
@@ -48,19 +49,20 @@ function onDragStart(event: DragEvent, kind: string) {
           <span :class="cn('size-2 rounded-full', GROUP_COLOR[entry.group])" />
           {{ t(`workflow.group.${entry.group}`) }}
         </h3>
-        <button
+        <Button
+          variant="ghost"
+          size="block"
           v-for="def in entry.nodes"
           :key="def.kind"
-          type="button"
           draggable="true"
-          class="block w-full cursor-grab rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="block block w-full cursor-grab rounded-md px-2 py-1.5 text-left hover:bg-muted"
           :title="localized(def.description, locale)"
           @dragstart="onDragStart($event, def.kind)"
           @click="emit('add', def.kind)"
         >
           <span class="block text-sm">{{ localized(def.title, locale) }}</span>
           <span class="block truncate text-xs text-muted-foreground">{{ localized(def.description, locale) }}</span>
-        </button>
+        </Button>
       </section>
       <p v-if="!groups.length" class="px-2 text-sm text-muted-foreground">{{ t('workflow.palette.none') }}</p>
     </div>

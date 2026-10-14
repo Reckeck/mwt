@@ -37,7 +37,11 @@ const steps = computed(() => [
   },
   { key: 'savings', done: Number(settings.vault?.savings_rate ?? 0.1) !== 0.1, to: { name: 'dashboard', query: { settings: 'budget' } } },
   { key: 'operation', done: (txs.data.value?.length ?? 0) > 0, to: { name: 'stores' } },
-  { key: 'salary', done: (automations.data.value?.length ?? 0) > 0, to: { name: 'planning-automations' } },
+  {
+    key: 'salary',
+    done: (automations.data.value?.length ?? 0) > 0,
+    to: { name: 'planning-automations', query: { new: 'salary' } },
+  },
   { key: 'goal', done: (goals.data.value?.length ?? 0) > 0, to: { name: 'planning-goals' } },
 ])
 
@@ -78,7 +82,7 @@ const createOpen = ref(false)
     </template>
     <ol class="grid gap-2">
       <li v-for="(step, index) in steps" :key="step.key" class="flex items-center gap-3 text-sm">
-        <component :is="step.done ? CircleCheck : Circle" class="size-4 shrink-0" :class="step.done ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'" />
+        <component :is="step.done ? CircleCheck : Circle" class="size-4 shrink-0" :class="step.done ? 'text-success' : 'text-muted-foreground'" />
         <span class="min-w-0 flex-1" :class="step.done && 'text-muted-foreground line-through'">
           {{ index + 1 }}. {{ t(`onboarding.step.${step.key}`) }}
         </span>

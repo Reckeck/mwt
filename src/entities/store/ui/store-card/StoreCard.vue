@@ -26,7 +26,7 @@ const { t } = useI18n()
 
 const store = computed(() => props.node.store)
 const descendants = computed(() => storeDescendants(props.node))
-const money = (value: string) => formatMoney(value, { currency: props.baseCurrency, decimals: 0 })
+const money = (value: string) => formatMoney(value, { currency: props.baseCurrency })
 
 /** The backend refuses to delete a wallet with history or sub-accounts; say why up front. */
 const deleteBlocker = computed(() => {

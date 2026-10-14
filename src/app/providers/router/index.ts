@@ -1,4 +1,7 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { watch } from 'vue'
+import { type RouteLocationNormalized, createRouter, createWebHistory } from 'vue-router'
+
+import { i18n } from '@/shared/config/i18n'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -47,12 +50,8 @@ export const router = createRouter({
               component: () => import('@/pages/transactions').then((page) => page.Transactions),
               meta: { i18n: 'nav.transactions' },
             },
-            {
-              path: 'losses',
-              name: 'transactions-losses',
-              component: () => import('@/pages/transactions').then((page) => page.TransactionsLosses),
-              meta: { i18n: 'nav.transactions' },
-            },
+            // Losses live in Analytics now; old links and tours land there.
+            { path: 'losses', redirect: { name: 'analytics-losses' } },
             {
               path: 'graph',
               name: 'transactions-graph',
@@ -140,12 +139,8 @@ export const router = createRouter({
               component: () => import('@/pages/directory').then((page) => page.DirectoryContacts),
               meta: { i18n: 'nav.directory' },
             },
-            {
-              path: 'rates',
-              name: 'directory-rates',
-              component: () => import('@/pages/directory').then((page) => page.DirectoryRates),
-              meta: { i18n: 'nav.directory' },
-            },
+            // Rates moved to Settings → Money; the contacts stay here with the window open over them.
+            { path: 'rates', redirect: { name: 'directory-contacts', query: { settings: 'rates' } } },
           ],
         },
         {
@@ -239,7 +234,12 @@ export const router = createRouter({
   ],
 })
 
-router.afterEach((to) => {
-  const key = to.meta.i18n as string | undefined
-  document.title = key ? `Multi Wallet Tracker · ${key}` : 'Multi Wallet Tracker'
-})
+/** The window title: the screen's name in the UI language, then the app's. */
+function setTitle(route: RouteLocationNormalized) {
+  const app = i18n.global.t('app.title')
+  const key = route.meta.i18n as string | undefined
+  document.title = key ? `${i18n.global.t(key)} · ${app}` : app
+}
+
+router.afterEach(setTitle)
+watch(i18n.global.locale, () => setTitle(router.currentRoute.value))

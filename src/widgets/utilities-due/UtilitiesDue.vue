@@ -75,7 +75,7 @@ const payOpen = computed({
           <span v-if="row.open" class="flex flex-wrap items-baseline gap-2 text-lg font-semibold">
             <Money v-for="[currency, sum] in row.due" :key="currency" :amount="sum" :currency="currency" :decimals="0" />
           </span>
-          <span v-else class="text-sm text-emerald-600 dark:text-emerald-400">{{ t('utilitiesDue.allPaid') }}</span>
+          <span v-else class="text-sm text-success">{{ t('utilitiesDue.allPaid') }}</span>
           <Button v-if="row.open" size="sm" @click="payFor = row.store.id">
             <Receipt class="size-4" />
             {{ t('utilityBill.open') }}

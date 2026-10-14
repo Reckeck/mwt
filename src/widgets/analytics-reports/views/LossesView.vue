@@ -34,7 +34,7 @@ const option = computed<ChartOption>(() => ({
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <Card>
       <div class="h-72 w-full"><Chart :option="option" autoresize /></div>
     </Card>

@@ -2,17 +2,15 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -31,9 +29,9 @@ watch(
 async function persist(patch: Partial<Settings>) {
   try {
     await settings.updateVault(patch)
-    toast.success(t('settings.saved'))
+    notify.saved()
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'settings.saveFailed')
     await settings.loadVault().catch(() => undefined)
   }
 }
@@ -51,17 +49,17 @@ const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 async function saveZone(zone: string) {
   try {
     await settings.updateApp({ timezone: zone })
-    toast.success(t('settings.saved'))
+    notify.saved()
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'settings.saveFailed')
   }
 }
 
 function saveRate() {
   const value = Number(percent.value.replace(',', '.'))
   if (!Number.isFinite(value) || value < 0 || value > 100) {
-    toast.error(t('settings.savingsRateInvalid'))
+    notify.error(null, 'settings.savingsRateInvalid')
     return
   }
   const rate = String(value / 100)
@@ -72,7 +70,7 @@ function saveRate() {
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('settings.budgetTitle') }}</p>
+      <h3 class="heading-card">{{ t('settings.budgetTitle') }}</h3>
     </template>
 
     <div class="grid gap-4">

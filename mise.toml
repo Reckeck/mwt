@@ -23,7 +23,8 @@ CARGO_TARGET_DIR = ".rust-target"
 "gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
 "check-onboarding" = { description = "Every screen has a tour; tour, whats-new and learning texts exist (AGENTS.md rule 12)", run = "node scripts/check-onboarding.mjs" }
 "check-forms" = { description = "Forms: save buttons stay enabled, fields are checked on save (rule 13); accounts, assets, currencies use the ready pickers (rule 14)", run = "node scripts/check-forms.mjs" }
-"check" = { description = "Lint + typecheck + onboarding + forms + CI scripts + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && node scripts/check-forms.mjs && scripts/ci/lint-ci.sh && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
+"check-ui" = { description = "UI: shared components over raw markup, tokens over raw colours, every action reports its outcome, files split by meaning", run = "node scripts/check-ui.mjs" }
+"check" = { description = "Lint + typecheck + onboarding + forms + ui + CI scripts + clippy + tests", run = "pnpm exec biome check . && pnpm exec vue-tsc --noEmit && node scripts/check-onboarding.mjs && node scripts/check-forms.mjs && node scripts/check-ui.mjs && scripts/ci/lint-ci.sh && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace" }
 "check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
 "changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "node scripts/release.mjs changelog" }
 "bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "node scripts/release.mjs bump" }

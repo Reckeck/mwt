@@ -3,16 +3,15 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import { BellRing } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
-import { call, parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
 
 import {
   AUTO_REMINDER_CATEGORIES,
@@ -44,8 +43,9 @@ function category(name: NoticeCategory): NoticeCategoryCfg {
 async function save(patch: Partial<NotificationSettings>) {
   try {
     await settings.updateVault({ notifications: { ...current.value, ...patch } })
+    notify.saved()
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'settings.saveFailed')
   }
 }
 
@@ -64,6 +64,10 @@ const permission = useQuery({
 const askPermission = useMutation({
   mutationFn: () => call<string>('notification_permission', { request: true }),
   onSuccess: () => void permission.refetch(),
+  meta: {
+    error: 'settings.saveFailed',
+    success: (data) => `${t('notices.permission')}: ${t(`notices.permissionState.${data as string}`)}`,
+  },
 })
 /* --- while the vault is locked, and after a reboot --- */
 const storage = useQuery({ queryKey: ['notification-storage'], queryFn: () => call<string>('notification_storage') })
@@ -71,12 +75,15 @@ const autostart = useQuery({ queryKey: ['autostart'], queryFn: () => call<boolea
 const setAutostart = useMutation({
   mutationFn: (enabled: boolean) => call<boolean>('set_autostart', { enabled }),
   onSuccess: () => void autostart.refetch(),
-  onError: (err) => toast.error(t('settings.saveFailed'), { description: parseError(err).message }),
+  meta: {
+    error: 'settings.saveFailed',
+    success: (data) => (data ? t('notices.autostartOn') : t('notices.autostartOff')),
+  },
 })
 
 const test = useMutation({
   mutationFn: () => call('send_test_notification'),
-  onError: (err) => toast.error(t('notices.testFailed'), { description: parseError(err).message }),
+  meta: { success: 'notices.testSent', error: 'notices.testFailed' },
 })
 </script>
 

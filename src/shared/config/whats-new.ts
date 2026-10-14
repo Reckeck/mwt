@@ -21,6 +21,24 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'interface',
+    date: '2026-10-14',
+    points: [
+      { key: 'toasts' },
+      { key: 'undo', route: 'stores' },
+      { key: 'loading' },
+      { key: 'portfolio', route: 'analytics-portfolio' },
+      { key: 'automations', route: 'planning-automations' },
+      { key: 'widgets', route: 'dashboard' },
+      { key: 'numbers', route: 'wallet' },
+      { key: 'menu' },
+      { key: 'walletSettings', route: 'wallet-settings' },
+      { key: 'tables', route: 'analytics-categories' },
+      { key: 'moved', route: 'analytics-losses' },
+      { key: 'palette' },
+    ],
+  },
+  {
     id: 'round15',
     date: '2026-10-13',
     points: [

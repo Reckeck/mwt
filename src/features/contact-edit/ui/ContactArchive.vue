@@ -2,12 +2,10 @@
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { call } from '@/shared/api/ipc'
 
 import type { ContactArchiveProps } from '../contact-edit.types'
 
@@ -20,21 +18,19 @@ const queryClient = useQueryClient()
 const toggle = useMutation({
   mutationFn: () => call('archive_contact', { id: props.contact.id, archived: !props.contact.archived }),
   onSuccess: () => {
-    toast.success(props.contact.archived ? t('contacts.unarchived') : t('contacts.archived'))
     void queryClient.invalidateQueries({ queryKey: ['contacts'] })
   },
-  onError: (err) => toast.error(t('contacts.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'contacts.saveFailed', success: () => props.contact.archived ? t('contacts.unarchived') : t('contacts.archived') },
 })
 
 // The backend refuses a contact that transactions refer to; the toast says to archive it instead.
 const remove = useMutation({
   mutationFn: () => call('delete_contact', { id: props.contact.id }),
   onSuccess: () => {
-    toast.success(t('contacts.deleted'))
     void queryClient.invalidateQueries({ queryKey: ['contacts'] })
     emit('deleted')
   },
-  onError: (err) => toast.error(t('contacts.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'contacts.deleteFailed', success: 'contacts.deleted' },
 })
 </script>
 

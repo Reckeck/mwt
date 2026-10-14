@@ -1,26 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 import { CircleAlert, RefreshCw } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
+import { usePriceRefresh } from '@/features/price-refresh'
 import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import { formatDate } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
-const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const table = useQuery({ queryKey: ['fx-table'], queryFn: () => call<FxTable>('get_fx_table') })
 
-const refreshBusy = computed(() => summary.isFetching.value || table.isFetching.value)
+const priceRefresh = usePriceRefresh()
+const refreshBusy = computed(() => priceRefresh.isPending.value || summary.isFetching.value || table.isFetching.value)
 const today = localDate(new Date())
 
 /** No rate for the base currency at all: every total is really in dollars. */
@@ -41,17 +42,7 @@ const rows = computed(() => {
   })
 })
 
-async function refresh() {
-  try {
-    const result = await call<RefreshResult>('refresh_all')
-    queryClient.setQueryData(['refresh'], result)
-    toast.success(t('store.refreshed'), { description: `${result.prices} · ${result.fx}` })
-    await queryClient.invalidateQueries({ queryKey: ['summary'] })
-    await queryClient.invalidateQueries({ queryKey: ['fx-table'] })
-  } catch (err) {
-    toast.error(t('store.refreshFailed'), { description: parseError(err).message })
-  }
-}
+const refresh = () => priceRefresh.mutate()
 </script>
 
 <template>
@@ -77,13 +68,23 @@ async function refresh() {
       <CircleAlert class="mt-0.5 size-3.5 shrink-0" />
       {{ t('store.fxBaseMissing', { currency: settings.baseCurrency.toUpperCase() }) }}
     </p>
-    <p v-if="!rows.length" class="text-sm text-muted-foreground">{{ t('store.fxNoFavorites') }}</p>
-    <dl v-else class="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 gap-y-1 text-sm">
-      <template v-for="row in rows" :key="row.code">
-        <dt class="font-medium uppercase">1 {{ row.code }}</dt>
-        <dd class="text-right font-semibold"><Money :amount="row.inBase" :convert="false" :decimals="2" /></dd>
-        <dd class="text-right text-xs text-muted-foreground">{{ row.stale }}</dd>
-      </template>
-    </dl>
+    <SectionState
+      :loading="table.isPending.value"
+      :error="table.error.value"
+      :empty="!rows.length"
+      :empty-title="t('store.fxNoFavorites')"
+      skeleton="list"
+      :rows="2"
+      compact
+      @retry="table.refetch()"
+    >
+      <dl class="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 gap-y-1 text-sm">
+        <template v-for="row in rows" :key="row.code">
+          <dt class="font-medium uppercase">1 {{ row.code }}</dt>
+          <dd class="text-right font-semibold"><Money :amount="row.inBase" :convert="false" :decimals="2" /></dd>
+          <dd class="text-right text-xs text-muted-foreground">{{ row.stale }}</dd>
+        </template>
+      </dl>
+    </SectionState>
   </Card>
 </template>

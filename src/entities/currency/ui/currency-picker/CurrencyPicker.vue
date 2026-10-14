@@ -154,7 +154,7 @@ function onOpen(isOpen: boolean) {
                 class="flex h-8 w-full cursor-pointer select-none items-center gap-2 rounded px-2 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
               >
                 <Check v-if="option.code === picked" class="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                <Star v-else-if="option.favorite" class="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+                <Star v-else-if="option.favorite" class="size-3.5 shrink-0 text-warning" aria-hidden="true" />
                 <span v-else class="size-3.5 shrink-0" aria-hidden="true" />
                 <template v-if="option.code !== NONE">
                   <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>

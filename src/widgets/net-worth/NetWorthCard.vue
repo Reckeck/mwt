@@ -60,7 +60,7 @@ const option = computed<ChartOption>(() => ({
           {{ t('netWorthCard.title') }}
         </RouterLink>
         <span class="font-semibold tabular-nums">
-          {{ formatMoney(worth.data.value.net, { decimals: 0, currency: worth.data.value.base_currency }) }}
+          {{ formatMoney(worth.data.value.net, { currency: worth.data.value.base_currency }) }}
         </span>
       </div>
     </template>
@@ -70,7 +70,7 @@ const option = computed<ChartOption>(() => ({
         <template v-for="row in rows" :key="row.key">
           <dt class="text-muted-foreground">{{ t(`report.networth.${row.key}`) }}</dt>
           <dd class="text-right" :class="row.sign < 0 && 'text-destructive'">
-            {{ row.sign < 0 ? '−' : '' }}{{ formatMoney(row.value, { decimals: 0 }) }}
+            {{ formatMoney(row.sign < 0 ? -Number(row.value) : row.value, { decimals: 0 }) }}
           </dd>
         </template>
       </dl>

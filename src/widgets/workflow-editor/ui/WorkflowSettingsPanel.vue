@@ -5,6 +5,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@/shared/ui/button'
 
 /** With nothing selected: the workflow's own settings and its problems. */
 const props = defineProps<{ issues: GraphIssue[]; base: string }>()
@@ -47,15 +48,16 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
       <h4 class="text-sm font-medium">{{ t('workflow.settings.issues') }}</h4>
       <ul v-if="props.issues.length" class="grid gap-1">
         <li v-for="(issue, index) in props.issues" :key="index">
-          <button
-            type="button"
-            class="w-full rounded-md px-2 py-1 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <Button
+            variant="ghost"
+            size="block"
+            class="px-2 py-1 text-xs w-full rounded-md px-2 py-1 text-left text-xs hover:bg-muted"
             :class="issue.level === 'error' ? 'text-destructive' : 'text-muted-foreground'"
             :disabled="!issue.node_id"
             @click="issue.node_id && emit('focus', issue.node_id)"
           >
             {{ issueText(issue) }}
-          </button>
+          </Button>
         </li>
       </ul>
       <p v-else class="text-xs text-muted-foreground">{{ t('workflow.settings.noIssues') }}</p>

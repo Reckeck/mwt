@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, ArrowRight } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
@@ -128,7 +127,6 @@ const form = useFormValidation(
 const apply = useMutation({
   mutationFn: () => call<StoreChangePlan>('apply_store_change', { input: input.value }),
   onSuccess: () => {
-    toast.success(t('storeChange.done'), { description: t('storeChange.backupHint') })
     for (const queryKey of [STORE_TREE_QUERY_KEY, ['stores'], ['store'], ['summary'], ['net-worth'], ...LEDGER_KEYS]) {
       void queryClient.invalidateQueries({ queryKey })
     }
@@ -138,7 +136,7 @@ const apply = useMutation({
       void router.push({ name: 'wallet', params: { id: targetId.value } })
     }
   },
-  onError: (err) => toast.error(t('storeChange.failed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'storeChange.failed', success: () => ({ text: t('storeChange.done'), description: t('storeChange.backupHint') }) },
 })
 
 const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subType}`) : t('storeChange.wallet'))
@@ -200,7 +198,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
             </p>
           </div>
           <div v-if="plan.data.value.archived.length" class="grid gap-1">
-            <p class="text-xs font-medium text-amber-700 dark:text-amber-300">{{ t('storeChange.archived') }}</p>
+            <p class="text-xs font-medium text-warning">{{ t('storeChange.archived') }}</p>
             <p v-for="entry in plan.data.value.archived" :key="entry.store_id" class="text-sm">
               {{ entry.name }} <span class="text-muted-foreground">· {{ subTypeLabel(entry.sub_type_before) }}</span>
             </p>

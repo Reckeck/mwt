@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ArrowLeftRight } from 'lucide-vue-next'
@@ -7,11 +7,13 @@ import { ArrowLeftRight } from 'lucide-vue-next'
 import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { type ColumnDef, DataTable } from '@/shared/ui/data-table'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { call } from '@/shared/api/ipc'
-import { formatDateTime } from '@/shared/lib/format'
+import { formatDateTime, formatMoney, formatQuantity } from '@/shared/lib/format'
+import { cn } from '@/shared/lib/utils'
 
 const { t } = useI18n()
 
@@ -55,7 +57,42 @@ const converted = useQuery({
 function swap() {
   ;[from.value, to.value] = [to.value, from.value]
 }
-const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })
+const fmt = (value: string) => formatQuantity(value, 6)
+
+/** Tracked currencies first, then by code; a header click sorts by that column. */
+const columns = computed<ColumnDef<FxRow>[]>(() => {
+  const base = (table.data.value?.base ?? '').toUpperCase()
+  return [
+    {
+      id: 'currency',
+      header: t('rates.currency'),
+      accessorKey: 'currency',
+      cell: ({ row }) =>
+        h('span', { class: cn('uppercase', row.original.tracked ? 'font-medium' : 'text-muted-foreground') }, row.original.currency),
+    },
+    {
+      id: 'inBase',
+      header: t('rates.inBase', { base }),
+      accessorFn: (row) => Number(row.in_base),
+      cell: ({ row }) => fmt(row.original.in_base),
+      meta: { align: 'right' },
+    },
+    {
+      id: 'perBase',
+      header: t('rates.perBase', { base }),
+      accessorFn: (row) => Number(row.per_base),
+      cell: ({ row }) => fmt(row.original.per_base),
+      meta: { align: 'right' },
+    },
+    {
+      id: 'updated',
+      header: t('rates.updated'),
+      accessorFn: (row) => row.updated_at ?? '',
+      cell: ({ row }) => (row.original.updated_at ? formatDateTime(row.original.updated_at) : '—'),
+      meta: { align: 'right', class: 'text-xs text-muted-foreground' },
+    },
+  ]
+})
 </script>
 
 <template>
@@ -63,52 +100,35 @@ const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximum
     <Card>
       <template #header>
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <p class="font-medium">{{ t('rates.title', { base: (table.data.value?.base ?? '').toUpperCase() }) }}</p>
+          <h3 class="heading-card">{{ t('rates.title', { base: (table.data.value?.base ?? '').toUpperCase() }) }}</h3>
           <Input v-model="search" class="h-8 w-40" :placeholder="t('rates.search')" />
         </div>
       </template>
       <div class="max-h-[32rem] overflow-y-auto">
-        <table class="w-full text-sm tabular-nums">
-          <thead class="sticky top-0 bg-card text-xs text-muted-foreground">
-            <tr>
-              <th class="py-1 pr-2 text-left font-normal">{{ t('rates.currency') }}</th>
-              <th class="px-2 py-1 text-right font-normal">{{ t('rates.inBase', { base: (table.data.value?.base ?? '').toUpperCase() }) }}</th>
-              <th class="px-2 py-1 text-right font-normal">{{ t('rates.perBase', { base: (table.data.value?.base ?? '').toUpperCase() }) }}</th>
-              <th class="py-1 pl-2 text-right font-normal">{{ t('rates.updated') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in rows" :key="row.currency" class="border-t border-border">
-              <td class="py-1.5 pr-2 font-medium uppercase" :class="!row.tracked && 'font-normal text-muted-foreground'">{{ row.currency }}</td>
-              <td class="px-2 py-1.5 text-right">{{ fmt(row.in_base) }}</td>
-              <td class="px-2 py-1.5 text-right">{{ fmt(row.per_base) }}</td>
-              <td class="py-1.5 pl-2 text-right text-xs text-muted-foreground">{{ row.updated_at ? formatDateTime(row.updated_at) : '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <DataTable sticky-header :columns="columns" :data="rows" :get-row-id="(row) => row.currency" :empty-text="t('rates.empty')" />
       </div>
       <p class="mt-3 text-xs text-muted-foreground">{{ t('rates.hint') }}</p>
     </Card>
 
     <Card>
       <template #header>
-        <p class="font-medium">{{ t('rates.converter') }}</p>
+        <h3 class="heading-card">{{ t('rates.converter') }}</h3>
       </template>
       <div class="grid gap-3">
-        <div class="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
           <div class="grid gap-1.5">
             <Label for="convert-from">{{ t('rates.from') }}</Label>
-            <CurrencyPicker id="convert-from" v-model="from" label="" :extra="codes" />
+            <CurrencyPicker id="convert-from" v-model="from" label="" compact :extra="codes" />
           </div>
           <Button variant="ghost" size="icon" class="size-9" :aria-label="t('rates.swap')" @click="swap">
             <ArrowLeftRight class="size-4" />
           </Button>
           <div class="grid gap-1.5">
             <Label for="convert-to">{{ t('rates.to') }}</Label>
-            <CurrencyPicker id="convert-to" v-model="to" label="" :extra="codes" />
+            <CurrencyPicker id="convert-to" v-model="to" label="" compact :extra="codes" />
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-2 gap-2 [&>*]:min-w-0">
           <div class="grid gap-1.5">
             <Label for="convert-amount">{{ t('rates.amount') }}</Label>
             <AmountInput id="convert-amount" v-model="amount" />
@@ -118,8 +138,8 @@ const fmt = (value: string) => Number(value).toLocaleString(undefined, { maximum
             <Input id="convert-date" v-model="date" type="date" />
           </div>
         </div>
-        <p class="text-2xl font-semibold tabular-nums">
-          {{ converted.data.value?.amount ? `${fmt(converted.data.value.amount)} ${to.toUpperCase()}` : '—' }}
+        <p class="figure">
+          {{ converted.data.value?.amount ? formatMoney(converted.data.value.amount, { currency: to }) : '—' }}
         </p>
         <p v-if="converted.data.value && converted.data.value.amount === null" class="text-xs text-muted-foreground">{{ t('rates.noRate') }}</p>
       </div>

@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useDebounceFn } from '@vueuse/core'
 import { ArrowUpToLine, LineChart, Plus, Search, Trash2, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { PriceAlertList } from '@/widgets/price-alert-list'
 import { TradingChart, type IndicatorKey } from '@/widgets/trading-chart'
@@ -16,6 +15,7 @@ import { call, parseError } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { notify } from '@/shared/lib/notify'
 
 import type { ExchangeTerminalProps } from './exchange-terminal.types'
 
@@ -30,13 +30,14 @@ const terminal = useQuery({
   staleTime: Number.POSITIVE_INFINITY,
 })
 
-const fail = (err: unknown) => toast.error(t('terminal.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+const fail = (err: unknown) => notify.error(err, 'terminal.saveFailed')
 
 const patch = useMutation({
   mutationFn: (change: TerminalPatch) =>
     call<TerminalState>('update_terminal_state', { input: { store_id: props.storeId, patch: change } }),
   onSuccess: (state) => queryClient.setQueryData(queryKey.value, state),
   onError: fail,
+  meta: { silent: 'the layout saves as you work on it; the chart shows the change' },
 })
 
 /** Watchlist entries are pairs against USDT; the chart takes the base ticker. */
@@ -69,16 +70,27 @@ function moveTop(pair: string) {
 /** Bumped to remount the chart when its drawings change from outside it. */
 const chartNonce = ref(0)
 
+/** Write one pair's drawings and show them; `json` of `'[]'` clears them. */
+async function writeDrawings(pair: string, json: string) {
+  await call('save_terminal_drawings', { input: { store_id: props.storeId, symbol: pair, json } })
+  queryClient.setQueryData<TerminalState>(queryKey.value, (old) => {
+    if (!old) return old
+    const { [pair]: _previous, ...drawings } = old.drawings
+    return { ...old, drawings: json === '[]' ? drawings : { ...drawings, [pair]: json } }
+  })
+  if (pair === active.value) chartNonce.value += 1
+}
+
 async function clearDrawings(pair: string) {
   pendingDrawings.delete(pair)
+  const before = terminal.data.value?.drawings[pair]
   try {
-    await call('save_terminal_drawings', { input: { store_id: props.storeId, symbol: pair, json: '[]' } })
-    queryClient.setQueryData<TerminalState>(queryKey.value, (old) => {
-      if (!old) return old
-      const { [pair]: _removed, ...drawings } = old.drawings
-      return { ...old, drawings }
+    await writeDrawings(pair, '[]')
+    notify.success(t('terminal.drawingsCleared', { symbol: baseOf(pair) }), {
+      action: before
+        ? { label: t('actions.undo'), onClick: () => void writeDrawings(pair, before).catch(fail) }
+        : undefined,
     })
-    if (pair === active.value) chartNonce.value += 1
   } catch (err) {
     fail(err)
   }
@@ -116,9 +128,16 @@ function add() {
 }
 
 function removeFromList(pair: string) {
+  const before = [...watchlist.value]
   const next = watchlist.value.filter((entry) => entry !== pair)
   patch.mutate({ watchlist: next, active_symbol: null, timeframe: null, indicators: null, layout: null })
   if (active.value === pair) active.value = next[0] ?? 'BTCUSDT'
+  notify.success(t('terminal.removedFromList', { symbol: baseOf(pair) }), {
+    action: {
+      label: t('actions.undo'),
+      onClick: () => patch.mutate({ watchlist: before, active_symbol: null, timeframe: null, indicators: null, layout: null }),
+    },
+  })
 }
 
 /* --- chart state goes to the vault, debounced: a drag fires many changes --- */
@@ -218,8 +237,7 @@ function onIndicators(keys: IndicatorKey[]) {
       <ul class="flex flex-col gap-0.5 overflow-y-auto" :aria-label="t('trading.watchlist')">
         <ContextMenu v-for="pair in watchlist" :key="pair" :actions="watchActions(pair)">
         <li class="group flex items-center">
-          <button
-            type="button"
+          <Button variant="ghost" size="block" class="block"
             :class="
               cn(
                 'min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors hover:bg-accent',
@@ -229,15 +247,16 @@ function onIndicators(keys: IndicatorKey[]) {
             @click="select(pair)"
           >
             {{ baseOf(pair) }}<span class="text-xs text-muted-foreground">/USDT</span>
-          </button>
-          <button
-            type="button"
-            class="invisible rounded p-1 text-muted-foreground hover:text-destructive group-hover:visible focus-visible:visible"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            class="invisible text-muted-foreground hover:text-destructive group-hover:visible focus-visible:visible"
             :aria-label="t('terminal.remove', { symbol: pair })"
             @click="removeFromList(pair)"
           >
             <X class="size-3.5" />
-          </button>
+          </Button>
         </li>
         </ContextMenu>
       </ul>

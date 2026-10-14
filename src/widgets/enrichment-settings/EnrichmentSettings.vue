@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { parseError } from '@/shared/api/ipc'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -15,9 +13,9 @@ const settings = useSettingsStore()
 async function turnOff() {
   try {
     await settings.updateApp({ enrichment_opt_in: false })
-    toast.success(t('settings.saved'))
+    notify.saved()
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'settings.saveFailed')
   }
 }
 </script>
@@ -25,8 +23,8 @@ async function turnOff() {
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('enrichment.settingsTitle') }}</p>
-      <p class="text-xs text-muted-foreground">{{ t('enrichment.settingsHint') }}</p>
+      <h3 class="heading-card">{{ t('enrichment.settingsTitle') }}</h3>
+      <p class="text-sm text-muted-foreground">{{ t('enrichment.settingsHint') }}</p>
     </template>
     <div class="flex items-center justify-between gap-3">
       <span class="text-sm">

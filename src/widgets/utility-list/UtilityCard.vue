@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ChevronDown, CircleAlert, Pencil, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { MeterReadingForm } from '@/features/meter-reading'
 import { TransactionCreateDialog } from '@/features/transaction-create'
@@ -12,11 +11,11 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { notify } from '@/shared/lib/notify'
 
 import UtilityHistory from './UtilityHistory.vue'
 
@@ -53,7 +52,8 @@ const prepare = useMutation({
     draft.value = result
     payOpen.value = true
   },
-  onError: (err) => toast.error(t('utilities.draftFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  onError: (err) => notify.error(err, 'utilities.draftFailed'),
+  meta: { silent: 'loads the bill draft; the payment dialog that opens is the result' },
 })
 
 const editOpen = ref(false)
@@ -61,10 +61,9 @@ const historyOpen = ref(false)
 const remove = useMutation({
   mutationFn: () => call('delete_utility_item', { id: props.item.id }),
   onSuccess: () => {
-    toast.success(t('utilities.deleted'))
     for (const queryKey of [['utilities'], ...PLANNING_KEYS]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('utilities.deleteFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'utilities.deleteFailed', success: 'utilities.deleted' },
 })
 
 function onPaid() {
@@ -90,7 +89,7 @@ function onPaid() {
             <span
               v-if="trend.data.value?.delta_pct"
               class="ml-1 inline-flex items-center gap-0.5 text-xs"
-              :class="Number(trend.data.value.delta_pct) > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'"
+              :class="Number(trend.data.value.delta_pct) > 0 ? 'text-destructive' : 'text-success'"
             >
               <component :is="Number(trend.data.value.delta_pct) > 0 ? TrendingUp : TrendingDown" class="size-3" />
               {{ trend.data.value.delta_pct }}%
@@ -147,15 +146,16 @@ function onPaid() {
       </Button>
       <p v-if="draft?.includes_deposit" class="text-xs text-muted-foreground">{{ t('utilities.depositIncluded') }}</p>
 
-      <button
-        type="button"
-        class="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      <Button
+        variant="ghost"
+        size="block"
+        class="w-fit px-1 py-0.5 text-xs flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         :aria-expanded="historyOpen"
         @click="historyOpen = !historyOpen"
       >
         <ChevronDown class="size-3.5 transition-transform" :class="historyOpen && 'rotate-180'" />
         {{ t('utilityHistory.title') }}
-      </button>
+      </Button>
       <UtilityHistory v-if="historyOpen" :item="props.item" :months="trend.data.value?.months ?? []" />
     </div>
 

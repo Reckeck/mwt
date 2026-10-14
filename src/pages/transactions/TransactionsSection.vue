@@ -13,7 +13,6 @@ const router = useRouter()
 const tabs = computed(() => [
   { value: 'transactions', label: t('transactions.tab.list') },
   { value: 'transactions-graph', label: t('transactions.tab.graph') },
-  { value: 'transactions-losses', label: t('transactions.tab.losses') },
   { value: 'transactions-calendar', label: t('transactions.tab.calendar') },
 ])
 const tab = computed({
@@ -23,7 +22,7 @@ const tab = computed({
 </script>
 
 <template>
-  <div class="grid gap-4 @container">
+  <div class="grid grid-cols-1 gap-4 @container">
     <div class="w-fit max-w-full" data-tour="section-tabs"><Tabs v-model="tab" :tabs="tabs" /></div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
   </div>

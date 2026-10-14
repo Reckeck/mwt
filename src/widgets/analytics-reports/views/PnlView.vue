@@ -6,7 +6,7 @@ import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatMoney } from '@/shared/lib/format'
+import { formatMoney, signClass } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 
@@ -34,13 +34,13 @@ const option = computed<ChartOption>(() => ({
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <div class="grid gap-4 @sm:grid-cols-2">
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('report.pnl.realized') }}</p>
         <p
           class="text-xl font-semibold tabular-nums"
-          :class="Number(props.report.total_realized) < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'"
+          :class="signClass(props.report.total_realized)"
         >
           {{ formatMoney(props.report.total_realized, { currency: props.report.meta.currency }) }}
         </p>

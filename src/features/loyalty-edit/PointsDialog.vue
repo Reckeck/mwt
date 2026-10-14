@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
@@ -12,10 +11,9 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 /** Credit or spend a programme's points; a credit can name the card that earned it. */
 const props = defineProps<{ store: Store; mode: 'credit' | 'spend' }>()
@@ -50,11 +48,10 @@ const save = useMutation({
       } satisfies AdjustPointsInput,
     }),
   onSuccess: () => {
-    toast.success(t('loyalty.saved'))
     for (const queryKey of [['cashback'], ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('loyalty.failed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'loyalty.failed', success: 'loyalty.saved' },
 })
 </script>
 

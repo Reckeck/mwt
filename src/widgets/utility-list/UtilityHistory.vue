@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Check, Pencil, Trash2, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { TransactionEditDialog } from '@/features/transaction-edit'
 import { Money } from '@/entities/currency'
@@ -11,11 +10,10 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
 import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 /**
  * The last months of one bill: the reading can be corrected or removed in
@@ -60,19 +58,17 @@ const saveReading = useMutation({
       } satisfies UpdateMeterReadingInput,
     }),
   onSuccess: () => {
-    toast.success(t('utilities.readingSaved'))
     editing.value = null
     refresh()
   },
-  onError: (err) => toast.error(t('utilities.readingFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'utilities.readingFailed', success: 'utilities.readingSaved' },
 })
 const removeReading = useMutation({
   mutationFn: (id: string) => call('delete_meter_reading', { id }),
   onSuccess: () => {
-    toast.success(t('utilityHistory.readingDeleted'))
     refresh()
   },
-  onError: (err) => toast.error(t('utilities.readingFailed'), { description: parseError(err).message }),
+  meta: { error: 'utilities.readingFailed', success: 'utilityHistory.readingDeleted' },
 })
 
 /* --- editing a payment --- */

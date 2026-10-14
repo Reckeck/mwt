@@ -19,6 +19,7 @@ const tax = useQuery({ queryKey: ['interest-tax'], queryFn: () => call<InterestT
 const refresh = useMutation({
   mutationFn: () => call<number>('refresh_key_rates'),
   onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['interest-tax'] }),
+  meta: { success: 'interestTax.refreshed', error: 'interestTax.keyRateFailed' },
 })
 // Without the key rate there is no limit: fetch it once, quietly.
 watch(
@@ -55,7 +56,7 @@ const used = computed(() => {
         <div class="h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             class="h-full rounded-full"
-            :class="used >= 100 ? 'bg-destructive' : used > 80 ? 'bg-amber-500' : 'bg-primary'"
+            :class="used >= 100 ? 'bg-destructive' : used > 80 ? 'bg-warning' : 'bg-primary'"
             :style="{ width: `${used}%` }"
           />
         </div>

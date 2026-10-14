@@ -7,6 +7,7 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { Spinner } from '@/shared/ui/spinner'
 
 import { MIN_VAULT_PASSWORD, useCreateVault } from './useCreateVault'
 import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
@@ -50,7 +51,7 @@ const form = useFormValidation(
 
       <FormField for="create-password-repeat" :label="t('auth.passwordRepeat')" required :error="form.error('repeat')">
         <Input id="create-password-repeat" v-model="passwordRepeat" type="password" autocomplete="new-password" />
-        <p v-if="passwordMatch && !form.error('repeat')" class="text-xs text-emerald-600">✓ {{ t('auth.passwordMatch') }}</p>
+        <p v-if="passwordMatch && !form.error('repeat')" class="text-xs text-success">✓ {{ t('auth.passwordMatch') }}</p>
       </FormField>
 
       <p
@@ -65,7 +66,7 @@ const form = useFormValidation(
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
       <Button form="create-form" type="submit" :disabled="busy">
-        <span v-if="busy" class="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <Spinner v-if="busy" />
         {{ busy ? t('auth.creating') : t('auth.createVaultButton') }}
       </Button>
     </template>

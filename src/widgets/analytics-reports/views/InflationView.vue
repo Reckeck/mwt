@@ -35,13 +35,13 @@ const option = computed<ChartOption>(() => ({
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <Card>
       <div class="grid gap-1 text-sm">
         <p v-if="props.report.meta.inflation_rate">
           {{ t('report.inflation.rate', { rate: props.report.meta.inflation_rate, currency: props.report.meta.currency.toUpperCase() }) }}
         </p>
-        <p v-else class="text-amber-600 dark:text-amber-400">
+        <p v-else class="text-warning">
           {{ t('report.inflation.noRate', { currency: props.report.meta.currency.toUpperCase() }) }}
         </p>
         <p v-if="props.report.nominal_change_pct !== null" class="tabular-nums">

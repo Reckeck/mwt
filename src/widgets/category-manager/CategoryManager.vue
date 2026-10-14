@@ -3,17 +3,15 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, Plus, Trash2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
 import { Select } from '@/shared/ui/select'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { CATEGORY_GROUPS, categoryLabel } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -28,30 +26,31 @@ const sections = computed(() =>
 )
 
 const refresh = () => void queryClient.invalidateQueries({ queryKey: ['categories'] })
-const fail = (title: string) => (err: unknown) => toast.error(title, { description: codeErrorMessage(parseError(err), t) })
 
 const update = useMutation({
   mutationFn: (input: UpdateCategoryInput) => call<Category>('update_category', { input }),
   onSuccess: () => {
-    toast.success(t('settings.saved'))
     refresh()
   },
-  onError: fail(t('settings.saveFailed')),
+  meta: { success: 'categories.manage.renamed', error: 'settings.saveFailed' },
 })
 
 const archive = useMutation({
   mutationFn: (category: Category) => call('archive_category', { key: category.key, archived: !category.archived }),
   onSuccess: refresh,
-  onError: fail(t('settings.saveFailed')),
+  meta: {
+    error: 'settings.saveFailed',
+    success: (_data, category) =>
+      (category as Category).archived ? t('categories.manage.restored') : t('categories.manage.archived'),
+  },
 })
 
 const remove = useMutation({
   mutationFn: (key: string) => call('delete_category', { key }),
   onSuccess: () => {
-    toast.success(t('categories.manage.deleted'))
     refresh()
   },
-  onError: fail(t('categories.manage.deleteFailed')),
+  meta: { success: 'categories.manage.deleted', error: 'categories.manage.deleteFailed' },
 })
 
 /** Rename on blur; an empty name returns to the built-in label. */
@@ -67,19 +66,18 @@ const adder = useFormValidation(() => ({ name: required(newName.value) }))
 const create = useMutation({
   mutationFn: () => call<Category>('create_category', { input: { key: null, name: newName.value.trim(), group: newGroup.value } }),
   onSuccess: () => {
-    toast.success(t('categories.manage.created'))
     newName.value = ''
     adder.reset()
     refresh()
   },
-  onError: fail(t('settings.saveFailed')),
+  meta: { success: 'categories.manage.created', error: 'settings.saveFailed' },
 })
 </script>
 
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('categories.manage.title') }}</p>
+      <h3 class="heading-card">{{ t('categories.manage.title') }}</h3>
     </template>
 
     <div class="grid gap-5">

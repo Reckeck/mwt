@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { CircleCheck, GraduationCap, PlayCircle, Sparkles } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { LessonList } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
@@ -12,6 +11,7 @@ import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { TOURS, tourLocation, useTour } from '@/shared/lib/tour'
+import { notify } from '@/shared/lib/notify'
 
 /** The learning centre: every screen's tour, what is done, and «Что нового». */
 const { t } = useI18n()
@@ -33,9 +33,9 @@ function show(location: ReturnType<typeof tourLocation>) {
 async function reset() {
   try {
     await tour.resetAll()
-    toast.success(t('tour.resetDone'))
+    notify.success('tour.resetDone')
   } catch {
-    toast.error(t('settings.saveFailed'))
+    notify.error(null, 'settings.saveFailed')
   }
 }
 </script>
@@ -68,7 +68,7 @@ async function reset() {
           class="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-1.5 text-sm"
         >
           <span class="flex min-w-0 items-center gap-2">
-            <CircleCheck v-if="entry.done" class="size-4 shrink-0 text-emerald-500" />
+            <CircleCheck v-if="entry.done" class="size-4 shrink-0 text-success" />
             <span v-else class="size-4 shrink-0 rounded-full border border-border" />
             <span class="truncate">{{ t(`tourName.${entry.id}`) }}</span>
           </span>

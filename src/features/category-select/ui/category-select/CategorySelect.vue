@@ -2,10 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { categoryLabel } from '@/shared/lib/categories'
 
 import type { CategorySelectProps } from './category-select.types'
@@ -50,9 +49,11 @@ const create = useMutation({
     queryClient.setQueryData<Category[]>(['categories'], (old) => [...(old ?? []), category])
     void queryClient.invalidateQueries({ queryKey: ['categories'] })
     model.value = Array.isArray(model.value) ? [...model.value, category.key] : category.key
-    toast.success(t('categorySelect.created', { name: categoryLabel(category, t) }))
   },
-  onError: (err) => toast.error(t('categorySelect.createFailed'), { description: parseError(err).message }),
+  meta: {
+    error: 'categorySelect.createFailed',
+    success: (data) => t('categorySelect.created', { name: categoryLabel(data as Category, t) }),
+  },
 })
 
 const createLabel = computed(() =>

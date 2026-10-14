@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
+import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 
 const { t } = useI18n()
@@ -25,24 +26,32 @@ const hasDebts = computed(() => Number(summary.data.value?.liabilities_base ?? 0
     <template #header>
       <p data-widget-title class="text-sm text-muted-foreground">{{ t('netWorth.title') }}</p>
     </template>
-    <div class="grid gap-3">
-      <div>
-        <p class="text-xl font-bold @xs:text-2xl">
-          <Money :amount="summary.data.value?.net_worth_base ?? '0'" :currency="currency" />
-        </p>
-      </div>
-      <div class="grid grid-cols-2 gap-3 text-sm">
+    <SectionState
+      :loading="summary.isPending.value"
+      :error="summary.error.value"
+      skeleton="figure"
+      compact
+      @retry="summary.refetch()"
+    >
+      <div class="grid gap-3">
         <div>
-          <p class="text-xs text-muted-foreground">{{ t('netWorth.assets') }}</p>
-          <p class="font-medium"><Money :amount="summary.data.value?.assets_base ?? '0'" :currency="currency" /></p>
-        </div>
-        <div>
-          <p class="text-xs text-muted-foreground">{{ t('netWorth.liabilities') }}</p>
-          <p class="font-medium" :class="hasDebts && 'text-destructive'">
-            <Money :amount="summary.data.value?.liabilities_base ?? '0'" :currency="currency" />
+          <p class="figure @xs:text-2xl">
+            <Money :amount="summary.data.value?.net_worth_base ?? '0'" :currency="currency" />
           </p>
         </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p class="text-xs text-muted-foreground">{{ t('netWorth.assets') }}</p>
+            <p class="font-medium"><Money :amount="summary.data.value?.assets_base ?? '0'" :currency="currency" /></p>
+          </div>
+          <div>
+            <p class="text-xs text-muted-foreground">{{ t('netWorth.liabilities') }}</p>
+            <p class="font-medium" :class="hasDebts && 'text-destructive'">
+              <Money :amount="summary.data.value?.liabilities_base ?? '0'" :currency="currency" />
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
+    </SectionState>
   </Card>
 </template>

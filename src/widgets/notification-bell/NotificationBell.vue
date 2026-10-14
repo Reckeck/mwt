@@ -34,6 +34,10 @@ const days = computed(() => {
 const markRead = useMutation({
   mutationFn: (keys: string[] | null) => call('mark_notifications_read', { keys }),
   onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  meta: {
+    error: 'notices.markFailed',
+    success: (_data, keys) => (keys ? t('notices.markedRead') : t('notices.allRead')),
+  },
 })
 
 function openNotice(record: NoticeRecord) {
@@ -80,10 +84,11 @@ function openNotice(record: NoticeRecord) {
         <p v-if="!days.length" class="p-2 text-sm text-muted-foreground">{{ t('notices.empty') }}</p>
         <section v-for="[day, records] in days" :key="day" class="grid gap-1 pb-3">
           <p class="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ formatDate(day) }}</p>
-          <button
+          <Button
+            variant="ghost"
+            size="block"
             v-for="record in records"
             :key="record.key"
-            type="button"
             :class="
               cn(
                 'grid gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent',
@@ -100,7 +105,7 @@ function openNotice(record: NoticeRecord) {
               <span class="shrink-0 text-xs text-muted-foreground tabular-nums">{{ formatDateTime(record.delivered_at) }}</span>
             </span>
             <span class="text-muted-foreground">{{ record.body }}</span>
-          </button>
+          </Button>
         </section>
       </div>
     </SheetContent>

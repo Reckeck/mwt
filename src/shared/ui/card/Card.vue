@@ -18,17 +18,18 @@ const rest = computed(() => {
 </script>
 
 <template>
-  <div :class="cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', cls)" v-bind="rest">
-    <div v-if="$slots.header" data-card-header :class="cn('flex flex-col gap-1', pad.section, pad.header)">
+  <div data-slot="card" :class="cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', cls)" v-bind="rest">
+    <div v-if="$slots.header" data-slot="card-header" data-card-header :class="cn('flex flex-col gap-1', pad.section, pad.header)">
       <slot name="header" />
     </div>
     <!-- Only the section right under another one drops its top padding;
          a card without a header used to have its content glued to the edge. -->
-    <div v-if="$slots.default" :class="cn(pad.section, $slots.header && 'pt-0 sm:pt-0')">
+    <div v-if="$slots.default" data-slot="card-content" :class="cn(pad.section, $slots.header && 'pt-0 sm:pt-0')">
       <slot />
     </div>
     <div
       v-if="$slots.footer"
+      data-slot="card-footer"
       :class="cn('flex items-center gap-2', pad.section, ($slots.header || $slots.default) && 'pt-0 sm:pt-0')"
     >
       <slot name="footer" />

@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
 import { ChangePasswordDialog } from '@/features/vault-change-password'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
-import { parseError } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
+import { notify } from '@/shared/lib/notify'
+import { Switch } from '@/shared/ui/switch'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
@@ -40,9 +40,9 @@ const fxIntervalOptions = computed(() =>
 async function persist(patch: Partial<Settings>) {
   try {
     await settingsStore.updateVault(patch)
-    toast.success(t('settings.saved'))
+    notify.saved()
   } catch (err) {
-    toast.error(t('settings.saveFailed'), { description: parseError(err).message })
+    notify.error(err, 'settings.saveFailed')
     try {
       await settingsStore.loadVault()
     } catch {
@@ -55,15 +55,12 @@ function updateFxInterval(value: string) {
   void persist({ fx_refresh_interval_sec: Number(value) })
 }
 
-function updateMinimizeToTray(event: Event) {
-  void persist({ minimize_to_tray: (event.target as HTMLInputElement).checked })
-}
 </script>
 
 <template>
   <Card>
     <template #header>
-      <p class="font-medium">{{ t('settings.vaultTitle') }}</p>
+      <h3 class="heading-card">{{ t('settings.vaultTitle') }}</h3>
     </template>
 
     <div class="grid gap-4">
@@ -79,15 +76,13 @@ function updateMinimizeToTray(event: Event) {
         </Select>
       </div>
 
-      <div class="flex items-center gap-3">
-        <input
-          id="minimize-to-tray"
-          type="checkbox"
-          :checked="settingsStore.vault?.minimize_to_tray ?? true"
-          class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-          @change="updateMinimizeToTray"
-        >
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
         <Label for="minimize-to-tray">{{ t('settings.minimizeToTray') }}</Label>
+        <Switch
+          id="minimize-to-tray"
+          :model-value="settingsStore.vault?.minimize_to_tray ?? true"
+          @update:model-value="(value: boolean) => void persist({ minimize_to_tray: value })"
+        />
       </div>
 
       <p class="text-xs text-muted-foreground">{{ t('settings.autoSaveHint') }}</p>

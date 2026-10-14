@@ -63,7 +63,7 @@ const ICONS = {
           <span
             v-if="item.amount"
             class="shrink-0 tabular-nums"
-            :class="Number(item.amount) > 0 ? 'text-emerald-600 dark:text-emerald-400' : ''"
+            :class="Number(item.amount) > 0 ? 'text-success' : ''"
           >
             {{ formatMoney(item.amount, { decimals: 0, currency: item.asset?.symbol }) }}
           </span>

@@ -2,7 +2,6 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { toast } from 'vue-sonner'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { AssetInput } from '@/entities/asset'
@@ -13,10 +12,10 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
 import { Select } from '@/shared/ui/select'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { tickerRef } from '@/shared/lib/asset-ref'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { Switch } from '@/shared/ui/switch'
 
 import type { PriceAlertDialogProps } from './price-alert-edit.types'
 
@@ -96,11 +95,10 @@ const save = useMutation({
       : call<PriceAlert>('create_price_alert', { input })
   },
   onSuccess: () => {
-    toast.success(props.alert ? t('alert.saved') : t('alert.created'))
     for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
-  onError: (err) => toast.error(t('alert.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'alert.saveFailed', success: () => props.alert ? t('alert.saved') : t('alert.created') },
 })
 </script>
 
@@ -123,10 +121,10 @@ const save = useMutation({
           <CurrencyPicker id="alert-currency" v-model="currency" />
         </FormField>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="active" type="checkbox" class="size-4 accent-primary" />
-        {{ t('alert.active') }}
-      </label>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="alert-active">{{ t('alert.active') }}</Label>
+        <Switch id="alert-active" v-model="active" />
+      </div>
       <p class="text-xs text-muted-foreground">{{ t('alert.hint') }}</p>
     </form>
     <template #footer>

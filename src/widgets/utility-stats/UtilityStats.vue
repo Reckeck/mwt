@@ -10,6 +10,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
+import { formatPct } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
 import { useTheme } from '@/shared/lib/theme'
@@ -116,10 +117,10 @@ const option = computed<ChartOption>(() => ({
           <span
             v-if="deltaPct !== null"
             class="inline-flex items-center gap-0.5 text-xs font-normal"
-            :class="deltaPct > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'"
+            :class="deltaPct > 0 ? 'text-destructive' : 'text-success'"
           >
             <component :is="deltaPct > 0 ? TrendingUp : TrendingDown" class="size-3" />
-            {{ deltaPct.toFixed(1) }}%
+            {{ formatPct(deltaPct, { signed: true, decimals: 1 }) }}
           </span>
         </span>
       </div>

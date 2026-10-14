@@ -59,7 +59,7 @@ const last = computed(() => props.report.points[props.report.points.length - 1] 
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <Card>
       <div class="h-80 w-full"><Chart :option="option" autoresize /></div>
     </Card>

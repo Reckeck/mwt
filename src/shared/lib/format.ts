@@ -73,10 +73,71 @@ export function formatMoney(value: string | number | null | undefined, opts: Mon
   return symbol ? `${number}\u00a0${symbol}` : number
 }
 
-export function formatPct(value: string | number | null | undefined): string {
+export interface PctFormatOptions {
+  /** Prefix positive values with `+`. */
+  signed?: boolean
+  decimals?: number
+}
+
+/** `12.5` → `12,50 %` in the UI locale; the value is already in percent, not a fraction. */
+export function formatPct(value: string | number | null | undefined, opts: PctFormatOptions = {}): string {
   if (value === null || value === undefined || value === '') return '—'
   const numeric = typeof value === 'string' ? Number(value) : value
-  return `${numeric.toFixed(2)}%`
+  if (!Number.isFinite(numeric)) return String(value)
+  const { signed = false, decimals = 2 } = opts
+  return new Intl.NumberFormat(activeLocale.value, {
+    style: 'percent',
+    signDisplay: signed ? 'exceptZero' : 'auto',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(numeric / 100)
+}
+
+/**
+ * A holding's quantity or a count: as many places as it has, up to
+ * `maxDecimals` (the user's «знаков после запятой»), never padded with zeros
+ * (`1`, `0,00042`).
+ */
+export function formatQuantity(value: string | number | null | undefined, maxDecimals = 8): string {
+  if (value === null || value === undefined || value === '') return '—'
+  const numeric = typeof value === 'string' ? Number(value) : value
+  if (!Number.isFinite(numeric)) return String(value)
+  return new Intl.NumberFormat(activeLocale.value, { maximumFractionDigits: maxDecimals }).format(numeric)
+}
+
+/**
+ * A unit price: two places from 1 up, more below it so a token at 0.00031 does
+ * not read as 0.00.
+ */
+export function formatPrice(value: string | number | null | undefined, currency?: string): string {
+  if (value === null || value === undefined || value === '') return '—'
+  const numeric = typeof value === 'string' ? Number(value) : value
+  if (!Number.isFinite(numeric)) return String(value)
+  const abs = Math.abs(numeric)
+  const decimals = abs >= 1 || abs === 0 ? 2 : Math.min(8, 2 - Math.floor(Math.log10(abs)) + 1)
+  return formatMoney(numeric, { currency, decimals })
+}
+
+export type SignTone = 'positive' | 'negative' | 'neutral'
+
+/** Which way a signed figure went; zero and empty stay neutral, never "profit". */
+export function signTone(value: string | number | null | undefined): SignTone {
+  if (value === null || value === undefined || value === '') return 'neutral'
+  const numeric = typeof value === 'string' ? Number(value) : value
+  if (!Number.isFinite(numeric) || numeric === 0) return 'neutral'
+  return numeric > 0 ? 'positive' : 'negative'
+}
+
+/** Text colour for a tone: tokens, so light and dark themes need nothing extra. */
+export const SIGN_TONE_CLASS: Record<SignTone, string> = {
+  positive: 'text-success',
+  negative: 'text-destructive',
+  neutral: '',
+}
+
+/** Colour of a signed figure (P&L, a change, an amount in or out). */
+export function signClass(value: string | number | null | undefined): string {
+  return SIGN_TONE_CLASS[signTone(value)]
 }
 
 export function formatDate(iso: string | null | undefined): string {
@@ -116,6 +177,8 @@ export function useMoney() {
   return {
     money: (value: string | number | null | undefined, opts?: MoneyFormatOptions) => formatMoney(value, opts),
     formatPct,
+    quantity: formatQuantity,
+    price: formatPrice,
     date: formatDate,
     dateTime: formatDateTime,
     locale: activeLocale,

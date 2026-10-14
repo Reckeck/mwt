@@ -23,6 +23,21 @@ const emit = defineEmits<{ 'update:open': [boolean] }>()
 const widths = dialogWidths
 
 const { t } = useI18n()
+
+const FIELD = '[autofocus], input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"]'
+
+/**
+ * Opening lands on the field to fill — the one marked `autofocus`, else the
+ * first — not on the close button Reka would pick. A dialog without fields
+ * keeps Reka's default.
+ */
+function focusFirstField(event: Event) {
+  const panel = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const field = panel?.querySelector<HTMLElement>('[data-dialog-body] [autofocus]') ?? panel?.querySelector<HTMLElement>(`[data-dialog-body] :is(${FIELD})`)
+  if (!field) return
+  event.preventDefault()
+  field.focus()
+}
 </script>
 
 <template>
@@ -33,6 +48,7 @@ const { t } = useI18n()
         class="fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in"
         :class="widths[props.size]"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"
+        @open-auto-focus="focusFirstField"
       >
         <header class="flex items-start gap-3 border-b border-border p-4">
           <div class="min-w-0 flex-1">
@@ -49,7 +65,7 @@ const { t } = useI18n()
           </DialogClose>
         </header>
 
-        <div class="min-h-0 flex-1 overflow-y-auto p-4">
+        <div data-dialog-body class="min-h-0 flex-1 overflow-y-auto p-4">
           <slot />
         </div>
 

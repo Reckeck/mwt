@@ -79,7 +79,7 @@ function show(target: string) {
     <div class="grid gap-5">
       <section v-for="entry in entries" :key="entry.id" class="grid gap-2">
         <p class="flex items-center gap-2 text-sm font-medium">
-          <Sparkles class="size-4 text-amber-500" />
+          <Sparkles class="size-4 text-warning" />
           {{ t(`whatsNew.${entry.id}.title`) }}
           <span class="text-xs font-normal text-muted-foreground">{{ formatDate(entry.date) }}</span>
         </p>

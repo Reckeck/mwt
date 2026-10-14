@@ -1625,9 +1625,10 @@ fn build() -> Vec<NodeDef> {
     out
 }
 
-/// The catalog as JSON for the browser mock, under `src/shared/api/`;
+/// The catalog as JSON for the browser mock, under `src/shared/api/` (the mock
+/// lives in `mock/`, loaded only by `pnpm dev`);
 /// `mise run gen-types` rewrites it.
-pub const MOCK_CATALOG_FILE: &str = "ipc-mock-workflow-catalog.json";
+pub const MOCK_CATALOG_FILE: &str = "mock/workflow-catalog.json";
 
 static CATALOG: OnceLock<Vec<NodeDef>> = OnceLock::new();
 

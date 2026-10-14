@@ -3,13 +3,11 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { call, parseError } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 const emit = defineEmits<{ created: [contact: Contact] }>()
 const { t } = useI18n()
@@ -28,7 +26,7 @@ const create = useMutation({
     void queryClient.invalidateQueries({ queryKey: ['contacts'] })
     emit('created', contact)
   },
-  onError: (err) => toast.error(t('contacts.saveFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { success: 'contacts.created', error: 'contacts.saveFailed' },
 })
 </script>
 

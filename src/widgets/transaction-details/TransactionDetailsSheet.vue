@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Link2, Link2Off, Redo2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 
 import { EnrichmentBanner } from '@/features/enrichment-review'
 import { TransactionCreateDialog } from '@/features/transaction-create'
@@ -13,11 +12,11 @@ import { TransactionLinkDialog } from '@/features/transaction-link'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
-import { call, parseError } from '@/shared/api/ipc'
-import { formatDateTime, formatMoney } from '@/shared/lib/format'
+import { call } from '@/shared/api/ipc'
+import { formatDateTime, formatMoney, formatQuantity } from '@/shared/lib/format'
 import { txId, txKind, txLegs, txMeta, txPrincipalLegs, txSides } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
-import { codeErrorMessage } from '@/shared/lib/vault-error'
+import { notify } from '@/shared/lib/notify'
 
 import type { TransactionDetailsSheetProps } from './transaction-details.types'
 
@@ -50,7 +49,7 @@ const rate = computed(() => {
   const into = legs.find((leg) => Number(leg.amount) > 0 && leg.asset.symbol !== out?.asset.symbol)
   if (!out || !into) return null
   const value = Math.abs(Number(out.amount)) / Number(into.amount)
-  return `1 ${into.asset.symbol} = ${value.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${out.asset.symbol}`
+  return `1 ${into.asset.symbol} = ${formatQuantity(value, 6)} ${out.asset.symbol}`
 })
 
 /** Where the money of this operation ended up: the next link starts there. */
@@ -71,17 +70,16 @@ async function continueChain() {
     for (const queryKey of [['transactions'], ['flows']]) void queryClient.invalidateQueries({ queryKey })
     continueOpen.value = true
   } catch (err) {
-    toast.error(t('flows.linkFailed'), { description: codeErrorMessage(parseError(err), t) })
+    notify.error(err, 'flows.linkFailed')
   }
 }
 
 const unlink = useMutation({
   mutationFn: () => call('unlink_transaction', { id: id.value }),
   onSuccess: () => {
-    toast.success(t('flows.unlinked'))
     for (const queryKey of [['transactions'], ['flows'], ['report']]) void queryClient.invalidateQueries({ queryKey })
   },
-  onError: (err) => toast.error(t('flows.linkFailed'), { description: codeErrorMessage(parseError(err), t) }),
+  meta: { error: 'flows.linkFailed', success: 'flows.unlinked' },
 })
 </script>
 
@@ -102,7 +100,7 @@ const unlink = useMutation({
               class="flex justify-between gap-2 tabular-nums"
             >
               <span class="text-muted-foreground">{{ context.storeName(leg.store_id) }}</span>
-              <span class="font-medium">{{ leg.amount }} {{ leg.asset.symbol }}</span>
+              <span class="font-medium tabular-nums">{{ formatMoney(leg.amount, { currency: leg.asset.symbol, signed: true }) }}</span>
             </p>
             <p v-if="rate" class="text-xs text-muted-foreground">{{ t('txDetails.rate', { rate }) }}</p>
             <p v-if="sides.from || sides.to" class="text-xs text-muted-foreground">
@@ -121,7 +119,7 @@ const unlink = useMutation({
               <dd class="text-right font-medium">{{ formatMoney(loss.data.value.total, { currency: loss.data.value.currency }) }}</dd>
             </dl>
             <p v-if="loss.data.value.internal" class="text-xs text-muted-foreground">{{ t('losses.internalHint') }}</p>
-            <p v-if="!loss.data.value.complete" class="text-xs text-amber-600 dark:text-amber-400">{{ t('losses.incomplete') }}</p>
+            <p v-if="!loss.data.value.complete" class="text-xs text-warning">{{ t('losses.incomplete') }}</p>
           </section>
 
           <section v-if="meta.categories.length || meta.contact_id || meta.comment" class="grid gap-1.5">

@@ -91,19 +91,20 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
         <div class="grid grid-cols-7 gap-1 text-center text-xs">
           <div v-for="name in weekdays" :key="name" class="pb-1 text-muted-foreground capitalize">{{ name }}</div>
           <div v-for="index in lead" :key="`lead-${index}`" />
-          <button
+          <Button
+            variant="outline"
+            size="block"
             v-for="day in calendar.data.value?.days ?? []"
             :key="day.date"
-            type="button"
-            class="grid min-h-16 content-start gap-0.5 rounded-md border p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="h-auto text-xs grid min-h-16 content-start gap-0.5 rounded-md border p-1.5 text-left transition-colors"
             :class="[STATUS_CLASSES[day.status], selected === day.date ? 'ring-2 ring-primary' : '']"
             :aria-pressed="selected === day.date"
             @click="selected = selected === day.date ? null : day.date"
           >
             <span class="font-medium">{{ Number(day.date.slice(8)) }}</span>
             <span v-if="Number(day.daily)" class="tabular-nums">−{{ money(day.daily) }}</span>
-            <span v-if="Number(day.income)" class="tabular-nums text-emerald-600 dark:text-emerald-400">+{{ money(day.income) }}</span>
-          </button>
+            <span v-if="Number(day.income)" class="tabular-nums text-success">+{{ money(day.income) }}</span>
+          </Button>
         </div>
         <div class="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span v-for="status in ['under', 'near', 'over'] as const" :key="status" class="flex items-center gap-1.5">
