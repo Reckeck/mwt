@@ -123,6 +123,9 @@ pub struct RunContext {
     /// Emulation only: answers already given to «Ждать подтверждения»
     /// nodes, by node id. A question without an answer pauses the emulation.
     pub answers: BTreeMap<String, bool>,
+    /// Every firing of the trigger gathered for «Очередь», each one's trigger
+    /// values; empty — just this one (`trigger_values`).
+    pub batch: Vec<BTreeMap<String, WfValue>>,
 }
 
 impl RunContext {
@@ -147,6 +150,7 @@ impl RunContext {
             resume: None,
             call_depth: 0,
             answers: BTreeMap::new(),
+            batch: Vec::new(),
         }
     }
 }
@@ -733,6 +737,9 @@ impl Executor<'_> {
         if node.kind == "list.for_each" {
             return self.for_each(node, def);
         }
+        if node.kind == "flow.queue" {
+            return self.queue(node, def);
+        }
         if node.kind.starts_with("loop.") && node.kind != "loop.break" {
             return self.run_loop(node, def);
         }
@@ -846,6 +853,58 @@ impl Executor<'_> {
         for (index, item) in items.into_iter().take(taken).enumerate() {
             if !self.loop_pass(node, index, ("item", item))? {
                 break;
+            }
+        }
+        self.forget_pure_data();
+        self.follow(&node.id, "done")
+    }
+
+    /// «Очередь»: the gathered firings, one by one, each with its own trigger
+    /// values; «Независимо» undoes only the firing that fails.
+    fn queue(&mut self, node: &Node, def: &NodeDef) -> Result<(), Halt> {
+        let ctx = self.ctx;
+        let items = if ctx.batch.is_empty() {
+            vec![ctx.trigger_values.clone()]
+        } else {
+            ctx.batch.clone()
+        };
+        let total = items.len();
+        let independent = self.raw_param(node, "mode").as_str() == Some("independent");
+        let number =
+            |value: usize| WfValue::Number(Amount::new(rust_decimal::Decimal::from(value as u64)));
+        self.memo.insert(memo_key(&node.id, "count"), number(total));
+        self.push_trace(
+            &node.id,
+            StepStatus::Ok,
+            format!("«{}»: срабатываний — {total}", def.title.ru),
+            format!("«{}»: {total} firings", def.title.en),
+        );
+        for (index, values) in items.iter().take(MAX_ITEMS).enumerate() {
+            for (port, value) in values {
+                self.memo
+                    .insert(memo_key(&ctx.trigger_node, port), value.clone());
+            }
+            self.forget_pure_data();
+            self.memo
+                .insert(memo_key(&node.id, "item"), WfValue::Record(values.clone()));
+            self.memo.insert(memo_key(&node.id, "index"), number(index));
+            self.mark_ran(&node.id);
+            let targets = self.targets(&node.id, "each");
+            let ready = self.ready_after(&node.id);
+            let point = independent.then(|| self.savepoint());
+            match (self.run_branches(targets, ready), point) {
+                (Err(Halt::Break), _) => break,
+                (Err(Halt::Fail(message)), Some(point)) => {
+                    self.undo_branch(&node.id, point, message)
+                }
+                (other, _) => other?,
+            }
+        }
+        // «Готово» sees the first firing, as the nodes before the queue did.
+        if let Some(first) = items.first() {
+            for (port, value) in first {
+                self.memo
+                    .insert(memo_key(&ctx.trigger_node, port), value.clone());
             }
         }
         self.forget_pure_data();

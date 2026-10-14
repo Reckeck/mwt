@@ -1903,3 +1903,162 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
         .unwrap();
     assert_eq!(manual.run.trigger, "manual");
 }
+
+/// Salary → «Очередь» → send the salary's amount from savings to the card.
+/// Savings hold 500; the card gets the salaries.
+fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String, Workflow) {
+    let (dir, mut vault, card, savings) = wallets();
+    vault
+        .add_transaction(income(&savings, "500", "opening"))
+        .unwrap();
+    let pay = transfer_node("pay", &savings, &card, "0");
+    let trigger = node(
+        "t",
+        "trigger.transaction",
+        json!({ "tx_kind": "topup", "category": "salary" }),
+    );
+    let (nodes, edges) = match mode {
+        Some(mode) => (
+            vec![
+                trigger,
+                node("q", "flow.queue", json!({ "mode": mode })),
+                pay,
+            ],
+            vec![
+                wire("t", "out", "q", "in"),
+                wire("q", "each", "pay", "in"),
+                wire("t", "amount", "pay", "amount"),
+            ],
+        ),
+        None => (
+            vec![trigger, pay],
+            vec![
+                wire("t", "out", "pay", "in"),
+                wire("t", "amount", "pay", "amount"),
+            ],
+        ),
+    };
+    let workflow = save(&mut vault, "Queue", graph_v3(nodes, edges));
+    (dir, vault, savings, workflow)
+}
+
+fn salaries(vault: &mut UnlockedVault, card: &str, amounts: &[&str]) {
+    for value in amounts {
+        vault
+            .add_transaction(income(card, value, "salary"))
+            .unwrap();
+    }
+}
+
+fn card_of(vault: &UnlockedVault, savings: &str) -> String {
+    vault
+        .doc
+        .stores
+        .iter()
+        .find(|store| store.id != savings && store.name == "Card")
+        .map(|store| store.id.clone())
+        .unwrap()
+}
+
+#[test]
+fn a_queue_takes_the_firings_of_a_pass_in_one_run() {
+    let (_dir, mut vault, savings, workflow) = queue_vault(Some("sequence"));
+    let card = card_of(&vault, &savings);
+    salaries(&mut vault, &card, &["100", "50", "200"]);
+    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
+    assert_eq!(
+        pass.runs[0].outcome,
+        RunOutcome::Done,
+        "{:?}",
+        pass.runs[0].trace
+    );
+    assert!(
+        pass.runs[0].trigger.contains("×3"),
+        "{}",
+        pass.runs[0].trigger
+    );
+    assert_eq!(pass.created.len(), 3);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("150"));
+    assert_eq!(vault.workflow_runs(Some(&workflow.id), 10).len(), 1);
+}
+
+#[test]
+fn a_queue_in_turn_undoes_everything_on_a_failure() {
+    let (_dir, mut vault, savings, _workflow) = queue_vault(Some("sequence"));
+    let card = card_of(&vault, &savings);
+    salaries(&mut vault, &card, &["100", "1000", "200"]);
+    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    assert_eq!(pass.runs.len(), 1);
+    assert!(
+        matches!(pass.runs[0].outcome, RunOutcome::Failed { .. }),
+        "{:?}",
+        pass.runs[0].outcome
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("500"));
+}
+
+#[test]
+fn an_independent_queue_keeps_the_firings_that_went_through() {
+    let (_dir, mut vault, savings, _workflow) = queue_vault(Some("independent"));
+    let card = card_of(&vault, &savings);
+    salaries(&mut vault, &card, &["100", "1000", "200"]);
+    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    assert_eq!(pass.runs.len(), 1);
+    assert!(
+        matches!(&pass.runs[0].outcome, RunOutcome::Partial { failed } if failed.len() == 1),
+        "{:?}",
+        pass.runs[0].outcome
+    );
+    assert_eq!(pass.created.len(), 2);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("200"));
+}
+
+#[test]
+fn without_a_queue_every_firing_is_its_own_run() {
+    let (_dir, mut vault, savings, _workflow) = queue_vault(None);
+    let card = card_of(&vault, &savings);
+    salaries(&mut vault, &card, &["100", "50", "200"]);
+    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    assert_eq!(pass.runs.len(), 3, "{:?}", pass.runs);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("150"));
+}
+
+#[test]
+fn a_queue_stands_after_a_trigger_and_does_not_sleep() {
+    let lone = crate::workflow::Graph::parse(&graph_v3(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("q", "flow.queue", json!({})),
+        ],
+        vec![],
+    ))
+    .unwrap();
+    let codes: Vec<_> = crate::workflow::validate(&lone)
+        .into_iter()
+        .map(|issue| issue.code)
+        .collect();
+    assert!(
+        codes.contains(&"queue_without_trigger".to_string()),
+        "{codes:?}"
+    );
+
+    let sleepy = crate::workflow::Graph::parse(&graph_v3(
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("q", "flow.queue", json!({})),
+            node("w", "action.wait", json!({ "hours": "1" })),
+        ],
+        vec![wire("t", "out", "q", "in"), wire("q", "each", "w", "in")],
+    ))
+    .unwrap();
+    let codes: Vec<_> = crate::workflow::validate(&sleepy)
+        .into_iter()
+        .map(|issue| issue.code)
+        .collect();
+    assert!(codes.contains(&"queue_sleeps".to_string()), "{codes:?}");
+    assert!(
+        !codes.contains(&"queue_without_trigger".to_string()),
+        "{codes:?}"
+    );
+}

@@ -1586,6 +1586,38 @@ fn build() -> Vec<NodeDef> {
         ],
     });
     out.push(NodeDef {
+        kind: "flow.queue",
+        group: Logic,
+        title: txt("Очередь", "Queue"),
+        description: txt(
+            "Собирает все срабатывания триггера за одну проверку и передаёт их дальше по одному.",
+            "Gathers every firing of the trigger in one check and hands them on one by one.",
+        ),
+        help: txt(
+            "Пришло пять операций сразу — вместо пяти запусков будет один: ветка «Каждое» пройдёт пять раз, у каждого раза свои данные триггера (и «Элемент» — все они записью), потом — «Готово». «По очереди»: сбой одного отменяет весь запуск. «Независимо»: каждое срабатывание — своя ветка, сбой отменяет только её. При ручном запуске и в эмуляции — пример из последних срабатываний. Не больше 200 за запуск.",
+            "Five operations came at once — one run instead of five: the «Each» way goes five times, each with its own trigger data (and «Item» — all of it as a record), then «Done». «In turn»: one failing undoes the whole run. «Independently»: each firing is a branch of its own, a failure undoes only it. Run by hand and in emulation it takes an example from the latest firings. At most 200 per run.",
+        ),
+        inputs: vec![flow_in()],
+        outputs: vec![
+            port("each", Ty::Flow, txt("Каждое", "Each")),
+            port("done", Ty::Flow, txt("Готово", "Done")),
+            port("item", Ty::Any, txt("Элемент", "Item")),
+            port("index", Ty::Number, txt("Номер", "Index")),
+            port("count", Ty::Number, txt("Сколько всего", "How many")),
+        ],
+        params: vec![param(
+            "mode",
+            select(&[
+                ("sequence", txt("По очереди", "In turn")),
+                ("independent", txt("Независимо", "Independently")),
+            ]),
+            txt("Как передавать", "How to hand on"),
+            json!("sequence"),
+        )],
+        advanced: false,
+        keywords: vec!["очередь", "пакет", "все сразу", "накопить", "собрать", "queue", "batch", "collect"],
+    });
+    out.push(NodeDef {
         kind: "list.count",
         group: List,
         title: txt("Количество", "Count"),

@@ -268,6 +268,7 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
     }
 
     out.extend(order_issues(graph, &order));
+    out.extend(queue_issues(graph));
 
     if let Some(node_id) = find_cycle(graph, &defs, true) {
         out.push(
@@ -424,6 +425,75 @@ fn order_issues(graph: &Graph, order: &HashMap<String, Vec<String>>) -> Vec<Grap
                 )
                 .on_edge(&only.id),
             );
+        }
+    }
+    out
+}
+
+/// Nodes reached by flow wires from `start` leaving through `port` (or any port).
+fn flow_reach(graph: &Graph, start: &str, port: Option<&str>) -> HashSet<String> {
+    let mut seen = HashSet::new();
+    let mut stack: Vec<String> = graph
+        .edges
+        .iter()
+        .filter(|edge| edge.from == start && port.is_none_or(|name| edge.from_port == name))
+        .filter(|edge| is_flow_input(graph, &edge.to, &edge.to_port))
+        .map(|edge| edge.to.clone())
+        .collect();
+    while let Some(id) = stack.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        stack.extend(
+            graph
+                .edges
+                .iter()
+                .filter(|edge| edge.from == id && is_flow_input(graph, &edge.to, &edge.to_port))
+                .map(|edge| edge.to.clone()),
+        );
+    }
+    seen
+}
+
+/// «Очередь» hands on the firings of a trigger, so it stands after one; a
+/// wait inside it would stop the items that are left.
+fn queue_issues(graph: &Graph) -> Vec<GraphIssue> {
+    let mut out = Vec::new();
+    for queue in graph
+        .nodes
+        .iter()
+        .filter(|node| !node.disabled && node.kind == "flow.queue")
+    {
+        let after_trigger = graph
+            .nodes
+            .iter()
+            .filter(|node| !node.disabled && node.kind.starts_with("trigger."))
+            .any(|trigger| flow_reach(graph, &trigger.id, None).contains(&queue.id));
+        if !after_trigger {
+            out.push(
+                GraphIssue::error(
+                    "queue_without_trigger",
+                    "«Очередь» должна стоять после триггера по потоку — она раздаёт его срабатывания".into(),
+                    "«Queue» must follow a trigger by flow: it hands on that trigger's firings".into(),
+                )
+                .on_node(&queue.id),
+            );
+        }
+        for id in flow_reach(graph, &queue.id, Some("each")) {
+            let sleeps = graph
+                .node(&id)
+                .is_some_and(|node| matches!(node.kind.as_str(), "action.wait" | "action.confirm"));
+            if sleeps {
+                let (who_ru, who_en) = name_of(graph, &id);
+                out.push(
+                    GraphIssue::warning(
+                        "queue_sleeps",
+                        format!("«{who_ru}» внутри «Очереди» усыпит запуск: оставшиеся срабатывания не пройдут"),
+                        format!("«{who_en}» inside «Queue» puts the run to sleep: the firings left won't go through"),
+                    )
+                    .on_node(&id),
+                );
+            }
         }
     }
     out

@@ -1018,6 +1018,62 @@ impl UnlockedVault {
         report.events
     }
 
+    /// Several firings of one trigger in a pass: with a «Очередь» in the
+    /// workflow, one run that hands them on one by one; otherwise a run each.
+    fn fire_all(
+        &mut self,
+        workflow: &Workflow,
+        graph: &Graph,
+        firings: Vec<RunContext>,
+        pass: &mut WorkflowPass,
+    ) -> Vec<EmittedEvent> {
+        if firings.len() > 1 && has_queue(graph) {
+            let batch: Vec<_> = firings
+                .iter()
+                .map(|ctx| ctx.trigger_values.clone())
+                .collect();
+            let mut first = firings.into_iter().next().unwrap_or_else(|| unreachable!());
+            first.trigger_label = format!("{} ×{}", first.trigger_label, batch.len());
+            first.batch = batch;
+            return self.fire(workflow, graph, first, pass);
+        }
+        let mut events = Vec::new();
+        for ctx in firings {
+            events.extend(self.fire(workflow, graph, ctx, pass));
+        }
+        events
+    }
+
+    /// An example batch for «Очередь» when run by hand or emulated: the
+    /// latest firings of an operation trigger (up to 3, oldest first).
+    fn sample_batch(
+        &self,
+        graph: &Graph,
+        trigger: &Node,
+        now: i64,
+        zone: &str,
+    ) -> Vec<BTreeMap<String, WfValue>> {
+        if !has_queue(graph) {
+            return Vec::new();
+        }
+        if trigger.kind == "trigger.transaction" {
+            let mut latest: Vec<_> = self
+                .doc
+                .transactions
+                .iter()
+                .rev()
+                .filter(|tx| tx_matches(self, &trigger.params, tx))
+                .take(3)
+                .map(tx_trigger_values)
+                .collect();
+            latest.reverse();
+            if !latest.is_empty() {
+                return latest;
+            }
+        }
+        vec![self.sample_trigger_values(trigger, now, zone)]
+    }
+
     /// Run a workflow now from a trigger (a «Запуск вручную» one by default).
     pub fn run_workflow_now(
         &mut self,
@@ -1044,6 +1100,7 @@ impl UnlockedVault {
             trigger_label(&trigger.kind, "by hand")
         };
         ctx.trigger_values = self.sample_trigger_values(&trigger, now, zone);
+        ctx.batch = self.sample_batch(&graph, &trigger, now, zone);
         let mut pass = WorkflowPass::default();
         let report = exec::run(self, &graph, &ctx);
         self.keep_run(&report, &mut pass);
@@ -1079,6 +1136,7 @@ impl UnlockedVault {
         ctx.mode = RunMode::DryRun;
         ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
         ctx.trigger_values = self.sample_trigger_values(&trigger, now, zone);
+        ctx.batch = self.sample_batch(&graph, &trigger, now, zone);
         ctx.answers = answers;
         let mut report = exec::run(&mut sandbox, &graph, &ctx);
         // The workflows its events start run too, on the same copy, so the
@@ -1180,30 +1238,38 @@ impl UnlockedVault {
                 return;
             }
             let mut next = Vec::new();
-            for event in std::mem::take(&mut events) {
-                for workflow in self.active_workflows() {
-                    let Ok(graph) = Graph::parse(&workflow.graph) else {
-                        continue;
-                    };
-                    let listeners: Vec<Node> = graph
-                        .nodes
+            let round = std::mem::take(&mut events);
+            for workflow in self.active_workflows() {
+                let Ok(graph) = Graph::parse(&workflow.graph) else {
+                    continue;
+                };
+                let listeners: Vec<Node> = graph
+                    .nodes
+                    .iter()
+                    .filter(|node| !node.disabled && node.kind == "trigger.event")
+                    .cloned()
+                    .collect();
+                for trigger in listeners {
+                    let listens = trigger
+                        .params
+                        .get("name")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_string();
+                    // The same event sent several times this round: one queue.
+                    let firings: Vec<RunContext> = round
                         .iter()
-                        .filter(|node| !node.disabled && node.kind == "trigger.event")
-                        .filter(|node| {
-                            node.params
-                                .get("name")
-                                .and_then(serde_json::Value::as_str)
-                                .is_some_and(|name| name.trim() == event.name)
+                        .filter(|event| event.name == listens)
+                        .map(|event| {
+                            let mut ctx = self.context(&workflow, &trigger, now, zone);
+                            ctx.trigger_label = trigger_label("event", &event.name);
+                            ctx.trigger_values =
+                                BTreeMap::from([("payload".to_string(), event.payload.clone())]);
+                            ctx
                         })
-                        .cloned()
                         .collect();
-                    for trigger in listeners {
-                        let mut ctx = self.context(&workflow, &trigger, now, zone);
-                        ctx.trigger_label = trigger_label("event", &event.name);
-                        ctx.trigger_values =
-                            BTreeMap::from([("payload".to_string(), event.payload.clone())]);
-                        next.extend(self.fire(&workflow, &graph, ctx, pass));
-                    }
+                    next.extend(self.fire_all(&workflow, &graph, firings, pass));
                 }
             }
             events = next;
@@ -1321,14 +1387,20 @@ impl UnlockedVault {
                         };
                         let (moments, _skipped) =
                             schedule_moments(&trigger.params, &Calendar::new(zone), after, now);
-                        for moment in moments {
-                            let at = crate::calendar::iso(moment);
-                            let mut ctx = self.context(&workflow, trigger, now, zone);
-                            ctx.trigger_label = trigger_label(&trigger.kind, &at);
-                            ctx.trigger_values =
-                                BTreeMap::from([("at".to_string(), WfValue::Date(at.clone()))]);
-                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
-                            self.wf_set_mark(&workflow.id, &key, &at);
+                        let firings: Vec<RunContext> = moments
+                            .iter()
+                            .map(|moment| {
+                                let at = crate::calendar::iso(*moment);
+                                let mut ctx = self.context(&workflow, trigger, now, zone);
+                                ctx.trigger_label = trigger_label(&trigger.kind, &at);
+                                ctx.trigger_values =
+                                    BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
+                                ctx
+                            })
+                            .collect();
+                        events.extend(self.fire_all(&workflow, &graph, firings, &mut pass));
+                        if let Some(last) = moments.last() {
+                            self.wf_set_mark(&workflow.id, &key, &crate::calendar::iso(*last));
                         }
                     }
                     "trigger.transaction" => {
@@ -1341,6 +1413,7 @@ impl UnlockedVault {
                             .iter()
                             .filter(|tx| tx_matches(self, &params, tx))
                             .collect();
+                        let mut firings = Vec::new();
                         for tx in matching {
                             // A workflow never reacts to what it made itself.
                             if matches!(&tx.meta().origin, crate::model::transaction::TxOrigin::Workflow { workflow_id, .. } if *workflow_id == workflow.id)
@@ -1350,8 +1423,9 @@ impl UnlockedVault {
                             let mut ctx = self.context(&workflow, trigger, now, zone);
                             ctx.trigger_label = trigger_label(&trigger.kind, &tx.meta().id);
                             ctx.trigger_values = tx_trigger_values(tx);
-                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+                            firings.push(ctx);
                         }
+                        events.extend(self.fire_all(&workflow, &graph, firings, &mut pass));
                     }
                     "trigger.balance" | "trigger.price" => {
                         let Some((value, above)) = self.threshold_value(trigger, now) else {
@@ -1433,4 +1507,12 @@ fn wait_graph(wait: &WorkflowWait, workflow: &Workflow) -> Result<Graph> {
     } else {
         Graph::parse(&wait.graph)
     }
+}
+
+/// Whether a workflow gathers the firings of a pass: it has a «Очередь» that is on.
+fn has_queue(graph: &Graph) -> bool {
+    graph
+        .nodes
+        .iter()
+        .any(|node| node.kind == "flow.queue" && !node.disabled)
 }
