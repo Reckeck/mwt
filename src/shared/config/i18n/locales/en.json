@@ -1674,6 +1674,17 @@
   "ui.actions": "Actions",
   "ui.showMore": "Show {count} more",
   "ui.showLess": "Show less",
+  "ui.pick.date": "Pick a date",
+  "ui.pick.datetime": "Pick a date and time",
+  "ui.pick.month": "Pick a month",
+  "ui.time": "Time",
+  "ui.today": "Today",
+  "ui.now": "Now",
+  "ui.thisMonth": "This month",
+  "ui.clear": "Clear",
+  "ui.done": "Done",
+  "ui.prevYear": "Previous year",
+  "ui.nextYear": "Next year",
   "toast.failed": "Couldn't complete the action",
   "toast.undone": "Undone",
   "widgetFrame.size": "Size",
@@ -2507,5 +2518,8 @@
   "palette.actions": "Actions",
   "palette.screens": "Screens",
   "palette.wallets": "Wallets",
-  "whatsNew.interface.palette": "Ctrl+K (or «Go to…» at the top) opens quick navigation: any screen, wallet or action by a few letters."
+  "whatsNew.interface.palette": "Ctrl+K (or «Go to…» at the top) opens quick navigation: any screen, wallet or action by a few letters.",
+  "whatsNew.interface.dates": "Dates and months are picked in a calendar in the app's language, with «Today» and «Clear» — the same on every system.",
+  "whatsNew.interface.filters": "The filter bar is shorter: wallet, kind and search stay in view, the rest sits under «More filters» with a count of what is set.",
+  "filter.more": "More filters"
 }

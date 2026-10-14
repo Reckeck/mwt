@@ -3,9 +3,9 @@ import { useI18n } from 'vue-i18n'
 
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Textarea } from '@/shared/ui/textarea'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { useAdjustment } from './model/use-adjustment'
 import type { AdjustmentDialogProps } from './store-adjust.types'
@@ -39,7 +39,7 @@ const { fiatOnly, title, timestamp, comment, rows, draft, changed, form, save } 
       :error="form.error('timestamp')"
       :hint="t('adjustment.dateHint')"
     >
-      <Input id="adjustment-date" v-model="timestamp" type="datetime-local" class="px-2" />
+      <DateTimePicker id="adjustment-date" v-model="timestamp" mode="datetime" class="px-2" />
     </FormField>
 
     <AdjustmentRowsTable v-model:rows="rows" :invalid="Boolean(form.error('rows'))" :loaded="draft.isSuccess.value" />

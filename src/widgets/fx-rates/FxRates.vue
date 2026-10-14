@@ -14,6 +14,7 @@ import { Label } from '@/shared/ui/label'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime, formatMoney, formatQuantity } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 const { t } = useI18n()
 
@@ -135,7 +136,7 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
           </div>
           <div class="grid gap-1.5">
             <Label for="convert-date">{{ t('rates.date') }}</Label>
-            <Input id="convert-date" v-model="date" type="date" />
+            <DateTimePicker id="convert-date" v-model="date" />
           </div>
         </div>
         <p class="figure">

@@ -8,12 +8,12 @@ import { TransactionEditDialog } from '@/features/transaction-edit'
 import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
 import { activeLocale } from '@/shared/lib/locale'
 import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 /**
  * The last months of one bill: the reading can be corrected or removed in
@@ -103,7 +103,7 @@ const txOpen = computed({
         >
           <template v-if="editing === reading.id">
             <span class="contents" :data-invalid="draftCheck.invalidAttr('date')">
-              <Input v-model="draftDate" type="date" class="h-7 w-36 px-2" :aria-label="t('utilities.day')" />
+              <DateTimePicker v-model="draftDate" class="h-7 w-36 px-2" :aria-label="t('utilities.day')" />
             </span>
             <span class="contents" :data-invalid="draftCheck.invalidAttr('value')">
               <AmountInput v-model="draft" class="h-7 w-32" :aria-label="t('utilities.reading')" />

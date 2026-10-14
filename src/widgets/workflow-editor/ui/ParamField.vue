@@ -18,6 +18,7 @@ import { formatMoney } from '@/shared/lib/format'
 import { WEEKDAYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { WORKFLOW_KEYS, localized } from '@/shared/lib/workflow'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import TargetsField from './TargetsField.vue'
 
@@ -88,7 +89,7 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         @update:model-value="(next) => emit('update', kind === 'day' ? Number(next) || 1 : String(next))"
       />
       <Input v-else-if="kind === 'time'" :id="id" type="time" :model-value="text" @update:model-value="(next) => emit('update', String(next))" />
-      <Input v-else-if="kind === 'date'" :id="id" type="date" :model-value="text" @update:model-value="(next) => emit('update', String(next) || null)" />
+      <DateTimePicker v-else-if="kind === 'date'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)" />
       <Textarea v-else-if="kind === 'long_text'" :id="id" :model-value="text" rows="3" @update:model-value="(next) => emit('update', String(next))" />
       <StoreNodeSelect
         v-else-if="kind === 'store'"

@@ -15,6 +15,7 @@ import { call } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { Switch } from '@/shared/ui/switch'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { CAPITALIZATIONS, INCOME_BRACKETS } from './deposit-terms.constants'
 import type { DepositTermsFormProps } from './deposit-terms.types'
@@ -109,7 +110,7 @@ const save = useMutation({
         </span>
       </div>
       <div v-for="(row, index) in rates" :key="index" class="flex items-center gap-2">
-        <Input v-model="row.from" type="date" class="w-40" :aria-label="t('deposit.rateFrom')" />
+        <DateTimePicker v-model="row.from" class="w-40" :aria-label="t('deposit.rateFrom')" />
         <AmountInput v-model="row.rate" :decimals="3" class="w-32" :aria-label="t('deposit.rate')">
           <template #suffix><span class="px-2 text-xs text-muted-foreground">%</span></template>
         </AmountInput>
@@ -143,7 +144,7 @@ const save = useMutation({
       <template v-if="isDeposit">
         <div class="grid gap-1.5">
           <Label for="deposit-opened">{{ t('deposit.openedAt') }}</Label>
-          <Input id="deposit-opened" v-model="openedAt" type="date" />
+          <DateTimePicker id="deposit-opened" v-model="openedAt" />
         </div>
         <FormField for="deposit-term" :label="t('deposit.termMonths')" :error="form.error('termMonths')">
           <Input id="deposit-term" v-model="termMonths" type="number" min="1" max="120" />
@@ -161,7 +162,7 @@ const save = useMutation({
       <p class="text-xs text-muted-foreground">{{ t('deposit.pds.hint') }}</p>
       <div class="grid gap-4 @sm:grid-cols-2">
         <FormField for="pds-first" :label="t('deposit.pds.firstContribution')" required :error="form.error('firstContribution')">
-          <Input id="pds-first" v-model="firstContribution" type="date" />
+          <DateTimePicker id="pds-first" v-model="firstContribution" />
         </FormField>
         <div class="grid gap-1.5">
           <Label for="pds-bracket">{{ t('deposit.pds.bracket') }}</Label>

@@ -2,11 +2,9 @@
 import { computed } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { X } from 'lucide-vue-next'
 
 import { ReportExportButton } from '@/features/report-export'
 import { ReportFilterBar } from '@/widgets/report-filter'
-import { Button } from '@/shared/ui/button'
 import { Tabs } from '@/shared/ui/tabs'
 
 import { useReportFilter } from './model/use-report-filter'
@@ -44,12 +42,8 @@ const { filter, narrowed, reset } = useReportFilter()
       <div class="w-fit max-w-full" data-tour="section-tabs"><Tabs v-model="tab" :tabs="tabs" /></div>
       <div data-tour="report-export"><ReportExportButton :kind="kind" :filter="filter" /></div>
     </div>
-    <div class="flex flex-wrap items-end gap-3" data-tour="report-filter">
-      <ReportFilterBar v-model="filter" class="min-w-0 flex-1" :kind="kind" />
-      <Button v-if="narrowed" variant="ghost" @click="reset">
-        <X class="size-4" />
-        {{ t('filter.reset', { count: narrowed }) }}
-      </Button>
+    <div data-tour="report-filter">
+      <ReportFilterBar v-model="filter" :kind="kind" :active="narrowed" @reset="reset" />
     </div>
     <div class="min-w-0" data-tour="section-content">
       <RouterView v-slot="{ Component }">

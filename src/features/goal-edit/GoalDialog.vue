@@ -18,6 +18,7 @@ import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { GoalDialogProps } from './goal-edit.types'
 
@@ -135,10 +136,10 @@ const save = useMutation({
 
       <div class="grid items-start gap-3 @sm:grid-cols-3">
         <FormField for="goal-start" :label="t('goal.startsAt')" required :error="form.error('startsAt')">
-          <Input id="goal-start" v-model="startsAt" type="date" />
+          <DateTimePicker id="goal-start" v-model="startsAt" />
         </FormField>
         <FormField for="goal-deadline" :label="t('goal.deadline')" :error="form.error('deadline')">
-          <Input id="goal-deadline" v-model="deadline" type="date" />
+          <DateTimePicker id="goal-deadline" v-model="deadline" />
           <p class="text-xs text-muted-foreground">{{ t('goal.optional') }}</p>
         </FormField>
         <FormField for="goal-commitment" :label="t('goal.commitment')" :error="form.error('commitment')">
