@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'workflows2',
+    date: '2026-10-14',
+    points: [
+      { key: 'quickAddOnly', route: 'workflow-new' },
+      { key: 'flowsInInspector', route: 'workflow-new' },
+    ],
+  },
+  {
     id: 'interface',
     date: '2026-10-14',
     points: [

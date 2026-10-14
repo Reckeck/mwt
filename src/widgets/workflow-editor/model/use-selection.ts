@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { localized } from '@/shared/lib/workflow'
 
-import { type EditorNode, isNote } from './flow'
+import { type EditorNode, type FlowPortLinks, isNote } from './flow'
 import type { EditorGraph } from './use-editor-graph'
 
 /** The one node the inspector shows, what feeds each of its inputs, and its edits. */
@@ -33,6 +33,34 @@ export function useSelection(editor: EditorGraph) {
     return out
   })
 
+  const nodeTitle = (id: string) => {
+    const nodeDef = def(editor.kindOf(id))
+    return editor.nodeById(id)?.data?.label || (nodeDef ? localized(nodeDef.title, locale.value) : id)
+  }
+
+  /** The node's flow ports and the wires on each: where the run comes from and goes next. */
+  const flowLinks = computed<FlowPortLinks[]>(() => {
+    const node = selectedNode.value
+    const nodeDef = selectedDef.value
+    if (!node || !nodeDef) return []
+    const side = (ports: NodeDef['inputs'], isOut: boolean): FlowPortLinks[] =>
+      ports
+        .filter((port) => port.type === 'flow')
+        .map((port) => ({
+          port: port.name,
+          side: isOut ? 'out' : 'in',
+          label: localized(port.label, locale.value),
+          links: editor.edges.value
+            .filter((edge) =>
+              isOut
+                ? edge.source === node.id && edge.sourceHandle === port.name
+                : edge.target === node.id && edge.targetHandle === port.name,
+            )
+            .map((edge) => ({ edgeId: edge.id, title: nodeTitle(isOut ? edge.target : edge.source) })),
+        }))
+    return [...side(nodeDef.inputs, false), ...side(nodeDef.outputs, true)]
+  })
+
   function setParam(param: string, value: unknown) {
     const node = selectedNode.value
     if (node) editor.patchNode(node.id, (data) => ({ ...data, params: { ...data.params, [param]: value } }))
@@ -48,5 +76,5 @@ export function useSelection(editor: EditorGraph) {
     if (node) editor.unwire(node.id, port)
   }
 
-  return { selectedNode, selectedDef, wiredFrom, setParam, setLabel, unwire }
+  return { selectedNode, selectedDef, wiredFrom, flowLinks, setParam, setLabel, unwire }
 }

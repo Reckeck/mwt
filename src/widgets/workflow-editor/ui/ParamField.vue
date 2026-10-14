@@ -66,9 +66,9 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
 </script>
 
 <template>
-  <div class="grid gap-1.5">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
     <div v-if="kind === 'bool'" class="flex items-center justify-between gap-2">
-      <Label :for="id">{{ localized(props.param.label, locale) }}</Label>
+      <Label :for="id" class="min-w-0 [overflow-wrap:anywhere]">{{ localized(props.param.label, locale) }}</Label>
       <Switch :id="id" :model-value="Boolean(current)" @update:model-value="(on) => emit('update', on)" />
     </div>
     <template v-else>

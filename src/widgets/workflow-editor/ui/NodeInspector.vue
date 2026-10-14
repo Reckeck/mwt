@@ -9,18 +9,21 @@ import { Label } from '@/shared/ui/label'
 import { localized } from '@/shared/lib/workflow'
 
 import { paramVisible } from '../model/fields'
-import type { EditorNode } from '../model/flow'
+import type { EditorNode, FlowPortLinks } from '../model/flow'
+import NodeFlows from './NodeFlows.vue'
 import ParamField from './ParamField.vue'
 
 /**
- * The selected node: its fields, where wired inputs come from, what is wrong
- * with it, and its help (F1).
+ * The selected node: its fields, where wired inputs come from, its flow wires,
+ * what is wrong with it, and its help (F1).
  */
 const props = defineProps<{
   node: EditorNode
   def: NodeDef | undefined
   /** Input port → where its wire comes from, in words. */
   wiredFrom: Record<string, string>
+  /** Flow ports and their wires. */
+  flows: FlowPortLinks[]
   issues: GraphIssue[]
 }>()
 const help = defineModel<boolean>('help', { default: false })
@@ -29,6 +32,8 @@ const emit = defineEmits<{
   label: [value: string]
   toggle: []
   unwire: [port: string]
+  unlink: [edgeId: string]
+  addFlow: [port: string, side: 'in' | 'out', event: MouseEvent]
   remove: []
 }>()
 
@@ -40,7 +45,7 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
 </script>
 
 <template>
-  <div class="grid gap-4" data-tour="workflow-inspector">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-4 [overflow-wrap:anywhere] [&>*]:min-w-0" data-tour="workflow-inspector">
     <div class="flex items-start gap-2">
       <div class="min-w-0 flex-1">
         <h3 class="font-semibold">{{ props.def ? text(props.def.title) : props.node.data?.kind }}</h3>
@@ -61,7 +66,7 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
       </dl>
     </div>
 
-    <ul v-if="props.issues.length" class="grid gap-1">
+    <ul v-if="props.issues.length" class="grid grid-cols-[minmax(0,1fr)] gap-1 [&>*]:min-w-0">
       <li
         v-for="(issue, index) in props.issues"
         :key="index"
@@ -72,7 +77,7 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
       </li>
     </ul>
 
-    <div class="grid gap-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
       <Label for="workflow-node-label">{{ t('workflow.inspector.label') }}</Label>
       <Input
         id="workflow-node-label"
@@ -83,7 +88,7 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
     </div>
 
     <template v-for="param in fields" :key="param.name">
-      <div v-if="props.wiredFrom[param.name]" class="grid gap-1.5">
+      <div v-if="props.wiredFrom[param.name]" class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
         <span class="text-sm font-medium">{{ text(param.label) }}</span>
         <div class="flex items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-sm">
           <span class="min-w-0 flex-1 truncate">{{ t('workflow.inspector.fromWire', { source: props.wiredFrom[param.name] }) }}</span>
@@ -98,6 +103,12 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
     <p v-if="props.def?.params.some((param) => param.wirable)" class="text-xs text-muted-foreground">
       {{ t('workflow.inspector.wireHint') }}
     </p>
+
+    <NodeFlows
+      :ports="props.flows"
+      @unlink="(edgeId) => emit('unlink', edgeId)"
+      @add="(port, side, event) => emit('addFlow', port, side, event)"
+    />
 
     <div class="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" @click="emit('toggle')">

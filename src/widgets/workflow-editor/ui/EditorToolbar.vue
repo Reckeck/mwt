@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { FlaskConical, Keyboard, Play, Plus, Save, StickyNote, Undo2 } from 'lucide-vue-next'
+import { FlaskConical, Keyboard, Play, Save, StickyNote, Undo2 } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
@@ -23,7 +23,6 @@ defineProps<{
 }>()
 const emit = defineEmits<{
   note: []
-  quickAdd: []
   emulate: []
   run: []
   discard: []
@@ -68,10 +67,6 @@ const { t } = useI18n()
     </Button>
     <Button variant="ghost" size="icon" :aria-label="t('workflow.note.add')" :title="t('workflow.note.add')" @click="emit('note')">
       <StickyNote class="size-4" />
-    </Button>
-    <Button variant="outline" data-tour="workflow-quick-button" @click="emit('quickAdd')">
-      <Plus class="size-4" />
-      {{ t('workflow.addNode') }}
     </Button>
     <Button variant="outline" data-tour="workflow-emulate" :disabled="emulating || !hasNodes" @click="emit('emulate')">
       <FlaskConical class="size-4" />
