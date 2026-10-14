@@ -28,9 +28,9 @@ function workflows(own: TourStep[]): TourStep[] {
 /** The node editor: new and saved workflows alike. */
 const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-canvas', key: 'workflowEditor.canvas', side: 'top' },
-  { target: 'workflow-palette', key: 'workflowEditor.palette', side: 'right' },
-  { target: 'workflow-quick-button', key: 'workflowEditor.quick', side: 'bottom' },
+  { target: 'workflow-quick-hint', key: 'workflowEditor.quick', side: 'top' },
   { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
+  { target: 'workflow-node-flows', key: 'workflowEditor.flows', side: 'left' },
   { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
   { target: 'workflow-tests', key: 'workflowEditor.tests', side: 'left' },
   { target: 'workflow-emulate', key: 'workflowEditor.emulate', side: 'bottom' },

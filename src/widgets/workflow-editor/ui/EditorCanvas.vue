@@ -10,6 +10,7 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
 import { WorkflowNodeCard, type WorkflowNodeData } from '@/entities/workflow'
+import { Kbd } from '@/shared/ui/kbd'
 
 import type { EditorNode, EditorNoteData } from '../model/flow'
 import { useSpacePan } from '../model/space-pan'
@@ -18,7 +19,7 @@ import type { EditorGraph } from '../model/use-editor-graph'
 import { leaveFields } from '../model/use-editor-hotkeys'
 import NoteCard from './NoteCard.vue'
 
-/** The canvas: nodes, notes and wires; drop from the palette, hold Space to pan. */
+/** The canvas: nodes, notes and wires; Ctrl+Space adds a node, hold Space to pan. */
 const props = defineProps<{
   editor: EditorGraph
   insert: ReturnType<typeof useCanvasInsert>
@@ -37,8 +38,6 @@ const spacePan = useSpacePan({ get: flow.getViewport, set: (next) => void flow.s
     class="wf-canvas relative min-h-[28rem] flex-1 overflow-hidden rounded-lg border border-border bg-background"
     data-tour="workflow-canvas"
     :aria-label="t('workflow.canvasLabel')"
-    @drop.prevent="insert.onDrop"
-    @dragover.prevent
     :data-space-pan="spacePan.held.value ? (spacePan.panning.value ? 'grabbing' : 'grab') : undefined"
     @pointerdown.capture="spacePan.onPress"
     @mousedown.capture="spacePan.onPress"
@@ -79,5 +78,11 @@ const spacePan = useSpacePan({ get: flow.getViewport, set: (next) => void flow.s
     >
       {{ t('workflow.canvas.empty') }}
     </div>
+    <p
+      data-tour="workflow-quick-hint"
+      class="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-md bg-background/80 px-2 py-1 text-xs text-muted-foreground">
+      <Kbd>Ctrl</Kbd>+<Kbd>Space</Kbd>
+      {{ t('workflow.canvas.addHint') }}
+    </p>
   </section>
 </template>

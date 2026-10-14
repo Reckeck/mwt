@@ -66,6 +66,10 @@ export function useEditorGraph(catalog: Pick<ReturnType<typeof useNodeCatalog>, 
     ]
   }
 
+  function removeEdge(edgeId: string) {
+    edges.value = edges.value.filter((edge) => edge.id !== edgeId)
+  }
+
   function unwire(nodeId: string, port: string) {
     edges.value = edges.value.filter((edge) => !(edge.target === nodeId && edge.targetHandle === port))
   }
@@ -148,6 +152,7 @@ export function useEditorGraph(catalog: Pick<ReturnType<typeof useNodeCatalog>, 
   }
 
   return {
+    removeEdge,
     flowId,
     flow,
     def,

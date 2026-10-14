@@ -122,9 +122,11 @@ onMounted(() => {
         >
           <span :class="cn('mt-1.5 size-2 shrink-0 rounded-full', GROUP_COLOR[row.def.group])" />
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1 font-medium">
-              <Sparkles v-if="row.choice.hint" class="size-3.5 text-primary" />
-              {{ row.choice.hint ? `${localized(row.def.title, locale)}: ${row.choice.hint}` : localized(row.def.title, locale) }}
+            <span class="flex min-w-0 items-center gap-1 font-medium">
+              <Sparkles v-if="row.choice.hint" class="size-3.5 shrink-0 text-primary" />
+              <span class="truncate">
+                {{ row.choice.hint ? `${localized(row.def.title, locale)}: ${row.choice.hint}` : localized(row.def.title, locale) }}
+              </span>
             </span>
             <span class="block truncate text-xs text-muted-foreground">{{ localized(row.def.description, locale) }}</span>
           </span>

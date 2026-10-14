@@ -19,24 +19,24 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
 </script>
 
 <template>
-  <div class="grid gap-4" data-tour="workflow-settings">
-    <div class="grid gap-1.5">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-4 [overflow-wrap:anywhere] [&>*]:min-w-0" data-tour="workflow-settings">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
       <h3 class="font-semibold">{{ t('workflow.settings.title') }}</h3>
       <p class="text-sm text-muted-foreground">{{ t('workflow.settings.hint') }}</p>
     </div>
 
-    <div class="grid gap-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
       <Label for="workflow-description">{{ t('workflow.settings.description') }}</Label>
       <Textarea id="workflow-description" v-model="description" rows="2" />
     </div>
 
-    <div class="grid gap-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
       <Label for="workflow-cap">{{ t('workflow.settings.cap', { base: props.base.toUpperCase() }) }}</Label>
       <Input id="workflow-cap" v-model="maxAmount" inputmode="decimal" :placeholder="t('workflow.settings.noCap')" />
       <p class="text-xs text-muted-foreground">{{ t('workflow.settings.capHint') }}</p>
     </div>
 
-    <div class="grid gap-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
       <div class="flex items-center justify-between gap-2">
         <Label for="workflow-react">{{ t('workflow.settings.react') }}</Label>
         <Switch id="workflow-react" v-model="react" />
@@ -44,9 +44,9 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
       <p class="text-xs text-muted-foreground">{{ t('workflow.settings.reactHint') }}</p>
     </div>
 
-    <div class="grid gap-1.5" data-tour="workflow-issues">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0" data-tour="workflow-issues">
       <h4 class="text-sm font-medium">{{ t('workflow.settings.issues') }}</h4>
-      <ul v-if="props.issues.length" class="grid gap-1">
+      <ul v-if="props.issues.length" class="grid grid-cols-[minmax(0,1fr)] gap-1 [&>*]:min-w-0">
         <li v-for="(issue, index) in props.issues" :key="index">
           <Button
             variant="ghost"

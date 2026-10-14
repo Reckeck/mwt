@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 
 import type { QuickAddChoice, QuickAddContext } from '@/features/workflow-quick-add'
-import { portAccepts } from '@/shared/lib/workflow'
 
 import type { EditorGraph } from './use-editor-graph'
 
@@ -50,6 +49,12 @@ export function useCanvasInsert(editor: EditorGraph) {
     openQuickAdd(at.x, at.y, { mode: 'free' })
   }
 
+  /** From the inspector: the search next to the button, joined to this flow port. */
+  function quickAddFrom(nodeId: string, port: string, side: 'out' | 'in', event: MouseEvent) {
+    const type = side === 'out' ? outType(nodeId, port) : inType(nodeId, port)
+    if (type) openQuickAdd(event.clientX, event.clientY, { mode: 'port', nodeId, port, type, side })
+  }
+
   function onQuickPick(choice: QuickAddChoice) {
     const state = quick.value
     quick.value = null
@@ -77,30 +82,6 @@ export function useCanvasInsert(editor: EditorGraph) {
       }
     }
     select(node.id)
-  }
-
-  /** Palette click: next to the selected node and joined to it when it fits. */
-  function addFromPalette(kind: string) {
-    const selected = flow.getSelectedNodes.value[0]
-    const nodeDef = def(kind)
-    const node = add(kind)
-    if (selected && nodeDef) {
-      node.position = { x: selected.position.x + 300, y: selected.position.y }
-      for (const output of def(selected.data?.kind ?? '')?.outputs ?? []) {
-        const input = nodeDef.inputs.find((port) => portAccepts(port.type, output.type))
-        if (input && (output.type === 'flow') === (input.type === 'flow')) {
-          connect(selected.id, output.name, node.id, input.name)
-          break
-        }
-      }
-    }
-    select(node.id)
-  }
-
-  function onDrop(event: DragEvent) {
-    const kind = event.dataTransfer?.getData('application/x-workflow-node')
-    if (!kind) return
-    select(add(kind, { x: event.clientX, y: event.clientY }).id)
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -131,5 +112,5 @@ export function useCanvasInsert(editor: EditorGraph) {
     openQuickAdd(point.clientX, point.clientY, { mode: 'port', ...dragFrom, type })
   })
 
-  return { quick, quickAddHere, onQuickPick, addFromPalette, onDrop, onPointerMove }
+  return { quick, quickAddHere, quickAddFrom, onQuickPick, onPointerMove }
 }

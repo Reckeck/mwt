@@ -36,6 +36,14 @@ export function toFlowNote(comment: WorkflowComment): EditorNode {
 }
 export type EditorEdge = FlowEdge<{ type: PortType }>
 
+/** One flow port of the selected node and the wires on it, for the inspector. */
+export interface FlowPortLinks {
+  port: string
+  side: 'in' | 'out'
+  label: string
+  links: Array<{ edgeId: string; title: string }>
+}
+
 /** How a wire looks: a thick neutral line for the flow, a coloured one for data. */
 export function edgeStyle(type: PortType): Pick<EditorEdge, 'style' | 'animated' | 'class'> {
   return {

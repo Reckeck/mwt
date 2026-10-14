@@ -26,14 +26,14 @@ import EditorToolbar from './EditorToolbar.vue'
 import HotkeysHelp from './HotkeysHelp.vue'
 import LessonPanel from './LessonPanel.vue'
 import NodeInspector from './NodeInspector.vue'
-import NodePalette from './NodePalette.vue'
 import RunPanel from './RunPanel.vue'
 import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
 import WorkflowSettingsPanel from './WorkflowSettingsPanel.vue'
 
 /**
- * The node editor: a palette on the left, the canvas, the inspector on the
- * right. Ctrl+Space adds a node that fits where the cursor is; the emulation
+ * The node editor: the canvas and the inspector on the right. Nodes are
+ * added only with Ctrl+Space (or Shift+A): a search of the nodes that fit where
+ * the cursor is; the emulation
  * shows the run step by step and the value on every wire. The logic lives in
  * `model/use-*`; this file wires it to the layout.
  */
@@ -60,7 +60,12 @@ const { name, description, active, react, maxAmount, lesson, dirty } = doc
 const insert = useCanvasInsert(editor)
 const { quick } = insert
 const clipboard = useGraphClipboard(editor)
-const { selectedNode, selectedDef, wiredFrom, setParam, setLabel, unwire } = useSelection(editor)
+const { selectedNode, selectedDef, wiredFrom, flowLinks, setParam, setLabel, unwire } = useSelection(editor)
+
+/** An empty flow port in the inspector: the node search, joined to that port. */
+function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
+  if (selectedNode.value) insert.quickAddFrom(selectedNode.value.id, port, side, event)
+}
 
 const helpOpen = ref(false)
 const hotkeysOpen = ref(false)
@@ -134,7 +139,6 @@ defineExpose({
       :running="actions.runNow.isPending.value"
       :saving="actions.save.isPending.value"
       @note="editor.addNote"
-      @quick-add="insert.quickAddHere"
       @emulate="run.emulate()"
       @run="run.runNow"
       @discard="doc.discardEdits"
@@ -150,8 +154,7 @@ defineExpose({
 
     <div v-if="hotkeysOpen" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
 
-    <div class="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)_20rem] gap-3">
-      <NodePalette :simple="simple" class="min-h-0" @add="insert.addFromPalette" />
+    <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_17rem] gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
 
       <div class="flex min-h-0 flex-col gap-3">
         <EditorCanvas :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
@@ -167,7 +170,7 @@ defineExpose({
         />
       </div>
 
-      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      <div class="flex min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden overflow-y-auto">
         <LessonPanel
           v-if="lesson"
           :lesson="lesson"
@@ -184,11 +187,14 @@ defineExpose({
             :node="selectedNode"
             :def="selectedDef"
             :wired-from="wiredFrom"
+            :flows="flowLinks"
             :issues="issuesOf(selectedNode.id)"
             @param="setParam"
             @label="setLabel"
             @toggle="editor.toggleSelected"
             @unwire="unwire"
+            @unlink="editor.removeEdge"
+            @add-flow="addFlow"
             @remove="editor.removeSelected"
           />
           <WorkflowSettingsPanel
