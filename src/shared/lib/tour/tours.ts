@@ -78,6 +78,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-operation', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
+    { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
     { target: 'chart-currency', key: 'wallet.chartCurrency', side: 'left' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
     { target: 'exchange-terminal', key: 'wallet.terminal', side: 'top' },

@@ -7,6 +7,7 @@ import { AssetRevalueButton } from '@/features/asset-revalue'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { UtilityBillDialog } from '@/features/utility-bill'
+import { UtilityRemindersButton } from '@/features/utility-reminders'
 import { StoreTransactions } from '@/widgets/store-transactions'
 import { PropertySummaryCard, UtilityList } from '@/widgets/utility-list'
 import { UtilityStats } from '@/widgets/utility-stats'
@@ -40,7 +41,8 @@ const billOpen = ref(false)
     <template #utilities>
       <div class="flex flex-col gap-4">
         <PropertySummaryCard :property-id="props.store.id" />
-        <div class="flex justify-end">
+        <div class="flex flex-wrap justify-end gap-2">
+          <UtilityRemindersButton :store="props.store" />
           <Button :disabled="props.store.archived" @click="billOpen = true">
             <Receipt class="size-4" />
             {{ t('utilityBill.open') }}

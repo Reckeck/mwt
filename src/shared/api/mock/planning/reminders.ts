@@ -2,18 +2,19 @@
 
 import { alerts, fail, reminders, remove, replace, uuid } from './state'
 import type { PlanningMockContext } from './state'
+import { autoUtilityReminders } from './auto-reminders'
 
 /** Planning commands: Reminders and price alerts. `undefined` when `cmd` is not one. */
 export function planReminders(
   cmd: string,
   args: Record<string, unknown> | undefined,
-  _ctx: PlanningMockContext,
+  ctx: PlanningMockContext,
   _settings: Settings,
 ): unknown {
   const body = args?.input as Record<string, unknown> | undefined
   switch (cmd) {
     case 'list_reminders':
-      return [...reminders].sort((left, right) => left.due_at.localeCompare(right.due_at))
+      return [...reminders, ...autoUtilityReminders(ctx)].sort((left, right) => left.due_at.localeCompare(right.due_at))
     case 'create_reminder': {
       const input = body as ReminderInput
       const reminder: Reminder = {
