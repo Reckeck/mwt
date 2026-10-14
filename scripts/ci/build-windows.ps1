@@ -90,7 +90,9 @@ $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
 $tauriConfig = Join-Path $cache 'tauri-ci.json'
 $overlay = '{"version":"' + $version + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
 [System.IO.File]::WriteAllText($tauriConfig, $overlay)
-Invoke-Pnpm tauri build --ci --bundles nsis,msi --config $tauriConfig
+# Quoted: a bare a,b in a PowerShell command line is an array, and tauri
+# would get 'nsis msi'.
+Invoke-Pnpm tauri build --ci --bundles 'nsis,msi' --config $tauriConfig
 
 # Collect under stable names
 $bundle = Join-Path $env:CARGO_TARGET_DIR 'release\bundle'

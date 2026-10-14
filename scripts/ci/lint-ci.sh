@@ -3,6 +3,7 @@
 # job — the mistakes that otherwise only show up on a GitLab runner:
 #   - *.ps1 must be ASCII: Windows PowerShell 5.1 reads UTF-8 without a BOM as
 #     cp1252, where the bytes of «—» contain 0x94 = ” and end a string early;
+#     and a bare a,b among command arguments is an array, not one argument;
 #   - every shell script must parse (bash -n), be executable (CI runs it
 #     directly), and pass shellcheck if present.
 set -uo pipefail
@@ -12,6 +13,12 @@ failed=0
 for script in scripts/ci/*.ps1; do
   if grep -nP '[^\x00-\x7F]' "$script"; then
     echo "$script: non-ASCII characters (above) break Windows PowerShell 5.1 — use ASCII" >&2
+    failed=1
+  fi
+  # A bare a,b among command arguments is an array in PowerShell: the program
+  # gets "a b". Quote such lists ('nsis,msi').
+  if grep -nP "^\s*(Invoke-\w+|&)\s.*\s(?<!['\"])[\w.-]+,[\w.-]+(?=\s|$)" "$script"; then
+    echo "$script: unquoted comma list in a command (above) — quote it" >&2
     failed=1
   fi
 done
