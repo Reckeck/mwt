@@ -31,10 +31,10 @@ variables:
   CI_ANDROID_IMAGE: $CI_REGISTRY_IMAGE/ci-android:$CI_IMAGE_TAG
   ARCH_IMAGE: archlinux:base-devel
   WINDOWS_RUNNER_TAG: saas-windows-medium-amd64
-  # Rust compiles and builds: 8 vCPU instead of the default small runner (2).
-  # Set to saas-linux-medium-amd64 or saas-linux-small-amd64 if the plan
-  # does not offer this size (jobs would wait for a runner forever).
-  CI_HEAVY_RUNNER_TAG: saas-linux-large-amd64
+  # Rust compiles and builds: 4 vCPU instead of the default small runner (2).
+  # saas-linux-large-amd64 (8 vCPU) is faster still, saas-linux-small-amd64
+  # cheapest.
+  CI_HEAVY_RUNNER_TAG: saas-linux-medium-amd64
   ANDROID_TARGETS: aarch64 armv7 x86_64
   CARGO_TARGET_DIR: $CI_PROJECT_DIR/.rust-target # absolute: tauri runs cargo from crates/app
   CARGO_TERM_COLOR: always
