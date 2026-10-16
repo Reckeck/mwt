@@ -18,7 +18,7 @@
 # Containers run with podman (rootless: files stay yours) or docker
 # (CONTAINER_ENGINE=docker). --native builds linux/flatpak on this host with
 # its own toolchain instead. Bundles land in release/; the build directories
-# of each container are volumes (mwt-build-*), so the host .rust-target and
+# of each container are volumes (mwt-build-<checkout>-*), so the host .rust-target and
 # node_modules stay untouched. Android signs with the release key when the
 # ANDROID_KEYSTORE_* variables are set (sign-android.sh), else a test key.
 set -uo pipefail
@@ -49,6 +49,9 @@ arch_image=docker.io/library/archlinux:base-devel
 
 declare -A result
 log_dir="$root/.cache/build-all"
+# Volumes per checkout: cargo trusts file times, and another checkout's
+# sources (older files) would look unchanged next to its artifacts.
+checkout="$(printf '%s' "$root" | sha256sum | cut -c1-8)"
 mkdir -p "$log_dir" "$out"
 
 ci_image() { # kind (linux|android): the CI image, pulled, or built if the registry lacks it
@@ -66,9 +69,9 @@ run_ci() {
   local image="$1" volume="$2" command="$3"
   "$engine" run --rm --init \
     -v "$root:/src" -w /src \
-    -v "mwt-build-$volume-target:/src/.rust-target" \
-    -v "mwt-build-$volume-node:/src/node_modules" \
-    -v "mwt-build-$volume-home:/root" \
+    -v "mwt-build-$checkout-$volume-target:/src/.rust-target" \
+    -v "mwt-build-$checkout-$volume-node:/src/node_modules" \
+    -v "mwt-build-$checkout-$volume-home:/root" \
     -e CI_PROJECT_DIR=/src -e CI=true -e GRADLE_USER_HOME=/src/.cache/gradle \
     -e ANDROID_TARGETS -e ANDROID_KEYSTORE_BASE64 -e ANDROID_KEYSTORE_PASSWORD \
     -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
@@ -141,6 +144,12 @@ build_macos() {
     ssh "$MACOS_BUILD_HOST" "cd '$remote' && bash -lc \"scripts/ci/build-macos.sh '$version' release\"" &&
     rsync -a "$MACOS_BUILD_HOST:$remote/release/" "$out/" --include='*macos*' --exclude='*'
 }
+
+# Builds regenerate tauri's committed schemas (crates/app/gen/schemas, with
+# the Android and Windows ones): put them back as they were.
+schemas="$(mktemp -d)"
+cp -a crates/app/gen/schemas/. "$schemas/"
+trap 'rm -rf crates/app/gen/schemas && mkdir -p crates/app/gen && mv "$schemas" crates/app/gen/schemas && chmod 755 crates/app/gen/schemas' EXIT
 
 for platform in "${platforms[@]}"; do
   log="$log_dir/$platform.log"
