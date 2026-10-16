@@ -30,13 +30,14 @@ id builder >/dev/null 2>&1 || useradd -m builder
 work="$(mktemp -d)"
 git clone ssh://aur@aur.archlinux.org/multi-wallet-tracker-bin.git "$work/aur"
 packaging/aur/render.sh "$version" "$release/$name" "$url" >"$work/aur/PKGBUILD"
+cp packaging/aur/multi-wallet-tracker-bin.install "$work/aur/"
 chown -R builder "$work"
 su builder -c "cd '$work/aur' && makepkg --printsrcinfo > .SRCINFO"
 
 cd "$work/aur"
 git config user.name "${AUR_GIT_NAME:-$GITLAB_USER_NAME}"
 git config user.email "${AUR_GIT_EMAIL:-$GITLAB_USER_EMAIL}"
-git add PKGBUILD .SRCINFO
+git add PKGBUILD .SRCINFO multi-wallet-tracker-bin.install
 if git diff --cached --quiet; then
   echo "AUR already at $version"
   exit 0

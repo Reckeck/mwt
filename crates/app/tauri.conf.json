@@ -55,7 +55,21 @@
         "language": [
           "en-US",
           "ru-RU"
+        ],
+        "fragmentPaths": [
+          "windows/autostart-cleanup.wxs"
+        ],
+        "componentGroupRefs": [
+          "MwtAutostartCleanup"
         ]
+      }
+    },
+    "linux": {
+      "deb": {
+        "postRemoveScript": "../../packaging/linux/postrm.sh"
+      },
+      "rpm": {
+        "postRemoveScript": "../../packaging/linux/postrm.sh"
       }
     },
     "android": {

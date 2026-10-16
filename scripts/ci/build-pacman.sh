@@ -14,6 +14,7 @@ id builder >/dev/null 2>&1 || useradd -m builder
 work="$(mktemp -d)"
 cp "$tarball" "$work/"
 packaging/aur/render.sh "$version" "$tarball" >"$work/PKGBUILD"
+cp packaging/aur/multi-wallet-tracker-bin.install "$work/"
 chown -R builder "$work"
 # -d: runtime deps (webkit2gtk-4.1, …) are not needed to package a binary.
 su builder -c "cd '$work' && makepkg -d --noconfirm"
