@@ -9,7 +9,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { integerInRange, nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
@@ -138,7 +138,7 @@ const save = useMutation({
       <div class="grid gap-1.5">
         <Label for="deposit-cap">{{ t('deposit.capitalization') }}</Label>
         <Select id="deposit-cap" v-model="capitalization">
-          <option v-for="entry in CAPITALIZATIONS" :key="entry" :value="entry">{{ t(`deposit.cap.${entry}`) }}</option>
+          <SelectItem v-for="entry in CAPITALIZATIONS" :key="entry" :value="entry">{{ t(`deposit.cap.${entry}`) }}</SelectItem>
         </Select>
       </div>
       <template v-if="isDeposit">
@@ -167,7 +167,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="pds-bracket">{{ t('deposit.pds.bracket') }}</Label>
           <Select id="pds-bracket" v-model="bracket">
-            <option v-for="entry in INCOME_BRACKETS" :key="entry" :value="entry">{{ t(`deposit.pds.brackets.${entry}`) }}</option>
+            <SelectItem v-for="entry in INCOME_BRACKETS" :key="entry" :value="entry">{{ t(`deposit.pds.brackets.${entry}`) }}</SelectItem>
           </Select>
         </div>
       </div>

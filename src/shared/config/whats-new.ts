@@ -34,6 +34,8 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'meterFormula', route: 'wallet' },
       { key: 'search', route: 'dashboard' },
       { key: 'utilityReminders', route: 'wallet' },
+      { key: 'time24' },
+      { key: 'selects' },
     ],
   },
   {

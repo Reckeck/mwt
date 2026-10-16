@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { tickerRef } from '@/shared/lib/asset-ref'
@@ -110,8 +110,8 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="alert-condition">{{ t('alert.condition') }}</Label>
           <Select id="alert-condition" v-model="condition">
-            <option value="above">{{ t('alert.above') }}</option>
-            <option value="below">{{ t('alert.below') }}</option>
+            <SelectItem value="above">{{ t('alert.above') }}</SelectItem>
+            <SelectItem value="below">{{ t('alert.below') }}</SelectItem>
           </Select>
         </div>
         <FormField for="alert-price" :label="t('alert.price')" required :error="form.error('price')">

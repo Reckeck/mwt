@@ -7,8 +7,9 @@ import { createReusableTemplate, reactiveOmit, useVModel } from "@vueuse/core"
 import { CalendarRoot, useDateFormatter, useForwardPropsEmits } from "reka-ui"
 import { createYear, createYearRange, toDate } from "reka-ui/date"
 import { computed, toRaw } from "vue"
+import { useI18n } from "vue-i18n"
 import { cn } from '@/shared/lib/utils'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { CalendarCell, CalendarCellTrigger, CalendarGrid, CalendarGridBody, CalendarGridHead, CalendarGridRow, CalendarHeadCell, CalendarHeader, CalendarHeading, CalendarNextButton, CalendarPrevButton } from '.'
 
 const props = withDefaults(defineProps<CalendarRootProps & { class?: HTMLAttributes["class"], layout?: LayoutTypes, yearRange?: DateValue[] }>(), {
@@ -40,45 +41,36 @@ const [DefineMonthTemplate, ReuseMonthTemplate] = createReusableTemplate<{ date:
 const [DefineYearTemplate, ReuseYearTemplate] = createReusableTemplate<{ date: DateValue }>()
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const { t } = useI18n()
 </script>
 
 <template>
   <DefineMonthTemplate v-slot="{ date }">
-    <div class="**:data-[slot=native-select-icon]:right-1">
-      <div class="relative">
-        <div class="absolute inset-0 flex h-full items-center text-sm pl-2 pointer-events-none">
-          {{ formatter.custom(toDate(date), { month: 'short' }) }}
-        </div>
-        <Select
-          class="relative h-8 pr-6 pl-2 text-xs text-transparent"
-          :model-value="String(date.month)"
-          @update:model-value="(value) => (placeholder = placeholder.set({ month: Number(value) }))"
-        >
-          <option v-for="month in createYear({ dateObj: date })" :key="month.toString()" :value="String(month.month)">
-            {{ formatter.custom(toDate(month), { month: 'short' }) }}
-          </option>
-        </Select>
-      </div>
-    </div>
+    <Select
+      class="h-8 w-auto gap-1 px-2 capitalize"
+      content-width="auto"
+      :aria-label="t('ui.month')"
+      :model-value="String(date.month)"
+      @update:model-value="(value) => (placeholder = placeholder.set({ month: Number(value) }))"
+    >
+      <SelectItem v-for="month in createYear({ dateObj: date })" :key="month.toString()" :value="String(month.month)" class="capitalize">
+        {{ formatter.custom(toDate(month), { month: 'long' }) }}
+      </SelectItem>
+    </Select>
   </DefineMonthTemplate>
 
   <DefineYearTemplate v-slot="{ date }">
-    <div class="**:data-[slot=native-select-icon]:right-1">
-      <div class="relative">
-        <div class="absolute inset-0 flex h-full items-center text-sm pl-2 pointer-events-none">
-          {{ formatter.custom(toDate(date), { year: 'numeric' }) }}
-        </div>
-        <Select
-          class="relative h-8 pr-6 pl-2 text-xs text-transparent"
-          :model-value="String(date.year)"
-          @update:model-value="(value) => (placeholder = placeholder.set({ year: Number(value) }))"
-        >
-          <option v-for="year in yearRange" :key="year.toString()" :value="String(year.year)">
-            {{ formatter.custom(toDate(year), { year: 'numeric' }) }}
-          </option>
-        </Select>
-      </div>
-    </div>
+    <Select
+      class="h-8 w-auto gap-1 px-2 tabular-nums"
+      content-width="auto"
+      :aria-label="t('ui.year')"
+      :model-value="String(date.year)"
+      @update:model-value="(value) => (placeholder = placeholder.set({ year: Number(value) }))"
+    >
+      <SelectItem v-for="year in yearRange" :key="year.toString()" :value="String(year.year)">
+        {{ formatter.custom(toDate(year), { year: 'numeric' }) }}
+      </SelectItem>
+    </Select>
   </DefineYearTemplate>
 
   <CalendarRoot

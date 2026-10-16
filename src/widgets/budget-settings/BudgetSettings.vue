@@ -7,7 +7,7 @@ import { CurrencyPicker } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
@@ -99,8 +99,8 @@ function saveRate() {
           :model-value="settings.vault?.daily_budget_mode ?? 'month'"
           @update:model-value="(value) => persist({ daily_budget_mode: value as DailyBudgetMode })"
         >
-          <option value="month">{{ t('settings.dailyBudget.month') }}</option>
-          <option value="until_income">{{ t('settings.dailyBudget.until_income') }}</option>
+          <SelectItem value="month">{{ t('settings.dailyBudget.month') }}</SelectItem>
+          <SelectItem value="until_income">{{ t('settings.dailyBudget.until_income') }}</SelectItem>
         </Select>
         <p class="text-xs text-muted-foreground">{{ t('settings.dailyBudgetHint') }}</p>
       </div>
@@ -112,8 +112,8 @@ function saveRate() {
           :model-value="settings.app?.timezone ?? ''"
           @update:model-value="(value) => saveZone(String(value))"
         >
-          <option value="">{{ t('settings.timezoneSystem', { zone: systemZone }) }}</option>
-          <option v-for="zone in zones" :key="zone" :value="zone">{{ zone }}</option>
+          <SelectItem value="">{{ t('settings.timezoneSystem', { zone: systemZone }) }}</SelectItem>
+          <SelectItem v-for="zone in zones" :key="zone" :value="zone">{{ zone }}</SelectItem>
         </Select>
         <p class="text-xs text-muted-foreground">{{ t('settings.timezoneHint') }}</p>
       </div>

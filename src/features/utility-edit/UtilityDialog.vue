@@ -12,7 +12,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { firstError, integerInRange, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
@@ -160,7 +160,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="utility-kind">{{ t('utilities.kind') }}</Label>
           <Select id="utility-kind" v-model="kind">
-            <option v-for="entry in UTILITY_KINDS" :key="entry" :value="entry">{{ t(`utilities.kindName.${entry}`) }}</option>
+            <SelectItem v-for="entry in UTILITY_KINDS" :key="entry" :value="entry">{{ t(`utilities.kindName.${entry}`) }}</SelectItem>
           </Select>
         </div>
       </div>
@@ -196,8 +196,8 @@ const save = useMutation({
       <div v-if="kind === 'housing'" class="grid gap-1.5">
         <Label for="utility-automation">{{ t('utilities.automation') }}</Label>
         <Select id="utility-automation" v-model="automationId">
-          <option value="">{{ t('utilities.noAutomation') }}</option>
-          <option v-for="entry in automations.data.value ?? []" :key="entry.id" :value="entry.id">{{ entry.name }}</option>
+          <SelectItem value="">{{ t('utilities.noAutomation') }}</SelectItem>
+          <SelectItem v-for="entry in automations.data.value ?? []" :key="entry.id" :value="entry.id">{{ entry.name }}</SelectItem>
         </Select>
         <p class="text-xs text-muted-foreground">{{ t('utilities.automationHint') }}</p>
       </div>

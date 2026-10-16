@@ -5,7 +5,7 @@ import { Plus } from 'lucide-vue-next'
 
 import { DASHBOARD_WIDGETS, type DashboardWidgetDef } from '@/widgets/dashboard-registry'
 import { Button } from '@/shared/ui/button'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 
 import type { DashboardCatalogProps } from './dashboard-catalog.types'
@@ -65,7 +65,7 @@ function add(def: DashboardWidgetDef) {
               class="h-8"
               :aria-label="t('dashboard.catalog.exchange')"
             >
-              <option v-for="exchange in exchanges" :key="exchange.id" :value="exchange.id">{{ exchange.name }}</option>
+              <SelectItem v-for="exchange in exchanges" :key="exchange.id" :value="exchange.id">{{ exchange.name }}</SelectItem>
             </Select>
             <!-- A live, scaled-down copy of the widget: no screenshots to keep in sync. -->
             <div class="pointer-events-none relative h-40 overflow-hidden rounded-md border border-dashed border-border bg-muted/30" aria-hidden="true" inert>

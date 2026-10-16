@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { formatDateTime } from '@/shared/lib/format'
 
 import { useTxForm } from '../../model/use-tx-form'
@@ -19,7 +19,7 @@ const { form, lookup, bybitCategory, applyFill } = useTxForm()
       <Label>{{ t('tx.bybit.recent') }}</Label>
       <div class="flex items-center gap-2">
         <Select v-if="form.kind === 'trade_spot'" v-model="bybitCategory" class="h-8 w-28 text-xs">
-          <option value="spot">{{ t('tx.bybit.category.spot') }}</option>
+          <SelectItem value="spot">{{ t('tx.bybit.category.spot') }}</SelectItem>
         </Select>
         <Button
           type="button"

@@ -11,7 +11,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp } from '@/shared/lib/datetime'
@@ -100,9 +100,9 @@ const save = useMutation({
       <div v-for="account in IMPORT_ACCOUNTS" :key="account" class="grid items-start gap-2 @md:grid-cols-[11rem_13rem_1fr]">
         <Label :for="`import-route-${account}`" class="pt-2">{{ t(`exchangeBalances.account.${account}`) }}</Label>
         <Select :id="`import-route-${account}`" v-model="routes[account].mode">
-          <option value="default">{{ t('importSettings.mode.default') }}</option>
-          <option value="store">{{ t('importSettings.mode.store') }}</option>
-          <option value="skip">{{ t('importSettings.mode.skip') }}</option>
+          <SelectItem value="default">{{ t('importSettings.mode.default') }}</SelectItem>
+          <SelectItem value="store">{{ t('importSettings.mode.store') }}</SelectItem>
+          <SelectItem value="skip">{{ t('importSettings.mode.skip') }}</SelectItem>
         </Select>
         <FormField v-if="routes[account].mode === 'store'" :error="form.error(`route-${account}`)">
           <StoreNodeSelect

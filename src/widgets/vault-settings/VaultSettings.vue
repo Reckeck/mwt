@@ -6,7 +6,7 @@ import { ChangePasswordDialog } from '@/features/vault-change-password'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
 import { Switch } from '@/shared/ui/switch'
@@ -72,7 +72,7 @@ function updateFxInterval(value: string) {
           :value="String(settingsStore.vault?.fx_refresh_interval_sec ?? 300)"
           @update:model-value="updateFxInterval"
         >
-          <option v-for="opt in fxIntervalOptions" :key="opt.value" :value="String(opt.value)">{{ opt.label }}</option>
+          <SelectItem v-for="opt in fxIntervalOptions" :key="opt.value" :value="String(opt.value)">{{ opt.label }}</SelectItem>
         </Select>
       </div>
 

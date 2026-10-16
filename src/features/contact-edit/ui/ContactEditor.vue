@@ -7,7 +7,7 @@ import { ClipboardPaste, Copy, Trash2 } from 'lucide-vue-next'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
@@ -125,7 +125,7 @@ const inlineInput =
         :aria-label="t('contacts.kind')"
         @update:model-value="setKind"
       >
-        <option v-for="entry in CONTACT_KINDS" :key="entry" :value="entry">{{ t(`contactKind.${entry}`) }}</option>
+        <SelectItem v-for="entry in CONTACT_KINDS" :key="entry" :value="entry">{{ t(`contactKind.${entry}`) }}</SelectItem>
       </Select>
       <Input
         v-model="group"
@@ -139,7 +139,7 @@ const inlineInput =
         @keydown.enter="($event.target as HTMLInputElement).blur()"
       />
       <datalist :id="groupListId">
-        <option v-for="entry in groups" :key="entry" :value="entry" />
+        <SelectItem v-for="entry in groups" :key="entry" :value="entry" />
       </datalist>
     </div>
 
@@ -167,7 +167,7 @@ const inlineInput =
             :aria-label="t('contacts.accountKind')"
             @update:model-value="(kind) => patchAccount(index, { kind: kind as DetailKind })"
           >
-            <option v-for="entry in DETAIL_KINDS" :key="entry" :value="entry">{{ t(`detailKind.${entry}`) }}</option>
+            <SelectItem v-for="entry in DETAIL_KINDS" :key="entry" :value="entry">{{ t(`detailKind.${entry}`) }}</SelectItem>
           </Select>
           <div class="flex min-w-0 items-center gap-1">
             <span class="min-w-0 flex-1 truncate font-mono text-xs" :title="account.value">{{ account.value }}</span>
@@ -196,8 +196,8 @@ const inlineInput =
               :aria-label="t('form.network')"
               @update:model-value="(network) => patchAccount(index, { network: (network as Chain) || null })"
             >
-              <option value="">{{ t('form.noNetwork') }}</option>
-              <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
+              <SelectItem value="">{{ t('form.noNetwork') }}</SelectItem>
+              <SelectItem v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</SelectItem>
             </Select>
             <Badge v-if="!account.active" variant="outline">{{ t('contacts.inactive') }}</Badge>
             <Button

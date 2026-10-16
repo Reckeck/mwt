@@ -6,7 +6,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
 
@@ -30,9 +30,9 @@ const { form, check } = useTxForm()
     <div class="grid gap-1.5">
       <Label for="tx-liquidity">{{ t('tx.field.liquidity') }}</Label>
       <Select id="tx-liquidity" v-model="form.liquidity">
-        <option value="">—</option>
-        <option value="maker">{{ t('tx.liquidity.maker') }}</option>
-        <option value="taker">{{ t('tx.liquidity.taker') }}</option>
+        <SelectItem value="">—</SelectItem>
+        <SelectItem value="maker">{{ t('tx.liquidity.maker') }}</SelectItem>
+        <SelectItem value="taker">{{ t('tx.liquidity.taker') }}</SelectItem>
       </Select>
     </div>
     <div class="grid gap-1.5">

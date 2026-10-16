@@ -7,7 +7,7 @@ import { CurrencyPicker } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { Checkbox } from '@/shared/ui/checkbox'
@@ -64,7 +64,7 @@ const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation
       <div :class="FILTER_FIELD_CLASS">
         <Label for="report-year">{{ t('report.filter.year') }}</Label>
         <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
-          <option v-for="entry in years" :key="entry" :value="entry">{{ entry }}</option>
+          <SelectItem v-for="entry in years" :key="entry" :value="entry">{{ entry }}</SelectItem>
         </Select>
       </div>
     </template>

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { LIABILITY_KINDS } from './liability-terms-fields.constants'
 
@@ -31,7 +31,7 @@ function setDay(raw: string | number) {
     <div class="grid gap-1.5">
       <Label for="liability-kind">{{ t('liability.kind') }}</Label>
       <Select id="liability-kind" :model-value="terms.kind" @update:model-value="(kind) => (terms = { ...terms, kind: kind as LiabilityKind })">
-        <option v-for="kind in LIABILITY_KINDS" :key="kind" :value="kind">{{ t(`liabilityKind.${kind}`) }}</option>
+        <SelectItem v-for="kind in LIABILITY_KINDS" :key="kind" :value="kind">{{ t(`liabilityKind.${kind}`) }}</SelectItem>
       </Select>
     </div>
     <div class="grid gap-1.5">

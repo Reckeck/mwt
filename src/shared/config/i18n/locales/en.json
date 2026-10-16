@@ -1703,6 +1703,9 @@
   "ui.pick.datetime": "Pick a date and time",
   "ui.pick.month": "Pick a month",
   "ui.time": "Time",
+  "ui.timePlaceholder": "HH:MM",
+  "ui.month": "Month",
+  "ui.year": "Year",
   "ui.today": "Today",
   "ui.now": "Now",
   "ui.thisMonth": "This month",
@@ -2571,5 +2574,7 @@
   "whatsNew.workflows2.meterFormula": "Utilities: a meter can have its own formula instead of «used × tariff», like (current - previous) * 3.5 * 10, tiers with min/max, a fixed fee as a term. Two- and three-rate meters: name the zones («day, night») and enter a reading for each.",
   "whatsNew.workflows2.search": "Quick jump is now a search field in the header: results drop down right under it, no separate window. Wallets look like in «To» — with the parent, asset and balance.",
   "whatsNew.workflows2.utilityReminders": "The utilities tab of a property wallet has a «Remind» button: set the pay day and get reminders to pay and to send the meter readings.",
+  "whatsNew.workflows2.time24": "Time is now 24-hour everywhere, with no AM/PM: in fields and lists, in any language and on any system.",
+  "whatsNew.workflows2.selects": "Drop-down lists (month and year in the calendar, kind, period, category…) look the same on every system and work from the keyboard: arrows, Enter and first letters.",
   "filter.more": "More filters"
 }

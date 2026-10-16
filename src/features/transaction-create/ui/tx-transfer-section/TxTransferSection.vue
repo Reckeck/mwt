@@ -7,7 +7,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
@@ -38,8 +38,8 @@ const { form, check, swapSides, debts, debtValue } = useTxForm()
   <div v-if="debts.length" class="grid gap-1.5">
     <Label for="tx-debt">{{ t('debt.title') }}</Label>
     <Select id="tx-debt" v-model="debtValue">
-      <option value="">{{ t('debt.none') }}</option>
-      <option v-for="effect in debts" :key="effect" :value="effect">{{ t(`debt.${effect}`) }}</option>
+      <SelectItem value="">{{ t('debt.none') }}</SelectItem>
+      <SelectItem v-for="effect in debts" :key="effect" :value="effect">{{ t(`debt.${effect}`) }}</SelectItem>
     </Select>
     <p class="text-xs text-muted-foreground">{{ t('debt.hint') }}</p>
   </div>

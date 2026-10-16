@@ -6,7 +6,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
@@ -40,9 +40,9 @@ const { form, check, props, isProperty, propertyName, overrunText } = useTxForm(
     <div class="grid gap-1.5">
       <Label for="tx-defi-action">{{ t('tx.field.action') }}</Label>
       <Select id="tx-defi-action" v-model="form.defiAction">
-        <option v-for="entry in ['stake', 'unstake', 'claim', 'add_liquidity', 'remove_liquidity']" :key="entry" :value="entry">
+        <SelectItem v-for="entry in ['stake', 'unstake', 'claim', 'add_liquidity', 'remove_liquidity']" :key="entry" :value="entry">
           {{ t(`tx.defiAction.${entry}`) }}
-        </option>
+        </SelectItem>
       </Select>
     </div>
     <div class="grid gap-1.5">

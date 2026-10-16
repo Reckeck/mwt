@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree, storeDescendants } from '@/shared/lib/store-tree'
 import { TX_KINDS } from '@/shared/lib/transactions'
@@ -117,8 +117,8 @@ function reset() {
     <div :class="FILTER_FIELD_CLASS">
       <Label :for="field('kind')">{{ t('form.kind') }}</Label>
       <Select :id="field('kind')" v-model="kind" class="w-full @3xl:w-40">
-        <option value="">{{ t('hist.allKinds') }}</option>
-        <option v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</option>
+        <SelectItem value="">{{ t('hist.allKinds') }}</SelectItem>
+        <SelectItem v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</SelectItem>
       </Select>
     </div>
     <div :class="FILTER_FIELD_CLASS">
@@ -142,8 +142,8 @@ function reset() {
       <div v-if="contacts.data.value?.length" class="grid gap-1.5">
         <Label :for="field('contact')">{{ t('filter.contact') }}</Label>
         <Select :id="field('contact')" v-model="contactId">
-          <option value="">{{ t('filter.anyContact') }}</option>
-          <option v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</option>
+          <SelectItem value="">{{ t('filter.anyContact') }}</SelectItem>
+          <SelectItem v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</SelectItem>
         </Select>
       </div>
       <div class="grid grid-cols-2 gap-2">

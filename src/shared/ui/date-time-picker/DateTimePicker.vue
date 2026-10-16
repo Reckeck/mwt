@@ -8,7 +8,7 @@ import { activeLocale } from '@/shared/lib/locale'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { Calendar } from '@/shared/ui/calendar'
-import { Input } from '@/shared/ui/input'
+import { TimeInput } from '@/shared/ui/time-input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 
 import type { DateTimePickerProps } from './date-time-picker.types'
@@ -112,10 +112,9 @@ function clear() {
       />
       <div v-if="props.mode === 'datetime'" class="flex items-center gap-2 border-t border-border px-3 py-2">
         <label :for="`${attrs.id ?? 'dt'}-time`" class="text-sm text-muted-foreground">{{ t('ui.time') }}</label>
-        <Input
+        <TimeInput
           :id="`${attrs.id ?? 'dt'}-time`"
-          type="time"
-          class="h-8 w-28"
+          class="h-8 w-20"
           :model-value="time"
           @update:model-value="pickTime"
         />

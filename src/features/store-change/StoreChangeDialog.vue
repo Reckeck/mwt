@@ -11,7 +11,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call, parseError } from '@/shared/api/ipc'
@@ -169,9 +169,9 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
       <div v-if="action === 'change_kind'" class="grid gap-1.5 sm:max-w-64">
         <Label for="store-change-kind">{{ t('storeChange.newKind') }}</Label>
         <Select id="store-change-kind" v-model="kind">
-          <option v-for="entry in CONVERTIBLE_KINDS.filter((value) => value !== props.store.kind)" :key="entry" :value="entry">
+          <SelectItem v-for="entry in CONVERTIBLE_KINDS.filter((value) => value !== props.store.kind)" :key="entry" :value="entry">
             {{ t(`stores.kind.${entry}`) }}
-          </option>
+          </SelectItem>
         </Select>
       </div>
       <FormField v-else-if="action === 'move_to'" for="store-change-parent" :label="t('storeChange.into')" required :error="form.error('parent')">

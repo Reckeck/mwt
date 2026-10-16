@@ -9,7 +9,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
@@ -79,8 +79,8 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
       <div class="grid gap-1.5">
         <Label for="tx-network">{{ t('form.network') }}</Label>
         <Select id="tx-network" v-model="form.network">
-          <option value="">{{ t('form.noNetwork') }}</option>
-          <option v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</option>
+          <SelectItem value="">{{ t('form.noNetwork') }}</SelectItem>
+          <SelectItem v-for="chain in CHAINS" :key="chain" :value="chain">{{ CHAIN_LABELS[chain] }}</SelectItem>
         </Select>
       </div>
       <div class="grid gap-1.5">
@@ -92,10 +92,10 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
     <div class="grid gap-1.5">
       <Label for="tx-contact">{{ t('tx.field.contact') }}</Label>
       <Select id="tx-contact" v-model="form.contactId">
-        <option value="">{{ t('tx.side.unspecified') }}</option>
-        <option v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)" :key="contact.id" :value="contact.id">
+        <SelectItem value="">{{ t('tx.side.unspecified') }}</SelectItem>
+        <SelectItem v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)" :key="contact.id" :value="contact.id">
           {{ contact.name }}
-        </option>
+        </SelectItem>
       </Select>
     </div>
   </AdvancedFields>
