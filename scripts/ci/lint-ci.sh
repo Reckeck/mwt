@@ -22,7 +22,7 @@ for script in scripts/ci/*.ps1; do
     failed=1
   fi
 done
-for script in scripts/ci/*.sh packaging/aur/render.sh; do
+for script in scripts/ci/*.sh scripts/local/*.sh packaging/aur/render.sh packaging/linux/*.sh; do
   if ! bash -n "$script"; then
     echo "$script: does not parse" >&2
     failed=1

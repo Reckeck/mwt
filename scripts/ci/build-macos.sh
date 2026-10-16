@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# macOS universal (Apple Silicon + Intel) .dmg and a tarball of the .app, on a
+# Mac: the build:macos job (GitLab macOS runner) or scripts/local/build-all.sh
+# (here or over ssh). Tauri cannot build for macOS from another OS.
+#
+#   scripts/ci/build-macos.sh <version> <out-dir>
+#
+# Signing: with APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD and
+# APPLE_SIGNING_IDENTITY (+ APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID to
+# notarize) tauri signs itself; without them the app is signed ad hoc and
+# Gatekeeper asks to confirm the first start (docs/ci.md).
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+version="$1"
+out="$2"
+[[ "$(uname -s)" == Darwin ]] || { echo "build-macos.sh runs on macOS only" >&2; exit 1; }
+
+export MISE_YES=1
+if ! command -v mise >/dev/null; then
+  curl -fsSL https://mise.run | sh
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+mise trust mise.toml
+mise install node pnpm rust
+eval "$(mise env -s bash)"
+export CARGO_TARGET_DIR="$PWD/.rust-target"
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+# In CI the store sits in the project, where the job cache keeps it.
+if [[ -n "${CI:-}" ]]; then
+  pnpm config set store-dir "$PWD/.cache/pnpm" >/dev/null
+fi
+pnpm install --frozen-lockfile --prefer-offline
+
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  echo "WARNING: no APPLE_SIGNING_IDENTITY - ad-hoc signature, not notarized" >&2
+  export APPLE_SIGNING_IDENTITY="-"
+fi
+config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh)"
+pnpm tauri build --ci --target universal-apple-darwin --bundles app,dmg --config "$config"
+
+bundle="$CARGO_TARGET_DIR/universal-apple-darwin/release/bundle"
+mkdir -p "$out"
+dmgs=("$bundle"/dmg/*.dmg)
+[[ ${#dmgs[@]} -eq 1 && -f "${dmgs[0]}" ]] || { echo "expected one .dmg in $bundle/dmg" >&2; exit 1; }
+cp "${dmgs[0]}" "$out/multi-wallet-tracker-$version-macos-universal.dmg"
+tar -C "$bundle/macos" -czf "$out/multi-wallet-tracker-$version-macos-universal.app.tar.gz" "Multi Wallet Tracker.app"
+ls -l "$out"
