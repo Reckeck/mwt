@@ -208,13 +208,15 @@ mise run build:all -- --version 0.2.0-1 windows
 
 - Образы берутся из Container Registry проекта по `CI_IMAGE_TAG` (публичные),
   если их там нет — собираются из `scripts/ci/ci.Dockerfile`.
-- Сборочные каталоги контейнеров — тома `mwt-build-*` (`.rust-target`,
+- Сборочные каталоги контейнеров — тома `mwt-build-<хэш пути копии>-*`
+  (свои у каждой копии: cargo сверяет время файлов, и чужие артефакты
+  выглядели бы свежими; `.rust-target`,
   `node_modules`, `/root`): хостовые `.rust-target` и `node_modules` не
   трогаются, повторная сборка идёт инкрементально. Начать с нуля —
   `podman volume rm $(podman volume ls -q | grep mwt-build-)`.
 - Версия по умолчанию — из `tauri.conf.json` (`scripts/ci/version.sh`).
 - Первый `windows` дольше: строится образ с `cargo-xwin`, а тот скачивает
-  Windows SDK (кэш в томе `mwt-build-windows-home`).
+  Windows SDK (кэш в томе `mwt-build-<копия>-windows-home`).
 
 ### По частям
 
