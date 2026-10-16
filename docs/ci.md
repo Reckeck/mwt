@@ -188,7 +188,7 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
 
 `scripts/local/build-all.sh` собирает бандлы тем же кодом, что CI
 (`scripts/ci/build-*.sh`), в тех же образах — на машине нужен только podman
-(или docker: `CONTAINER_ENGINE=docker`). Результат — в `release/`, логи — в
+(или docker: `CONTAINER_ENGINE=docker`). Результат — в `.cache/build-all/builds/`, логи — в
 `.cache/build-all/<платформа>.log`, в конце — таблица OK/SKIP/FAIL.
 
 ```bash

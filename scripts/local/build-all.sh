@@ -17,7 +17,7 @@
 #
 # Containers run with podman (rootless: files stay yours) or docker
 # (CONTAINER_ENGINE=docker). --native builds linux/flatpak on this host with
-# its own toolchain instead. Bundles land in release/; the build directories
+# its own toolchain instead. Bundles land in .cache/build-all/builds/; the build directories
 # of each container are volumes (mwt-build-<checkout>-*), so the host .rust-target and
 # node_modules stay untouched. Android signs with the release key when the
 # ANDROID_KEYSTORE_* variables are set (sign-android.sh), else a test key.
@@ -40,7 +40,7 @@ while (($#)); do
 done
 ((${#platforms[@]})) || platforms=("${all[@]}")
 version="${version:-$(scripts/ci/version.sh)}"
-out=release
+out=.cache/build-all/builds
 
 engine="${CONTAINER_ENGINE:-$(command -v podman >/dev/null && echo podman || echo docker)}"
 image_tag="$(sed -n 's/^  CI_IMAGE_TAG: "\(.*\)".*/\1/p' .gitlab-ci.yml)"

@@ -23,7 +23,7 @@
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check` | lint + typecheck + onboarding + forms + ui + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
-| `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `release/` (`docs/ci.md`, «Локально») |
+| `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
 
