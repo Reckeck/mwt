@@ -79,7 +79,9 @@ Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хр
    `development` (или прямо в составе MR выпуска).
 2. MR `development` → `main`, merge.
 3. Пайплайн `main`: проверки → сборки → Release `vX.Y.Z` с файлами и
-   заметками из CHANGELOG. AUR — кнопкой `aur:publish`.
+   заметками из CHANGELOG (Linux, Windows, Android, Flatpak, pacman; macOS —
+   если включён `MACOS_BUILD`). AUR — кнопкой `aur:publish`. Проверить
+   бандлы до мержа можно и локально: `mise run build:all` (`docs/ci.md`).
 4. `backmerge` открывает MR `main` → `development` (нужен `RELEASE_TOKEN`) —
    слить его. Поднимать версию сразу не нужно: пре-релизы до следующего
    bump сами идут как `X.Y.(Z+1)-N`.

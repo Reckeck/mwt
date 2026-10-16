@@ -30,3 +30,4 @@ CARGO_TARGET_DIR = ".rust-target"
 "bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "node scripts/release.mjs bump" }
 "ci-image-tag" = { description = "CI image tag for .gitlab-ci.yml CI_IMAGE_TAG (hash of the image inputs)", run = "scripts/ci/image-tag.sh" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }
+"build:all" = { description = "Bundles for every platform (linux pacman flatpak android windows macos) in the CI images, into release/", run = "scripts/local/build-all.sh" }

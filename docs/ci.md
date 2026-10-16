@@ -21,6 +21,7 @@
 | check | `sast`, `secret_detection` | шаблоны GitLab Security |
 | build | `build:linux` | `.deb`, `.rpm`, `.AppImage`, `tar.gz` с бинарником (Ubuntu 22.04 — старый glibc, файлы запускаются на новых дистрибутивах) |
 | build | `build:windows` | NSIS-установщик `.exe`, MSI (по одному на `en-US` и `ru-RU`), portable `.zip` с голым `.exe` |
+| build | `build:macos` | только при `MACOS_BUILD=true`: универсальный `.dmg` и `.app.tar.gz` (Apple Silicon + Intel) |
 | build | `build:android` | универсальные APK и AAB (`aarch64`, `armv7`, `x86_64`), подписанные |
 | package | `package:flatpak` | `.flatpak`-бандл (рантайм GNOME 50) из Linux-tarball |
 | package | `package:pacman` | `multi-wallet-tracker-bin-*.pkg.tar.zst` из того же tarball |
@@ -102,6 +103,11 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 - `build:windows` — Windows-раннер с тегом из `WINDOWS_RUNNER_TAG`
   (по умолчанию `saas-windows-medium-amd64`, общий раннер GitLab.com; для своего
   раннера — его тег). MSVC Build Tools ставятся через choco, если их нет.
+- `build:macos` — macOS-раннер GitLab.com (`MACOS_RUNNER_TAG`, по умолчанию
+  `saas-macos-medium-m1`, образ `MACOS_IMAGE`). Такие раннеры есть только в
+  планах Premium/Ultimate, поэтому job выключен, пока переменная
+  `MACOS_BUILD` не равна `true` (иначе пайплайн вечно ждёт раннер). Свой Mac
+  с GitLab Runner — его тег в `MACOS_RUNNER_TAG`.
 - Android-сборка длинная (release + LTO, три архитектуры —
   `ANDROID_TARGETS`): timeout 2 ч.
 - `ci:image` — docker-in-docker (`docker:27-dind`), нужен privileged-раннер
@@ -116,6 +122,9 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 | `ANDROID_KEY_ALIAS` | то же | |
 | `ANDROID_KEY_PASSWORD` | то же | по умолчанию = пароль хранилища |
 | `AUR_SSH_PRIVATE_KEY` | `aur:publish` | тип **File**; ключ, добавленный в аккаунт AUR |
+| `MACOS_BUILD` | `build:macos` | `true` включает macOS-сборку (нужен macOS-раннер) |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | подпись macOS | base64 `.p12` Developer ID; masked. Без них — подпись ad hoc |
+| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | нотаризация macOS | пароль приложения Apple ID; masked |
 | `RELEASE_TOKEN` | `prerelease:cleanup`, `backmerge`; `release`, если `CI_JOB_TOKEN` не хватает прав | project access token, роль Maintainer, scope `api` |
 
 Без ключа Android APK подписывается одноразовым тестовым ключом и получает
@@ -150,11 +159,64 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
   Package Registry, поэтому проект (или хотя бы его пакеты) должен быть
   публичным. Шаблон — `packaging/aur/PKGBUILD.in`, рендер —
   `packaging/aur/render.sh`.
+- **macOS.** Универсальная сборка (`--target universal-apple-darwin`),
+  `scripts/ci/build-macos.sh`. Без сертификата Developer ID приложение
+  подписано ad hoc и не нотаризовано: Gatekeeper при первом запуске
+  попросит подтвердить (правый клик → «Открыть» или
+  `xattr -cr "/Applications/Multi Wallet Tracker.app"`). Собрать macOS на
+  другой ОС tauri не умеет. Автозапуск — LaunchAgent в
+  `~/Library/LaunchAgents`; при переносе `.app` в корзину он остаётся (хука
+  удаления на macOS нет), но запустить уже нечего — выключайте автозапуск в
+  настройках до удаления.
+- **Автозапуск после удаления.** Запись автозапуска живёт в профиле
+  пользователя, поэтому удаление её снимает отдельно: deb/rpm —
+  `packaging/linux/postrm.sh`, pacman/AUR — `post_remove` в
+  `packaging/aur/multi-wallet-tracker-bin.install` (удаляют записи, что
+  запускают `/usr/bin/multi-wallet-tracker`, у всех пользователей), NSIS —
+  встроенный шаг деинсталлятора tauri, MSI — фрагмент
+  `crates/app/windows/autostart-cleanup.wxs`. На Linux запись ещё и несёт
+  `TryExec=<путь к программе>` (`crates/app/src/autostart.rs`): сеанс
+  пропускает её, если файла нет, — так и AppImage, удалённый руками, не
+  запускается. Обновление записи не трогает.
 - **Windows.** Portable-`.exe` и установщики требуют WebView2 Runtime (есть в
   Windows 10/11; NSIS при отсутствии скачивает его). Подписи кода нет —
   SmartScreen будет предупреждать.
 
 ## Локально
+
+### Все платформы: `mise run build:all`
+
+`scripts/local/build-all.sh` собирает бандлы тем же кодом, что CI
+(`scripts/ci/build-*.sh`), в тех же образах — на машине нужен только podman
+(или docker: `CONTAINER_ENGINE=docker`). Результат — в `release/`, логи — в
+`.cache/build-all/<платформа>.log`, в конце — таблица OK/SKIP/FAIL.
+
+```bash
+mise run build:all                         # всё
+mise run build:all -- linux android        # выборочно
+mise run build:all -- --version 0.2.0-1 windows
+```
+
+| Платформа | Где собирается | Что получится |
+|---|---|---|
+| `linux` | образ `ci-linux` (`--native` — на хосте) | `.deb`, `.rpm`, `.AppImage`, `tar.gz` |
+| `pacman` | `archlinux:base-devel`, после `linux` | `.pkg.tar.zst` |
+| `flatpak` | `archlinux:base-devel` `--privileged`, после `linux` | `.flatpak` |
+| `android` | образ `ci-android` | APK и AAB; без `ANDROID_KEYSTORE_*` — тестовый ключ, суффикс `-testkey` |
+| `windows` | `ci-linux` + `cargo-xwin` (`scripts/local/windows-cross.Dockerfile`) | NSIS `-setup.exe`, portable `.zip`; MSI нет — WiX работает только на Windows, его делает CI |
+| `macos` | на Mac — сразу; с Linux — на `MACOS_BUILD_HOST=user@mac` по ssh (rsync туда и обратно) | `.dmg`, `.app.tar.gz`; без Mac — SKIP |
+
+- Образы берутся из Container Registry проекта по `CI_IMAGE_TAG` (публичные),
+  если их там нет — собираются из `scripts/ci/ci.Dockerfile`.
+- Сборочные каталоги контейнеров — тома `mwt-build-*` (`.rust-target`,
+  `node_modules`, `/root`): хостовые `.rust-target` и `node_modules` не
+  трогаются, повторная сборка идёт инкрементально. Начать с нуля —
+  `podman volume rm $(podman volume ls -q | grep mwt-build-)`.
+- Версия по умолчанию — из `tauri.conf.json` (`scripts/ci/version.sh`).
+- Первый `windows` дольше: строится образ с `cargo-xwin`, а тот скачивает
+  Windows SDK (кэш в томе `mwt-build-windows-home`).
+
+### По частям
 
 ```bash
 mise run build                                       # deb/rpm/AppImage

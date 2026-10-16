@@ -31,6 +31,12 @@ variables:
   CI_ANDROID_IMAGE: $CI_REGISTRY_IMAGE/ci-android:$CI_IMAGE_TAG
   ARCH_IMAGE: archlinux:base-devel
   WINDOWS_RUNNER_TAG: saas-windows-medium-amd64
+  # macOS runners exist on GitLab Premium/Ultimate only: build:macos runs when
+  # MACOS_BUILD is "true" (a CI/CD variable), or the pipeline would wait for
+  # a runner forever.
+  MACOS_BUILD: "false"
+  MACOS_RUNNER_TAG: saas-macos-medium-m1
+  MACOS_IMAGE: macos-15-xcode-16
   # Rust compiles and builds: 4 vCPU instead of the default small runner (2).
   # saas-linux-large-amd64 (8 vCPU) is faster still, saas-linux-small-amd64
   # cheapest.
@@ -285,8 +291,7 @@ build:linux:
   variables:
     CI_MISE_TOOLS: "" # node, pnpm and rust
   script:
-    - pnpm tauri build --ci --bundles deb,rpm,appimage --config "$(scripts/ci/tauri-config.sh)"
-    - scripts/ci/collect-linux.sh "$BUILD_VERSION" release
+    - scripts/ci/build-linux.sh "$BUILD_VERSION" release
   cache:
     - *cargo-cache
     - *pnpm-cache
@@ -332,11 +337,7 @@ build:android:
     - source scripts/ci/setup-linux.sh
     - source scripts/ci/setup-android.sh
   script:
-    # The Gradle project is generated, not committed (crates/app/gen/android).
-    - pnpm tauri android init --ci
-    - pnpm tauri icon crates/app/icons/icon.png
-    - pnpm tauri android build --ci --apk --aab --target $ANDROID_TARGETS --config "$(scripts/ci/tauri-config.sh)"
-    - scripts/ci/sign-android.sh "$BUILD_VERSION" release
+    - scripts/ci/build-android.sh "$BUILD_VERSION" release
   cache:
     - *cargo-cache
     - *pnpm-cache
@@ -348,6 +349,28 @@ build:android:
       policy: $CACHE_POLICY
   artifacts:
     name: multi-wallet-tracker-android
+    paths: [release/]
+    expire_in: 2 weeks
+
+# Universal .dmg (Apple Silicon + Intel). Off unless MACOS_BUILD is "true".
+build:macos:
+  extends: [.build-needs]
+  stage: build
+  image: $MACOS_IMAGE
+  tags: [$MACOS_RUNNER_TAG]
+  timeout: 2h
+  rules:
+    - if: $MACOS_BUILD != "true"
+      when: never
+    - *full # .build-rules
+  script:
+    - scripts/ci/build-macos.sh "$BUILD_VERSION" release
+  cache:
+    - key: macos-deps
+      paths: [.cache/pnpm]
+      policy: $CACHE_POLICY
+  artifacts:
+    name: multi-wallet-tracker-macos
     paths: [release/]
     expire_in: 2 weeks
 
@@ -364,16 +387,8 @@ package:flatpak:
     key: flatpak-gnome
     paths: [.flatpak-builder/downloads]
     policy: $CACHE_POLICY
-  before_script:
-    - pacman -Sy --noconfirm --needed flatpak flatpak-builder git >/dev/null
   script:
-    - git clone --depth 1 https://github.com/flathub/shared-modules.git packaging/flatpak/shared-modules
-    - cp "release/multi-wallet-tracker-$BUILD_VERSION-linux-x86_64.tar.gz" packaging/flatpak/multi-wallet-tracker-linux-x86_64.tar.gz
-    - flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    - flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean
-      --repo=.flatpak-repo .flatpak-build packaging/flatpak/dev.mwt.MultiWalletTracker.yml
-    - flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
-      .flatpak-repo "release/multi-wallet-tracker-$BUILD_VERSION-x86_64.flatpak" dev.mwt.MultiWalletTracker
+    - scripts/ci/build-flatpak.sh "$BUILD_VERSION" release
   artifacts:
     name: multi-wallet-tracker-flatpak
     paths: [release/*.flatpak]
@@ -394,7 +409,15 @@ package:pacman:
 # ----------------------------------------------------------------- release
 
 .publish-needs:
-  needs: [version, build:linux, build:windows, build:android, package:flatpak, package:pacman]
+  needs:
+    - version
+    - build:linux
+    - build:windows
+    - build:android
+    - package:flatpak
+    - package:pacman
+    - job: build:macos
+      optional: true
 
 prerelease:
   extends: [.publish, .publish-needs]

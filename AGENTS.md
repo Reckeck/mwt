@@ -23,6 +23,7 @@
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check` | lint + typecheck + onboarding + forms + ui + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
+| `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `release/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
 
@@ -70,7 +71,8 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
 mise.toml             # tools + env + tasks
 .gitlab-ci.yml        # CI/CD: проверки, сборки Linux/Windows/Android, Flatpak/pacman, релиз (docs/ci.md)
 scripts/ci/           # логика CI-job'ов (bootstrap, сбор бандлов, подпись Android, релиз, AUR)
-packaging/            # flatpak/ (манифест + metainfo), aur/ (PKGBUILD.in + render.sh)
+scripts/local/        # build-all.sh: локальная сборка всех платформ тем же кодом, что CI
+packaging/            # flatpak/ (манифест + metainfo), aur/ (PKGBUILD.in + render.sh), linux/ (postrm deb/rpm)
 docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor, ci
 ```
 
