@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { assetKey } from '@/shared/lib/asset-ref'
 
 import type { AssetSelectProps } from './asset-select.types'
@@ -31,8 +31,7 @@ const selected = computed({
 </script>
 
 <template>
-  <Select v-model="selected" :aria-invalid="props.invalid || undefined" :class="props.invalid && 'border-destructive'">
-    <option v-if="props.placeholder" value="" disabled>{{ props.placeholder }}</option>
-    <option v-for="option in options" :key="option.key" :value="option.key">{{ option.label }}</option>
+  <Select v-model="selected" :invalid="props.invalid" :placeholder="props.placeholder">
+    <SelectItem v-for="option in options" :key="option.key" :value="option.key">{{ option.label }}</SelectItem>
   </Select>
 </template>

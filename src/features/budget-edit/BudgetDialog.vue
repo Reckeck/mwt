@@ -11,7 +11,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -98,7 +98,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="budget-target">{{ t('budget.target') }}</Label>
           <Select id="budget-target" v-model="targetKind">
-            <option v-for="kind in BUDGET_TARGETS" :key="kind" :value="kind">{{ t(`budget.targetKind.${kind}`) }}</option>
+            <SelectItem v-for="kind in BUDGET_TARGETS" :key="kind" :value="kind">{{ t(`budget.targetKind.${kind}`) }}</SelectItem>
           </Select>
         </div>
         <FormField
@@ -130,7 +130,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="budget-period">{{ t('budget.period') }}</Label>
           <Select id="budget-period" v-model="period">
-            <option v-for="entry in BUDGET_PERIODS" :key="entry" :value="entry">{{ t(`budget.periodKind.${entry}`) }}</option>
+            <SelectItem v-for="entry in BUDGET_PERIODS" :key="entry" :value="entry">{{ t(`budget.periodKind.${entry}`) }}</SelectItem>
           </Select>
         </div>
         <FormField for="budget-limit" :label="t('budget.limit')" required :error="form.error('limit')">

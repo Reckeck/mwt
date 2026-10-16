@@ -9,8 +9,9 @@ import { StoreNodeSelect } from '@/entities/store'
 import { CategorySelect } from '@/features/category-select'
 import { AccountRefPicker } from '@/features/transaction-create'
 import { Input } from '@/shared/ui/input'
+import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
@@ -74,12 +75,12 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
     <template v-else>
       <Label :for="id">{{ localized(props.param.label, locale) }}</Label>
       <Select v-if="props.param.kind.kind === 'select'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next)">
-        <option v-for="[value, label] in props.param.kind.options" :key="value" :value="value">
+        <SelectItem v-for="[value, label] in props.param.kind.options" :key="value" :value="value">
           {{ localized(label, locale) }}
-        </option>
+        </SelectItem>
       </Select>
       <Select v-else-if="kind === 'weekday'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', Number(next))">
-        <option v-for="day in WEEKDAYS" :key="day" :value="String(day)">{{ t(`schedule.weekday.${day}`) }}</option>
+        <SelectItem v-for="day in WEEKDAYS" :key="day" :value="String(day)">{{ t(`schedule.weekday.${day}`) }}</SelectItem>
       </Select>
       <Input
         v-else-if="kind === 'number' || kind === 'day'"
@@ -88,7 +89,7 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         inputmode="decimal"
         @update:model-value="(next) => emit('update', kind === 'day' ? Number(next) || 1 : String(next))"
       />
-      <Input v-else-if="kind === 'time'" :id="id" type="time" :model-value="text" @update:model-value="(next) => emit('update', String(next))" />
+      <TimeInput v-else-if="kind === 'time'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next)" />
       <DateTimePicker v-else-if="kind === 'date'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)" />
       <Textarea v-else-if="kind === 'long_text'" :id="id" :model-value="text" rows="3" @update:model-value="(next) => emit('update', String(next))" />
       <StoreNodeSelect
@@ -121,19 +122,19 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         @update:model-value="(next) => emit('update', next || null)"
       />
       <Select v-else-if="kind === 'budget'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
-        <option value="">{{ t('workflow.field.notSet') }}</option>
-        <option v-for="budget in budgets.data.value ?? []" :key="budget.id" :value="budget.id">
+        <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
+        <SelectItem v-for="budget in budgets.data.value ?? []" :key="budget.id" :value="budget.id">
           {{ t(`budget.periodKind.${budget.period}`) }} · {{ formatMoney(budget.limit, { currency: budget.currency }) }}
-        </option>
+        </SelectItem>
       </Select>
       <Select v-else-if="kind === 'goal'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
-        <option value="">{{ t('workflow.field.notSet') }}</option>
-        <option v-for="goal in goals.data.value ?? []" :key="goal.id" :value="goal.id">{{ goal.name }}</option>
+        <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
+        <SelectItem v-for="goal in goals.data.value ?? []" :key="goal.id" :value="goal.id">{{ goal.name }}</SelectItem>
       </Select>
       <template v-else-if="kind === 'workflow'">
         <Select :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
-          <option value="">{{ t('workflow.field.notSet') }}</option>
-          <option v-for="workflow in callable" :key="workflow.id" :value="workflow.id">{{ workflow.name }}</option>
+          <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
+          <SelectItem v-for="workflow in callable" :key="workflow.id" :value="workflow.id">{{ workflow.name }}</SelectItem>
         </Select>
         <p class="text-xs text-muted-foreground">{{ t('workflow.field.callableHint') }}</p>
       </template>

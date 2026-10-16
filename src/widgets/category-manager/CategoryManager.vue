@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { CATEGORY_GROUPS, categoryLabel } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
@@ -94,7 +94,7 @@ const create = useMutation({
             />
           </span>
           <Select v-model="newGroup" class="h-9 w-44" :aria-label="t('categories.manage.group')">
-            <option v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</option>
+            <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
           </Select>
           <Button type="submit" size="sm" :disabled="create.isPending.value">
             <Plus class="size-4" />
@@ -124,7 +124,7 @@ const create = useMutation({
             :aria-label="t('categories.manage.group')"
             @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup })"
           >
-            <option v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</option>
+            <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
           </Select>
           <Button
             variant="ghost"

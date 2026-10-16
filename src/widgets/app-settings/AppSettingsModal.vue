@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -141,9 +141,9 @@ function removeFavorite(code: string) {
         :model-value="settingsStore.locale"
         @update:model-value="onLocaleChange($event)"
       >
-        <option v-for="option in localeOptions" :key="option.code" :value="option.code">
+        <SelectItem v-for="option in localeOptions" :key="option.code" :value="option.code">
           {{ t(option.label) }}
-        </option>
+        </SelectItem>
       </Select>
     </div>
 

@@ -6,7 +6,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
 
@@ -23,15 +23,15 @@ const { form, check } = useTxForm()
     <div class="grid gap-1.5">
       <Label for="tx-direction">{{ t('tx.field.direction') }}</Label>
       <Select id="tx-direction" v-model="form.direction">
-        <option value="long">{{ t('tx.direction.long') }}</option>
-        <option value="short">{{ t('tx.direction.short') }}</option>
+        <SelectItem value="long">{{ t('tx.direction.long') }}</SelectItem>
+        <SelectItem value="short">{{ t('tx.direction.short') }}</SelectItem>
       </Select>
     </div>
     <div class="grid gap-1.5">
       <Label for="tx-futures-action">{{ t('tx.field.action') }}</Label>
       <Select id="tx-futures-action" v-model="form.action">
-        <option value="open">{{ t('tx.futures.open') }}</option>
-        <option value="close">{{ t('tx.futures.close') }}</option>
+        <SelectItem value="open">{{ t('tx.futures.open') }}</SelectItem>
+        <SelectItem value="close">{{ t('tx.futures.close') }}</SelectItem>
       </Select>
     </div>
     <FormField for="tx-qty" :label="t('tx.field.quantity')" required :error="check.error('quantity')">
@@ -48,8 +48,8 @@ const { form, check } = useTxForm()
     <div class="grid gap-1.5">
       <Label for="tx-futures-category">{{ t('tx.field.futuresCategory') }}</Label>
       <Select id="tx-futures-category" v-model="form.futuresCategory">
-        <option value="linear">{{ t('tx.futuresCategory.linear') }}</option>
-        <option value="inverse">{{ t('tx.futuresCategory.inverse') }}</option>
+        <SelectItem value="linear">{{ t('tx.futuresCategory.linear') }}</SelectItem>
+        <SelectItem value="inverse">{{ t('tx.futuresCategory.inverse') }}</SelectItem>
       </Select>
     </div>
     <div v-if="form.action === 'close'" class="grid gap-1.5">

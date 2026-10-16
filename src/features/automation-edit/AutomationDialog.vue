@@ -10,7 +10,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, WEEKDAYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -172,7 +172,7 @@ const save = useMutation({
         <div class="grid gap-1.5">
           <Label for="automation-schedule">{{ t('automation.schedule') }}</Label>
           <Select id="automation-schedule" v-model="scheduleKind">
-            <option v-for="kind in SCHEDULE_KINDS" :key="kind" :value="kind">{{ t(`schedule.kind.${kind}`) }}</option>
+            <SelectItem v-for="kind in SCHEDULE_KINDS" :key="kind" :value="kind">{{ t(`schedule.kind.${kind}`) }}</SelectItem>
           </Select>
         </div>
         <FormField
@@ -187,7 +187,7 @@ const save = useMutation({
         </FormField>
         <FormField v-else-if="scheduleKind === 'weekly'" for="automation-weekday" :label="t('schedule.weekdayLabel')">
           <Select id="automation-weekday" v-model="weekday">
-            <option v-for="entry in WEEKDAYS" :key="entry" :value="String(entry)">{{ t(`schedule.weekday.${entry}`) }}</option>
+            <SelectItem v-for="entry in WEEKDAYS" :key="entry" :value="String(entry)">{{ t(`schedule.weekday.${entry}`) }}</SelectItem>
           </Select>
         </FormField>
         <FormField v-else for="automation-days" :label="t('schedule.days')" required :error="fields.error('everyDays')">

@@ -12,6 +12,7 @@ export function formatBarTime(time: Time, minutes: number, locale: string): stri
     year: daily ? 'numeric' : undefined,
     hour: daily ? undefined : '2-digit',
     minute: daily ? undefined : '2-digit',
+    hourCycle: 'h23',
   })
 }
 
@@ -26,7 +27,7 @@ export function formatTick(time: Time, type: TickMarkType, locale: string): stri
     case TickMarkType.DayOfMonth:
       return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
     default:
-      return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+      return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   }
 }
 

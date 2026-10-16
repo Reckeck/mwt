@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { decimal, firstError, required, useFormValidation } from '@/shared/lib/form'
 
 import { useWorkflowActions } from '../../model/use-workflow-actions'
@@ -86,15 +86,15 @@ function submit() {
       </FormField>
       <FormField :label="t('workflow.vars.kind')" for="workflow-var-kind">
         <Select id="workflow-var-kind" v-model="kind">
-          <option v-for="option in ['number', 'money', 'text', 'bool']" :key="option" :value="option">
+          <SelectItem v-for="option in ['number', 'money', 'text', 'bool']" :key="option" :value="option">
             {{ t(`workflow.vars.kinds.${option}`) }}
-          </option>
+          </SelectItem>
         </Select>
       </FormField>
       <FormField :label="t('workflow.vars.value')" for="workflow-var-value" :required="numeric" :error="form.error('value')">
         <Select v-if="kind === 'bool'" id="workflow-var-value" v-model="value">
-          <option value="true">{{ t('workflow.vars.yes') }}</option>
-          <option value="false">{{ t('workflow.vars.no') }}</option>
+          <SelectItem value="true">{{ t('workflow.vars.yes') }}</SelectItem>
+          <SelectItem value="false">{{ t('workflow.vars.no') }}</SelectItem>
         </Select>
         <Input v-else id="workflow-var-value" v-model="value" :inputmode="kind === 'text' ? 'text' : 'decimal'" />
       </FormField>

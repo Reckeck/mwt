@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { useSettingsStore } from '@/shared/store/settings'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
@@ -69,7 +69,7 @@ function submit() {
       <div class="grid gap-1.5">
         <Label for="property-category">{{ t('propertyCategory.title') }}</Label>
         <Select id="property-category" v-model="category">
-          <option v-for="entry in CATEGORIES" :key="entry" :value="entry">{{ t(`propertyCategory.${entry}`) }}</option>
+          <SelectItem v-for="entry in CATEGORIES" :key="entry" :value="entry">{{ t(`propertyCategory.${entry}`) }}</SelectItem>
         </Select>
       </div>
       <div class="grid gap-1.5">

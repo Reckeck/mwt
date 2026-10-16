@@ -151,6 +151,9 @@ export function formatDate(iso: string | null | undefined): string {
   }).format(date)
 }
 
+/** Times read 0–23 in every language: no AM/PM, also in English. */
+export const TIME_CYCLE = 'h23' as const
+
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -161,6 +164,7 @@ export function formatDateTime(iso: string | null | undefined): string {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    hourCycle: TIME_CYCLE,
   }).format(date)
 }
 
@@ -170,7 +174,11 @@ export function formatAsOf(iso: string | null | undefined): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
   if (date.toDateString() !== new Date().toDateString()) return formatDateTime(iso)
-  return new Intl.DateTimeFormat(activeLocale.value, { hour: '2-digit', minute: '2-digit' }).format(date)
+  return new Intl.DateTimeFormat(activeLocale.value, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: TIME_CYCLE,
+  }).format(date)
 }
 
 export function useMoney() {

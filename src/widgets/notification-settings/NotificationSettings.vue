@@ -7,6 +7,7 @@ import { BellRing } from 'lucide-vue-next'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
@@ -113,12 +114,11 @@ const test = useMutation({
           <Label for="notice-time">{{ t('notices.defaultTime') }}</Label>
           <p class="text-xs text-muted-foreground">{{ t('notices.defaultTimeHint') }}</p>
         </div>
-        <Input
+        <TimeInput
           id="notice-time"
-          type="time"
-          class="w-32"
+          class="w-24"
           :model-value="current.default_time"
-          @change="(event: Event) => save({ default_time: (event.target as HTMLInputElement).value || '10:00' })"
+          @update:model-value="(next) => save({ default_time: next || '10:00' })"
         />
       </div>
       <div class="flex flex-wrap items-center justify-between gap-3">

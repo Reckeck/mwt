@@ -7,7 +7,7 @@ import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
 import { useWalletCatalog } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 
@@ -105,7 +105,7 @@ function intervalLabel(seconds: number): string {
           :model-value="interval"
           @update:model-value="(value) => setInterval.mutate(Number(value))"
         >
-          <option v-for="seconds in INTERVALS" :key="seconds" :value="String(seconds)">{{ intervalLabel(seconds) }}</option>
+          <SelectItem v-for="seconds in INTERVALS" :key="seconds" :value="String(seconds)">{{ intervalLabel(seconds) }}</SelectItem>
         </Select>
       </div>
     </template>

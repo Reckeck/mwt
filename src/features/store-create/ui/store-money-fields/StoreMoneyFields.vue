@@ -6,7 +6,7 @@ import { CurrencyPicker } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useStoreCreate } from '../../model/use-store-create-state'
 
@@ -65,8 +65,8 @@ const {
       <CurrencyPicker v-if="openingPicker === 'currency'" v-model="openingCurrency" />
       <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" />
       <Select v-else-if="openingPicker === 'side' && pair" v-model="openingSide" :aria-label="t('binding.pair')">
-        <option value="base">{{ pair.base }}</option>
-        <option value="quote">{{ pair.quote }}</option>
+        <SelectItem value="base">{{ pair.base }}</SelectItem>
+        <SelectItem value="quote">{{ pair.quote }}</SelectItem>
       </Select>
       <span v-else-if="openingAsset" class="flex h-9 items-center px-1 text-sm text-muted-foreground">
         {{ openingAsset.symbol }}

@@ -11,7 +11,7 @@ import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { PageHeader } from '@/shared/ui/page-header'
 import { SectionState } from '@/shared/ui/section-state'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { StatCard } from '@/shared/ui/stat-card'
 import { Switch } from '@/shared/ui/switch'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -119,7 +119,7 @@ function openWallet(created: Store) {
         <div class="grid gap-1.5">
           <Label for="stores-sort">{{ t('stores.sort.label') }}</Label>
           <Select id="stores-sort" v-model="sort" class="w-48">
-            <option v-for="key in SORTS" :key="key" :value="key">{{ t(`stores.sort.${key}`) }}</option>
+            <SelectItem v-for="key in SORTS" :key="key" :value="key">{{ t(`stores.sort.${key}`) }}</SelectItem>
           </Select>
         </div>
         <div v-if="archivedCount" class="flex h-9 items-center gap-2">

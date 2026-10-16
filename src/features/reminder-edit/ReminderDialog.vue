@@ -7,8 +7,9 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
@@ -88,7 +89,7 @@ const save = useMutation({
           <DateTimePicker id="reminder-date" v-model="date" />
         </FormField>
         <FormField for="reminder-time" :label="t('reminder.time')" required :error="form.error('time')">
-          <Input id="reminder-time" v-model="time" type="time" />
+          <TimeInput id="reminder-time" v-model="time" :invalid="Boolean(form.error('time'))" />
         </FormField>
       </div>
       <div class="grid gap-1.5" data-tour="reminder-repeat">
@@ -99,10 +100,10 @@ const save = useMutation({
             <Input v-model="every" type="number" min="1" max="999" class="w-20" :aria-label="t('reminder.everyCount')" />
           </template>
           <Select id="reminder-repeat" v-model="unit" class="flex-1">
-            <option value="">{{ t('reminder.once') }}</option>
-            <option v-for="entry in REPEAT_UNITS" :key="entry" :value="entry">
+            <SelectItem value="">{{ t('reminder.once') }}</SelectItem>
+            <SelectItem v-for="entry in REPEAT_UNITS" :key="entry" :value="entry">
               {{ t(`reminder.unit.${entry}`, Number(every) || 1) }}
-            </option>
+            </SelectItem>
           </Select>
         </div>
         <p class="text-xs text-muted-foreground">{{ unit ? t('reminder.repeatHint') : t('reminder.onceHint') }}</p>

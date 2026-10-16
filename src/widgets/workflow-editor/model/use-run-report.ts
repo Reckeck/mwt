@@ -69,7 +69,9 @@ export function useRunReport(
       workflow_id: id,
       test: {
         id: '',
-        name: t('workflow.tests.defaultName', { when: new Date().toLocaleString(locale.value) }),
+        name: t('workflow.tests.defaultName', {
+          when: new Date().toLocaleString(locale.value, { dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23' }),
+        }),
         trigger_node: result.run.trace[0]?.node_id ?? null,
         at: result.run.started_at,
         answers: { ...answers.value },

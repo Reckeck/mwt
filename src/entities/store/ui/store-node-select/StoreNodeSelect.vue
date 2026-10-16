@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 import type { StoreNodeSelectProps } from './store-node-select.types'
@@ -16,7 +16,7 @@ const props = defineProps<StoreNodeSelectProps>()
 /** Selected store id; `''` is the empty option. */
 const storeId = defineModel<string>({ required: true })
 
-// Native <option> cannot hold markup: the path says where a node sits.
+// Native <SelectItem> cannot hold markup: the path says where a node sits.
 const options = computed(() =>
   (props.flat ? props.nodes : flattenStoreTree(props.nodes)).map((node) => ({
     id: node.store.id,
@@ -26,9 +26,8 @@ const options = computed(() =>
 </script>
 
 <template>
-  <Select v-model="storeId" :aria-invalid="props.invalid || undefined" :class="props.invalid && 'border-destructive'">
-    <option v-if="props.placeholder" value="" disabled>{{ props.placeholder }}</option>
-    <option v-if="props.emptyLabel" value="">{{ props.emptyLabel }}</option>
-    <option v-for="option in options" :key="option.id" :value="option.id">{{ option.label }}</option>
+  <Select v-model="storeId" :invalid="props.invalid" :placeholder="props.placeholder">
+    <SelectItem v-if="props.emptyLabel" value="">{{ props.emptyLabel }}</SelectItem>
+    <SelectItem v-for="option in options" :key="option.id" :value="option.id">{{ option.label }}</SelectItem>
   </Select>
 </template>

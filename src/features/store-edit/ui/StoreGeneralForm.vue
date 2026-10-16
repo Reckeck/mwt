@@ -7,7 +7,7 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
@@ -112,14 +112,14 @@ function submit() {
     <div v-if="isRoot" class="grid gap-1.5">
       <Label for="store-contact">{{ t('stores.contact') }}</Label>
       <Select id="store-contact" v-model="contactId">
-        <option value="">{{ t('stores.contactNone') }}</option>
-        <option
+        <SelectItem value="">{{ t('stores.contactNone') }}</SelectItem>
+        <SelectItem
           v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)"
           :key="contact.id"
           :value="contact.id"
         >
           {{ contact.name }}
-        </option>
+        </SelectItem>
       </Select>
     </div>
 

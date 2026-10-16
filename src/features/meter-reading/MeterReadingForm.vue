@@ -9,7 +9,7 @@ import { call } from '@/shared/api/ipc'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
-import { Select } from '@/shared/ui/select'
+import { Select, SelectItem } from '@/shared/ui/select'
 
 import type { MeterReadingFormProps } from './meter-reading.types'
 
@@ -65,7 +65,7 @@ const save = useMutation({
         />
       </span>
       <Select v-if="zones.length" v-model="zone" class="h-8 w-28" :aria-label="t('utilities.zone')">
-        <option v-for="entry in zones" :key="entry" :value="entry">{{ entry }}</option>
+        <SelectItem v-for="entry in zones" :key="entry" :value="entry">{{ entry }}</SelectItem>
       </Select>
       <span class="contents" :data-invalid="form.invalidAttr('value')">
         <AmountInput
