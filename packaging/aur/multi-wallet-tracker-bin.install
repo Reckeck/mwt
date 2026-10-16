@@ -1,0 +1,10 @@
+# pacman runs this after the package is removed; same as packaging/linux/postrm.sh
+# for deb/rpm: autostart entries in the homes would launch a program that is gone.
+post_remove() {
+  for entry in /home/*/.config/autostart/*.desktop /root/.config/autostart/*.desktop; do
+    [ -f "$entry" ] || continue
+    if grep -q '^Exec=/usr/bin/multi-wallet-tracker\( \|$\)' "$entry"; then
+      rm -f "$entry"
+    fi
+  done
+}

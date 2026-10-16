@@ -88,6 +88,7 @@ pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String
     let launcher = app.autolaunch();
     if enabled {
         launcher.enable().map_err(|err| err.to_string())?;
+        crate::autostart::guard_entry(&app);
     } else {
         launcher.disable().map_err(|err| err.to_string())?;
     }

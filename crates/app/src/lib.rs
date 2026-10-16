@@ -1,6 +1,8 @@
 //! Tauri entrypoint for the Multi Wallet Tracker shell. All business logic and
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
+#[cfg(desktop)]
+mod autostart;
 mod commands;
 #[cfg(desktop)]
 mod legacy;
@@ -293,6 +295,8 @@ pub fn run() {
             tray::create(app)?;
             #[cfg(desktop)]
             legacy::migrate_autostart(app.handle());
+            #[cfg(desktop)]
+            autostart::guard_entry(app.handle());
             // Started with the system: stay in the tray, remind from there.
             if std::env::args().any(|arg| arg == "--hidden")
                 && let Some(window) = app.get_webview_window("main")
