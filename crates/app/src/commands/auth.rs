@@ -75,6 +75,7 @@ pub async fn create_vault(
     // The base currency lives in the app config, so push it into the new vault
     // before reading the info back out.
     app_settings::sync_base_currency(&state, &app);
+    crate::sync::on_unlock(&app);
     let info = info_of(
         state
             .vault
@@ -110,6 +111,7 @@ pub async fn unlock_vault(
     // The base currency lives in the app config, so push it into the opened
     // vault before reading the info back out.
     app_settings::sync_base_currency(&state, &app);
+    crate::sync::on_unlock(&app);
     let info = info_of(
         state
             .vault
@@ -132,6 +134,7 @@ pub async fn unlock_vault(
 pub async fn lock_vault_cmd(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     // The last word before the vault closes: what to remind of while locked.
     crate::scheduler::snapshot_tick(&app, true);
+    crate::sync::on_lock(&app);
     let mut guard = lock_vault(&state).map_err(err_to_string)?;
     *guard = None;
     Ok(())

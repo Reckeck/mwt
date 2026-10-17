@@ -24,6 +24,8 @@ pub const MANIFEST_PER_MESSAGE: usize = 5_000;
 pub enum Message {
     /// First message each way after the handshake.
     Hello(Hello),
+    /// The user pressed «Сопрячь» on the sender: show the code here too.
+    PairRequest,
     /// The user's answer to the pairing code on this side.
     Pairing {
         accept: bool,
@@ -50,17 +52,14 @@ pub enum Message {
     Changed {
         records: Vec<(String, RecordState)>,
     },
-    /// Whether this device's window has focus (who shows a notification).
+    /// Who shows a system notification. Client to main: the client's window
+    /// has focus. Main to client: some other device of the group has focus.
     Presence {
         focused: bool,
     },
     /// The sender's clock, for the jump check.
     Time {
         now_ms: u64,
-    },
-    /// A notification was read here: dismiss it everywhere.
-    NoticeRead {
-        key: String,
     },
     /// Hand over the main role (the preferred device came back).
     TakeMain,
@@ -84,6 +83,9 @@ pub struct Hello {
     pub prefer_main: bool,
     /// The sender will show a code and wait for the user (it does not trust us yet).
     pub needs_pairing: bool,
+    /// From the main device: the receiver's place in the queue to take over
+    /// when the main device goes (0 = first).
+    pub rank: u32,
 }
 
 pub fn encode(message: &Message) -> Result<Vec<u8>> {

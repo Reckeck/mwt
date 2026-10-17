@@ -8,9 +8,12 @@ mod commands;
 mod legacy;
 mod notify_store;
 mod platform_fs;
+#[cfg(mobile)]
+mod platform_net;
 mod quick_add_socket;
 mod scheduler;
 mod shortcut;
+mod sync;
 #[cfg(desktop)]
 mod tray;
 
@@ -50,6 +53,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build());
     builder
         .manage(AppState::new())
+        .manage(sync::SyncHub::default())
         .invoke_handler(tauri::generate_handler![
             // auth
             auth::vault_status,
@@ -276,6 +280,17 @@ pub fn run() {
             vault_link::link_vault_external,
             vault_link::unlink_vault_external,
             vault_link::resolve_vault_conflict,
+            // device-to-device sync
+            commands::sync::sync_status,
+            commands::sync::sync_set_settings,
+            commands::sync::sync_pair,
+            commands::sync::sync_confirm_pairing,
+            commands::sync::sync_decide_plan,
+            commands::sync::sync_peers,
+            commands::sync::sync_forget_peer,
+            commands::sync::sync_history,
+            commands::sync::sync_undo,
+            commands::sync::sync_restore_backup,
         ])
         .setup(|app| {
             // Resolve the default vault location once (`platform_fs::vaults_dir`).
@@ -317,6 +332,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
+            // Whose window has focus decides where a notification shows.
+            if let WindowEvent::Focused(focused) = event {
+                sync::set_focus(window.app_handle(), *focused);
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // A device setting: kept in the app config, not in the vault.
                 let minimize_to_tray =

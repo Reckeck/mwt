@@ -292,6 +292,38 @@ impl UnlockedVault {
         Ok(Some(applied))
     }
 
+    /// Keys a kept batch changed (to pass on to the other devices).
+    pub fn sync_batch_keys(&self, batch_id: &str) -> Vec<String> {
+        self.doc
+            .sync
+            .batches
+            .iter()
+            .find(|batch| batch.id == batch_id)
+            .map(|batch| {
+                batch
+                    .entries
+                    .iter()
+                    .map(|entry| entry.key.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Notices a kept batch added (to show them on this device).
+    pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord> {
+        let keys: std::collections::HashSet<String> = self
+            .sync_batch_keys(batch_id)
+            .into_iter()
+            .filter_map(|key| key.strip_prefix("notification_log:").map(str::to_string))
+            .collect();
+        self.doc
+            .notification_log
+            .iter()
+            .filter(|record| keys.contains(&record.key))
+            .cloned()
+            .collect()
+    }
+
     /// The batches still kept, newest first.
     pub fn sync_history(&self) -> Vec<AppliedBatch> {
         self.doc.sync.batches.iter().rev().map(applied_of).collect()

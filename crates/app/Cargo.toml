@@ -40,6 +40,9 @@ tauri-plugin-notification = "2"
 iana-time-zone = "0.1"
 chacha20poly1305.workspace = true
 rand.workspace = true
+# Device-to-device vault sync on the local network (src/sync).
+mdns-sd.workspace = true
+rmp-serde.workspace = true
 
 # Android-only: document pickers with a grant that survives a restart
 # (the external copy of a vault, `platform_fs`).
