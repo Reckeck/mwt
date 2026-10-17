@@ -116,6 +116,14 @@ export const appSettingsOutsideCommands: MockCommands = {
       mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
     if (input.completed_tours) mockAppSettings.completed_tours = [...new Set(input.completed_tours)]
     if (input.seen_whats_new) mockAppSettings.seen_whats_new = [...new Set(input.seen_whats_new)]
+    if (input.device_name !== null && input.device_name !== undefined)
+      mockAppSettings.device_name = input.device_name.trim() || null
+    if (input.sync) mockAppSettings.sync = input.sync
+    if (input.minimize_to_tray !== null && input.minimize_to_tray !== undefined)
+      mockAppSettings.minimize_to_tray = input.minimize_to_tray
+    if (input.fx_refresh_interval_sec) mockAppSettings.fx_refresh_interval_sec = input.fx_refresh_interval_sec
+    if (input.display_decimals !== null && input.display_decimals !== undefined)
+      mockAppSettings.display_decimals = input.display_decimals
     return resolve(mockAppSettings)
   },
   set_quick_add_shortcut: ({ args }) => {

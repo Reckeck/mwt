@@ -38,7 +38,7 @@ const storeId = computed(() => String(route.params.id ?? ''))
 const { includeChildren, scopeValue } = useWalletScope(storeId)
 const { overview, pnl, base, store, isArchived, children, hasChildren, positions, ancestors, parentPath, canAddChild, ownShare } =
   useStoreOverview(storeId, includeChildren)
-const decimals = computed(() => settingsStore.vault?.display_decimals ?? 8)
+const decimals = computed(() => settingsStore.displayDecimals)
 
 /* --- exchanges: the terminal and the import extend the page --- */
 const isExchangeNode = computed(() => store.value?.kind === 'exchange' && !store.value.parent_id)

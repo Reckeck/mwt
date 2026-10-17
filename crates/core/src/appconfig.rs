@@ -95,7 +95,46 @@ pub struct AppSettings {
     /// «Что нового» entries already shown after an update.
     #[serde(default)]
     pub seen_whats_new: Vec<String>,
+    /// This installation's id for vault sync; made once by [`Self::ensure_device_id`].
+    /// It lives here, not in the vault, so a copied vault file never shares it.
+    #[serde(default)]
+    pub device_id: String,
+    /// Name other devices see when pairing; `None` = the host name.
+    #[serde(default)]
+    pub device_name: Option<String>,
+    /// Device-to-device vault sync over the local network.
+    #[serde(default)]
+    pub sync: SyncPrefs,
+    /// Hide to the tray on close. `None` until taken over from the vault
+    /// that used to keep it ([`Self::adopt_device_settings`]).
+    #[serde(default)]
+    pub minimize_to_tray: Option<bool>,
+    /// How often prices and rates refresh here, seconds; `None` = not taken over yet.
+    #[serde(default)]
+    pub fx_refresh_interval_sec: Option<u32>,
+    /// Decimal places balances render with on this screen; `None` = not taken over yet.
+    #[serde(default)]
+    pub display_decimals: Option<u32>,
 }
+
+/// Vault sync preferences of this device. Everything is off until the user
+/// turns it on: an enabled device listens on the local network.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncPrefs {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Show what will change before the first batch of a session is applied.
+    #[serde(default)]
+    pub confirm_first: bool,
+    /// Take the main role whenever this device is around.
+    #[serde(default)]
+    pub prefer_main: bool,
+}
+
+/// Defaults of the device settings that used to live in the vault.
+pub const DEFAULT_MINIMIZE_TO_TRAY: bool = true;
+pub const DEFAULT_FX_REFRESH_SEC: u32 = 300;
+pub const DEFAULT_DISPLAY_DECIMALS: u32 = 8;
 
 /// Reference annual inflation the user starts with, percent. Rough recent
 /// figures; the settings screen says so and lets the user change them.
@@ -119,6 +158,12 @@ impl Default for AppSettings {
             quick_add_shortcut: None,
             completed_tours: Vec::new(),
             seen_whats_new: Vec::new(),
+            device_id: String::new(),
+            device_name: None,
+            sync: SyncPrefs::default(),
+            minimize_to_tray: None,
+            fx_refresh_interval_sec: None,
+            display_decimals: None,
         }
     }
 }
@@ -163,6 +208,62 @@ impl AppSettings {
         if let Some(entries) = &patch.seen_whats_new {
             self.seen_whats_new = dedup(entries);
         }
+        if let Some(name) = &patch.device_name {
+            let name: String = name.trim().chars().take(MAX_DEVICE_NAME).collect();
+            self.device_name = (!name.is_empty()).then_some(name);
+        }
+        if let Some(sync) = patch.sync {
+            self.sync = sync;
+        }
+        if let Some(minimize) = patch.minimize_to_tray {
+            self.minimize_to_tray = Some(minimize);
+        }
+        if let Some(interval) = patch.fx_refresh_interval_sec {
+            self.fx_refresh_interval_sec = Some(interval.clamp(30, 3600));
+        }
+        if let Some(decimals) = patch.display_decimals {
+            self.display_decimals = Some(decimals.min(18));
+        }
+    }
+
+    /// Give this installation its sync id if it has none yet; `true` = changed.
+    pub fn ensure_device_id(&mut self) -> bool {
+        if uuid::Uuid::parse_str(&self.device_id).is_ok() {
+            return false;
+        }
+        self.device_id = uuid::Uuid::new_v4().to_string();
+        true
+    }
+
+    /// Take over the device settings a vault used to keep, for each one not
+    /// set here yet; `true` = something was taken. Settings already set here
+    /// win: they belong to this device, the vault's copy to whoever saved last.
+    pub fn adopt_device_settings(&mut self, vault: &crate::vault::Settings) -> bool {
+        let before = (
+            self.minimize_to_tray,
+            self.fx_refresh_interval_sec,
+            self.display_decimals,
+        );
+        self.minimize_to_tray.get_or_insert(vault.minimize_to_tray);
+        self.fx_refresh_interval_sec
+            .get_or_insert(vault.fx_refresh_interval_sec.clamp(30, 3600));
+        self.display_decimals
+            .get_or_insert(vault.display_decimals.min(18));
+        before
+            != (
+                self.minimize_to_tray,
+                self.fx_refresh_interval_sec,
+                self.display_decimals,
+            )
+    }
+
+    pub fn minimize_to_tray(&self) -> bool {
+        self.minimize_to_tray.unwrap_or(DEFAULT_MINIMIZE_TO_TRAY)
+    }
+
+    pub fn fx_refresh_interval(&self) -> u32 {
+        self.fx_refresh_interval_sec
+            .unwrap_or(DEFAULT_FX_REFRESH_SEC)
     }
 
     /// Annual inflation of a currency, percent, if the user has one for it.
@@ -244,7 +345,21 @@ pub struct UpdateAppSettingsInput {
     /// Replaces the list of «Что нового» entries already shown.
     #[serde(default)]
     pub seen_whats_new: Option<Vec<String>>,
+    /// An empty name goes back to the host name.
+    #[serde(default)]
+    pub device_name: Option<String>,
+    #[serde(default)]
+    pub sync: Option<SyncPrefs>,
+    #[serde(default)]
+    pub minimize_to_tray: Option<bool>,
+    #[serde(default)]
+    pub fx_refresh_interval_sec: Option<u32>,
+    #[serde(default)]
+    pub display_decimals: Option<u32>,
 }
+
+/// Longest device name, characters; it is shown in a pairing dialog.
+pub const MAX_DEVICE_NAME: usize = 40;
 
 /// Trimmed, without blanks and repeats, in order.
 fn dedup(items: &[String]) -> Vec<String> {
@@ -579,6 +694,16 @@ mod tests {
             quick_add_shortcut: Some("CmdOrCtrl+Shift+Space".into()),
             completed_tours: vec!["dashboard".into()],
             seen_whats_new: vec!["2026-10-round-13".into()],
+            device_id: uuid::Uuid::new_v4().to_string(),
+            device_name: Some("Laptop".into()),
+            sync: SyncPrefs {
+                enabled: true,
+                confirm_first: true,
+                prefer_main: false,
+            },
+            minimize_to_tray: Some(false),
+            fx_refresh_interval_sec: Some(900),
+            display_decimals: Some(2),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
@@ -672,6 +797,52 @@ mod tests {
         let (catalog, source) = merge_catalog(None, None, None);
         assert_eq!(catalog, SupportedCurrencies::fallback());
         assert_eq!(source.notice(), Some("builtin"));
+    }
+
+    #[test]
+    fn device_id_is_made_once() {
+        let mut settings = AppSettings::default();
+        assert!(settings.ensure_device_id());
+        let id = settings.device_id.clone();
+        assert!(!settings.ensure_device_id());
+        assert_eq!(settings.device_id, id);
+    }
+
+    #[test]
+    fn device_settings_are_taken_from_the_vault_once() {
+        let vault = crate::vault::Settings {
+            minimize_to_tray: false,
+            fx_refresh_interval_sec: 900,
+            display_decimals: 4,
+            ..Default::default()
+        };
+        let mut settings = AppSettings {
+            display_decimals: Some(2),
+            ..Default::default()
+        };
+        assert!(settings.adopt_device_settings(&vault));
+        assert!(!settings.minimize_to_tray());
+        assert_eq!(settings.fx_refresh_interval(), 900);
+        // Set here already: the device's own value stays.
+        assert_eq!(settings.display_decimals, Some(2));
+        assert!(!settings.adopt_device_settings(&crate::vault::Settings::default()));
+        assert!(!settings.minimize_to_tray());
+    }
+
+    #[test]
+    fn old_settings_file_reads_without_device_fields() {
+        let dir = temp_dir("old");
+        std::fs::write(
+            settings_path(&dir),
+            r#"{"theme":"dark","locale":"ru","base_currency":"rub"}"#,
+        )
+        .expect("write");
+        let settings = load_settings(&dir);
+        assert_eq!(settings.theme, Theme::Dark);
+        assert!(settings.device_id.is_empty());
+        assert!(!settings.sync.enabled);
+        assert!(settings.minimize_to_tray());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -131,11 +131,31 @@ pub async fn get_supported_currencies(
 /// vault would report figures in USD while the UI labels them with the user's
 /// base currency.
 pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
-    let settings = load_settings(&config_dir(app));
+    let dir = config_dir(app);
+    let mut settings = load_settings(&dir);
     // A poisoned lock must not fail the unlock that just succeeded.
     if let Ok(mut guard) = lock_vault(state)
         && let Some(vault) = guard.as_mut()
     {
         vault.set_base_currency(settings.base());
+        // The tray, refresh interval and decimals used to be kept per vault;
+        // the first vault opened after the update hands them to this device.
+        let adopted = settings.adopt_device_settings(&vault.doc.settings);
+        let identified = settings.ensure_device_id();
+        drop(guard);
+        if adopted || identified {
+            save_settings(&dir, &settings).ok();
+        }
     }
+}
+
+/// This installation's sync id, made and saved on first use.
+#[allow(dead_code)] // the sync manager is its first caller
+pub fn device_id(app: &AppHandle) -> String {
+    let dir = config_dir(app);
+    let mut settings = load_settings(&dir);
+    if settings.ensure_device_id() {
+        save_settings(&dir, &settings).ok();
+    }
+    settings.device_id
 }

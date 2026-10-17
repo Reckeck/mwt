@@ -136,7 +136,33 @@ completed_tours: Array<string>,
 /**
  * «Что нового» entries already shown after an update.
  */
-seen_whats_new: Array<string>, };
+seen_whats_new: Array<string>, 
+/**
+ * This installation's id for vault sync; made once by [`Self::ensure_device_id`].
+ * It lives here, not in the vault, so a copied vault file never shares it.
+ */
+device_id: string, 
+/**
+ * Name other devices see when pairing; `None` = the host name.
+ */
+device_name: string | null, 
+/**
+ * Device-to-device vault sync over the local network.
+ */
+sync: SyncPrefs, 
+/**
+ * Hide to the tray on close. `None` until taken over from the vault
+ * that used to keep it ([`Self::adopt_device_settings`]).
+ */
+minimize_to_tray: boolean | null, 
+/**
+ * How often prices and rates refresh here, seconds; `None` = not taken over yet.
+ */
+fx_refresh_interval_sec: number | null, 
+/**
+ * Decimal places balances render with on this screen; `None` = not taken over yet.
+ */
+display_decimals: number | null, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -2872,6 +2898,20 @@ fiat: Array<string>,
 crypto: Array<string>, };
 
 /**
+ * Vault sync preferences of this device. Everything is off until the user
+ * turns it on: an enabled device listens on the local network.
+ */
+type SyncPrefs = { enabled: boolean, 
+/**
+ * Show what will change before the first batch of a session is applied.
+ */
+confirm_first: boolean, 
+/**
+ * Take the main role whenever this device is around.
+ */
+prefer_main: boolean, };
+
+/**
  * Terminal panels' layout, as the UI left it.
  */
 type TerminalLayout = { show_watchlist: boolean, 
@@ -3241,7 +3281,11 @@ completed_tours: Array<string> | null,
 /**
  * Replaces the list of «Что нового» entries already shown.
  */
-seen_whats_new: Array<string> | null, };
+seen_whats_new: Array<string> | null, 
+/**
+ * An empty name goes back to the host name.
+ */
+device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 

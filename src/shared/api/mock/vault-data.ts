@@ -48,6 +48,12 @@ export const mockAppSettings: AppSettings = {
   quick_add_shortcut: null,
   completed_tours: [],
   seen_whats_new: [],
+  device_id: '00000000-0000-4000-8000-000000000001',
+  device_name: null,
+  sync: { enabled: false, confirm_first: false, prefer_main: false },
+  minimize_to_tray: null,
+  fx_refresh_interval_sec: null,
+  display_decimals: null,
 }
 
 export const mockCurrencies: SupportedCurrencies = {
