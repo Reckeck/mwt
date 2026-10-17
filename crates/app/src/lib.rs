@@ -8,7 +8,7 @@ mod commands;
 mod legacy;
 mod notify_store;
 mod platform_fs;
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 mod platform_net;
 mod quick_add_socket;
 mod scheduler;
@@ -40,7 +40,9 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init());
     #[cfg(target_os = "android")]
-    let builder = builder.plugin(tauri_plugin_saf::init());
+    let builder = builder
+        .plugin(tauri_plugin_saf::init())
+        .plugin(tauri_plugin_net::init());
     // Autostart, global keys and window geometry exist on desktops only.
     #[cfg(desktop)]
     let builder = builder

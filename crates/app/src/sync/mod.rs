@@ -172,6 +172,8 @@ pub fn restart(app: &AppHandle) {
         hub.generation += 1;
         hub.generation
     };
+    #[cfg(target_os = "android")]
+    crate::platform_net::multicast(app, true);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = discovery::start(&app, generation, &vault_id).await {
@@ -192,6 +194,8 @@ pub fn stop(app: &AppHandle) {
         let _ = link.orders.send(Order::Close);
     }
     if let Some(run) = run {
+        #[cfg(target_os = "android")]
+        crate::platform_net::multicast(app, false);
         let _ = run.stop.send(true);
         if let Some(announce) = run.announce {
             announce.shutdown();

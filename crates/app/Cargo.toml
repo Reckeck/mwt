@@ -48,6 +48,8 @@ rmp-serde.workspace = true
 # (the external copy of a vault, `platform_fs`).
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-saf = { path = "../plugin-saf" }
+# LAN sync: multicast lock and the Keystore-wrapped device key (src/platform_net.rs).
+tauri-plugin-net = { path = "../plugin-net" }
 
 # Desktop-only: tray, autostart, global keys, window geometry and the OS keyring
 # have no Android/iOS counterpart (`cfg(desktop)` in the code).
