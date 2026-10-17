@@ -22,6 +22,10 @@ const empty = (): VaultState => ({
 
 export const useVaultStore = defineStore('vault', {
   state: empty,
+  getters: {
+    /** Android/iOS: vaults live in app storage, a picked file is copied in. */
+    appStorage: (state) => state.status?.storage === 'app',
+  },
   actions: {
     async refreshStatus() {
       this.status = await call<VaultStatus>('vault_status')
@@ -35,9 +39,14 @@ export const useVaultStore = defineStore('vault', {
       await call('forget_recent_vault', { path })
       this.recents = this.recents.filter((recent: RecentVault) => recent.path !== path)
     },
-    /** Resolves to the chosen path, or `null` when the dialog was cancelled. */
+    /** The chosen vault (on mobile already copied into app storage), or
+     *  `null` when the dialog was cancelled. */
     async pickVaultFile(save: boolean) {
-      return await call<string | null>('pick_vault_file', { save })
+      return await call<PickedVault | null>('pick_vault_file', { save })
+    },
+    /** After `SYNC_CONFLICT`: make the vault and its external copy equal. */
+    async resolveConflict(path: string, keep: ConflictSide) {
+      await call('resolve_vault_conflict', { input: { path, keep } })
     },
     /** `path` is explicit: the unlock screen may target any vault, not just the
      *  default one, and `select_vault` cannot be used for a file that does not
@@ -51,7 +60,13 @@ export const useVaultStore = defineStore('vault', {
         })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
-        this.status = { path, exists: true, unlocked: true, info: this.info }
+        this.status = {
+          path: this.info.path,
+          exists: true,
+          unlocked: true,
+          info: this.info,
+          storage: this.status?.storage ?? 'files',
+        }
       } catch (err) {
         this.error = (err as Error).message
         throw err
@@ -68,7 +83,13 @@ export const useVaultStore = defineStore('vault', {
         })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
-        this.status = { path, exists: true, unlocked: true, info: this.info }
+        this.status = {
+          path: this.info.path,
+          exists: true,
+          unlocked: true,
+          info: this.info,
+          storage: this.status?.storage ?? 'files',
+        }
       } catch (err) {
         this.error = (err as Error).message
         throw err

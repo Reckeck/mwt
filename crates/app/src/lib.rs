@@ -7,6 +7,7 @@ mod commands;
 #[cfg(desktop)]
 mod legacy;
 mod notify_store;
+mod platform_fs;
 mod quick_add_socket;
 mod scheduler;
 mod shortcut;
@@ -16,7 +17,7 @@ mod tray;
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
     losses, notifications, planning, portfolio, pricing, settings, stores, transactions,
-    vault_recents, workflows,
+    vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -32,7 +33,11 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Rust-side file access for document URIs (`platform_fs`); no JS permission.
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_saf::init());
     // Autostart, global keys and window geometry exist on desktops only.
     #[cfg(desktop)]
     let builder = builder
@@ -266,11 +271,15 @@ pub fn run() {
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,
             vault_recents::pick_vault_file,
+            // external copy of a vault
+            vault_link::vault_link_status,
+            vault_link::link_vault_external,
+            vault_link::unlink_vault_external,
+            vault_link::resolve_vault_conflict,
         ])
         .setup(|app| {
-            // Resolve the default vault location once (XDG/AppData).
-            let data_dir = app.path().app_data_dir().expect("app data dir");
-            let default_path = data_dir.join("vault.wallet");
+            // Resolve the default vault location once (`platform_fs::vaults_dir`).
+            let default_path = platform_fs::default_vault_path(app.handle());
             let state = app.state::<AppState>();
             *state.vault_path.lock().expect("vault_path lock") = default_path;
 

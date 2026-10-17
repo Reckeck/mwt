@@ -5,6 +5,7 @@ import { mockCategories, mockRules } from './ledger'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockAutostart, mockNotices, mockTransactions } from './demo'
+import { mockConflict } from './commands-vault-files'
 import { mockAppSettings, mockCurrencies, mockInfo, mockSettings, mockStatus } from './vault-data'
 
 /** Commands: vault. */
@@ -13,12 +14,16 @@ export const vaultCommands: MockCommands = {
     return resolve(mockStatus.value)
   },
   unlock_vault: ({ body }) => {
+    if (String(body?.path).includes('conflict') && !mockConflict.resolved) {
+      throw { code: 'SYNC_CONFLICT', message: 'Download/vault.wallet' }
+    }
     if (body?.password === 'secret') {
       mockStatus.value = {
         path: String(body?.path ?? mockStatus.value.path),
         exists: true,
         unlocked: true,
         info: mockInfo,
+        storage: mockStatus.value.storage,
       }
       return resolve(mockInfo)
     }
@@ -30,6 +35,7 @@ export const vaultCommands: MockCommands = {
       exists: true,
       unlocked: true,
       info: mockInfo,
+      storage: mockStatus.value.storage,
     }
     return resolve(mockInfo)
   },
@@ -40,11 +46,6 @@ export const vaultCommands: MockCommands = {
   lock_vault_cmd: (_call) => {
     mockStatus.value = { ...mockStatus.value, unlocked: false, info: null }
     return resolve({})
-  },
-  pick_vault_file: ({ args }) => {
-    // No native dialog in the browser mock; report a plausible path so the
-    // create/open flows stay observable during `pnpm dev`.
-    return resolve(args?.save ? '/tmp/mock/new-vault.wallet' : '/tmp/mock/vault.wallet')
   },
   forget_recent_vault: (_call) => {
     return resolve({})

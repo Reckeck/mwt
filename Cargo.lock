@@ -4585,6 +4585,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-saf"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-window-state"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5074,9 +5083,11 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tauri-plugin-saf",
  "tauri-plugin-window-state",
  "tempfile",
  "time",

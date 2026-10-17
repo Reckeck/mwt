@@ -573,6 +573,11 @@ exec_ids: Array<string>, };
 
 type ConfirmPendingImportsOutput = { confirmed: number, };
 
+/**
+ * Which copy wins after `SYNC_CONFLICT`.
+ */
+type ConflictSide = "local" | "remote";
+
 type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, 
 /**
  * Group the directory lists it under («Семья», «P2P»); empty = by kind.
@@ -1622,6 +1627,16 @@ due_day: number | null, monthly_payment: Amount | null, };
  */
 type LinkTransactionsInput = { ids: Array<string>, flow_id: string | null, };
 
+/**
+ * Keep a copy of the unlocked vault in an external document.
+ */
+type LinkVaultInput = { 
+/**
+ * Pick an existing file (it gets replaced by the vault) instead of
+ * creating a new one.
+ */
+existing: boolean, };
+
 type Liquidity = "maker" | "taker";
 
 type ListImportedTransactionsInput = { store_id: string, 
@@ -2057,6 +2072,19 @@ closed_pnl: Amount | null, kind: ImportKind,
  */
 from_account: string | null, to_account: string | null, };
 
+/**
+ * A vault file chosen in the system dialog.
+ */
+type PickedVault = { 
+/**
+ * Local path to open or create (a copy in app storage on mobile).
+ */
+path: string, display_name: string, 
+/**
+ * The picked document was copied into app storage.
+ */
+imported: boolean, };
+
 type PnlLeg = { ts: string, store_id: string, asset_key: string, 
 /**
  * Absolute size of the closed-out quantity.
@@ -2258,7 +2286,15 @@ fees_base: Amount, legs: Array<PnlLeg>, };
 /**
  * A recently opened vault file.
  */
-type RecentVault = { path: string, last_opened: string, exists: boolean, };
+type RecentVault = { path: string, last_opened: string, exists: boolean, 
+/**
+ * File name to show, whatever the OS's separator.
+ */
+display_name: string, 
+/**
+ * Saves are copied to an external document.
+ */
+linked: boolean, };
 
 type RefreshResult = { prices: number, fx: number, 
 /**
@@ -2373,6 +2409,8 @@ months: Array<string>, real_terms: boolean,
  * Annual inflation used for `real_terms`, percent.
  */
 inflation_rate: Amount | null, };
+
+type ResolveVaultConflictInput = { path: string, keep: ConflictSide, };
 
 type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
 
@@ -3513,9 +3551,27 @@ discarded_imports: Array<string>, };
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 
 /**
+ * The external copy of the unlocked vault, if any.
+ */
+type VaultLinkStatus = { linked: boolean, display_name: string | null, 
+/**
+ * RFC 3339 time of the last successful copy.
+ */
+last_synced_at: string | null, 
+/**
+ * Why the last copy failed; cleared by the next successful one.
+ */
+last_error: string | null, };
+
+/**
  * What the unlock screen needs to know about the app.
  */
-type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, };
+type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, storage: VaultStorage, };
+
+/**
+ * How vault files are kept on this platform.
+ */
+type VaultStorage = "files" | "app";
 
 /**
  * What a sleeping run waits for.

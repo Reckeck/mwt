@@ -35,6 +35,7 @@ pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, Str
         exists: path.exists(),
         unlocked,
         info,
+        storage: crate::platform_fs::storage(),
     })
 }
 
@@ -44,7 +45,7 @@ pub async fn create_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
-    let path = std::path::PathBuf::from(&input.path);
+    let path = crate::platform_fs::resolve_new_vault(&app, &input.path).map_err(err_to_string)?;
     if input.password.is_empty() {
         return Err("INVALID_INPUT: password must not be empty".into());
     }
@@ -96,9 +97,13 @@ pub async fn unlock_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
-    let path = std::path::PathBuf::from(&input.path);
-    let vault = UnlockedVault::open(path.clone(), &input.password)
+    let path =
+        crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+    // A linked vault first takes in what changed in its external copy.
+    crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
+    let mut vault = UnlockedVault::open(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
+    crate::platform_fs::attach_mirror(&app, &mut vault);
     *state.vault.lock().map_err(|err| {
         err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = Some(vault);

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { ChangePasswordDialog } from '@/features/vault-change-password'
+import { VaultLinkSection } from '@/features/vault-external-link'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Label } from '@/shared/ui/label'
@@ -86,6 +87,8 @@ function updateFxInterval(value: string) {
       </div>
 
       <p class="text-xs text-muted-foreground">{{ t('settings.autoSaveHint') }}</p>
+
+      <VaultLinkSection />
 
       <Button variant="outline" size="sm" class="w-fit" @click="passwordOpen = true">
         {{ t('vault.password.open') }}

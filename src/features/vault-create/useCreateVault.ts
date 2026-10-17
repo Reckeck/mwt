@@ -8,6 +8,9 @@ import { useVaultStore } from '@/shared/store/vault'
 /** Shortest master password the form accepts. */
 export const MIN_VAULT_PASSWORD = 4
 
+/** Name suggested for the first vault in app storage (`vault.wallet`). */
+const DEFAULT_VAULT_NAME = 'vault'
+
 /** State and actions of the create form; the dialog only renders them. */
 export function useCreateVault() {
   const { t } = useI18n()
@@ -27,10 +30,12 @@ export function useCreateVault() {
     passwordRepeat.value = ''
     error.value = null
     // Pre-fill the default location only while it is still free — suggesting a
-    // path that already holds a vault would just fail with ALREADY_EXISTS.
+    // path that already holds a vault would just fail with ALREADY_EXISTS. In
+    // app storage (mobile) the form asks for a name, not a path.
     try {
       const status = vault.status ?? (await vault.refreshStatus())
-      path.value = status?.exists ? '' : (status?.path ?? '')
+      const suggested = status?.storage === 'app' ? DEFAULT_VAULT_NAME : (status?.path ?? '')
+      path.value = status?.exists ? '' : suggested
     } catch {
       path.value = ''
     }
@@ -39,7 +44,7 @@ export function useCreateVault() {
   async function browse() {
     try {
       const picked = await vault.pickVaultFile(true)
-      if (picked) path.value = picked
+      if (picked) path.value = picked.path
     } catch (err) {
       error.value = vaultErrorMessage(err, t)
     }
@@ -48,7 +53,7 @@ export function useCreateVault() {
   async function submit() {
     const target = path.value.trim()
     if (!target) {
-      error.value = t('auth.pathRequired')
+      error.value = t(vault.appStorage ? 'auth.nameRequired' : 'auth.pathRequired')
       return
     }
     if (password.value.length < MIN_VAULT_PASSWORD) {

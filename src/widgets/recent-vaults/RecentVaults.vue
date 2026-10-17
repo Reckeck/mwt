@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FolderOpen, LockKeyhole, X } from 'lucide-vue-next'
+import { FolderOpen, Link2, LockKeyhole, X } from 'lucide-vue-next'
 
 import { VaultUnlockDialog } from '@/features/vault-unlock'
 import { Button } from '@/shared/ui/button'
@@ -25,12 +25,17 @@ onMounted(async () => {
 
 /** Only the entry in the list goes; the file itself stays where it is. */
 async function forget(path: string) {
+  const name = displayName(path)
   try {
     await vault.forgetRecent(path)
-    notify.success('auth.forgotten', { description: path })
+    notify.success('auth.forgotten', { description: name })
   } catch (err) {
     notify.error(err, 'auth.forgetFailed')
   }
+}
+
+function displayName(path: string): string {
+  return vault.recents.find((recent: RecentVault) => recent.path === path)?.display_name || path
 }
 
 function openUnlock(path: string | null) {
@@ -60,12 +65,22 @@ function openUnlock(path: string | null) {
             @click="openUnlock(recent.path)"
           >
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium">{{ recent.path.split('/').pop() || recent.path }}</p>
-              <p class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
+              <p class="flex items-center gap-1.5 truncate text-sm font-medium">
+                <span class="truncate">{{ recent.display_name || recent.path }}</span>
+                <Link2 v-if="recent.linked" class="size-3.5 shrink-0 text-muted-foreground" :aria-label="t('vaultLink.linkedBadge')" />
+              </p>
+              <!-- In app storage the path tells the user nothing. -->
+              <p v-if="!vault.appStorage" class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
             </div>
             <span v-if="!recent.exists" class="shrink-0 text-xs text-destructive">{{ t('auth.missing') }}</span>
           </Button>
-          <ConfirmButton :label="t('auth.forget')" :confirm-label="t('auth.forgetConfirm')" @confirm="forget(recent.path)">
+          <!-- App storage lists every vault on the device: there is no list entry to forget. -->
+          <ConfirmButton
+            v-if="!vault.appStorage"
+            :label="t('auth.forget')"
+            :confirm-label="t('auth.forgetConfirm')"
+            @confirm="forget(recent.path)"
+          >
             <X class="size-3.5" />
           </ConfirmButton>
         </div>
@@ -75,7 +90,7 @@ function openUnlock(path: string | null) {
 
       <Button variant="outline" class="w-full justify-start gap-2" @click="openUnlock(null)">
         <FolderOpen class="size-4" />
-        {{ t('auth.openOther') }}
+        {{ t(vault.appStorage ? 'auth.importFile' : 'auth.openOther') }}
       </Button>
     </div>
   </Card>

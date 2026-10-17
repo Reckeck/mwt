@@ -9,6 +9,7 @@ import { bybitImportStagingCommands, exchangeAccountsCommands, exchangeReadOnlyC
 import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { storeTreeCommands } from './commands-store-tree'
+import { vaultFilesCommands } from './commands-vault-files'
 import { overviewCommands, walletsCommands } from './commands-wallets'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -18,6 +19,7 @@ import { mockAppSettings, mockSettings } from './vault-data'
 /** Every command the browser mock answers, by name. */
 const MOCK_COMMANDS: MockCommands = {
   ...vaultCommands,
+  ...vaultFilesCommands,
   ...notificationsCommands,
   ...appSettingsOutsideCommands,
   ...contactsCommands,
