@@ -27,33 +27,19 @@ const fxIntervalOptions = computed(() =>
   [30, 60, 300, 900, 1800, 3600].map((value) => ({ value, label: duration(value) })),
 )
 
-/**
- * Persist one setting and keep the store in step.
- *
- * Settings are written the moment they change, so nothing can be lost by
- * closing the app without hitting Save — which is exactly what used to happen:
- * only the language switch persisted, every other control only mutated local
- * state and silently reverted on the next launch.
- *
- * A failed write is surfaced as a toast and the store is re-read from the
- * backend, so what the screen shows is always what is on disk.
- */
-async function persist(patch: Partial<Settings>) {
+/** Tray and refresh interval belong to this device, so they go to the app config. */
+async function persistDevice(patch: Partial<UpdateAppSettingsInput>) {
   try {
-    await settingsStore.updateVault(patch)
+    await settingsStore.updateApp(patch)
     notify.saved()
   } catch (err) {
     notify.error(err, 'settings.saveFailed')
-    try {
-      await settingsStore.loadVault()
-    } catch {
-      /* the error above is the one worth showing */
-    }
+    await settingsStore.loadApp().catch(() => undefined)
   }
 }
 
 function updateFxInterval(value: string) {
-  void persist({ fx_refresh_interval_sec: Number(value) })
+  void persistDevice({ fx_refresh_interval_sec: Number(value) })
 }
 
 </script>
@@ -66,11 +52,12 @@ function updateFxInterval(value: string) {
 
     <div class="grid gap-4">
       <p class="text-xs text-muted-foreground">{{ t('settings.vaultScopeHint') }}</p>
+      <p class="text-xs text-muted-foreground">{{ t('settings.deviceScopeHint') }}</p>
       <div class="grid gap-1.5">
         <Label for="fx-interval">{{ t('settings.fxRefreshInterval') }}</Label>
         <Select
           id="fx-interval"
-          :value="String(settingsStore.vault?.fx_refresh_interval_sec ?? 300)"
+          :value="String(settingsStore.app?.fx_refresh_interval_sec ?? settingsStore.vault?.fx_refresh_interval_sec ?? 300)"
           @update:model-value="updateFxInterval"
         >
           <SelectItem v-for="opt in fxIntervalOptions" :key="opt.value" :value="String(opt.value)">{{ opt.label }}</SelectItem>
@@ -81,8 +68,8 @@ function updateFxInterval(value: string) {
         <Label for="minimize-to-tray">{{ t('settings.minimizeToTray') }}</Label>
         <Switch
           id="minimize-to-tray"
-          :model-value="settingsStore.vault?.minimize_to_tray ?? true"
-          @update:model-value="(value: boolean) => void persist({ minimize_to_tray: value })"
+          :model-value="settingsStore.app?.minimize_to_tray ?? settingsStore.vault?.minimize_to_tray ?? true"
+          @update:model-value="(value: boolean) => void persistDevice({ minimize_to_tray: value })"
         />
       </div>
 

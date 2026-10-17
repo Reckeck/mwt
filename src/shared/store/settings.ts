@@ -9,8 +9,10 @@ import { call } from '@/shared/api/ipc'
  *   the app config directory: they follow the *user*, survive opening another
  *   vault, and are readable before any vault is unlocked (which is what lets the
  *   unlock screen render in the right language).
- * - `vault` — refresh intervals, tray behaviour, dashboard widgets. Encrypted
- *   inside the vault, so they are genuinely per-vault.
+ *   Also the device's own settings (tray, refresh interval, decimals, sync):
+ *   they must never travel to another device with the vault.
+ * - `vault` — dashboard widgets, budget, notifications. Encrypted inside the
+ *   vault, so they are genuinely per-vault and synced between devices.
  *
  * Both halves share one store on purpose. The backend split is a storage detail;
  * making callers import a second store to find out where a setting comes from
@@ -57,8 +59,8 @@ export const useSettingsStore = defineStore('settings', {
 
     // -- vault-scoped --
 
-    /** Decimal places used to render balances. */
-    displayDecimals: (state): number => state.vault?.display_decimals ?? 8,
+    /** Decimal places used to render balances: a device setting, the vault's old copy until taken over. */
+    displayDecimals: (state): number => state.app?.display_decimals ?? state.vault?.display_decimals ?? 8,
     dashboardWidgets: (state): DashboardWidgetCfg[] => state.vault?.dashboard_widgets ?? [],
   },
 
@@ -104,6 +106,11 @@ export const useSettingsStore = defineStore('settings', {
           enrichment_opt_in: patch.enrichment_opt_in ?? null,
           completed_tours: patch.completed_tours ?? null,
           seen_whats_new: patch.seen_whats_new ?? null,
+          device_name: patch.device_name ?? null,
+          sync: patch.sync ?? null,
+          minimize_to_tray: patch.minimize_to_tray ?? null,
+          fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
+          display_decimals: patch.display_decimals ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

@@ -318,19 +318,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             use tauri::WindowEvent;
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Check if minimize_to_tray is enabled in settings
-                // For now, always minimize to tray instead of closing
-                let state = window.state::<AppState>();
-                let minimize_to_tray = state
-                    .vault
-                    .lock()
-                    .ok()
-                    .and_then(|guard| {
-                        guard
-                            .as_ref()
-                            .map(|vault| vault.doc.settings.minimize_to_tray)
-                    })
-                    .unwrap_or(true);
+                // A device setting: kept in the app config, not in the vault.
+                let minimize_to_tray =
+                    commands::app_settings::current_settings(window.app_handle())
+                        .minimize_to_tray();
                 if minimize_to_tray {
                     window.hide().ok();
                     api.prevent_close();

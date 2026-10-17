@@ -430,6 +430,7 @@
   "settings.appScopeHint": "Theme, language and currencies are shared by the whole app: they do not depend on a vault and apply immediately.",
   "settings.vaultTitle": "Vault settings",
   "settings.vaultScopeHint": "These settings live in the open vault only. Application-wide settings are under «Application settings» at the bottom of the sidebar.",
+  "settings.deviceScopeHint": "The refresh interval and minimizing to the tray belong to this device and are not synced.",
   "settings.favoriteCurrencyRemove": "Remove {code}",
   "money.loadingRates": "Loading rates…",
   "money.noRates": "No cached rates yet",
