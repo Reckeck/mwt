@@ -41,6 +41,8 @@ mod losses;
 mod loyalty;
 mod notifications;
 mod notify_snapshot;
+mod peer_sync;
+pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod rates;
 mod reports;
@@ -172,6 +174,12 @@ pub struct UnlockedVault {
     sandbox: bool,
     /// External copy written after every save (see [`crate::vault_io::mirror`]).
     mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>,
+    /// What the last save looked like, to stamp changes for sync.
+    tracker: Option<crate::sync::track::Tracker>,
+    /// This device's clock for sync stamps.
+    clock: crate::sync::Clock,
+    /// Told every save's changed keys while a sync session is live.
+    sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
 }
 
 impl UnlockedVault {
@@ -189,7 +197,11 @@ impl UnlockedVault {
             _lock: lock,
             sandbox: false,
             mirror: None,
+            tracker: None,
+            clock: crate::sync::Clock::default(),
+            sync_tap: None,
         };
+        vault.start_tracking()?;
         vault.ensure_cash_wallet("Cash")?;
         Ok(vault)
     }
@@ -212,7 +224,11 @@ impl UnlockedVault {
             _lock: lock,
             sandbox: false,
             mirror: None,
+            tracker: None,
+            clock: crate::sync::Clock::default(),
+            sync_tap: None,
         };
+        vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
         let graphs_migrated = vault.migrate_workflow_graphs();
@@ -255,18 +271,27 @@ impl UnlockedVault {
             _lock: crate::storage::VaultLock::detached(),
             sandbox: true,
             mirror: None,
+            tracker: None,
+            clock: self.clock.clone(),
+            sync_tap: None,
         }
     }
 
     /// Persist the current document (encrypt + atomic write); a sandbox
     /// writes nothing.
-    pub fn persist(&self) -> Result<()> {
+    pub fn persist(&mut self) -> Result<()> {
         if self.sandbox {
             return Ok(());
         }
+        let changed = self.track_changes()?;
         let sealed = VaultFile::save_sealed(&self.path, &self.password, &self.doc, self.fmt)?;
         if let Some(mirror) = &self.mirror {
             mirror.push(&sealed);
+        }
+        if !changed.is_empty()
+            && let Some(tap) = &self.sync_tap
+        {
+            tap.changed(&changed);
         }
         Ok(())
     }
@@ -296,6 +321,9 @@ impl UnlockedVault {
         doc.id = self.doc.id.clone();
         doc.created_at = self.doc.created_at.clone();
         doc.version = crate::VAULT_FORMAT_VERSION;
+        // Sync bookkeeping is the vault's own: an edited copy is ignored, and
+        // the edits themselves get stamped on save like any other change.
+        doc.sync = std::mem::take(&mut self.doc.sync);
         self.doc = doc;
         self.recompute_holdings();
         self.persist()

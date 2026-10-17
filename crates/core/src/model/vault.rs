@@ -535,6 +535,13 @@ pub struct VaultDoc {
     /// Exchange ids the user discarded: a later sync does not stage them again.
     #[serde(default)]
     pub discarded_imports: Vec<String>,
+    /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
+    /// devices, batches kept for undo (docs/sync.md). Managed by the vault
+    /// itself; the JSON editor's copy is ignored on save.
+    #[serde(default)]
+    #[ts(skip)]
+    #[schemars(with = "serde_json::Value")]
+    pub sync: crate::sync::SyncState,
 }
 
 /// JSON Schema of the decrypted document.
@@ -587,6 +594,7 @@ impl Default for VaultDoc {
             workflow_waits: Vec::new(),
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
+            sync: crate::sync::SyncState::default(),
         }
     }
 }

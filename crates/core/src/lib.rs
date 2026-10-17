@@ -16,6 +16,7 @@ pub mod model;
 pub mod pricing;
 pub mod service;
 pub mod storage;
+pub mod sync;
 pub mod txinfo;
 pub mod utilities_formula;
 pub mod vault_io;
