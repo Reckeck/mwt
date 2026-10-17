@@ -16,6 +16,7 @@ pub mod portfolio;
 pub mod pricing;
 pub mod settings;
 pub mod stores;
+pub mod sync;
 pub mod transactions;
 pub mod vault_link;
 pub mod vault_recents;

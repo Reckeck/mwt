@@ -56,11 +56,15 @@ pub fn spawn(app: AppHandle) {
             }
             // First take in what was told while locked, so nothing repeats.
             merge_locked(&app);
-            bybit_tick(&app, &mut memory);
-            automations_tick(&app);
-            workflows_tick(&app);
-            alerts_tick(&app, &mut memory);
-            reminders_tick(&app, &mut memory);
+            // In a sync group only the main device runs the jobs; the
+            // others get their results by sync (docs/sync.md).
+            if crate::sync::runs_jobs(&app) {
+                bybit_tick(&app, &mut memory);
+                automations_tick(&app);
+                workflows_tick(&app);
+                alerts_tick(&app, &mut memory);
+                reminders_tick(&app, &mut memory);
+            }
             snapshot_tick(&app, false);
         }
     });
@@ -90,14 +94,17 @@ pub fn deliver(app: &AppHandle, records: Vec<NoticeRecord>, force: bool) {
     if records.is_empty() {
         return;
     }
-    let system = force || {
-        let state = app.state::<AppState>();
-        state.vault.lock().ok().is_none_or(|guard| {
-            guard
-                .as_ref()
-                .is_none_or(|vault| vault.doc.settings.notifications.system)
-        })
-    };
+    // In a sync group the device whose window has focus shows it (all of
+    // them when none has).
+    let system = force
+        || crate::sync::show_system_here(app) && {
+            let state = app.state::<AppState>();
+            state.vault.lock().ok().is_none_or(|guard| {
+                guard
+                    .as_ref()
+                    .is_none_or(|vault| vault.doc.settings.notifications.system)
+            })
+        };
     for record in records {
         let _ = app.emit("notification", &record);
         if system {

@@ -26,6 +26,13 @@ Frontend парсит код и показывает локализованно�
 | `notification` | `NoticeRecord { key, category, title, body, link?, at, delivered_at, read }` | показано уведомление (напоминание, алерт, нехватка денег, бюджет, автоматизация, импорт Bybit): колокольчик и тост. `link` — имя маршрута или `wallet:<id>`. Каждый `key` показывается один раз за всё время — журнал в vault |
 | `enrichment-ready` | `{ tx_id }` | обозреватель вернул данные по хешу операции; находка ждёт «Применить / Отклонить» |
 | `vault-mirror-failed` | `string` (причина) | копия vault во внешний файл не записалась (`platform_fs::mirror_sink`); vault цел, статус — `vault_link_status` |
+| `sync-status` | `SyncStatus` | изменилось состояние синхронизации устройств: роль, соединения, фазы, прогресс (`docs/sync.md`) |
+| `sync-offer` | `SyncOfferEvent { session_id, peer_name }` | рядом устройство с этим же vault, ещё не сопряжённое: баннер «Сопрячь» |
+| `sync-pairing` | `SyncPairingEvent { session_id, peer_name, code }` | показать 6-значный код; на втором устройстве он тот же |
+| `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary }` | список изменений ждёт решения (`sync_decide_plan`): первая пачка при «Спрашивать», первое сопряжение или «временно ненадёжное» устройство |
+| `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch }` | пачка с другого устройства применена; фронт перечитывает все запросы, уведомление с «Отменить» (`sync_undo`) |
+| `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | часы устройств расходятся (5 мин – 24 ч) или прыгнули: устройство «временно ненадёжное» до конца сессии |
+| `sync-error` | `SyncErrorEvent { code, message, peer_name? }` | сессия не началась или прервалась: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL` |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
 только при разблокированном vault — импорт Bybit, автоматизации, алерты (цены их
@@ -60,6 +67,23 @@ Frontend парсит код и показывает локализованно�
 | `link_vault_external` | `LinkVaultInput { existing }` | `Option<VaultLinkStatus>` (`null` — диалог закрыт); копия пишется сразу; `existing` — выбранный файл заменяется vault |
 | `unlink_vault_external` | — | `()`; файл-копия остаётся на месте, право доступа (Android) отдаётся |
 | `resolve_vault_conflict` | `ResolveVaultConflictInput { path, keep: local \| remote }` | `()`; `remote`: локальный vault уходит в `.bak`, копия становится vault. Потом снова `unlock_vault` |
+
+### синхронизация устройств (`crates/app/src/commands/sync.rs`)
+
+Устройство — `docs/sync.md`. Работает, пока vault разблокирован и синхронизация включена.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup }` |
+| `sync_set_settings` | `SyncSettingsInput { enabled?, confirm_first?, prefer_main?, device_name? }` | `SyncStatus`; включение и выключение действуют сразу |
+| `sync_pair` | `sessionId` | `()`; «Сопрячь» на баннере: код появляется на обоих устройствах |
+| `sync_confirm_pairing` | `SyncDecisionInput { session_id, accept }` | `()`; коды совпали (`accept`) или нет |
+| `sync_decide_plan` | `SyncDecisionInput { session_id, accept }` | `()`; применить список изменений или отказаться (сессия закрывается) |
+| `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online }>` — доверенные устройства |
+| `sync_forget_peer` | `deviceId` | `()`; устройство отклоняется здесь и, по мере синхронизации, везде |
+| `sync_history` | — | `Vec<AppliedBatch { id, peer_name, applied_at, summary, undone_at }>`, новые первыми (до 20 пачек, 7 дней) |
+| `sync_undo` | `batchId` | `UndoReport { restored, skipped }`; откат — новая правка, уходит и на другие устройства |
+| `sync_restore_backup` | — | `()`; vault как до первой пачки последней сессии (`<vault>.presync.bak`) |
 
 ### stores
 | `list_stores` | — | `Vec<Store>` (плоско) |

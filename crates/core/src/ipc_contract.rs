@@ -1759,3 +1759,167 @@ pub struct DeleteWorkflowTestInput {
     pub workflow_id: String,
     pub test_id: String,
 }
+
+// -- device sync (docs/sync.md) ---------------------------------------------------
+
+/// This device's place in the sync group.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncRole {
+    /// Sync is off, or the vault is locked.
+    #[default]
+    Off,
+    /// Looking for the group's main device.
+    Searching,
+    /// The other devices connect here; the background jobs run here.
+    Main,
+    /// Connected to the main device.
+    Client,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncPhase {
+    #[default]
+    Connecting,
+    /// A device with this vault that is not trusted yet: the banner offers pairing.
+    Offer,
+    /// Both screens show the code.
+    Pairing,
+    /// Manifests and records are crossing.
+    Exchanging,
+    /// The list of changes waits for the user.
+    AwaitingConfirm,
+    /// In sync; changes go across as they are saved.
+    Live,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncProgress {
+    pub received: u32,
+    pub total: u32,
+}
+
+/// One connection to another device.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncSessionView {
+    pub session_id: String,
+    pub device_id: String,
+    pub name: String,
+    pub phase: SyncPhase,
+    /// Its clock jumped this session: every batch from it waits for confirmation.
+    pub unreliable: bool,
+    /// Its clock minus ours, ms (shown when beyond 5 minutes).
+    #[ts(type = "number")]
+    pub clock_offset_ms: i64,
+    pub progress: Option<SyncProgress>,
+    /// The other device's window has focus.
+    pub focused: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncStatus {
+    pub enabled: bool,
+    pub role: SyncRole,
+    pub device_id: String,
+    pub device_name: String,
+    pub confirm_first: bool,
+    pub prefer_main: bool,
+    /// Where this device's key lives: `hardware`, `system` (OS keyring) or
+    /// `memory` (gone after a restart: pairing again).
+    pub key_storage: String,
+    pub sessions: Vec<SyncSessionView>,
+    /// A backup from before a sync exists («Восстановить до синхронизации»).
+    pub has_backup: bool,
+}
+
+/// A trusted device as the settings list shows it.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncPeerView {
+    pub device_id: String,
+    pub name: String,
+    pub paired_at: String,
+    pub last_synced_at: Option<String>,
+    pub online: bool,
+}
+
+/// Partial update of this device's sync settings.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncSettingsInput {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub confirm_first: Option<bool>,
+    #[serde(default)]
+    pub prefer_main: Option<bool>,
+    /// An empty name goes back to the host name.
+    #[serde(default)]
+    pub device_name: Option<String>,
+}
+
+/// `sync-offer`: a device with this vault the user has not paired with.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncOfferEvent {
+    pub session_id: String,
+    pub peer_name: String,
+}
+
+/// `sync-pairing`: show the code; both screens must show the same one.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncPairingEvent {
+    pub session_id: String,
+    pub peer_name: String,
+    pub code: String,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncConfirmReason {
+    /// «Спрашивать перед синхронизацией» is on: the first batch of a session.
+    #[default]
+    First,
+    /// Just paired: the first sync with this device.
+    Paired,
+    /// The device's clock jumped this session.
+    Unreliable,
+}
+
+/// `sync-plan-ready`: what a batch would change, waiting for the user.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncPlanEvent {
+    pub session_id: String,
+    pub peer_name: String,
+    pub reason: SyncConfirmReason,
+    pub summary: crate::sync::SyncSummary,
+}
+
+/// `vault-synced`: a batch was applied here.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct VaultSyncedEvent {
+    pub session_id: String,
+    pub batch: crate::service::AppliedBatch,
+}
+
+/// `sync-error`: a session ended or refused to start; `code` is a `SYNC_*` code.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncErrorEvent {
+    pub code: String,
+    pub message: String,
+    pub peer_name: Option<String>,
+}
+
+/// `sync-clock`: the other device's clock differs or jumped.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncClockEvent {
+    pub session_id: String,
+    pub peer_name: String,
+    #[ts(type = "number")]
+    pub offset_ms: i64,
+    pub unreliable: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncDecisionInput {
+    pub session_id: String,
+    pub accept: bool,
+}

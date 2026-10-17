@@ -20,7 +20,7 @@ use crate::commands::{AppState, err_to_string, lock_vault};
 
 /// App config directory. Panics only if the platform refuses to name it, which
 /// would leave the app with nowhere to keep either this or the recent vaults.
-fn config_dir(app: &AppHandle) -> PathBuf {
+pub fn config_dir(app: &AppHandle) -> PathBuf {
     app.path().app_config_dir().expect("app config dir")
 }
 
@@ -150,7 +150,6 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
 }
 
 /// This installation's sync id, made and saved on first use.
-#[allow(dead_code)] // the sync manager is its first caller
 pub fn device_id(app: &AppHandle) -> String {
     let dir = config_dir(app);
     let mut settings = load_settings(&dir);

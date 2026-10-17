@@ -165,6 +165,11 @@ fx_refresh_interval_sec: number | null,
 display_decimals: number | null, };
 
 /**
+ * A batch just applied, as the UI shows it.
+ */
+type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary: SyncSummary, undone_at: string | null, };
+
+/**
  * Shared asset identification, so each variant does not repeat five
  * optional fields it does not always need.
  */
@@ -581,12 +586,25 @@ delta_pct: Amount | null, };
  */
 type Chain = "bitcoin" | "ethereum" | "bsc" | "solana" | "polygon" | "arbitrum" | "optimism" | "avalanche" | "base" | "tron" | "litecoin" | "dogecoin" | "cardano" | "xrp" | "polkadot" | "cosmos" | "near" | "ton" | "algorand" | "fiat";
 
+type ChangeItem = { kind: ChangeKind, label: string, };
+
+type ChangeKind = "added" | "updated" | "deleted";
+
 type ChangePasswordInput = { current_password: string, new_password: string, };
 
 /**
  * Input to clear a key for a specific store.
  */
 type ClearExchangeKeyInput = { store_id: string, };
+
+/**
+ * Changes to one collection (`transactions`, `stores`, …).
+ */
+type CollectionChanges = { collection: string, added: number, updated: number, deleted: number, 
+/**
+ * The first [`MAX_ITEMS`] changes, for the list under the summary.
+ */
+items: Array<ChangeItem>, };
 
 /**
  * Turn staged fills into real trades (two legs each, like `add_trade`).
@@ -1934,6 +1952,11 @@ categories: Array<NoticeCategoryCfg>, };
  */
 type OpeningBalance = { asset: AssetRef, amount: Amount, };
 
+/**
+ * A field edited on both devices where the other device's later edit won.
+ */
+type OverwrittenField = { collection: string, label: string, field: string, before: string, after: string, };
+
 type ParamDef = { name: string, kind: ParamKind, label: LocalizedText, 
 /**
  * JSON of the default value.
@@ -2898,6 +2921,42 @@ fiat: Array<string>,
 crypto: Array<string>, };
 
 /**
+ * `sync-clock`: the other device's clock differs or jumped.
+ */
+type SyncClockEvent = { session_id: string, peer_name: string, offset_ms: number, unreliable: boolean, };
+
+type SyncConfirmReason = "first" | "paired" | "unreliable";
+
+type SyncDecisionInput = { session_id: string, accept: boolean, };
+
+/**
+ * `sync-error`: a session ended or refused to start; `code` is a `SYNC_*` code.
+ */
+type SyncErrorEvent = { code: string, message: string, peer_name: string | null, };
+
+/**
+ * `sync-offer`: a device with this vault the user has not paired with.
+ */
+type SyncOfferEvent = { session_id: string, peer_name: string, };
+
+/**
+ * `sync-pairing`: show the code; both screens must show the same one.
+ */
+type SyncPairingEvent = { session_id: string, peer_name: string, code: string, };
+
+/**
+ * A trusted device as the settings list shows it.
+ */
+type SyncPeerView = { device_id: string, name: string, paired_at: string, last_synced_at: string | null, online: boolean, };
+
+type SyncPhase = "connecting" | "offer" | "pairing" | "exchanging" | "awaiting_confirm" | "live";
+
+/**
+ * `sync-plan-ready`: what a batch would change, waiting for the user.
+ */
+type SyncPlanEvent = { session_id: string, peer_name: string, reason: SyncConfirmReason, summary: SyncSummary, };
+
+/**
  * Vault sync preferences of this device. Everything is off until the user
  * turns it on: an enabled device listens on the local network.
  */
@@ -2910,6 +2969,52 @@ confirm_first: boolean,
  * Take the main role whenever this device is around.
  */
 prefer_main: boolean, };
+
+type SyncProgress = { received: number, total: number, };
+
+/**
+ * This device's place in the sync group.
+ */
+type SyncRole = "off" | "searching" | "main" | "client";
+
+/**
+ * One connection to another device.
+ */
+type SyncSessionView = { session_id: string, device_id: string, name: string, phase: SyncPhase, 
+/**
+ * Its clock jumped this session: every batch from it waits for confirmation.
+ */
+unreliable: boolean, 
+/**
+ * Its clock minus ours, ms (shown when beyond 5 minutes).
+ */
+clock_offset_ms: number, progress: SyncProgress | null, 
+/**
+ * The other device's window has focus.
+ */
+focused: boolean, };
+
+/**
+ * Partial update of this device's sync settings.
+ */
+type SyncSettingsInput = { enabled: boolean | null, confirm_first: boolean | null, prefer_main: boolean | null, 
+/**
+ * An empty name goes back to the host name.
+ */
+device_name: string | null, };
+
+type SyncStatus = { enabled: boolean, role: SyncRole, device_id: string, device_name: string, confirm_first: boolean, prefer_main: boolean, 
+/**
+ * Where this device's key lives: `hardware`, `system` (OS keyring) or
+ * `memory` (gone after a restart: pairing again).
+ */
+key_storage: string, sessions: Array<SyncSessionView>, 
+/**
+ * A backup from before a sync exists («Восстановить до синхронизации»).
+ */
+has_backup: boolean, };
+
+type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, };
 
 /**
  * Terminal panels' layout, as the UI left it.
@@ -3227,6 +3332,15 @@ flow: FlowClass, warnings: Array<PreviewWarning>,
  * return; `None` when the draft would be accepted.
  */
 error: string | null, };
+
+/**
+ * What an undo did.
+ */
+type UndoReport = { restored: number, 
+/**
+ * Labels of records changed again since the batch: left as they are.
+ */
+skipped: Array<string>, };
 
 type UnlockInput = { path: string, password: string, };
 
@@ -3616,6 +3730,11 @@ type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: Vau
  * How vault files are kept on this platform.
  */
 type VaultStorage = "files" | "app";
+
+/**
+ * `vault-synced`: a batch was applied here.
+ */
+type VaultSyncedEvent = { session_id: string, batch: AppliedBatch, };
 
 /**
  * What a sleeping run waits for.

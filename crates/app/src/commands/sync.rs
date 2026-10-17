@@ -1,0 +1,158 @@
+//! Device-to-device vault sync (docs/sync.md): status, settings, pairing,
+//! confirmations, trusted devices, history and undo. The work is in
+//! `crate::sync` (network) and `trade_core` (merge).
+
+use tauri::{AppHandle, State};
+use trade_core::appconfig::{UpdateAppSettingsInput, load_settings, save_settings};
+use trade_core::ipc_contract::{SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus};
+use trade_core::service::{AppliedBatch, UndoReport};
+
+use crate::commands::{AppState, err_to_string, require_vault};
+use crate::sync::{self, Order};
+
+#[tauri::command]
+pub async fn sync_status(app: AppHandle) -> Result<SyncStatus, String> {
+    Ok(sync::status(&app))
+}
+
+/// Change this device's sync settings; turning sync on or off starts or
+/// stops it at once.
+#[tauri::command]
+pub async fn sync_set_settings(
+    app: AppHandle,
+    input: SyncSettingsInput,
+) -> Result<SyncStatus, String> {
+    let dir = crate::commands::app_settings::config_dir(&app);
+    let mut settings = load_settings(&dir);
+    let mut prefs = settings.sync;
+    if let Some(enabled) = input.enabled {
+        prefs.enabled = enabled;
+    }
+    if let Some(confirm) = input.confirm_first {
+        prefs.confirm_first = confirm;
+    }
+    if let Some(prefer) = input.prefer_main {
+        prefs.prefer_main = prefer;
+    }
+    let restart =
+        prefs.enabled != settings.sync.enabled || prefs.prefer_main != settings.sync.prefer_main;
+    settings.apply(&UpdateAppSettingsInput {
+        sync: Some(prefs),
+        device_name: input.device_name.clone(),
+        ..Default::default()
+    });
+    settings.ensure_device_id();
+    save_settings(&dir, &settings).map_err(err_to_string)?;
+    if restart || input.device_name.is_some() {
+        sync::restart(&app);
+    }
+    Ok(sync::status(&app))
+}
+
+/// «Сопрячь» on the banner: both screens show the code.
+#[tauri::command]
+pub async fn sync_pair(app: AppHandle, session_id: String) -> Result<(), String> {
+    send(&app, &session_id, Order::StartPairing)
+}
+
+/// The answer to the pairing code (`accept` = the codes match).
+#[tauri::command]
+pub async fn sync_confirm_pairing(app: AppHandle, input: SyncDecisionInput) -> Result<(), String> {
+    send(&app, &input.session_id, Order::Decide(input.accept))
+}
+
+/// The answer to the list of changes.
+#[tauri::command]
+pub async fn sync_decide_plan(app: AppHandle, input: SyncDecisionInput) -> Result<(), String> {
+    send(&app, &input.session_id, Order::Decide(input.accept))
+}
+
+fn send(app: &AppHandle, session_id: &str, order: Order) -> Result<(), String> {
+    if sync::send(app, session_id, order) {
+        Ok(())
+    } else {
+        Err(err_to_string(trade_core::Error::NotFound(
+            "the other device is no longer connected".into(),
+        )))
+    }
+}
+
+#[tauri::command]
+pub async fn sync_peers(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<SyncPeerView>, String> {
+    let status = sync::status(&app);
+    let me = status.device_id.clone();
+    let online: Vec<String> = status
+        .sessions
+        .into_iter()
+        .map(|session| session.device_id)
+        .collect();
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_ref()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    Ok(vault
+        .sync_state()
+        .peers
+        .iter()
+        // The list also carries this device as the others trust it.
+        .filter(|peer| peer.revoked.is_none() && peer.device_id != me)
+        .map(|peer| SyncPeerView {
+            device_id: peer.device_id.clone(),
+            name: peer.name.clone(),
+            paired_at: peer.paired_at.clone(),
+            last_synced_at: peer.last_synced_at.clone(),
+            online: online.contains(&peer.device_id),
+        })
+        .collect())
+}
+
+/// «Забыть устройство»: refused here at once, everywhere once it spreads.
+#[tauri::command]
+pub async fn sync_forget_peer(
+    app: AppHandle,
+    device_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard
+            .as_mut()
+            .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+        vault.sync_forget_peer(&device_id).map_err(err_to_string)?;
+    }
+    sync::forget_device(&app, &device_id);
+    sync::emit_status(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_ref()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    Ok(vault.sync_history())
+}
+
+/// Undo one batch; the undo itself reaches the other devices.
+#[tauri::command]
+pub async fn sync_undo(batch_id: String, state: State<'_, AppState>) -> Result<UndoReport, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    vault.sync_undo(&batch_id).map_err(err_to_string)
+}
+
+/// The emergency exit: everything as before the last session's first batch.
+#[tauri::command]
+pub async fn sync_restore_backup(state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    vault.sync_restore_backup().map_err(err_to_string)
+}
