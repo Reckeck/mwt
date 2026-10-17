@@ -548,6 +548,7 @@ mod tests {
         json["version"] = Json::from(1);
         let root = json.as_object_mut().unwrap();
         root.remove("notification_log");
+        root.remove("sync");
         root["settings"]
             .as_object_mut()
             .unwrap()
@@ -585,6 +586,7 @@ mod tests {
         }
         let mut expected = doc.clone();
         expected.notification_log.clear();
+        expected.sync = crate::sync::SyncState::default();
         expected.settings.notifications = crate::model::notify::NotificationSettings::default();
         for contact in &mut expected.contacts {
             contact.group.clear();

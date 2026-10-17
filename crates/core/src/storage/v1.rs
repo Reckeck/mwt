@@ -263,6 +263,7 @@ impl From<VaultDocV1> for VaultDoc {
             workflow_waits: Vec::new(),
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
+            sync: crate::sync::SyncState::default(),
         }
     }
 }

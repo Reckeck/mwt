@@ -475,5 +475,48 @@ pub fn full_doc() -> VaultDoc {
         group: CategoryGroup::Savings,
         archived: true,
     });
+    // Sync bookkeeping, including a stored record value (MessagePack must
+    // carry arbitrary JSON in a batch for undo).
+    let stamp = crate::sync::Stamp::new(1_700_000_000_000, 2, "devaaaaa");
+    doc.sync.stamps.insert(
+        "stores:x".into(),
+        crate::sync::RecordStamps {
+            created: stamp.clone(),
+            fields: [("name".to_string(), stamp.clone())].into(),
+        },
+    );
+    doc.sync
+        .tombstones
+        .insert("contacts:gone".into(), stamp.clone());
+    doc.sync.peers.push(crate::sync::TrustedPeer {
+        device_id: "dev-b".into(),
+        name: "Phone".into(),
+        public_key: "ab".repeat(32),
+        paired_at: "2026-10-01T00:00:00Z".into(),
+        last_synced_at: Some("2026-10-02T00:00:00Z".into()),
+        revoked: None,
+        stamp: stamp.clone(),
+    });
+    doc.sync.batches.push(crate::sync::SyncBatch {
+        id: "b1".into(),
+        peer_device: "dev-b".into(),
+        peer_name: "Phone".into(),
+        applied_at: "2026-10-02T00:00:00Z".into(),
+        summary: crate::sync::SyncSummary::default(),
+        entries: vec![crate::sync::BatchEntry {
+            key: "stores:x".into(),
+            before: crate::sync::RecordState {
+                value: Some(serde_json::json!({"id": "x", "n": 1.5, "tags": [null, true]})),
+                stamps: None,
+                tombstone: None,
+            },
+            after: crate::sync::RecordState {
+                value: None,
+                stamps: None,
+                tombstone: Some(stamp),
+            },
+        }],
+        undone_at: None,
+    });
     doc
 }
