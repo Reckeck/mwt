@@ -29,6 +29,13 @@ mise артефакты окажутся в `target/`, и сборка пойд�
   `UnlockedVault` (`service.rs`) заканчивается `persist()` — полное
   перешифрование и атомарная запись (tmp + fsync + rename). Отдельного «save»
   с фронта нет.
+- **Файлы vault на разных ОС.** Рабочий vault всегда локальный путь:
+  `PathBuf::from` по строке с фронта не делается, только
+  `platform_fs::resolve_vault_to_open/resolve_new_vault` (Android отдаёт
+  `content://`, его нужно импортировать). Файловые диалоги, URI и каталог vault живут
+  только в `crates/app/src/platform_fs/`, локальная запись — в
+  `trade_core::vault_io`. Привязанный vault после `persist()` отдаёт байты
+  `VaultMirror`. Подробно — `docs/storage-platforms.md`.
 - **Два хранилища настроек.** Тема/язык/базовая валюта/избранное — в
   `appconfig.rs` (обычный JSON в конфиг-директории, доступен до разблокировки,
   читается в `App.vue` через `get_app_settings`). Всё доменное, включая кэш цен

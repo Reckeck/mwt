@@ -41,13 +41,16 @@ crates/core/          # весь бизнес-логика, БЕЗ Tauri
   src/appconfig.rs    # настройки приложения ВНЕ vault: theme, locale, base_currency, favorites
   src/crypto/         # header.rs (55 байт, AAD) + mod.rs (seal/open/atomic_write)
   src/storage/        # SnapshotFormat (Json/Bin + for_profile()), VaultFile::create/open/save
+  src/vault_io/       # файл vault на любой ОС: local (atomic_write, lock, .bak), путь|URI, импорт, зеркало (docs/storage-platforms.md)
   src/pricing/        # PricingService: fetch_prices/fetch_fx (чистые, без мутации doc)
   src/service.rs      # UnlockedVault: мутации, холдинги, портфель, история, PnL
   src/market/         # OHLCV-свечи Binance для графиков (жило в sim/, лаборатория удалена)
   src/ipc_contract.rs # DTO для команд (входы/выходы IPC)
   src/bin/gen_types.rs# генератор src/shared/api/ipc.gen.d.ts (ts-rs export_all_to + слияние)
+crates/plugin-saf/    # Android: выбор документа с долговременным правом (Kotlin), только target android
 crates/app/           # Tauri shell: builder, commands/*, tauri.conf.json, capabilities/
   src/commands/       # auth, stores, transactions, categories, contacts, planning, analytics, pricing, portfolio, calc, settings, exchange
+  src/platform_fs/    # ЕДИНСТВЕННОЕ место с файловыми диалогами, content:// и каталогом vault: desktop/mobile, копия во внешнем файле
   src/scheduler.rs    # фоновый поток: импорт Bybit, автоматизации, алерты, напоминания
   src/lib.rs          # tauri::Builder + generate_handler![…] (список ВСЕХ команд), AppState (vault: Mutex<Option<UnlockedVault>>, vault_path)
 src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i18n + ECharts), FSD v2.1

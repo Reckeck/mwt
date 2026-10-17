@@ -6,7 +6,8 @@
 
 Ошибки: команды возвращают `Result<T, String>`; строка —
 `ERR_CODE: message`, где `ERR_CODE` — метод `Error::code()`
-(например `CRYPTO`, `MISSING`, `INVALID_INPUT`, `REQUIRES_UNLOCK`, `NOT_FOUND`).
+(например `CRYPTO`, `MISSING`, `INVALID_INPUT`, `REQUIRES_UNLOCK`, `NOT_FOUND`,
+`SYNC_CONFLICT`).
 Frontend парсит код и показывает локализованное сообщение.
 
 ## События
@@ -24,6 +25,7 @@ Frontend парсит код и показывает локализованно�
 | `reminders-changed` | `{}` | синхронизация создала или сдвинула авто-напоминания |
 | `notification` | `NoticeRecord { key, category, title, body, link?, at, delivered_at, read }` | показано уведомление (напоминание, алерт, нехватка денег, бюджет, автоматизация, импорт Bybit): колокольчик и тост. `link` — имя маршрута или `wallet:<id>`. Каждый `key` показывается один раз за всё время — журнал в vault |
 | `enrichment-ready` | `{ tx_id }` | обозреватель вернул данные по хешу операции; находка ждёт «Применить / Отклонить» |
+| `vault-mirror-failed` | `string` (причина) | копия vault во внешний файл не записалась (`platform_fs::mirror_sink`); vault цел, статус — `vault_link_status` |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
 только при разблокированном vault — импорт Bybit, автоматизации, алерты (цены их
@@ -35,18 +37,29 @@ Frontend парсит код и показывает локализованно�
 ### auth (`crates/app/src/commands/auth.rs`)
 | Команда | Вход | Выход |
 |---|---|---|
-| `vault_status` | — | `VaultStatus { exists, unlocked, path, format }` |
-| `create_vault` | `CreateVaultInput { path, password, cash_name? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя) |
-| `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo` |
+| `vault_status` | — | `VaultStatus { exists, unlocked, path, info, storage }`; `storage`: `files` (десктоп) или `app` (Android/iOS, vault в памяти приложения) |
+| `create_vault` | `CreateVaultInput { path, password, cash_name? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя). `path` без разделителей — имя: файл ляжет в каталог приложения; URI — `INVALID_INPUT` |
+| `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo`; `content://` в `path` сначала копируется в каталог приложения; у привязанного vault сначала сверяется копия — `SYNC_CONFLICT`, если изменились обе стороны |
 | `lock_vault_cmd` | — | `()` |
 | `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; текущий пароль проверяется расшифровкой файла (`SECRET` при ошибке), `.bak` не пишется |
 
 ### vault recents (`crates/app/src/commands/vault_recents.rs`)
 | Команда | Вход | Выход |
 |---|---|---|
-| `recent_vaults` | — | `Vec<RecentVault>` |
+| `recent_vaults` | — | `Vec<RecentVault { path, last_opened, exists, display_name, linked }>`; в режиме `app` дополняется всеми `*.wallet` каталога приложения |
 | `forget_recent_vault` | `SelectVaultInput { path }` | `()` (убирает из списка, файл не трогает) |
-| `pick_vault_file` | `save: bool` | `Option<String>` (путь, либо `null` если диалог закрыт); при `save` к имени без `.wallet` расширение дописывается |
+| `pick_vault_file` | `save: bool` | `Option<PickedVault { path, display_name, imported }>` (`null`, если диалог закрыт); при `save` к имени без `.wallet` расширение дописывается. На Android/iOS открытие копирует файл в каталог приложения (`imported`), `save` — `UNSUPPORTED` (создание по имени) |
+
+### копия во внешнем файле (`crates/app/src/commands/vault_link.rs`)
+
+Устройство — `docs/storage-platforms.md`.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `vault_link_status` | — | `VaultLinkStatus { linked, display_name, last_synced_at, last_error }` открытого vault |
+| `link_vault_external` | `LinkVaultInput { existing }` | `Option<VaultLinkStatus>` (`null` — диалог закрыт); копия пишется сразу; `existing` — выбранный файл заменяется vault |
+| `unlink_vault_external` | — | `()`; файл-копия остаётся на месте, право доступа (Android) отдаётся |
+| `resolve_vault_conflict` | `ResolveVaultConflictInput { path, keep: local \| remote }` | `()`; `remote`: локальный vault уходит в `.bak`, копия становится vault. Потом снова `unlock_vault` |
 
 ### stores
 | `list_stores` | — | `Vec<Store>` (плоско) |

@@ -49,6 +49,11 @@ Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с м
 | `~/.config/dev.mwt.desktop/currencies.json` | кэш каталога валют (фиат + крипто) | обычный JSON |
 | `~/.config/dev.mwt.desktop/recent_vaults.json` | недавние хранилища | обычный JSON |
 
+| `~/.config/dev.mwt.desktop/vault_links.json` | какой vault копируется в какой внешний файл | обычный JSON |
+
+Пути других ОС, Android (vault в памяти приложения, импорт `content://`) и
+копия во внешнем файле — `docs/storage-platforms.md`.
+
 Кэш цен и FX **внутри vault** (`VaultDoc.price_cache` / `fx_cache`) — он
 зашифрован и переживает рестарт, но привязан к конкретному хранилищу, у каждого
 свой. Каталог валют — в конфигах приложения: он не секретный и одинаков для всех
