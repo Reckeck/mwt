@@ -21,6 +21,11 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'lanSync',
+    date: '2026-10-18',
+    points: [{ key: 'lan' }, { key: 'pairing' }, { key: 'merge' }, { key: 'undo' }, { key: 'deviceSettings' }],
+  },
+  {
     id: 'vaultFiles',
     date: '2026-10-17',
     points: [{ key: 'androidOpen' }, { key: 'externalCopy' }, { key: 'names' }],

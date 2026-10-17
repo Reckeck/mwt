@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { CircleHelp, Plus, WifiOff } from 'lucide-vue-next'
 
+import { SyncIndicator } from '@/features/vault-sync'
 import { Money } from '@/entities/currency'
 import { NotificationBell } from '@/widgets/notification-bell'
 import { Badge } from '@/shared/ui/badge'
@@ -43,6 +44,7 @@ const { t } = useI18n()
       <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
     </Button>
 
+    <SyncIndicator />
     <NotificationBell />
     <Button
       v-if="props.hasTour"

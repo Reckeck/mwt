@@ -42,7 +42,11 @@ const change = useMutation({
   onSuccess: () => {
     open.value = false
   },
-  meta: { success: 'vault.password.changed', error: 'vault.password.failed' },
+  // Sync never carries the password: the other devices keep theirs.
+  meta: {
+    success: () => ({ text: t('vault.password.changed'), description: t('sync.passwordHint') }),
+    error: 'vault.password.failed',
+  },
 })
 </script>
 

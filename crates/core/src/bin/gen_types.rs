@@ -108,6 +108,7 @@ fn main() {
         trade_core::ipc_contract::SyncPhase,
         trade_core::ipc_contract::SyncProgress,
         trade_core::ipc_contract::SyncSessionView,
+        trade_core::ipc_contract::SyncPendingPlan,
         trade_core::ipc_contract::SyncStatus,
         trade_core::ipc_contract::SyncPeerView,
         trade_core::ipc_contract::SyncSettingsInput,

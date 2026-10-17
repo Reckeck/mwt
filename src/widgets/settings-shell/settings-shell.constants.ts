@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { Bell, Bug, Coins, FolderTree, HardDrive, Settings2 } from 'lucide-vue-next'
+import { Bell, Bug, Coins, FolderTree, HardDrive, RefreshCw, Settings2 } from 'lucide-vue-next'
 
 export interface SettingsSection {
   id: string
@@ -63,6 +63,16 @@ export const SETTINGS_TABS: SettingsTab[] = [
     sections: [
       { id: 'vault', titleKey: 'settingsShell.section.vault' },
       { id: 'enrichment', titleKey: 'settingsShell.section.enrichment' },
+    ],
+  },
+  {
+    id: 'sync',
+    titleKey: 'settingsShell.tab.sync',
+    icon: RefreshCw,
+    sections: [
+      { id: 'sync', titleKey: 'settingsShell.section.sync' },
+      { id: 'sync-devices', titleKey: 'settingsShell.section.syncDevices' },
+      { id: 'sync-history', titleKey: 'settingsShell.section.syncHistory' },
     ],
   },
   {
