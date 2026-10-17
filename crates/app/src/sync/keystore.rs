@@ -15,7 +15,7 @@ use trade_core::error::Result;
 use trade_core::sync::session::{DeviceKey, hex, unhex};
 
 /// Where the key lives, as `SyncStatus::key_storage` reports it.
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 pub const HARDWARE: &str = "hardware";
 #[cfg(desktop)]
 pub const SYSTEM: &str = "system";
@@ -72,7 +72,7 @@ fn load_or_create(_app: &AppHandle) -> Result<(DeviceKey, &'static str)> {
     Ok((DeviceKey::generate()?, MEMORY))
 }
 
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 fn load_or_create(app: &AppHandle) -> Result<(DeviceKey, &'static str)> {
     use tauri::Manager;
     let Ok(dir) = app.path().app_data_dir() else {
@@ -93,4 +93,10 @@ fn load_or_create(app: &AppHandle) -> Result<(DeviceKey, &'static str)> {
         }
     }
     Ok((key, MEMORY))
+}
+
+/// iOS has no plugin yet: the key lives in memory.
+#[cfg(all(mobile, not(target_os = "android")))]
+fn load_or_create(_app: &AppHandle) -> Result<(DeviceKey, &'static str)> {
+    Ok((DeviceKey::generate()?, MEMORY))
 }
