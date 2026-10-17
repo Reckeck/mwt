@@ -1815,6 +1815,16 @@ pub struct SyncSessionView {
     pub progress: Option<SyncProgress>,
     /// The other device's window has focus.
     pub focused: bool,
+    /// While pairing: the code both screens show.
+    pub pairing_code: Option<String>,
+    /// The list of changes waiting for the user, if any.
+    pub plan: Option<SyncPendingPlan>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncPendingPlan {
+    pub reason: SyncConfirmReason,
+    pub summary: crate::sync::SyncSummary,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

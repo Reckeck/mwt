@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { QuickAddDialog } from '@/features/quick-add'
+import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { WhatsNewDialog } from '@/widgets/whats-new'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
@@ -35,6 +36,7 @@ useTheme()
 useNativeMenuBlock()
 useCacheEvents()
 useBackendNotices()
+useSyncEvents()
 
 const { summary, isOnline } = useConnectivity()
 const { tour, routeTour } = useTourAutostart()
@@ -65,6 +67,7 @@ const pageTitle = computed(() =>
       </AppHeader>
 
       <div class="@container min-h-0 flex-1 overflow-y-auto p-3 md:p-4">
+        <SyncBanner />
         <!-- Keyed by path: /stores/a → /stores/b reuses the page component, and its
              queries and child widgets would otherwise keep showing wallet a. -->
         <RouterView :key="route.path" />
@@ -74,6 +77,8 @@ const pageTitle = computed(() =>
     <SettingsShell />
     <QuickAddDialog v-model:open="quickAddOpen" />
     <WhatsNewDialog />
+    <SyncPairingDialog />
+    <SyncPlanDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
 </template>

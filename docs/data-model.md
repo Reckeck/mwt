@@ -26,13 +26,16 @@
 | `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
 | `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий. v2: `Reminder.repeat` (каждые N дней/недель/месяцев/лет), `Reminder.source` (авто-напоминание и его источник), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (день месяца, `None` = конец месяца) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: показанные уведомления (ключ «источник + вхождение», чтобы не повторять после перезапуска), не больше 500 |
+| `sync` | `SyncState` | `serde(default)`: штампы изменений, tombstone'ы, доверенные устройства, пачки для отмены — синхронизация устройств (`docs/sync.md`); в TS не экспортируется, копия из JSON-редактора игнорируется |
 
 ### Settings — только vault-scoped
 
 `display_decimals` (по умолчанию 8), `dashboard_widgets` (сетка из 12 колонок:
 `DashboardWidgetCfg { id, col, row, width, height, pinned, store_id? }`; виджета нет в списке —
 его нет на дашборде; `pinned` — заголовок скрыт, позиция и размер закреплены),
-`fx_refresh_interval_sec` (300), `minimize_to_tray` (true), `savings_rate` (доля дохода
+`fx_refresh_interval_sec` (300), `minimize_to_tray` (true) — эти три с
+синхронизацией устройств переехали в `app_settings.json` (первое открытие
+переносит значения; поля в vault остаются, но не читаются), `savings_rate` (доля дохода
 на накопления, 0..1, по умолчанию `0.10`), `daily_budget_mode` (`month` —
 месяц с переносом остатка, по умолчанию; `until_income` — до следующего
 дохода), `budget_currency` (пусто = базовая валюта), `notifications` (v2:
@@ -55,7 +58,7 @@ vault: они переживают открытие другого хранил�
 
 | Файл | Что |
 |---|---|
-| `app_settings.json` | `AppSettings { theme, locale, base_currency, favorite_currencies[] }` |
+| `app_settings.json` | `AppSettings { theme, locale, base_currency, favorite_currencies[], …, device_id, device_name, sync { enabled, confirm_first, prefer_main }, minimize_to_tray, fx_refresh_interval_sec, display_decimals }` — `device_id` создаётся один раз на установку и в vault не попадает |
 | `currencies.json` | кэш каталога валют, `SupportedCurrencies { fiat[], crypto[] }` |
 
 Дефолты: `theme: auto`, `locale: auto`, `base_currency: "usd"`, favorites пуст.

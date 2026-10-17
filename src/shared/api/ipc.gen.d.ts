@@ -2949,6 +2949,8 @@ type SyncPairingEvent = { session_id: string, peer_name: string, code: string, }
  */
 type SyncPeerView = { device_id: string, name: string, paired_at: string, last_synced_at: string | null, online: boolean, };
 
+type SyncPendingPlan = { reason: SyncConfirmReason, summary: SyncSummary, };
+
 type SyncPhase = "connecting" | "offer" | "pairing" | "exchanging" | "awaiting_confirm" | "live";
 
 /**
@@ -2992,7 +2994,15 @@ clock_offset_ms: number, progress: SyncProgress | null,
 /**
  * The other device's window has focus.
  */
-focused: boolean, };
+focused: boolean, 
+/**
+ * While pairing: the code both screens show.
+ */
+pairing_code: string | null, 
+/**
+ * The list of changes waiting for the user, if any.
+ */
+plan: SyncPendingPlan | null, };
 
 /**
  * Partial update of this device's sync settings.

@@ -15,8 +15,8 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use trade_core::error::{Error, PeerSyncFailure, Result};
 use trade_core::ipc_contract::{
-    SyncClockEvent, SyncConfirmReason, SyncOfferEvent, SyncPairingEvent, SyncPhase, SyncPlanEvent,
-    SyncProgress, SyncRole, SyncSessionView, VaultSyncedEvent,
+    SyncClockEvent, SyncConfirmReason, SyncOfferEvent, SyncPairingEvent, SyncPendingPlan,
+    SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView, VaultSyncedEvent,
 };
 use trade_core::service::PeerRef;
 use trade_core::sync::RecordState;
@@ -289,6 +289,8 @@ async fn session<H: Host>(
                     clock_offset_ms: watch.offset(),
                     progress: None,
                     focused: false,
+                    pairing_code: None,
+                    plan: None,
                 },
                 orders: orders_in,
                 to_main,
@@ -343,7 +345,10 @@ async fn pair<H: Host>(
     );
     let code = wire.channel.pairing_code();
     let show_code = |app: &H| {
-        set_phase(app, &peer.session_id, SyncPhase::Pairing);
+        update_link(app, &peer.session_id, |link| {
+            link.view.phase = SyncPhase::Pairing;
+            link.view.pairing_code = Some(code.clone());
+        });
         app.emit(
             PAIRING_EVENT,
             SyncPairingEvent {
@@ -395,6 +400,7 @@ async fn pair<H: Host>(
             },
         }
         if mine && theirs {
+            update_link(app, &peer.session_id, |link| link.view.pairing_code = None);
             app.with_vault(|vault| {
                 vault.sync_trust_peer(&peer.device_id, &peer.name, &peer.remote_key)
             })?;
@@ -607,7 +613,13 @@ async fn apply<H: Host>(
     if let Some(reason) = reason {
         let summary = app.with_vault(|vault| vault.sync_preview(&incoming))?;
         if !summary.is_empty() {
-            set_phase(app, &peer.session_id, SyncPhase::AwaitingConfirm);
+            update_link(app, &peer.session_id, |link| {
+                link.view.phase = SyncPhase::AwaitingConfirm;
+                link.view.plan = Some(SyncPendingPlan {
+                    reason,
+                    summary: summary.clone(),
+                });
+            });
             app.emit(
                 PLAN_EVENT,
                 SyncPlanEvent {
@@ -645,6 +657,7 @@ async fn apply<H: Host>(
                     },
                 }
             };
+            update_link(app, &peer.session_id, |link| link.view.plan = None);
             if !accept {
                 let _ = wire
                     .send(&Message::Bye {
