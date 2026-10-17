@@ -37,7 +37,14 @@ export function useSyncActions() {
 
   const pair = useMutation({
     mutationFn: (sessionId: string) => call('sync_pair', { sessionId }),
-    meta: { silent: 'the pairing code appears on screen', error: 'sync.pairFailed' },
+    // The code dialog is the answer: nothing to say unless it failed.
+    meta: { success: '', error: 'sync.pairFailed' },
+  })
+
+  const dismiss = useMutation({
+    mutationFn: (sessionId: string) => call('sync_dismiss_offer', { sessionId }),
+    // The banner just goes away: nothing to say unless it failed.
+    meta: { success: '', error: 'sync.pairFailed' },
   })
 
   const confirmPairing = useMutation({
@@ -88,5 +95,5 @@ export function useSyncActions() {
     meta: { success: 'sync.backup.restored', error: 'sync.backup.restoreFailed' },
   })
 
-  return { settings, pair, confirmPairing, decidePlan, forget, undo, restore }
+  return { settings, pair, dismiss, confirmPairing, decidePlan, forget, undo, restore }
 }

@@ -77,6 +77,7 @@ Frontend парсит код и показывает локализованно�
 | `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup }` |
 | `sync_set_settings` | `SyncSettingsInput { enabled?, confirm_first?, prefer_main?, device_name? }` | `SyncStatus`; включение и выключение действуют сразу |
 | `sync_pair` | `sessionId` | `()`; «Сопрячь» на баннере: код появляется на обоих устройствах |
+| `sync_dismiss_offer` | `sessionId` | `()`; «Не сейчас»: сессия закрывается тихо, устройство не предлагается до перезапуска синхронизации |
 | `sync_confirm_pairing` | `SyncDecisionInput { session_id, accept }` | `()`; коды совпали (`accept`) или нет |
 | `sync_decide_plan` | `SyncDecisionInput { session_id, accept }` | `()`; применить список изменений или отказаться (сессия закрывается) |
 | `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online }>` — доверенные устройства |

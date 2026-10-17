@@ -55,6 +55,12 @@ pub async fn sync_pair(app: AppHandle, session_id: String) -> Result<(), String>
     send(&app, &session_id, Order::StartPairing)
 }
 
+/// «Не сейчас» on the banner: the device is not offered again until sync restarts.
+#[tauri::command]
+pub async fn sync_dismiss_offer(app: AppHandle, session_id: String) -> Result<(), String> {
+    send(&app, &session_id, Order::Dismiss)
+}
+
 /// The answer to the pairing code (`accept` = the codes match).
 #[tauri::command]
 pub async fn sync_confirm_pairing(app: AppHandle, input: SyncDecisionInput) -> Result<(), String> {

@@ -286,6 +286,7 @@ pub fn run() {
             commands::sync::sync_status,
             commands::sync::sync_set_settings,
             commands::sync::sync_pair,
+            commands::sync::sync_dismiss_offer,
             commands::sync::sync_confirm_pairing,
             commands::sync::sync_decide_plan,
             commands::sync::sync_peers,

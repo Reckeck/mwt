@@ -17,13 +17,15 @@ import { useSyncStatus } from '../../model/use-sync-status'
  */
 const { t } = useI18n()
 const { offers } = useSyncStatus()
-const { pair } = useSyncActions()
+const { pair, dismiss } = useSyncActions()
 const dismissed = ref(new Set<string>())
 
 const shown = computed(() => offers.value.filter((offer) => !dismissed.value.has(offer.session_id)))
 
+/** «Не сейчас»: hidden at once; the backend stops offering this device until sync restarts. */
 function later(sessionId: string) {
   dismissed.value = new Set([...dismissed.value, sessionId])
+  dismiss.mutate(sessionId)
 }
 </script>
 
