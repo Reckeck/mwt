@@ -33,6 +33,7 @@ tokio.workspace = true
 schemars.workspace = true
 ts-rs.workspace = true
 regex.workspace = true
+snow.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

@@ -6,7 +6,9 @@
 pub mod manifest;
 pub mod merge;
 pub mod plan;
+pub mod protocol;
 pub mod registry;
+pub mod session;
 pub mod stamp;
 pub mod state;
 pub mod track;

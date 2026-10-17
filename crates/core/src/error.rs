@@ -83,6 +83,10 @@ pub enum Error {
     /// (see `vault_io::mirror`); the user picks which one to keep.
     #[error("the vault and its external copy both changed: {0}")]
     SyncConflict(String),
+
+    /// Device-to-device sync could not go on (the reason is the code).
+    #[error("device sync: {0:?}")]
+    PeerSync(PeerSyncFailure),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -153,6 +157,36 @@ impl StoreTreeViolation {
     }
 }
 
+/// Why a device-to-device sync stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerSyncFailure {
+    /// The encrypted channel broke: tampering, a bad frame, a dropped link.
+    Channel,
+    /// The other device has a different vault open.
+    OtherVault,
+    /// The other device runs an app with another sync protocol or vault format.
+    VersionMismatch,
+    /// The clocks differ by more than a day.
+    ClockSkew,
+    /// This device was forgotten on the other one (or the other way round).
+    Revoked,
+    /// The user declined the pairing on one of the devices.
+    Rejected,
+}
+
+impl PeerSyncFailure {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Channel => "SYNC_CHANNEL",
+            Self::OtherVault => "SYNC_OTHER_VAULT",
+            Self::VersionMismatch => "SYNC_VERSION_MISMATCH",
+            Self::ClockSkew => "SYNC_CLOCK_SKEW",
+            Self::Revoked => "SYNC_REVOKED",
+            Self::Rejected => "SYNC_REJECTED",
+        }
+    }
+}
+
 impl Error {
     /// Stable machine-friendly code for IPC (`err.code` on the JS side).
     pub fn code(&self) -> &'static str {
@@ -181,6 +215,7 @@ impl Error {
             Error::FxMissing(_) => "FX_MISSING",
             Error::VaultBusy(_) => "VAULT_BUSY",
             Error::SyncConflict(_) => "SYNC_CONFLICT",
+            Error::PeerSync(failure) => failure.code(),
         }
     }
 }
