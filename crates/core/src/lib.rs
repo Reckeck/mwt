@@ -18,6 +18,7 @@ pub mod service;
 pub mod storage;
 pub mod txinfo;
 pub mod utilities_formula;
+pub mod vault_io;
 pub mod workflow;
 
 pub use amount::Amount;

@@ -32,6 +32,8 @@ use crate::model::vault::VaultDoc;
 
 pub mod v1;
 
+pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotFormat {
     Json,
@@ -202,7 +204,8 @@ impl VaultFile {
         }
         let doc = VaultDoc::default();
         let fmt = SnapshotFormat::for_profile();
-        Self::save_impl(path, password, &doc, fmt, /*overwrite=*/ false)
+        Self::save_impl(path, password, &doc, fmt, /*overwrite=*/ false)?;
+        Ok(path.to_path_buf())
     }
 
     /// Open an existing vault, decrypt and decode it.
@@ -233,7 +236,17 @@ impl VaultFile {
 
     /// Re-encrypt & atomically persist the whole document.
     pub fn save(path: &Path, password: &str, doc: &VaultDoc, fmt: SnapshotFormat) -> Result<()> {
-        Self::save_impl(path, password, doc, fmt, /*overwrite=*/ true).map(|_| ())
+        Self::save_sealed(path, password, doc, fmt).map(|_| ())
+    }
+
+    /// [`Self::save`], handing back the exact bytes written (for a mirror copy).
+    pub fn save_sealed(
+        path: &Path,
+        password: &str,
+        doc: &VaultDoc,
+        fmt: SnapshotFormat,
+    ) -> Result<Vec<u8>> {
+        Self::save_impl(path, password, doc, fmt, /*overwrite=*/ true)
     }
 
     /// Export the decrypted snapshot as readable JSON (for debugging/backup).
@@ -261,7 +274,7 @@ impl VaultFile {
         doc: &VaultDoc,
         fmt: SnapshotFormat,
         overwrite: bool,
-    ) -> Result<PathBuf> {
+    ) -> Result<Vec<u8>> {
         if path.exists() && !overwrite {
             return Err(Error::AlreadyExists(path.display().to_string()));
         }
@@ -269,141 +282,7 @@ impl VaultFile {
         let (header, _, _) = crypto::random_header(fmt);
         let file = crypto::seal(&header, password.as_bytes(), &plaintext)?;
         crypto::atomic_write(path, &file)?;
-        Ok(path.to_path_buf())
-    }
-}
-
-/// Conventional backup slot for a vault file: `<name>.bak` appended to the
-/// full file name, so `vault.wallet` becomes `vault.wallet.bak`.
-pub fn backup_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".bak");
-    path.with_file_name(name)
-}
-
-/// Keeps a vault open in one app instance at a time.
-///
-/// Every save rewrites the whole file, so two windows editing the same vault
-/// would silently undo each other. The lock is `<vault>.lock` holding the
-/// owner's PID; a lock whose process is gone (a crash) is taken over. The
-/// owning process may open the vault again (re-unlock, tests).
-#[derive(Debug)]
-pub struct VaultLock {
-    path: PathBuf,
-    owned: bool,
-}
-
-impl VaultLock {
-    /// A lock that holds nothing: for a sandbox copy of a vault that never
-    /// touches the file.
-    pub fn detached() -> Self {
-        Self {
-            path: PathBuf::new(),
-            owned: false,
-        }
-    }
-
-    pub fn acquire(vault: &Path) -> Result<Self> {
-        let mut name = vault.file_name().unwrap_or_default().to_os_string();
-        name.push(".lock");
-        let path = vault.with_file_name(name);
-        let own = std::process::id();
-        if let Some(holder) = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|raw| raw.trim().parse::<u32>().ok())
-        {
-            if holder == own {
-                return Ok(Self { path, owned: false });
-            }
-            if process_alive(holder) {
-                return Err(Error::VaultBusy(vault.display().to_string()));
-            }
-        }
-        std::fs::write(&path, own.to_string()).map_err(|err| Error::Io(err.to_string()))?;
-        Ok(Self { path, owned: true })
-    }
-}
-
-impl Drop for VaultLock {
-    fn drop(&mut self) {
-        if self.owned {
-            std::fs::remove_file(&self.path).ok();
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn process_alive(pid: u32) -> bool {
-    Path::new(&format!("/proc/{pid}")).exists()
-}
-
-/// Without `/proc` a leftover lock cannot be told from a live one; it is
-/// ignored rather than locking the user out after a crash.
-#[cfg(not(target_os = "linux"))]
-fn process_alive(_pid: u32) -> bool {
-    false
-}
-
-/// File extension of a vault on disk.
-pub const VAULT_EXT: &str = "wallet";
-
-/// Append `.wallet` unless the name already ends with it (any case).
-///
-/// Native save dialogs on Linux return exactly what was typed, so `my-money`
-/// would otherwise become an extension-less file the open dialog's filter hides.
-pub fn ensure_wallet_ext(path: &Path) -> PathBuf {
-    let has_ext = path
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case(VAULT_EXT));
-    if has_ext {
-        return path.to_path_buf();
-    }
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".");
-    name.push(VAULT_EXT);
-    path.with_file_name(name)
-}
-
-/// The default data directory for the app.
-pub fn default_data_dir(app_name: &str) -> PathBuf {
-    let dir = std::env::var("TRADE_APP_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| directories_like(app_name));
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
-
-fn directories_like(app_name: &str) -> PathBuf {
-    // Prefer XDG on Linux, AppData on Windows, ~/Library on macOS.
-    #[cfg(target_os = "linux")]
-    {
-        let base = std::env::var("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-                PathBuf::from(home).join(".local/share")
-            });
-        base.join(app_name)
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let base = std::env::var("APPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."));
-        base.join(app_name)
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home)
-            .join("Library/Application Support")
-            .join(app_name)
-    }
-    // Android/iOS: the app layer passes Tauri's app data dir instead.
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-    {
-        let _ = app_name;
-        PathBuf::from(".")
+        Ok(file)
     }
 }
 
@@ -869,48 +748,5 @@ mod tests {
             .hint(),
             "****"
         );
-    }
-
-    #[test]
-    fn ensure_wallet_ext_appends_only_when_missing() {
-        let cases = [
-            ("/tmp/a", "/tmp/a.wallet"),
-            ("/tmp/a.wallet", "/tmp/a.wallet"),
-            ("/tmp/a.WALLET", "/tmp/a.WALLET"),
-            ("/tmp/a.json", "/tmp/a.json.wallet"),
-            ("/tmp/my.money", "/tmp/my.money.wallet"),
-        ];
-        for (input, expected) in cases {
-            assert_eq!(ensure_wallet_ext(Path::new(input)), PathBuf::from(expected));
-        }
-    }
-
-    #[test]
-    fn a_vault_lock_keeps_other_processes_out() {
-        let dir = tempfile::tempdir().unwrap();
-        let vault = dir.path().join("v.wallet");
-        let lock_file = dir.path().join("v.wallet.lock");
-        {
-            let _held = VaultLock::acquire(&vault).unwrap();
-            assert!(lock_file.exists());
-            // The same process may open it again.
-            assert!(VaultLock::acquire(&vault).is_ok());
-            assert!(
-                lock_file.exists(),
-                "a re-entrant lock does not release the first"
-            );
-        }
-        assert!(!lock_file.exists());
-        // PID 1 is always alive on Linux: another process holds it.
-        std::fs::write(&lock_file, "1").unwrap();
-        if cfg!(target_os = "linux") {
-            assert!(matches!(
-                VaultLock::acquire(&vault),
-                Err(Error::VaultBusy(_))
-            ));
-        }
-        // A dead holder is taken over.
-        std::fs::write(&lock_file, "4294967000").unwrap();
-        assert!(VaultLock::acquire(&vault).is_ok());
     }
 }

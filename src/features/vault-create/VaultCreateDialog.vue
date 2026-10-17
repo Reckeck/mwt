@@ -10,11 +10,13 @@ import { Input } from '@/shared/ui/input'
 import { Spinner } from '@/shared/ui/spinner'
 
 import { MIN_VAULT_PASSWORD, useCreateVault } from './useCreateVault'
+import { useVaultStore } from '@/shared/store/vault'
 import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
 
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
+const vault = useVaultStore()
 const { path, password, passwordRepeat, passwordMatch, error, busy, reset, browse, submit } = useCreateVault()
 
 watch(open, (isOpen) => {
@@ -33,9 +35,20 @@ const form = useFormValidation(
 
 <template>
   <!-- Path + password, then the vault is saved and opened. -->
-  <Dialog v-model:open="open" :title="t('auth.createVaultTitle')" :description="t('auth.createVaultHint')" size="sm">
+  <Dialog v-model:open="open" :title="t('auth.createVaultTitle')" :description="t(vault.appStorage ? 'auth.createVaultHintApp' : 'auth.createVaultHint')" size="sm">
     <form id="create-form" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
-      <FormField for="create-path" :label="t('auth.vaultPath')" required :error="form.error('path')">
+      <!-- App storage (Android/iOS): a name; the file lives inside the app. -->
+      <FormField
+        v-if="vault.appStorage"
+        for="create-path"
+        :label="t('auth.vaultName')"
+        :hint="t('auth.vaultNameHint')"
+        required
+        :error="form.error('path')"
+      >
+        <Input id="create-path" v-model="path" :placeholder="t('auth.vaultNamePlaceholder')" />
+      </FormField>
+      <FormField v-else for="create-path" :label="t('auth.vaultPath')" required :error="form.error('path')">
         <div class="flex gap-1.5">
           <Input id="create-path" v-model="path" :placeholder="t('auth.pathPlaceholder')" />
           <Button variant="outline" type="button" :aria-label="t('auth.browse')" :title="t('auth.browse')" @click="browse">

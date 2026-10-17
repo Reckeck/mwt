@@ -11,6 +11,8 @@ export const mockStatus: { value: VaultStatus } = {
     exists: false,
     unlocked: false,
     info: null,
+    // `?storage=app` shows the Android/iOS screens (vaults in app storage).
+    storage: new URLSearchParams(globalThis.location?.search ?? '').get('storage') === 'app' ? 'app' : 'files',
   },
 }
 

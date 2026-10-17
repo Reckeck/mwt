@@ -9,7 +9,9 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Spinner } from '@/shared/ui/spinner'
 
+import SyncConflictChoice from './SyncConflictChoice.vue'
 import { useUnlockVault } from './useUnlockVault'
+import { useVaultStore } from '@/shared/store/vault'
 import type { VaultUnlockDialogProps } from './vault-unlock-dialog.types'
 import { required, useFormValidation } from '@/shared/lib/form'
 
@@ -17,7 +19,9 @@ const props = defineProps<VaultUnlockDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
-const { password, error, busy, pathFixed, targetPath, path, reset, browse, submit } = useUnlockVault()
+const vault = useVaultStore()
+const { password, error, busy, pathFixed, targetPath, pickedName, conflict, path, reset, browse, submit, resolveConflict } =
+  useUnlockVault()
 
 const form = useFormValidation(
   () => ({ path: pathFixed.value ? null : required(path.value), password: required(password.value) }),
@@ -34,7 +38,21 @@ watch(open, (isOpen) => {
   <!-- Password for a vault chosen from the recents, or for any file. -->
   <Dialog v-model:open="open" :title="t('auth.unlockTitle')" :description="t('auth.unlockHint')" size="sm">
     <form id="unlock-form" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
-      <FormField v-if="!pathFixed" for="unlock-path" :label="t('auth.vaultPath')" required :error="form.error('path')">
+      <!-- App storage (Android/iOS): no paths to type, the picked file is copied in. -->
+      <FormField
+        v-if="!pathFixed && vault.appStorage"
+        for="unlock-pick"
+        :label="t('auth.vaultFile')"
+        :hint="t('auth.importHint')"
+        required
+        :error="form.error('path')"
+      >
+        <Button id="unlock-pick" variant="outline" type="button" class="justify-start gap-2" @click="browse">
+          <FolderOpen class="size-4" />
+          <span class="truncate">{{ pickedName ?? t('auth.pickFile') }}</span>
+        </Button>
+      </FormField>
+      <FormField v-else-if="!pathFixed" for="unlock-path" :label="t('auth.vaultPath')" required :error="form.error('path')">
         <div class="flex gap-1.5">
           <Input id="unlock-path" v-model="targetPath" :placeholder="t('auth.pathPlaceholder')" />
           <Button variant="outline" type="button" :aria-label="t('auth.browse')" :title="t('auth.browse')" @click="browse">
@@ -46,8 +64,10 @@ watch(open, (isOpen) => {
       <FormField for="unlock-password" :label="t('auth.password')" required :error="form.error('password')">
         <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
         <Input id="unlock-password" v-model="password" type="password" autocomplete="current-password" autofocus />
-        <p class="truncate text-xs text-muted-foreground">{{ path }}</p>
+        <p v-if="!vault.appStorage || pathFixed" class="truncate text-xs text-muted-foreground">{{ pickedName ?? path }}</p>
       </FormField>
+
+      <SyncConflictChoice v-if="conflict" :busy="busy" @keep="resolveConflict" />
 
       <p
         v-if="error"

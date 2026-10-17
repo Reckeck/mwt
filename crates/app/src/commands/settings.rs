@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 
 use trade_core::ipc_contract::{DevDumpVaultOutput, UpdateSettingsInput};
 use trade_core::model::vault::Settings;
@@ -80,23 +79,8 @@ pub async fn dev_export_vault(
 ) -> Result<Option<String>, String> {
     let json = vault_json(&state)?;
 
-    let picked = app
-        .dialog()
-        .file()
-        .add_filter("JSON", &["json"])
-        .set_file_name("vault.json")
-        .set_title("Сохранить vault как JSON")
-        .blocking_save_file();
-    let Some(picked) = picked else {
-        return Ok(None);
-    };
-
-    let path = picked
-        .into_path()
-        .map_err(|err| format!("IO_ERROR: {err}"))?;
-    std::fs::write(&path, json).map_err(|err| format!("IO_ERROR: {err}"))?;
-
-    Ok(Some(path.display().to_string()))
+    crate::platform_fs::save_bytes_dialog(&app, "vault.json", "JSON", &["json"], json.as_bytes())
+        .map_err(err_to_string)
 }
 
 /// Validate `json` and, if it is a well-formed current `VaultDoc`, replace the

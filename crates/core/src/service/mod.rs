@@ -170,6 +170,8 @@ pub struct UnlockedVault {
     /// A sandbox copy: it runs every rule like the real vault but never
     /// writes the file (see [`Self::sandbox`]).
     sandbox: bool,
+    /// External copy written after every save (see [`crate::vault_io::mirror`]).
+    mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>,
 }
 
 impl UnlockedVault {
@@ -186,6 +188,7 @@ impl UnlockedVault {
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
+            mirror: None,
         };
         vault.ensure_cash_wallet("Cash")?;
         Ok(vault)
@@ -208,6 +211,7 @@ impl UnlockedVault {
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
+            mirror: None,
         };
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
@@ -250,6 +254,7 @@ impl UnlockedVault {
             password: Zeroizing::new(String::new()),
             _lock: crate::storage::VaultLock::detached(),
             sandbox: true,
+            mirror: None,
         }
     }
 
@@ -259,7 +264,24 @@ impl UnlockedVault {
         if self.sandbox {
             return Ok(());
         }
-        VaultFile::save(&self.path, &self.password, &self.doc, self.fmt)
+        let sealed = VaultFile::save_sealed(&self.path, &self.password, &self.doc, self.fmt)?;
+        if let Some(mirror) = &self.mirror {
+            mirror.push(&sealed);
+        }
+        Ok(())
+    }
+
+    /// Copy every later save to `mirror` (`None` stops copying). A sandbox
+    /// never gets one: it writes nothing.
+    pub fn set_mirror(&mut self, mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>) {
+        if !self.sandbox {
+            self.mirror = mirror;
+        }
+    }
+
+    /// Whether saves are copied to an external document.
+    pub fn has_mirror(&self) -> bool {
+        self.mirror.is_some()
     }
 
     /// Replace the whole document with an externally supplied one and persist
@@ -3740,6 +3762,40 @@ mod tests {
         ));
         assert_eq!(std::fs::read(&path).unwrap(), before);
         assert!(UnlockedVault::open(path, "old").is_ok());
+    }
+
+    #[derive(Default)]
+    struct RecordingMirror(std::sync::Mutex<Vec<Vec<u8>>>);
+
+    impl crate::vault_io::VaultMirror for RecordingMirror {
+        fn push(&self, sealed: &[u8]) {
+            self.0.lock().unwrap().push(sealed.to_vec());
+        }
+    }
+
+    #[test]
+    fn a_mirror_gets_exactly_the_saved_file() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mirror.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mirror = std::sync::Arc::new(RecordingMirror::default());
+        vault.set_mirror(Some(mirror.clone()));
+        assert!(vault.has_mirror());
+
+        vault.persist().unwrap();
+        let pushed = mirror.0.lock().unwrap().clone();
+        assert_eq!(pushed, vec![std::fs::read(&path).unwrap()]);
+
+        // A sandbox neither writes nor copies.
+        let mut sandbox = vault.sandbox();
+        sandbox.set_mirror(Some(mirror.clone()));
+        assert!(!sandbox.has_mirror());
+        sandbox.persist().unwrap();
+        assert_eq!(mirror.0.lock().unwrap().len(), 1);
+
+        vault.set_mirror(None);
+        vault.persist().unwrap();
+        assert_eq!(mirror.0.lock().unwrap().len(), 1);
     }
 
     // -- analytics -----------------------------------------------------------

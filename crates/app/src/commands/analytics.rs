@@ -3,7 +3,6 @@
 //! reference inflation from the app settings.
 
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 
 use trade_core::calendar::{Calendar, month_key, now_secs};
 use trade_core::service::{CalendarMonth, Report, ReportFilter, ReportKind, report_csv};
@@ -55,18 +54,8 @@ pub async fn export_report_csv(
             .and_then(|value| value.as_str().map(str::to_string))
             .unwrap_or_else(|| "report".into())
     );
-    let picked = app
-        .dialog()
-        .file()
-        .add_filter("CSV", &["csv"])
-        .set_file_name(&name)
-        .blocking_save_file();
-    let Some(picked) = picked else {
-        return Ok(None);
-    };
-    let path = picked.into_path().map_err(|err| format!("IO: {err}"))?;
-    std::fs::write(&path, csv).map_err(|err| format!("IO: {err}"))?;
-    Ok(Some(path.display().to_string()))
+    crate::platform_fs::save_bytes_dialog(&app, &name, "CSV", &["csv"], csv.as_bytes())
+        .map_err(err_to_string)
 }
 
 /// Spending by day of a `YYYY-MM` month; the current month when omitted.

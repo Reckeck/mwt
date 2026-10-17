@@ -17,6 +17,7 @@ pub mod pricing;
 pub mod settings;
 pub mod stores;
 pub mod transactions;
+pub mod vault_link;
 pub mod vault_recents;
 pub mod workflows;
 

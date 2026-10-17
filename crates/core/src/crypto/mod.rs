@@ -19,10 +19,6 @@
 //! A wrong password = AEAD authentication failure = `Error::Secret`.
 //! There is **no** stored password verifier or key material on disk.
 
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
-
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
@@ -35,6 +31,8 @@ use crate::error::{Error, Result};
 use crate::storage::SnapshotFormat;
 
 pub mod header;
+
+pub use crate::vault_io::local::{atomic_write, read_all};
 
 pub const NONCE_LEN: usize = 24;
 pub const TAG_LEN: usize = 16;
@@ -128,53 +126,6 @@ pub fn open_bytes(bytes: &[u8], password: &[u8]) -> Result<(Vec<u8>, SnapshotFor
         .map_err(|_| Error::Secret)?;
     let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
     Ok((pt, fmt))
-}
-
-/// Atomic save: write `bytes` to `path` via temp file + fsync + rename.
-pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
-    let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    if !dir.exists() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp_name = format!(
-        ".{}.tmp.{}.{}",
-        path.file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "vault".into()),
-        std::process::id(),
-        uuid::Uuid::new_v4().simple(),
-    );
-    let tmp_path = dir.join(tmp_name);
-
-    let result = (|| -> Result<()> {
-        let mut file = File::create(&tmp_path)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
-        std::fs::rename(&tmp_path, path)?;
-        if let Ok(handle) = File::open(dir) {
-            let _ = handle.sync_all(); // best-effort dir fsync
-        }
-        Ok(())
-    })();
-
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp_path);
-    }
-    result
-}
-
-pub fn read_all(path: &Path) -> Result<Vec<u8>> {
-    let mut file = File::open(path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            Error::NotFound(path.display().to_string())
-        } else {
-            Error::Io(err.to_string())
-        }
-    })?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
 }
 
 #[cfg(test)]

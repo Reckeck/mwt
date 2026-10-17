@@ -24,6 +24,7 @@ workspace = true
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = { workspace = true }
+tauri-plugin-fs = { workspace = true }
 trade-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
@@ -39,6 +40,11 @@ tauri-plugin-notification = "2"
 iana-time-zone = "0.1"
 chacha20poly1305.workspace = true
 rand.workspace = true
+
+# Android-only: document pickers with a grant that survives a restart
+# (the external copy of a vault, `platform_fs`).
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-saf = { path = "../plugin-saf" }
 
 # Desktop-only: tray, autostart, global keys, window geometry and the OS keyring
 # have no Android/iOS counterpart (`cfg(desktop)` in the code).

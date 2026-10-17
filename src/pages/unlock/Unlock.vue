@@ -8,8 +8,10 @@ import { RecentVaults } from '@/widgets/recent-vaults'
 import { VaultCreateDialog } from '@/features/vault-create'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { useVaultStore } from '@/shared/store/vault'
 
 const { t } = useI18n()
+const vault = useVaultStore()
 
 const settingsOpen = ref(false)
 const createOpen = ref(false)
@@ -49,7 +51,7 @@ const createOpen = ref(false)
               <FolderPlus class="size-4 shrink-0 text-muted-foreground" />
               <h2 class="text-base font-semibold">{{ t('auth.createVaultTitle') }}</h2>
             </div>
-            <p class="text-sm text-muted-foreground">{{ t('auth.createVaultHint') }}</p>
+            <p class="text-sm text-muted-foreground">{{ t(vault.appStorage ? 'auth.createVaultHintApp' : 'auth.createVaultHint') }}</p>
           </template>
 
           <Button size="lg" class="w-full" @click="createOpen = true">

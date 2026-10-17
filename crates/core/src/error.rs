@@ -78,6 +78,11 @@ pub enum Error {
     /// The vault is open in another app instance (see `storage::VaultLock`).
     #[error("vault is open in another window: {0}")]
     VaultBusy(String),
+
+    /// The vault and its external copy both changed since the last sync
+    /// (see `vault_io::mirror`); the user picks which one to keep.
+    #[error("the vault and its external copy both changed: {0}")]
+    SyncConflict(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -175,6 +180,7 @@ impl Error {
             Error::TooLarge(_) => "TOO_LARGE",
             Error::FxMissing(_) => "FX_MISSING",
             Error::VaultBusy(_) => "VAULT_BUSY",
+            Error::SyncConflict(_) => "SYNC_CONFLICT",
         }
     }
 }

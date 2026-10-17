@@ -21,6 +21,11 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'vaultFiles',
+    date: '2026-10-17',
+    points: [{ key: 'androidOpen' }, { key: 'externalCopy' }, { key: 'names' }],
+  },
+  {
     id: 'workflows2',
     date: '2026-10-14',
     points: [

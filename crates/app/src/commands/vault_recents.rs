@@ -4,9 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Manager};
-use tauri_plugin_dialog::DialogExt;
-
-use trade_core::ipc_contract::{RecentVault, SelectVaultInput};
+use trade_core::ipc_contract::{PickedVault, RecentVault, SelectVaultInput, VaultStorage};
+use trade_core::vault_io::display_name_of;
 
 const RECENTS_FILE: &str = "recent_vaults.json";
 const MAX_RECENTS: usize = 10;
@@ -65,6 +64,41 @@ pub fn rebase_paths(config_dir: &Path, moves: &[(PathBuf, PathBuf)]) {
     }
 }
 
+/// `.wallet` files in `dir` that are not in `known` yet, newest first.
+fn stored_vaults(dir: &Path, known: &[RecentVault]) -> Vec<RecentVault> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut found: Vec<(u64, String)> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(trade_core::storage::VAULT_EXT))
+        })
+        .map(|path| {
+            let modified = std::fs::metadata(&path)
+                .and_then(|meta| meta.modified())
+                .ok()
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |since| since.as_secs());
+            (modified, path.to_string_lossy().into_owned())
+        })
+        .filter(|(_, path)| !known.iter().any(|recent| &recent.path == path))
+        .collect();
+    found.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    found
+        .into_iter()
+        .map(|(modified, path)| RecentVault {
+            display_name: display_name_of(&path),
+            path,
+            last_opened: modified.to_string(),
+            exists: true,
+            linked: false,
+        })
+        .collect()
+}
+
 /// Add a vault to recents (move to top, dedupe, cap)
 pub fn add_recent(app: &AppHandle, path: &str) {
     let mut recents = load_recents(app);
@@ -80,6 +114,8 @@ pub fn add_recent(app: &AppHandle, path: &str) {
             path: path_str,
             last_opened: now.to_string(),
             exists: Path::new(path).exists(),
+            display_name: display_name_of(path),
+            linked: false,
         },
     );
     if recents.len() > MAX_RECENTS {
@@ -105,6 +141,16 @@ pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
         recent.exists = Path::new(&recent.path).exists();
     }
     save_recents(&app, &recents);
+    // In app storage the user cannot browse for a vault, so every one there is listed.
+    if crate::platform_fs::storage() == VaultStorage::App
+        && let Ok(dir) = crate::platform_fs::vaults_dir(&app)
+    {
+        recents.extend(stored_vaults(&dir, &recents));
+    }
+    for recent in &mut recents {
+        recent.display_name = display_name_of(&recent.path);
+        recent.linked = crate::platform_fs::links::is_linked(&app, &recent.path);
+    }
     Ok(recents)
 }
 
@@ -115,29 +161,6 @@ pub async fn forget_recent_vault(app: AppHandle, input: SelectVaultInput) -> Res
 }
 
 #[tauri::command]
-pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<String>, String> {
-    let dialog = app.dialog().file();
-    let dialog = if save {
-        dialog
-            .add_filter("Multi Wallet Tracker vault", &["wallet"])
-            .set_file_name("vault.wallet")
-            .set_title("Сохранить vault как…")
-    } else {
-        dialog
-            .add_filter("Multi Wallet Tracker vault", &["wallet"])
-            .set_title("Открыть vault")
-    };
-    if !save {
-        return Ok(dialog.blocking_pick_file().map(|path| path.to_string()));
-    }
-    // The save dialog returns exactly what was typed; a vault always gets its extension.
-    let picked = dialog
-        .blocking_save_file()
-        .map(|path| path.into_path().map_err(|err| err.to_string()))
-        .transpose()?;
-    Ok(picked.map(|path| {
-        trade_core::storage::ensure_wallet_ext(&path)
-            .to_string_lossy()
-            .into_owned()
-    }))
+pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<PickedVault>, String> {
+    crate::platform_fs::pick_vault(&app, save).map_err(crate::commands::err_to_string)
 }

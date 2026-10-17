@@ -59,6 +59,18 @@ pub struct VaultInfo {
     pub base_currency: String,
 }
 
+/// How vault files are kept on this platform.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum VaultStorage {
+    /// Desktop: a vault is any file the user picks, opened where it lies.
+    #[default]
+    Files,
+    /// Android/iOS: vaults live in the app's own storage; a picked file is
+    /// copied in, and an external copy is kept by linking it.
+    App,
+}
+
 /// What the unlock screen needs to know about the app.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct VaultStatus {
@@ -66,6 +78,8 @@ pub struct VaultStatus {
     pub exists: bool,
     pub unlocked: bool,
     pub info: Option<VaultInfo>,
+    #[serde(default)]
+    pub storage: VaultStorage,
 }
 
 // -- stores ------------------------------------------------------------------
@@ -1546,6 +1560,12 @@ pub struct RecentVault {
     pub path: String,
     pub last_opened: String,
     pub exists: bool,
+    /// File name to show, whatever the OS's separator.
+    #[serde(default)]
+    pub display_name: String,
+    /// Saves are copied to an external document.
+    #[serde(default)]
+    pub linked: bool,
 }
 
 /// Input to select or pick a vault file.
@@ -1553,6 +1573,54 @@ pub struct RecentVault {
 #[serde(rename_all = "snake_case")]
 pub struct SelectVaultInput {
     pub path: String,
+}
+
+/// A vault file chosen in the system dialog.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct PickedVault {
+    /// Local path to open or create (a copy in app storage on mobile).
+    pub path: String,
+    pub display_name: String,
+    /// The picked document was copied into app storage.
+    pub imported: bool,
+}
+
+/// Keep a copy of the unlocked vault in an external document.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct LinkVaultInput {
+    /// Pick an existing file (it gets replaced by the vault) instead of
+    /// creating a new one.
+    pub existing: bool,
+}
+
+/// The external copy of the unlocked vault, if any.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct VaultLinkStatus {
+    pub linked: bool,
+    pub display_name: Option<String>,
+    /// RFC 3339 time of the last successful copy.
+    pub last_synced_at: Option<String>,
+    /// Why the last copy failed; cleared by the next successful one.
+    pub last_error: Option<String>,
+}
+
+/// Which copy wins after `SYNC_CONFLICT`.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictSide {
+    #[default]
+    Local,
+    Remote,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ResolveVaultConflictInput {
+    pub path: String,
+    pub keep: ConflictSide,
 }
 
 /// Output of the dev dump vault command (DEV only).
