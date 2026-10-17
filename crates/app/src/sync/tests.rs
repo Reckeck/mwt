@@ -104,6 +104,8 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
         rank: 0,
         next_rank: 0,
         backup_done: false,
+        declined: Default::default(),
+        retries: 0,
         stop,
         announce: None,
     });
@@ -318,6 +320,57 @@ async fn a_declined_pairing_trusts_nobody() {
         .with_vault(|vault| Ok(vault.sync_state().peers.len()))
         .unwrap();
     assert_eq!(peers, 0);
+}
+
+/// «Не сейчас» on every offer; returns the error codes reported.
+fn dismiss(host: TestHost, mut events: Events) -> Arc<Mutex<Vec<String>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = seen.clone();
+    tokio::spawn(async move {
+        while let Some((event, payload)) = events.recv().await {
+            let session = payload
+                .get("session_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            if event == super::OFFER_EVENT {
+                super::send(&host, &session, Order::Dismiss);
+            }
+            if event == super::ERROR_EVENT {
+                log.lock().unwrap().push(event);
+            }
+        }
+    });
+    seen
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_put_off_device_closes_quietly_and_is_not_offered_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let (client, client_events) = device("Phone", right, SyncRole::Client);
+    let main_errors = dismiss(main.clone(), main_events);
+    let client_errors = dismiss(client.clone(), client_events);
+    connect(&main, &client).await;
+    let client_id = client.settings().device_id;
+    until("the offer put off", || {
+        main.hub()
+            .run
+            .as_ref()
+            .is_some_and(|run| run.declined.contains(&client_id))
+    })
+    .await;
+    until("both links closed", || {
+        main.hub().links.is_empty() && client.hub().links.is_empty()
+    })
+    .await;
+    assert!(main_errors.lock().unwrap().is_empty());
+    assert!(client_errors.lock().unwrap().is_empty());
+    // Connecting again is closed before any offer.
+    connect(&main, &client).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(main.hub().links.is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

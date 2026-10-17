@@ -94,6 +94,10 @@ export const syncCommands: MockCommands = {
     state.phase = 'pairing'
     return resolve(null)
   },
+  sync_dismiss_offer: () => {
+    state.phase = null
+    return resolve(null)
+  },
   sync_confirm_pairing: ({ body }) => {
     const accept = Boolean((body as SyncDecisionInput).accept)
     if (accept) {

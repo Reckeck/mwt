@@ -49,6 +49,8 @@ pub(crate) enum Order {
     Changed(Vec<String>),
     /// The user pressed «Сопрячь».
     StartPairing,
+    /// «Не сейчас»: close quietly, do not offer this device again this run.
+    Dismiss,
     /// The user's answer to the code or to the list of changes.
     Decide(bool),
     /// Who should show system notifications (see `protocol::Message::Presence`).
@@ -82,6 +84,11 @@ pub(crate) struct Run {
     pub rank: u32,
     pub next_rank: u32,
     pub backup_done: bool,
+    /// Devices the user declined or put off: not offered again until sync restarts.
+    pub declined: std::collections::BTreeSet<String>,
+    /// Sessions with the main device that ended before going live, in a row:
+    /// each waits longer before connecting again.
+    pub retries: u32,
     pub stop: tokio::sync::watch::Sender<bool>,
     pub announce: Option<discovery::Announcer>,
 }

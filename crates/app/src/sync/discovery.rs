@@ -106,6 +106,8 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
             rank: 0,
             next_rank: 0,
             backup_done: false,
+            declined: Default::default(),
+            retries: 0,
             stop,
             announce: Some(announcer),
         });
@@ -363,18 +365,28 @@ pub(crate) fn become_main(app: &AppHandle) {
 /// The link to the main device closed: wait our turn, then take over or
 /// connect to whoever did.
 pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
-    let rank = {
+    let (rank, retries) = {
         let mut hub = hub(app);
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return;
         };
         run.role = SyncRole::Searching;
-        run.rank
+        run.retries = run.retries.saturating_add(1);
+        (run.rank, run.retries)
     };
     super::emit_status(app);
+    // A session that keeps failing (declined, refused, unreachable) is not
+    // retried every few seconds: 5 s, 10 s, 20 s… up to 5 minutes.
+    let backoff = if retries > 1 {
+        5_000u64
+            .saturating_mul(1 << (retries - 2).min(6))
+            .min(300_000)
+    } else {
+        0
+    };
     elect_later(
         app,
         generation,
-        Duration::from_millis(1000 + u64::from(rank.min(30)) * 2000),
+        Duration::from_millis(1000 + u64::from(rank.min(30)) * 2000 + backoff),
     );
 }

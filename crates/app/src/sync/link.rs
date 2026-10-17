@@ -79,9 +79,12 @@ async fn read_frame(reader: &mut OwnedReadHalf) -> Result<Vec<u8>> {
     Ok(body)
 }
 
+/// The encrypted connection. Writing goes through a queue drained by its
+/// own task, so a session busy sending never stops reading: two devices
+/// sending large batches at each other cannot block one another.
 struct Wire {
     channel: Channel,
-    writer: OwnedWriteHalf,
+    out: mpsc::UnboundedSender<Vec<u8>>,
     frames: mpsc::Receiver<Vec<u8>>,
 }
 
@@ -89,7 +92,9 @@ impl Wire {
     async fn send(&mut self, message: &Message) -> Result<()> {
         let bytes = encode(message)?;
         for frame in self.channel.seal(&bytes)? {
-            write_frame(&mut self.writer, &frame).await?;
+            self.out
+                .send(frame)
+                .map_err(|_| Error::PeerSync(PeerSyncFailure::Channel))?;
         }
         Ok(())
     }
@@ -185,9 +190,17 @@ async fn session<H: Host>(
             }
         }
     });
+    let (out, mut outgoing) = mpsc::unbounded_channel::<Vec<u8>>();
+    tauri::async_runtime::spawn(async move {
+        while let Some(frame) = outgoing.recv().await {
+            if write_frame(&mut writer, &frame).await.is_err() {
+                break;
+            }
+        }
+    });
     let mut wire = Wire {
         channel,
-        writer,
+        out,
         frames,
     };
     let remote_key = wire.channel.remote_hex();
@@ -240,7 +253,12 @@ async fn session<H: Host>(
     if theirs.protocol != PROTOCOL_VERSION || theirs.format != trade_core::VAULT_FORMAT_VERSION {
         return Err(failure(PeerSyncFailure::VersionMismatch));
     }
-    if theirs.device_id == settings.device_id {
+    let declined = app
+        .hub()
+        .run
+        .as_ref()
+        .is_some_and(|run| run.declined.contains(&theirs.device_id));
+    if theirs.device_id == settings.device_id || declined {
         return Err(Stop::Quiet);
     }
     if revoked {
@@ -363,8 +381,15 @@ async fn pair<H: Host>(
     let (mut shown, mut mine, mut theirs) = (false, false, false);
     loop {
         tokio::select! {
-            () = &mut deadline => return Err(failure(PeerSyncFailure::Rejected)),
+            () = &mut deadline => {
+                decline(app, peer);
+                return Err(Stop::Quiet);
+            }
             order = orders.recv() => match order {
+                Some(Order::Dismiss) => {
+                    decline(app, peer);
+                    return Err(Stop::Quiet);
+                }
                 Some(Order::StartPairing) => {
                     if !shown {
                         shown = true;
@@ -375,6 +400,7 @@ async fn pair<H: Host>(
                 Some(Order::Decide(accept)) if shown => {
                     wire.send(&Message::Pairing { accept }).await?;
                     if !accept {
+                        decline(app, peer);
                         return Err(failure(PeerSyncFailure::Rejected));
                     }
                     mine = true;
@@ -391,6 +417,7 @@ async fn pair<H: Host>(
                 }
                 Some(Message::Pairing { accept }) => {
                     if !accept {
+                        decline(app, peer);
                         return Err(failure(PeerSyncFailure::Rejected));
                     }
                     theirs = true;
@@ -406,6 +433,13 @@ async fn pair<H: Host>(
             })?;
             return Ok(());
         }
+    }
+}
+
+/// Do not offer this device again until sync restarts.
+fn decline<H: Host>(app: &H, peer: &Peer) {
+    if let Some(run) = app.hub().run.as_mut() {
+        run.declined.insert(peer.device_id.clone());
     }
 }
 
@@ -723,6 +757,9 @@ async fn live<H: Host>(
     mut pending: BTreeSet<String>,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Live);
+    if let Some(run) = app.hub().run.as_mut() {
+        run.retries = 0;
+    }
     hand_over_if_preferred(app, peer);
     super::send_presence(&mut app.hub());
 
