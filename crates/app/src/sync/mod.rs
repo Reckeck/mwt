@@ -8,7 +8,10 @@
 //! Lock order: the hub's mutex is never held while taking the vault's; a
 //! vault save may call into the hub (the sync tap), never the other way.
 
+#[cfg(target_os = "android")]
+pub mod background;
 mod discovery;
+pub mod firewall;
 mod host;
 pub mod keystore;
 mod link;
@@ -22,7 +25,9 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 use tokio::sync::mpsc;
-use trade_core::ipc_contract::{SyncPhase, SyncProgress, SyncRole, SyncSessionView, SyncStatus};
+use trade_core::ipc_contract::{
+    SyncNetworkView, SyncPhase, SyncProgress, SyncRole, SyncSessionView, SyncStatus,
+};
 use trade_core::service::SyncTap;
 
 use crate::commands::AppState;
@@ -67,6 +72,10 @@ pub(crate) struct Link {
     pub orders: mpsc::UnboundedSender<Order>,
     /// This link is our connection to the main device.
     pub to_main: bool,
+    /// The main device dialed this link (the client could not reach it).
+    pub callback: bool,
+    /// The other side's mDNS instance.
+    pub instance: String,
     /// The other side asked to be the main device.
     pub prefer_main: bool,
     /// A batch was applied on it this session (for «спрашивать»).
@@ -80,6 +89,15 @@ pub(crate) struct Run {
     pub instance: String,
     /// Main devices of the group seen by discovery: instance → addresses.
     pub mains: BTreeMap<String, Vec<std::net::SocketAddr>>,
+    /// The other devices of the group seen by discovery: the main device
+    /// calls them back when they cannot reach it.
+    pub others: BTreeMap<String, discovery::Seen>,
+    /// Connecting to the main device failed: told to it once it calls back.
+    pub unreached: bool,
+    /// Failed connections to the main device in a row.
+    pub dial_failures: u32,
+    pub port: u16,
+    pub started_ms: i64,
     /// Given by the main device: our place in the queue to take over.
     pub rank: u32,
     pub next_rank: u32,
@@ -98,6 +116,11 @@ pub(crate) struct Hub {
     pub run: Option<Run>,
     pub links: BTreeMap<String, Link>,
     pub focused: bool,
+    /// Another device could not connect here (see `Hello::unreached`).
+    pub inbound_blocked: bool,
+    pub last_error: Option<String>,
+    /// The last batch applied or change sent (the background lock counts from it).
+    pub last_activity: Option<Instant>,
     failures: HashMap<IpAddr, Vec<Instant>>,
     generation: u64,
 }
@@ -180,7 +203,10 @@ pub fn restart(app: &AppHandle) {
         hub.generation
     };
     #[cfg(target_os = "android")]
-    crate::platform_net::multicast(app, true);
+    {
+        crate::platform_net::multicast(app, true);
+        background::arm(app, true);
+    }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = discovery::start(&app, generation, &vault_id).await {
@@ -194,6 +220,7 @@ pub fn restart(app: &AppHandle) {
 pub fn stop(app: &AppHandle) {
     let (run, links) = {
         let mut hub = Host::hub(app);
+        hub.inbound_blocked = false;
         let links: Vec<_> = std::mem::take(&mut hub.links).into_values().collect();
         (hub.run.take(), links)
     };
@@ -202,7 +229,10 @@ pub fn stop(app: &AppHandle) {
     }
     if let Some(run) = run {
         #[cfg(target_os = "android")]
-        crate::platform_net::multicast(app, false);
+        {
+            crate::platform_net::multicast(app, false);
+            background::arm(app, false);
+        }
         let _ = run.stop.send(true);
         if let Some(announce) = run.announce {
             announce.shutdown();
@@ -279,11 +309,15 @@ pub(crate) fn broadcast<H: Host>(app: &H, keys: &[String], origin: Option<&str>)
     if keys.is_empty() {
         return;
     }
-    let hub = Host::hub(app);
+    let mut hub = Host::hub(app);
+    let mut sent = false;
     for (id, link) in &hub.links {
         if Some(id.as_str()) != origin && link.view.phase == SyncPhase::Live {
-            let _ = link.orders.send(Order::Changed(keys.to_vec()));
+            sent |= link.orders.send(Order::Changed(keys.to_vec())).is_ok();
         }
+    }
+    if sent {
+        hub.last_activity = Some(Instant::now());
     }
 }
 
@@ -340,6 +374,7 @@ pub(crate) fn status<H: Host>(app: &H) -> SyncStatus {
         ""
     };
     let hub = app.hub();
+    let network = network_view(&hub);
     SyncStatus {
         enabled: settings.sync.enabled,
         role: hub.run.as_ref().map(|run| run.role).unwrap_or_default(),
@@ -350,6 +385,30 @@ pub(crate) fn status<H: Host>(app: &H) -> SyncStatus {
         key_storage: key_storage.to_string(),
         sessions: hub.links.values().map(|link| link.view.clone()).collect(),
         has_backup,
+        background_supported: cfg!(target_os = "android"),
+        background_lock_min: settings.sync.background_lock_min(),
+        network,
+    }
+}
+
+fn network_view(hub: &Hub) -> SyncNetworkView {
+    let run = hub.run.as_ref();
+    let (firewall_fix, firewall_commands) = firewall::fix();
+    SyncNetworkView {
+        port: run.map(|run| run.port),
+        address: run
+            .and_then(|_| discovery::local_address())
+            .map(|ip| ip.to_string()),
+        seen: run.map_or(0, |run| {
+            let mut seen: std::collections::BTreeSet<&String> = run.mains.keys().collect();
+            seen.extend(run.others.keys());
+            u32::try_from(seen.len()).unwrap_or(u32::MAX)
+        }),
+        since_ms: run.map(|run| run.started_ms),
+        inbound_blocked: hub.inbound_blocked,
+        firewall_fix,
+        firewall_commands,
+        last_error: hub.last_error.clone(),
     }
 }
 
@@ -358,6 +417,7 @@ pub(crate) fn emit_status<H: Host>(app: &H) {
 }
 
 pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option<&str>) {
+    app.hub().last_error = Some(err.code().to_string());
     app.emit(
         ERROR_EVENT,
         trade_core::ipc_contract::SyncErrorEvent {

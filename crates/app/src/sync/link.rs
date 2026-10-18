@@ -114,15 +114,28 @@ impl Wire {
 
 // -- entry ----------------------------------------------------------------------
 
+/// `dialer`: this device opened the connection. Which side is the main
+/// device comes from the hellos: a client dials the main device, or the main
+/// device calls back a client that cannot reach it.
 pub(crate) async fn run<H: Host>(
     app: H,
     stream: TcpStream,
     addr: SocketAddr,
     generation: u64,
-    to_main: bool,
+    dialer: bool,
 ) {
     let session_id = uuid::Uuid::new_v4().to_string();
-    let result = session(&app, stream, addr, generation, to_main, &session_id).await;
+    let mut to_main = false;
+    let result = session(
+        &app,
+        stream,
+        addr,
+        generation,
+        dialer,
+        &session_id,
+        &mut to_main,
+    )
+    .await;
     let peer = app
         .hub()
         .links
@@ -157,15 +170,16 @@ async fn session<H: Host>(
     stream: TcpStream,
     addr: SocketAddr,
     generation: u64,
-    to_main: bool,
+    dialer: bool,
     session_id: &str,
+    to_main_out: &mut bool,
 ) -> Flow<()> {
     let key = app.device_key()?;
     stream.set_nodelay(true).ok();
     let (mut reader, mut writer) = stream.into_split();
 
     let channel = tokio::time::timeout(HANDSHAKE_TIMEOUT, async {
-        let mut handshake = if to_main {
+        let mut handshake = if dialer {
             Handshake::initiator(&key)?
         } else {
             Handshake::responder(&key)?
@@ -214,15 +228,15 @@ async fn session<H: Host>(
         ))
     })?;
     let settings = app.settings();
-    let (main_here, rank) = {
+    let (main_here, rank, instance, unreached) = {
         let mut hub = app.hub();
         match hub.run.as_mut().filter(|run| run.generation == generation) {
             Some(run) if run.role == SyncRole::Main => {
                 let rank = run.next_rank;
                 run.next_rank += 1;
-                (true, rank)
+                (true, rank, run.instance.clone(), false)
             }
-            Some(_) => (false, 0),
+            Some(run) => (false, 0, run.instance.clone(), run.unreached),
             None => return Err(Stop::Quiet),
         }
     };
@@ -237,6 +251,8 @@ async fn session<H: Host>(
         prefer_main: settings.sync.prefer_main,
         needs_pairing: !trusted,
         rank,
+        instance,
+        unreached,
     }))
     .await?;
     let theirs = match tokio::time::timeout(HANDSHAKE_TIMEOUT, wire.next())
@@ -261,6 +277,14 @@ async fn session<H: Host>(
     if theirs.device_id == settings.device_id || declined {
         return Err(Stop::Quiet);
     }
+    // Exactly one side of a link is the main device; two main devices sort
+    // it out through discovery.
+    if main_here == theirs.main {
+        return Err(Stop::Quiet);
+    }
+    let to_main = theirs.main;
+    *to_main_out = to_main;
+    let callback = dialer == main_here;
     if revoked {
         let _ = wire
             .send(&Message::Bye {
@@ -288,12 +312,42 @@ async fn session<H: Host>(
 
     let (orders_in, mut orders) = mpsc::unbounded_channel();
     {
-        let mut hub = app.hub();
+        let mut guard = app.hub();
+        let hub = &mut *guard;
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return Err(Stop::Quiet);
         };
         if to_main {
+            // A client called back while it was still looking.
+            if run.role == SyncRole::Main {
+                return Err(Stop::Quiet);
+            }
+            run.role = SyncRole::Client;
             run.rank = theirs.rank;
+        }
+        // Both connections came up at once: keep the one the client dialed.
+        let twins: Vec<(String, bool)> = hub
+            .links
+            .iter()
+            .filter(|(_, link)| link.view.device_id == theirs.device_id)
+            .map(|(id, link)| (id.clone(), link.callback))
+            .collect();
+        if !twins.is_empty() {
+            if callback || twins.iter().any(|(_, other)| !other) {
+                return Err(Stop::Quiet);
+            }
+            for (id, _) in &twins {
+                if let Some(link) = hub.links.get(id) {
+                    let _ = link.orders.send(Order::Close);
+                }
+            }
+        }
+        if main_here {
+            if theirs.unreached {
+                hub.inbound_blocked = true;
+            } else if !dialer {
+                hub.inbound_blocked = false;
+            }
         }
         hub.links.insert(
             session_id.to_string(),
@@ -312,6 +366,8 @@ async fn session<H: Host>(
                 },
                 orders: orders_in,
                 to_main,
+                callback,
+                instance: theirs.instance.clone(),
                 prefer_main: theirs.prefer_main,
                 applied_once: false,
             },
@@ -724,6 +780,7 @@ async fn apply<H: Host>(
         let notices = vault.sync_batch_notices(&batch.id);
         Ok(Some((batch, keys, notices)))
     })?;
+    app.hub().last_activity = Some(std::time::Instant::now());
     update_link(app, &peer.session_id, |link| link.applied_once = true);
     if let Some((batch, keys, notices)) = applied {
         app.emit(
@@ -756,6 +813,7 @@ async fn live<H: Host>(
     watch: &mut ClockWatch,
     mut pending: BTreeSet<String>,
 ) -> Flow<()> {
+    app.hub().last_error = None;
     set_phase(app, &peer.session_id, SyncPhase::Live);
     if let Some(run) = app.hub().run.as_mut() {
         run.retries = 0;

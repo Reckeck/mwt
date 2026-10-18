@@ -101,6 +101,11 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
         tag: String::new(),
         instance: name.into(),
         mains: Default::default(),
+        others: Default::default(),
+        unreached: false,
+        dial_failures: 0,
+        port: 0,
+        started_ms: 0,
         rank: 0,
         next_rank: 0,
         backup_done: false,
@@ -157,6 +162,22 @@ async fn connect(main: &TestHost, client: &TestHost) {
     let client = client.clone();
     tokio::spawn(async move {
         super::link::run(client, stream, addr, 1, true).await;
+    });
+}
+
+/// The main device dials: the client cannot be reached (its firewall).
+async fn call_back(main: &TestHost, client: &TestHost) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = client.clone();
+    tokio::spawn(async move {
+        let (stream, peer) = listener.accept().await.unwrap();
+        super::link::run(server, stream, peer, 1, false).await;
+    });
+    let stream = TcpStream::connect(addr).await.unwrap();
+    let main = main.clone();
+    tokio::spawn(async move {
+        super::link::run(main, stream, addr, 1, true).await;
     });
 }
 
@@ -391,4 +412,70 @@ async fn a_forgotten_device_is_refused() {
     connect(&main, &client).await;
     until("the refusal", || has(&main_errors, "SYNC_REVOKED")).await;
     assert!(comments(&client).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_main_device_calls_back_a_client_that_cannot_reach_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let (client, client_events) = device("Phone", right, SyncRole::Searching);
+    client.hub().run.as_mut().unwrap().unreached = true;
+    seed(&main, "salary on the laptop");
+    let main_errors = answer(main.clone(), main_events, true);
+    let _client_errors = answer(client.clone(), client_events, true);
+
+    call_back(&main, &client).await;
+    until("both links live", || live(&main) && live(&client)).await;
+
+    assert_eq!(comments(&client), comments(&main));
+    assert_eq!(client.hub().run.as_ref().unwrap().role, SyncRole::Client);
+    assert!(
+        client
+            .hub()
+            .links
+            .values()
+            .all(|link| link.to_main && link.callback)
+    );
+    assert!(
+        main.hub()
+            .links
+            .values()
+            .all(|link| !link.to_main && link.callback)
+    );
+    // The client said it could not get through: the main device shows it.
+    assert!(main.hub().inbound_blocked);
+    assert!(main_errors.lock().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_links_at_once_keep_the_one_the_client_dialed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let (client, client_events) = device("Phone", right, SyncRole::Client);
+    let _main_errors = answer(main.clone(), main_events, true);
+    let _client_errors = answer(client.clone(), client_events, true);
+    // Paired first, so both new links go straight to the exchange.
+    connect(&main, &client).await;
+    until("paired", || live(&main) && live(&client)).await;
+    let session = main.hub().links.keys().next().cloned().unwrap();
+    super::send(&main, &session, Order::Close);
+    until("closed", || {
+        main.hub().links.is_empty() && client.hub().links.is_empty()
+    })
+    .await;
+
+    connect(&main, &client).await;
+    call_back(&main, &client).await;
+    until("one link each", || {
+        live(&main) && live(&client) && main.hub().links.len() == 1 && client.hub().links.len() == 1
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    for host in [&main, &client] {
+        let hub = host.hub();
+        assert_eq!(hub.links.len(), 1);
+        assert!(hub.links.values().all(|link| !link.callback));
+    }
 }

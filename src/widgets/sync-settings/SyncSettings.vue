@@ -9,8 +9,11 @@ import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { SectionState } from '@/shared/ui/section-state'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { SettingsSection } from '@/shared/ui/settings-section'
 import { Switch } from '@/shared/ui/switch'
+
+import SyncNetwork from './SyncNetwork.vue'
 
 /** This device's sync switches: on/off, its name, «спрашивать», «главное». */
 const { t } = useI18n()
@@ -30,6 +33,12 @@ watch(
 function saveName() {
   if (name.value.trim() === (current.value?.device_name ?? '')) return
   settings.mutate({ device_name: name.value.trim() })
+}
+
+/** Android: minutes in the background before the vault locks itself (0 = never). */
+const LOCK_OPTIONS = [5, 15, 30, 60, 0] as const
+function lockLabel(minutes: number) {
+  return minutes === 0 ? t('sync.backgroundLock.never') : t('sync.backgroundLock.minutes', { count: minutes })
 }
 
 const keyHint = computed(() => {
@@ -82,6 +91,27 @@ const keyHint = computed(() => {
             @update:model-value="(value: boolean) => settings.mutate({ prefer_main: value })"
           />
         </div>
+
+        <div
+          v-if="current?.background_supported"
+          class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+        >
+          <div class="grid min-w-0 flex-1 gap-0.5">
+            <Label for="sync-background-lock">{{ t('sync.backgroundLock.label') }}</Label>
+            <p class="text-xs text-muted-foreground">{{ t('sync.backgroundLock.hint') }}</p>
+          </div>
+          <Select
+            id="sync-background-lock"
+            :value="String(current.background_lock_min)"
+            @update:model-value="(value) => settings.mutate({ background_lock_min: Number(value) })"
+          >
+            <SelectItem v-for="minutes in LOCK_OPTIONS" :key="minutes" :value="String(minutes)">
+              {{ lockLabel(minutes) }}
+            </SelectItem>
+          </Select>
+        </div>
+
+        <SyncNetwork v-if="current?.enabled" />
 
         <p v-if="keyHint" class="text-xs text-muted-foreground" :class="current?.key_storage === 'memory' && 'text-warning'">
           {{ keyHint }}

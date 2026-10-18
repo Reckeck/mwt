@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watch } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 
 import { Sonner } from '@/shared/ui/sonner'
@@ -24,6 +25,14 @@ if (!settingsStore.appLoaded) {
   // Pickers open instantly when the catalog is already here; the backend serves a fresh cache without the network.
   settingsStore.loadCurrencies().catch(() => {})
 }
+
+// The backend may lock the vault by itself (Android: after a while in the
+// background, or from the sync notification): the window follows, and
+// checks again when it comes back in case the event came while it slept.
+void vault.listen()
+useEventListener(document, 'visibilitychange', () => {
+  if (document.visibilityState === 'visible') vault.refreshStatus().catch(() => {})
+})
 
 router.beforeEach(async (to) => {
   const wantsPublic = to.meta.public === true

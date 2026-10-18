@@ -1,4 +1,4 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use trade_core::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, UnlockInput, VaultInfo, VaultStatus,
@@ -22,12 +22,16 @@ fn info_of(vault: &UnlockedVault) -> VaultInfo {
 
 #[tauri::command]
 pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, String> {
+    status_of(&state)
+}
+
+fn status_of(state: &AppState) -> Result<VaultStatus, String> {
     let path = state
         .vault_path
         .lock()
         .map_err(|_| "lock".to_string())?
         .clone();
-    let guard = lock_vault(&state).map_err(err_to_string)?;
+    let guard = lock_vault(state).map_err(err_to_string)?;
     let unlocked = guard.is_some();
     let info = guard.as_ref().map(info_of);
     Ok(VaultStatus {
@@ -37,6 +41,21 @@ pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, Str
         info,
         storage: crate::platform_fs::storage(),
     })
+}
+
+/// Lock without the window asking (the background lock, the button on the
+/// sync notification): the window learns it from `vault-changed`.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub fn lock_now(app: &AppHandle) {
+    crate::scheduler::snapshot_tick(app, true);
+    crate::sync::on_lock(app);
+    let state = app.state::<AppState>();
+    if let Ok(mut guard) = lock_vault(&state) {
+        *guard = None;
+    }
+    if let Ok(status) = status_of(&state) {
+        let _ = app.emit("vault-changed", status);
+    }
 }
 
 #[tauri::command]

@@ -86,6 +86,14 @@ pub struct Hello {
     /// From the main device: the receiver's place in the queue to take over
     /// when the main device goes (0 = first).
     pub rank: u32,
+    /// The sender's mDNS instance: the main device calls back the devices it
+    /// sees but has no link with.
+    #[serde(default)]
+    pub instance: String,
+    /// The sender tried to connect to the receiver and could not (its
+    /// firewall drops incoming connections).
+    #[serde(default)]
+    pub unreached: bool,
 }
 
 pub fn encode(message: &Message) -> Result<Vec<u8>> {

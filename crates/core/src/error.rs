@@ -172,6 +172,8 @@ pub enum PeerSyncFailure {
     Revoked,
     /// The user declined the pairing on one of the devices.
     Rejected,
+    /// The firewall could not be opened here (cancelled, or no supported one).
+    Firewall,
 }
 
 impl PeerSyncFailure {
@@ -183,6 +185,7 @@ impl PeerSyncFailure {
             Self::ClockSkew => "SYNC_CLOCK_SKEW",
             Self::Revoked => "SYNC_REVOKED",
             Self::Rejected => "SYNC_REJECTED",
+            Self::Firewall => "SYNC_FIREWALL",
         }
     }
 }
