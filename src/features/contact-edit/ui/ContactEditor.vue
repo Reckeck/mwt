@@ -139,7 +139,7 @@ const inlineInput =
         @keydown.enter="($event.target as HTMLInputElement).blur()"
       />
       <datalist :id="groupListId">
-        <SelectItem v-for="entry in groups" :key="entry" :value="entry" />
+        <option v-for="entry in groups" :key="entry" :value="entry" />
       </datalist>
     </div>
 
