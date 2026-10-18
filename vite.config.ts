@@ -29,8 +29,19 @@ export default defineConfig({
         }
       : undefined,
     watch: {
-      // Don't watch .rust-target (wasteful & noisy).
-      ignored: ['**/.rust-target/**', '**/target/**', '**/crates/**'],
+      // Build output is not source: .rust-target is wasteful and noisy, and the
+      // Flatpak build trees (`mise run build:all -- flatpak`) hold a sandbox
+      // root whose symlink loops crash the watcher with ELOOP.
+      ignored: [
+        '**/.rust-target/**',
+        '**/target/**',
+        '**/crates/**',
+        '**/.cache/**',
+        '**/.flatpak-build/**',
+        '**/.flatpak-builder/**',
+        '**/.flatpak-repo/**',
+        '**/release/**',
+      ],
     },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
