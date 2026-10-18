@@ -4717,6 +4717,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-insets"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-net"
 version = "0.1.0"
 dependencies = [
@@ -5270,6 +5279,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
+ "tauri-plugin-insets",
  "tauri-plugin-net",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
