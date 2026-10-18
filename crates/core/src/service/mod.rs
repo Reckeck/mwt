@@ -35,6 +35,7 @@ mod envelopes;
 mod exchange_sync;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
+mod insights;
 mod interest;
 mod ledger;
 mod losses;
@@ -65,6 +66,10 @@ pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use insights::{
+    Insight, InsightCode, OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear,
+    ReportOverview, report_insights,
+};
 pub use interest::{DepositReport, InterestTaxReport, PdsReport};
 pub use ledger::{
     GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph,

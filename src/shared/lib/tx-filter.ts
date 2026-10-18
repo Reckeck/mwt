@@ -10,6 +10,7 @@ export function emptyTxFilter(patch: Partial<TxFilter> = {}): TxFilter {
     to: null,
     hide_internal: false,
     text: null,
+    category: null,
     ...patch,
   }
 }
@@ -29,6 +30,7 @@ export function activeFilterCount(filter: TxFilter): number {
     Boolean(filter.from || filter.to),
     filter.hide_internal,
     Boolean(filter.text?.trim()),
+    filter.category !== null,
   ].filter(Boolean).length
 }
 
@@ -46,11 +48,24 @@ export function txFilterToQuery(filter: TxFilter): Record<string, string | undef
     to: filter.to || undefined,
     internal: filter.hide_internal ? 'hide' : undefined,
     q: filter.text?.trim() || undefined,
+    // `''` is «without a category», a filter of its own.
+    cat: filter.category ?? undefined,
   }
 }
 
 /** The query keys a filter may use. */
-export const TX_FILTER_QUERY_KEYS = ['store', 'children', 'kind', 'contact', 'flow', 'from', 'to', 'internal', 'q']
+export const TX_FILTER_QUERY_KEYS = [
+  'store',
+  'children',
+  'kind',
+  'contact',
+  'flow',
+  'from',
+  'to',
+  'internal',
+  'q',
+  'cat',
+]
 
 /** Back from the query; `null` when the address carries no filter at all. */
 export function txFilterFromQuery(query: Query): TxFilter | null {
@@ -59,7 +74,8 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
     const first = Array.isArray(value) ? value[0] : value
     return typeof first === 'string' && first ? first : null
   }
-  if (!TX_FILTER_QUERY_KEYS.some((key) => one(key))) return null
+  const category = typeof query.cat === 'string' ? query.cat : null
+  if (!TX_FILTER_QUERY_KEYS.some((key) => one(key)) && category === null) return null
   const store = one('store')
   const kind = one('kind')
   return emptyTxFilter({
@@ -71,5 +87,6 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
     to: one('to'),
     hide_internal: one('internal') === 'hide',
     text: one('q'),
+    category,
   })
 }

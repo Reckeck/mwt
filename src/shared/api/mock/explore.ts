@@ -62,6 +62,7 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     if (filter.from && day < filter.from) return false
     if (filter.to && day > filter.to) return false
     if (filter.hide_internal && isInternal(tx, ctx.tree)) return false
+    if (filter.category !== null && (txMeta(tx).categories[0] ?? '') !== filter.category) return false
     if (!needle) return true
     const names = [
       ...storesOf(tx).map(nameOf),

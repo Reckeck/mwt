@@ -48,6 +48,9 @@ pub struct TxFilter {
     /// Words to find in the comment, categories, assets, stores, contacts or hash.
     #[serde(default)]
     pub text: Option<String>,
+    /// The main category key, as reports group by it; `""` = without a category.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -284,6 +287,11 @@ impl UnlockedVault {
             })
             .filter(|tx| !filter.hide_internal || !tx.is_internal(|id| self.root_of(id)))
             .filter(|tx| {
+                filter.category.as_deref().is_none_or(|key| {
+                    tx.meta().categories.first().map_or("", String::as_str) == key
+                })
+            })
+            .filter(|tx| {
                 needle
                     .as_deref()
                     .is_none_or(|needle| self.search_text(tx).contains(needle))
@@ -450,6 +458,25 @@ mod tests {
             ..TxFilter::default()
         };
         assert_eq!(list(by_store_name).len(), 1);
+    }
+
+    #[test]
+    fn filters_by_the_main_category() {
+        let (_dir, mut vault, [card, _savings, _exchange]) = ledger();
+        let mut food = at(payment(&card, "20", "lunch"), "2026-03-05T10:00:00Z");
+        food.meta_mut().categories = vec!["taxi".into(), "groceries".into()];
+        vault.add_transaction(food).unwrap();
+        let list = |key: &str| {
+            let filter = TxFilter {
+                category: Some(key.into()),
+                ..TxFilter::default()
+            };
+            vault.list_transactions(&filter, "UTC").unwrap()
+        };
+        assert_eq!(list("taxi").len(), 1);
+        // «coffee» is groceries too; lunch names it only second.
+        assert_eq!(list("groceries").len(), 1, "only the first category counts");
+        assert!(list("").iter().all(|tx| tx.meta().comment != "lunch"));
     }
 
     #[test]

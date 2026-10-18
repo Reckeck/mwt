@@ -3,9 +3,17 @@
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { flows, meta, money, monthsOf } from './flows'
 import type { AnalyticsMockContext } from './flows'
+import { mockInsights } from './overview'
 import { cashflow, categories, networth, yearReport } from './reports'
 
 export function mockReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockContext): AnalyticsReport {
+  const report = bareReport(kind, filter, ctx)
+  const insights = mockInsights(report)
+  for (const body of Object.values(report)) body.meta.insights = insights
+  return report
+}
+
+function bareReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockContext): AnalyticsReport {
   const months = monthsOf(filter, kind)
   switch (kind) {
     case 'cashflow':

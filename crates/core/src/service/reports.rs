@@ -76,6 +76,9 @@ pub struct ReportMeta {
     pub real_terms: bool,
     /// Annual inflation used for `real_terms`, percent.
     pub inflation_rate: Option<Amount>,
+    /// What the report says in words; filled once the report is built.
+    #[serde(default)]
+    pub insights: Vec<super::insights::Insight>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -267,6 +270,22 @@ pub enum Report {
     Losses(super::losses::LossReport),
 }
 
+impl Report {
+    pub fn meta_mut(&mut self) -> &mut ReportMeta {
+        match self {
+            Report::Cashflow(report) => &mut report.meta,
+            Report::Year(report) => &mut report.meta,
+            Report::Categories(report) => &mut report.meta,
+            Report::Networth(report) => &mut report.meta,
+            Report::Stores(report) => &mut report.meta,
+            Report::Pnl(report) => &mut report.meta,
+            Report::Portfolio(report) => &mut report.meta,
+            Report::Inflation(report) => &mut report.meta,
+            Report::Losses(report) => &mut report.meta,
+        }
+    }
+}
+
 /// How one day of the calendar went against its allowance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -330,6 +349,7 @@ impl Ctx {
                 .collect(),
             real_terms: self.real,
             inflation_rate: self.rate,
+            insights: Vec::new(),
         }
     }
 
@@ -488,7 +508,7 @@ impl UnlockedVault {
             filter.to = Some(format!("{year:04}-12"));
         }
         let ctx = self.report_ctx(&filter, now, zone, inflation)?;
-        Ok(match kind {
+        let mut report = match kind {
             ReportKind::Cashflow => Report::Cashflow(self.cashflow_report(&ctx)),
             ReportKind::Year => Report::Year(Box::new(self.year_report(&ctx))),
             ReportKind::Categories => Report::Categories(self.categories_report(&ctx)),
@@ -498,7 +518,10 @@ impl UnlockedVault {
             ReportKind::Portfolio => Report::Portfolio(self.portfolio_report(&ctx)),
             ReportKind::Inflation => Report::Inflation(self.inflation_report(&ctx)),
             ReportKind::Losses => Report::Losses(self.loss_report(&ctx)),
-        })
+        };
+        let insights = super::insights::report_insights(&report);
+        report.meta_mut().insights = insights;
+        Ok(report)
     }
 
     /// Classified flows of the report range (or `[from, to)`), in scope.
@@ -515,7 +538,7 @@ impl UnlockedVault {
 
     // -- cash flow --------------------------------------------------------------
 
-    fn cashflow_report(&self, ctx: &Ctx) -> CashflowReport {
+    pub(crate) fn cashflow_report(&self, ctx: &Ctx) -> CashflowReport {
         let mut rows: Vec<CashflowRow> = ctx
             .months
             .iter()
@@ -563,7 +586,7 @@ impl UnlockedVault {
 
     // -- the year -------------------------------------------------------------------
 
-    fn year_report(&self, ctx: &Ctx) -> YearReport {
+    pub(crate) fn year_report(&self, ctx: &Ctx) -> YearReport {
         let rate = self.doc.settings.savings_rate;
         let cash = self.cashflow_report(ctx);
         let finish = |row: &mut YearRow| {
@@ -631,7 +654,7 @@ impl UnlockedVault {
 
     // -- categories ---------------------------------------------------------------
 
-    fn categories_report(&self, ctx: &Ctx) -> CategoriesReport {
+    pub(crate) fn categories_report(&self, ctx: &Ctx) -> CategoriesReport {
         let span = ctx.months.len();
         let mut previous_start = ctx.months[0];
         for _ in 0..span {
@@ -676,7 +699,10 @@ impl UnlockedVault {
             let row = CategoryRow {
                 key,
                 group,
-                average: (total / count(span)).round(2),
+                // Over the months it had spending, not over quiet ones.
+                average: (total
+                    / count(cells.iter().filter(|cell| !cell.is_zero()).count().max(1)))
+                .round(2),
                 total,
                 share: Amount::ZERO,
                 delta_pct: (!previous.is_zero())
@@ -849,7 +875,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn networth_report(&self, ctx: &Ctx) -> NetworthReport {
+    pub(crate) fn networth_report(&self, ctx: &Ctx) -> NetworthReport {
         NetworthReport {
             meta: ctx.meta(),
             points: self.networth_points(ctx),
@@ -944,7 +970,7 @@ impl UnlockedVault {
 
     // -- PnL --------------------------------------------------------------------------
 
-    fn pnl_report(&self, ctx: &Ctx) -> PnlReport {
+    pub(crate) fn pnl_report(&self, ctx: &Ctx) -> PnlReport {
         let book = self.rate_book();
         let base = self.base_and_fx().0;
         let mut rows: Vec<PnlRow> = ctx
