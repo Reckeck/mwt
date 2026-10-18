@@ -14,7 +14,7 @@ import { FxRates } from '@/widgets/fx-rates'
 import { InflationSettings } from '@/widgets/inflation-settings'
 import { NotificationSettings } from '@/widgets/notification-settings'
 import { QuickAddSettings } from '@/widgets/quick-add-settings'
-import { SyncDevices, SyncHistory, SyncSettings } from '@/widgets/sync-settings'
+import { SyncDevices, SyncHistory, SyncSettings, SyncTransfer } from '@/widgets/sync-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { VaultSettings } from '@/widgets/vault-settings'
@@ -168,6 +168,7 @@ watch(
                 <SyncSettings v-else-if="section.id === 'sync'" />
                 <SyncDevices v-else-if="section.id === 'sync-devices'" />
                 <SyncHistory v-else-if="section.id === 'sync-history'" />
+                <SyncTransfer v-else-if="section.id === 'sync-transfer'" />
                 <VaultDevTools v-else-if="section.id === 'devtools'">
                   <template #viewer>
                     <VaultJsonEditor />

@@ -25,6 +25,9 @@ pub enum NoticeCategory {
     /// Planned money going out that the forecast balance will not cover.
     Shortfall,
     Tax,
+    /// Something about the vault itself: it was handed to another device.
+    /// Always shown; there is no switch for it.
+    Security,
 }
 
 impl NoticeCategory {

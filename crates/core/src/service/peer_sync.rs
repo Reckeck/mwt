@@ -42,6 +42,9 @@ pub struct AppliedBatch {
     pub summary: SyncSummary,
     #[serde(default)]
     pub undone_at: Option<String>,
+    /// Not a batch: the vault was handed to this device from here.
+    #[serde(default)]
+    pub transferred_to: Option<String>,
 }
 
 /// What an undo did.
@@ -324,9 +327,77 @@ impl UnlockedVault {
             .collect()
     }
 
-    /// The batches still kept, newest first.
+    /// The batches still kept and the transfers to new devices, newest first.
     pub fn sync_history(&self) -> Vec<AppliedBatch> {
-        self.doc.sync.batches.iter().rev().map(applied_of).collect()
+        let mut history: Vec<AppliedBatch> = self.doc.sync.batches.iter().map(applied_of).collect();
+        history.extend(self.doc.sync.transfers.iter().map(|transfer| AppliedBatch {
+            id: transfer.id.clone(),
+            peer_name: transfer.device_name.clone(),
+            applied_at: transfer.at.clone(),
+            summary: SyncSummary::default(),
+            undone_at: None,
+            transferred_to: Some(transfer.device_name.clone()),
+        }));
+        history.sort_by_key(|item| {
+            std::cmp::Reverse(crate::model::vault::iso_to_millis(&item.applied_at))
+        });
+        history
+    }
+
+    /// The vault was just handed to a new device: trust it for sync, keep it
+    /// in the history and leave a notice every linked device shows (so a
+    /// transfer the owner did not make does not go unseen). Returns the notice.
+    pub fn sync_record_transfer(
+        &mut self,
+        device_id: &str,
+        device_name: &str,
+        public_key: &str,
+        ru: bool,
+    ) -> Result<crate::model::notify::NoticeRecord> {
+        let at = now_iso();
+        let id = uuid::Uuid::new_v4().to_string();
+        self.doc
+            .sync
+            .transfers
+            .push(crate::sync::state::TransferRecord {
+                id: id.clone(),
+                device_id: device_id.to_string(),
+                device_name: device_name.to_string(),
+                at: at.clone(),
+            });
+        let extra = self
+            .doc
+            .sync
+            .transfers
+            .len()
+            .saturating_sub(crate::sync::state::MAX_TRANSFERS);
+        self.doc.sync.transfers.drain(..extra);
+        let (title, body) = if ru {
+            (
+                "Хранилище передано на другое устройство".to_string(),
+                format!(
+                    "Копия хранилища ушла на «{device_name}». Если это были не вы, смените пароль."
+                ),
+            )
+        } else {
+            (
+                "The vault was handed to another device".to_string(),
+                format!(
+                    "A copy of the vault went to «{device_name}». If it was not you, change the password."
+                ),
+            )
+        };
+        let notice = super::notifications::notice(
+            crate::model::notify::NoticeCategory::Security,
+            format!("transfer:{id}"),
+            &title,
+            body,
+            Some("/?settings=sync".into()),
+            at,
+        );
+        self.log_notices(vec![notice.clone()])?;
+        self.sync_trust_peer(device_id, device_name, public_key)?;
+        Ok(notice)
     }
 
     /// Put back what a batch changed, for every record nobody changed since.
@@ -606,6 +677,7 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
         applied_at: batch.applied_at.clone(),
         summary: batch.summary.clone(),
         undone_at: batch.undone_at.clone(),
+        transferred_to: None,
     }
 }
 
@@ -924,5 +996,38 @@ mod tests {
         reopened.persist().unwrap();
         assert_eq!(reopened.sync_state().stamps.len(), 1);
         drop(dir);
+    }
+
+    #[test]
+    fn handing_the_vault_over_needs_its_password_and_leaves_a_trace() {
+        let (_dir, mut vault) = empty_vault();
+        assert!(vault.check_password("pw").is_ok());
+        assert!(matches!(vault.check_password("pw "), Err(Error::Secret)));
+        assert!(matches!(vault.check_password(""), Err(Error::Secret)));
+
+        let notice = vault
+            .sync_record_transfer("phone", "Сочный Апельсин", "ab", true)
+            .unwrap();
+        assert_eq!(
+            notice.category,
+            crate::model::notify::NoticeCategory::Security
+        );
+        assert!(notice.body.contains("Сочный Апельсин"));
+        // Every linked device gets the notice (it is in the synced log)...
+        assert!(
+            vault
+                .doc
+                .notification_log
+                .iter()
+                .any(|record| record.key == notice.key)
+        );
+        // ...the new device may sync...
+        assert!(vault.sync_state().trusted("ab").is_some());
+        // ...and the history says where the vault went.
+        let history = vault.sync_history();
+        assert_eq!(
+            history[0].transferred_to.as_deref(),
+            Some("Сочный Апельсин")
+        );
     }
 }

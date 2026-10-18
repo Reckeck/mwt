@@ -46,6 +46,9 @@ ts-rs = { version = "9", features = ["serde-compat"] }
 regex = "1"
 # Device-to-device vault sync: Noise channel and LAN discovery.
 snow = "0.10"
+# Vault transfer: the one-time code is checked by a PAKE (no offline guessing).
+spake2 = "0.4"
+serde_bytes = "0.11"
 mdns-sd = "0.21"
 
 [profile.release]

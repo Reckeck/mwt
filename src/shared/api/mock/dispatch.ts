@@ -10,6 +10,7 @@ import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { storeTreeCommands } from './commands-store-tree'
 import { syncCommands } from './commands-sync'
+import { transferCommands } from './commands-transfer'
 import { vaultFilesCommands } from './commands-vault-files'
 import { overviewCommands, walletsCommands } from './commands-wallets'
 import { resolve } from './core'
@@ -22,6 +23,7 @@ const MOCK_COMMANDS: MockCommands = {
   ...vaultCommands,
   ...vaultFilesCommands,
   ...syncCommands,
+  ...transferCommands,
   ...notificationsCommands,
   ...appSettingsOutsideCommands,
   ...contactsCommands,

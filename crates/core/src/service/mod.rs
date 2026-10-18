@@ -211,6 +211,23 @@ impl UnlockedVault {
         Ok(vault)
     }
 
+    /// The vault password typed again (before handing the vault to another
+    /// device): `Error::Secret` unless it is this vault's. Constant time.
+    pub fn check_password(&self, candidate: &str) -> Result<()> {
+        use hmac::Mac;
+        type Check = hmac::Hmac<sha2::Sha256>;
+        let tag = |password: &str| {
+            let mut mac =
+                <Check as Mac>::new_from_slice(password.as_bytes()).map_err(|_| Error::Secret)?;
+            mac.update(b"mwt-password-check");
+            Ok::<_, Error>(mac)
+        };
+        let expected = tag(&self.password)?.finalize().into_bytes();
+        tag(candidate)?
+            .verify_slice(&expected)
+            .map_err(|_| Error::Secret)
+    }
+
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
         let (decoded, fmt) = VaultFile::open_versioned(&path, password)?;
         // After the password check: a wrong password must not hint the vault is in use.

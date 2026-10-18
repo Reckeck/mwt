@@ -64,14 +64,14 @@ fn failure(kind: PeerSyncFailure) -> Stop {
 
 // -- wire -----------------------------------------------------------------------
 
-async fn write_frame(writer: &mut OwnedWriteHalf, bytes: &[u8]) -> Result<()> {
+pub(super) async fn write_frame(writer: &mut OwnedWriteHalf, bytes: &[u8]) -> Result<()> {
     let len = u16::try_from(bytes.len()).map_err(|_| Error::PeerSync(PeerSyncFailure::Channel))?;
     writer.write_all(&len.to_be_bytes()).await?;
     writer.write_all(bytes).await?;
     Ok(())
 }
 
-async fn read_frame(reader: &mut OwnedReadHalf) -> Result<Vec<u8>> {
+pub(super) async fn read_frame(reader: &mut OwnedReadHalf) -> Result<Vec<u8>> {
     let mut head = [0u8; 2];
     reader.read_exact(&mut head).await?;
     let mut body = vec![0u8; usize::from(u16::from_be_bytes(head))];

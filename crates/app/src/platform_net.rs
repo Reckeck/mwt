@@ -34,3 +34,11 @@ pub fn poll(app: &AppHandle) -> Option<tauri_plugin_net::Poll> {
 pub fn ask_notifications(app: &AppHandle) {
     let _ = app.net().ask_notifications();
 }
+
+/// The system's language (`ru`, `en`, …), asked once.
+pub fn language(app: &AppHandle) -> String {
+    static LANGUAGE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LANGUAGE
+        .get_or_init(|| app.net().language().unwrap_or_default())
+        .clone()
+}

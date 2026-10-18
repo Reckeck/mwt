@@ -149,6 +149,16 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
     }
 }
 
+/// Give this device its friendly name (an adjective and a fruit, in the
+/// app's language) if it has none yet.
+pub fn ensure_device_name(app: &AppHandle) {
+    let dir = config_dir(app);
+    let mut settings = load_settings(&dir);
+    if settings.ensure_device_name(crate::scheduler::russian(app)) {
+        save_settings(&dir, &settings).ok();
+    }
+}
+
 /// This installation's sync id, made and saved on first use.
 pub fn device_id(app: &AppHandle) -> String {
     let dir = config_dir(app);

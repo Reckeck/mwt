@@ -1,5 +1,5 @@
 //! Letting other devices reach this one through its firewall: only the sync
-//! port, only from the local network (docs/sync.md, «Фаервол»).
+//! port and the one a vault is received on, only from the local network (docs/sync.md, «Фаервол»).
 //!
 //! The rule is added by the system tool behind the system's own password
 //! prompt (`pkexec` on Linux, UAC on Windows). A Flatpak cannot reach the
@@ -13,7 +13,7 @@ use trade_core::ipc_contract::SyncFirewallFix;
 use super::discovery::local_address;
 // Only the systems with a firewall rule to offer name the port.
 #[cfg(any(windows, all(target_os = "linux", not(target_os = "android"))))]
-use super::discovery::SYNC_PORT;
+use super::{discovery::SYNC_PORT, handover::RECEIVE_PORT};
 
 /// The local network of this device, as `192.168.1.0/24`.
 fn subnet() -> String {
@@ -59,18 +59,20 @@ mod platform {
     use std::path::Path;
     use std::process::Command;
 
-    use super::{SYNC_PORT, SyncFirewallFix, refused};
+    use super::{RECEIVE_PORT, SYNC_PORT, SyncFirewallFix, refused};
     use trade_core::error::Result;
 
     const COMMENT: &str = "Multi Wallet Tracker sync";
 
     fn ufw(subnet: &str) -> String {
-        format!("ufw allow from {subnet} to any port {SYNC_PORT} proto tcp comment '{COMMENT}'")
+        format!(
+            "ufw allow from {subnet} to any port {SYNC_PORT}:{RECEIVE_PORT} proto tcp comment '{COMMENT}'"
+        )
     }
 
     fn firewalld(subnet: &str) -> String {
         format!(
-            "firewall-cmd --permanent --add-rich-rule='rule family=\"ipv4\" source address=\"{subnet}\" port port=\"{SYNC_PORT}\" protocol=\"tcp\" accept' && firewall-cmd --reload"
+            "firewall-cmd --permanent --add-rich-rule='rule family=\"ipv4\" source address=\"{subnet}\" port port=\"{SYNC_PORT}-{RECEIVE_PORT}\" protocol=\"tcp\" accept' && firewall-cmd --reload"
         )
     }
 
@@ -119,7 +121,7 @@ mod platform {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
 
-    use super::{SYNC_PORT, SyncFirewallFix, refused};
+    use super::{RECEIVE_PORT, SYNC_PORT, SyncFirewallFix, refused};
     use trade_core::error::Result;
 
     /// Without a console window flashing up.
@@ -127,7 +129,7 @@ mod platform {
 
     fn rule() -> String {
         format!(
-            "advfirewall firewall add rule name=\"Multi Wallet Tracker sync\" dir=in action=allow protocol=TCP localport={SYNC_PORT} remoteip=localsubnet profile=private"
+            "advfirewall firewall add rule name=\"Multi Wallet Tracker sync\" dir=in action=allow protocol=TCP localport={SYNC_PORT}-{RECEIVE_PORT} remoteip=localsubnet profile=private"
         )
     }
 

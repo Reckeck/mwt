@@ -6,6 +6,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { listenMock } from './mock-bus'
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -41,7 +42,7 @@ export async function call<T>(cmd: string, args?: Record<string, unknown>): Prom
 }
 
 export async function onEvent<T>(event: string, handler: (payload: T) => void): Promise<UnlistenFn> {
-  // Quietly no-op in browser dev mode.
-  if (!isTauri) return () => {}
+  // Browser dev mode: the mock's own events (`mock-bus`).
+  if (!isTauri) return listenMock(event, handler as (payload: unknown) => void)
   return listen<T>(event, (received) => handler(received.payload))
 }

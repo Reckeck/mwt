@@ -39,11 +39,16 @@ const list = computed(() => history.data.value ?? [])
             <div class="flex items-center gap-2 px-3 py-2">
               <CollapsibleTrigger class="grid min-w-0 flex-1 gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span class="truncate text-sm font-medium">
-                  {{ t('sync.history.from', { name: batch.peer_name, count: batch.summary.total }) }}
+                  {{
+                    batch.transferred_to
+                      ? t('sync.history.transferred', { name: batch.transferred_to })
+                      : t('sync.history.from', { name: batch.peer_name, count: batch.summary.total })
+                  }}
                 </span>
                 <span class="text-xs text-muted-foreground">{{ formatDateTime(batch.applied_at) }}</span>
               </CollapsibleTrigger>
-              <Badge v-if="batch.undone_at" variant="outline">{{ t('sync.history.undone') }}</Badge>
+              <Badge v-if="batch.transferred_to" variant="outline">{{ t('sync.history.transferBadge') }}</Badge>
+              <Badge v-else-if="batch.undone_at" variant="outline">{{ t('sync.history.undone') }}</Badge>
               <Button
                 v-else
                 size="sm"
@@ -57,7 +62,7 @@ const list = computed(() => history.data.value ?? [])
                 {{ t('actions.undo') }}
               </Button>
             </div>
-            <CollapsibleContent class="border-t border-border p-3">
+            <CollapsibleContent v-if="!batch.transferred_to" class="border-t border-border p-3">
               <SyncChanges :summary="batch.summary" />
             </CollapsibleContent>
           </Collapsible>

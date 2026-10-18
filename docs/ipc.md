@@ -33,6 +33,9 @@ Frontend парсит код и показывает локализованно�
 | `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch }` | пачка с другого устройства применена; фронт перечитывает все запросы, уведомление с «Отменить» (`sync_undo`) |
 | `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | часы устройств расходятся (5 мин – 24 ч) или прыгнули: устройство «временно ненадёжное» до конца сессии |
 | `sync-error` | `SyncErrorEvent { code, message, peer_name? }` | сессия не началась или прервалась: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL` |
+| `transfer-receive` | `TransferReceiveView` | шаг приёма хранилища: ожидание, запрос, код, прогресс, готово (`saved_path`), ошибка (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
+| `transfer-send` | `TransferSendView` | шаг передачи: ждём «Принять», код (`wrong_code`, `attempts_left`), прогресс, готово, ошибка |
+| `transfer-nearby` | `TransferNearby[]` | устройства рядом, ждущие приёма |
 | `vault-changed` | `VaultStatus` | vault заблокирован без запроса окна (Android: блокировка в фоне, кнопка на уведомлении синхронизации); окно уходит на экран разблокировки |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
@@ -77,7 +80,15 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup, background_supported, background_lock_min, network }`; `network` — диагностика: порт, адрес, сколько устройств видно, `inbound_blocked`, `firewall_fix` (`none`/`auto`/`manual`), команды, код последней ошибки |
 | `sync_set_settings` | `SyncSettingsInput { enabled?, confirm_first?, prefer_main?, device_name?, background_lock_min? }` | `SyncStatus`; включение и выключение действуют сразу; на Android включение спрашивает разрешение на уведомления |
-| `sync_open_firewall` | — | `SyncStatus`; правило для порта 53318/tcp из локальной подсети (pkexec или UAC); `SYNC_FIREWALL` — отменено или фаервол не найден |
+| `sync_open_firewall` | — | `SyncStatus`; правило для портов 53318–53319/tcp из локальной подсети (pkexec или UAC); `SYNC_FIREWALL` — отменено или фаервол не найден |
+| `transfer_receive_start` | — | `TransferReceiveView`; устройство видно рядом по имени 5 минут, без открытого vault |
+| `transfer_receive_stop` | — | `()` |
+| `transfer_receive_decide` | `accept` | `()`; «Принять» / «Отклонить» запрос на экране |
+| `transfer_browse_start` | — | `TransferNearby[]`; дальше — событие `transfer-nearby` |
+| `transfer_browse_stop` | — | `()` |
+| `transfer_send` | `TransferSendInput { id, password }` | `TransferSendView`; `SECRET` — пароль не этого vault |
+| `transfer_send_code` | `code` | `()`; код с экрана получателя (6 цифр); `SYNC_BAD_CODE` — не шесть цифр |
+| `transfer_send_cancel` | — | `()` |
 | `sync_pair` | `sessionId` | `()`; «Сопрячь» на баннере: код появляется на обоих устройствах |
 | `sync_dismiss_offer` | `sessionId` | `()`; «Не сейчас»: сессия закрывается тихо, устройство не предлагается до перезапуска синхронизации |
 | `sync_confirm_pairing` | `SyncDecisionInput { session_id, accept }` | `()`; коды совпали (`accept`) или нет |

@@ -43,6 +43,11 @@ pub struct Background {
     pub stop: String,
 }
 
+#[derive(Deserialize)]
+struct Language {
+    language: String,
+}
+
 /// What [`Net::poll`] reports.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Poll {
@@ -92,6 +97,12 @@ impl<R: Runtime> Net<R> {
     /// Whether the app is in the background, and the button pressed.
     pub fn poll(&self) -> Result<Poll> {
         self.run("poll", ())
+    }
+
+    /// The system's language code (`ru`, `en`, …).
+    pub fn language(&self) -> Result<String> {
+        let out: Language = self.run("language", ())?;
+        Ok(out.language)
     }
 
     /// Ask for the notification permission (Android 13+), without waiting.

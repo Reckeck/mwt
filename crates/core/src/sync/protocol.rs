@@ -8,7 +8,8 @@ use crate::error::{Error, Result};
 
 /// Bumped on an incompatible change; devices on different versions refuse
 /// to sync and ask to update instead.
-pub const PROTOCOL_VERSION: u32 = 1;
+/// 2: notices may carry the `security` category (vault transfer).
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Largest message after reassembly: a manifest or records batch is split
 /// well below it, so anything larger is a broken or hostile peer.

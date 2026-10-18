@@ -109,6 +109,12 @@ class NetPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve(JSObject().put("background", inBackground).put("action", action))
   }
 
+  /** The system's language, for texts made outside the window. */
+  @Command
+  fun language(invoke: Invoke) {
+    invoke.resolve(JSObject().put("language", java.util.Locale.getDefault().language))
+  }
+
   /** Android 13+: the background sync notification needs this permission. */
   @Command
   fun askNotifications(invoke: Invoke) {

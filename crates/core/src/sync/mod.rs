@@ -3,6 +3,7 @@
 //! Everything here is pure: no network, no files. The vault side lives in
 //! `service::sync`, the transport in the app crate.
 
+pub mod alias;
 pub mod manifest;
 pub mod merge;
 pub mod plan;
@@ -12,6 +13,7 @@ pub mod session;
 pub mod stamp;
 pub mod state;
 pub mod track;
+pub mod transfer;
 pub mod view;
 
 pub use plan::{
