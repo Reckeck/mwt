@@ -5,7 +5,9 @@
 use tauri::{AppHandle, State};
 
 use trade_core::calendar::{Calendar, month_key, now_secs};
-use trade_core::service::{CalendarMonth, Report, ReportFilter, ReportKind, report_csv};
+use trade_core::service::{
+    CalendarMonth, Report, ReportFilter, ReportKind, ReportOverview, report_csv,
+};
 
 use crate::commands::app_settings::{current_settings, current_zone};
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -34,6 +36,24 @@ pub async fn get_report(
     state: State<'_, AppState>,
 ) -> Result<Report, String> {
     build_report(&app, &state, kind, &filter)
+}
+
+/// The analytics start screen: one card per question, the filter's last
+/// month against the one before.
+#[tauri::command]
+pub async fn get_report_overview(
+    filter: ReportFilter,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ReportOverview, String> {
+    let zone = current_zone(&app);
+    let inflation = current_settings(&app).inflation;
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .report_overview(&filter, now_secs(), &zone, &inflation)
+        .map_err(err_to_string)
 }
 
 /// Save a report as CSV through the native save dialog. `None` when the

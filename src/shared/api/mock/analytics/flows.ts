@@ -60,5 +60,5 @@ export function flows(ctx: AnalyticsMockContext): MockFlow[] {
 }
 
 export function meta(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): ReportMeta {
-  return { currency: ctx.currency, months, real_terms: filter.real_terms, inflation_rate: null }
+  return { currency: ctx.currency, months, real_terms: filter.real_terms, inflation_rate: null, insights: [] }
 }

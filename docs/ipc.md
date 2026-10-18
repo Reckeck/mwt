@@ -235,7 +235,8 @@ JSON без шифрования — там нет ничего секретно
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate? }` |
+| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate?, insights }`; `insights` — факты для вывода словами (`Insight { code, amount?, pct?, subject? }`, текст собирает фронт по `insight.<code>`) |
+| `get_report_overview` | `filter: ReportFilter` (берутся `scope`, `currency`, `real_terms` и месяц `to`, по умолчанию текущий) | `ReportOverview { currency, month, previous_month, year, flow, wealth, investments, savings }`: карточки стартового экрана аналитики — месяц против прошлого, вложения с начала года; у каждой `has_data` и `insights` |
 | `export_report_csv` | те же `kind`, `filter` | `Option<String>` — путь файла; `None`, если диалог закрыли. CSV: UTF-8 с BOM, `;`, CRLF, колонка валюты в каждой строке |
 | `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, days[{ date, income, spent, daily, tx_count, status }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future` |
 

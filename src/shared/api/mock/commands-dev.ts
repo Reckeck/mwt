@@ -1,7 +1,7 @@
 /** Commands: developer tools, reports, losses, links and enrichment. */
 
 import { txId, txMeta } from '@/shared/lib/transactions'
-import { mockCalendar, mockReport } from './analytics'
+import { mockCalendar, mockOverview, mockReport } from './analytics'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
@@ -42,6 +42,9 @@ export const devReportCommands: MockCommands = {
   },
   get_report: ({ args }) => {
     return resolve(mockReport(args?.kind as ReportKind, args?.filter as ReportFilter, analyticsContext()))
+  },
+  get_report_overview: ({ args }) => {
+    return resolve(mockOverview(args?.filter as ReportFilter, analyticsContext()))
   },
   get_calendar: ({ args }) => {
     return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))

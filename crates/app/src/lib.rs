@@ -183,6 +183,7 @@ pub fn run() {
             enrichment::re_enrich,
             // analytics
             analytics::get_report,
+            analytics::get_report_overview,
             analytics::export_report_csv,
             analytics::get_calendar,
             // planning

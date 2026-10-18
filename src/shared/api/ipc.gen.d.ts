@@ -1564,6 +1564,17 @@ type InflationReport = { meta: ReportMeta, points: Array<InflationPoint>,
 nominal_change_pct: Amount | null, real_change_pct: Amount | null, };
 
 /**
+ * One fact a report states; which fields are set depends on the code.
+ */
+type Insight = { code: InsightCode, amount: Amount | null, pct: Amount | null, 
+/**
+ * What the sentence names: a category key, a month, a wallet, an asset.
+ */
+subject: string | null, };
+
+type InsightCode = "overspent" | "saved" | "no_income" | "costliest_month" | "spent_up" | "spent_down" | "top_category" | "category_grew" | "below_plan" | "best_month" | "wealth_up" | "wealth_down" | "wealth_flat" | "owes" | "store_grew_most" | "profit" | "loss" | "fees_paid" | "conversion_losses" | "top_asset" | "real_change" | "no_inflation_rate";
+
+/**
  * Chain the user picked when the hash alone was ambiguous. Without it the
  * backend never guesses an EVM network.
  */
@@ -1951,6 +1962,30 @@ categories: Array<NoticeCategoryCfg>, };
  * category `opening_balance`, so it is neither income nor spending.
  */
 type OpeningBalance = { asset: AssetRef, amount: Amount, };
+
+/**
+ * «Income and spending» card: the month against the one before.
+ */
+type OverviewFlow = { income: Amount, spent: Amount, net: Amount, previous_spent: Amount, 
+/**
+ * The biggest expense of the month, a category key.
+ */
+top_category: string | null, has_data: boolean, insights: Array<Insight>, };
+
+/**
+ * «Investments» card: since the start of the year — a month is too short.
+ */
+type OverviewInvestments = { realized: Amount, fees: Amount, losses: Amount, has_data: boolean, insights: Array<Insight>, };
+
+/**
+ * «How much I have» card: net worth now and over the month.
+ */
+type OverviewWealth = { net: Amount, change: Amount, has_data: boolean, insights: Array<Insight>, };
+
+/**
+ * «Year» card: what the year kept so far.
+ */
+type OverviewYear = { saved: Amount, saved_pct: Amount, best_month: string | null, worst_month: string | null, has_data: boolean, insights: Array<Insight>, };
 
 /**
  * A field edited on both devices where the other device's later edit won.
@@ -2457,7 +2492,20 @@ months: Array<string>, real_terms: boolean,
 /**
  * Annual inflation used for `real_terms`, percent.
  */
-inflation_rate: Amount | null, };
+inflation_rate: Amount | null, 
+/**
+ * What the report says in words; filled once the report is built.
+ */
+insights: Array<Insight>, };
+
+/**
+ * The analytics start screen: one card per question.
+ */
+type ReportOverview = { currency: string, 
+/**
+ * The month the cards are about, `YYYY-MM`.
+ */
+month: string, previous_month: string, year: number, flow: OverviewFlow, wealth: OverviewWealth, investments: OverviewInvestments, savings: OverviewYear, };
 
 type ResolveVaultConflictInput = { path: string, keep: ConflictSide, };
 
@@ -3305,7 +3353,11 @@ hide_internal: boolean,
 /**
  * Words to find in the comment, categories, assets, stores, contacts or hash.
  */
-text: string | null, };
+text: string | null, 
+/**
+ * The main category key, as reports group by it; `""` = without a category.
+ */
+category: string | null, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
