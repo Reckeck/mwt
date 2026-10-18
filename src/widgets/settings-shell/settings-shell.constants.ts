@@ -73,6 +73,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
       { id: 'sync', titleKey: 'settingsShell.section.sync' },
       { id: 'sync-devices', titleKey: 'settingsShell.section.syncDevices' },
       { id: 'sync-history', titleKey: 'settingsShell.section.syncHistory' },
+      { id: 'sync-transfer', titleKey: 'settingsShell.section.syncTransfer' },
     ],
   },
   {

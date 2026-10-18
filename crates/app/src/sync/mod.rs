@@ -12,11 +12,15 @@
 pub mod background;
 mod discovery;
 pub mod firewall;
+pub mod handover;
 mod host;
 pub mod keystore;
 mod link;
 #[cfg(test)]
 mod tests;
+mod transfer;
+#[cfg(test)]
+mod transfer_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
@@ -158,6 +162,7 @@ pub fn on_unlock(app: &AppHandle) {
             vault.set_device(&device);
         }
     }
+    handover::trust_sender(app);
     restart(app);
 }
 

@@ -1884,6 +1884,79 @@ pub struct SyncNetworkView {
     pub last_error: Option<String>,
 }
 
+/// Where handing a vault to a new device stands (either side).
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferPhase {
+    #[default]
+    Idle,
+    /// Receiving: visible nearby, no request yet. Sending: waiting for the
+    /// other device to accept.
+    Waiting,
+    /// Receiving: a device asks to hand its vault over («Принять / Отклонить»).
+    Request,
+    /// Receiving: showing the code. Sending: asking for it.
+    Code,
+    Transferring,
+    Done,
+    Failed,
+}
+
+/// The receiving side (`transfer-receive` event, `transfer_receive_*`).
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TransferReceiveView {
+    pub phase: TransferPhase,
+    /// The name other devices see this one by.
+    pub device_name: String,
+    /// When this device stops being visible (ms since the epoch).
+    #[ts(type = "number | null")]
+    pub expires_ms: Option<i64>,
+    pub sender_name: Option<String>,
+    /// The six digits to type on the sending device.
+    pub code: Option<String>,
+    #[ts(type = "number")]
+    pub done_bytes: u64,
+    #[ts(type = "number")]
+    pub total_bytes: u64,
+    /// Where the received vault was saved (to open it).
+    pub saved_path: Option<String>,
+    /// `SYNC_*` code of what went wrong.
+    pub error: Option<String>,
+}
+
+/// The sending side (`transfer-send` event, `transfer_send*`).
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TransferSendView {
+    pub phase: TransferPhase,
+    /// The receiving device.
+    pub device_name: String,
+    /// Tries left for the code.
+    pub attempts_left: u32,
+    /// The last code typed was wrong.
+    pub wrong_code: bool,
+    #[ts(type = "number")]
+    pub done_bytes: u64,
+    #[ts(type = "number")]
+    pub total_bytes: u64,
+    pub error: Option<String>,
+}
+
+/// A device nearby waiting to receive a vault (`transfer-nearby` event).
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct TransferNearby {
+    pub id: String,
+    pub name: String,
+    /// `mobile` or `desktop`.
+    pub kind: String,
+}
+
+/// «Передать»: to whom, and the vault password typed again.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct TransferSendInput {
+    pub id: String,
+    pub password: String,
+}
+
 /// A trusted device as the settings list shows it.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SyncPeerView {

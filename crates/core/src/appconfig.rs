@@ -249,6 +249,20 @@ impl AppSettings {
         true
     }
 
+    /// Give this device a friendly name if it has none yet (an adjective and
+    /// a fruit, in Russian when `ru`); `true` = changed.
+    pub fn ensure_device_name(&mut self, ru: bool) -> bool {
+        if self
+            .device_name
+            .as_ref()
+            .is_some_and(|name| !name.trim().is_empty())
+        {
+            return false;
+        }
+        self.device_name = Some(crate::sync::alias::generate(ru, &mut rand::thread_rng()));
+        true
+    }
+
     /// Take over the device settings a vault used to keep, for each one not
     /// set here yet; `true` = something was taken. Settings already set here
     /// win: they belong to this device, the vault's copy to whoever saved last.

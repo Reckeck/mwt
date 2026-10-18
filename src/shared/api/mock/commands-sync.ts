@@ -132,7 +132,14 @@ export const syncCommands: MockCommands = {
     if (accept) {
       const now = new Date().toISOString()
       state.history = [
-        { id: `batch-${state.history.length + 1}`, peer_name: PHONE.name, applied_at: now, summary, undone_at: null },
+        {
+          id: `batch-${state.history.length + 1}`,
+          peer_name: PHONE.name,
+          applied_at: now,
+          summary,
+          undone_at: null,
+          transferred_to: null,
+        },
         ...state.history,
       ]
       state.peers = state.peers.map((peer) => ({ ...peer, last_synced_at: now }))

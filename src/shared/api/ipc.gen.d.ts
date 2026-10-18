@@ -167,7 +167,11 @@ display_decimals: number | null, };
 /**
  * A batch just applied, as the UI shows it.
  */
-type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary: SyncSummary, undone_at: string | null, };
+type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary: SyncSummary, undone_at: string | null, 
+/**
+ * Not a batch: the vault was handed to this device from here.
+ */
+transferred_to: string | null, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -1903,7 +1907,7 @@ type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list" |
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
  */
-type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax";
+type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "security";
 
 /**
  * One category's switches.
@@ -3273,6 +3277,67 @@ verbs: Array<TxKind>,
  * Specialised kinds (trades, DeFi, selling property).
  */
 special: Array<TxKind>, default: TxKind, };
+
+/**
+ * A device nearby waiting to receive a vault (`transfer-nearby` event).
+ */
+type TransferNearby = { id: string, name: string, 
+/**
+ * `mobile` or `desktop`.
+ */
+kind: string, };
+
+/**
+ * Where handing a vault to a new device stands (either side).
+ */
+type TransferPhase = "idle" | "waiting" | "request" | "code" | "transferring" | "done" | "failed";
+
+/**
+ * The receiving side (`transfer-receive` event, `transfer_receive_*`).
+ */
+type TransferReceiveView = { phase: TransferPhase, 
+/**
+ * The name other devices see this one by.
+ */
+device_name: string, 
+/**
+ * When this device stops being visible (ms since the epoch).
+ */
+expires_ms: number | null, sender_name: string | null, 
+/**
+ * The six digits to type on the sending device.
+ */
+code: string | null, done_bytes: number, total_bytes: number, 
+/**
+ * Where the received vault was saved (to open it).
+ */
+saved_path: string | null, 
+/**
+ * `SYNC_*` code of what went wrong.
+ */
+error: string | null, };
+
+/**
+ * «Передать»: to whom, and the vault password typed again.
+ */
+type TransferSendInput = { id: string, password: string, };
+
+/**
+ * The sending side (`transfer-send` event, `transfer_send*`).
+ */
+type TransferSendView = { phase: TransferPhase, 
+/**
+ * The receiving device.
+ */
+device_name: string, 
+/**
+ * Tries left for the code.
+ */
+attempts_left: number, 
+/**
+ * The last code typed was wrong.
+ */
+wrong_code: boolean, done_bytes: number, total_bytes: number, error: string | null, };
 
 /**
  * «Перевести»: one asset moves between two places, at least one of them mine.

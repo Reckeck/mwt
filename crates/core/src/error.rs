@@ -174,6 +174,14 @@ pub enum PeerSyncFailure {
     Rejected,
     /// The firewall could not be opened here (cancelled, or no supported one).
     Firewall,
+    /// Vault transfer: the code typed on the sending device is not the one shown.
+    BadCode,
+    /// Vault transfer: the receiving device declined, or the code was wrong too often.
+    TransferDeclined,
+    /// Vault transfer: the five minutes to receive ran out.
+    TransferExpired,
+    /// Vault transfer: what arrived is not a whole vault file.
+    NotAVault,
 }
 
 impl PeerSyncFailure {
@@ -186,6 +194,10 @@ impl PeerSyncFailure {
             Self::Revoked => "SYNC_REVOKED",
             Self::Rejected => "SYNC_REJECTED",
             Self::Firewall => "SYNC_FIREWALL",
+            Self::BadCode => "SYNC_BAD_CODE",
+            Self::TransferDeclined => "SYNC_TRANSFER_DECLINED",
+            Self::TransferExpired => "SYNC_TRANSFER_EXPIRED",
+            Self::NotAVault => "SYNC_NOT_A_VAULT",
         }
     }
 }

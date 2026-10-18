@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FolderPlus, Settings } from 'lucide-vue-next'
+import { FolderPlus, Settings, Smartphone } from 'lucide-vue-next'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
 import { RecentVaults } from '@/widgets/recent-vaults'
 import { VaultCreateDialog } from '@/features/vault-create'
+import { ReceiveVaultDialog } from '@/features/vault-transfer'
+import { VaultUnlockDialog } from '@/features/vault-unlock'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { useVaultStore } from '@/shared/store/vault'
@@ -15,6 +17,16 @@ const vault = useVaultStore()
 
 const settingsOpen = ref(false)
 const createOpen = ref(false)
+const receiveOpen = ref(false)
+// A vault that just arrived from another device opens right away.
+const receivedPath = ref<string | null>(null)
+const unlockOpen = ref(false)
+
+function onReceived(path: string) {
+  void vault.loadRecents().catch(() => {})
+  receivedPath.value = path
+  unlockOpen.value = true
+}
 </script>
 
 <template>
@@ -59,10 +71,27 @@ const createOpen = ref(false)
             {{ t('auth.createVaultButton') }}
           </Button>
         </Card>
+
+        <Card>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <Smartphone class="size-4 shrink-0 text-muted-foreground" />
+              <h2 class="text-base font-semibold">{{ t('transfer.receive.cardTitle') }}</h2>
+            </div>
+            <p class="text-sm text-muted-foreground">{{ t('transfer.receive.cardHint') }}</p>
+          </template>
+
+          <Button size="lg" variant="outline" class="w-full" @click="receiveOpen = true">
+            <Smartphone class="size-4" />
+            {{ t('transfer.receive.cardButton') }}
+          </Button>
+        </Card>
       </div>
     </div>
 
     <VaultCreateDialog v-model:open="createOpen" />
+    <ReceiveVaultDialog v-model:open="receiveOpen" @received="onReceived" />
+    <VaultUnlockDialog v-if="receivedPath" v-model:open="unlockOpen" :path="receivedPath" />
 
     <AppSettingsDialog v-model:open="settingsOpen" />
   </div>

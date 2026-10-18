@@ -163,7 +163,23 @@ pub struct SyncState {
     /// Newest last.
     #[serde(default)]
     pub batches: Vec<SyncBatch>,
+    /// Times this vault was handed to a new device from here, newest last.
+    #[serde(default)]
+    pub transfers: Vec<TransferRecord>,
 }
+
+/// The vault was handed to a new device from this one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransferRecord {
+    pub id: String,
+    pub device_id: String,
+    pub device_name: String,
+    /// RFC3339.
+    pub at: String,
+}
+
+/// Transfers kept in the history.
+pub const MAX_TRANSFERS: usize = 50;
 
 impl SyncState {
     /// The latest stamp anywhere, to start the clock after it.

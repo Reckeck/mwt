@@ -195,6 +195,12 @@ fn mac(key: &[u8], parts: &[&[u8]]) -> HmacSha256 {
 }
 
 impl Channel {
+    /// The handshake hash: unique to this connection, so anything bound to
+    /// it cannot be replayed on another one.
+    pub fn handshake_hash(&self) -> &[u8] {
+        &self.hash
+    }
+
     pub fn remote_hex(&self) -> String {
         hex(&self.remote_static)
     }

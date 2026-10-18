@@ -56,6 +56,7 @@ pub fn run() {
     builder
         .manage(AppState::new())
         .manage(sync::SyncHub::default())
+        .manage(sync::handover::Handover::default())
         .invoke_handler(tauri::generate_handler![
             // auth
             auth::vault_status,
@@ -296,6 +297,14 @@ pub fn run() {
             commands::sync::sync_undo,
             commands::sync::sync_restore_backup,
             commands::sync::sync_open_firewall,
+            commands::transfer::transfer_receive_start,
+            commands::transfer::transfer_receive_stop,
+            commands::transfer::transfer_receive_decide,
+            commands::transfer::transfer_browse_start,
+            commands::transfer::transfer_browse_stop,
+            commands::transfer::transfer_send,
+            commands::transfer::transfer_send_code,
+            commands::transfer::transfer_send_cancel,
         ])
         .setup(|app| {
             // Resolve the default vault location once (`platform_fs::vaults_dir`).

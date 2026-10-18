@@ -26,7 +26,7 @@
 | `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
 | `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий. v2: `Reminder.repeat` (каждые N дней/недель/месяцев/лет), `Reminder.source` (авто-напоминание и его источник), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (день месяца, `None` = конец месяца) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: показанные уведомления (ключ «источник + вхождение», чтобы не повторять после перезапуска), не больше 500 |
-| `sync` | `SyncState` | `serde(default)`: штампы изменений, tombstone'ы, доверенные устройства, пачки для отмены — синхронизация устройств (`docs/sync.md`); в TS не экспортируется, копия из JSON-редактора игнорируется |
+| `sync` | `SyncState` | `serde(default)`: штампы изменений, tombstone'ы, доверенные устройства, пачки для отмены, передачи хранилища на новые устройства (`transfers`) — синхронизация устройств (`docs/sync.md`); в TS не экспортируется, копия из JSON-редактора игнорируется |
 
 ### Settings — только vault-scoped
 

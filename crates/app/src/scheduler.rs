@@ -83,8 +83,22 @@ pub fn russian(app: &AppHandle) -> bool {
     match load_settings(&dir).locale {
         Locale::Ru => true,
         Locale::En => false,
-        Locale::Auto => std::env::var("LANG").is_ok_and(|lang| lang.starts_with("ru")),
+        Locale::Auto => system_language(app).starts_with("ru"),
     }
+}
+
+/// The system's language: Android has no `LANG`, the plugin asks the OS.
+#[cfg(target_os = "android")]
+fn system_language(app: &AppHandle) -> String {
+    crate::platform_net::language(app)
+}
+
+#[cfg(not(target_os = "android"))]
+fn system_language(_app: &AppHandle) -> String {
+    ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .find_map(|var| std::env::var(var).ok().filter(|value| !value.is_empty()))
+        .unwrap_or_default()
 }
 
 /// Show notices: each goes to the window as a `notification` event (the bell

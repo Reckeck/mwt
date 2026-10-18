@@ -18,6 +18,7 @@ pub mod settings;
 pub mod stores;
 pub mod sync;
 pub mod transactions;
+pub mod transfer;
 pub mod vault_link;
 pub mod vault_recents;
 pub mod workflows;

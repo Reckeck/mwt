@@ -21,6 +21,11 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'vaultTransfer',
+    date: '2026-10-19',
+    points: [{ key: 'how' }, { key: 'code' }, { key: 'trace' }, { key: 'names' }],
+  },
+  {
     id: 'reportsRework',
     date: '2026-10-18',
     points: [
