@@ -20,6 +20,7 @@
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
 | `mise run changelog` | обновить список коммитов в `## [Unreleased]` CHANGELOG.md (git-cliff) |
 | `mise run bump` | следующая версия (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) во все файлы + раздел CHANGELOG |
+| `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах») |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check` | lint + typecheck + onboarding + forms + ui + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
@@ -230,9 +231,8 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   и OS keyring есть только на десктопе: код — под `#[cfg(desktop)]` с
   заглушкой под `#[cfg(mobile)]`, плагины — в
   `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]`
-  `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI:
-  `cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings`
-  (нужен Android NDK и `rustup target add aarch64-linux-android`).
+  `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI —
+  `mise run check-platforms` (см. «Сборка на всех платформах»).
 - **Идентификаторы не меняются.** `dev.mwt.desktop` (десктоп; от него
   зависит путь к vault), `dev.mwt.app` (Android, `tauri.android.conf.json`),
   `dev.mwt.MultiWalletTracker` (Flatpak). Смена = потеря данных у пользователей или
@@ -274,7 +274,8 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `isolation: worktree` в Claude Code. Такую копию пользователь не может
   открыть и переключиться в неё, не видно, что в ней меняется, а её
   `biome.json` ломает `mise run check` в основной копии.
-- Закончил — `jjw-finish <slug>`: переносит change'ы в основную копию,
+- Закончил — `mise run check-platforms` в этой папке, затем
+  `jjw-finish <slug>`: переносит change'ы в основную копию,
   заново прогоняет гейт и удаляет папку. Копия не переживает свою задачу;
   `jjws` проверяет, что хвостов не осталось.
 - Коммиты внутри `../work-app-*` — обычными `jj describe` + `jj new`
@@ -289,6 +290,27 @@ mise run check        # biome check + vue-tsc --noEmit + clippy + cargo test --w
 
 Гейт зелёный → коммитим. Не зелёный → коммит запрещён, сначала чини.
 Никогда не «фиксим» падение теста удалением или ослаблением проверки.
+
+### Сборка на всех платформах
+
+После **последней** правки, перед влитием в основную копию (`jjw-finish`) и
+перед коммитом, проверь, что проект компилируется на всех платформах:
+
+```bash
+mise run check-platforms   # linux, windows (cargo-xwin), android (NDK или образ ci-android), macos
+```
+
+- Код под `#[cfg(...)]`, платформенные зависимости и `platform_fs` на хосте
+  не компилируются: `mise run check` их не видит, ошибка всплывёт только в
+  CI или у пользователя (так `unused import` под Android прошёл в
+  `fix(sync)` 2026-10-18).
+- Любая правка после проверки — проверь заново: считается только прогон на
+  финальном состоянии.
+- `FAIL` — влитие и коммит запрещены, как при красном гейте.
+- `SKIP` допустим только как ограничение системы (macOS на Linux без
+  `MACOS_BUILD_HOST`, нет cargo-xwin / NDK / podman). Не «чини» его
+  пропуском: назови пользователю пропущенную платформу и причину.
+- Полные бандлы — `mise run build:all`; для проверки компиляции он не нужен.
 
 Быстрее, когда правка заведомо локальная:
 
@@ -390,6 +412,8 @@ pnpm dlx skills list                             # что установлено
 
 - [ ] `cargo fmt` выполнен, диффа от автоформатирования нет
 - [ ] `mise run check` — зелёные (biome + vue-tsc + clippy + `cargo test --workspace`)
+- [ ] `mise run check-platforms` на финальном состоянии — без `FAIL`; каждый
+      `SKIP` назван пользователю с причиной
 - [ ] `mise run gen-types` — `src/shared/api/ipc.gen.d.ts` актуален (если менялись DTO)
 - [ ] Новые DTO в `ipc_contract.rs` покрыты ts-rs и командой в `crates/app`
 - [ ] Команда зарегистрирована в `generate_handler!` и в таблице `docs/ipc.md`

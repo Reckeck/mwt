@@ -184,6 +184,22 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
 
 ## Локально
 
+### Компиляция на всех платформах: `mise run check-platforms`
+
+Быстрая проверка без бандлов (минуты, а не час): `cargo clippy -D warnings`
+под linux, windows (`cargo xwin`, `x86_64-pc-windows-msvc`), android
+(`aarch64-linux-android` — NDK хоста, иначе образ `ci-android` через podman с
+теми же томами, что у `build:all`) и macos (только на Mac или через
+`MACOS_BUILD_HOST`). Обязательна после последней правки перед влитием и
+коммитом (AGENTS.md, «Сборка на всех платформах»). Логи —
+`.cache/check-platforms/<платформа>.log`; `SKIP` с причиной — машина
+платформу проверить не может, `FAIL` — код не собирается.
+
+```bash
+mise run check-platforms                    # всё
+mise run check-platforms -- windows android # выборочно
+```
+
 ### Все платформы: `mise run build:all`
 
 `scripts/local/build-all.sh` собирает бандлы тем же кодом, что CI
