@@ -51,7 +51,7 @@ function sourceLink(source: ReminderSource): RouteLocationRaw | null {
     case 'goal_deadline':
       return { name: 'planning-goals' }
     case 'debt':
-      return { name: 'directory-contacts' }
+      return { name: 'transactions-contacts' }
     case 'rent':
     case 'property_tax':
     case 'interest_tax':

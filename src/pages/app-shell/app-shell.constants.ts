@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { BookUser, CalendarCheck, ChartArea, LayoutDashboard, ScrollText, WalletCards, Workflow } from 'lucide-vue-next'
+import { CalendarCheck, ChartArea, LayoutDashboard, ScrollText, WalletCards, Workflow } from 'lucide-vue-next'
 
 export interface NavItem {
   /** Route the item opens. */
@@ -25,20 +25,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'stores', icon: WalletCards, key: 'nav.stores', prefix: '/stores' },
       { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
+      { name: 'analytics', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
     ],
   },
   {
     key: 'nav.group.plans',
     items: [
       { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
-      { name: 'analytics-cashflow', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
-    ],
-  },
-  {
-    key: 'nav.group.tools',
-    items: [
       { name: 'workflows', icon: Workflow, key: 'nav.workflows', prefix: '/workflows' },
-      { name: 'directory-contacts', icon: BookUser, key: 'nav.directory', prefix: '/directory' },
     ],
   },
 ]

@@ -4,6 +4,8 @@ import { computed } from 'vue'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
+import StoreNodeMultiSelect from './StoreNodeMultiSelect.vue'
+
 import type { StoreNodeSelectProps } from './store-node-select.types'
 
 /**
@@ -14,7 +16,9 @@ import type { StoreNodeSelectProps } from './store-node-select.types'
 const props = defineProps<StoreNodeSelectProps>()
 
 /** Selected store id; `''` is the empty option. */
-const storeId = defineModel<string>({ required: true })
+const storeId = defineModel<string>({ default: '' })
+/** With `multiple`: the picked ids, empty = the empty option. */
+const ids = defineModel<string[]>('ids', { default: () => [] })
 
 // Native <SelectItem> cannot hold markup: the path says where a node sits.
 const options = computed(() =>
@@ -26,7 +30,14 @@ const options = computed(() =>
 </script>
 
 <template>
-  <Select v-model="storeId" :invalid="props.invalid" :placeholder="props.placeholder">
+  <StoreNodeMultiSelect
+    v-if="props.multiple"
+    v-model="ids"
+    :options="options"
+    :empty-label="props.emptyLabel"
+    :placeholder="props.placeholder"
+  />
+  <Select v-else v-model="storeId" :invalid="props.invalid" :placeholder="props.placeholder">
     <SelectItem v-if="props.emptyLabel" value="">{{ props.emptyLabel }}</SelectItem>
     <SelectItem v-for="option in options" :key="option.id" :value="option.id">{{ option.label }}</SelectItem>
   </Select>

@@ -7,6 +7,8 @@ export interface StoreNodeSelectProps {
   placeholder?: string
   /** Offer exactly `nodes`, not their sub-accounts too (for a filtered list). */
   flat?: boolean
+  /** Several nodes at once (a filter), bound with `v-model:ids`; none picked = `emptyLabel`. */
+  multiple?: boolean
   /** Marks the field as wrong (red border), next to an error under it. */
   invalid?: boolean
 }

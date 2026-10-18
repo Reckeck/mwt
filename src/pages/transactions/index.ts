@@ -1,4 +1,4 @@
 export { default as Transactions } from './Transactions.vue'
 export { default as TransactionsCalendar } from './TransactionsCalendar.vue'
 export { default as TransactionsSection } from './TransactionsSection.vue'
-export { default as TransactionsGraph } from './TransactionsGraph.vue'
+export { default as TransactionsContacts } from './TransactionsContacts.vue'

@@ -51,11 +51,13 @@ export const router = createRouter({
               meta: { i18n: 'nav.transactions' },
             },
             // Losses live in Analytics now; old links and tours land there.
-            { path: 'losses', redirect: { name: 'analytics-losses' } },
+            { path: 'losses', redirect: { name: 'analytics-investments' } },
+            // The money graph was dropped (2026-10): old links open the list.
+            { path: 'graph', redirect: (to) => ({ name: 'transactions', query: to.query }) },
             {
-              path: 'graph',
-              name: 'transactions-graph',
-              component: () => import('@/pages/transactions').then((page) => page.TransactionsGraph),
+              path: 'contacts',
+              name: 'transactions-contacts',
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsContacts),
               meta: { i18n: 'nav.transactions' },
             },
             {
@@ -66,83 +68,55 @@ export const router = createRouter({
             },
           ],
         },
-        { path: 'charts', redirect: { name: 'analytics-portfolio' } },
+        { path: 'charts', redirect: { name: 'analytics-investments' } },
         {
           path: 'analytics',
           component: () => import('@/pages/analytics').then((page) => page.Analytics),
           children: [
-            { path: '', redirect: { name: 'analytics-cashflow' } },
             {
-              path: 'cashflow',
-              name: 'analytics-cashflow',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'cashflow' },
+              path: '',
+              name: 'analytics',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsOverview),
+              meta: { i18n: 'nav.analytics', group: 'overview' },
             },
             {
-              path: 'year',
-              name: 'analytics-year',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'year' },
+              path: 'flow',
+              name: 'analytics-flow',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsFlow),
+              meta: { i18n: 'nav.analytics', group: 'flow' },
             },
+            {
+              path: 'wealth',
+              name: 'analytics-wealth',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsWealth),
+              meta: { i18n: 'nav.analytics', group: 'wealth' },
+            },
+            {
+              path: 'investments',
+              name: 'analytics-investments',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsInvestments),
+              meta: { i18n: 'nav.analytics', group: 'investments' },
+            },
+            // The nine reports of before, folded into the sections; old links keep working.
+            { path: 'cashflow', redirect: (to) => ({ name: 'analytics-flow', query: to.query }) },
+            { path: 'year', redirect: (to) => ({ name: 'analytics-flow', query: { ...to.query, view: 'year' } }) },
             {
               path: 'categories',
-              name: 'analytics-categories',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'categories' },
+              redirect: (to) => ({ name: 'analytics-flow', query: { ...to.query, view: 'categories' } }),
             },
-            {
-              path: 'networth',
-              name: 'analytics-networth',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'networth' },
-            },
-            {
-              path: 'stores',
-              name: 'analytics-stores',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'stores' },
-            },
-            {
-              path: 'pnl',
-              name: 'analytics-pnl',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'pnl' },
-            },
-            {
-              path: 'losses',
-              name: 'analytics-losses',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'losses' },
-            },
-            {
-              path: 'portfolio',
-              name: 'analytics-portfolio',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'portfolio' },
-            },
-            {
-              path: 'inflation',
-              name: 'analytics-inflation',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsTab),
-              meta: { i18n: 'nav.analytics', report: 'inflation' },
-            },
+            { path: 'networth', redirect: (to) => ({ name: 'analytics-wealth', query: to.query }) },
+            { path: 'stores', redirect: (to) => ({ name: 'analytics-wealth', query: to.query }) },
+            { path: 'inflation', redirect: (to) => ({ name: 'analytics-wealth', query: { ...to.query, real: '1' } }) },
+            { path: 'pnl', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
+            { path: 'portfolio', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
+            { path: 'losses', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
           ],
         },
-        {
-          path: 'directory',
-          component: () => import('@/pages/directory').then((page) => page.Directory),
-          children: [
-            { path: '', redirect: { name: 'directory-contacts' } },
-            {
-              path: 'contacts',
-              name: 'directory-contacts',
-              component: () => import('@/pages/directory').then((page) => page.DirectoryContacts),
-              meta: { i18n: 'nav.directory' },
-            },
-            // Rates moved to Settings → Money; the contacts stay here with the window open over them.
-            { path: 'rates', redirect: { name: 'directory-contacts', query: { settings: 'rates' } } },
-          ],
-        },
+        // Contacts live under Transactions now; old links land there.
+        { path: 'directory', redirect: { name: 'transactions-contacts' } },
+        { path: 'directory/contacts', redirect: { name: 'transactions-contacts' } },
+        // Rates moved to Settings → Money; the contacts stay under the window open over them.
+        { path: 'directory/rates', redirect: { name: 'transactions-contacts', query: { settings: 'rates' } } },
         {
           path: 'planning',
           component: () => import('@/pages/planning').then((page) => page.Planning),
@@ -191,23 +165,15 @@ export const router = createRouter({
               meta: { i18n: 'nav.workflows' },
             },
             {
-              path: 'vars',
-              name: 'workflows-vars',
-              component: () => import('@/pages/workflows').then((page) => page.WorkflowsVars),
+              path: 'journal',
+              name: 'workflows-journal',
+              component: () => import('@/pages/workflows').then((page) => page.WorkflowsJournal),
               meta: { i18n: 'nav.workflows' },
             },
-            {
-              path: 'queue',
-              name: 'workflows-queue',
-              component: () => import('@/pages/workflows').then((page) => page.WorkflowsQueue),
-              meta: { i18n: 'nav.workflows' },
-            },
-            {
-              path: 'runs',
-              name: 'workflows-runs',
-              component: () => import('@/pages/workflows').then((page) => page.WorkflowsRuns),
-              meta: { i18n: 'nav.workflows' },
-            },
+            // The queue and the runs are one journal now; variables open as a panel.
+            { path: 'queue', redirect: { name: 'workflows-journal' } },
+            { path: 'runs', redirect: { name: 'workflows-journal' } },
+            { path: 'vars', redirect: { name: 'workflows', query: { vars: '1' } } },
           ],
         },
         {

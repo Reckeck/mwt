@@ -12,10 +12,12 @@ import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { activeLocale } from '@/shared/lib/locale'
 
+import { PERIOD_PRESETS, defaultRange, presetOf, presetRange } from './model/period-presets'
 import type { ReportFilterBarProps } from './report-filter.types'
 
-const props = defineProps<ReportFilterBarProps>()
+const props = withDefaults(defineProps<ReportFilterBarProps>(), { scoped: true, realTerms: false })
 const filter = defineModel<ReportFilter>({ required: true })
 const emit = defineEmits<{ reset: [] }>()
 
@@ -25,12 +27,12 @@ const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<Stor
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 /** Set filters among the folded ones: a currency, today's money. */
-const moreActive = computed(() => [filter.value.currency, filter.value.real_terms].filter(Boolean).length)
+const moreActive = computed(() => [filter.value.currency, props.realTerms && filter.value.real_terms].filter(Boolean).length)
 
-const storeId = computed({
-  get: () => filter.value.scope.store_ids[0] ?? '',
-  set: (id: string) => {
-    filter.value.scope = { store_ids: id ? [id] : [], include_children: true }
+const storeIds = computed({
+  get: () => filter.value.scope.store_ids,
+  set: (ids: string[]) => {
+    filter.value.scope = { store_ids: ids, include_children: true }
   },
 })
 /** Month pickers hold `''` for «not set»; the filter holds `null`. */
@@ -44,6 +46,19 @@ const monthField = (field: 'from' | 'to') =>
 const fromMonth = monthField('from')
 const toMonth = monthField('to')
 
+/** An empty picker shows the month the report really starts or ends with. */
+const monthText = (key: string) =>
+  new Intl.DateTimeFormat(activeLocale.value, { month: 'short', year: 'numeric' }).format(new Date(`${key}-01T12:00`))
+const defaults = computed(() => defaultRange())
+
+const preset = computed({
+  get: () => presetOf(filter.value.from, filter.value.to),
+  set: (value: string) => {
+    if (!value) return
+    Object.assign(filter.value, presetRange(value as (typeof PERIOD_PRESETS)[number]))
+  },
+})
+
 const year = computed({
   get: () => String(filter.value.year ?? new Date().getFullYear()),
   set: (value: string) => {
@@ -54,34 +69,66 @@ const years = computed(() => {
   const now = new Date().getFullYear()
   return Array.from({ length: 8 }, (_unused, index) => String(now - index))
 })
-/** Wallet scope means nothing for inflation and the year of the budget. */
-const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation')
 </script>
 
 <template>
   <FilterBar :active="props.active" :more-active="moreActive" @reset="emit('reset')">
-    <template v-if="props.kind === 'year'">
-      <div :class="FILTER_FIELD_CLASS">
-        <Label for="report-year">{{ t('report.filter.year') }}</Label>
-        <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
-          <SelectItem v-for="entry in years" :key="entry" :value="entry">{{ entry }}</SelectItem>
-        </Select>
-      </div>
-    </template>
+    <div v-if="props.period === 'year'" :class="FILTER_FIELD_CLASS">
+      <Label for="report-year">{{ t('report.filter.year') }}</Label>
+      <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
+        <SelectItem v-for="entry in years" :key="entry" :value="entry">{{ entry }}</SelectItem>
+      </Select>
+    </div>
+    <div v-else-if="props.period === 'month'" :class="FILTER_FIELD_CLASS">
+      <Label for="report-month">{{ t('report.filter.month') }}</Label>
+      <DateTimePicker
+        id="report-month"
+        v-model="toMonth"
+        mode="month"
+        :placeholder="monthText(defaults.to)"
+        class="w-full @3xl:w-40"
+      />
+    </div>
     <template v-else>
       <div :class="FILTER_FIELD_CLASS">
+        <Label for="report-preset">{{ t('report.filter.period') }}</Label>
+        <Select id="report-preset" v-model="preset" :placeholder="t('report.preset.custom')" class="w-full @3xl:w-44">
+          <SelectItem v-for="entry in PERIOD_PRESETS" :key="entry" :value="entry">{{ t(`report.preset.${entry}`) }}</SelectItem>
+        </Select>
+      </div>
+      <div :class="FILTER_FIELD_CLASS">
         <Label for="report-from">{{ t('report.filter.from') }}</Label>
-        <DateTimePicker id="report-from" v-model="fromMonth" mode="month" class="w-full @3xl:w-40" />
+        <DateTimePicker
+          id="report-from"
+          v-model="fromMonth"
+          mode="month"
+          :placeholder="monthText(defaults.from)"
+          class="w-full @3xl:w-40"
+        />
       </div>
       <div :class="FILTER_FIELD_CLASS">
         <Label for="report-to">{{ t('report.filter.to') }}</Label>
-        <DateTimePicker id="report-to" v-model="toMonth" mode="month" class="w-full @3xl:w-40" />
+        <DateTimePicker
+          id="report-to"
+          v-model="toMonth"
+          mode="month"
+          :placeholder="monthText(defaults.to)"
+          class="w-full @3xl:w-40"
+        />
       </div>
     </template>
-    <div v-if="scoped" :class="FILTER_FIELD_CLASS">
+    <div v-if="props.scoped" :class="FILTER_FIELD_CLASS">
       <Label for="report-scope">{{ t('report.filter.scope') }}</Label>
-      <StoreNodeSelect id="report-scope" v-model="storeId" :nodes="nodes" :empty-label="t('report.filter.allWallets')" class="w-full @3xl:w-56" />
+      <StoreNodeSelect
+        id="report-scope"
+        v-model:ids="storeIds"
+        multiple
+        :nodes="nodes"
+        :empty-label="t('report.filter.allWallets')"
+        class="w-full @3xl:w-56"
+      />
     </div>
+    <p v-else class="self-end pb-2 text-xs text-muted-foreground">{{ t('report.filter.notScoped') }}</p>
     <!-- Rarely changed: folded under «Ещё фильтры». -->
     <template #more>
       <div class="grid gap-1.5">
@@ -96,7 +143,7 @@ const scoped = computed(() => props.kind !== 'year' && props.kind !== 'inflation
           />
         </div>
       </div>
-      <label v-if="props.kind !== 'inflation'" for="report-real-terms" class="flex items-center gap-2 text-sm">
+      <label v-if="props.realTerms" for="report-real-terms" class="flex items-center gap-2 text-sm">
         <Checkbox id="report-real-terms" v-model="filter.real_terms" />
         {{ t('report.filter.realTerms') }}
       </label>

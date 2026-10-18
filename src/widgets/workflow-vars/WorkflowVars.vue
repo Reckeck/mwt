@@ -47,7 +47,7 @@ const empty = computed(() => vars.isSuccess.value && !(vars.data.value ?? []).le
 </script>
 
 <template>
-  <div class="grid gap-4" data-tour="workflow-vars">
+  <div class="grid gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="max-w-2xl text-sm text-muted-foreground">{{ t('workflow.vars.intro') }}</p>
       <Button @click="open(null)">

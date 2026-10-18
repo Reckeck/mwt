@@ -1,4 +1,5 @@
 export interface ReportExportButtonProps {
-  kind: ReportKind
+  /** The reports on screen: one exports at once, several open a menu. */
+  kinds: ReportKind[]
   filter: ReportFilter
 }

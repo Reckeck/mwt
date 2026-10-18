@@ -1,2 +1,5 @@
 export { default as Analytics } from './Analytics.vue'
-export { default as AnalyticsTab } from './AnalyticsTab.vue'
+export { default as AnalyticsFlow } from './AnalyticsFlow.vue'
+export { default as AnalyticsInvestments } from './AnalyticsInvestments.vue'
+export { default as AnalyticsOverview } from './AnalyticsOverview.vue'
+export { default as AnalyticsWealth } from './AnalyticsWealth.vue'

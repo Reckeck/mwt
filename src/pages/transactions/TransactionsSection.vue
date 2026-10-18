@@ -12,8 +12,8 @@ const router = useRouter()
 /** Each tab is a child route, so a tab has its own address. */
 const tabs = computed(() => [
   { value: 'transactions', label: t('transactions.tab.list') },
-  { value: 'transactions-graph', label: t('transactions.tab.graph') },
   { value: 'transactions-calendar', label: t('transactions.tab.calendar') },
+  { value: 'transactions-contacts', label: t('transactions.tab.contacts') },
 ])
 const tab = computed({
   get: () => String(route.name ?? 'transactions'),

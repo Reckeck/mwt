@@ -2,13 +2,14 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { ArrowRightLeft } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
+import { ArrowRightLeft, ScrollText } from 'lucide-vue-next'
 
 import { ContactArchive, ContactEditor } from '@/features/contact-edit'
 import { DebtPanel } from '@/features/debt-manage'
 import { ContactTurnoverTable } from '@/entities/contact'
 import { TransactionsList } from '@/entities/transaction'
-import { Button } from '@/shared/ui/button'
+import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { Tabs } from '@/shared/ui/tabs'
@@ -46,7 +47,15 @@ const detailTabs = computed(() => [
   <div class="grid gap-4">
     <Card :class="props.contact.archived && 'opacity-70'">
       <template #header>
-        <div class="flex items-center justify-end gap-1">
+        <div class="flex flex-wrap items-center justify-end gap-1">
+          <RouterLink
+            :to="{ name: 'transactions', query: { contact: props.contact.id } }"
+            :class="buttonVariants({ variant: 'ghost', size: 'sm' })"
+            data-tour="contact-transactions"
+          >
+            <ScrollText class="size-4" />
+            {{ t('contacts.openTransactions') }}
+          </RouterLink>
           <Button
             variant="outline"
             size="sm"
