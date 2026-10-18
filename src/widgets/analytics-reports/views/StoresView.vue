@@ -49,5 +49,8 @@ const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as c
         </TableBody>
       </Table>
     </div>
+    <p class="mt-3 text-xs text-muted-foreground">
+      {{ t('report.currencyNote', { currency: props.report.meta.currency.toUpperCase() }) }}
+    </p>
   </Card>
 </template>

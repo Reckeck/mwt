@@ -13,7 +13,7 @@ const empty = (): ReportFilter => ({
 })
 
 /**
- * One filter for every report tab, kept in the address (`?from=2026-01&store=…`)
+ * One filter for every report tab, kept in the address (`?from=2026-01&store=a,b`)
  * so switching tabs, Back and a reload keep the period and wallets.
  */
 export function useReportFilter() {
@@ -22,8 +22,8 @@ export function useReportFilter() {
   const one = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : null)
 
   const filter = reactive<ReportFilter>(empty())
-  const store = one('store')
-  if (store) filter.scope = { store_ids: [store], include_children: true }
+  const stores = one('store')
+  if (stores) filter.scope = { store_ids: stores.split(',').filter(Boolean), include_children: true }
   filter.from = one('from')
   filter.to = one('to')
   filter.year = Number(one('year')) || null
@@ -36,7 +36,7 @@ export function useReportFilter() {
       const query: Record<string, unknown> = { ...route.query }
       for (const key of KEYS) delete query[key]
       const next: Record<string, string | null> = {
-        store: value.scope.store_ids[0] ?? null,
+        store: value.scope.store_ids.join(',') || null,
         from: value.from,
         to: value.to,
         year: value.year ? String(value.year) : null,

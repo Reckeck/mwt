@@ -1,6 +1,12 @@
+/** What period the report asks for: a range of months, a year, or one month. */
+export type ReportPeriod = 'range' | 'year' | 'month'
+
 export interface ReportFilterBarProps {
-  /** The report the filter is for: the year report asks for a year, not a range. */
-  kind: ReportKind
+  period: ReportPeriod
+  /** The wallet filter applies; the year report and inflation ignore it. */
+  scoped?: boolean
+  /** Offer «in today's money» under «Ещё фильтры». */
+  realTerms?: boolean
   /** How many filters narrow the reports: «Сбросить (N)» shows when any. */
   active?: number
 }

@@ -5,12 +5,16 @@ export interface TourStep {
   side?: 'top' | 'right' | 'bottom' | 'left'
 }
 
-/** The tabs, filter and content every analytics report shares; the last step says what the report is. */
-function analytics(report: string): TourStep[] {
+/**
+ * Every analytics section: its tabs and filter, its own steps, the facts in
+ * words and the export. A step whose element is not on screen is skipped.
+ */
+function analytics(own: TourStep[]): TourStep[] {
   return [
     { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
     { target: 'report-filter', key: 'analytics.filter', side: 'bottom' },
-    { target: 'section-content', key: `analytics.${report}`, side: 'top' },
+    ...own,
+    { target: 'report-insights', key: 'analytics.insights', side: 'bottom' },
     { target: 'report-export', key: 'analytics.export', side: 'left' },
   ]
 }
@@ -54,13 +58,13 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
     { target: 'workflow-new', key: 'workflows.new', side: 'left' },
     { target: 'workflow-card', key: 'workflows.card', side: 'top' },
+    { target: 'workflow-vars-open', key: 'workflows.vars', side: 'left' },
   ]),
-  'workflows-vars': workflows([{ target: 'workflow-vars', key: 'workflows.vars', side: 'top' }]),
-  'workflows-queue': workflows([
-    { target: 'workflow-queue', key: 'workflows.queue', side: 'top' },
+  'workflows-journal': workflows([
     { target: 'workflow-questions', key: 'workflows.questions', side: 'top' },
+    { target: 'workflow-queue', key: 'workflows.queue', side: 'top' },
+    { target: 'workflow-runs', key: 'workflows.runs', side: 'top' },
   ]),
-  'workflows-runs': workflows([{ target: 'workflow-runs', key: 'workflows.runs', side: 'top' }]),
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
@@ -102,28 +106,27 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'tx-filter', key: 'transactions.filter', side: 'bottom' },
     { target: 'section-content', key: 'transactions.list', side: 'top' },
   ],
-  'transactions-graph': [
-    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
-    { target: 'section-content', key: 'transactionsGraph.content', side: 'top' },
-  ],
   'transactions-calendar': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'section-content', key: 'transactionsCalendar.content', side: 'top' },
   ],
-  'analytics-cashflow': analytics('cashflow'),
-  'analytics-year': analytics('year'),
-  'analytics-categories': analytics('categories'),
-  'analytics-networth': analytics('networth'),
-  'analytics-stores': analytics('stores'),
-  'analytics-pnl': analytics('pnl'),
-  'analytics-losses': analytics('losses'),
-  'analytics-portfolio': analytics('portfolio'),
-  'analytics-inflation': analytics('inflation'),
-  'directory-contacts': [
+  analytics: analytics([{ target: 'overview-cards', key: 'analytics.overview', side: 'top' }]),
+  'analytics-flow': analytics([
+    { target: 'report-view', key: 'analytics.flowView', side: 'bottom' },
+    { target: 'section-content', key: 'analytics.flow', side: 'top' },
+  ]),
+  'analytics-wealth': analytics([
+    { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
+    { target: 'section-content', key: 'analytics.wealth', side: 'top' },
+  ]),
+  'analytics-investments': analytics([{ target: 'section-content', key: 'analytics.investments', side: 'top' }]),
+  'transactions-contacts': [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'contact-quick-create', key: 'directory.create', side: 'right' },
     { target: 'contact-groups', key: 'directory.groups', side: 'right' },
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
+    { target: 'contact-transactions', key: 'directory.transactions', side: 'bottom' },
   ],
   'planning-automations': planning([
     { target: 'section-content', key: 'planningAutomations.content', side: 'top' },

@@ -7,7 +7,10 @@ import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
+
+import { monthLabel } from '../use-report'
 
 import { categoryChart, num } from './chart'
 
@@ -22,7 +25,19 @@ const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
 const currency = computed(() => props.report.meta.currency)
 const moneyTooltip = useMoneyChartTooltip(currency)
-const labels = computed(() => props.report.points.map((point) => formatDate(point.date)))
+/** Monthly samples read as months, like the other reports; weekly ones keep the date. */
+const monthly = computed(() => {
+  const [first, second] = props.report.points
+  return Boolean(first && second) && Date.parse(second.date) - Date.parse(first.date) > 20 * 86_400_000
+})
+const labels = computed(() =>
+  props.report.points.map((point) => (monthly.value ? monthLabel(point.date.slice(0, 7), activeLocale.value) : formatDate(point.date))),
+)
+/** Shares over time say nothing with a single asset. */
+const severalAssets = computed(() => {
+  const last = props.report.points.at(-1)
+  return (last?.values.filter((value) => num(value) > 0).length ?? 0) > 1
+})
 const assetName = (symbol: string) => symbol || t('report.portfolio.other')
 
 /** The portfolio's value over the period. */
@@ -40,7 +55,6 @@ const valueOption = computed<ChartOption>(() => {
         name: t('store.total'),
         type: 'line' as const,
         showSymbol: false,
-        smooth: true,
         areaStyle: { opacity: 0.15 },
         data: props.report.points.map((point) => num(point.total)),
       },
@@ -101,13 +115,13 @@ const allocationOption = computed<ChartOption>(() => {
       </template>
       <div class="h-72 w-full"><Chart :option="valueOption" autoresize /></div>
     </Card>
-    <Card>
+    <Card v-if="severalAssets">
       <template #header>
         <h3 class="heading-card">{{ t('report.portfolio.title') }}</h3>
       </template>
       <div class="h-80 w-full"><Chart :option="shareOption" autoresize /></div>
     </Card>
-    <Card>
+    <Card :class="!severalAssets && '@lg:col-span-2'">
       <template #header>
         <h3 class="heading-card">{{ t('charts.distribution') }}</h3>
       </template>

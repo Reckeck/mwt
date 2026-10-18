@@ -13,7 +13,7 @@ import { useContactActions } from './model/use-contact-actions'
 import { ContactDetails } from './ui/contact-details'
 import { ContactList } from './ui/contact-list'
 
-/** Contacts: the list on the left, the picked contact on the right. */
+/** Contacts and debts: the list on the left, the picked contact on the right. */
 const { t } = useI18n()
 
 const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })

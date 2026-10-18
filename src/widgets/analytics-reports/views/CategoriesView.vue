@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { RouterLink } from 'vue-router'
 
+import { ReportTerm } from '@/entities/report'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
@@ -9,14 +12,32 @@ import { formatMoney, formatPct, signClass } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
+import { transactionsOf } from '../lib/drill-down'
 import { monthLabel } from '../use-report'
 
-const props = defineProps<{ report: CategoriesReport }>()
+const props = defineProps<{ report: CategoriesReport; filter: ReportFilter }>()
 
 const { t } = useI18n()
 const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
 const label = (key: string) => (key ? categoryKeyLabel(key, categories.data.value, t) : t('report.categories.none'))
 const money = (value: string) => formatMoney(value, { decimals: 0 })
+const months = computed(() => props.report.meta.months)
+/** The category's transactions over the whole period, or over one month. */
+const ofCategory = (key: string, month?: string) =>
+  transactionsOf(
+    month ? { from: month, category: key } : { from: months.value[0], to: months.value.at(-1), category: key },
+    props.filter,
+  )
+
+const delta = (value: string | null) => (value === null ? '—' : formatPct(value, { signed: true, decimals: 0 }))
+
+/** All spending of the period: the top five's shares are of this. */
+const spending = computed(() =>
+  props.report.groups
+    .filter((block) => block.group === 'fixed' || block.group === 'daily')
+    .reduce((sum, block) => sum + Number(block.total), 0),
+)
+const shareOf = (value: string) => (spending.value > 0 ? (Number(value) / spending.value) * 100 : 0)
 
 /** Cell shade by its share of the group's biggest cell — a heat map without a chart. */
 function heat(block: CategoryGroupBlock, value: string): string {
@@ -32,19 +53,22 @@ function heat(block: CategoryGroupBlock, value: string): string {
       <template #header>
         <p class="font-medium">{{ t('report.categories.top') }}</p>
       </template>
-      <ol class="grid gap-1.5 text-sm">
-        <li v-for="(row, index) in props.report.top" :key="row.key" class="flex items-center gap-3">
-          <span class="w-4 text-muted-foreground">{{ index + 1 }}</span>
-          <span class="min-w-0 flex-1 truncate">{{ label(row.key) }}</span>
-          <span class="tabular-nums">{{ money(row.total) }}</span>
-          <span
-            v-if="row.delta_pct !== null"
-            class="w-16 text-right text-xs tabular-nums"
-            :class="signClass(-Number(row.delta_pct))"
-          >
-            {{ formatPct(row.delta_pct, { signed: true, decimals: 1 }) }}
-          </span>
-          <span v-else class="w-16" />
+      <ol class="grid gap-2.5 text-sm">
+        <li v-for="(row, index) in props.report.top" :key="row.key" class="grid gap-1">
+          <div class="flex items-center gap-3">
+            <span class="w-4 text-muted-foreground">{{ index + 1 }}</span>
+            <RouterLink :to="ofCategory(row.key)" class="min-w-0 flex-1 truncate hover:underline">{{ label(row.key) }}</RouterLink>
+            <span class="tabular-nums">{{ money(row.total) }}</span>
+            <span class="w-12 text-right text-xs tabular-nums text-muted-foreground">
+              {{ formatPct(shareOf(row.total), { decimals: 0 }) }}
+            </span>
+            <span class="w-14 text-right text-xs tabular-nums" :class="row.delta_pct !== null && signClass(-Number(row.delta_pct))">
+              {{ delta(row.delta_pct) }}
+            </span>
+          </div>
+          <div class="ml-7 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div class="h-full rounded-full bg-primary" :style="{ width: `${shareOf(row.total)}%` }" />
+          </div>
         </li>
       </ol>
     </Card>
@@ -61,41 +85,63 @@ function heat(block: CategoryGroupBlock, value: string): string {
           <TableHeader>
             <TableRow class="hover:bg-transparent">
               <TableHead class="text-left">{{ t('report.categories.category') }}</TableHead>
+              <TableHead class="text-right">
+                <ReportTerm :label="t('report.categories.delta')" :hint="t('report.term.delta')" />
+              </TableHead>
               <TableHead v-for="month in props.report.meta.months" :key="month" class="text-right capitalize">
                 {{ monthLabel(month, activeLocale) }}
               </TableHead>
               <TableHead class="text-right">{{ t('report.total') }}</TableHead>
-              <TableHead class="text-right">{{ t('report.categories.average') }}</TableHead>
+              <TableHead class="text-right">
+                <ReportTerm :label="t('report.categories.average')" :hint="t('report.term.average')" />
+              </TableHead>
               <TableHead class="text-right">{{ t('report.categories.share') }}</TableHead>
-              <TableHead class="text-right">Δ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="row in block.rows" :key="row.key">
-              <TableCell class="max-w-48 truncate">{{ label(row.key) }}</TableCell>
+              <TableCell class="max-w-48 truncate">
+                <RouterLink :to="ofCategory(row.key)" class="hover:underline">{{ label(row.key) }}</RouterLink>
+              </TableCell>
+              <TableCell class="text-right text-xs" :class="row.delta_pct !== null && signClass(-Number(row.delta_pct))">
+                {{ delta(row.delta_pct) }}
+              </TableCell>
               <TableCell
                 v-for="(cell, index) in row.cells"
                 :key="index"
                 class="text-right"
+                :class="!Number(cell) && 'text-muted-foreground'"
                 :style="{ background: heat(block, cell) }"
               >
-                {{ Number(cell) ? money(cell) : '' }}
+                <RouterLink v-if="Number(cell)" :to="ofCategory(row.key, months[index])" class="hover:underline">
+                  {{ money(cell) }}
+                </RouterLink>
+                <template v-else>—</template>
               </TableCell>
               <TableCell class="text-right font-medium">{{ money(row.total) }}</TableCell>
               <TableCell class="text-right">{{ money(row.average) }}</TableCell>
-              <TableCell class="text-right">{{ row.share }}%</TableCell>
-              <TableCell class="text-right text-xs">{{ row.delta_pct === null ? '—' : `${row.delta_pct}%` }}</TableCell>
+              <TableCell class="text-right">{{ formatPct(row.share, { decimals: 0 }) }}</TableCell>
             </TableRow>
             <TableRow class="font-medium">
               <TableCell>{{ t('report.total') }}</TableCell>
-              <TableCell v-for="(cell, index) in block.totals" :key="index" class="text-right">{{ money(cell) }}</TableCell>
+              <TableCell />
+              <TableCell
+                v-for="(cell, index) in block.totals"
+                :key="index"
+                class="text-right"
+                :class="!Number(cell) && 'text-muted-foreground'"
+              >
+                {{ Number(cell) ? money(cell) : '—' }}
+              </TableCell>
               <TableCell class="text-right">{{ money(block.total) }}</TableCell>
-              <TableCell colspan="3" />
+              <TableCell colspan="2" />
             </TableRow>
           </TableBody>
         </Table>
       </div>
     </Card>
-    <p v-if="!props.report.groups.length" class="py-12 text-center text-sm text-muted-foreground">{{ t('report.empty') }}</p>
+    <p class="text-xs text-muted-foreground">
+      {{ t('report.currencyNote', { currency: props.report.meta.currency.toUpperCase() }) }}
+    </p>
   </div>
 </template>

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { watchDebounced } from '@vueuse/core'
 import { Link2, X } from 'lucide-vue-next'
 
+import { CategorySelect } from '@/features/category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
@@ -70,6 +71,14 @@ const contactId = nullable('contact_id')
 const from = nullable('from')
 const to = nullable('to')
 
+const category = computed({
+  get: () => filter.value.category ?? '',
+  set: (value: string | string[]) => {
+    const key = Array.isArray(value) ? (value[0] ?? '') : value
+    filter.value = { ...filter.value, category: key || null }
+  },
+})
+
 const hideInternal = computed({
   get: () => filter.value.hide_internal,
   set: (value: boolean) => {
@@ -96,7 +105,10 @@ watch(
 const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && storeId.value ? 1 : 0))
 /** Set filters among the folded ones. */
 const moreActive = computed(
-  () => [filter.value.contact_id, filter.value.from || filter.value.to, filter.value.hide_internal].filter(Boolean).length,
+  () =>
+    [filter.value.contact_id, filter.value.from || filter.value.to, filter.value.hide_internal, filter.value.category !== null].filter(
+      Boolean,
+    ).length,
 )
 function reset() {
   const kept = props.fixedScope ? { scope: filter.value.scope } : {}
@@ -145,6 +157,16 @@ function reset() {
           <SelectItem value="">{{ t('filter.anyContact') }}</SelectItem>
           <SelectItem v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</SelectItem>
         </Select>
+      </div>
+      <div class="grid gap-1.5">
+        <Label :for="field('category')">{{ t('filter.category') }}</Label>
+        <CategorySelect
+          :id="field('category')"
+          v-model="category"
+          :groups="['daily', 'fixed', 'income', 'savings']"
+          :placeholder="t('filter.anyCategory')"
+          no-create
+        />
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div class="grid min-w-0 gap-1.5">

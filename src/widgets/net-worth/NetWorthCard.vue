@@ -56,7 +56,7 @@ const option = computed<ChartOption>(() => ({
   <Card size="sm" v-if="worth.data.value">
     <template #header>
       <div class="flex items-center justify-between gap-2">
-        <RouterLink data-widget-title :to="{ name: 'analytics-networth' }" class="text-sm text-muted-foreground hover:text-foreground">
+        <RouterLink data-widget-title :to="{ name: 'analytics-wealth' }" class="text-sm text-muted-foreground hover:text-foreground">
           {{ t('netWorthCard.title') }}
         </RouterLink>
         <span class="font-semibold tabular-nums">
