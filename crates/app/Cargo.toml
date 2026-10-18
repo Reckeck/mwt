@@ -42,6 +42,7 @@ chacha20poly1305.workspace = true
 rand.workspace = true
 # Device-to-device vault sync on the local network (src/sync).
 mdns-sd.workspace = true
+if-addrs = "0.15"
 rmp-serde.workspace = true
 
 # Android-only: document pickers with a grant that survives a restart

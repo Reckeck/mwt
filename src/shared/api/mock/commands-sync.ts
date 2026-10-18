@@ -41,6 +41,8 @@ const state = {
   phase: null as SyncPhase | null,
   peers: [] as SyncPeerView[],
   history: [] as AppliedBatch[],
+  since: Date.now(),
+  firewallOpen: false,
 }
 
 function session(): SyncSessionView[] {
@@ -73,6 +75,21 @@ function status(): SyncStatus {
     key_storage: prefs.enabled ? 'system' : '',
     sessions: session(),
     has_backup: state.history.length > 0,
+    background_supported: false,
+    background_lock_min: prefs.background_lock_min ?? 30,
+    network: {
+      port: prefs.enabled ? 53318 : null,
+      address: prefs.enabled ? '192.168.1.174' : null,
+      seen: state.phase ? 1 : 0,
+      since_ms: prefs.enabled ? state.since : null,
+      // Shown until «Открыть порт», as if the phone could not get in.
+      inbound_blocked: prefs.enabled && !state.firewallOpen,
+      firewall_fix: 'auto',
+      firewall_commands: [
+        "sudo ufw allow from 192.168.1.0/24 to any port 53318 proto tcp comment 'Multi Wallet Tracker sync'",
+      ],
+      last_error: null,
+    },
   }
 }
 
@@ -84,6 +101,9 @@ export const syncCommands: MockCommands = {
     if (input.enabled !== null && input.enabled !== undefined) prefs.enabled = input.enabled
     if (input.confirm_first !== null && input.confirm_first !== undefined) prefs.confirm_first = input.confirm_first
     if (input.prefer_main !== null && input.prefer_main !== undefined) prefs.prefer_main = input.prefer_main
+    if (input.background_lock_min !== null && input.background_lock_min !== undefined)
+      prefs.background_lock_min = input.background_lock_min
+    if (input.enabled) state.since = Date.now()
     if (input.device_name !== null && input.device_name !== undefined)
       mockAppSettings.device_name = input.device_name.trim() || null
     // The scripted phone shows up once sync is on and it is not paired yet.
@@ -134,4 +154,8 @@ export const syncCommands: MockCommands = {
     return resolve<UndoReport>({ restored: 3, skipped: ['Аренда'] })
   },
   sync_restore_backup: () => resolve(null),
+  sync_open_firewall: () => {
+    state.firewallOpen = true
+    return resolve(status())
+  },
 }

@@ -129,6 +129,20 @@ pub struct SyncPrefs {
     /// Take the main role whenever this device is around.
     #[serde(default)]
     pub prefer_main: bool,
+    /// Android: minutes in the background without a sync before the vault
+    /// locks itself and background sync stops; `0` = never, `None` = default.
+    #[serde(default)]
+    pub background_lock_min: Option<u32>,
+}
+
+/// Default of [`SyncPrefs::background_lock_min`].
+pub const DEFAULT_BACKGROUND_LOCK_MIN: u32 = 30;
+
+impl SyncPrefs {
+    pub fn background_lock_min(&self) -> u32 {
+        self.background_lock_min
+            .unwrap_or(DEFAULT_BACKGROUND_LOCK_MIN)
+    }
 }
 
 /// Defaults of the device settings that used to live in the vault.
@@ -700,6 +714,7 @@ mod tests {
                 enabled: true,
                 confirm_first: true,
                 prefer_main: false,
+                background_lock_min: Some(15),
             },
             minimize_to_tray: Some(false),
             fx_refresh_interval_sec: Some(900),

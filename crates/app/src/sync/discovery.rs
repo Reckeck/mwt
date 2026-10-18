@@ -4,10 +4,12 @@
 //! Each device listens on an ephemeral TCP port and announces it over mDNS
 //! with only a daily tag of its vault (`session::discovery_tag`) and whether
 //! it is the main device. Without a main device in sight for a few seconds a
-//! device becomes main; the others connect to it.
+//! device becomes main; the others connect to it. A device whose firewall
+//! drops incoming connections can still be main: it calls back the devices
+//! it sees but has no link with.
 
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tauri::AppHandle;
@@ -20,9 +22,44 @@ use trade_core::sync::stamp::now_ms;
 use super::{Order, Run, hub};
 
 pub const SERVICE: &str = "_mwt-sync._tcp.local.";
+/// The port sync listens on, so a firewall rule can name it; a random one
+/// when it is taken (another copy of the app on this computer).
+pub const SYNC_PORT: u16 = 53318;
 /// How long a device looks for a main device before becoming one.
 const ELECTION_WAIT: Duration = Duration::from_secs(3);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long the main device waits for a device it sees to connect before it
+/// calls that device itself, and how often it looks.
+const CALLBACK_AFTER: Duration = Duration::from_secs(6);
+const CALLBACK_EVERY: Duration = Duration::from_secs(5);
+const CALLBACK_RETRY: Duration = Duration::from_secs(30);
+/// Failed connections to a main device before it is taken for gone.
+const MAX_DIAL_FAILURES: u32 = 3;
+
+/// A device of the group that is not the main one, as discovery saw it.
+pub(crate) struct Seen {
+    addrs: Vec<SocketAddr>,
+    next_call: Instant,
+}
+
+/// This device's address on the local network: the one multicast leaves from.
+pub(crate) fn local_address() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind(("0.0.0.0", 0)).ok()?;
+    socket.connect(("224.0.0.251", 5353)).ok()?;
+    let ip = socket.local_addr().ok()?.ip();
+    (!ip.is_unspecified() && !ip.is_loopback()).then_some(ip)
+}
+
+/// [`SYNC_PORT`], waiting a moment for a previous run to let go of it.
+async fn listen() -> Result<TcpListener> {
+    for _ in 0..10 {
+        if let Ok(listener) = TcpListener::bind(("0.0.0.0", SYNC_PORT)).await {
+            return Ok(listener);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Ok(TcpListener::bind(("0.0.0.0", 0)).await?)
+}
 
 /// The mDNS announcement of this device.
 pub(crate) struct Announcer {
@@ -74,7 +111,7 @@ fn current(app: &AppHandle, generation: u64) -> bool {
 }
 
 pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> Result<()> {
-    let listener = TcpListener::bind(("0.0.0.0", 0)).await?;
+    let listener = listen().await?;
     let port = listener.local_addr()?.port();
     let tag = discovery_tag(vault_id, day_of(now_ms()));
     let instance = random_instance();
@@ -103,6 +140,11 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
             tag: tag.clone(),
             instance: instance.clone(),
             mains: Default::default(),
+            others: Default::default(),
+            unreached: false,
+            dial_failures: 0,
+            port,
+            started_ms: i64::try_from(now_ms()).unwrap_or(i64::MAX),
             rank: 0,
             next_rank: 0,
             backup_done: false,
@@ -173,9 +215,31 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
                             && let Some(run) = hub(&app).run.as_mut()
                         {
                             run.mains.remove(&other);
+                            run.others.remove(&other);
                         }
+                        super::emit_status(&app);
                     }
                     _ => {}
+                }
+            }
+        });
+    }
+
+    // The main device calls back the devices that do not reach it.
+    {
+        let app = app.clone();
+        let mut stopped = stopped.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = stopped.changed() => break,
+                    () = tokio::time::sleep(CALLBACK_EVERY) => {}
+                }
+                for addrs in due_callbacks(&app, generation) {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        callback(&app, generation, addrs).await;
+                    });
                 }
             }
         });
@@ -230,8 +294,16 @@ async fn found(
         };
         if !main {
             run.mains.remove(&other);
+            let next_call = Instant::now() + CALLBACK_AFTER;
+            run.others
+                .entry(other)
+                .and_modify(|seen| seen.addrs.clone_from(&addrs))
+                .or_insert(Seen { addrs, next_call });
+            drop(hub);
+            super::emit_status(app);
             return;
         }
+        run.others.remove(&other);
         run.mains.insert(other.clone(), addrs.clone());
         match run.role {
             SyncRole::Searching => Some(addrs),
@@ -284,19 +356,80 @@ async fn connect(app: &AppHandle, generation: u64, instance: String, addrs: Vec<
         if let Ok(Ok(stream)) =
             tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await
         {
+            if let Some(run) = hub(app).run.as_mut() {
+                run.unreached = false;
+                run.dial_failures = 0;
+            }
             super::link::run(app.clone(), stream, addr, generation, true).await;
             return;
         }
     }
-    // Unreachable: forget it and look again.
+    // Unreachable: most likely a firewall there, so wait for the main device
+    // to call back; after a few tries take it for gone and look again.
     {
-        let mut hub = hub(app);
-        if let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) {
+        let mut guard = hub(app);
+        let hub = &mut *guard;
+        let called_back = hub.links.values().any(|link| link.to_main);
+        let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
+            return;
+        };
+        if called_back {
+            return;
+        }
+        run.role = SyncRole::Searching;
+        run.unreached = true;
+        run.dial_failures += 1;
+        if run.dial_failures >= MAX_DIAL_FAILURES {
             run.mains.remove(&instance);
-            run.role = SyncRole::Searching;
+            run.dial_failures = 0;
         }
     }
-    elect_later(app, generation, ELECTION_WAIT);
+    super::emit_status(app);
+    elect_later(
+        app,
+        generation,
+        CALLBACK_AFTER + CALLBACK_EVERY + ELECTION_WAIT,
+    );
+}
+
+/// On the main device: the devices seen for a while with no link to them.
+fn due_callbacks(app: &AppHandle, generation: u64) -> Vec<Vec<SocketAddr>> {
+    let mut guard = hub(app);
+    let hub = &mut *guard;
+    let linked: std::collections::BTreeSet<&str> = hub
+        .links
+        .values()
+        .map(|link| link.instance.as_str())
+        .collect();
+    let Some(run) = hub
+        .run
+        .as_mut()
+        .filter(|run| run.generation == generation && run.role == SyncRole::Main)
+    else {
+        return Vec::new();
+    };
+    let now = Instant::now();
+    run.others
+        .iter_mut()
+        .filter(|(instance, seen)| !linked.contains(instance.as_str()) && seen.next_call <= now)
+        .map(|(_, seen)| {
+            seen.next_call = now + CALLBACK_RETRY;
+            seen.addrs.clone()
+        })
+        .collect()
+}
+
+/// Connect to a device of the group from the main device (a failure is
+/// retried after [`CALLBACK_RETRY`]).
+async fn callback(app: &AppHandle, generation: u64, addrs: Vec<SocketAddr>) {
+    for addr in addrs {
+        if let Ok(Ok(stream)) =
+            tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await
+        {
+            super::link::run(app.clone(), stream, addr, generation, true).await;
+            return;
+        }
+    }
 }
 
 /// [`elect`] later, on its own task (breaks the `connect` ↔ `elect` cycle).
@@ -366,10 +499,16 @@ pub(crate) fn become_main(app: &AppHandle) {
 /// connect to whoever did.
 pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
     let (rank, retries) = {
-        let mut hub = hub(app);
+        let mut guard = hub(app);
+        let hub = &mut *guard;
+        // A twin of a live link closed: the main device is still here.
+        let still_linked = hub.links.values().any(|link| link.to_main);
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return;
         };
+        if still_linked {
+            return;
+        }
         run.role = SyncRole::Searching;
         run.retries = run.retries.saturating_add(1);
         (run.rank, run.retries)

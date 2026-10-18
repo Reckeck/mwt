@@ -34,6 +34,9 @@ pub async fn sync_set_settings(
     if let Some(prefer) = input.prefer_main {
         prefs.prefer_main = prefer;
     }
+    if let Some(minutes) = input.background_lock_min {
+        prefs.background_lock_min = Some(minutes);
+    }
     let restart =
         prefs.enabled != settings.sync.enabled || prefs.prefer_main != settings.sync.prefer_main;
     settings.apply(&UpdateAppSettingsInput {
@@ -43,9 +46,23 @@ pub async fn sync_set_settings(
     });
     settings.ensure_device_id();
     save_settings(&dir, &settings).map_err(err_to_string)?;
+    #[cfg(target_os = "android")]
+    if input.enabled == Some(true) {
+        crate::platform_net::ask_notifications(&app);
+    }
     if restart || input.device_name.is_some() {
         sync::restart(&app);
     }
+    Ok(sync::status(&app))
+}
+
+/// «Открыть порт»: let the other devices through this device's firewall
+/// (asks for the system password).
+#[tauri::command]
+pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
+    sync::firewall::open().await.map_err(err_to_string)?;
+    sync::hub(&app).inbound_blocked = false;
+    sync::emit_status(&app);
     Ok(sync::status(&app))
 }
 

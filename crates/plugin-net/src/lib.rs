@@ -2,6 +2,8 @@
 //!
 //! - the Wi-Fi multicast lock, without which Android drops the mDNS packets
 //!   devices find each other with;
+//! - a foreground service that keeps sync running in the background, with
+//!   a notification and a Wi-Fi lock;
 //! - wrapping the device's sync key with a non-exportable AES key of the
 //!   Android Keystore (StrongBox when the phone has one), so the key at rest
 //!   cannot be read from the app's files.
@@ -27,6 +29,26 @@ struct Hex {
 #[derive(Serialize)]
 struct Multicast {
     on: bool,
+}
+
+/// The background sync notification (`Net::background`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Background {
+    /// Sync runs: going to the background starts the foreground service.
+    pub armed: bool,
+    pub channel: String,
+    pub title: String,
+    pub text: String,
+    pub lock: String,
+    pub stop: String,
+}
+
+/// What [`Net::poll`] reports.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Poll {
+    pub background: bool,
+    /// The notification button pressed since the last poll: `lock` or `stop`.
+    pub action: Option<String>,
 }
 
 /// `app.net()`.
@@ -58,6 +80,23 @@ impl<R: Runtime> Net<R> {
     /// Hold (or let go of) the multicast lock while sync is on.
     pub fn multicast(&self, on: bool) -> Result<()> {
         self.run::<serde::de::IgnoredAny, _>("multicast", Multicast { on })
+            .map(|_| ())
+    }
+
+    /// Arm (or disarm) background sync, with the notification's texts.
+    pub fn background(&self, state: &Background) -> Result<()> {
+        self.run::<serde::de::IgnoredAny, _>("background", state.clone())
+            .map(|_| ())
+    }
+
+    /// Whether the app is in the background, and the button pressed.
+    pub fn poll(&self) -> Result<Poll> {
+        self.run("poll", ())
+    }
+
+    /// Ask for the notification permission (Android 13+), without waiting.
+    pub fn ask_notifications(&self) -> Result<()> {
+        self.run::<serde::de::IgnoredAny, _>("askNotifications", ())
             .map(|_| ())
     }
 

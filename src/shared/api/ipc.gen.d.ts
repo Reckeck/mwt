@@ -2935,6 +2935,44 @@ type SyncDecisionInput = { session_id: string, accept: boolean, };
 type SyncErrorEvent = { code: string, message: string, peer_name: string | null, };
 
 /**
+ * How a firewall that drops incoming sync connections can be opened here.
+ */
+type SyncFirewallFix = "none" | "auto" | "manual";
+
+/**
+ * The diagnostics of sync on the local network.
+ */
+type SyncNetworkView = { 
+/**
+ * The TCP port this device listens on while sync runs.
+ */
+port: number | null, 
+/**
+ * This device's address on the local network.
+ */
+address: string | null, 
+/**
+ * Devices with this vault seen nearby right now.
+ */
+seen: number, 
+/**
+ * When this device started looking (ms since the epoch).
+ */
+since_ms: number | null, 
+/**
+ * Another device could not connect here: a firewall drops incoming connections.
+ */
+inbound_blocked: boolean, firewall_fix: SyncFirewallFix, 
+/**
+ * The commands that open the port by hand.
+ */
+firewall_commands: Array<string>, 
+/**
+ * The code of the last sync error (`SYNC_*`), cleared by a session that goes live.
+ */
+last_error: string | null, };
+
+/**
  * `sync-offer`: a device with this vault the user has not paired with.
  */
 type SyncOfferEvent = { session_id: string, peer_name: string, };
@@ -2970,7 +3008,12 @@ confirm_first: boolean,
 /**
  * Take the main role whenever this device is around.
  */
-prefer_main: boolean, };
+prefer_main: boolean, 
+/**
+ * Android: minutes in the background without a sync before the vault
+ * locks itself and background sync stops; `0` = never, `None` = default.
+ */
+background_lock_min: number | null, };
 
 type SyncProgress = { received: number, total: number, };
 
@@ -3011,7 +3054,11 @@ type SyncSettingsInput = { enabled: boolean | null, confirm_first: boolean | nul
 /**
  * An empty name goes back to the host name.
  */
-device_name: string | null, };
+device_name: string | null, 
+/**
+ * Android: minutes in the background before the vault locks (0 = never).
+ */
+background_lock_min: number | null, };
 
 type SyncStatus = { enabled: boolean, role: SyncRole, device_id: string, device_name: string, confirm_first: boolean, prefer_main: boolean, 
 /**
@@ -3022,7 +3069,19 @@ key_storage: string, sessions: Array<SyncSessionView>,
 /**
  * A backup from before a sync exists («Восстановить до синхронизации»).
  */
-has_backup: boolean, };
+has_backup: boolean, 
+/**
+ * Sync goes on in the background here (Android: a foreground service).
+ */
+background_supported: boolean, 
+/**
+ * Minutes in the background before an Android device locks (0 = never).
+ */
+background_lock_min: number, 
+/**
+ * What the network looks like from here (the diagnostics line).
+ */
+network: SyncNetworkView, };
 
 type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, };
 

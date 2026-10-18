@@ -19,3 +19,18 @@ pub fn unwrap_secret(app: &AppHandle, wrapped: &[u8]) -> Option<Vec<u8>> {
 pub fn multicast(app: &AppHandle, on: bool) {
     let _ = app.net().multicast(on);
 }
+
+/// Arm background sync (or not), with the notification's texts.
+pub fn background(app: &AppHandle, state: &tauri_plugin_net::Background) {
+    let _ = app.net().background(state);
+}
+
+/// Whether the app is in the background, and the notification button pressed.
+pub fn poll(app: &AppHandle) -> Option<tauri_plugin_net::Poll> {
+    app.net().poll().ok()
+}
+
+/// Android 13+: ask for the permission the background notification needs.
+pub fn ask_notifications(app: &AppHandle) {
+    let _ = app.net().ask_notifications();
+}

@@ -50,7 +50,7 @@ export const mockAppSettings: AppSettings = {
   seen_whats_new: [],
   device_id: '00000000-0000-4000-8000-000000000001',
   device_name: null,
-  sync: { enabled: false, confirm_first: false, prefer_main: false },
+  sync: { enabled: false, confirm_first: false, prefer_main: false, background_lock_min: null },
   minimize_to_tray: null,
   fx_refresh_interval_sec: null,
   display_decimals: null,

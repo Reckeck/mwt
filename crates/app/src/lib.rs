@@ -294,6 +294,7 @@ pub fn run() {
             commands::sync::sync_history,
             commands::sync::sync_undo,
             commands::sync::sync_restore_backup,
+            commands::sync::sync_open_firewall,
         ])
         .setup(|app| {
             // Resolve the default vault location once (`platform_fs::vaults_dir`).

@@ -1841,6 +1841,47 @@ pub struct SyncStatus {
     pub sessions: Vec<SyncSessionView>,
     /// A backup from before a sync exists («Восстановить до синхронизации»).
     pub has_backup: bool,
+    /// Sync goes on in the background here (Android: a foreground service).
+    pub background_supported: bool,
+    /// Minutes in the background before an Android device locks (0 = never).
+    pub background_lock_min: u32,
+    /// What the network looks like from here (the diagnostics line).
+    pub network: SyncNetworkView,
+}
+
+/// How a firewall that drops incoming sync connections can be opened here.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncFirewallFix {
+    /// Nothing to open (Android, iOS, macOS asks by itself).
+    #[default]
+    None,
+    /// `sync_open_firewall` opens it (asks for the system password).
+    Auto,
+    /// Only by hand: the user runs [`SyncNetworkView::firewall_commands`]
+    /// (Flatpak cannot reach the host firewall).
+    Manual,
+}
+
+/// The diagnostics of sync on the local network.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncNetworkView {
+    /// The TCP port this device listens on while sync runs.
+    pub port: Option<u16>,
+    /// This device's address on the local network.
+    pub address: Option<String>,
+    /// Devices with this vault seen nearby right now.
+    pub seen: u32,
+    /// When this device started looking (ms since the epoch).
+    #[ts(type = "number | null")]
+    pub since_ms: Option<i64>,
+    /// Another device could not connect here: a firewall drops incoming connections.
+    pub inbound_blocked: bool,
+    pub firewall_fix: SyncFirewallFix,
+    /// The commands that open the port by hand.
+    pub firewall_commands: Vec<String>,
+    /// The code of the last sync error (`SYNC_*`), cleared by a session that goes live.
+    pub last_error: Option<String>,
 }
 
 /// A trusted device as the settings list shows it.
@@ -1865,6 +1906,9 @@ pub struct SyncSettingsInput {
     /// An empty name goes back to the host name.
     #[serde(default)]
     pub device_name: Option<String>,
+    /// Android: minutes in the background before the vault locks (0 = never).
+    #[serde(default)]
+    pub background_lock_min: Option<u32>,
 }
 
 /// `sync-offer`: a device with this vault the user has not paired with.

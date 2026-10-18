@@ -21,6 +21,7 @@ export function useSyncActions() {
           confirm_first: input.confirm_first ?? null,
           prefer_main: input.prefer_main ?? null,
           device_name: input.device_name ?? null,
+          background_lock_min: input.background_lock_min ?? null,
         } satisfies SyncSettingsInput,
       }),
     onSuccess: (status) => queryClient.setQueryData(SYNC_STATUS_KEY, status),
@@ -95,5 +96,18 @@ export function useSyncActions() {
     meta: { success: 'sync.backup.restored', error: 'sync.backup.restoreFailed' },
   })
 
-  return { settings, pair, dismiss, confirmPairing, decidePlan, forget, undo, restore }
+  // «Открыть порт»: the system asks for its password; the warning goes once it is done.
+  const openFirewall = useMutation({
+    mutationFn: () => call<SyncStatus>('sync_open_firewall'),
+    onSuccess: (status) => queryClient.setQueryData(SYNC_STATUS_KEY, status),
+    meta: { success: 'sync.firewall.opened', error: 'sync.firewall.openFailed' },
+  })
+
+  // A Flatpak cannot reach the host firewall: the user runs the command.
+  const copyCommand = useMutation({
+    mutationFn: (command: string) => navigator.clipboard.writeText(command),
+    meta: { success: 'sync.firewall.copied', error: 'sync.firewall.copyFailed' },
+  })
+
+  return { settings, pair, dismiss, confirmPairing, decidePlan, forget, undo, restore, openFirewall, copyCommand }
 }

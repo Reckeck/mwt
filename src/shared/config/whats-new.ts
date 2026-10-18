@@ -21,6 +21,11 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'lanSyncReach',
+    date: '2026-10-18',
+    points: [{ key: 'callback' }, { key: 'firewall' }, { key: 'background' }],
+  },
+  {
     id: 'lanSync',
     date: '2026-10-18',
     points: [{ key: 'lan' }, { key: 'pairing' }, { key: 'merge' }, { key: 'undo' }, { key: 'deviceSettings' }],

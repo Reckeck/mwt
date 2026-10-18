@@ -1,7 +1,9 @@
 package dev.mwt.net
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
@@ -13,6 +15,7 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import androidx.appcompat.app.AppCompatActivity
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -29,6 +32,16 @@ class MulticastArgs {
   var on: Boolean = false
 }
 
+@InvokeArg
+class BackgroundArgs {
+  var armed: Boolean = false
+  var channel: String = "Sync"
+  var title: String = "Sync"
+  var text: String = ""
+  var lock: String = "Lock"
+  var stop: String = "Stop"
+}
+
 /**
  * LAN sync on Android: the multicast lock mDNS needs, and a non-exportable
  * AES key in the Android Keystore (StrongBox when the phone has one) that
@@ -38,6 +51,74 @@ class MulticastArgs {
 class NetPlugin(private val activity: Activity) : Plugin(activity) {
   private val alias = "mwt-sync-device-key"
   private var lock: WifiManager.MulticastLock? = null
+  /** Sync runs: going to the background starts [SyncService]. */
+  @Volatile private var armed = false
+  @Volatile private var inBackground = false
+  private var serviceOn = false
+
+  override fun onPause(activity: AppCompatActivity) {
+    inBackground = true
+    if (armed) startService()
+  }
+
+  override fun onResume(activity: AppCompatActivity) {
+    inBackground = false
+    stopService()
+  }
+
+  private fun startService() {
+    if (serviceOn) return
+    try {
+      SyncService.start(activity.applicationContext)
+      serviceOn = true
+    } catch (ex: Exception) {
+      Logger.error("cannot start background sync: ${ex.message}")
+    }
+  }
+
+  private fun stopService() {
+    if (!serviceOn) return
+    SyncService.stop(activity.applicationContext)
+    serviceOn = false
+  }
+
+  /** Sync started or stopped here, or the notification text changed. */
+  @Command
+  fun background(invoke: Invoke) {
+    val args = invoke.parseArgs(BackgroundArgs::class.java)
+    val changed = SyncService.texts.text != args.text
+    SyncService.texts = SyncService.Texts(args.channel, args.title, args.text, args.lock, args.stop)
+    armed = args.armed
+    activity.runOnUiThread {
+      if (!armed) {
+        stopService()
+      } else if (inBackground && (!serviceOn || changed)) {
+        // A running service redraws its notification on a new start.
+        serviceOn = false
+        startService()
+      }
+    }
+    invoke.resolve(JSObject())
+  }
+
+  /** Whether the app is in the background, and the button pressed since the last poll. */
+  @Command
+  fun poll(invoke: Invoke) {
+    val action = SyncService.pending
+    SyncService.pending = null
+    invoke.resolve(JSObject().put("background", inBackground).put("action", action))
+  }
+
+  /** Android 13+: the background sync notification needs this permission. */
+  @Command
+  fun askNotifications(invoke: Invoke) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+      activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+      activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7318)
+    }
+    invoke.resolve(JSObject())
+  }
 
   @Command
   fun multicast(invoke: Invoke) {
