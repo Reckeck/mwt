@@ -10,7 +10,10 @@ use std::net::{IpAddr, Ipv4Addr};
 use trade_core::error::{Error, PeerSyncFailure, Result};
 use trade_core::ipc_contract::SyncFirewallFix;
 
-use super::discovery::{SYNC_PORT, local_address};
+use super::discovery::local_address;
+// Only the systems with a firewall rule to offer name the port.
+#[cfg(any(windows, all(target_os = "linux", not(target_os = "android"))))]
+use super::discovery::SYNC_PORT;
 
 /// The local network of this device, as `192.168.1.0/24`.
 fn subnet() -> String {
