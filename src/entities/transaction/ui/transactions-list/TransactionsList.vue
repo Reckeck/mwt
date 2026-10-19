@@ -90,9 +90,10 @@ function showMore() {
     <!-- The menu trigger takes the outer ref: the listener needs one of its own. -->
     <div ref="listRoot" class="contents divide-y divide-border">
       <section v-for="day in days" :key="day.date" class="divide-y divide-border">
+        <!-- Opaque, no backdrop-blur: a blur on every day header froze WebKitGTK (the Linux window) for good. -->
         <h3
           v-if="day.date"
-          class="sticky top-0 z-[1] flex items-baseline justify-between gap-2 bg-card/95 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
+          class="sticky top-0 z-[1] flex items-baseline justify-between gap-2 bg-card py-1.5 text-xs font-medium text-muted-foreground"
         >
           <span class="capitalize">{{ formatDay(`${day.date}T12:00:00`) }}</span>
           <span class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
