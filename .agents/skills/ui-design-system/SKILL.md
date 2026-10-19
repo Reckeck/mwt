@@ -84,6 +84,17 @@ CLI не умеет пробный прогон: ставь во временн�
     `check-onboarding` (совпадение ключей)
 15. **Файл — одна смысловая часть:** `.vue` до 250 строк, `.ts` до 300;
     длиннее — дели на `model/`, `lib/`, `ui/`. → `check-ui` (file-size)
+16. **Работает на телефоне:** граница `md` (768 px), отступы системных
+    панелей — `*-safe`, ни одного действия только с клавиатуры, наведения или
+    правого клика. → [mobile.md](references/mobile.md), `check-ui`
+17. **Готовое вместо урезанной копии.** Прежде чем рисовать сущность (позицию,
+    операцию, кошелёк, график цены, алерт), найди в `entities/*` и `widgets/*`
+    компонент, который её уже показывает, и встрои его — с пропсом, если не
+    хватает. Любая сумма с валютой — `<Money>` (подсказка курсов), не
+    `formatMoney` в шаблоне. → `check-ui` (format-money)
+18. **Избранное в каждом списке валют и активов:** группа «Избранные» сверху и
+    звёздочка. Это дают пикеры (правило 8) и `useFavoriteCurrencies`; свой
+    список валют не пишется. → `check-forms`
 
 ## Каталог: задача → компонент
 
@@ -120,6 +131,28 @@ CLI не умеет пробный прогон: ставь во временн�
 | счёт / кошелёк | `StoreNodeSelect`, в операции — `AccountRefPicker` | `entities/store`, `features/transaction-create` |
 | актив | `AssetInput` (поиск), `AssetSelect` (из известных) | `entities/asset` |
 | валюта | `CurrencyPicker` | `entities/currency` |
+| торговая пара `BTCUSDT` | `PairInput` (`quotes`, `kind="futures"`) | `entities/asset` |
+| валюта графика: база или избранная | `ChartCurrencySwitch` | `entities/currency` |
+| сумма в базовой и избранных валютах | `MoneyConversions` (тело подсказки `Money`) | `entities/currency` |
+| избранное: прочитать, добавить, порядок | `useFavoriteCurrencies`, кнопка — `FavoriteStarButton` | `entities/currency`, `features/currency-favorite` |
+| позиции кошелька (цена, 24ч, источник, P&L) | `StorePositions` (`clickable`, `@open`) | `entities/store` |
+| актив целиком: цена, график, алерты, кошельки | `AssetDetailsSheet` | `widgets/asset-details` |
+| строка субсчёта со ссылкой | `StoreRowLink` | `entities/store` |
+| карточка кошелька | `StoreCard` (меню «⋯» и правый клик — один список) | `entities/store` |
+| график стоимости кошелька | `StoreChart` | `entities/store` |
+| график цены с рисованием и алертом | `TradingChart` (`can-alert`, `@alert`) | `widgets/trading-chart` |
+| алерт: создать / список | `PriceAlertDialog` (`preset`), `PriceAlertList` (`asset`, `preset`) | `features/price-alert-edit`, `widgets/price-alert-list` |
+| доли: кольцо | `AllocationPie` (`slices`, `bare`) | `widgets/allocation-pie` |
+| открыть карточку операции | `openTxDetails(tx)` (один лист в оболочке) | `shared/lib/tx-details` |
+| конвертер валют | `openConverter(code)`, внутри страницы — `ConverterPanel` | `shared/lib/converter`, `features/currency-convert` |
+| вступление списка + кнопка «Создать» | `ListHeader` | `shared/ui/list-header` |
+| «Доступно: … · Всё» под суммой | `AvailableHint` | `features/transaction-create` |
+| ПК или телефон | `usePlatform()` (`isDesktop`, `isMobile`, `isAndroid`) | `shared/lib/platform` |
+| окно телефона (< 768) | `useIsPhone()` | `shared/lib/phone` |
+| шторка снизу | `Drawer` (`Dialog` на телефоне — уже она) | `shared/ui/drawer` |
+| вкладки = дочерние маршруты | `RouteTabs` (`keep-query`) | `shared/ui/route-tabs` |
+| редкие действия страницы | `PageHeader` слот `#more` | `shared/ui/page-header` |
+| свой слой поверх страницы и «Назад» | `pushBackLayer(close)` | `shared/lib/back-stack` |
 
 Полный список — папки `src/shared/ui/*` (каждая с `index.ts`). Нет нужного —
 `pnpm dlx shadcn-vue@latest search`, затем `add`.
@@ -142,7 +175,8 @@ CLI не умеет пробный прогон: ставь во временн�
    заметный элемент — шаг в тур его экрана и `data-tour`; смена поведения —
    пункт в текущей записи `whats-new.ts`.
 6. Проверь глазами в `pnpm dev` (мок, пароль `secret`): светлая и тёмная
-   тема, окно 1280 и узкое ~800, загрузка (ложного «пусто» нет).
+   тема, окно 1280 и узкое ~800, телефон 390 и 360 с эмуляцией отступов
+   ([mobile.md](references/mobile.md)), загрузка (ложного «пусто» нет).
 7. `mise run check` (Biome, vue-tsc, `check-onboarding`, `check-forms`,
    `check-ui`, clippy, тесты).
 
@@ -150,7 +184,7 @@ CLI не умеет пробный прогон: ставь во временн�
 
 | Скрипт | Ловит |
 |---|---|
-| `mise run check-ui` | сырые `button`/`checkbox`/`radio`/`table`, ручное пустое состояние, `emerald`/`red`/hex, `transition-all`, `toFixed` в `.vue`, `div @click` без роли, `useMutation` без `meta`, файл длиннее лимита |
+| `mise run check-ui` | сырые `button`/`checkbox`/`radio`/`table`, ручное пустое состояние, `emerald`/`red`/hex, `transition-all`, `toFixed` в `.vue`, `div @click` без роли, `formatMoney` в шаблоне, `h-screen`/`vh`, `fixed` у края без `*-safe`, широкая ширина без префикса, `useMutation` без `meta`, файл длиннее лимита |
 | `mise run check-forms` | кнопка сохранения заблокирована проверкой полей, ручная проверка в `@submit`, самодельные списки счетов/активов/валют |
 | `mise run check-onboarding` | экран без тура, шаг без элемента, нет текста, ключи ru ≠ en |
 
@@ -169,6 +203,7 @@ CLI не умеет пробный прогон: ставь во временн�
 - [tokens.md](references/tokens.md) — цвета, шкала заголовков, отступы, радиусы, тёмная тема
 - [forms.md](references/forms.md) — правила 13 и 14 полностью, `useFormValidation`, `FormDialog`
 - [feedback.md](references/feedback.md) — уведомления, загрузка, ошибки, пусто, подтверждение и «Отменить»
+- [mobile.md](references/mobile.md) — правило 16: телефон, отступы, «Назад», шторки, ширины
 - [data-display.md](references/data-display.md) — таблицы, деньги, проценты, даты, P&L, графики, длинные списки
 - [layout.md](references/layout.md) — страница, диалог, Sheet, вкладки, узкие окна
 - [a11y-motion.md](references/a11y-motion.md) — клавиатура, фокус, ARIA, контраст, анимация
