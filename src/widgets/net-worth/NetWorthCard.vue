@@ -4,12 +4,11 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { useMoneyChartTooltip } from '@/entities/currency'
+import { Money, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
-import { formatMoney } from '@/shared/lib/format'
 
 const { t } = useI18n()
 
@@ -59,9 +58,7 @@ const option = computed<ChartOption>(() => ({
         <RouterLink data-widget-title :to="{ name: 'analytics-wealth' }" class="text-sm text-muted-foreground hover:text-foreground">
           {{ t('netWorthCard.title') }}
         </RouterLink>
-        <span class="font-semibold tabular-nums">
-          {{ formatMoney(worth.data.value.net, { currency: worth.data.value.base_currency }) }}
-        </span>
+        <Money class="font-semibold" :amount="worth.data.value.net" :currency="worth.data.value.base_currency" />
       </div>
     </template>
     <div class="grid gap-3">
@@ -70,7 +67,11 @@ const option = computed<ChartOption>(() => ({
         <template v-for="row in rows" :key="row.key">
           <dt class="text-muted-foreground">{{ t(`report.networth.${row.key}`) }}</dt>
           <dd class="text-right" :class="row.sign < 0 && 'text-destructive'">
-            {{ formatMoney(row.sign < 0 ? -Number(row.value) : row.value, { decimals: 0 }) }}
+            <Money
+              :amount="row.sign < 0 ? -Number(row.value) : row.value"
+              :currency="worth.data.value.base_currency"
+              :decimals="0"
+            />
           </dd>
         </template>
       </dl>

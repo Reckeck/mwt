@@ -60,10 +60,10 @@ const rows = computed<MonthTableRow[]>(() => [
 <template>
   <div class="grid grid-cols-1 gap-4">
     <div class="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-4">
-      <StatCard :label="t('report.year.income')">
+      <StatCard :label="t('report.year.income', { year: props.report.year })">
         <Money :amount="props.report.total.income" :currency="currency" :decimals="0" />
       </StatCard>
-      <StatCard :label="t('report.year.saved')" :hint="pct(props.report.total.saved_pct)">
+      <StatCard :label="t('report.year.saved', { year: props.report.year })" :hint="pct(props.report.total.saved_pct)">
         <Money :amount="props.report.total.savings_fact" :currency="currency" :decimals="0" colored />
       </StatCard>
       <StatCard :label="t('report.year.best')" :value="best ? monthTitle(best.month) : '—'">
@@ -74,7 +74,7 @@ const rows = computed<MonthTableRow[]>(() => [
       </StatCard>
     </div>
     <ReportDetails :label="t('report.byMonth')" default-open>
-      <MonthTable :columns="columns" :rows="rows" :label-header="t('report.month')" />
+      <MonthTable :columns="columns" :rows="rows" :label-header="t('report.month')" :currency="props.report.meta.currency" />
       <p class="mt-3 text-xs text-muted-foreground">{{ t('report.year.averageNote') }}</p>
     </ReportDetails>
   </div>

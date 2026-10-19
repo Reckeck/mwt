@@ -9,10 +9,11 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
+import { AvailableHint } from '../available-hint'
 
 /** Spot trade: sell one asset, buy another on an exchange. */
 const { t } = useI18n()
-const { form, check } = useTxForm()
+const { form, check, props } = useTxForm()
 </script>
 
 <template>
@@ -20,6 +21,7 @@ const { form, check } = useTxForm()
     <AssetInput v-model="form.soldAsset" required :error="check.error('soldAsset')" :label="t('form.sellAsset')" />
     <FormField for="tx-sold" :label="t('form.sellQty')" required :error="check.error('soldQty')">
       <AmountInput id="tx-sold" v-model="form.soldQty" />
+      <AvailableHint :store-id="props.storeId" :asset="form.soldAsset" @max="(quantity) => (form.soldQty = quantity)" />
     </FormField>
     <AssetInput v-model="form.boughtAsset" required :error="check.error('boughtAsset')" :label="t('form.buyAsset')" />
     <FormField for="tx-bought" :label="t('form.buyQty')" required :error="check.error('boughtQty')">

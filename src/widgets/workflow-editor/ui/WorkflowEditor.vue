@@ -5,8 +5,9 @@ import { useLocalStorage } from '@vueuse/core'
 
 import { type WorkflowNodeData, useNodeCatalog } from '@/entities/workflow'
 import { useWorkflowActions } from '@/features/workflow-manage'
-import { QuickAddPanel } from '@/features/workflow-quick-add'
 import { required, useFormValidation } from '@/shared/lib/form'
+import { useIsPhone } from '@/shared/lib/phone'
+import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { nodeSummary } from '../model/fields'
@@ -19,18 +20,18 @@ import { useGraphValidation } from '../model/use-graph-validation'
 import { triggerChoices } from '../model/trigger-choices'
 import { useRedundantFlows } from '../model/use-redundant-flows'
 import { useRunReport } from '../model/use-run-report'
-import { useSelection } from '../model/use-selection'
 import { useWorkflowDocument } from '../model/use-workflow-document'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
+import { useMobileSheet } from '../model/use-mobile-sheet'
 import DraftBanner from './DraftBanner.vue'
 import EditorCanvas from './EditorCanvas.vue'
+import EditorSidePanel from './EditorSidePanel.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import HotkeysHelp from './HotkeysHelp.vue'
-import LessonPanel from './LessonPanel.vue'
-import NodeInspector from './NodeInspector.vue'
+import MobileEditorBar from './MobileEditorBar.vue'
+import MobileInspector from './MobileInspector.vue'
+import QuickAddHost from './QuickAddHost.vue'
 import RunPanel from './RunPanel.vue'
-import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
-import WorkflowSettingsPanel from './WorkflowSettingsPanel.vue'
 
 /**
  * The node editor: the canvas and the inspector on the right. Nodes are
@@ -59,16 +60,22 @@ const doc = useWorkflowDocument(editor, catalog.query, actions, report, {
   template: () => props.template,
   lesson: () => props.lesson,
 })
-const { name, description, active, react, maxAmount, lesson, dirty } = doc
+const { name, active, lesson, dirty } = doc
 const insert = useCanvasInsert(editor)
 const { quick } = insert
 const clipboard = useGraphClipboard(editor)
-const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, setLabel, unwire } = useSelection(editor)
-
-/** An empty flow port in the inspector: the node search, joined to that port. */
-function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
-  if (selectedNode.value) insert.quickAddFrom(selectedNode.value.id, port, side, event)
-}
+/** What the side panel (or the phone's sheet) needs. */
+const panel = computed(() => ({
+  editor,
+  insert,
+  doc,
+  run,
+  issues: issues.value,
+  issuesOf,
+  redundant,
+  checking: actions.dryRun.isPending.value,
+  base: settings.baseCurrency,
+}))
 
 const triggers = computed(() => triggerChoices(nodes.value, editor.def, locale.value))
 
@@ -82,6 +89,26 @@ const form = useFormValidation(() => ({
   graph: active.value && errors.value.length ? t('workflow.missing.errors') : null,
 }))
 const save = () => doc.save((id) => emit('saved', id))
+
+/** A phone: one row on top, the canvas on the whole screen, the panels in a sheet. */
+const phone = useIsPhone()
+const sheet = useMobileSheet(editor, report, phone)
+const barState = computed(() => ({
+  nameError: form.error('name'),
+  message: form.firstMessage(),
+  canRun: Boolean(props.workflowId),
+  canDiscard: dirty.value && !lesson.value,
+  dirty: dirty.value,
+  hasNodes: nodes.value.length > 0,
+  emulating: actions.dryRun.isPending.value,
+  running: actions.runNow.isPending.value,
+  saving: actions.save.isPending.value,
+}))
+const runProps = computed(() => ({
+  report: report.value as NonNullable<typeof report.value>,
+  answers: answers.value,
+  canSaveTest: Boolean(props.workflowId) && Boolean(report.value?.run.dry_run) && !dirty.value,
+}))
 
 useEditorHotkeys(editorRoot, () => Boolean(quick.value), {
   save: (event) => form.submit(save, event),
@@ -114,6 +141,8 @@ function display(id: string, data: EditorNode['data']): WorkflowNodeData {
 
 /** A lesson is practice: leaving it never asks to save. */
 defineExpose({
+  /** For the page's breadcrumbs. */
+  name: computed(() => doc.name.value.trim()),
   dirty: computed(() => dirty.value && !lesson.value),
   canDraft: computed(() => Boolean(props.workflowId)),
   saveDraft: doc.saveDraft,
@@ -123,26 +152,33 @@ defineExpose({
 
 <template>
   <div
-    class="flex h-full min-h-0 flex-col gap-3"
+    :class="cn('flex h-full min-h-0 flex-col', !phone && 'gap-3')"
     ref="editorRoot"
     role="application"
     :aria-label="t('workflow.editorLabel')"
     tabindex="-1"
   >
+    <MobileEditorBar
+      v-if="phone"
+      v-model:name="name"
+      v-model:active="active"
+      v-model:simple="simple"
+      v-bind="barState"
+      @note="editor.addNote"
+      @paste="clipboard.paste()"
+      @panel="sheet.show('inspector')"
+      @emulate="run.emulate(false, triggers[0]?.id ?? null)"
+      @run="run.runNow(triggers[0]?.id ?? null)"
+      @discard="doc.discardEdits"
+      @save="(event) => form.submit(save, event)"
+    />
     <EditorToolbar
+      v-else
       v-model:name="name"
       v-model:active="active"
       v-model:simple="simple"
       v-model:hotkeys="hotkeysOpen"
-      :name-error="form.error('name')"
-      :message="form.firstMessage()"
-      :can-run="Boolean(props.workflowId)"
-      :can-discard="dirty && !lesson"
-      :dirty="dirty"
-      :has-nodes="nodes.length > 0"
-      :emulating="actions.dryRun.isPending.value"
-      :running="actions.runNow.isPending.value"
-      :saving="actions.save.isPending.value"
+      v-bind="barState"
       :triggers="triggers"
       @note="editor.addNote"
       @emulate="(id) => run.emulate(false, id)"
@@ -158,17 +194,37 @@ defineExpose({
       @drop="doc.dropDraft"
     />
 
-    <div v-if="hotkeysOpen" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
+    <div v-if="hotkeysOpen && !phone" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
 
-    <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_17rem] gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
-
+    <template v-if="phone">
+      <EditorCanvas touch :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
+      <MobileInspector
+        v-model:open="sheet.open.value"
+        v-model:tab="sheet.tab.value"
+        :has-run="Boolean(report)"
+        :has-lesson="Boolean(lesson)"
+        :node-selected="editor.flow.getSelectedNodes.value.length === 1"
+      >
+        <template #inspector><EditorSidePanel v-model:help="helpOpen" part="inspector" v-bind="panel" /></template>
+        <template #run>
+        <RunPanel
+          v-if="report"
+          v-bind="runProps"
+          @focus="editor.focusNode"
+          @answer="run.answer"
+          @close="report = null"
+          @save-test="run.saveAsTest"
+        />
+      </template>
+        <template #lesson><EditorSidePanel v-model:help="helpOpen" part="lesson" v-bind="panel" @lesson="(id) => emit('lesson', id)" /></template>
+      </MobileInspector>
+    </template>
+    <div v-else class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_17rem] gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div class="flex min-h-0 flex-col gap-3">
         <EditorCanvas :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
         <RunPanel
           v-if="report"
-          :report="report"
-          :answers="answers"
-          :can-save-test="Boolean(props.workflowId) && report.run.dry_run && !dirty"
+          v-bind="runProps"
           @focus="editor.focusNode"
           @answer="run.answer"
           @close="report = null"
@@ -176,64 +232,14 @@ defineExpose({
         />
       </div>
 
-      <div class="flex min-h-0 min-w-0 flex-col gap-3 overflow-x-hidden overflow-y-auto">
-        <LessonPanel
-          v-if="lesson"
-          :lesson="lesson"
-          :graph="editor.graph.value"
-          :report="report"
-          :checking="actions.dryRun.isPending.value"
-          @check="run.emulate()"
-          @next="(id) => emit('lesson', id)"
-        />
-        <div class="rounded-lg border border-border bg-card p-3">
-          <NodeInspector
-            v-if="selectedNode"
-            v-model:help="helpOpen"
-            :node="selectedNode"
-            :def="selectedDef"
-            :wired-from="wiredFrom"
-            :flows="flowLinks"
-            :data-after="dataAfter"
-            :issues="issuesOf(selectedNode.id)"
-            @param="setParam"
-            @label="setLabel"
-            @toggle="editor.toggleSelected"
-            @unwire="unwire"
-            @unlink="editor.removeEdge"
-            @add-flow="addFlow"
-            @remove="editor.removeSelected"
-          />
-          <WorkflowSettingsPanel
-            v-else
-            v-model:description="description"
-            v-model:max-amount="maxAmount"
-            v-model:react="react"
-            :issues="issues"
-            :redundant="redundant.count.value"
-            :base="settings.baseCurrency"
-            @focus="editor.focusNode"
-            @drop-redundant="redundant.removeAll"
-          />
-          <WorkflowHistoryPanel
-            v-if="!selectedNode && doc.workflow.data.value"
-            class="mt-4 border-t border-border pt-4"
-            :workflow="doc.workflow.data.value"
-            :dirty="dirty"
-            @restored="doc.onRestored"
-          />
-        </div>
-      </div>
+      <EditorSidePanel
+        v-model:help="helpOpen"
+        class="overflow-x-hidden overflow-y-auto"
+        v-bind="panel"
+        @lesson="(id) => emit('lesson', id)"
+      />
     </div>
 
-    <QuickAddPanel
-      v-if="quick"
-      :left="quick.left"
-      :top="quick.top"
-      :context="quick.context"
-      :simple="simple"
-      @pick="insert.onQuickPick"
-      @close="quick = null"
-    />
+    <QuickAddHost :state="quick" :simple="simple" :phone="phone" @pick="insert.onQuickPick" @close="quick = null" />
   </div>
 </template>

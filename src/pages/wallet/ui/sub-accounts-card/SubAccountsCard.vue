@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FolderPlus } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
-import { bindingLabel } from '@/entities/store'
-import { Badge } from '@/shared/ui/badge'
+import { StoreRowLink } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { formatPct } from '@/shared/lib/format'
@@ -44,19 +42,16 @@ const share = (value: number) => formatPct(value * 100, { decimals: 0 })
         <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ share(props.ownShare) }}</span>
         <Money class="shrink-0 text-sm" :amount="props.ownBase" :currency="props.currency" :decimals="2" />
       </div>
-      <RouterLink
+      <StoreRowLink
         v-for="child in props.children"
         :key="child.store.id"
-        :to="{ name: 'wallet', params: { id: child.store.id } }"
-        class="-mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent"
-        :class="child.store.archived && 'opacity-60'"
-      >
-        <component :is="storeIcon(child.store)" class="size-4 shrink-0" :style="{ color: child.store.color }" />
-        <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ child.store.name }}</span>
-        <Badge v-if="bindingLabel(child.store.binding)" variant="outline">{{ bindingLabel(child.store.binding) }}</Badge>
-        <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ share(child.share) }}</span>
-        <Money class="shrink-0 text-sm" :amount="child.subtree_base" :currency="props.currency" :decimals="2" />
-      </RouterLink>
+        class="py-2.5"
+        :store="child.store"
+        :amount="child.subtree_base"
+        :currency="props.currency"
+        :share="child.share"
+        :decimals="2"
+      />
     </div>
   </Card>
 </template>

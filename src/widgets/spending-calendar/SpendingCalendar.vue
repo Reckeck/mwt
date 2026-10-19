@@ -1,27 +1,29 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { TransactionsList } from '@/entities/transaction'
-import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 import { UpcomingList } from '@/widgets/upcoming-list'
-import { Button } from '@/shared/ui/button'
+import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
-import { txId } from '@/shared/lib/transactions'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { STATUS_CLASSES } from './spending-calendar.constants'
+import { openTxDetails } from '@/shared/lib/tx-details'
 
 const { t } = useI18n()
 
-const month = ref(localDate(new Date()).slice(0, 7))
+const today = localDate(new Date())
+const month = ref(today.slice(0, 7))
 const calendar = useQuery({
   queryKey: computed(() => ['calendar', month.value]),
   queryFn: () => call<CalendarMonth>('get_calendar', { month: month.value }),
@@ -58,14 +60,7 @@ const dayQuery = useQuery({
 })
 const dayTxs = computed(() => (selected.value ? (dayQuery.data.value ?? []) : []))
 
-const openedId = ref<string | null>(null)
-const detailsOpen = ref(false)
-const opened = computed(() => dayTxs.value.find((tx) => txId(tx) === openedId.value) ?? null)
-function openDetails(tx: Transaction) {
-  openedId.value = txId(tx)
-  detailsOpen.value = true
-}
-const money = (value: string) => formatMoney(value, { decimals: 0 })
+const openDetails = openTxDetails
 </script>
 
 <template>
@@ -97,13 +92,17 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
             v-for="day in calendar.data.value?.days ?? []"
             :key="day.date"
             class="h-auto text-xs grid min-h-16 content-start gap-0.5 rounded-md border p-1.5 text-left transition-colors"
-            :class="[STATUS_CLASSES[day.status], selected === day.date ? 'ring-2 ring-primary' : '']"
+            :class="[STATUS_CLASSES[day.status], selected === day.date ? 'ring-2 ring-primary' : day.date === today ? 'ring-1 ring-primary' : '']"
             :aria-pressed="selected === day.date"
+            :aria-current="day.date === today ? 'date' : undefined"
             @click="selected = selected === day.date ? null : day.date"
           >
-            <span class="font-medium">{{ Number(day.date.slice(8)) }}</span>
-            <span v-if="Number(day.daily)" class="tabular-nums">−{{ money(day.daily) }}</span>
-            <span v-if="Number(day.income)" class="tabular-nums text-success">+{{ money(day.income) }}</span>
+            <span class="font-medium">
+              {{ Number(day.date.slice(8)) }}
+              <span v-if="day.date === today" class="sr-only">{{ t('calendar.today') }}</span>
+            </span>
+            <span v-if="Number(day.daily)" class="tabular-nums">−<Money :amount="day.daily" :decimals="0" :currency="calendar.data.value?.currency" /></span>
+            <span v-if="Number(day.income)" class="tabular-nums text-success">+<Money :amount="day.income" :decimals="0" :currency="calendar.data.value?.currency" /></span>
           </Button>
         </div>
         <div class="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -114,9 +113,22 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
         </div>
       </Card>
 
+    </div>
+
+    <!-- The chosen day sits next to the month, above what is coming. -->
+    <div class="grid gap-4">
       <Card v-if="selected">
         <template #header>
-          <p class="font-medium">{{ t('calendar.dayTitle', { date: formatDate(selected) }) }}</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-medium">{{ t('calendar.dayTitle', { date: formatDate(selected) }) }}</p>
+            <RouterLink
+              :to="{ name: 'transactions', query: { from: selected, to: selected } }"
+              :class="buttonVariants({ variant: 'link', size: 'sm' })"
+              class="h-auto px-0"
+            >
+              {{ t('calendar.openInList') }}
+            </RouterLink>
+          </div>
         </template>
         <p v-if="!dayTxs.length" class="text-sm text-muted-foreground">{{ t('calendar.dayEmpty') }}</p>
         <div v-else class="-my-3">
@@ -127,10 +139,8 @@ const money = (value: string) => formatMoney(value, { decimals: 0 })
           </TransactionsList>
         </div>
       </Card>
+      <UpcomingList :days="45" :limit="15" />
     </div>
 
-    <UpcomingList :days="45" :limit="15" />
-
-    <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
   </div>
 </template>

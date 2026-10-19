@@ -16,12 +16,15 @@ import { ExchangeTerminal } from '@/widgets/exchange-terminal'
 import { LoyaltySummary } from '@/widgets/loyalty-summary'
 import { StoreChart, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
+import { Tabs } from '@/shared/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { useWalletScope, useWalletTabs } from './model/use-wallet-view'
 import { ExchangeImportView } from './ui/exchange-import-view'
+import { WalletExtras } from './ui/wallet-extras'
 import { SubAccountsCard } from './ui/sub-accounts-card'
 import { WalletHeader } from './ui/wallet-header'
 import { WalletStats } from './ui/wallet-stats'
@@ -70,6 +73,11 @@ function onApplyPlan(payload: CalculatorPlan) {
   plan.value = { ...payload }
   transactionOpen.value = true
 }
+/** Nothing recorded and nothing held: one first step instead of empty charts. */
+const isEmpty = computed(
+  () => !hasChildren.value && overview.data.value?.tx_count === 0 && !overview.data.value?.positions.length,
+)
+
 function openWallet(created: Store) {
   void router.push({ name: 'wallet', params: { id: created.id } })
 }
@@ -93,22 +101,17 @@ function openWallet(created: Store) {
         @refresh="priceRefresh.mutate()"
       />
 
-      <!-- An exchange is extended by its terminal and its import: one view at a time. -->
-      <ToggleGroup
-        v-if="hasTerminal"
-        v-model="view"
-        type="single"
-        variant="outline"
-        size="sm"
-        class="self-start"
-        :aria-label="t('wallet.view.title')"
-        data-tour="exchange-views"
-      >
-        <ToggleGroupItem v-for="entry in views" :key="entry.value" :value="entry.value" class="px-3">{{ entry.label }}</ToggleGroupItem>
-      </ToggleGroup>
+      <!-- An exchange is extended by its terminal and its import: one view at a time, tabs like the rest of the app. -->
+      <div v-if="hasTerminal" class="w-fit max-w-full" :aria-label="t('wallet.view.title')" data-tour="exchange-views">
+        <Tabs v-model="view" :tabs="views" />
+      </div>
 
       <ExchangeTerminal v-if="view === 'terminal'" :store-id="storeId" />
       <ExchangeImportView v-else-if="view === 'import'" :store-id="storeId" :has-key="bybitHasKey" />
+
+      <EmptyState v-else-if="isEmpty" :title="t('wallet.empty.title')" :description="t('wallet.empty.description')">
+        <Button :disabled="isArchived" @click="openTransaction">{{ t('wallet.empty.action') }}</Button>
+      </EmptyState>
 
       <template v-else>
         <!-- Only a wallet with sub-accounts has a scope to choose. -->
@@ -145,6 +148,7 @@ function openWallet(created: Store) {
         />
 
         <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />
+        <WalletExtras :store="store" :has-key="bybitHasKey" />
 
         <WalletTabs
           v-model:tab="tab"
@@ -156,6 +160,7 @@ function openWallet(created: Store) {
           :base="base"
           :decimals="decimals"
           :include-children="includeChildren"
+          :prices-as-of="overview.data.value.prices_as_of"
           @operation="openTransaction"
         />
       </template>

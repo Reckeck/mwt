@@ -8,7 +8,10 @@
 export interface WhatsNewPoint {
   /** i18n key under `whatsNew.<entry id>.`. */
   key: string
-  /** Route whose tour shows it; omitted when there is nothing to point at. */
+  /**
+   * Route whose tour shows it, or `settings:<tab>` for a settings tab;
+   * omitted when there is nothing to point at.
+   */
   route?: string
 }
 
@@ -21,9 +24,77 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'phone',
+    date: '2026-10-20',
+    points: [
+      { key: 'bottomNav', route: 'dashboard' },
+      { key: 'sheets' },
+      { key: 'back' },
+      { key: 'editor', route: 'workflow-new' },
+      { key: 'insets' },
+    ],
+  },
+  {
     id: 'vaultTransfer',
     date: '2026-10-19',
     points: [{ key: 'how' }, { key: 'code' }, { key: 'trace' }, { key: 'names' }],
+  },
+  {
+    id: 'cryptoFavorites',
+    date: '2026-10-19',
+    points: [
+      { key: 'codes', route: 'settings:general' },
+      { key: 'rates', route: 'settings:money' },
+      { key: 'catalog' },
+      { key: 'everywhere' },
+    ],
+  },
+  {
+    id: 'positions',
+    date: '2026-10-19',
+    points: [
+      { key: 'prices', route: 'stores' },
+      { key: 'sheet', route: 'stores' },
+      { key: 'elsewhere', route: 'stores' },
+      { key: 'pairs' },
+      { key: 'txCard', route: 'transactions' },
+      { key: 'walletBlocks', route: 'stores' },
+    ],
+  },
+  {
+    id: 'analyticsFixes',
+    date: '2026-10-19',
+    points: [
+      { key: 'realTerms', route: 'analytics-wealth' },
+      { key: 'drillDown', route: 'analytics-investments' },
+      { key: 'empty' },
+      { key: 'month', route: 'analytics' },
+    ],
+  },
+  {
+    id: 'screens',
+    date: '2026-10-19',
+    points: [
+      { key: 'available', route: 'transactions' },
+      { key: 'walletCards', route: 'stores' },
+      { key: 'walletStats', route: 'stores' },
+      { key: 'journalDays', route: 'transactions' },
+      { key: 'calendar', route: 'transactions-calendar' },
+      { key: 'reminders', route: 'planning-reminders' },
+      { key: 'requiredFields', route: 'workflows' },
+    ],
+  },
+  {
+    id: 'polish',
+    date: '2026-10-19',
+    points: [
+      { key: 'checklist', route: 'dashboard' },
+      { key: 'header', route: 'dashboard' },
+      { key: 'planning', route: 'planning-goals' },
+      { key: 'workflows', route: 'workflows' },
+      { key: 'wallet', route: 'wallet' },
+      { key: 'firstRun' },
+    ],
   },
   {
     id: 'reportsRework',

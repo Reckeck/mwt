@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Plus, Wallet as WalletIcon } from 'lucide-vue-next'
+import { Plus, Trash2, Wallet as WalletIcon } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
 import { StoreCard } from '@/entities/store'
@@ -16,9 +16,10 @@ import { StatCard } from '@/shared/ui/stat-card'
 import { Switch } from '@/shared/ui/switch'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { Money } from '@/entities/currency'
+import { Dialog } from '@/shared/ui/dialog'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -56,6 +57,7 @@ const shown = computed(() => {
   return [...list].sort((left, right) => Number(right.subtree_base) - Number(left.subtree_base))
 })
 const createDialogOpen = ref(false)
+const deleting = ref<Store | null>(null)
 
 function invalidate() {
   for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
@@ -111,11 +113,12 @@ function openWallet(created: Store) {
     >
       <div class="flex flex-wrap items-end gap-4">
         <StatCard
-          class="min-w-56 flex-1 @lg:flex-none"
+          class="min-w-0 flex-1 @lg:min-w-56 @lg:flex-none"
           :label="t('stores.total')"
-          :value="formatMoney(total, { currency: settings.baseCurrency })"
           :hint="t('stores.totalHint')"
-        />
+        >
+          <Money :amount="total" :currency="settings.baseCurrency" />
+        </StatCard>
         <div class="grid gap-1.5">
           <Label for="stores-sort">{{ t('stores.sort.label') }}</Label>
           <Select id="stores-sort" v-model="sort" class="w-48">
@@ -135,7 +138,7 @@ function openWallet(created: Store) {
           :node="node"
           :base-currency="settings.baseCurrency"
           @toggle-archive="toggleArchive.mutate"
-          @delete="remove.mutate"
+          @delete="(store) => (deleting = store)"
         />
       </div>
 
@@ -150,5 +153,25 @@ function openWallet(created: Store) {
     </SectionState>
 
     <StoreCreateDialog v-model:open="createDialogOpen" @created="openWallet" />
+    <!-- A menu has no room for the two-step button: the page asks before a wallet is gone. -->
+    <Dialog
+      :open="deleting !== null"
+      :title="t('stores.deleteConfirmTitle', { name: deleting?.name ?? '' })"
+      :description="t('stores.deleteConfirmHint')"
+      size="sm"
+      @update:open="(value) => !value && (deleting = null)"
+    >
+      <template #footer>
+        <Button variant="ghost" @click="deleting = null">{{ t('actions.cancel') }}</Button>
+        <Button
+          variant="destructive"
+          :disabled="remove.isPending.value"
+          @click="deleting && remove.mutate(deleting.id, { onSettled: () => (deleting = null) })"
+        >
+          <Trash2 class="size-4" />
+          {{ t('stores.delete') }}
+        </Button>
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -43,7 +43,7 @@ const { t } = useI18n()
 
 <template>
   <div class="flex flex-wrap items-center gap-2" data-tour="workflow-toolbar">
-    <div class="w-64" :data-invalid="nameError ? '' : undefined">
+    <div class="w-full sm:w-64" :data-invalid="nameError ? '' : undefined">
       <Input
         v-model="name"
         :aria-label="t('workflow.name')"
@@ -65,6 +65,7 @@ const { t } = useI18n()
       variant="ghost"
       size="icon"
       :aria-label="t('workflow.hotkeys')"
+      :title="t('workflow.hotkeys')"
       :aria-pressed="hotkeysOpen"
       @click="hotkeysOpen = !hotkeysOpen"
     >
@@ -78,6 +79,7 @@ const { t } = useI18n()
       :icon="FlaskConical"
       :triggers="triggers"
       :disabled="emulating || !hasNodes"
+      :title="hasNodes ? undefined : t('workflow.emulateNeedsNodes')"
       data-tour="workflow-emulate"
       @run="(id) => emit('emulate', id)"
     />

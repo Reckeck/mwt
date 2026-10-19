@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RouterLink } from 'vue-router'
+import { Money } from '@/entities/currency'
 
 import { ReportTerm } from '@/entities/report'
 import { Card } from '@/shared/ui/card'
@@ -20,7 +21,7 @@ const props = defineProps<{ report: CategoriesReport; filter: ReportFilter }>()
 const { t } = useI18n()
 const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
 const label = (key: string) => (key ? categoryKeyLabel(key, categories.data.value, t) : t('report.categories.none'))
-const money = (value: string) => formatMoney(value, { decimals: 0 })
+const money = (value: string) => formatMoney(value, { decimals: 0, currency: props.report.meta.currency })
 const months = computed(() => props.report.meta.months)
 /** The category's transactions over the whole period, or over one month. */
 const ofCategory = (key: string, month?: string) =>
@@ -58,7 +59,7 @@ function heat(block: CategoryGroupBlock, value: string): string {
           <div class="flex items-center gap-3">
             <span class="w-4 text-muted-foreground">{{ index + 1 }}</span>
             <RouterLink :to="ofCategory(row.key)" class="min-w-0 flex-1 truncate hover:underline">{{ label(row.key) }}</RouterLink>
-            <span class="tabular-nums">{{ money(row.total) }}</span>
+            <span class="tabular-nums"><Money :amount="row.total" :decimals="0" :currency="props.report.meta.currency" /></span>
             <span class="w-12 text-right text-xs tabular-nums text-muted-foreground">
               {{ formatPct(shareOf(row.total), { decimals: 0 }) }}
             </span>
@@ -77,14 +78,14 @@ function heat(block: CategoryGroupBlock, value: string): string {
       <template #header>
         <div class="flex items-center justify-between gap-2">
           <p class="font-medium">{{ t(`categoryGroup.${block.group ?? 'daily'}`) }}</p>
-          <span class="text-sm tabular-nums text-muted-foreground">{{ money(block.total) }}</span>
+          <span class="text-sm tabular-nums text-muted-foreground"><Money :amount="block.total" :decimals="0" :currency="props.report.meta.currency" /></span>
         </div>
       </template>
       <div class="overflow-x-auto">
         <Table class="w-full text-sm tabular-nums">
           <TableHeader>
             <TableRow class="hover:bg-transparent">
-              <TableHead class="text-left">{{ t('report.categories.category') }}</TableHead>
+              <TableHead class="text-left sticky left-0 z-[1] bg-card">{{ t('report.categories.category') }}</TableHead>
               <TableHead class="text-right">
                 <ReportTerm :label="t('report.categories.delta')" :hint="t('report.term.delta')" />
               </TableHead>
@@ -100,7 +101,7 @@ function heat(block: CategoryGroupBlock, value: string): string {
           </TableHeader>
           <TableBody>
             <TableRow v-for="row in block.rows" :key="row.key">
-              <TableCell class="max-w-48 truncate">
+              <TableCell class="max-w-48 truncate sticky left-0 z-[1] bg-card">
                 <RouterLink :to="ofCategory(row.key)" class="hover:underline">{{ label(row.key) }}</RouterLink>
               </TableCell>
               <TableCell class="text-right text-xs" :class="row.delta_pct !== null && signClass(-Number(row.delta_pct))">
@@ -114,16 +115,16 @@ function heat(block: CategoryGroupBlock, value: string): string {
                 :style="{ background: heat(block, cell) }"
               >
                 <RouterLink v-if="Number(cell)" :to="ofCategory(row.key, months[index])" class="hover:underline">
-                  {{ money(cell) }}
+                  <Money :amount="cell" :decimals="0" :currency="props.report.meta.currency" />
                 </RouterLink>
                 <template v-else>—</template>
               </TableCell>
-              <TableCell class="text-right font-medium">{{ money(row.total) }}</TableCell>
-              <TableCell class="text-right">{{ money(row.average) }}</TableCell>
+              <TableCell class="text-right font-medium"><Money :amount="row.total" :decimals="0" :currency="props.report.meta.currency" /></TableCell>
+              <TableCell class="text-right"><Money :amount="row.average" :decimals="0" :currency="props.report.meta.currency" /></TableCell>
               <TableCell class="text-right">{{ formatPct(row.share, { decimals: 0 }) }}</TableCell>
             </TableRow>
             <TableRow class="font-medium">
-              <TableCell>{{ t('report.total') }}</TableCell>
+              <TableCell class="sticky left-0 z-[1] bg-card">{{ t('report.total') }}</TableCell>
               <TableCell />
               <TableCell
                 v-for="(cell, index) in block.totals"
@@ -133,15 +134,12 @@ function heat(block: CategoryGroupBlock, value: string): string {
               >
                 {{ Number(cell) ? money(cell) : '—' }}
               </TableCell>
-              <TableCell class="text-right">{{ money(block.total) }}</TableCell>
+              <TableCell class="text-right"><Money :amount="block.total" :decimals="0" :currency="props.report.meta.currency" /></TableCell>
               <TableCell colspan="2" />
             </TableRow>
           </TableBody>
         </Table>
       </div>
     </Card>
-    <p class="text-xs text-muted-foreground">
-      {{ t('report.currencyNote', { currency: props.report.meta.currency.toUpperCase() }) }}
-    </p>
   </div>
 </template>

@@ -226,5 +226,6 @@ pub fn quote_usd(vault: &mut UnlockedVault) {
         value_usd: amount("1"),
         ts: "2000-01-01T00:00:00Z".into(),
         source: "test".into(),
+        change_24h_pct: None,
     });
 }

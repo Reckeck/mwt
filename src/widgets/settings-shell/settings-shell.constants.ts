@@ -1,10 +1,22 @@
 import type { Component } from 'vue'
-import { Bell, Bug, Coins, FolderTree, HardDrive, RefreshCw, Settings2 } from 'lucide-vue-next'
+import {
+  Bell,
+  Bug,
+  Coins,
+  FolderTree,
+  GraduationCap,
+  HardDrive,
+  MonitorSmartphone,
+  RefreshCw,
+  Settings2,
+} from 'lucide-vue-next'
 
 export interface SettingsSection {
   id: string
   /** i18n key of the section's name in the window's sidebar. */
   titleKey: string
+  /** Exists only on a desktop (the global shortcut, the tray). */
+  desktopOnly?: boolean
 }
 
 export interface SettingsTab {
@@ -25,11 +37,22 @@ export const SETTINGS_TABS: SettingsTab[] = [
     id: 'general',
     titleKey: 'settingsShell.tab.general',
     icon: Settings2,
+    sections: [{ id: 'app', titleKey: 'settingsShell.section.app' }],
+  },
+  {
+    id: 'device',
+    titleKey: 'settingsShell.tab.device',
+    icon: MonitorSmartphone,
     sections: [
-      { id: 'app', titleKey: 'settingsShell.section.app' },
-      { id: 'quick-add', titleKey: 'settingsShell.section.quickAdd' },
-      { id: 'tours', titleKey: 'settingsShell.section.tours' },
+      { id: 'device-app', titleKey: 'settingsShell.section.deviceApp' },
+      { id: 'quick-add', titleKey: 'settingsShell.section.quickAdd', desktopOnly: true },
     ],
+  },
+  {
+    id: 'learning',
+    titleKey: 'settingsShell.tab.learning',
+    icon: GraduationCap,
+    sections: [{ id: 'tours', titleKey: 'settingsShell.section.tours' }],
   },
   {
     id: 'notifications',
@@ -91,4 +114,6 @@ export const SETTINGS_ALIASES: Record<string, { tab: string; section: string }> 
   inflation: { tab: 'money', section: 'inflation' },
   rates: { tab: 'money', section: 'rates' },
   enrichment: { tab: 'vault', section: 'enrichment' },
+  tours: { tab: 'learning', section: 'tours' },
+  'quick-add': { tab: 'device', section: 'quick-add' },
 }

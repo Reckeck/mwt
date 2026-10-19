@@ -30,7 +30,9 @@ const list = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 
 // A click anywhere else closes the panel, like Escape.
-onClickOutside(panel, () => emit('close'))
+onClickOutside(panel, () => {
+  if (!props.docked) emit('close')
+})
 
 interface Row {
   choice: QuickAddChoice
@@ -95,13 +97,18 @@ const contextText = computed(() => {
 onMounted(() => {
   void nextTick(() => (field.value?.$el as HTMLInputElement | undefined)?.focus())
 })
+// check-ui-ignore fixed-width: floats at the cursor on a desktop only; a phone docks it in a sheet
 </script>
 
 <template>
   <div
     ref="panel"
-    class="fixed z-50 grid w-80 gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg"
-    :style="{ left: `${props.left}px`, top: `${props.top}px` }"
+    :class="
+      props.docked
+        ? 'grid min-h-0 gap-2 p-3'
+        : 'fixed z-50 grid w-80 gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg'
+    "
+    :style="props.docked ? undefined : { left: `${props.left}px`, top: `${props.top}px` }"
     data-tour="workflow-quick-add"
     role="dialog"
     :aria-label="contextText"
@@ -109,7 +116,7 @@ onMounted(() => {
   >
     <p class="px-1 text-xs text-muted-foreground">{{ contextText }}</p>
     <Input ref="field" v-model="query" :placeholder="t('workflow.quick.placeholder')" :aria-label="t('workflow.quick.placeholder')" />
-    <ul ref="list" class="max-h-72 overflow-y-auto">
+    <ul ref="list" :class="props.docked ? 'max-h-[50dvh] overflow-y-auto' : 'max-h-72 overflow-y-auto'">
       <li v-for="(row, index) in rows" :key="`${row.choice.kind}-${row.choice.hint}`">
         <Button
           variant="ghost"
@@ -134,6 +141,6 @@ onMounted(() => {
       </li>
       <li v-if="!rows.length" class="px-2 py-3 text-sm text-muted-foreground">{{ t('workflow.quick.none') }}</li>
     </ul>
-    <p class="px-1 text-xs text-muted-foreground">{{ t('workflow.quick.tips') }}</p>
+    <p v-if="!props.docked" class="px-1 text-xs text-muted-foreground">{{ t('workflow.quick.tips') }}</p>
   </div>
 </template>

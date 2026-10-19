@@ -43,6 +43,7 @@ const dot = (type: PortType) =>
   cn('!size-2.5 !border-2 !border-card', type === 'flow' ? '!size-3 !rounded-sm' : '!rounded-full')
 /** The port's colour inline: Vue Flow's own handle style would win over a class. */
 const dotStyle = (type: PortType) => ({ background: portStroke(type) })
+// check-ui-ignore fixed-width: a node on the canvas, which pans and zooms
 </script>
 
 <template>

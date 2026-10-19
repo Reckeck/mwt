@@ -6,6 +6,7 @@ import { isFiatCode, moneyParts, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { useFavoriteCurrencies } from '../../model/favorites'
 import { MoneyConversions } from '../money-conversions'
 import type { MoneyProps } from './money.types'
 
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
 })
 
 const settings = useSettingsStore()
+const favorites = useFavoriteCurrencies()
 
 const code = computed(() => (props.currency || settings.baseCurrency).toLowerCase())
 const parts = computed(() =>
@@ -42,17 +44,27 @@ const known = computed(
   () =>
     code.value === settings.baseCurrency ||
     isFiatCode(code.value) ||
-    settings.favoriteCurrencies.some((entry) => entry.toLowerCase() === code.value),
+    favorites.isFavorite(code.value),
 )
 const convertible = computed(
   () => (props.convert ?? known.value) && Number.isFinite(numeric.value) && numeric.value !== 0,
 )
 /** The conversions load on the first hover only. */
 const hovered = ref(false)
+/**
+ * The tooltip mounts on the first hover, open: a page of rows has hundreds of
+ * sums, and a tooltip each made the page slow to appear.
+ */
+const armed = ref(false)
+function arm() {
+  if (!convertible.value) return
+  armed.value = true
+  hovered.value = true
+}
 </script>
 
 <template>
-  <Tooltip v-if="convertible" @update:open="(isOpen: boolean) => isOpen && (hovered = true)">
+  <Tooltip v-if="convertible && armed" default-open @update:open="(isOpen: boolean) => isOpen && (hovered = true)">
     <TooltipTrigger as-child>
       <span :class="cn('money inline-flex cursor-default items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone)">
         <span>{{ parts.number }}</span>
@@ -63,7 +75,11 @@ const hovered = ref(false)
       <MoneyConversions v-if="hovered" :amount="numeric" :currency="code" />
     </TooltipContent>
   </Tooltip>
-  <span v-else :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone)">
+  <span
+    v-else
+    :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone, convertible && 'cursor-default')"
+    @pointerenter="arm"
+  >
     <span>{{ parts.number }}</span>
     <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
   </span>

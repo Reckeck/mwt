@@ -3,6 +3,7 @@ import { type MaybeRefOrGetter, computed, toValue } from 'vue'
 import { activeLocale } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { useFavoriteCurrencies } from '../../model/favorites'
 import type { CurrencyKind, CurrencyOption } from './currency-picker.types'
 
 /** `Intl.DisplayNames` is costly to build; one per locale is enough. */
@@ -29,10 +30,12 @@ function currencyName(code: string, locale: string): string {
  */
 export function useCurrencyOptions(kinds: MaybeRefOrGetter<CurrencyKind[]>, extra: MaybeRefOrGetter<string[]>) {
   const settings = useSettingsStore()
+  const favoriteCodes = useFavoriteCurrencies()
 
   const all = computed<CurrencyOption[]>(() => {
     const wanted = new Set(toValue(kinds))
-    const favorites = new Set([settings.baseCurrency, ...settings.favoriteCurrencies.map((code) => code.toLowerCase())])
+    const order = favoriteCodes.withBase.value
+    const favorites = new Set(order)
     const locale = activeLocale.value
     const seen = new Set<string>()
     const rows: CurrencyOption[] = []
@@ -51,7 +54,9 @@ export function useCurrencyOptions(kinds: MaybeRefOrGetter<CurrencyKind[]>, extr
     for (const code of toValue(extra)) push(code, fiat.has(code.toLowerCase()) ? 'fiat' : 'crypto')
     if (wanted.has('fiat')) for (const code of settings.fiatCurrencies) push(code, 'fiat')
     if (wanted.has('crypto')) for (const code of settings.cryptoCurrencies) push(code, 'crypto')
-    return rows.sort((left, right) => Number(right.favorite) - Number(left.favorite))
+    // Favourites first, in the user's order (the base leads); the rest keep the catalog order.
+    const rank = (row: CurrencyOption) => (row.favorite ? order.indexOf(row.code) : order.length)
+    return rows.sort((left, right) => rank(left) - rank(right))
   })
 
   /** Exact code, then code prefix, then name or code substring. */

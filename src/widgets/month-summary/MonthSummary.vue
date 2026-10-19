@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -35,7 +36,7 @@ const rows = computed(() => {
     <dl class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm tabular-nums">
       <template v-for="row in rows" :key="row.key">
         <dt class="text-muted-foreground">{{ t(`monthSummary.${row.key}`) }}</dt>
-        <dd class="text-right">{{ money(row.amount) }}</dd>
+        <dd class="text-right"><Money :amount="row.amount" :decimals="0" :currency="data?.currency" /></dd>
       </template>
       <dt class="text-muted-foreground">{{ t('monthSummary.savedPct') }}</dt>
       <dd class="text-right" :class="Number(data.deviation) < 0 ? 'text-destructive' : 'text-success'">

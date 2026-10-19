@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import { BellRing } from 'lucide-vue-next'
@@ -72,16 +73,6 @@ const askPermission = useMutation({
 })
 /* --- while the vault is locked, and after a reboot --- */
 const storage = useQuery({ queryKey: ['notification-storage'], queryFn: () => call<string>('notification_storage') })
-const autostart = useQuery({ queryKey: ['autostart'], queryFn: () => call<boolean>('get_autostart') })
-const setAutostart = useMutation({
-  mutationFn: (enabled: boolean) => call<boolean>('set_autostart', { enabled }),
-  onSuccess: () => void autostart.refetch(),
-  meta: {
-    error: 'settings.saveFailed',
-    success: (data) => (data ? t('notices.autostartOn') : t('notices.autostartOff')),
-  },
-})
-
 const test = useMutation({
   mutationFn: () => call('send_test_notification'),
   meta: { success: 'notices.testSent', error: 'notices.testFailed' },
@@ -150,18 +141,10 @@ const test = useMutation({
           {{ storage.data.value === 'keyring' ? t('notices.lockedKeyring') : t('notices.lockedMemory') }}
         </p>
       </div>
-      <div class="flex items-center justify-between gap-3">
-        <div class="grid gap-0.5">
-          <Label for="notice-autostart">{{ t('notices.autostart') }}</Label>
-          <p class="text-xs text-muted-foreground">{{ t('notices.autostartHint') }}</p>
-        </div>
-        <Switch
-          id="notice-autostart"
-          :model-value="autostart.data.value ?? false"
-          :disabled="setAutostart.isPending.value"
-          @update:model-value="(value) => setAutostart.mutate(Boolean(value))"
-        />
-      </div>
+      <!-- Starting with the system is a device setting: «Это устройство». -->
+      <RouterLink :to="{ query: { settings: 'device' } }" class="w-fit text-xs text-primary hover:underline">
+        {{ t('notices.autostartMoved') }}
+      </RouterLink>
     </div>
 
     <div class="grid gap-1 rounded-lg border border-border">

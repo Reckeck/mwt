@@ -197,6 +197,8 @@ impl From<VaultDocV1> for VaultDoc {
                 daily_budget_mode: settings.daily_budget_mode,
                 budget_currency: settings.budget_currency,
                 notifications: NotificationSettings::default(),
+                budget_configured: false,
+                onboarding_skipped: Vec::new(),
             },
             stores: old.stores,
             holdings: old.holdings,

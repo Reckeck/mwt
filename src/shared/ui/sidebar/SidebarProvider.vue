@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { HTMLAttributes, Ref } from "vue"
 import { useEventListener, useMediaQuery, useVModel } from "@vueuse/core"
+import { PHONE_QUERY } from '@/shared/lib/phone'
 import { TooltipProvider } from "reka-ui"
 import { computed, ref } from "vue"
 import { cn } from '@/shared/lib/utils'
@@ -19,7 +20,7 @@ const emits = defineEmits<{
   "update:open": [open: boolean]
 }>()
 
-const isMobile = useMediaQuery("(max-width: 768px)")
+const isMobile = useMediaQuery(PHONE_QUERY)
 const openMobile = ref(false)
 
 const open = useVModel(props, "open", emits, {

@@ -11,10 +11,14 @@ import { Select, SelectItem } from '@/shared/ui/select'
 
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
+import { accountStoreId } from '@/shared/lib/transactions'
+import { computed } from 'vue'
+import { AvailableHint } from '../available-hint'
 
 /** Transfer: one asset between two places, possibly a debt. */
 const { t } = useI18n()
 const { form, check, swapSides, debts, debtValue } = useTxForm()
+const fromStore = computed(() => accountStoreId(form.from))
 </script>
 
 <template>
@@ -22,6 +26,7 @@ const { form, check, swapSides, debts, debtValue } = useTxForm()
     <AssetInput v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
     <FormField for="tx-amount" :label="t('form.amount')" required :error="check.error('amount')">
       <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
+      <AvailableHint :store-id="fromStore" :asset="form.asset" @max="(quantity) => (form.amount = quantity)" />
     </FormField>
   </div>
   <div class="grid items-end gap-3 @sm:grid-cols-[1fr_auto_1fr]">

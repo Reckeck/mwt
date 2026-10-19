@@ -23,7 +23,7 @@ export function issue(
   nodeId: string | null = null,
   edgeId: string | null = null,
 ) {
-  return { level: 'error', code, node_id: nodeId, edge_id: edgeId, text_ru: ru, text_en: en } as GraphIssue
+  return { level: 'error', code, node_id: nodeId, edge_id: edgeId, text_ru: ru, text_en: en, param: null } as GraphIssue
 }
 export function find(id: string): Workflow {
   const workflow = workflows.find((entry) => entry.id === id)

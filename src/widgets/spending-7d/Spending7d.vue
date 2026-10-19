@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -51,7 +52,7 @@ const weekday = (date: string) =>
           {{ t('spending7d.title') }}
         </RouterLink>
         <span class="text-sm tabular-nums">
-          {{ formatMoney(total, { decimals: 0, currency: current.data.value.currency }) }}
+          <Money :amount="total" :decimals="0" :currency="current.data.value.currency" />
         </span>
       </div>
     </template>

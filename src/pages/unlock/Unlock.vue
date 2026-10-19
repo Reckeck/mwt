@@ -34,7 +34,7 @@ function onReceived(path: string) {
     <!-- The app shell is not mounted on this public route, so the unlock screen
          carries its own header — otherwise the settings would be unreachable
          before a vault is open. -->
-    <header class="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 md:px-6">
+    <header class="box-content flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 pt-safe md:px-6">
       <div class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
         M
       </div>
@@ -66,7 +66,8 @@ function onReceived(path: string) {
             <p class="text-sm text-muted-foreground">{{ t(vault.appStorage ? 'auth.createVaultHintApp' : 'auth.createVaultHint') }}</p>
           </template>
 
-          <Button size="lg" class="w-full" @click="createOpen = true">
+          <!-- With a vault to open, creating another is the second choice. -->
+          <Button size="lg" class="w-full" :variant="vault.recents.length ? 'outline' : 'default'" @click="createOpen = true">
             <FolderPlus class="size-4" />
             {{ t('auth.createVaultButton') }}
           </Button>

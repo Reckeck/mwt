@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -55,8 +56,8 @@ const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
         <TableBody>
           <TableRow v-for="month in calendar.data.value?.months ?? []" :key="month.month">
             <TableCell class="capitalize">{{ monthName(month.month) }}</TableCell>
-            <TableCell class="text-right">{{ money(month.need) }}</TableCell>
-            <TableCell class="text-right">{{ money(month.saved) }}</TableCell>
+            <TableCell class="text-right"><Money :amount="month.need" :currency="calendar.data.value?.currency" /></TableCell>
+            <TableCell class="text-right"><Money :amount="month.saved" :currency="calendar.data.value?.currency" /></TableCell>
             <TableCell class="text-right text-xs">
               <span v-if="Number(month.need) === 0" class="text-muted-foreground">—</span>
               <span v-else-if="month.done" class="text-success">✓ {{ t('goalCalendar.done') }}</span>

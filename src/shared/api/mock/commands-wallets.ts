@@ -1,14 +1,15 @@
 /** Commands: wallets, envelopes, the exchange terminal, overviews and history. */
 
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
+import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockListTxs, mockTxGraph } from './explore'
 import { mockEnvelopeView, mockEnvelopes, mockWalletCatalog } from './catalog'
 import { resolve } from './core'
 import type { MockCommands } from './core'
-import { mockStores } from './demo'
-import { mockHistory, mockSummary } from './market'
-import { mockExploreCtx, mockOverview, mockStore } from './tree'
-import { mockSettings } from './vault-data'
+import { mockFilterTxs, mockStores } from './demo'
+import { mockHistory, mockNetWorth, mockSummary } from './market'
+import { mockAncestors, mockExploreCtx, mockOverview, mockOwnPositions, mockStore } from './tree'
+import { mockAppSettings, mockSettings } from './vault-data'
 
 /** Commands: wallets, envelopes and the exchange terminal. */
 export const walletsCommands: MockCommands = {
@@ -113,6 +114,12 @@ export const overviewCommands: MockCommands = {
     // read the same names the real backend receives (data *fields* stay snake_case).
     return resolve(mockListTxs((args?.filter as TxFilter | null) ?? emptyTxFilter(), mockExploreCtx()))
   },
+  list_transactions_page: ({ args }) => {
+    const all = mockListTxs((args?.filter as TxFilter | null) ?? emptyTxFilter(), mockExploreCtx())
+    const offset = Number(args?.offset ?? 0)
+    const limit = Number(args?.limit ?? all.length)
+    return resolve({ items: all.slice(offset, offset + limit), total: all.length } satisfies TxPage)
+  },
   get_tx_graph: ({ args }) => {
     return resolve(
       mockTxGraph(
@@ -125,6 +132,65 @@ export const overviewCommands: MockCommands = {
   get_store_overview: ({ args }) => {
     return resolve(mockOverview(String(args?.storeId ?? ''), args?.includeChildren !== false))
   },
+  // Like `asset_holdings` in Rust, matched by ticker only.
+  get_asset_holdings: ({ args }) => {
+    const asset = args?.asset as AssetRef
+    const rows: AssetHolding[] = mockStores.flatMap((store) =>
+      mockOwnPositions(store.id)
+        .filter((position) => position.asset.symbol.toUpperCase() === asset.symbol.toUpperCase())
+        .map((position) => ({
+          store_id: store.id,
+          store_name: store.name,
+          path: mockAncestors(store.id).map((parent) => parent.name),
+          root_id: mockAncestors(store.id)[0]?.id ?? store.id,
+          archived: store.archived,
+          asset: position.asset,
+          quantity: position.quantity,
+          avg_cost: position.avg_cost,
+          price_base: position.price_base,
+          value_base: position.value_base,
+          unrealized_base: position.unrealized_base,
+          price_info: position.price_info,
+          peg_valued: position.price_info.origin === 'peg',
+        })),
+    )
+    rows.sort((left, right) => Number(right.value_base) - Number(left.value_base))
+    const sum = (pick: (row: AssetHolding) => string) =>
+      String(rows.reduce((total, row) => total + Number(pick(row)), 0))
+    return resolve({
+      asset,
+      base_currency: mockAppSettings.base_currency,
+      total_quantity: sum((row) => row.quantity),
+      total_value_base: sum((row) => row.value_base),
+      rows,
+    } satisfies AssetHoldings)
+  },
+  // Like `store_months` in Rust: principal legs on the wallet, valued at their recorded price.
+  get_store_months: ({ args }) => {
+    const storeId = String(args?.storeId ?? '')
+    const count = Number(args?.months ?? 6)
+    const now = new Date()
+    const rows: StoreMonthRow[] = Array.from({ length: count }, (_unused, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (count - 1 - index), 1)
+      return {
+        month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        inflow: '0',
+        outflow: '0',
+        tx_count: 0,
+      }
+    })
+    for (const tx of mockFilterTxs([storeId])) {
+      const row = rows.find((entry) => txMeta(tx).timestamp.startsWith(entry.month))
+      if (!row) continue
+      row.tx_count += 1
+      for (const leg of txLegs(tx).filter((entry) => entry.store_id === storeId && entry.role === 'principal')) {
+        const value = Math.abs(Number(leg.amount)) * Number(leg.price_usd ?? 1)
+        if (Number(leg.amount) < 0) row.outflow = String(Number(row.outflow) + value)
+        else row.inflow = String(Number(row.inflow) + value)
+      }
+    }
+    return resolve(rows)
+  },
   get_store_history: (_call) => {
     return resolve(mockHistory)
   },
@@ -132,7 +198,13 @@ export const overviewCommands: MockCommands = {
     return resolve({ total_base: '1234.56', fees_base: '4.5', legs: [] })
   },
   get_summary: (_call) => {
-    return resolve(mockSummary)
+    // Like the core: the summary's net worth is the same figure `get_net_worth` gives.
+    const worth = mockNetWorth()
+    return resolve({
+      ...mockSummary,
+      net_worth_base: worth.net,
+      liabilities_base: String(Number(worth.liabilities) + Number(worth.payables)),
+    })
   },
   get_history: (_call) => {
     return resolve(mockHistory)

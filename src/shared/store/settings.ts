@@ -19,6 +19,9 @@ import { call } from '@/shared/api/ipc'
  * would only move the decision into every view. The split stays visible in the
  * field and action names (`app` / `vault`).
  */
+/** A catalog that came back cached or built-in is asked for again after this long. */
+const CATALOG_RETRY_MS = 60_000
+
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
     /** User-scoped preferences, stored outside the vault. */
@@ -30,6 +33,8 @@ export const useSettingsStore = defineStore('settings', {
     /** `builtin` | `cached` | null — see `CurrencyCatalogOutput.notice`. */
     currenciesNotice: null as string | null,
     currenciesLoading: false,
+    /** When the catalog last arrived, ms; a degraded one is asked for again after a minute. */
+    currenciesFetchedAt: 0,
     /** Whether the app-level read has landed at least once. */
     appLoaded: false,
     /** Ask for consent to look hashes up (plan §8.2); the shell shows the dialog. */
@@ -79,15 +84,19 @@ export const useSettingsStore = defineStore('settings', {
      *
      * The backend degrades on its own (network → last cached fetch → built-in
      * list), so this never rejects over an offline machine; `currenciesNotice`
-     * says which rung was used.
+     * says which rung was used. A degraded list (`notice` set) is asked for
+     * again once it is older than a minute, or at once with `force`.
      */
-    async loadCurrencies() {
-      if (this.currenciesLoading || this.currencies) return
+    async loadCurrencies(force = false) {
+      if (this.currenciesLoading) return
+      const stale = this.currenciesNotice !== null && Date.now() - this.currenciesFetchedAt > CATALOG_RETRY_MS
+      if (this.currencies && !force && !stale) return
       this.currenciesLoading = true
       try {
         const result = await call<CurrencyCatalogOutput>('get_supported_currencies')
         this.currencies = result.catalog
         this.currenciesNotice = result.notice
+        this.currenciesFetchedAt = Date.now()
       } finally {
         this.currenciesLoading = false
       }
@@ -136,5 +145,6 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     daily_budget_mode: patch.daily_budget_mode ?? null,
     budget_currency: patch.budget_currency ?? null,
     notifications: patch.notifications ?? null,
+    onboarding_skipped: patch.onboarding_skipped ?? null,
   }
 }

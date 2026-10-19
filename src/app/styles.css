@@ -73,6 +73,13 @@
 }
 
 :root {
+  /* System bars, cutout and keyboard: the browser's safe area, or what the
+     Android plugin writes (`--native-inset-*`, crates/plugin-insets) — the
+     WebView there reports env() as zero. Everything fixed to an edge uses these. */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--native-inset-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--native-inset-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--native-inset-left, 0px));
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
@@ -255,6 +262,40 @@
   letter-spacing: var(--tracking-tight);
 }
 
+/* Room for the system bars (see --safe-* on :root). */
+@utility pt-safe {
+  padding-top: var(--safe-top);
+}
+@utility pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+@utility px-safe {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+@utility inset-safe {
+  top: var(--safe-top);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  left: var(--safe-left);
+}
+/* A strip that scrolls sideways (tabs) without a scrollbar eating its height. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* A finger needs a bigger target than a mouse: small buttons grow on touch screens. */
+@media (pointer: coarse) {
+  [role='tab'],
+  [role='menuitem'],
+  [role='option'] {
+    min-height: 40px;
+  }
+}
+
 /* A desktop window, not a page: no rubber-band scroll past the edges. */
 html,
 body {
@@ -403,4 +444,19 @@ body .driver-popover-close-btn {
 .wf-canvas .vue-flow__edge.selected .vue-flow__edge-path {
   stroke-width: 3.5;
   filter: drop-shadow(0 0 2px var(--ring));
+}
+
+/* A finger needs more than the 10px dot: the port answers to a ring around it,
+   and the zoom buttons grow to a touch size. */
+@media (pointer: coarse) {
+  .wf-canvas .vue-flow__handle::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    border-radius: 9999px;
+  }
+  .wf-canvas .vue-flow__controls-button {
+    width: 36px;
+    height: 36px;
+  }
 }

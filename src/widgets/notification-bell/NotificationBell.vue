@@ -6,10 +6,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Bell, CheckCheck } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
 import { noticeRoute } from '@/shared/lib/notice-link'
+import { settingsQuery } from '@/shared/lib/settings-link'
 import { cn } from '@/shared/lib/utils'
 
 /** The bell: what was told, by day, newest first; unread ones stand out. */
@@ -39,6 +41,12 @@ const markRead = useMutation({
     success: (_data, keys) => (keys ? t('notices.markedRead') : t('notices.allRead')),
   },
 })
+
+/** What gets announced is chosen in the settings: the empty panel leads there. */
+function openSettings() {
+  open.value = false
+  void router.push({ query: settingsQuery(router.currentRoute.value.query, 'notifications') })
+}
 
 function openNotice(record: NoticeRecord) {
   if (!record.read) markRead.mutate([record.key])
@@ -81,7 +89,9 @@ function openNotice(record: NoticeRecord) {
         <SheetDescription>{{ t('notices.hint') }}</SheetDescription>
       </SheetHeader>
       <div class="min-h-0 flex-1 overflow-y-auto p-3">
-        <p v-if="!days.length" class="p-2 text-sm text-muted-foreground">{{ t('notices.empty') }}</p>
+        <EmptyState v-if="!days.length" compact :icon="Bell" :title="t('notices.empty')" :description="t('notices.emptyHint')">
+          <Button variant="outline" size="sm" @click="openSettings">{{ t('notices.openSettings') }}</Button>
+        </EmptyState>
         <section v-for="[day, records] in days" :key="day" class="grid gap-1 pb-3">
           <p class="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ formatDate(day) }}</p>
           <Button

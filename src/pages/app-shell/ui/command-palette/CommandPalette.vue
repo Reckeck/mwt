@@ -4,17 +4,21 @@ import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { onClickOutside, useEventListener } from '@vueuse/core'
-import { Lock, Plus, RefreshCw, Settings, Sparkles } from 'lucide-vue-next'
+import { ArrowLeftRight, Lock, Plus, RefreshCw, Search, Settings, Sparkles } from 'lucide-vue-next'
 
 import { walletRow } from '@/entities/store'
 import { usePriceRefresh } from '@/features/price-refresh'
+import { Button } from '@/shared/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandSeparator } from '@/shared/ui/command'
 import { call } from '@/shared/api/ipc'
+import { openConverter } from '@/shared/lib/converter'
+import { useIsPhone } from '@/shared/lib/phone'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { NAV_GROUPS } from '../../app-shell.constants'
 import PaletteInput from './PaletteInput.vue'
+import { usePaletteIndex } from './use-palette-index'
 
 /**
  * The search in the header: type a few letters to go to any screen or wallet,
@@ -38,6 +42,28 @@ const wallets = computed(() =>
 const screens = computed(() => NAV_GROUPS.flatMap((group) => group.items))
 
 const open = ref(false)
+/** A phone shows a magnifier; the field opens over the top bar while in use. */
+const phone = useIsPhone()
+const rootClass = computed(() => {
+  if (!phone.value) return 'relative w-40 min-w-0 sm:w-56 lg:w-72'
+  return open.value ? 'absolute inset-x-2 bottom-2.5 z-50' : 'shrink-0'
+})
+
+function openField() {
+  open.value = true
+  void nextTick(() => input.value?.focus())
+}
+const index = usePaletteIndex(
+  open,
+  computed(() => screens.value.map((item) => item.name)),
+)
+/** Settings, sub-tabs, workflows and contacts: a heading and its entries each. */
+const groups = computed(() => [
+  { key: 'settings', heading: t('palette.settings'), items: index.settings.value },
+  { key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value },
+  { key: 'workflows', heading: t('palette.workflows'), items: index.workflows.value },
+  { key: 'contacts', heading: t('palette.contacts'), items: index.contacts.value },
+])
 const root = ref<HTMLElement | null>(null)
 const input = ref<InstanceType<typeof PaletteInput> | null>(null)
 /** The listbox keeps the last pick; cleared so the same row can be picked again. */
@@ -69,14 +95,17 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
 </script>
 
 <template>
-  <div ref="root" class="relative w-40 min-w-0 sm:w-56 lg:w-72" data-tour="command-palette">
-    <Command v-model="picked" class="overflow-visible bg-transparent">
+  <div ref="root" :class="rootClass" data-tour="command-palette">
+    <Button v-if="phone && !open" variant="ghost" size="icon" :aria-label="t('palette.title')" @click="openField">
+      <Search class="size-4" />
+    </Button>
+    <Command v-show="!phone || open" v-model="picked" class="overflow-visible" :class="phone ? 'bg-background' : 'bg-transparent'">
       <PaletteInput ref="input" :placeholder="t('palette.placeholder')" :label="t('palette.title')" @focus="open = true" />
       <div
         v-show="open"
         class="absolute top-full right-0 z-50 mt-1 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
       >
-        <CommandList class="max-h-[min(24rem,70vh)]">
+        <CommandList class="max-h-[min(24rem,70dvh)]">
           <CommandEmpty>{{ t('palette.nothing') }}</CommandEmpty>
           <CommandGroup :heading="t('palette.actions')">
             <CommandItem value="action-quick-add" @select="run(() => emit('quickAdd'))">
@@ -94,6 +123,10 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
             <CommandItem value="action-whats-new" @select="go({ query: { ...route.query, whatsNew: '1' } })">
               <Sparkles />
               {{ t('whatsNew.title') }}
+            </CommandItem>
+            <CommandItem value="action-converter" @select="run(() => openConverter())">
+              <ArrowLeftRight />
+              {{ t('palette.converter') }}
             </CommandItem>
             <CommandItem value="action-lock" @select="run(() => emit('lock'))">
               <Lock />
@@ -123,6 +156,17 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
               </span>
             </CommandItem>
           </CommandGroup>
+          <template v-for="group in groups" :key="group.key">
+            <template v-if="group.items.length">
+              <CommandSeparator />
+              <CommandGroup :heading="group.heading">
+                <CommandItem v-for="entry in group.items" :key="entry.id" :value="entry.id" @select="go(entry.to)">
+                  {{ entry.label }}
+                  <span class="sr-only">{{ entry.keywords }}</span>
+                </CommandItem>
+              </CommandGroup>
+            </template>
+          </template>
         </CommandList>
       </div>
     </Command>

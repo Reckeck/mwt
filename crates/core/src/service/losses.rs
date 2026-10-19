@@ -113,6 +113,12 @@ pub struct FxRow {
     pub updated_at: String,
     /// The vault uses this currency (it keeps rate history).
     pub tracked: bool,
+    /// A coin from the favourites, rated from its cached price.
+    #[serde(default)]
+    pub crypto: bool,
+    /// The user marked this code as a favourite.
+    #[serde(default)]
+    pub favorite: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -348,11 +354,28 @@ impl UnlockedVault {
 
     /// Every chain with a link in `[from, to)` (RFC3339 bounds; empty = open),
     /// newest first, valued in the base currency.
-    pub fn list_flows(&self, from: Option<&str>, to: Option<&str>) -> Vec<FlowSummary> {
+    pub fn list_flows(
+        &self,
+        from: Option<&str>,
+        to: Option<&str>,
+        store_ids: &[String],
+    ) -> Vec<FlowSummary> {
         let book = self.rate_book();
         let base = self.base_and_fx().0;
         let lower = from.map(secs_or_now).unwrap_or(i64::MIN);
         let upper = to.map(secs_or_now).unwrap_or(i64::MAX);
+        // A chain belongs to the wallets any of its links moved money in.
+        let scope = (!store_ids.is_empty()).then(|| {
+            self.resolve_scope(&crate::model::store::StoreScope {
+                store_ids: store_ids.to_vec(),
+                include_children: true,
+            })
+        });
+        let touches_scope = |tx: &Transaction| {
+            scope
+                .as_ref()
+                .is_none_or(|ids| tx.legs().iter().any(|leg| ids.contains(&leg.store_id)))
+        };
         let mut chains: HashMap<String, Vec<&Transaction>> = HashMap::new();
         for tx in &self.doc.transactions {
             if let Some(flow) = &tx.meta().flow_id {
@@ -365,7 +388,7 @@ impl UnlockedVault {
                 links.iter().any(|tx| {
                     let secs = secs_or_now(&tx.meta().timestamp);
                     secs >= lower && secs < upper
-                })
+                }) && links.iter().any(|tx| touches_scope(tx))
             })
             .map(|(flow_id, mut links)| {
                 links.sort_by_key(|tx| secs_or_now(&tx.meta().timestamp));
@@ -436,8 +459,14 @@ impl UnlockedVault {
 
     // -- rates --------------------------------------------------------------------
 
-    /// Every cached currency against the base, latest rates (plan Ф3b, «Курсы»).
-    pub fn fx_table(&self) -> FxTable {
+    /// Every cached currency against the base, latest rates (plan Ф3b, «Курсы»),
+    /// plus a row per crypto favourite that has a cached price.
+    pub fn fx_table(&self, favorites: &[String]) -> FxTable {
+        let is_favorite = |code: &str| {
+            favorites
+                .iter()
+                .any(|fav| fav.trim().eq_ignore_ascii_case(code))
+        };
         let base = self.base_and_fx().0;
         let tracked = self.fx_currencies_in_use();
         let mut latest: BTreeMap<String, (Amount, String)> = BTreeMap::new();
@@ -453,7 +482,7 @@ impl UnlockedVault {
             .entry("usd".into())
             .or_insert_with(|| (Amount::new(rust_decimal::Decimal::ONE), String::new()));
         let base_per_usd = latest.get(&base).map(|(rate, _)| *rate);
-        let rows = latest
+        let mut rows: Vec<FxRow> = latest
             .iter()
             .filter(|(code, _)| **code != base)
             .filter_map(|(code, (per_usd, ts))| {
@@ -468,10 +497,59 @@ impl UnlockedVault {
                     in_base: (Amount::new(rust_decimal::Decimal::ONE) / per_base).round(6),
                     updated_at: ts.clone(),
                     tracked: tracked.contains(code),
+                    crypto: false,
+                    favorite: is_favorite(code),
                 })
             })
             .collect();
+        if let Some(base_rate) = base_per_usd.filter(|rate| !rate.is_zero()) {
+            let crypto = self.crypto_fx_rows(favorites, &base, base_rate, &rows);
+            rows.extend(crypto);
+        }
         FxTable { base, rows }
+    }
+
+    /// Rows for the crypto favourites, from the latest cached quote.
+    fn crypto_fx_rows(
+        &self,
+        favorites: &[String],
+        base: &str,
+        base_per_usd: Amount,
+        fiat_rows: &[FxRow],
+    ) -> Vec<FxRow> {
+        let book = self.rate_book();
+        let now = crate::pricing::history::secs_or_now("");
+        let mut rows: Vec<FxRow> = Vec::new();
+        for code in favorites {
+            let code = code.trim().to_lowercase();
+            let taken = code == base
+                || fiat_rows.iter().any(|row| row.currency == code)
+                || rows.iter().any(|row| row.currency == code);
+            if taken {
+                continue;
+            }
+            let Some(asset) = self.favorite_asset(&code) else {
+                continue;
+            };
+            let Some((usd, at)) = book.quote_at(&asset.key(), now) else {
+                continue;
+            };
+            let in_base = usd * base_per_usd;
+            if in_base.is_zero() {
+                continue;
+            }
+            rows.push(FxRow {
+                // A coin is worth thousands of base units: keep enough digits.
+                per_base: (Amount::new(rust_decimal::Decimal::ONE) / in_base).round(12),
+                in_base: in_base.round(6),
+                updated_at: at.map(super::rates::iso_of).unwrap_or_default(),
+                tracked: self.held_coin(&code).is_some(),
+                crypto: true,
+                favorite: true,
+                currency: code,
+            });
+        }
+        rows
     }
 }
 
@@ -559,6 +637,7 @@ mod tests {
             value_usd: amount("1"),
             ts: "2026-01-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         }]);
         (dir, vault, card, wallet, baht)
     }
@@ -619,7 +698,7 @@ mod tests {
         let flow = vault
             .link_transactions(&[first.meta().id.clone(), second.meta().id.clone()], None)
             .unwrap();
-        let flows = vault.list_flows(None, None);
+        let flows = vault.list_flows(None, None, &[]);
         assert_eq!(flows.len(), 1);
         let chain = &flows[0];
         assert_eq!(chain.flow_id, flow);
@@ -632,18 +711,60 @@ mod tests {
         assert_eq!(chain.difference, amount("2.86"));
 
         vault.unlink_transaction(&second.meta().id).unwrap();
-        assert_eq!(vault.list_flows(None, None)[0].links.len(), 1);
+        assert_eq!(vault.list_flows(None, None, &[])[0].links.len(), 1);
+        // Another wallet's chains stay out; one of the chain's own wallets keeps it.
+        assert!(
+            vault
+                .list_flows(None, None, std::slice::from_ref(&baht))
+                .is_empty()
+        );
+        assert_eq!(
+            vault
+                .list_flows(None, None, std::slice::from_ref(&card))
+                .len(),
+            1
+        );
     }
 
     #[test]
     fn the_rates_table_is_against_the_base() {
         let (_dir, mut vault, ..) = setup();
         vault.set_base_currency("rub");
-        let table = vault.fx_table();
+        let table = vault.fx_table(&[]);
         assert_eq!(table.base, "rub");
         let usd = table.rows.iter().find(|row| row.currency == "usd").unwrap();
         assert_eq!(usd.in_base, amount("100"));
         let thb = table.rows.iter().find(|row| row.currency == "thb").unwrap();
         assert_eq!(thb.per_base, amount("0.35"));
+        assert!(!thb.crypto && !thb.favorite);
+    }
+
+    #[test]
+    fn crypto_favorites_join_the_rates_table() {
+        let (_dir, mut vault, ..) = setup();
+        vault.set_base_currency("rub");
+        vault.apply_prices(&[PricePoint {
+            asset_key: "coin:bitcoin".into(),
+            value_usd: amount("50000"),
+            ts: "2026-01-02T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }]);
+        let favorites = ["BTC".to_string(), "THB".to_string()];
+        let table = vault.fx_table(&favorites);
+        let btc = table.rows.iter().find(|row| row.currency == "btc").unwrap();
+        assert!(btc.crypto && btc.favorite);
+        assert_eq!(btc.in_base, amount("5000000"));
+        assert_eq!(btc.per_base, amount("0.0000002"));
+        assert!(btc.updated_at.starts_with("2026-01-02"));
+        let thb = table.rows.iter().find(|row| row.currency == "thb").unwrap();
+        assert!(thb.favorite && !thb.crypto);
+    }
+
+    #[test]
+    fn an_unpriced_favorite_has_no_row() {
+        let (_dir, vault, ..) = setup();
+        let table = vault.fx_table(&["DOGE".to_string()]);
+        assert!(table.rows.iter().all(|row| row.currency != "doge"));
     }
 }

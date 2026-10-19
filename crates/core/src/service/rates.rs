@@ -145,7 +145,7 @@ impl RateBook {
     }
 }
 
-fn iso_of(secs: i64) -> String {
+pub(crate) fn iso_of(secs: i64) -> String {
     use time::format_description::well_known::Rfc3339;
     time::OffsetDateTime::from_unix_timestamp(secs)
         .ok()
@@ -166,6 +166,13 @@ impl UnlockedVault {
             keys_by_symbol
                 .entry(holding.asset.symbol.to_uppercase())
                 .or_insert_with(|| holding.asset.key());
+        }
+        // A favourite coin the vault does not hold is still convertible once
+        // its quote is cached.
+        for (ticker, coingecko_id, _) in crate::exchange::well_known_coins() {
+            keys_by_symbol
+                .entry(ticker.to_string())
+                .or_insert_with(|| format!("coin:{coingecko_id}"));
         }
         for tx in &self.doc.transactions {
             let secs = secs_or_now(&tx.meta().timestamp);
@@ -285,14 +292,68 @@ impl UnlockedVault {
         Ok(())
     }
 
+    /// A code that names a coin rather than a fiat currency: no FX rate is
+    /// cached for it, and the vault holds a coin with that ticker or it is a
+    /// well-known one. Its rate comes from the price cache, not FX sources.
+    pub fn is_crypto_code(&self, code: &str) -> bool {
+        let lower = code.trim().to_lowercase();
+        if lower.is_empty() || lower == "usd" {
+            return false;
+        }
+        if self
+            .doc
+            .fx_cache
+            .iter()
+            .any(|point| point.currency == lower)
+        {
+            return false;
+        }
+        self.held_coin(&lower).is_some() || crate::exchange::well_known_coin(&lower).is_some()
+    }
+
+    /// The asset a crypto favourite is priced as: the identity the vault
+    /// already holds, else the well-known coin. `None` for fiat and unknowns.
+    pub fn favorite_asset(&self, code: &str) -> Option<AssetRef> {
+        if !self.is_crypto_code(code) {
+            return None;
+        }
+        if let Some(asset) = self.held_coin(code) {
+            return Some(asset.clone());
+        }
+        let upper = code.trim().to_uppercase();
+        let (coingecko_id, name) = crate::exchange::well_known_coin(&upper)?;
+        Some(AssetRef {
+            chain: None,
+            ..AssetRef::crypto(
+                &upper,
+                name,
+                Some(coingecko_id),
+                crate::model::chain::Chain::Fiat,
+            )
+        })
+    }
+
+    pub(crate) fn held_coin(&self, code: &str) -> Option<&AssetRef> {
+        self.doc
+            .holdings
+            .iter()
+            .map(|holding| &holding.asset)
+            .find(|asset| {
+                asset.is_crypto()
+                    && !asset.is_derivative()
+                    && asset.symbol.eq_ignore_ascii_case(code.trim())
+            })
+    }
+
     /// Which of `currencies` have no cached rate taken on `date` (UTC day).
-    /// USD never needs one.
+    /// USD never needs one, and coins are priced, not looked up as FX.
     pub fn fx_missing_on(&self, currencies: &[String], date: chrono::NaiveDate) -> Vec<String> {
         let day = date.format("%Y-%m-%d").to_string();
         let mut out: Vec<String> = currencies
             .iter()
             .map(|code| code.trim().to_lowercase())
             .filter(|code| !code.is_empty() && code != "usd")
+            .filter(|code| !self.is_crypto_code(code))
             .filter(|code| {
                 !self.doc.fx_cache.iter().any(|point| {
                     &point.currency == code
@@ -532,6 +593,48 @@ mod tests {
             vault.fx_missing_on(&wanted, next),
             vec!["eur".to_string(), "rub".to_string()]
         );
+    }
+
+    #[test]
+    fn fx_missing_on_skips_crypto_codes() {
+        let (_dir, vault) = crate::service::test_support::empty_vault();
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+        let wanted = ["btc".to_string(), "TON".to_string(), "eur".to_string()];
+        assert_eq!(vault.fx_missing_on(&wanted, day), vec!["eur".to_string()]);
+    }
+
+    #[test]
+    fn convert_reaches_a_well_known_coin_not_held() {
+        let (_dir, mut vault) = empty_vault();
+        vault.apply_prices(&[PricePoint {
+            asset_key: "coin:ethereum".into(),
+            value_usd: amount("2000"),
+            ts: "2026-01-01T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }]);
+        assert_eq!(
+            vault.convert_at(amount("1"), "eth", "usd", ""),
+            Some(amount("2000"))
+        );
+    }
+
+    #[test]
+    fn favorite_asset_prefers_the_held_identity() {
+        let (_dir, mut vault) = empty_vault();
+        assert_eq!(
+            vault.favorite_asset("btc").map(|asset| asset.key()),
+            Some("coin:bitcoin".to_string())
+        );
+        assert!(vault.favorite_asset("eur").is_none());
+        assert!(vault.favorite_asset("usd").is_none());
+
+        let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
+        let held = AssetRef::crypto("TON", "Toncoin", None, crate::model::chain::Chain::Ton);
+        vault
+            .add_transaction(income_of(&wallet, held.clone(), "5", "3", "gift"))
+            .unwrap();
+        assert_eq!(vault.favorite_asset("ton"), Some(held));
     }
 
     fn priced_payment(

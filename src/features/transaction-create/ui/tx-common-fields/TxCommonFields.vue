@@ -39,7 +39,7 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
     </div>
     <div v-if="!props.template" class="grid min-w-0 gap-1.5">
       <Label for="tx-date">{{ t('form.date') }}</Label>
-      <DateTimePicker id="tx-date" v-model="form.timestamp" mode="datetime" class="min-w-0 px-2" />
+      <DateTimePicker id="tx-date" v-model="form.timestamp" mode="datetime" :placeholder="t('form.dateNow')" class="min-w-0 px-2" />
       <p v-if="rateHint && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="text-xs text-muted-foreground">
         {{ rateHint }}
       </p>

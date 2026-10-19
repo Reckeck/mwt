@@ -10,7 +10,7 @@ import { Money } from '@/entities/currency'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate, formatQuantity } from '@/shared/lib/format'
 
 /** A bonus programme's page: points, what they are worth, what burns next. */
 const props = defineProps<{ store: Store }>()
@@ -46,7 +46,7 @@ const dialogOpen = computed({
       <div class="grid gap-1">
         <p class="text-xs text-muted-foreground">{{ t('loyalty.points') }}</p>
         <p class="text-2xl font-semibold tabular-nums">
-          {{ formatMoney(row?.points ?? '0', { decimals: 0 }) }}
+          {{ formatQuantity(row?.points ?? '0', 0) }}
           <span class="text-sm font-normal text-muted-foreground">{{ props.store.loyalty.points_symbol }}</span>
         </p>
         <p v-if="row" class="text-sm text-muted-foreground">

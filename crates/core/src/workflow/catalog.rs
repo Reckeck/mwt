@@ -87,6 +87,9 @@ pub struct ParamDef {
     pub default: serde_json::Value,
     /// An input of the same name exists: the field can be «taken from a wire».
     pub wirable: bool,
+    /// The node cannot work with the field empty and no wire into it: an
+    /// active workflow is refused until it is filled (`REQUIRED_PARAMS`).
+    pub required: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
@@ -160,6 +163,7 @@ pub(super) fn param(
         label,
         default,
         wirable: false,
+        required: false,
     }
 }
 
@@ -179,6 +183,28 @@ pub(super) fn wired(
         label,
         default,
         wirable: true,
+        required: false,
+    }
+}
+
+/// Fields a node does nothing useful without: a price trigger with no asset
+/// never fires, a payment with no account fails every run. Conditional ones
+/// (the «to» of a transfer) are checked in `validate`.
+pub const REQUIRED_PARAMS: &[(&str, &str)] = &[
+    ("trigger.price", "asset"),
+    ("trigger.balance", "store"),
+    ("data.balance", "account"),
+    ("data.price", "asset"),
+    ("action.transaction", "account"),
+    ("action.distribute", "from"),
+    ("action.distribute", "targets"),
+];
+
+fn mark_required(nodes: &mut [NodeDef]) {
+    for node in nodes {
+        for param in &mut node.params {
+            param.required = REQUIRED_PARAMS.contains(&(node.kind, param.name));
+        }
     }
 }
 
@@ -1691,7 +1717,11 @@ static CATALOG: OnceLock<Vec<NodeDef>> = OnceLock::new();
 
 /// Every node there is.
 pub fn catalog() -> &'static [NodeDef] {
-    CATALOG.get_or_init(build)
+    CATALOG.get_or_init(|| {
+        let mut nodes = build();
+        mark_required(&mut nodes);
+        nodes
+    })
 }
 
 pub fn node_def(kind: &str) -> Option<&'static NodeDef> {
@@ -1702,6 +1732,23 @@ pub fn node_def(kind: &str) -> Option<&'static NodeDef> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn every_required_param_has_an_empty_default() {
+        for (kind, name) in REQUIRED_PARAMS {
+            let def = node_def(kind).unwrap_or_else(|| panic!("{kind} is not in the catalog"));
+            let param = def
+                .param(name)
+                .unwrap_or_else(|| panic!("{kind} has no field {name}"));
+            assert!(param.required, "{kind}.{name} is not marked");
+            // A filled default would hide the empty field from the check.
+            assert!(
+                param.default.is_null() || param.default == serde_json::json!([]),
+                "{kind}.{name} defaults to {}",
+                param.default
+            );
+        }
+    }
 
     #[test]
     fn the_browser_mock_has_the_current_catalog() {

@@ -1,4 +1,4 @@
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
 import { useEventListener, useOnline } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
+import { quickAddOpen } from '@/shared/lib/quick-add'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { tourIdOf, useTour } from '@/shared/lib/tour'
 import { useVaultStore } from '@/shared/store/vault'
@@ -40,6 +41,8 @@ export function useTourAutostart() {
       // Let the page render its widgets before pointing at them.
       tourTimer = setTimeout(() => {
         if (routeTour.value !== id || document.querySelector('[role="dialog"]')) return
+        // A lesson guides on its own: the general tour of the screen would talk over it.
+        if (route.query.lesson && !wanted) return
         // `?tour=<route>` asks for it explicitly (the learning centre, «Что нового»).
         if (wanted) tour.start(id)
         else tour.autoStart(id)
@@ -71,7 +74,6 @@ export function useShellActions() {
   const route = useRoute()
   const router = useRouter()
   const vault = useVaultStore()
-  const quickAddOpen = ref(false)
 
   function openSettings(tab = 'general') {
     void router.push({ query: settingsQuery(route.query, tab) })

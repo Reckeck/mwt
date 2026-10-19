@@ -4,6 +4,7 @@
 /// without the desktop shell) falls back to a small in-memory mock so the UI
 /// can be iterated on.
 
+import { onBackButtonPress } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { listenMock } from './mock-bus'
@@ -45,4 +46,14 @@ export async function onEvent<T>(event: string, handler: (payload: T) => void): 
   // Browser dev mode: the mock's own events (`mock-bus`).
   if (!isTauri) return listenMock(event, handler as (payload: unknown) => void)
   return listen<T>(event, (received) => handler(received.payload))
+}
+
+/**
+ * The Android back button or gesture. Listening takes over the default (the
+ * app no longer goes back or closes by itself). A no-op off Tauri.
+ */
+export async function onBackButton(handler: (canGoBack: boolean) => void): Promise<UnlistenFn> {
+  if (!isTauri) return () => {}
+  const listener = await onBackButtonPress(({ canGoBack }) => handler(canGoBack))
+  return () => void listener.unregister()
 }

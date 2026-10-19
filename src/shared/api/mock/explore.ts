@@ -58,6 +58,9 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     if (filter.kinds.length && !filter.kinds.includes(txKind(tx))) return false
     if (filter.contact_id && !txContactIds(tx).includes(filter.contact_id)) return false
     if (filter.flow_id && txMeta(tx).flow_id !== filter.flow_id) return false
+    if (filter.with_fee && !txLegs(tx).some((leg) => leg.role === 'fee')) return false
+    // The mock keeps no cost basis: «closed a position» is a spot sale or an asset sale.
+    if (filter.realized && !['trade_spot', 'asset_sell'].includes(txKind(tx))) return false
     const day = localDay(txMeta(tx).timestamp)
     if (filter.from && day < filter.from) return false
     if (filter.to && day > filter.to) return false

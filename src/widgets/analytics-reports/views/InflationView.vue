@@ -26,6 +26,7 @@ const option = computed<ChartOption>(() => ({
     props.report.points.map((point) => monthLabel(point.month, activeLocale.value)),
     axisColor.value,
     moneyTooltip.value,
+    props.report.meta.currency,
   ),
   series: [
     { name: t('report.inflation.nominal'), type: 'line', data: props.report.points.map((point) => num(point.nominal_net)) },

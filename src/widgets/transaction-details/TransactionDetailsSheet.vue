@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Link2, Link2Off, Redo2 } from 'lucide-vue-next'
+import { Copy, CopyPlus, Link2, Link2Off, Redo2 } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { EnrichmentBanner } from '@/features/enrichment-review'
 import { TransactionCreateDialog } from '@/features/transaction-create'
@@ -14,11 +15,13 @@ import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime, formatMoney, formatQuantity } from '@/shared/lib/format'
-import { txId, txKind, txLegs, txMeta, txPrincipalLegs, txSides } from '@/shared/lib/transactions'
+import { txId, txKind, txLegs, txMeta, txPrincipalLegs, txSides, txStoreId } from '@/shared/lib/transactions'
+import { copyText } from '@/shared/lib/clipboard'
 import { useTxContext } from '@/shared/lib/tx-context'
 import { notify } from '@/shared/lib/notify'
 
 import type { TransactionDetailsSheetProps } from './transaction-details.types'
+import LegPrices from './ui/LegPrices.vue'
 
 const props = defineProps<TransactionDetailsSheetProps>()
 const open = defineModel<boolean>('open', { required: true })
@@ -59,6 +62,7 @@ const continueStore = computed(() => {
 })
 
 const linkOpen = ref(false)
+const duplicateOpen = ref(false)
 const continueOpen = ref(false)
 const continueFlow = ref<string | null>(null)
 
@@ -100,7 +104,7 @@ const unlink = useMutation({
               class="flex justify-between gap-2 tabular-nums"
             >
               <span class="text-muted-foreground">{{ context.storeName(leg.store_id) }}</span>
-              <span class="font-medium tabular-nums">{{ formatMoney(leg.amount, { currency: leg.asset.symbol, signed: true }) }}</span>
+              <span class="font-medium tabular-nums"><Money :amount="leg.amount" :currency="leg.asset.symbol" signed /></span>
             </p>
             <p v-if="rate" class="text-xs text-muted-foreground">{{ t('txDetails.rate', { rate }) }}</p>
             <p v-if="sides.from || sides.to" class="text-xs text-muted-foreground">
@@ -112,11 +116,11 @@ const unlink = useMutation({
             <p class="font-medium">{{ t('txDetails.loss') }}</p>
             <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs tabular-nums">
               <dt class="text-muted-foreground">{{ t('losses.fee') }}</dt>
-              <dd class="text-right">{{ formatMoney(loss.data.value.fee, { currency: loss.data.value.currency }) }}</dd>
+              <dd class="text-right"><Money :amount="loss.data.value.fee" :currency="loss.data.value.currency" /></dd>
               <dt class="text-muted-foreground">{{ t('losses.slippage') }}</dt>
-              <dd class="text-right">{{ formatMoney(loss.data.value.slippage, { currency: loss.data.value.currency }) }}</dd>
+              <dd class="text-right"><Money :amount="loss.data.value.slippage" :currency="loss.data.value.currency" /></dd>
               <dt class="font-medium">{{ t('losses.total') }}</dt>
-              <dd class="text-right font-medium">{{ formatMoney(loss.data.value.total, { currency: loss.data.value.currency }) }}</dd>
+              <dd class="text-right font-medium"><Money :amount="loss.data.value.total" :currency="loss.data.value.currency" /></dd>
             </dl>
             <p v-if="loss.data.value.internal" class="text-xs text-muted-foreground">{{ t('losses.internalHint') }}</p>
             <p v-if="!loss.data.value.complete" class="text-xs text-warning">{{ t('losses.incomplete') }}</p>
@@ -136,7 +140,7 @@ const unlink = useMutation({
               <ol class="grid gap-1 text-xs">
                 <li v-for="(link, index) in flow.links" :key="txId(link.tx)" class="flex justify-between gap-2" :class="txId(link.tx) === id && 'font-medium'">
                   <span>{{ index + 1 }}. {{ t(`tx.kind.${txKind(link.tx)}`) }} · {{ formatDateTime(txMeta(link.tx).timestamp) }}</span>
-                  <span class="tabular-nums text-muted-foreground">{{ formatMoney(link.loss.total, { currency: flow.currency }) }}</span>
+                  <span class="tabular-nums text-muted-foreground"><Money :amount="link.loss.total" :currency="flow.currency" /></span>
                 </li>
               </ol>
               <p class="text-xs tabular-nums text-muted-foreground">
@@ -166,11 +170,21 @@ const unlink = useMutation({
             </div>
           </section>
 
+          <LegPrices :tx="props.tx" />
+
           <EnrichmentBanner :tx="props.tx" />
 
-          <div class="flex items-center gap-1 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center gap-1 border-t border-border pt-3">
             <TransactionEditButton :tx="props.tx" />
-            <TransactionDelete :id="id" />
+            <Button variant="ghost" size="sm" @click="duplicateOpen = true">
+              <CopyPlus class="size-4" />
+              {{ t('tx.duplicate') }}
+            </Button>
+            <Button variant="ghost" size="sm" @click="copyText(id)">
+              <Copy class="size-4" />
+              {{ t('tx.copyId') }}
+            </Button>
+            <TransactionDelete :id="id" class="ml-auto" />
           </div>
         </div>
 
@@ -180,6 +194,12 @@ const unlink = useMutation({
           v-model:open="continueOpen"
           :store-id="continueStore"
           :flow-id="continueFlow"
+        />
+        <TransactionCreateDialog
+          v-if="duplicateOpen"
+          v-model:open="duplicateOpen"
+          :store-id="txStoreId(props.tx)"
+          :prefill="props.tx"
         />
       </template>
     </SheetContent>

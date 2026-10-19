@@ -31,7 +31,7 @@ pub const DEFAULT_BASE_CURRENCY: &str = "usd";
 /// no successful fetch was ever cached. Keeps the pickers usable offline.
 pub const FALLBACK_FIAT: &[&str] = &[
     "usd", "eur", "rub", "cny", "gbp", "jpy", "chf", "cad", "aud", "inr", "brl", "krw", "try",
-    "mxn", "sgd", "hkd", "nzd", "sek", "nok", "pln", "czk", "huf", "ron", "bgn", "try",
+    "mxn", "sgd", "hkd", "nzd", "sek", "nok", "pln", "czk", "huf", "ron", "bgn",
 ];
 
 /// Last-resort crypto catalog, same reasoning as [`FALLBACK_FIAT`].
@@ -115,6 +115,10 @@ pub struct AppSettings {
     /// Decimal places balances render with on this screen; `None` = not taken over yet.
     #[serde(default)]
     pub display_decimals: Option<u32>,
+    /// Day this installation first ran (`YYYY-MM-DD`): «Что нового» skips what
+    /// came before it. `None` for installs older than the field.
+    #[serde(default)]
+    pub installed_at: Option<String>,
 }
 
 /// Vault sync preferences of this device. Everything is off until the user
@@ -178,6 +182,7 @@ impl Default for AppSettings {
             minimize_to_tray: None,
             fx_refresh_interval_sec: None,
             display_decimals: None,
+            installed_at: None,
         }
     }
 }
@@ -339,17 +344,28 @@ fn normalize_zone(raw: &str) -> Option<String> {
     crate::calendar::Calendar::is_valid_zone(zone).then(|| zone.to_string())
 }
 
-/// Uppercase, keep three-letter ISO codes only, drop the base currency itself:
-/// a favourite equal to the base would show the same number twice.
+/// Longest currency or coin ticker a favourite may hold (`1INCH`, `MATIC`, …).
+const MAX_CODE_LEN: usize = 10;
+
+/// Uppercase, deduplicated, in the user's order: the order ranks the
+/// conversions shown under an amount. Fiat ISO codes and crypto tickers both
+/// pass (2–10 letters or digits, at least one letter). The base currency is
+/// kept: the UI hides it, and a later base change must not lose it.
 fn normalize_codes(raw: &[String]) -> Vec<String> {
-    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut codes: Vec<String> = Vec::new();
     for code in raw {
         let code = code.trim().to_uppercase();
-        if code.len() == 3 && code.chars().all(|ch| ch.is_ascii_alphabetic()) {
-            seen.insert(code);
+        if is_ticker(&code) && !codes.contains(&code) {
+            codes.push(code);
         }
     }
-    seen.into_iter().collect()
+    codes
+}
+
+fn is_ticker(code: &str) -> bool {
+    (2..=MAX_CODE_LEN).contains(&code.len())
+        && code.chars().all(|ch| ch.is_ascii_alphanumeric())
+        && code.chars().any(|ch| ch.is_ascii_alphabetic())
 }
 
 /// Partial update: only the fields present in the payload are touched.
@@ -418,7 +434,7 @@ pub struct SupportedCurrencies {
 impl SupportedCurrencies {
     /// Built-in catalog for a machine that has never reached the network.
     pub fn fallback() -> Self {
-        Self {
+        let mut catalog = Self {
             fiat: FALLBACK_FIAT
                 .iter()
                 .map(|code| (*code).to_string())
@@ -427,7 +443,24 @@ impl SupportedCurrencies {
                 .iter()
                 .map(|code| (*code).to_string())
                 .collect(),
-        }
+        };
+        catalog.normalize();
+        catalog
+    }
+
+    /// The same catalog with the built-in majors added, so a half the network
+    /// failed to deliver still offers BTC, USDT, EUR…
+    fn with_fallback(mut self) -> Self {
+        let builtin = Self::fallback();
+        self.fiat.extend(builtin.fiat);
+        self.crypto.extend(builtin.crypto);
+        self.normalize();
+        self
+    }
+
+    /// Both halves present: worth caching and serving without a refetch.
+    pub fn is_complete(&self) -> bool {
+        !self.fiat.is_empty() && !self.crypto.is_empty()
     }
 
     /// Union of both catalogs, sorted and deduplicated — what a picker renders.
@@ -482,6 +515,19 @@ pub fn load_settings(config_dir: &Path) -> AppSettings {
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default();
     settings.normalize();
+    settings
+}
+
+/// [`load_settings`], but a first run (no settings file yet) is stamped with
+/// `today` and saved, so later reads know what came before the install.
+pub fn load_or_init_settings(config_dir: &Path, today: &str) -> AppSettings {
+    let first_run = !settings_path(config_dir).exists();
+    let mut settings = load_settings(config_dir);
+    if first_run {
+        settings.installed_at = Some(today.to_string());
+        // Unsaved, the next start is a "first run" again: harmless.
+        let _ = save_settings(config_dir, &settings);
+    }
     settings
 }
 
@@ -544,7 +590,9 @@ pub async fn build_currency_catalog(
     pricing: &crate::pricing::PricingService,
 ) -> (SupportedCurrencies, CatalogSource) {
     let cached = load_currencies(config_dir);
+    // A cache missing a half (an older build wrote those) is refetched.
     if let Some(catalog) = cached.as_ref()
+        && catalog.is_complete()
         && is_fresh(&currencies_path(config_dir), CURRENCIES_FRESH_FOR)
     {
         return (catalog.clone(), CatalogSource::Fresh);
@@ -558,10 +606,10 @@ pub async fn build_currency_catalog(
         Err(_) => None,
     };
     let crypto = pricing.coin_symbols().await.ok();
-    let (catalog, source) = merge_catalog(fiat, crypto, cached);
+    let (catalog, source, complete) = merge_catalog(fiat, crypto, cached);
     // Only a catalog worth remembering is written back; caching a half-empty
     // result would freeze the gap in place on every later offline start.
-    if source == CatalogSource::Network {
+    if source == CatalogSource::Network && complete {
         let _ = save_currencies(config_dir, &catalog);
     }
     (catalog, source)
@@ -578,12 +626,13 @@ fn is_fresh(path: &Path, max_age: std::time::Duration) -> bool {
 
 /// Combine this run's fetch results with the cache. A half that failed is
 /// taken from the cache; the source reflects whether the network answered at
-/// all, not whether the list changed.
+/// all, not whether the list changed. The built-in majors are always mixed in;
+/// the flag says whether both halves came from the network or the cache.
 fn merge_catalog(
     fiat: Option<Vec<String>>,
     crypto: Option<Vec<String>>,
     cached: Option<SupportedCurrencies>,
-) -> (SupportedCurrencies, CatalogSource) {
+) -> (SupportedCurrencies, CatalogSource, bool) {
     let fetched_something = fiat.is_some() || crypto.is_some();
     let mut catalog = SupportedCurrencies {
         fiat: fiat
@@ -596,14 +645,19 @@ fn merge_catalog(
     catalog.normalize();
 
     if catalog.is_empty() {
-        return (SupportedCurrencies::fallback(), CatalogSource::Builtin);
+        return (
+            SupportedCurrencies::fallback(),
+            CatalogSource::Builtin,
+            false,
+        );
     }
+    let complete = catalog.is_complete();
     let source = if fetched_something {
         CatalogSource::Network
     } else {
         CatalogSource::Cache
     };
-    (catalog, source)
+    (catalog.with_fallback(), source, complete)
 }
 
 fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -658,15 +712,45 @@ mod tests {
                 " rub ".into(),
                 "eur".into(),
                 "RUB".into(),
-                "us".into(),
+                "usdt".into(),
+                "u$".into(),
                 "123".into(),
                 String::new(),
             ]),
             ..Default::default()
         });
         assert_eq!(settings.base(), "rub");
-        // Uppercase, three letters only, deduplicated.
-        assert_eq!(settings.favorite_currencies, vec!["EUR", "RUB"]);
+        // Uppercase, deduplicated, tickers only, in the order given.
+        assert_eq!(settings.favorite_currencies, vec!["RUB", "EUR", "USDT"]);
+    }
+
+    #[test]
+    fn crypto_tickers_survive_as_favorites() {
+        let mut settings = AppSettings::default();
+        settings.apply(&UpdateAppSettingsInput {
+            favorite_currencies: Some(
+                ["btc", "USDT", "doge", "1inch", "matic", "ton"]
+                    .map(String::from)
+                    .to_vec(),
+            ),
+            ..Default::default()
+        });
+        assert_eq!(
+            settings.favorite_currencies,
+            vec!["BTC", "USDT", "DOGE", "1INCH", "MATIC", "TON"]
+        );
+    }
+
+    #[test]
+    fn numeric_only_codes_are_dropped() {
+        let codes = normalize_codes(&["123".into(), "1".into(), "x".into(), "ABCDEFGHIJK".into()]);
+        assert!(codes.is_empty());
+    }
+
+    #[test]
+    fn favorites_keep_the_user_order() {
+        let codes = normalize_codes(&["usd".into(), "btc".into(), "eur".into(), "USD".into()]);
+        assert_eq!(codes, vec!["USD", "BTC", "EUR"]);
     }
 
     #[test]
@@ -683,12 +767,12 @@ mod tests {
     fn normalize_repairs_hand_edited_values() {
         let mut settings = AppSettings {
             base_currency: "  ".into(),
-            favorite_currencies: vec!["usd".into(), "nope".into(), "gbp".into()],
+            favorite_currencies: vec!["usd".into(), "!!".into(), "gbp".into()],
             ..Default::default()
         };
         settings.normalize();
         assert_eq!(settings.base_currency, DEFAULT_BASE_CURRENCY);
-        assert_eq!(settings.favorite_currencies, vec!["GBP", "USD"]);
+        assert_eq!(settings.favorite_currencies, vec!["USD", "GBP"]);
     }
 
     #[test]
@@ -733,9 +817,30 @@ mod tests {
             minimize_to_tray: Some(false),
             fx_refresh_interval_sec: Some(900),
             display_decimals: Some(2),
+            installed_at: Some("2026-10-19".into()),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn first_load_stamps_the_install_day() {
+        let dir = temp_dir("install-day");
+        let settings = load_or_init_settings(&dir, "2026-10-19");
+        assert_eq!(settings.installed_at.as_deref(), Some("2026-10-19"));
+        // The second start keeps the first day.
+        let again = load_or_init_settings(&dir, "2026-12-01");
+        assert_eq!(again.installed_at.as_deref(), Some("2026-10-19"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_existing_file_without_install_day_reads_as_none() {
+        let dir = temp_dir("install-day-old");
+        save_settings(&dir, &AppSettings::default()).expect("save");
+        let settings = load_or_init_settings(&dir, "2026-10-19");
+        assert_eq!(settings.installed_at, None);
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -797,20 +902,56 @@ mod tests {
             fiat: vec!["usd".into()],
             crypto: vec!["btc".into()],
         };
-        let (catalog, source) = merge_catalog(
+        let (catalog, source, complete) = merge_catalog(
             Some(vec!["usd".into()]),
             Some(vec!["btc".into()]),
             Some(cached.clone()),
         );
-        assert_eq!(catalog, cached);
+        assert_eq!(catalog, cached.with_fallback());
         assert_eq!(source, CatalogSource::Network);
         assert_eq!(source.notice(), None);
+        assert!(complete);
     }
 
     #[test]
     fn first_fetch_is_fresh_not_builtin() {
-        let (_, source) = merge_catalog(Some(vec!["eur".into()]), None, None);
+        let (_, source, complete) = merge_catalog(Some(vec!["eur".into()]), None, None);
         assert_eq!(source, CatalogSource::Network);
+        // The crypto half failed: not worth caching.
+        assert!(!complete);
+    }
+
+    #[test]
+    fn fallback_catalog_has_no_repeats() {
+        let catalog = SupportedCurrencies::fallback();
+        let mut fiat = catalog.fiat.clone();
+        fiat.dedup();
+        assert_eq!(fiat, catalog.fiat);
+        assert_eq!(catalog.fiat.iter().filter(|code| *code == "try").count(), 1);
+    }
+
+    #[test]
+    fn network_catalog_always_contains_the_fallback_majors() {
+        let (catalog, _, _) = merge_catalog(Some(vec!["thb".into()]), Some(Vec::new()), None);
+        for code in ["btc", "usdt", "ton"] {
+            assert!(catalog.crypto.contains(&code.to_string()), "{code}");
+        }
+        assert!(catalog.fiat.contains(&"thb".to_string()));
+        assert!(catalog.fiat.contains(&"usd".to_string()));
+    }
+
+    #[test]
+    fn a_half_empty_cache_is_not_fresh() {
+        let half = SupportedCurrencies {
+            fiat: vec!["usd".into()],
+            crypto: Vec::new(),
+        };
+        assert!(!half.is_complete());
+        let full = SupportedCurrencies {
+            fiat: vec!["usd".into()],
+            crypto: vec!["btc".into()],
+        };
+        assert!(full.is_complete());
     }
 
     #[test]
@@ -819,11 +960,11 @@ mod tests {
             fiat: vec!["usd".into()],
             crypto: Vec::new(),
         };
-        let (catalog, source) = merge_catalog(None, None, Some(cached.clone()));
-        assert_eq!(catalog, cached);
+        let (catalog, source, _) = merge_catalog(None, None, Some(cached.clone()));
+        assert_eq!(catalog, cached.with_fallback());
         assert_eq!(source.notice(), Some("cached"));
 
-        let (catalog, source) = merge_catalog(None, None, None);
+        let (catalog, source, _) = merge_catalog(None, None, None);
         assert_eq!(catalog, SupportedCurrencies::fallback());
         assert_eq!(source.notice(), Some("builtin"));
     }

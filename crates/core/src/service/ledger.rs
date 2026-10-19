@@ -23,6 +23,13 @@ use super::{StoreTreeNode, UnlockedVault};
 /// More nodes than this and the graph is unreadable (and slow): narrow the filter.
 pub const GRAPH_NODE_CAP: usize = 2000;
 
+/// One page of the operations list, newest first, and how many match in all.
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct TxPage {
+    pub items: Vec<Transaction>,
+    pub total: u32,
+}
+
 /// What the operations list and graph show.
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct TxFilter {
@@ -51,6 +58,13 @@ pub struct TxFilter {
     /// The main category key, as reports group by it; `""` = without a category.
     #[serde(default)]
     pub category: Option<String>,
+    /// Only transactions that paid a fee (what «Потери» are made of).
+    #[serde(default)]
+    pub with_fee: bool,
+    /// Only transactions that closed a position with a profit or a loss
+    /// (what the P&L report adds up).
+    #[serde(default)]
+    pub realized: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -123,6 +137,27 @@ impl UnlockedVault {
         let mut out = self.filtered(filter, zone)?;
         out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
         Ok(out.into_iter().cloned().collect())
+    }
+
+    /// `limit` operations from `offset`, newest first: a long journal goes to
+    /// the screen a page at a time instead of whole on every refresh.
+    pub fn list_transactions_page(
+        &self,
+        filter: &TxFilter,
+        offset: u32,
+        limit: u32,
+        zone: &str,
+    ) -> Result<TxPage> {
+        let mut out = self.filtered(filter, zone)?;
+        out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
+        let total = u32::try_from(out.len()).unwrap_or(u32::MAX);
+        let items = out
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .cloned()
+            .collect();
+        Ok(TxPage { items, total })
     }
 
     /// The filtered transactions as lanes and edges. `collapsed` lists stores
@@ -266,6 +301,15 @@ impl UnlockedVault {
             .filter(|text| !text.is_empty());
         let contact = filter.contact_id.as_deref().filter(|id| !id.is_empty());
         let flow = filter.flow_id.as_deref().filter(|id| !id.is_empty());
+        // The P&L replay of the same wallets says which transactions realized something.
+        let realized: Option<HashSet<String>> = filter.realized.then(|| {
+            self.realized_pnl_filtered(ids.as_ref())
+                .legs
+                .into_iter()
+                .filter(|leg| !leg.pnl_base.is_zero())
+                .map(|leg| leg.tx_id)
+                .collect()
+        });
 
         Ok(self
             .doc
@@ -286,6 +330,12 @@ impl UnlockedVault {
                 from.is_none_or(|first| day >= first) && to.is_none_or(|last| day <= last)
             })
             .filter(|tx| !filter.hide_internal || !tx.is_internal(|id| self.root_of(id)))
+            .filter(|tx| !filter.with_fee || tx.legs().iter().any(|leg| leg.role == LegRole::Fee))
+            .filter(|tx| {
+                realized
+                    .as_ref()
+                    .is_none_or(|set| set.contains(&tx.meta().id))
+            })
             .filter(|tx| {
                 filter.category.as_deref().is_none_or(|key| {
                     tx.meta().categories.first().map_or("", String::as_str) == key
@@ -422,6 +472,25 @@ mod tests {
     }
 
     #[test]
+    fn a_page_is_a_slice_of_the_full_list() {
+        let (_dir, vault, _ids) = ledger();
+        let filter = TxFilter::default();
+        let all = vault.list_transactions(&filter, "UTC").unwrap();
+        let first = vault.list_transactions_page(&filter, 0, 3, "UTC").unwrap();
+        let second = vault.list_transactions_page(&filter, 3, 3, "UTC").unwrap();
+        assert_eq!(first.total, 4);
+        assert_eq!(first.items, all[..3]);
+        assert_eq!(second.items, all[3..]);
+        assert!(
+            vault
+                .list_transactions_page(&filter, 9, 3, "UTC")
+                .unwrap()
+                .items
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn filters_by_scope_kind_period_and_text() {
         let (_dir, vault, [card, savings, _exchange]) = ledger();
         let list = |filter: TxFilter| vault.list_transactions(&filter, "UTC").unwrap();
@@ -458,6 +527,60 @@ mod tests {
             ..TxFilter::default()
         };
         assert_eq!(list(by_store_name).len(), 1);
+    }
+
+    #[test]
+    fn filter_covers_several_wallets() {
+        let (_dir, vault, [_card, savings, exchange]) = ledger();
+        let filter = TxFilter {
+            scope: StoreScope {
+                store_ids: vec![savings, exchange],
+                include_children: true,
+            },
+            ..TxFilter::default()
+        };
+        assert_eq!(vault.list_transactions(&filter, "UTC").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn with_fee_keeps_only_operations_with_a_fee() {
+        let (_dir, mut vault, [card, _savings, _exchange]) = ledger();
+        let mut paid = at(payment(&card, "20", "atm"), "2026-03-05T10:00:00Z");
+        if let Transaction::Payment(inner) = &mut paid {
+            inner.fee = fee_usd("1");
+        }
+        let paid = vault.add_transaction(paid).unwrap();
+        let filter = TxFilter {
+            with_fee: true,
+            ..TxFilter::default()
+        };
+        let list = vault.list_transactions(&filter, "UTC").unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].meta().id, paid.meta().id);
+    }
+
+    #[test]
+    fn realized_keeps_operations_that_closed_a_position() {
+        let (_dir, mut vault, [_card, _savings, exchange]) = ledger();
+        vault
+            .add_transaction(at(
+                income_of(&exchange, btc(), "1", "100", "buy"),
+                "2026-03-06T10:00:00Z",
+            ))
+            .unwrap();
+        let sale = vault
+            .add_transaction(at(
+                sell_btc(&exchange, "1", "150", "150"),
+                "2026-03-07T10:00:00Z",
+            ))
+            .unwrap();
+        let filter = TxFilter {
+            realized: true,
+            ..TxFilter::default()
+        };
+        let list = vault.list_transactions(&filter, "UTC").unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].meta().id, sale.meta().id);
     }
 
     #[test]

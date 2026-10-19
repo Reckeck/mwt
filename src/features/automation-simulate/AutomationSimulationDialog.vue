@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { FlaskConical } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -115,9 +116,9 @@ const rejected = (run: SimulatedRun) => typeof run.outcome === 'object' && 'reje
           >
             <span class="min-w-0 truncate">{{ storeName(row.store_id) }}</span>
             <span class="tabular-nums">
-              <span class="text-muted-foreground">{{ formatMoney(row.before, { currency: row.asset.symbol }) }}</span>
+              <span class="text-muted-foreground"><Money :amount="row.before" :currency="row.asset.symbol" /></span>
               →
-              <span :class="amountClass(row.after)">{{ formatMoney(row.after, { currency: row.asset.symbol }) }}</span>
+              <span :class="amountClass(row.after)"><Money :amount="row.after" :currency="row.asset.symbol" /></span>
             </span>
           </p>
         </div>

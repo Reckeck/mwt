@@ -11,6 +11,8 @@ export function emptyTxFilter(patch: Partial<TxFilter> = {}): TxFilter {
     hide_internal: false,
     text: null,
     category: null,
+    with_fee: false,
+    realized: false,
     ...patch,
   }
 }
@@ -31,17 +33,19 @@ export function activeFilterCount(filter: TxFilter): number {
     filter.hide_internal,
     Boolean(filter.text?.trim()),
     filter.category !== null,
+    filter.with_fee,
+    filter.realized,
   ].filter(Boolean).length
 }
 
 type Query = Record<string, string | null | (string | null)[] | undefined>
 
-/** The filter as short query keys, only what is set: `?store=…&kind=payment&q=кофе`. */
+/** The filter as short query keys, only what is set: `?store=a,b&kind=payment&q=кофе`. */
 export function txFilterToQuery(filter: TxFilter): Record<string, string | undefined> {
   return {
-    store: filter.scope.store_ids[0] || undefined,
+    store: filter.scope.store_ids.join(',') || undefined,
     children: filter.scope.store_ids.length && !filter.scope.include_children ? '0' : undefined,
-    kind: filter.kinds[0] || undefined,
+    kind: filter.kinds.join(',') || undefined,
     contact: filter.contact_id || undefined,
     flow: filter.flow_id || undefined,
     from: filter.from || undefined,
@@ -50,6 +54,8 @@ export function txFilterToQuery(filter: TxFilter): Record<string, string | undef
     q: filter.text?.trim() || undefined,
     // `''` is «without a category», a filter of its own.
     cat: filter.category ?? undefined,
+    fee: filter.with_fee ? '1' : undefined,
+    realized: filter.realized ? '1' : undefined,
   }
 }
 
@@ -65,6 +71,8 @@ export const TX_FILTER_QUERY_KEYS = [
   'internal',
   'q',
   'cat',
+  'fee',
+  'realized',
 ]
 
 /** Back from the query; `null` when the address carries no filter at all. */
@@ -76,11 +84,11 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
   }
   const category = typeof query.cat === 'string' ? query.cat : null
   if (!TX_FILTER_QUERY_KEYS.some((key) => one(key)) && category === null) return null
-  const store = one('store')
-  const kind = one('kind')
+  // Lists are comma-separated; an old single value reads as a list of one.
+  const list = (key: string) => (one(key) ?? '').split(',').filter(Boolean)
   return emptyTxFilter({
-    scope: { store_ids: store ? [store] : [], include_children: one('children') !== '0' },
-    kinds: kind ? [kind as TxKind] : [],
+    scope: { store_ids: list('store'), include_children: one('children') !== '0' },
+    kinds: list('kind') as TxKind[],
     contact_id: one('contact'),
     flow_id: one('flow'),
     from: one('from'),
@@ -88,5 +96,7 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
     hide_internal: one('internal') === 'hide',
     text: one('q'),
     category,
+    with_fee: one('fee') === '1',
+    realized: one('realized') === '1',
   })
 }

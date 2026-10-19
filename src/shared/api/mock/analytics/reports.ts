@@ -130,5 +130,5 @@ export function networth(ctx: AnalyticsMockContext, months: string[], filter: Re
       net: money(value),
     }
   })
-  return { meta: meta(ctx, months, filter), points }
+  return { meta: meta(ctx, months, filter), points, has_data: points.some((point) => Number(point.net) !== 0) }
 }

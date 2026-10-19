@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { Money } from '@/entities/currency'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 import type { LossSummaryProps } from './loss-summary.types'
 
-const props = withDefaults(defineProps<LossSummaryProps>(), { report: null })
+const props = withDefaults(defineProps<LossSummaryProps>(), { report: null, storeIds: () => [], hideEmpty: false, title: '' })
 
 const { t } = useI18n()
 
@@ -27,11 +28,18 @@ const context = useTxContext()
 
 /** Without a report handed in: the last twelve months in the budget currency. */
 const own = useQuery({
-  queryKey: ['report', 'losses', 'summary'],
+  queryKey: computed(() => ['report', 'losses', 'summary', props.storeIds]),
   queryFn: () =>
     call<AnalyticsReport>('get_report', {
       kind: 'losses',
-      filter: { scope: { store_ids: [], include_children: true }, from: null, to: null, year: null, currency: null, real_terms: false },
+      filter: {
+        scope: { store_ids: props.storeIds, include_children: true },
+        from: null,
+        to: null,
+        year: null,
+        currency: null,
+        real_terms: false,
+      },
     }),
   enabled: computed(() => props.report === null),
 })
@@ -40,33 +48,33 @@ const data = computed<LossReport | null>(() => {
   const value = own.data.value
   return value && 'losses' in value ? value.losses : null
 })
-const money = (value: string) => formatMoney(value, { currency: data.value?.meta.currency })
 
 const groups = computed(() => {
   const value = data.value
   if (!value) return []
   return [
-    { key: 'byKind', rows: value.by_kind, label: (key: string) => t(`tx.kind.${key}`) },
-    { key: 'byStore', rows: value.by_store, label: (key: string) => context.storeName(key) },
-    { key: 'byContact', rows: value.by_contact, label: (key: string) => context.contactName(key) },
-  ].filter((group) => group.rows.length)
+    { key: 'byKind', rows: value.by_kind, label: (key: string) => t(`tx.kind.${key}`), filter: 'kind' },
+    { key: 'byStore', rows: value.by_store, label: (key: string) => context.storeName(key), filter: 'store' },
+    { key: 'byContact', rows: value.by_contact, label: (key: string) => context.contactName(key), filter: 'contact' },
+  ].filter((group) => group.rows.length && !(group.key === 'byStore' && props.storeIds.length))
 })
 </script>
 
 <template>
-  <div v-if="data" class="grid gap-4">
+  <div v-if="data && !(props.hideEmpty && !Number(data.total.total))" class="grid gap-4">
+    <h3 v-if="props.title" class="heading-card">{{ props.title }}</h3>
     <div class="grid gap-4 @sm:grid-cols-3">
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('losses.total') }}</p>
-        <p class="text-xl font-semibold tabular-nums">{{ money(data.total.total) }}</p>
+        <p class="text-xl font-semibold tabular-nums"><Money :amount="data.total.total" :currency="data?.meta.currency" /></p>
       </Card>
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('losses.fee') }}</p>
-        <p class="text-xl font-semibold tabular-nums">{{ money(data.total.fee) }}</p>
+        <p class="text-xl font-semibold tabular-nums"><Money :amount="data.total.fee" :currency="data?.meta.currency" /></p>
       </Card>
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('losses.slippage') }}</p>
-        <p class="text-xl font-semibold tabular-nums">{{ money(data.total.slippage) }}</p>
+        <p class="text-xl font-semibold tabular-nums"><Money :amount="data.total.slippage" :currency="data?.meta.currency" /></p>
       </Card>
     </div>
     <p v-if="data.incomplete" class="text-xs text-warning">
@@ -83,8 +91,14 @@ const groups = computed(() => {
             :key="row.key"
             class="flex justify-between gap-2"
           >
-            <span class="min-w-0 truncate">{{ group.label(row.key) }}</span>
-            <span class="shrink-0 tabular-nums">{{ money(row.total) }}</span>
+            <!-- The transactions behind the row, in the journal with the same filter. -->
+            <RouterLink
+              :to="{ name: 'transactions', query: { [group.filter]: row.key } }"
+              class="min-w-0 truncate hover:underline"
+            >
+              {{ group.label(row.key) }}
+            </RouterLink>
+            <span class="shrink-0 tabular-nums"><Money :amount="row.total" :currency="data?.meta.currency" /></span>
           </li>
         </ul>
         <Button

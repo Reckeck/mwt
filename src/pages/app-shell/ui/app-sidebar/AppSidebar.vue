@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Lock, Settings } from 'lucide-vue-next'
@@ -18,6 +18,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
+  useSidebar,
 } from '@/shared/ui/sidebar'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -33,6 +34,13 @@ const vault = useVaultStore()
 /** File name of the open vault; the full path is in the tooltip. */
 const vaultPath = computed(() => vault.status?.path ?? '')
 const vaultFile = computed(() => vaultPath.value.split(/[\\/]/).pop() ?? '')
+
+/** On a phone the menu is a sheet over the page: a picked section closes it. */
+const { setOpenMobile } = useSidebar()
+watch(
+  () => route.fullPath,
+  () => setOpenMobile(false),
+)
 
 const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.prefix) : route.name === item.name)
 </script>
@@ -85,9 +93,9 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
     <SidebarFooter>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton :tooltip="t('settings.appTitle')" data-tour="open-settings" @click="emit('openSettings')">
+          <SidebarMenuButton :tooltip="t('settingsShell.title')" data-tour="open-settings" @click="emit('openSettings')">
             <Settings />
-            <span>{{ t('settings.appTitle') }}</span>
+            <span>{{ t('settingsShell.title') }}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>

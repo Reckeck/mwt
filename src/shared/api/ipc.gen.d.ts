@@ -162,7 +162,12 @@ fx_refresh_interval_sec: number | null,
 /**
  * Decimal places balances render with on this screen; `None` = not taken over yet.
  */
-display_decimals: number | null, };
+display_decimals: number | null, 
+/**
+ * Day this installation first ran (`YYYY-MM-DD`): «Что нового» skips what
+ * came before it. `None` for installs older than the field.
+ */
+installed_at: string | null, };
 
 /**
  * A batch just applied, as the UI shows it.
@@ -172,6 +177,28 @@ type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary
  * Not a batch: the vault was handed to this device from here.
  */
 transferred_to: string | null, };
+
+/**
+ * The asset on one wallet.
+ */
+type AssetHolding = { store_id: string, store_name: string, 
+/**
+ * Names from the top-level wallet down to the parent of `store_id`.
+ */
+path: Array<string>, root_id: string, archived: boolean, 
+/**
+ * The asset as this wallet holds it: the network can differ between rows.
+ */
+asset: AssetRef, quantity: Amount, avg_cost: Amount | null, price_base: Amount, value_base: Amount, unrealized_base: Amount, price_info: PriceInfo, 
+/**
+ * Valued at one dollar only because nobody quoted the stablecoin yet.
+ */
+peg_valued: boolean, };
+
+/**
+ * Every wallet holding the asset, biggest first, with the totals.
+ */
+type AssetHoldings = { asset: AssetRef, base_currency: string, total_quantity: Amount, total_value_base: Amount, rows: Array<AssetHolding>, };
 
 /**
  * Shared asset identification, so each variant does not repeat five
@@ -1232,7 +1259,15 @@ updated_at: string,
 /**
  * The vault uses this currency (it keeps rate history).
  */
-tracked: boolean, };
+tracked: boolean, 
+/**
+ * A coin from the favourites, rated from its cached price.
+ */
+crypto: boolean, 
+/**
+ * The user marked this code as a favourite.
+ */
+favorite: boolean, };
 
 type FxTable = { base: string, rows: Array<FxRow>, };
 
@@ -1325,7 +1360,11 @@ type GraphIssue = { level: IssueLevel,
 /**
  * Machine code: `unknown_node`, `no_trigger`, `type_mismatch`, …
  */
-code: string, node_id: string | null, edge_id: string | null, text_ru: string, text_en: string, };
+code: string, node_id: string | null, edge_id: string | null, text_ru: string, text_en: string, 
+/**
+ * The node's field the problem is about, to point at it in the inspector.
+ */
+param: string | null, };
 
 /**
  * One row of the graph: a store, or a store with its sub-accounts folded in.
@@ -1886,7 +1925,12 @@ type NetworthReport = { meta: ReportMeta,
 /**
  * Value at the end of each month (today for this month).
  */
-points: Array<NetworthPoint>, };
+points: Array<NetworthPoint>, 
+/**
+ * Anything was owned or owed in the period: a point exists for every
+ * month, so an empty vault would otherwise draw a flat line at zero.
+ */
+has_data: boolean, };
 
 type NodeDef = { kind: string, group: NodeGroup, title: LocalizedText, description: LocalizedText, 
 /**
@@ -2004,7 +2048,12 @@ default: unknown,
 /**
  * An input of the same name exists: the field can be «taken from a wire».
  */
-wirable: boolean, };
+wirable: boolean, 
+/**
+ * The node cannot work with the field empty and no wire into it: an
+ * active workflow is refused until it is filled (`REQUIRED_PARAMS`).
+ */
+required: boolean, };
 
 /**
  * What kind of field edits a parameter.
@@ -2173,13 +2222,21 @@ path: string, display_name: string,
  */
 imported: boolean, };
 
-type PnlLeg = { ts: string, store_id: string, asset_key: string, 
+type PnlLeg = { ts: string, 
+/**
+ * The transaction that closed the position.
+ */
+tx_id: string, store_id: string, asset_key: string, 
 /**
  * Absolute size of the closed-out quantity.
  */
 quantity: Amount, pnl_base: Amount, side: string, };
 
-type PnlReport = { meta: ReportMeta, rows: Array<PnlRow>, total_realized: Amount, total_fees: Amount, };
+type PnlReport = { meta: ReportMeta, rows: Array<PnlRow>, total_realized: Amount, total_fees: Amount, 
+/**
+ * A sale or a fee fell in the period (there is a row for every month).
+ */
+has_data: boolean, };
 
 type PnlRow = { month: string, realized: Amount, fees: Amount, };
 
@@ -2209,7 +2266,11 @@ type PortfolioReport = { meta: ReportMeta,
 /**
  * Asset symbols, the biggest first; the last may be `""` for «other».
  */
-assets: Array<string>, points: Array<PortfolioPoint>, };
+assets: Array<string>, points: Array<PortfolioPoint>, 
+/**
+ * Some point holds a value.
+ */
+has_data: boolean, };
 
 type PortfolioSummary = { base_currency: string, fx_per_usd: Amount, total_usd: Amount, total_base: Amount, assets: Array<AssetStat>, by_chain: Array<NamedValue>, by_store: Array<StoreValue>, 
 /**
@@ -2262,6 +2323,25 @@ type PriceAlertInput = { asset: AssetIdent, condition: AlertCondition, price: Am
 store_id?: string, };
 
 /**
+ * Where a price came from and when, for the hint next to it.
+ */
+type PriceInfo = { origin: PriceOrigin, 
+/**
+ * The provider (`coingecko`, `coincap`, `binance`, an FX source); `None`
+ * when the origin says it all.
+ */
+source: string | null, 
+/**
+ * RFC3339 moment the price is from; `None` for a hand-set price or the peg.
+ */
+at: string | null, };
+
+/**
+ * The kind of price a position is valued at.
+ */
+type PriceOrigin = "manual" | "fiat" | "market" | "stamp" | "peg" | "none";
+
+/**
  * A cached price: one unit of an asset in USD.
  */
 type PricePoint = { 
@@ -2272,7 +2352,15 @@ asset_key: string, value_usd: Amount,
 /**
  * ISO-8601 UTC.
  */
-ts: string, source: string, };
+ts: string, 
+/**
+ * The provider that quoted it (`coingecko`, `coincap`, `binance`…).
+ */
+source: string, 
+/**
+ * Change over the last 24 hours, percent, when the provider said it.
+ */
+change_24h_pct: Amount | null, };
 
 /**
  * Price stamps a money movement can carry.
@@ -2639,7 +2727,16 @@ budget_currency: string,
 /**
  * What to be told about and how far ahead.
  */
-notifications: NotificationSettings, };
+notifications: NotificationSettings, 
+/**
+ * The budget settings were saved at least once: the checklist step
+ * «доля сбережений» is done even when 10 % was the right answer.
+ */
+budget_configured: boolean, 
+/**
+ * Checklist steps the user said they do not need.
+ */
+onboarding_skipped: Array<string>, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -2812,6 +2909,15 @@ type StoreCrumb = { id: string, name: string, color: string, };
 type StoreKind = "cash" | "bank" | "crypto" | "exchange" | "property" | "loyalty" | "liability";
 
 /**
+ * One local calendar month of a wallet, in the base currency.
+ */
+type StoreMonthRow = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, inflow: Amount, outflow: Amount, tx_count: number, };
+
+/**
  * Allowed destinations for moving a sub-account.
  */
 type StoreMoveTargets = { 
@@ -2869,7 +2975,16 @@ can_add_child: boolean, tx_count: number,
 /**
  * RFC3339; empty when there are no transactions.
  */
-first_tx_at: string, last_tx_at: string, };
+first_tx_at: string, last_tx_at: string, 
+/**
+ * Unrealized result of the own positions and of the whole subtree.
+ */
+unrealized_base: Amount, subtree_unrealized_base: Amount, 
+/**
+ * The oldest provider quote the positions are valued at; `None` when no
+ * position has one.
+ */
+prices_as_of: string | null, };
 
 /**
  * A single open position inside one store.
@@ -2886,7 +3001,15 @@ price_base: Amount, value_usd: Amount, value_base: Amount,
 /**
  * `(price_base − avg_cost) × |quantity|`; zero when `avg_cost` is unknown.
  */
-unrealized_base: Amount, };
+unrealized_base: Amount, 
+/**
+ * Percent over the last 24 hours, when known.
+ */
+change_24h_pct: Amount | null, 
+/**
+ * Where the price came from and when.
+ */
+price_info: PriceInfo, };
 
 type StoreReportRow = { store_id: string, name: string, 
 /**
@@ -2934,7 +3057,15 @@ own_tx_count: number,
 /**
  * `depth < MAX_STORE_DEPTH` and not archived.
  */
-can_add_child: boolean, children: Array<StoreTreeNode>, };
+can_add_child: boolean, children: Array<StoreTreeNode>, 
+/**
+ * Up to three biggest assets, its own first, then its sub-accounts'.
+ */
+top_assets: Array<AssetRef>, 
+/**
+ * RFC3339 of the newest transaction here or in a sub-account.
+ */
+last_tx_at: string | null, };
 
 /**
  * One store's slice of the portfolio. Unlike [`NamedValue`] it carries the
@@ -3422,7 +3553,16 @@ text: string | null,
 /**
  * The main category key, as reports group by it; `""` = without a category.
  */
-category: string | null, };
+category: string | null, 
+/**
+ * Only transactions that paid a fee (what «Потери» are made of).
+ */
+with_fee: boolean, 
+/**
+ * Only transactions that closed a position with a profit or a loss
+ * (what the P&L report adds up).
+ */
+realized: boolean, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
@@ -3507,6 +3647,11 @@ utility_item_id?: string, };
  * How a transaction came to exist.
  */
 type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } } | { "workflow": { workflow_id: string, run_id: string, } };
+
+/**
+ * One page of the operations list, newest first, and how many match in all.
+ */
+type TxPage = { items: Array<Transaction>, total: number, };
 
 type TxPreview = { changes: Array<PositionChange>, base_currency: string, 
 /**
@@ -3637,7 +3782,11 @@ budget_currency: string | null,
 /**
  * What to be told about and how far ahead.
  */
-notifications: NotificationSettings | null, };
+notifications: NotificationSettings | null, 
+/**
+ * Replaces the list of checklist steps marked «Не нужно».
+ */
+onboarding_skipped: Array<string> | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

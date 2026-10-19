@@ -31,6 +31,7 @@ const option = computed<ChartOption>(() => ({
     props.report.rows.map((row) => monthLabel(row.month, activeLocale.value)),
     axisColor.value,
     moneyTooltip.value,
+    props.report.meta.currency,
   ),
   series: [
     { name: t('report.cashflow.income'), type: 'bar', data: props.report.rows.map((row) => num(row.income)) },
@@ -86,10 +87,9 @@ const rows = computed<MonthTableRow[]>(() => [
       <div class="h-80 w-full"><Chart :option="option" autoresize class="cursor-pointer" @click="openMonth" /></div>
     </Card>
     <ReportDetails :label="t('report.byMonth')">
-      <MonthTable :columns="columns" :rows="rows" :label-header="t('report.month')" />
-      <p class="mt-3 text-xs text-muted-foreground">
-        {{ t('report.currencyNote', { currency: currency.toUpperCase() }) }}
-        <template v-if="props.report.meta.real_terms">· {{ t('report.realNote', { rate: props.report.meta.inflation_rate ?? '—' }) }}</template>
+      <MonthTable :columns="columns" :rows="rows" :label-header="t('report.month')" :currency="props.report.meta.currency" />
+      <p v-if="props.report.meta.real_terms" class="mt-3 text-xs text-muted-foreground">
+        {{ t('report.realNote', { rate: props.report.meta.inflation_rate ?? '—' }) }}
       </p>
     </ReportDetails>
   </div>

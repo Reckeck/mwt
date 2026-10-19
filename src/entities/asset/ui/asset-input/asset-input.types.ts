@@ -7,4 +7,6 @@ export interface AssetInputProps {
   required?: boolean
   /** Message under the field after a failed save (see `useFormValidation`). */
   error?: string
+  /** Open the list when the field gets focus; off so a dialog's autofocus does not cover the form. */
+  openOnFocus?: boolean
 }

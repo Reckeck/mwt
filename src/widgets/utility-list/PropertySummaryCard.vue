@@ -8,6 +8,7 @@ import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 
 import type { UtilityListProps } from './utility-list.types'
+import { Money } from '@/entities/currency'
 
 const props = defineProps<UtilityListProps>()
 const { t } = useI18n()
@@ -24,10 +25,10 @@ const rows = computed(() => {
   const data = summary.data.value
   if (!data) return []
   return [
-    { key: 'value', label: t('propertySummary.value'), value: money(data.value_base) },
-    { key: 'debt', label: t('propertySummary.debt'), value: money(data.debt_base) },
-    { key: 'equity', label: t('propertySummary.equity'), value: money(data.equity_base) },
-    { key: 'monthly', label: t('propertySummary.monthly'), value: money(data.monthly_cost_base) },
+    { key: 'value', label: t('propertySummary.value'), value: data.value_base },
+    { key: 'debt', label: t('propertySummary.debt'), value: data.debt_base },
+    { key: 'equity', label: t('propertySummary.equity'), value: data.equity_base },
+    { key: 'monthly', label: t('propertySummary.monthly'), value: data.monthly_cost_base },
   ]
 })
 </script>
@@ -38,7 +39,9 @@ const rows = computed(() => {
       <div class="grid grid-cols-2 gap-4 @md:grid-cols-4">
         <div v-for="row in rows" :key="row.key" class="grid gap-0.5">
           <p class="truncate text-xs text-muted-foreground">{{ row.label }}</p>
-          <p class="truncate text-lg font-semibold tabular-nums">{{ row.value }}</p>
+          <p class="truncate text-lg font-semibold tabular-nums">
+            <Money :amount="row.value" :currency="summary.data.value?.base_currency" :decimals="0" />
+          </p>
         </div>
       </div>
       <p v-if="summary.data.value" class="text-xs text-muted-foreground">

@@ -79,6 +79,13 @@ pub struct Settings {
     /// What to be told about and how far ahead.
     #[serde(default)]
     pub notifications: crate::model::notify::NotificationSettings,
+    /// The budget settings were saved at least once: the checklist step
+    /// «доля сбережений» is done even when 10 % was the right answer.
+    #[serde(default)]
+    pub budget_configured: bool,
+    /// Checklist steps the user said they do not need.
+    #[serde(default)]
+    pub onboarding_skipped: Vec<String>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -117,6 +124,8 @@ impl Default for Settings {
             daily_budget_mode: DailyBudgetMode::Month,
             budget_currency: String::new(),
             notifications: crate::model::notify::NotificationSettings::default(),
+            budget_configured: false,
+            onboarding_skipped: Vec::new(),
         }
     }
 }
@@ -129,7 +138,11 @@ pub struct PricePoint {
     pub value_usd: Amount,
     /// ISO-8601 UTC.
     pub ts: String,
+    /// The provider that quoted it (`coingecko`, `coincap`, `binance`…).
     pub source: String,
+    /// Change over the last 24 hours, percent, when the provider said it.
+    #[serde(default)]
+    pub change_24h_pct: Option<Amount>,
 }
 
 /// A cached FX rate: units of `currency` per 1 USD.

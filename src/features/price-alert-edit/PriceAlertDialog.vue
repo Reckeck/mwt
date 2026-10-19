@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { CurrencyPicker } from '@/entities/currency'
-import { AssetInput } from '@/entities/asset'
+import { AssetInput, resolveTicker } from '@/entities/asset'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -13,7 +13,6 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
-import { tickerRef } from '@/shared/lib/asset-ref'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { Switch } from '@/shared/ui/switch'
 
@@ -30,28 +29,6 @@ const condition = ref<AlertCondition>('above')
 const price = ref('')
 const currency = ref('usd')
 const active = ref(true)
-
-/** A chart knows only the ticker: take the matching listed asset, so the alert gets a price feed. */
-async function resolveTicker(symbol: string): Promise<AssetRef> {
-  try {
-    const hits = await call<AssetSearchHit[]>('search_assets', { query: symbol })
-    const hit = hits.find((entry) => entry.symbol.toUpperCase() === symbol.toUpperCase())
-    if (hit) {
-      const ticker = hit.symbol.toUpperCase()
-      return {
-        symbol: ticker,
-        name: hit.name || ticker,
-        coingecko_id: hit.coingecko_id,
-        chain: hit.chain,
-        contract: hit.contract,
-        quote: ticker,
-      }
-    }
-  } catch {
-    // Offline search: the bare ticker still names the asset.
-  }
-  return tickerRef(symbol)
-}
 
 watch(open, async (isOpen) => {
   if (!isOpen) return

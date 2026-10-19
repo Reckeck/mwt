@@ -40,7 +40,7 @@ function toggle(id: string, on: boolean) {
       <span class="truncate">{{ summary }}</span>
       <ChevronDown class="size-4 shrink-0 opacity-50" />
     </PopoverTrigger>
-    <PopoverContent align="start" class="max-h-80 w-(--reka-popover-trigger-width) min-w-56 overflow-y-auto p-1">
+    <PopoverContent align="start" class="max-h-80 w-(--reka-popover-trigger-width) min-w-[min(14rem,calc(100vw-2rem))] overflow-y-auto p-1">
       <label
         v-if="props.emptyLabel"
         :for="`${uid}-all`"

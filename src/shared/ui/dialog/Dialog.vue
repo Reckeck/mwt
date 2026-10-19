@@ -11,6 +11,9 @@ import {
   DialogTitle,
 } from 'reka-ui'
 
+import { useIsPhone } from '@/shared/lib/phone'
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/shared/ui/drawer'
+
 import { dialogWidths, type DialogProps } from './dialog.constants'
 
 const props = withDefaults(
@@ -23,6 +26,8 @@ const emit = defineEmits<{ 'update:open': [boolean] }>()
 const widths = dialogWidths
 
 const { t } = useI18n()
+/** On a phone the same dialog is a sheet from the bottom that a swipe closes. */
+const phone = useIsPhone()
 
 const FIELD = '[autofocus], input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"]'
 
@@ -41,11 +46,36 @@ function focusFirstField(event: Event) {
 </script>
 
 <template>
-  <DialogRoot :open="props.open" @update:open="(value) => emit('update:open', value)">
+  <Drawer v-if="phone" :open="props.open" @update:open="(value) => emit('update:open', value)">
+    <DrawerContent v-bind="props.description ? {} : { 'aria-describedby': undefined }">
+      <header class="flex items-start gap-3 border-b border-border px-4 pt-2 pb-3">
+        <div class="min-w-0 flex-1">
+          <DrawerTitle class="truncate">{{ props.title }}</DrawerTitle>
+          <DrawerDescription v-if="props.description" class="mt-0.5">{{ props.description }}</DrawerDescription>
+        </div>
+        <DrawerClose
+          class="-mr-1 flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X class="size-4" />
+          <span class="sr-only">{{ t('actions.close') }}</span>
+        </DrawerClose>
+      </header>
+
+      <div data-dialog-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <slot />
+      </div>
+
+      <footer v-if="$slots.footer" class="flex flex-wrap items-center justify-end gap-2 border-t border-border p-4">
+        <slot name="footer" />
+      </footer>
+    </DrawerContent>
+  </Drawer>
+
+  <DialogRoot v-else :open="props.open" @update:open="(value) => emit('update:open', value)">
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in" />
       <DialogContent
-        class="fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in"
+        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in"
         :class="widths[props.size]"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"
         @open-auto-focus="focusFirstField"

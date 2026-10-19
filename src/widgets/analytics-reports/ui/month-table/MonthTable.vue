@@ -4,9 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronDown } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { ReportTerm } from '@/entities/report'
 import { Button } from '@/shared/ui/button'
-import { formatMoney, signClass } from '@/shared/lib/format'
+import { signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
@@ -22,10 +23,10 @@ const { t } = useI18n()
 const opened = ref(new Set<string>())
 const secondary = computed(() => props.columns.filter((column) => !column.primary))
 
-function cell(column: MonthTableColumn, row: MonthTableRow): string {
+/** Text for a muted row or a column with its own format; `null` draws the sum as `<Money>`. */
+function cell(column: MonthTableColumn, row: MonthTableRow): string | null {
   if (row.muted) return '—'
-  const value = row.values[column.key] ?? '0'
-  return column.format ? column.format(value) : formatMoney(value, { decimals: 0 })
+  return column.format ? column.format(row.values[column.key] ?? '0') : null
 }
 
 function toggle(id: string) {
@@ -40,7 +41,7 @@ function toggle(id: string) {
     <Table class="w-full text-sm tabular-nums">
       <TableHeader>
         <TableRow class="hover:bg-transparent">
-          <TableHead class="text-left">{{ props.labelHeader }}</TableHead>
+          <TableHead class="text-left sticky left-0 z-[1] bg-card">{{ props.labelHeader }}</TableHead>
           <TableHead
             v-for="column in props.columns"
             :key="column.key"
@@ -54,7 +55,7 @@ function toggle(id: string) {
       <TableBody>
         <template v-for="row in props.rows" :key="row.id">
           <TableRow :class="cn(row.muted && 'text-muted-foreground', row.bold && 'font-medium')">
-            <TableCell class="capitalize">
+            <TableCell class="capitalize sticky left-0 z-[1] bg-card">
               <RouterLink v-if="row.to && !row.muted" :to="row.to" class="hover:underline" :title="t('report.openTransactions')">
                 {{ row.label }}
               </RouterLink>
@@ -65,7 +66,8 @@ function toggle(id: string) {
               :key="column.key"
               :class="cn('text-right', !column.primary && 'hidden @2xl:table-cell', column.signed && !row.muted && signClass(row.values[column.key]))"
             >
-              {{ cell(column, row) }}
+              <template v-if="cell(column, row) !== null">{{ cell(column, row) }}</template>
+              <Money v-else :amount="row.values[column.key] ?? '0'" :currency="props.currency" :decimals="0" />
             </TableCell>
             <TableCell v-if="secondary.length" class="w-8 p-0 @2xl:hidden">
               <Button
@@ -85,7 +87,8 @@ function toggle(id: string) {
                 <template v-for="column in secondary" :key="column.key">
                   <dt class="text-muted-foreground">{{ column.label }}</dt>
                   <dd :class="cn('text-right', column.signed && !row.muted && signClass(row.values[column.key]))">
-                    {{ cell(column, row) }}
+                    <template v-if="cell(column, row) !== null">{{ cell(column, row) }}</template>
+              <Money v-else :amount="row.values[column.key] ?? '0'" :currency="props.currency" :decimals="0" />
                   </dd>
                 </template>
               </dl>

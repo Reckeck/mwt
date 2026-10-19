@@ -115,7 +115,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.goal ? t('goal.edit') : t('goal.new')" size="lg">
+  <Dialog v-model:open="open" :title="props.goal ? t('goal.edit') : t('goal.new')">
     <form id="goal-form" class="@container grid gap-5" @submit.prevent="form.submit(save.mutate, $event)">
       <FormField for="goal-name" :label="t('goal.name')" required :error="form.error('name')">
         <Input id="goal-name" v-model="name" :placeholder="t('goal.namePlaceholder')" />

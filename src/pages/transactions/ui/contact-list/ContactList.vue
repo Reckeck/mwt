@@ -2,15 +2,17 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Search } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { ContactQuickCreate } from '@/features/contact-edit'
 import { type ContactDebtFilter, type ContactSection, contactNets } from '@/entities/contact'
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { Input } from '@/shared/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { formatMoney, signClass } from '@/shared/lib/format'
+import { signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
 /** The contacts: quick add, search, the debt filter, and the list in collapsible sections. */
@@ -70,13 +72,13 @@ function toggleSection(key: string) {
           <span class="tabular-nums">{{ section.entries.length }}</span>
         </Button>
         <ul v-show="!collapsed.includes(section.key)" class="grid gap-0.5">
-          <li v-for="contact in section.entries" :key="contact.id">
+          <li v-for="contact in section.entries" :key="contact.id" class="flex items-center gap-1">
             <ContextMenu :actions="props.actionsOf(contact)">
               <Button
                 variant="ghost"
                 :class="
                   cn(
-                    'h-auto w-full justify-between px-3 py-2 text-left font-normal',
+                    'h-auto min-w-0 flex-1 justify-between px-3 py-2 text-left font-normal',
                     props.selectedId === contact.id && 'bg-accent',
                     contact.archived && 'opacity-60',
                   )
@@ -86,11 +88,14 @@ function toggleSection(key: string) {
                 <span class="min-w-0 truncate font-medium">{{ contact.name }}</span>
                 <span class="flex shrink-0 flex-col items-end text-xs tabular-nums">
                   <span v-for="row in nets(contact.id)" :key="row.symbol" :class="signClass(row.net)">
-                    {{ formatMoney(row.net, { decimals: 0, currency: row.symbol, signed: true }) }}
+                    <Money :amount="row.net" :decimals="0" :currency="row.symbol" signed />
                   </span>
                 </span>
               </Button>
             </ContextMenu>
+            <span v-if="props.actionsOf(contact).length" class="pointer-fine:hidden">
+              <ActionMenu :actions="props.actionsOf(contact)" :label="t('actions.more')" />
+            </span>
           </li>
         </ul>
       </section>

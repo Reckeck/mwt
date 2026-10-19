@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { type RouteLocationRaw, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { Bell, CalendarClock, CircleAlert, HandCoins, Home, Landmark } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { AutomationRunActions } from '@/features/automation-edit'
 import { Card } from '@/shared/ui/card'
@@ -35,6 +37,22 @@ const ICONS = {
   rejected_run: CircleAlert,
   debt: HandCoins,
 } as const
+
+/** Where an item is managed: its list, its loan wallet or its contact. A refused run keeps its own buttons. */
+function targetOf(item: UpcomingItem): RouteLocationRaw | null {
+  switch (item.kind) {
+    case 'automation':
+      return { name: 'planning-automations' }
+    case 'reminder':
+      return { name: 'planning-reminders' }
+    case 'loan_payment':
+      return { name: 'wallet', params: { id: item.source_id } }
+    case 'debt':
+      return { name: 'transactions', query: { contact: item.source_id } }
+    default:
+      return null
+  }
+}
 </script>
 
 <template>
@@ -57,7 +75,15 @@ const ICONS = {
             :class="item.kind === 'rejected_run' ? 'text-destructive' : 'text-muted-foreground'"
           />
           <span class="w-20 shrink-0 text-xs tabular-nums text-muted-foreground">{{ formatDate(item.date) }}</span>
-          <span class="min-w-0 flex-1 truncate" :title="item.title">
+          <RouterLink
+            v-if="targetOf(item)"
+            :to="targetOf(item) as RouteLocationRaw"
+            class="min-w-0 flex-1 truncate hover:underline"
+            :title="item.title"
+          >
+            {{ item.title }}
+          </RouterLink>
+          <span v-else class="min-w-0 flex-1 truncate" :title="item.title">
             {{ item.kind === 'rejected_run' ? t('upcoming.notCreated', { name: item.title }) : item.title }}
           </span>
           <span
@@ -65,7 +91,7 @@ const ICONS = {
             class="shrink-0 tabular-nums"
             :class="Number(item.amount) > 0 ? 'text-success' : ''"
           >
-            {{ formatMoney(item.amount, { decimals: 0, currency: item.asset?.symbol }) }}
+            <Money :amount="item.amount" :decimals="0" :currency="item.asset?.symbol" />
           </span>
         </div>
         <p v-if="item.shortfall" class="pl-6 text-xs text-destructive">

@@ -6,6 +6,7 @@ import { useEventListener } from '@vueuse/core'
 import { WORKFLOW_LESSONS, WORKFLOW_TEMPLATES, type useNodeCatalog } from '@/entities/workflow'
 import type { useWorkflowActions } from '@/features/workflow-manage'
 import { call } from '@/shared/api/ipc'
+import { notify } from '@/shared/lib/notify'
 import { WORKFLOW_KEYS, emptyGraph, parseGraph } from '@/shared/lib/workflow'
 
 import { useHistory } from './history'
@@ -99,10 +100,18 @@ export function useWorkflowDocument(
         loadGraph(template ? template.graph((key) => t(key)) : emptyGraph())
       }
       loaded.value = true
-      savedSnapshot.value = source.workflowId() ? snapshot() : ''
+      // A new workflow nobody touched is not «unsaved edits»: leaving it asks nothing.
+      // Taken after the canvas settles, since mounting nodes measures them into the graph.
+      savedSnapshot.value = snapshot()
+      if (!source.workflowId()) {
+        void nextTick(() => {
+          savedSnapshot.value = snapshot()
+        })
+      }
       rememberSaved()
       history.reset(graphJson.value)
-      void nextTick(() => editor.flow.fitView({ padding: 0.2, maxZoom: 1 }))
+      // Not below half size: a long graph is panned rather than shrunk past reading.
+      void nextTick(() => editor.flow.fitView({ padding: 0.2, maxZoom: 1, minZoom: 0.5 }))
     },
     { immediate: true },
   )
@@ -117,6 +126,7 @@ export function useWorkflowDocument(
   }))
 
   function save(onSaved: (id: string) => void) {
+    const first = !source.workflowId()
     actions.save.mutate(
       { id: source.workflowId(), draft: draft.value },
       {
@@ -125,9 +135,30 @@ export function useWorkflowDocument(
           rememberSaved()
           draftOpened.value = false
           onSaved(saved.workflow.id)
+          if (first && !saved.workflow.active && saved.issues.length === 0) offerToSwitchOn(saved.workflow.id)
         },
       },
     )
+  }
+
+  /** A new workflow is saved switched off: the next step, switching it on, is offered right away. */
+  function offerToSwitchOn(id: string) {
+    notify.info(t('workflow.enableNow.title'), {
+      action: {
+        label: t('workflow.enableNow.action'),
+        onClick: () =>
+          actions.setActive.mutate(
+            { id, active: true },
+            {
+              onSuccess: (workflow) => {
+                active.value = workflow.active
+                savedSnapshot.value = snapshot()
+                rememberSaved()
+              },
+            },
+          ),
+      },
+    })
   }
 
   /** Throw the unsaved edits away: the canvas and the settings as they were saved. */

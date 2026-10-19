@@ -1311,6 +1311,9 @@ pub struct UpdateSettingsInput {
     /// What to be told about and how far ahead.
     #[serde(default)]
     pub notifications: Option<crate::model::notify::NotificationSettings>,
+    /// Replaces the list of checklist steps marked «Не нужно».
+    #[serde(default)]
+    pub onboarding_skipped: Option<Vec<String>>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------

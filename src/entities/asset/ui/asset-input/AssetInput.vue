@@ -2,9 +2,9 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ComboboxInput } from 'reka-ui'
+import { Star } from 'lucide-vue-next'
 
-import { useCurrencyOptions } from '@/entities/currency'
-import { call } from '@/shared/api/ipc'
+import { useCurrencyOptions, useFavoriteCurrencies } from '@/entities/currency'
 import { fiatRef } from '@/shared/lib/asset-ref'
 import { CHAIN_LABELS } from '@/shared/lib/chains'
 import { cn } from '@/shared/lib/utils'
@@ -12,7 +12,9 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { ComboboxAnchor, ComboboxGroup, ComboboxItem, ComboboxList, ComboboxRoot, ComboboxViewport } from '@/shared/ui/combobox'
 import { Label } from '@/shared/ui/label'
 
+import { hitToRef, resolveTicker } from '../../lib/resolve-ticker'
 import type { AssetInputProps } from './asset-input.types'
+import { useAssetSearch } from './model/use-asset-search'
 
 /** Fiat rows shown at most; the full catalog is one more letter away. */
 const FIAT_LIMIT = 6
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<AssetInputProps>(), {
   invalid: false,
   required: false,
   error: undefined,
+  openOnFocus: false,
 })
 
 const asset = defineModel<AssetRef | null>({ default: null })
@@ -36,12 +39,10 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 const inputId = useId()
 const query = ref('')
-const hits = ref<AssetSearchHit[]>([])
 const open = ref(false)
-const loading = ref(false)
+const { hits, loading, schedule, clear } = useAssetSearch()
+const favorites = useFavoriteCurrencies()
 
-let timer: ReturnType<typeof setTimeout> | undefined
-let seq = 0
 /** Typing clears the model; that clear must not wipe what is being typed. */
 let clearedByTyping = false
 
@@ -65,28 +66,24 @@ watch(
  * losses in it could not be counted.
  */
 const { filter: filterFiat } = useCurrencyOptions(['fiat'], [])
-const fiatHits = computed(() => filterFiat(query.value).slice(0, FIAT_LIMIT))
+const fiatCodes = computed(() => new Set(settings.fiatCurrencies))
 
-async function search(rawQuery: string) {
-  const token = ++seq
-  if (rawQuery.trim().length < 1) {
-    hits.value = []
-    loading.value = false
-    return
-  }
-  loading.value = true
-  try {
-    const res = await call<AssetSearchHit[]>('search_assets', { query: rawQuery.trim() })
-    if (token === seq) hits.value = res
-  } catch {
-    if (token === seq) hits.value = []
-  } finally {
-    if (token === seq) loading.value = false
-  }
-}
+/** With nothing typed: the base and the favourites, crypto included, before anything else. */
+const favoriteRows = computed(() =>
+  query.value.trim()
+    ? []
+    : favorites.withBase.value.map((code) => ({ code: code.toUpperCase(), fiat: fiatCodes.value.has(code) })),
+)
+const fiatHits = computed(() => {
+  const shown = new Set(favoriteRows.value.map((row) => row.code.toLowerCase()))
+  return filterFiat(query.value)
+    .filter((row) => !shown.has(row.code))
+    .slice(0, FIAT_LIMIT)
+})
 
+/** A dialog focuses its first field: opening on that focus would cover the rest of the form. */
 function onFocus() {
-  open.value = true
+  if (props.openOnFocus) open.value = true
   if (!settings.currencies) void settings.loadCurrencies().catch(() => {})
 }
 
@@ -97,27 +94,25 @@ function onInput(value: string) {
     clearedByTyping = true
     asset.value = null
   }
-  clearTimeout(timer)
-  timer = setTimeout(() => void search(value), 250)
+  schedule(value)
 }
 
 function close(symbol: string) {
   query.value = symbol
   open.value = false
-  hits.value = []
+  clear()
 }
 
 function pick(hit: AssetSearchHit) {
-  const symbol = hit.symbol.toUpperCase()
-  asset.value = {
-    symbol,
-    name: hit.name || symbol,
-    coingecko_id: hit.coingecko_id,
-    chain: hit.chain,
-    contract: hit.contract,
-    quote: symbol,
-  }
-  close(symbol)
+  asset.value = hitToRef(hit)
+  close(asset.value.symbol)
+}
+
+/** A favourite coin is only a ticker in the settings: find the listed asset behind it. */
+async function pickFavorite(code: string, fiat: boolean) {
+  if (fiat) return pickFiat(code)
+  close(code)
+  asset.value = await resolveTicker(code)
 }
 
 /** A catalog currency, or free text the catalog does not know, as a fiat unit. */
@@ -131,7 +126,10 @@ function pickFiat(code: string) {
 /** Rows are keyed by kind: `fiat:USD`, `hit:3`, `typed`; picking one runs its action. */
 function onPick(key: unknown) {
   if (typeof key !== 'string') return
-  if (key.startsWith('fiat:')) pickFiat(key.slice(5))
+  if (key.startsWith('fav:')) {
+    const row = favoriteRows.value.find((entry) => entry.code === key.slice(4))
+    if (row) void pickFavorite(row.code, row.fiat)
+  } else if (key.startsWith('fiat:')) pickFiat(key.slice(5))
   else if (key.startsWith('hit:')) {
     const hit = hits.value[Number(key.slice(4))]
     if (hit) pick(hit)
@@ -146,7 +144,9 @@ const canOfferFiat = computed(
     !fiatHits.value.some((row) => row.code.toUpperCase() === typed.value) &&
     !hits.value.some((hit) => hit.symbol.toUpperCase() === typed.value),
 )
-const hasRows = computed(() => fiatHits.value.length > 0 || hits.value.length > 0 || canOfferFiat.value)
+const hasRows = computed(
+  () => favoriteRows.value.length > 0 || fiatHits.value.length > 0 || hits.value.length > 0 || canOfferFiat.value,
+)
 
 const subtitle = (value: AssetRef) => {
   if (value.chain === 'fiat') {
@@ -185,6 +185,8 @@ const subtitle = (value: AssetRef) => {
           "
           @update:model-value="onInput"
           @focus="onFocus"
+          @click="open = true"
+          @keydown.down="open = true"
         />
         <span v-if="loading" class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
           …
@@ -193,11 +195,21 @@ const subtitle = (value: AssetRef) => {
 
       <ComboboxList
         v-if="hasRows"
-        class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-64"
+        class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-[min(16rem,calc(100vw-2rem))]"
         align="start"
         @open-auto-focus.prevent
       >
         <ComboboxViewport class="max-h-72 p-1">
+          <ComboboxGroup v-if="favoriteRows.length" :heading="t('asset.group.favorites')">
+            <ComboboxItem v-for="row in favoriteRows" :key="`fav-${row.code}`" :value="`fav:${row.code}`">
+              <Star class="size-3.5 shrink-0 fill-warning text-warning" aria-hidden="true" />
+              <span class="sr-only">{{ t('currency.favoriteMark') }}</span>
+              <span class="w-16 shrink-0 truncate font-medium">{{ row.code }}</span>
+              <span class="min-w-0 flex-1 truncate text-muted-foreground">
+                {{ row.fiat ? t('currency.kind.fiat') : t('currency.kind.crypto') }}
+              </span>
+            </ComboboxItem>
+          </ComboboxGroup>
           <ComboboxGroup v-if="fiatHits.length" :heading="t('asset.group.fiat')">
             <ComboboxItem v-for="row in fiatHits" :key="`fiat-${row.code}`" :value="`fiat:${row.code}`">
               <span class="w-20 shrink-0 truncate font-medium uppercase">{{ row.code }}</span>

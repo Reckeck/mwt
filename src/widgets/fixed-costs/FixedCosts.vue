@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQueries, useQuery } from '@tanstack/vue-query'
 import { CircleAlert } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -58,7 +59,7 @@ const totals = computed(() => {
           {{ row.item.name }}
         </RouterLink>
         <span class="shrink-0 tabular-nums text-muted-foreground">
-          {{ formatMoney(row.amount, { decimals: 0, currency: row.item.currency }) }}
+          <Money :amount="row.amount" :decimals="0" :currency="row.item.currency" />
         </span>
       </li>
     </ul>

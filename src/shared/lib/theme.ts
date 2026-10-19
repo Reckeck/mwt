@@ -1,5 +1,7 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 
+import { call } from '@/shared/api/ipc'
+import { usePlatform } from '@/shared/lib/platform'
 import { useSettingsStore } from '@/shared/store/settings'
 
 export type ResolvedTheme = 'light' | 'dark'
@@ -28,6 +30,15 @@ export function useTheme() {
   }
 
   watch(resolved, apply, { immediate: true })
+  // Android draws the status-bar icons itself: dark icons on a light page and the other way round.
+  const { isAndroid } = usePlatform()
+  watch(
+    [resolved, isAndroid],
+    ([theme, android]) => {
+      if (android) call('set_system_bars', { dark: theme === 'dark' }).catch(() => undefined)
+    },
+    { immediate: true },
+  )
   onMounted(() => media.addEventListener('change', onMediaChange))
   onUnmounted(() => media.removeEventListener('change', onMediaChange))
 

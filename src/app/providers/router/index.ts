@@ -180,13 +180,13 @@ export const router = createRouter({
           path: 'workflows/new',
           name: 'workflow-new',
           component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
-          meta: { i18n: 'nav.workflows' },
+          meta: { i18n: 'nav.workflows', fullscreen: true },
         },
         {
           path: 'workflows/:id',
           name: 'workflow-edit',
           component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
-          meta: { i18n: 'nav.workflows' },
+          meta: { i18n: 'nav.workflows', fullscreen: true },
         },
         {
           // The settings window opens over any page; old links land on the dashboard with it open.

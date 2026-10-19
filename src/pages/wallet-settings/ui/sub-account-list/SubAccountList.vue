@@ -2,13 +2,13 @@
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FolderInput, FolderPlus } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
-import { bindingLabel } from '@/entities/store'
+import { bindingBadge } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SettingsSection } from '@/shared/ui/settings-section'
-import { formatMoney } from '@/shared/lib/format'
 import { storeIcon } from '@/shared/lib/store-icons'
 
 import type { SubAccountListProps } from './sub-account-list.types'
@@ -18,7 +18,6 @@ const props = defineProps<SubAccountListProps>()
 const emit = defineEmits<{ create: []; move: [store: Store] }>()
 const { t } = useI18n()
 
-const money = (value: string) => formatMoney(value, { currency: props.baseCurrency, decimals: 2 })
 </script>
 
 <template>
@@ -39,8 +38,8 @@ const money = (value: string) => formatMoney(value, { currency: props.baseCurren
         >
           {{ child.store.name }}
         </RouterLink>
-        <Badge v-if="bindingLabel(child.store.binding)" variant="outline">{{ bindingLabel(child.store.binding) }}</Badge>
-        <span class="shrink-0 text-sm tabular-nums">{{ money(child.subtree_base) }}</span>
+        <Badge v-if="bindingBadge(child.store)" variant="outline">{{ bindingBadge(child.store) }}</Badge>
+        <span class="shrink-0 text-sm tabular-nums"><Money :amount="child.subtree_base" :currency="props.baseCurrency" :decimals="2" /></span>
         <Button
           variant="ghost"
           size="icon-sm"

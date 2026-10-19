@@ -13,7 +13,7 @@ import { AssetSelect } from '@/entities/asset'
 import { assetKey } from '@/shared/lib/asset-ref'
 import { nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
+import { formatQuantity } from '@/shared/lib/format'
 
 import type { EnvelopeManagerProps } from './envelope-manage.types'
 
@@ -94,7 +94,8 @@ function apply(id: string, sign: 1 | -1) {
   fund.mutate({ id, amount: sign < 0 ? `-${raw}` : raw })
 }
 
-const qty = (value: string, symbol: string) => `${formatMoney(value, { decimals: 2 })} ${symbol.toUpperCase()}`
+/** Envelopes hold an asset, not money in the base currency: a quantity and its ticker. */
+const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbol.toUpperCase()}`
 </script>
 
 <template>

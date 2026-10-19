@@ -2,13 +2,13 @@
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
+import { Money } from '@/entities/currency'
 
 import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatMoney } from '@/shared/lib/format'
 
 const { t } = useI18n()
 
@@ -35,7 +35,7 @@ const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.use
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="min-w-0 truncate">{{ label(status.budget.target) }} · {{ t(`budget.periodKind.${status.budget.period}`) }}</span>
           <span class="shrink-0 tabular-nums" :class="Number(status.remaining) < 0 ? 'text-destructive' : 'text-muted-foreground'">
-            {{ formatMoney(status.spent, { decimals: 0 }) }} / {{ formatMoney(status.budget.limit, { decimals: 0, currency: status.budget.currency }) }}
+            <Money :amount="status.spent" :decimals="0" :currency="status.budget.currency" /> / <Money :amount="status.budget.limit" :decimals="0" :currency="status.budget.currency" />
           </span>
         </div>
         <div class="h-1.5 overflow-hidden rounded-full bg-muted">

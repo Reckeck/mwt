@@ -19,7 +19,7 @@ mod tray;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
-    losses, notifications, planning, portfolio, pricing, settings, stores, transactions,
+    losses, mobile, notifications, planning, portfolio, pricing, settings, stores, transactions,
     vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
@@ -42,7 +42,8 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = builder
         .plugin(tauri_plugin_saf::init())
-        .plugin(tauri_plugin_net::init());
+        .plugin(tauri_plugin_net::init())
+        .plugin(tauri_plugin_insets::init());
     // Autostart, global keys and window geometry exist on desktops only.
     #[cfg(desktop)]
     let builder = builder
@@ -85,6 +86,7 @@ pub fn run() {
             stores::store_move_targets,
             // transactions
             transactions::list_transactions,
+            transactions::list_transactions_page,
             transactions::get_tx_graph,
             transactions::transaction_kinds_for_store_kind,
             transactions::add_transaction,
@@ -148,6 +150,8 @@ pub fn run() {
             portfolio::get_summary,
             portfolio::get_history,
             portfolio::get_realized_pnl,
+            portfolio::get_asset_holdings,
+            portfolio::get_store_months,
             portfolio::get_store_history,
             portfolio::get_store_pnl,
             portfolio::get_net_worth,
@@ -157,6 +161,9 @@ pub fn run() {
             calc::calc_preview,
             // app settings (outside the vault)
             app_settings::get_app_settings,
+            app_settings::app_platform,
+            mobile::set_system_bars,
+            mobile::move_to_back,
             app_settings::update_app_settings,
             app_settings::set_quick_add_shortcut,
             app_settings::get_shortcut_support,

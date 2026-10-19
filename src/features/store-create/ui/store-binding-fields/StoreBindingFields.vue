@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { AssetInput } from '@/entities/asset'
+import { AssetInput, PairInput } from '@/entities/asset'
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 
 import { useStoreCreate } from '../../model/use-store-create-state'
 
@@ -33,7 +32,7 @@ const { props, subInfo, token, currency, pairText, pair, form } = useStoreCreate
       :error="form.error('pair')"
       :hint="pair ? t('binding.pairParsed', pair) : pairText ? t('binding.pairInvalid') : t('subTypeHint.pair')"
     >
-      <Input id="store-binding-pair" v-model="pairText" :placeholder="t('binding.pairPlaceholder')" autocomplete="off" />
+      <PairInput id="store-binding-pair" v-model="pairText" :quotes="['USDT', 'USDC', 'BTC']" :placeholder="t('binding.pairPlaceholder')" />
     </FormField>
     <p v-else class="text-sm text-muted-foreground">{{ t(`subTypeHint.${subInfo.sub_type}`) }}</p>
   </template>

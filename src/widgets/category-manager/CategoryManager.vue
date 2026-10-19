@@ -88,7 +88,7 @@ const create = useMutation({
           <span class="contents" :data-invalid="adder.invalidAttr('name')">
             <Input
               v-model="newName"
-              class="h-9 w-56"
+              class="h-9 w-full sm:w-56"
               :placeholder="t('categories.manage.newName')"
               :aria-label="t('categories.manage.newName')"
             />

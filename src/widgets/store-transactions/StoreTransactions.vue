@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { TransactionFilterBar } from '@/features/transaction-filter'
-import { TransactionDetailsSheet } from '@/widgets/transaction-details'
-import { TransactionsList } from '@/entities/transaction'
+import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
-import { txId } from '@/shared/lib/transactions'
 import { storeTxFilter } from '@/shared/lib/tx-filter'
 
 import type { StoreTransactionsProps } from './store-transactions.types'
+import { openTxDetails } from '@/shared/lib/tx-details'
 
 const props = withDefaults(defineProps<StoreTransactionsProps>(), { includeChildren: true })
 
@@ -30,19 +29,11 @@ watch(
   },
 )
 
-const txs = useQuery({
-  queryKey: computed(() => ['transactions', 'list', filter.value]),
-  queryFn: () => call<Transaction[]>('list_transactions', { filter: filter.value }),
-  placeholderData: (previous) => previous,
-})
+/** The day totals are in the base currency: the summary has its rate. */
+const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
+const { query: txs, rows, total } = useTxPages(filter)
 
-const openedId = ref<string | null>(null)
-const detailsOpen = ref(false)
-const opened = computed(() => (txs.data.value ?? []).find((tx) => txId(tx) === openedId.value) ?? null)
-function openDetails(tx: Transaction) {
-  openedId.value = txId(tx)
-  detailsOpen.value = true
-}
+const openDetails = openTxDetails
 </script>
 
 <template>
@@ -56,20 +47,30 @@ function openDetails(tx: Transaction) {
     <SectionState
       :loading="txs.isPending.value"
       :error="txs.error.value"
-      :empty="!txs.data.value?.length"
+      :empty="!rows.length"
       :empty-title="t('filter.empty')"
       :empty-description="t('ui.noDataHint')"
       compact
       @retry="txs.refetch()"
     >
       <div class="-my-3">
-        <TransactionsList :transactions="txs.data.value ?? []" :store-id="props.storeId" openable @open="openDetails">
+        <TransactionsList
+          :transactions="rows"
+          :total="total"
+          :loading-more="txs.isFetchingNextPage.value"
+          :store-id="props.storeId"
+          openable
+          group-by-day
+          :fx-per-usd="summary.data.value?.fx_per_usd"
+          :base-currency="summary.data.value?.base_currency"
+          @open="openDetails"
+          @more="txs.fetchNextPage()"
+        >
           <template #actions="{ tx }">
             <slot name="actions" :tx="tx" />
           </template>
         </TransactionsList>
       </div>
     </SectionState>
-    <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
   </Card>
 </template>

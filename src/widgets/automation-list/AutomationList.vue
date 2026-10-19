@@ -8,6 +8,7 @@ import { AutomationDialog, AutomationRunActions } from '@/features/automation-ed
 import { AutomationSimulationDialog } from '@/features/automation-simulate'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -119,21 +120,19 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
 
 <template>
   <div class="grid gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted-foreground">
-        {{ props.storeId || props.readonly ? t('automation.intro') : t('automation.introWallet') }}
-      </p>
-      <div class="flex items-center gap-2">
-        <Button v-if="shown.length" variant="outline" data-tour="automation-simulate" @click="openSimulation(null)">
+    <ListHeader
+      :intro="props.storeId || props.readonly ? t('automation.intro') : t('automation.introWallet')"
+      :action-label="props.readonly ? undefined : t('automation.new')"
+      :hide-action="empty"
+      @action="openNew()"
+    >
+      <template v-if="shown.length" #actions>
+        <Button variant="outline" data-tour="automation-simulate" @click="openSimulation(null)">
           <FlaskConical class="size-4" />
           {{ t('simulation.open') }}
         </Button>
-        <Button v-if="!props.readonly" @click="openNew()">
-          <Plus class="size-4" />
-          {{ t('automation.new') }}
-        </Button>
-      </div>
-    </div>
+      </template>
+    </ListHeader>
 
     <!-- Ready-made automations of this kind of wallet: one click, a few fields. -->
     <div v-if="props.presets.length && !props.readonly" class="flex flex-wrap gap-2" data-tour="automation-presets">

@@ -25,6 +25,7 @@ use crate::storage::{SnapshotFormat, VaultFile};
 
 mod adjustments;
 mod agenda;
+mod asset_holdings;
 mod auto_reminders;
 mod automations;
 mod budget;
@@ -45,9 +46,11 @@ mod notify_snapshot;
 mod peer_sync;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
+mod price_info;
 mod rates;
 mod reports;
 mod store_change;
+mod store_months;
 #[cfg(test)]
 mod test_support;
 mod utilities;
@@ -57,6 +60,7 @@ mod worth;
 
 pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
+pub use asset_holdings::{AssetHolding, AssetHoldings};
 pub use auto_reminders::category_of;
 pub use automations::{
     AutomationDraft, AutomationPass, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance,
@@ -72,7 +76,7 @@ pub use insights::{
 };
 pub use interest::{DepositReport, InterestTaxReport, PdsReport};
 pub use ledger::{
-    GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph,
+    GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph, TxPage,
 };
 pub use losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
@@ -81,6 +85,7 @@ pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use notifications::{notice, notice_title};
 pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
+pub use price_info::{PriceInfo, PriceOrigin};
 pub use rates::RateBook;
 pub use reports::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
@@ -91,6 +96,7 @@ pub use reports::{
 pub use store_change::{
     StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
 };
+pub use store_months::StoreMonthRow;
 pub use utilities::{
     FormulaZoneReading, PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill,
     UtilityBillLine, UtilityDraft, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth,
@@ -254,7 +260,9 @@ impl UnlockedVault {
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
         let graphs_migrated = vault.migrate_workflow_graphs();
-        if migrated || graphs_migrated || fmt != vault.fmt {
+        // A field became required after the workflow was switched on: off, and said so.
+        let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
+        if migrated || graphs_migrated || incomplete || fmt != vault.fmt {
             vault.persist()?;
         }
         Ok(vault)
@@ -396,6 +404,22 @@ impl UnlockedVault {
             ));
         }
         let settings = &mut self.doc.settings;
+        if input.savings_rate.is_some()
+            || input.daily_budget_mode.is_some()
+            || input.budget_currency.is_some()
+        {
+            settings.budget_configured = true;
+        }
+        if let Some(steps) = input.onboarding_skipped {
+            let mut kept: Vec<String> = Vec::new();
+            for step in steps {
+                let step = step.trim().to_string();
+                if !step.is_empty() && !kept.contains(&step) {
+                    kept.push(step);
+                }
+            }
+            settings.onboarding_skipped = kept;
+        }
         if let Some(decimals) = input.display_decimals {
             settings.display_decimals = decimals.clamp(0, 18);
         }
@@ -1284,30 +1308,11 @@ impl UnlockedVault {
     /// Current USD price of one unit: a hand-set price (property), fiat
     /// through its latest FX rate, else the newest cached quote, else the last price a transaction recorded for
     /// the asset, else zero. Derivatives are never valued.
+    /// A dollar stablecoin with no price yet is still worth a dollar, not
+    /// nothing: exchange balances are mostly in them. See [`Self::price_quote_for`],
+    /// which also says where the price came from.
     fn price_usd_for(&self, asset_key: &str) -> Amount {
-        self.manual_price_usd(asset_key)
-            .or_else(|| {
-                let code = asset_key.strip_prefix("fiat:")?;
-                self.per_usd(code)
-                    .filter(|rate| !rate.is_zero())
-                    .map(|rate| Amount::new(rust_decimal::Decimal::ONE) / rate)
-            })
-            .or_else(|| {
-                self.doc
-                    .price_cache
-                    .iter()
-                    .filter(|point| point.asset_key == asset_key)
-                    .max_by(|left, right| left.ts.cmp(&right.ts))
-                    .map(|point| point.value_usd)
-            })
-            .or_else(|| self.last_stamped_price(asset_key))
-            // A dollar stablecoin with no price yet is still worth a dollar,
-            // not nothing: exchange balances are mostly in them.
-            .or_else(|| {
-                crate::exchange::is_usd_stablecoin(asset_key)
-                    .then(|| Amount::new(rust_decimal::Decimal::ONE))
-            })
-            .unwrap_or(Amount::ZERO)
+        self.price_quote_for(asset_key).usd
     }
 
     /// Every store id a scope covers. An empty id list means the whole vault.
@@ -1356,11 +1361,12 @@ impl UnlockedVault {
                 holding.store_id == store_id && holding.asset.is_derivative() == derivatives
             })
             .map(|holding| {
-                let price_usd = if derivatives {
-                    Amount::ZERO
+                let quote = if derivatives {
+                    price_info::PriceQuote::default()
                 } else {
-                    self.price_usd_for(&holding.asset.key())
+                    self.price_quote_for(&holding.asset.key())
                 };
+                let price_usd = quote.usd;
                 let value_usd = holding.quantity * price_usd;
                 let price_base = price_usd * fx;
                 let unrealized_base = match holding.avg_cost {
@@ -1376,6 +1382,8 @@ impl UnlockedVault {
                     value_usd,
                     value_base: value_usd * fx,
                     unrealized_base,
+                    change_24h_pct: quote.change_24h_pct,
+                    price_info: quote.info,
                 }
             })
             .collect();
@@ -1455,6 +1463,7 @@ impl UnlockedVault {
     pub fn store_tree(&self) -> Vec<StoreTreeNode> {
         let (_base, fx) = self.base_and_fx();
         let mut own_usd: HashMap<&str, Amount> = HashMap::new();
+        let mut held: HashMap<&str, Vec<(Amount, AssetRef)>> = HashMap::new();
         for holding in self
             .doc
             .holdings
@@ -1463,19 +1472,35 @@ impl UnlockedVault {
         {
             let value = holding.quantity * self.price_usd_for(&holding.asset.key());
             *own_usd.entry(holding.store_id.as_str()).or_default() += value;
+            if holding.quantity.is_positive() {
+                held.entry(holding.store_id.as_str())
+                    .or_default()
+                    .push((value, holding.asset.clone()));
+            }
         }
         let mut tx_count: HashMap<String, u32> = HashMap::new();
+        let mut last_tx: HashMap<String, String> = HashMap::new();
         for tx in &self.doc.transactions {
             let mut touched: HashSet<String> = HashSet::new();
             touched.extend(tx.store_ids());
+            let at = &tx.meta().timestamp;
             for id in touched {
+                let latest = last_tx.entry(id.clone()).or_default();
+                if at > latest {
+                    latest.clone_from(at);
+                }
                 *tx_count.entry(id).or_default() += 1;
             }
+        }
+        for assets in held.values_mut() {
+            assets.sort_by_key(|(value, _)| std::cmp::Reverse(*value));
         }
         let ctx = TreeCtx {
             fx,
             own_usd,
             tx_count,
+            last_tx,
+            held,
         };
         let mut seen = HashSet::new();
         let roots: Vec<&Store> = self
@@ -1525,7 +1550,31 @@ impl UnlockedVault {
         let subtree_usd = children
             .iter()
             .fold(own_usd, |acc, child| acc + child.subtree_usd);
+        // The wallet's own biggest assets, topped up from its sub-accounts' by ticker.
+        let mut top_assets: Vec<AssetRef> = Vec::new();
+        let own_assets = ctx
+            .held
+            .get(store.id.as_str())
+            .into_iter()
+            .flatten()
+            .map(|(_, asset)| asset);
+        for asset in own_assets.chain(children.iter().flat_map(|child| child.top_assets.iter())) {
+            if top_assets.len() < TOP_ASSETS
+                && !top_assets
+                    .iter()
+                    .any(|seen| seen.symbol.eq_ignore_ascii_case(&asset.symbol))
+            {
+                top_assets.push(asset.clone());
+            }
+        }
+        let last_tx_at = children
+            .iter()
+            .filter_map(|child| child.last_tx_at.clone())
+            .chain(ctx.last_tx.get(&store.id).cloned())
+            .max();
         StoreTreeNode {
+            top_assets,
+            last_tx_at,
             store: store.clone(),
             depth: depth as u32,
             path,
@@ -1587,7 +1636,22 @@ impl UnlockedVault {
             })
             .collect();
 
+        let positions = self.store_positions(store_id, fx);
+        let subtree_positions = self.merged_positions(&subtree, fx);
+        let unrealized = |list: &[StorePosition]| {
+            list.iter()
+                .fold(Amount::ZERO, |sum, position| sum + position.unrealized_base)
+        };
+        // The oldest market quote shown: «prices as of» must not claim fresher.
+        let prices_as_of = subtree_positions
+            .iter()
+            .filter(|position| position.price_info.origin == PriceOrigin::Market)
+            .filter_map(|position| position.price_info.at.clone())
+            .min();
         Ok(StoreOverview {
+            unrealized_base: unrealized(&positions),
+            subtree_unrealized_base: unrealized(&subtree_positions),
+            prices_as_of,
             ancestors: self
                 .ancestors_of(store_id)
                 .into_iter()
@@ -1606,8 +1670,8 @@ impl UnlockedVault {
             subtree_usd: node.subtree_usd,
             subtree_base: node.subtree_base,
             realized_pnl_base: self.realized_pnl_filtered(Some(&scope)).total_base,
-            positions: self.store_positions(store_id, fx),
-            subtree_positions: self.merged_positions(&subtree, fx),
+            positions,
+            subtree_positions,
             open_positions: self.store_positions_of(store_id, fx, true),
             children,
             can_add_child: node.can_add_child,
@@ -1821,23 +1885,6 @@ impl UnlockedVault {
         out
     }
 
-    /// The latest USD price a transaction recorded for an asset (e.g. the
-    /// last buy), for assets no provider quotes.
-    fn last_stamped_price(&self, asset_key: &str) -> Option<Amount> {
-        self.doc
-            .transactions
-            .iter()
-            .filter_map(|tx| {
-                tx.legs()
-                    .into_iter()
-                    .find(|leg| leg.asset.key() == asset_key && leg.role == LegRole::Principal)
-                    .and_then(|leg| leg.price_usd)
-                    .map(|price| (tx.meta().timestamp.clone(), price))
-            })
-            .max_by(|left, right| left.0.cmp(&right.0))
-            .map(|(_, price)| price)
-    }
-
     pub fn realized_pnl(&self) -> RealizedPnl {
         self.realized_pnl_filtered(None)
     }
@@ -1851,14 +1898,14 @@ impl UnlockedVault {
         // Flatten to (timestamp, leg) and replay. Only legs booked in scope
         // count, which is what makes a per-store PnL differ from the
         // vault-wide one even though they share this code path.
-        let mut movements: Vec<(String, Leg)> = Vec::new();
+        let mut movements: Vec<(String, &str, Leg)> = Vec::new();
         for tx in &self.doc.transactions {
             let ts = tx.meta().timestamp.clone();
             for leg in tx.legs() {
                 if scope.is_some_and(|ids| !ids.contains(&leg.store_id)) {
                     continue;
                 }
-                movements.push((ts.clone(), leg));
+                movements.push((ts.clone(), tx.meta().id.as_str(), leg));
             }
         }
         movements.sort_by(|left, right| left.0.cmp(&right.0));
@@ -1870,7 +1917,7 @@ impl UnlockedVault {
         let mut fees = Amount::ZERO;
         let mut legs = Vec::new();
 
-        for (ts, leg) in &movements {
+        for (ts, tx_id, leg) in &movements {
             let delta = leg.amount;
             if delta.is_zero() || leg.asset.is_derivative() {
                 continue;
@@ -1887,6 +1934,7 @@ impl UnlockedVault {
                     total += pnl;
                     legs.push(PnlLeg {
                         ts: ts.clone(),
+                        tx_id: tx_id.to_string(),
                         store_id: leg.store_id.clone(),
                         asset_key: leg.asset.key(),
                         quantity: delta.abs(),
@@ -1904,6 +1952,7 @@ impl UnlockedVault {
                     total += pnl;
                     legs.push(PnlLeg {
                         ts: ts.clone(),
+                        tx_id: tx_id.to_string(),
                         store_id: leg.store_id.clone(),
                         asset_key: leg.asset.key(),
                         quantity: delta.abs(),
@@ -2690,6 +2739,12 @@ pub struct StorePosition {
     pub value_base: Amount,
     /// `(price_base − avg_cost) × |quantity|`; zero when `avg_cost` is unknown.
     pub unrealized_base: Amount,
+    /// Percent over the last 24 hours, when known.
+    #[serde(default)]
+    pub change_24h_pct: Option<Amount>,
+    /// Where the price came from and when.
+    #[serde(default)]
+    pub price_info: PriceInfo,
 }
 
 /// A direct sub-account row on the wallet page.
@@ -2746,6 +2801,15 @@ pub struct StoreOverview {
     /// RFC3339; empty when there are no transactions.
     pub first_tx_at: String,
     pub last_tx_at: String,
+    /// Unrealized result of the own positions and of the whole subtree.
+    #[serde(default)]
+    pub unrealized_base: Amount,
+    #[serde(default)]
+    pub subtree_unrealized_base: Amount,
+    /// The oldest provider quote the positions are valued at; `None` when no
+    /// position has one.
+    #[serde(default)]
+    pub prices_as_of: Option<String>,
 }
 
 /// One node of the wallet tree (sidebar, wallets page, pickers).
@@ -2765,6 +2829,12 @@ pub struct StoreTreeNode {
     /// `depth < MAX_STORE_DEPTH` and not archived.
     pub can_add_child: bool,
     pub children: Vec<StoreTreeNode>,
+    /// Up to three biggest assets, its own first, then its sub-accounts'.
+    #[serde(default)]
+    pub top_assets: Vec<AssetRef>,
+    /// RFC3339 of the newest transaction here or in a sub-account.
+    #[serde(default)]
+    pub last_tx_at: Option<String>,
 }
 
 /// Allowed destinations for moving a sub-account.
@@ -2781,7 +2851,13 @@ struct TreeCtx<'doc> {
     fx: Amount,
     own_usd: HashMap<&'doc str, Amount>,
     tx_count: HashMap<String, u32>,
+    last_tx: HashMap<String, String>,
+    /// Positive holdings per store, biggest value first.
+    held: HashMap<&'doc str, Vec<(Amount, AssetRef)>>,
 }
+
+/// Assets a wallet card names.
+const TOP_ASSETS: usize = 3;
 
 /// Live before archived, then by name.
 fn sort_tree(nodes: &mut [StoreTreeNode]) {
@@ -2897,6 +2973,9 @@ pub struct HistoryPoint {
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct PnlLeg {
     pub ts: String,
+    /// The transaction that closed the position.
+    #[serde(default)]
+    pub tx_id: String,
     pub store_id: String,
     pub asset_key: String,
     /// Absolute size of the closed-out quantity.
@@ -3402,6 +3481,7 @@ mod tests {
             value_usd: amount("1"),
             ts: "2000-01-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
 
         let tree = vault.store_tree();
@@ -3875,6 +3955,7 @@ mod tests {
             value_usd: amount("1"),
             ts: "2026-01-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
         (dir, vault)
     }
@@ -3896,6 +3977,7 @@ mod tests {
             value_usd: crate::service::test_support::amount("1"),
             ts: "2026-01-01T10:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
         vault.doc.fx_cache.push(crate::model::vault::FxPoint {
             currency: "eur".into(),
@@ -3916,6 +3998,56 @@ mod tests {
         let overview = vault.store_overview(&first, true).unwrap();
         assert_eq!(overview.own_usd.to_string(), "100");
         assert_eq!(overview.tx_count, 1);
+    }
+
+    #[test]
+    fn store_tree_lists_top_assets_and_last_activity() {
+        let (_dir, mut vault) = setup();
+        let cold = vault.doc.stores[1].id.clone();
+        let mut buy = income_of(&cold, btc(), "1", "50000", "buy");
+        at(&mut buy, "2026-03-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
+        let mut cash = income_of(&cold, usd(), "100", "1", "cash");
+        at(&mut cash, "2026-05-01T00:00:00Z");
+        vault.add_transaction(cash).unwrap();
+        let tree = vault.store_tree();
+        let node = tree
+            .iter()
+            .find(|node| node.store.id == cold)
+            .expect("the wallet is a root");
+        let symbols: Vec<&str> = node
+            .top_assets
+            .iter()
+            .map(|asset| asset.symbol.as_str())
+            .collect();
+        assert_eq!(symbols, ["BTC", "USD"]);
+        assert_eq!(node.last_tx_at.as_deref(), Some("2026-05-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn store_overview_sums_unrealized_and_reports_prices_as_of() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[1].id.clone();
+        let mut buy = income_of(&store, btc(), "1", "50000", "buy");
+        at(&mut buy, "2026-01-01T00:00:00Z");
+        vault.add_transaction(buy).unwrap();
+        vault.apply_prices(&[crate::model::vault::PricePoint {
+            asset_key: btc().key(),
+            value_usd: amount("60000"),
+            ts: "2026-10-19T09:00:00Z".into(),
+            source: "coingecko".into(),
+            change_24h_pct: Some(amount("1.5")),
+        }]);
+        let overview = vault.store_overview(&store, true).unwrap();
+        assert_eq!(overview.unrealized_base, amount("10000"));
+        assert_eq!(overview.subtree_unrealized_base, amount("10000"));
+        assert_eq!(
+            overview.prices_as_of.as_deref(),
+            Some("2026-10-19T09:00:00Z")
+        );
+        let position = &overview.positions[0];
+        assert_eq!(position.change_24h_pct, Some(amount("1.5")));
+        assert_eq!(position.price_info.origin, PriceOrigin::Market);
     }
 
     /// A per-store series must not be valued against the other store's
@@ -4604,6 +4736,8 @@ mod persist_tests {
             daily_budget_mode: crate::model::vault::DailyBudgetMode::UntilIncome,
             budget_currency: "thb".into(),
             notifications: crate::model::notify::NotificationSettings::default(),
+            budget_configured: true,
+            onboarding_skipped: vec!["debts".into()],
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
@@ -4615,6 +4749,33 @@ mod persist_tests {
             reopened.settings, edited,
             "settings reverted across a restart"
         );
+    }
+
+    #[test]
+    fn saving_the_budget_marks_it_configured() {
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        assert!(!vault.doc.settings.budget_configured);
+        let settings = vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                savings_rate: Some(Amount::parse("0.10").unwrap()),
+                ..Default::default()
+            })
+            .unwrap();
+        // The default 10 % saved on purpose still counts.
+        assert!(settings.budget_configured);
+    }
+
+    #[test]
+    fn skipped_checklist_steps_are_kept_once() {
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        let settings = vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                onboarding_skipped: Some(vec!["debts".into(), " debts ".into(), "goal".into()]),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(settings.onboarding_skipped, vec!["debts", "goal"]);
+        assert!(!settings.budget_configured);
     }
 
     /// The same, but through `replace_doc` — the path the raw JSON editor uses.

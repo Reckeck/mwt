@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Calculator, FolderPlus, Goal as GoalIcon, MoreVertical, Plus, RefreshCw, Repeat, Scale, Settings2 } from 'lucide-vue-next'
+import { ArrowLeftRight, Calculator, FolderPlus, Goal as GoalIcon, Plus, RefreshCw, Repeat, Scale, Settings2 } from 'lucide-vue-next'
 
-import { bindingLabel } from '@/entities/store'
+import { bindingBadge } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { Button, buttonVariants } from '@/shared/ui/button'
-import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 import { Spinner } from '@/shared/ui/spinner'
+import { openConverter } from '@/shared/lib/converter'
 import { storeIcon } from '@/shared/lib/store-icons'
 
 /**
@@ -37,12 +37,26 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 
+function openSettings() {
+  void router.push({ name: 'wallet-settings', params: { id: props.store.id } })
+}
+
+/** The way up to this wallet; its own name is the heading below and the top bar. */
 const crumbs = computed<PageCrumb[]>(() => [
   { label: t('nav.stores'), to: { name: 'stores' } },
   ...props.ancestors.map((parent) => ({ label: parent.name, to: { name: 'wallet', params: { id: parent.id } } })),
-  { label: props.store.name },
 ])
+
+const moneyWallet = computed(() => ['bank', 'cash', 'liability'].includes(props.store.kind))
+/** A wallet bound to one currency starts the converter from it. */
+const ownCurrency = computed(() => {
+  const binding = props.store.binding
+  return binding && typeof binding === 'object' && 'asset' in binding && binding.asset.chain === 'fiat'
+    ? binding.asset.symbol.toLowerCase()
+    : null
+})
 </script>
 
 <template>
@@ -60,7 +74,7 @@ const crumbs = computed<PageCrumb[]>(() => [
           <Badge variant="secondary">
             {{ props.store.sub_type ? t(`subType.${props.store.sub_type}`) : t(`stores.kind.${props.store.kind}`) }}
           </Badge>
-          <Badge v-if="bindingLabel(props.store.binding)" variant="outline">{{ bindingLabel(props.store.binding) }}</Badge>
+          <Badge v-if="bindingBadge(props.store)" variant="outline">{{ bindingBadge(props.store) }}</Badge>
           <Badge v-if="props.store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
           <Badge
             v-if="props.store.purpose !== 'everyday' || props.store.kind !== 'liability'"
@@ -78,6 +92,7 @@ const crumbs = computed<PageCrumb[]>(() => [
           v-if="props.store.kind !== 'property'"
           variant="outline"
           size="sm"
+          class="max-md:hidden"
           :disabled="props.store.archived"
           data-tour="wallet-adjust"
           @click="emit('adjust')"
@@ -88,7 +103,7 @@ const crumbs = computed<PageCrumb[]>(() => [
         <Button
           variant="outline"
           size="icon"
-          class="size-8"
+          class="size-8 max-md:hidden"
           :title="t('store.refresh')"
           :aria-label="t('store.refresh')"
           :disabled="props.refreshing"
@@ -100,40 +115,54 @@ const crumbs = computed<PageCrumb[]>(() => [
         <RouterLink
           :to="{ name: 'wallet-settings', params: { id: props.store.id } }"
           :class="buttonVariants({ variant: 'outline', size: 'icon' })"
-          class="size-8"
+          class="size-8 max-md:hidden"
           :title="t('walletSettings.nav')"
           :aria-label="t('walletSettings.nav')"
           data-tour="wallet-settings"
         >
           <Settings2 class="size-4" />
         </RouterLink>
-        <DropdownMenu align="end">
-          <template #trigger>
-            <Button variant="outline" size="icon" class="size-8" :title="t('wallet.more')" :aria-label="t('wallet.more')">
-              <MoreVertical class="size-4" />
-            </Button>
-          </template>
-          <DropdownMenuItem value="calculator" @select="emit('calculator')">
-            <Calculator class="size-4 shrink-0" />
-            {{ t('calc.title') }}
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" @select="emit('subAccount')">
-            <FolderPlus class="size-4 shrink-0" />
-            {{ t('stores.newSubAccountShort') }}
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="!props.store.archived" value="goal" @select="emit('goal')">
-            <GoalIcon class="size-4 shrink-0" />
-            {{ t('goal.makeFromStore') }}
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="!props.store.archived" value="automation" @select="emit('automation')">
-            <Repeat class="size-4 shrink-0" />
-            {{ t('automation.makeFromStore') }}
-          </DropdownMenuItem>
-        </DropdownMenu>
         <Button size="sm" :disabled="props.store.archived" data-tour="wallet-operation" @click="emit('operation')">
           <Plus class="size-4" />
           {{ t('wallet.addOperation') }}
         </Button>
+      </template>
+
+      <template #more>
+        <!-- On a phone the header keeps the main action; these move here. -->
+        <DropdownMenuItem v-if="props.store.kind !== 'property'" value="adjust" class="md:hidden" :disabled="props.store.archived" @select="emit('adjust')">
+          <Scale class="size-4 shrink-0" />
+          {{ t('adjustment.open') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem value="refresh" class="md:hidden" :disabled="props.refreshing" @select="emit('refresh')">
+          <RefreshCw class="size-4 shrink-0" />
+          {{ t('store.refresh') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem value="settings" class="md:hidden" @select="openSettings">
+          <Settings2 class="size-4 shrink-0" />
+          {{ t('walletSettings.nav') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem value="calculator" @select="emit('calculator')">
+          <Calculator class="size-4 shrink-0" />
+          {{ t('calc.title') }}
+        </DropdownMenuItem>
+        <!-- Money wallets convert their own currency; a coin wallet has the terminal. -->
+        <DropdownMenuItem v-if="moneyWallet" value="converter" @select="openConverter(ownCurrency)">
+          <ArrowLeftRight class="size-4 shrink-0" />
+          {{ t('palette.converter') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" @select="emit('subAccount')">
+          <FolderPlus class="size-4 shrink-0" />
+          {{ t('stores.newSubAccountShort') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="!props.store.archived" value="goal" @select="emit('goal')">
+          <GoalIcon class="size-4 shrink-0" />
+          {{ t('goal.makeFromStore') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="!props.store.archived" value="automation" @select="emit('automation')">
+          <Repeat class="size-4 shrink-0" />
+          {{ t('automation.makeFromStore') }}
+        </DropdownMenuItem>
       </template>
     </PageHeader>
 

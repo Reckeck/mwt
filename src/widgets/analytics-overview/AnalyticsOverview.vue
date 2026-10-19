@@ -10,6 +10,7 @@ import { monthName } from '@/entities/report'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { formatPct } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
+import { useTxContext } from '@/shared/lib/tx-context'
 import { SectionState } from '@/shared/ui/section-state'
 
 import type { AnalyticsOverviewProps } from './analytics-overview.types'
@@ -26,8 +27,15 @@ const overview = useOverview(() => props.filter)
 const data = computed(() => overview.data.value ?? null)
 const adding = ref(false)
 
-/** The same filter rides along to the report a card opens. */
-const linkTo = (name: string, view?: string) => ({ name, query: { ...route.query, ...(view ? { view } : {}) } })
+/** The same filter rides along to the report a card opens; the overview's month becomes its period. */
+function linkTo(name: string, view?: string) {
+  const { month, ...query } = route.query
+  const period = typeof month === 'string' ? { from: month, to: month } : {}
+  return { name, query: { ...query, ...period, ...(view ? { view } : {}) } }
+}
+const context = useTxContext()
+/** This month's spending against the last one; positive means more was spent. */
+const spentDelta = computed(() => (data.value ? Number(data.value.flow.spent) - Number(data.value.flow.previous_spent) : 0))
 const month = computed(() => (data.value ? monthName(data.value.month, activeLocale.value) : ''))
 </script>
 
@@ -57,6 +65,15 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
         </OverviewFigure>
         <OverviewFigure :label="t('report.cashflow.netTotal')" :hint="t('report.term.net')">
           <Money :amount="data.flow.net" :currency="data.currency" :decimals="0" colored />
+        </OverviewFigure>
+        <!-- Spending more than last month is the bad direction: red, not green. -->
+        <OverviewFigure :label="t('analytics.overview.vsPrevMonth')">
+          <span :class="spentDelta > 0 ? 'text-destructive' : spentDelta < 0 ? 'text-success' : ''">
+            <Money :amount="spentDelta" :currency="data.currency" :decimals="0" signed />
+          </span>
+        </OverviewFigure>
+        <OverviewFigure v-if="data.flow.top_category" :label="t('analytics.overview.topCategory')">
+          {{ context.categoryName(data.flow.top_category) }}
         </OverviewFigure>
         <template #action>
           <Button size="sm" @click="adding = true"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>
@@ -104,7 +121,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
           <Money :amount="data.investments.losses" :currency="data.currency" :decimals="0" />
         </OverviewFigure>
         <template #action>
-          <RouterLink :to="{ name: 'stores' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">{{ t('analytics.overview.toWallets') }}</RouterLink>
+          <Button size="sm" variant="outline" @click="adding = true"><Plus class="size-4" />{{ t('analytics.overview.addTrade') }}</Button>
         </template>
       </OverviewCard>
 
@@ -115,10 +132,10 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
         :has-data="data.savings.has_data"
         :insights="data.savings.insights"
         :currency="data.currency"
-        :empty-title="t('analytics.overview.flowEmpty')"
-        :empty-description="t('analytics.overview.flowEmptyHint')"
+        :empty-title="t('analytics.overview.yearEmpty')"
+        :empty-description="t('analytics.overview.yearEmptyHint')"
       >
-        <OverviewFigure :label="t('report.year.saved')" :hint="t('report.term.savings_fact')">
+        <OverviewFigure :label="t('report.year.saved', { year: data.year })" :hint="t('report.term.savings_fact')">
           <Money :amount="data.savings.saved" :currency="data.currency" :decimals="0" colored />
         </OverviewFigure>
         <OverviewFigure :label="t('analytics.overview.savedShare')" :hint="t('report.term.saved_pct')">

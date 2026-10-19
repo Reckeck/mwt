@@ -6,7 +6,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { call } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 
-import { baseOf, pairOf } from '../lib/pair'
+import { baseOf, pairOf } from '@/shared/lib/pair'
 
 interface TerminalDrawingsOptions {
   storeId: () => string

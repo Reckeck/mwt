@@ -32,6 +32,10 @@ function workflows(own: TourStep[]): TourStep[] {
 /** The node editor: new and saved workflows alike. */
 const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-canvas', key: 'workflowEditor.canvas', side: 'top' },
+  // Only on an empty canvas; skipped once there is a node.
+  { target: 'workflow-add-first', key: 'workflowEditor.addFirst', side: 'top' },
+  // A phone: the «+» on the canvas instead of Ctrl+Space.
+  { target: 'workflow-add-touch', key: 'workflowEditor.addTouch', side: 'left' },
   { target: 'workflow-quick-hint', key: 'workflowEditor.quick', side: 'top' },
   { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
   { target: 'workflow-node-flows', key: 'workflowEditor.flows', side: 'left' },
@@ -45,6 +49,13 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
   { target: 'workflow-discard', key: 'workflowEditor.discard', side: 'bottom' },
   { target: 'workflow-draft', key: 'workflowEditor.draft', side: 'bottom' },
+]
+
+/** An empty new workflow: what to do first, not all fourteen stops of the editor. */
+export const WORKFLOW_EDITOR_EMPTY: TourStep[] = [
+  { target: 'workflow-add-first', key: 'workflowEditor.addFirst', side: 'top' },
+  { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
+  { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
 ]
 
 /**
@@ -68,6 +79,9 @@ export const TOURS: Record<string, TourStep[]> = {
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
+    // Only on a phone.
+    { target: 'bottom-nav', key: 'dashboard.bottomNav', side: 'top' },
+    { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
@@ -86,6 +100,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
     { target: 'chart-currency', key: 'wallet.chartCurrency', side: 'left' },
+    { target: 'wallet-positions', key: 'wallet.positions', side: 'top' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
     { target: 'exchange-terminal', key: 'wallet.terminal', side: 'top' },
   ],
@@ -110,9 +125,13 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'section-content', key: 'transactionsCalendar.content', side: 'top' },
   ],
-  analytics: analytics([{ target: 'overview-cards', key: 'analytics.overview', side: 'top' }]),
+  analytics: analytics([
+    { target: 'overview-cards', key: 'analytics.overview', side: 'top' },
+    { target: 'overview-insights', key: 'analytics.overviewInsights', side: 'bottom' },
+  ]),
   'analytics-flow': analytics([
     { target: 'report-view', key: 'analytics.flowView', side: 'bottom' },
+    { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.flow', side: 'top' },
   ]),
   'analytics-wealth': analytics([

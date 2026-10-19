@@ -3,10 +3,12 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { BudgetDialog } from '@/features/budget-edit'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -58,13 +60,7 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
 
 <template>
   <div class="grid gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted-foreground">{{ t('budget.intro') }}</p>
-      <Button @click="openNew">
-        <Plus class="size-4" />
-        {{ t('budget.new') }}
-      </Button>
-    </div>
+    <ListHeader :intro="t('budget.intro')" :action-label="t('budget.new')" :hide-action="empty" @action="openNew" />
 
     <EmptyState v-if="empty" compact :title="t('budget.empty')">
       <Button @click="openNew"><Plus class="size-4" />{{ t('budget.new') }}</Button>
@@ -81,9 +77,9 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
                 <Badge v-if="!budget.active" variant="outline">{{ t('budget.paused') }}</Badge>
               </div>
               <p class="text-sm tabular-nums text-muted-foreground">
-                {{ formatMoney(statusOf(budget.id)?.spent ?? '0', { currency: budget.currency }) }}
+                <Money :amount="statusOf(budget.id)?.spent ?? '0'" :currency="budget.currency" />
                 /
-                {{ formatMoney(budget.limit, { currency: budget.currency }) }}
+                <Money :amount="budget.limit" :currency="budget.currency" />
               </p>
             </div>
             <div class="flex shrink-0 items-center gap-1">

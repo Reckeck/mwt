@@ -112,7 +112,7 @@ const current = computed(() => allOptions.value.find((row) => row.value === choi
       </ComboboxAnchor>
 
       <!-- Above dialogs (z-50): the operation form lives in one. -->
-      <ComboboxList class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-72" align="start">
+      <ComboboxList class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-[min(18rem,calc(100vw-2rem))]" align="start">
         <ComboboxInput
           v-model="search"
           auto-focus

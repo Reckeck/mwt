@@ -140,6 +140,14 @@ export function signClass(value: string | number | null | undefined): string {
   return SIGN_TONE_CLASS[signTone(value)]
 }
 
+/** «пн, 14 окт.»: a day header in a journal, where the weekday matters more than the year. */
+export function formatDay(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return new Intl.DateTimeFormat(activeLocale.value, { weekday: 'short', day: 'numeric', month: 'short' }).format(date)
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)

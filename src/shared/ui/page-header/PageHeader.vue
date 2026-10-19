@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
+import { MoreVertical } from 'lucide-vue-next'
 
 import {
   Breadcrumb,
@@ -10,12 +11,16 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/ui/breadcrumb'
+import { Button } from '@/shared/ui/button'
+import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 
 import type { PageHeaderProps } from './page-header.types'
 
 /**
  * The top of a page: where it sits (breadcrumbs), what it is (title, badges in
  * the default slot) and what it does (`#actions`, the main action last).
+ * The rarer actions go to `#more` (menu items), behind «⋯» at the end. On a
+ * phone the actions take their own row under the title.
  */
 const props = withDefaults(defineProps<PageHeaderProps>(), {
   title: undefined,
@@ -43,7 +48,7 @@ const { t } = useI18n()
     </Breadcrumb>
 
     <div
-      v-if="props.title || $slots.default || $slots.actions"
+      v-if="props.title || $slots.default || $slots.actions || $slots.more"
       class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
     >
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -53,8 +58,19 @@ const { t } = useI18n()
         </div>
         <p v-if="props.description" class="text-sm text-muted-foreground">{{ props.description }}</p>
       </div>
-      <div v-if="$slots.actions" class="flex shrink-0 flex-wrap items-center gap-2">
+      <div
+        v-if="$slots.actions || $slots.more"
+        class="flex shrink-0 flex-wrap items-center gap-2 max-md:w-full max-md:justify-end"
+      >
         <slot name="actions" />
+        <DropdownMenu v-if="$slots.more" align="end">
+          <template #trigger>
+            <Button variant="outline" size="icon" class="size-8" :title="t('actions.more')" :aria-label="t('actions.more')">
+              <MoreVertical class="size-4" />
+            </Button>
+          </template>
+          <slot name="more" />
+        </DropdownMenu>
       </div>
     </div>
   </header>

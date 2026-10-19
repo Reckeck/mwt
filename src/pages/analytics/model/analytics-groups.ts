@@ -27,6 +27,9 @@ export const GROUP_EXPORTS: Record<Exclude<AnalyticsGroup, 'flow'>, ReportKind[]
   investments: ['portfolio', 'pnl', 'losses'],
 }
 
+/** Sections where «in today's money» means something; elsewhere the figures stay nominal. */
+export const REAL_TERMS_GROUPS: AnalyticsGroup[] = ['flow', 'wealth']
+
 export function flowViewOf(raw: unknown): FlowView {
   return FLOW_VIEWS.includes(raw as FlowView) ? (raw as FlowView) : 'months'
 }

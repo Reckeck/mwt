@@ -102,7 +102,7 @@ const keyHint = computed(() => {
           </div>
           <Select
             id="sync-background-lock"
-            :value="String(current.background_lock_min)"
+            :model-value="String(current.background_lock_min)"
             @update:model-value="(value) => settings.mutate({ background_lock_min: Number(value) })"
           >
             <SelectItem v-for="minutes in LOCK_OPTIONS" :key="minutes" :value="String(minutes)">
