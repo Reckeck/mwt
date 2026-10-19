@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Receipt } from 'lucide-vue-next'
 
@@ -8,6 +8,8 @@ import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { UtilityBillDialog } from '@/features/utility-bill'
 import { UtilityRemindersButton } from '@/features/utility-reminders'
+import { AllocationPie } from '@/widgets/allocation-pie'
+import { AssetDetailsSheet } from '@/widgets/asset-details'
 import { StoreTransactions } from '@/widgets/store-transactions'
 import { PropertySummaryCard, UtilityList } from '@/widgets/utility-list'
 import { UtilityStats } from '@/widgets/utility-stats'
@@ -27,12 +29,26 @@ const props = defineProps<{
   base: string
   decimals: number
   includeChildren: boolean
+  /** The oldest quote behind the prices, for «prices as of». */
+  pricesAsOf?: string | null
 }>()
 const tab = defineModel<string>('tab', { required: true })
 const emit = defineEmits<{ operation: [] }>()
 
 const { t } = useI18n()
 const billOpen = ref(false)
+const detailsOpen = ref(false)
+const picked = ref<StorePosition | null>(null)
+/** A coin wallet or an exchange holds several assets: a ring shows their shares. */
+const slices = computed(() =>
+  ['crypto', 'exchange'].includes(props.store.kind) && props.positions.length > 1
+    ? props.positions.map((position) => ({ label: position.asset.symbol.toUpperCase(), value: position.value_base }))
+    : [],
+)
+function openPosition(position: StorePosition) {
+  picked.value = position
+  detailsOpen.value = true
+}
 </script>
 
 <template>
@@ -60,17 +76,40 @@ const billOpen = ref(false)
           {{ t('wallet.addOperation') }}
         </Button>
       </EmptyState>
-      <StorePositions v-else :positions="props.positions" :base-currency="props.base" :decimals="props.decimals">
+      <StorePositions
+        v-else
+        data-tour="wallet-positions"
+        clickable
+        :positions="props.positions"
+        :base-currency="props.base"
+        :decimals="props.decimals"
+        :prices-as-of="props.pricesAsOf"
+        @open="openPosition"
+      >
         <template v-if="props.store.kind === 'property'" #actions="{ position }">
           <AssetRevalueButton :asset="position.asset" />
         </template>
       </StorePositions>
+      <AllocationPie
+        v-if="slices.length"
+        class="mt-4"
+        :title="t('charts.byAsset')"
+        :slices="slices"
+        :currency="props.base"
+      />
       <!-- Futures positions: shown, never counted in the totals. -->
       <StorePositions
         v-if="props.openPositions.length"
         class="mt-4"
         :title="t('wallet.openPositions')"
         :positions="props.openPositions"
+        :base-currency="props.base"
+        :decimals="props.decimals"
+      />
+      <AssetDetailsSheet
+        v-model:open="detailsOpen"
+        :position="picked"
+        :store-id="props.storeId"
         :base-currency="props.base"
         :decimals="props.decimals"
       />

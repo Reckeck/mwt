@@ -18,7 +18,7 @@ import { Label } from '@/shared/ui/label'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { CURRENCY_ROW_HEIGHT } from './currency-picker.constants'
-import type { CurrencyOption, CurrencyPickerProps } from './currency-picker.types'
+import type { CurrencyKind, CurrencyOption, CurrencyPickerProps } from './currency-picker.types'
 import { useCurrencyOptions } from './useCurrencyOptions'
 
 /**
@@ -48,6 +48,8 @@ const selected = defineModel<string>({ default: '' })
  * value is mapped to this code instead.
  */
 const NONE = '\u0000none'
+/** Values of the group title rows; never picked, never a currency code. */
+const GROUP_PREFIX = '\u0000group:'
 const picked = computed({
   get: () => selected.value || (props.allowEmpty ? NONE : ''),
   set: (value: string) => {
@@ -71,9 +73,26 @@ const extra = computed(() => [...props.extra, ...(selected.value ? [selected.val
 const { filter } = useCurrencyOptions(() => props.kinds, extra)
 
 const EMPTY: CurrencyOption = { code: NONE, kind: 'fiat', name: '', favorite: false }
+const header = (group: 'favorites' | CurrencyKind): CurrencyOption => ({
+  code: `${GROUP_PREFIX}${group}`,
+  kind: 'fiat',
+  name: t(`currency.group.${group}`),
+  favorite: false,
+  header: true,
+})
+
+/** With no search the list is grouped: favourites (the base first), then currencies, then crypto. */
 const options = computed(() => {
   const rows = filter(search.value)
-  return props.allowEmpty && !search.value.trim() ? [EMPTY, ...rows] : rows
+  if (search.value.trim()) return rows
+  const favorites = rows.filter((row) => row.favorite)
+  const groups: CurrencyOption[] = []
+  if (favorites.length) groups.push(header('favorites'), ...favorites)
+  for (const kind of ['fiat', 'crypto'] as const) {
+    const rest = rows.filter((row) => !row.favorite && row.kind === kind)
+    if (rest.length) groups.push(header(kind), ...rest)
+  }
+  return props.allowEmpty ? [EMPTY, ...groups] : groups
 })
 
 const selectedName = computed(() => options.value.find((row) => row.code === selected.value)?.name ?? '')
@@ -84,8 +103,13 @@ const catalogNotice = computed(() => {
   return null
 })
 
+/** A no-op once the full catalog is in; a degraded one is retried after a minute. */
 function onOpen(isOpen: boolean) {
-  if (isOpen && !settingsStore.currencies) void settingsStore.loadCurrencies().catch(() => {})
+  if (isOpen) void settingsStore.loadCurrencies().catch(() => {})
+}
+
+function retryCatalog() {
+  void settingsStore.loadCurrencies(true).catch(() => {})
 }
 </script>
 
@@ -126,7 +150,7 @@ function onOpen(isOpen: boolean) {
       </ComboboxAnchor>
 
       <!-- Above dialogs (z-50): the picker opens inside forms in dialogs. -->
-      <ComboboxList class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-56" align="start">
+      <ComboboxList class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-[min(14rem,calc(100vw-2rem))]" align="start">
         <ComboboxInput
           v-model="search"
           auto-focus
@@ -144,10 +168,20 @@ function onOpen(isOpen: boolean) {
             :overscan="8"
             :text-content="(row: CurrencyOption) => row.code"
           >
-            <ComboboxItem :value="option.code" class="h-8 w-full cursor-pointer">
+            <!-- A group title: disabled, so the arrows skip it. -->
+            <ComboboxItem
+              v-if="option.header"
+              :value="option.code"
+              disabled
+              class="h-8 w-full px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground data-[disabled]:opacity-100"
+            >
+              {{ option.name }}
+            </ComboboxItem>
+            <ComboboxItem v-else :value="option.code" class="h-8 w-full cursor-pointer">
               <Check v-if="option.code === picked" class="size-3.5 text-primary" aria-hidden="true" />
-              <Star v-else-if="option.favorite" class="size-3.5 text-warning" aria-hidden="true" />
+              <Star v-else-if="option.favorite" class="size-3.5 fill-warning text-warning" aria-hidden="true" />
               <span v-else class="size-3.5 shrink-0" aria-hidden="true" />
+              <span v-if="option.favorite" class="sr-only">{{ t('currency.favoriteMark') }}</span>
               <template v-if="option.code !== NONE">
                 <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>
                 <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ option.name }}</span>
@@ -167,6 +201,16 @@ function onOpen(isOpen: boolean) {
     </ComboboxRoot>
 
     <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>
-    <p v-else-if="catalogNotice" class="text-xs text-muted-foreground">{{ catalogNotice }}</p>
+    <p v-else-if="catalogNotice" class="text-xs text-muted-foreground">
+      {{ catalogNotice }}
+      <Button
+        variant="link"
+        class="h-auto p-0 text-xs"
+        :disabled="settingsStore.currenciesLoading"
+        @click="retryCatalog"
+      >
+        {{ t('currency.catalogRetry') }}
+      </Button>
+    </p>
   </div>
 </template>

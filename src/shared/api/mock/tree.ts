@@ -53,6 +53,9 @@ export function mockPlacementError(node: string | null, parent: string | null, n
   return taken ? { code: 'STORE_NAME_TAKEN', message: 'name taken' } : null
 }
 
+/** When the mock's quotes were «taken»: a few minutes ago. */
+const mockPricesAsOf = new Date(Date.now() - 4 * 60_000).toISOString()
+
 /** Positions held on the store itself, like `store_positions` in Rust. */
 export function mockOwnPositions(storeId: string): StorePosition[] {
   const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
@@ -78,6 +81,12 @@ export function mockOwnPositions(storeId: string): StorePosition[] {
         value_usd: String(row.qty * priceUsd),
         value_base: String(row.qty * priceUsd),
         unrealized_base: String(row.qty * (priceUsd - row.cost)),
+        // A fiat unit is priced by its rate; the rest look like a CoinGecko quote moving a little.
+        change_24h_pct: row.asset.chain === 'fiat' ? null : String(((row.asset.symbol.charCodeAt(0) % 7) - 3) * 0.8),
+        price_info:
+          row.asset.chain === 'fiat'
+            ? { origin: 'fiat' as const, source: 'open.er-api', at: mockPricesAsOf }
+            : { origin: 'market' as const, source: 'coingecko', at: mockPricesAsOf },
       }
     })
     .sort((left, right) => Number(right.value_base) - Number(left.value_base))
@@ -165,6 +174,20 @@ export function mockTreeNode(store: Store, depth: number, parentPath: string[]):
     can_add_child:
       depth < MOCK_MAX_DEPTH && !store.archived && !['property', 'cash', 'loyalty', 'liability'].includes(store.kind),
     children,
+    // Like the core: own biggest first, then the sub-accounts', one per ticker.
+    top_assets: [
+      ...mockOwnPositions(store.id)
+        .filter((row) => Number(row.quantity) > 0)
+        .map((row) => row.asset),
+      ...children.flatMap((child) => child.top_assets),
+    ]
+      .filter((asset, index, list) => list.findIndex((other) => other.symbol === asset.symbol) === index)
+      .slice(0, 3),
+    last_tx_at:
+      [...mockFilterTxs([store.id]).map(timestampOf), ...children.map((child) => child.last_tx_at ?? '')]
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? null,
   }
 }
 
@@ -237,6 +260,7 @@ export function mockOverview(storeId: string, includeChildren: boolean): StoreOv
     (left, right) => Number(right.value_base) - Number(left.value_base),
   )
   const subtreeTotal = Number(node.subtree_usd)
+  const own = mockOwnPositions(store.id)
   return {
     store,
     ancestors: mockAncestors(store.id).map((parent) => ({ id: parent.id, name: parent.name, color: parent.color })),
@@ -248,7 +272,7 @@ export function mockOverview(storeId: string, includeChildren: boolean): StoreOv
     subtree_usd: node.subtree_usd,
     subtree_base: node.subtree_base,
     realized_pnl_base: '0',
-    positions: mockOwnPositions(store.id),
+    positions: own,
     subtree_positions: subtreePositions,
     open_positions: [],
     children: node.children.map((child) => ({
@@ -262,5 +286,8 @@ export function mockOverview(storeId: string, includeChildren: boolean): StoreOv
     tx_count: txs.length,
     first_tx_at: txs.length ? timestampOf(txs[txs.length - 1]) : '',
     last_tx_at: txs.length ? timestampOf(txs[0]) : '',
+    unrealized_base: String(own.reduce((sum, row) => sum + Number(row.unrealized_base), 0)),
+    subtree_unrealized_base: String(subtreePositions.reduce((sum, row) => sum + Number(row.unrealized_base), 0)),
+    prices_as_of: own.length ? mockPricesAsOf : null,
   }
 }

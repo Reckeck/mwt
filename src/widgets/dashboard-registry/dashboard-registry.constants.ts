@@ -83,6 +83,7 @@ export const DEFAULT_DASHBOARD = [
   'monthSummary',
   'upcoming',
   'netWorth',
+  'assets',
   'spending7d',
   'utilitiesDue',
 ]

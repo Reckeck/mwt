@@ -177,6 +177,10 @@ pub struct NetworthReport {
     pub meta: ReportMeta,
     /// Value at the end of each month (today for this month).
     pub points: Vec<NetworthPoint>,
+    /// Anything was owned or owed in the period: a point exists for every
+    /// month, so an empty vault would otherwise draw a flat line at zero.
+    #[serde(default)]
+    pub has_data: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -215,6 +219,9 @@ pub struct PnlReport {
     pub rows: Vec<PnlRow>,
     pub total_realized: Amount,
     pub total_fees: Amount,
+    /// A sale or a fee fell in the period (there is a row for every month).
+    #[serde(default)]
+    pub has_data: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -234,6 +241,9 @@ pub struct PortfolioReport {
     /// Asset symbols, the biggest first; the last may be `""` for «other».
     pub assets: Vec<String>,
     pub points: Vec<PortfolioPoint>,
+    /// Some point holds a value.
+    #[serde(default)]
+    pub has_data: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -876,9 +886,22 @@ impl UnlockedVault {
     }
 
     pub(crate) fn networth_report(&self, ctx: &Ctx) -> NetworthReport {
+        let points = self.networth_points(ctx);
+        let has_data = points.iter().any(|point| {
+            [
+                point.financial,
+                point.non_financial,
+                point.receivables,
+                point.liabilities,
+                point.payables,
+            ]
+            .iter()
+            .any(|value| !value.is_zero())
+        });
         NetworthReport {
             meta: ctx.meta(),
-            points: self.networth_points(ctx),
+            points,
+            has_data,
         }
     }
 
@@ -973,6 +996,7 @@ impl UnlockedVault {
     pub(crate) fn pnl_report(&self, ctx: &Ctx) -> PnlReport {
         let book = self.rate_book();
         let base = self.base_and_fx().0;
+        let mut has_data = false;
         let mut rows: Vec<PnlRow> = ctx
             .months
             .iter()
@@ -989,7 +1013,8 @@ impl UnlockedVault {
             let value = book
                 .convert(leg.pnl_base, &base, &ctx.currency, secs)
                 .unwrap_or(leg.pnl_base);
-            rows[index].realized += ctx.shown(value, ctx.months[index]);
+            rows[index].realized += value;
+            has_data = true;
         }
         for tx in &self.doc.transactions {
             let secs = secs_or_now(&tx.meta().timestamp);
@@ -1002,16 +1027,20 @@ impl UnlockedVault {
                 }
                 let value = UnlockedVault::leg_value_in(&book, &leg, &ctx.currency, secs)
                     .unwrap_or(Amount::ZERO);
-                rows[index].fees += ctx.shown(value, ctx.months[index]);
+                rows[index].fees += value;
+                has_data = true;
             }
         }
         let mut out = PnlReport {
             meta: ctx.meta(),
+            has_data,
             ..PnlReport::default()
         };
-        for row in &mut rows {
-            row.realized = row.realized.round(2);
-            row.fees = row.fees.round(2);
+        // Today's money is applied to the month's sum once: per leg, the
+        // rounding of every conversion would add up.
+        for (row, month) in rows.iter_mut().zip(&ctx.months) {
+            row.realized = ctx.shown(row.realized, *month).round(2);
+            row.fees = ctx.shown(row.fees, *month).round(2);
             out.total_realized += row.realized;
             out.total_fees += row.fees;
         }
@@ -1094,7 +1123,7 @@ impl UnlockedVault {
         if has_other {
             assets.push(String::new());
         }
-        let points = dates
+        let points: Vec<PortfolioPoint> = dates
             .iter()
             .zip(by_symbol)
             .map(|(date, values)| {
@@ -1134,10 +1163,12 @@ impl UnlockedVault {
                 }
             })
             .collect();
+        let has_data = points.iter().any(|point| !point.total.is_zero());
         PortfolioReport {
             meta: ctx.meta(),
             assets,
             points,
+            has_data,
         }
     }
 
@@ -1825,6 +1856,75 @@ mod tests {
         );
         assert_eq!(inflation_report.nominal_change_pct, Some(Amount::ZERO));
         assert!(inflation_report.real_change_pct.unwrap().is_negative());
+    }
+
+    #[test]
+    fn pnl_real_terms_round_once_per_month() {
+        let (_dir, mut vault, card) = vault_with_card();
+        for day in ["05", "06", "07"] {
+            let mut tx = spend(&card, "1", "groceries", &format!("2025-06-{day}T10:00:00Z"));
+            if let Transaction::Payment(inner) = &mut tx {
+                inner.fee = fee_usd("0.333");
+            }
+            vault.add_transaction(tx).unwrap();
+        }
+        let inflation = BTreeMap::from([("usd".to_string(), amount("10"))]);
+        let filter = ReportFilter {
+            real_terms: true,
+            ..range("2025-06", "2025-06")
+        };
+        let Report::Pnl(report) = vault
+            .report(ReportKind::Pnl, &filter, secs(NOW), "UTC", &inflation)
+            .unwrap()
+        else {
+            panic!()
+        };
+        // 0.999 × 1.1 = 1.0989 → 1.10; rounding each fee first gave 3 × 0.37 = 1.11.
+        assert_eq!(report.rows[0].fees, amount("1.10"));
+        assert!(report.has_data);
+    }
+
+    #[test]
+    fn an_empty_vault_has_no_pnl_or_networth_data() {
+        let (_dir, vault, _card) = vault_with_card();
+        let filter = range("2026-01", "2026-06");
+        let Report::Pnl(pnl) = run(&vault, ReportKind::Pnl, &filter) else {
+            panic!()
+        };
+        assert_eq!(pnl.rows.len(), 6);
+        assert!(!pnl.has_data);
+        let Report::Networth(networth) = run(&vault, ReportKind::Networth, &filter) else {
+            panic!()
+        };
+        assert!(!networth.has_data);
+        let Report::Portfolio(portfolio) = run(&vault, ReportKind::Portfolio, &filter) else {
+            panic!()
+        };
+        assert!(!portfolio.has_data);
+    }
+
+    #[test]
+    fn the_year_report_follows_the_wallet_scope() {
+        let (_dir, mut vault, card) = vault_with_card();
+        let other = store(&mut vault, "Other", StoreKind::Bank, None);
+        vault
+            .add_transaction(earn(&card, "1000", "2026-01-05T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(earn(&other, "500", "2026-01-05T10:00:00Z"))
+            .unwrap();
+        let filter = ReportFilter {
+            year: Some(2026),
+            scope: StoreScope {
+                store_ids: vec![other.clone()],
+                include_children: true,
+            },
+            ..ReportFilter::default()
+        };
+        let Report::Year(report) = run(&vault, ReportKind::Year, &filter) else {
+            panic!()
+        };
+        assert_eq!(report.rows[0].income, amount("500"));
     }
 
     #[test]

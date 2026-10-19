@@ -33,17 +33,18 @@ const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<Stor
 const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
-const storeId = computed({
-  get: () => filter.value.scope.store_ids[0] ?? '',
-  set: (id: string) => {
-    filter.value = { ...filter.value, scope: { store_ids: id ? [id] : [], include_children: true } }
+const storeIds = computed({
+  get: () => filter.value.scope.store_ids,
+  set: (ids: string[]) => {
+    filter.value = { ...filter.value, scope: { store_ids: ids, include_children: filter.value.scope.include_children } }
   },
 })
-/** Sub-accounts the picked wallet has: the «+N» next to «with sub-accounts». */
-const childCount = computed(() => {
-  const node = nodes.value.find((entry) => entry.store.id === storeId.value)
-  return node ? storeDescendants(node).length : 0
-})
+/** Sub-accounts the picked wallets have: the «+N» next to «with sub-accounts». */
+const childCount = computed(() =>
+  nodes.value
+    .filter((entry) => storeIds.value.includes(entry.store.id))
+    .reduce((sum, node) => sum + storeDescendants(node).length, 0),
+)
 const includeChildren = computed({
   get: () => filter.value.scope.include_children,
   set: (value: boolean) => {
@@ -51,9 +52,9 @@ const includeChildren = computed({
   },
 })
 
-/** One kind at a time in the picker; the filter itself takes a list. */
+/** One kind at a time in the picker; several (from a report) show as a chip instead. */
 const kind = computed({
-  get: () => filter.value.kinds[0] ?? '',
+  get: () => (filter.value.kinds.length === 1 ? filter.value.kinds[0] : ''),
   set: (value: string) => {
     filter.value = { ...filter.value, kinds: value ? [value as TxKind] : [] }
   },
@@ -102,7 +103,7 @@ watch(
   },
 )
 
-const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && storeId.value ? 1 : 0))
+const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && storeIds.value.length ? 1 : 0))
 /** Set filters among the folded ones. */
 const moreActive = computed(
   () =>
@@ -118,25 +119,47 @@ function reset() {
 
 <template>
   <FilterBar :active="active" :more-active="moreActive" @reset="reset">
+    <template #lead>
+      <div :class="FILTER_FIELD_CLASS">
+        <Label :for="field('text')">{{ t('filter.search') }}</Label>
+        <Input :id="field('text')" v-model="search" class="w-full @3xl:w-52" :placeholder="t('hist.search')" />
+      </div>
+    </template>
     <div v-if="!props.fixedScope" :class="FILTER_FIELD_CLASS">
       <Label :for="field('scope')">{{ t('filter.scope') }}</Label>
-      <StoreNodeSelect :id="field('scope')" v-model="storeId" :nodes="nodes" :empty-label="t('tx.allStores')" class="w-full @3xl:w-56" />
+      <StoreNodeSelect
+        :id="field('scope')"
+        v-model:ids="storeIds"
+        multiple
+        :nodes="nodes"
+        :empty-label="t('tx.allStores')"
+        class="w-full @3xl:w-56"
+      />
     </div>
-    <label v-if="!props.fixedScope && storeId && childCount" :for="field('children')" class="flex h-9 items-center gap-2 text-sm">
+    <label v-if="!props.fixedScope && storeIds.length && childCount" :for="field('children')" class="flex h-9 items-center gap-2 text-sm">
       <Checkbox :id="field('children')" v-model="includeChildren" />
       {{ t('filter.withChildren', { count: childCount }) }}
     </label>
     <div :class="FILTER_FIELD_CLASS">
       <Label :for="field('kind')">{{ t('form.kind') }}</Label>
-      <Select :id="field('kind')" v-model="kind" class="w-full @3xl:w-40">
+      <Select :id="field('kind')" v-model="kind" :disabled="filter.kinds.length > 1" class="w-full @3xl:w-40">
         <SelectItem value="">{{ t('hist.allKinds') }}</SelectItem>
         <SelectItem v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</SelectItem>
       </Select>
     </div>
-    <div :class="FILTER_FIELD_CLASS">
-      <Label :for="field('text')">{{ t('filter.search') }}</Label>
-      <Input :id="field('text')" v-model="search" class="w-full @3xl:w-52" :placeholder="t('hist.search')" />
-    </div>
+    <!-- What a report opened the list with: each is a chip that takes itself off. -->
+    <Button v-if="filter.kinds.length > 1" variant="secondary" class="shrink-0" @click="filter = { ...filter, kinds: [] }">
+      {{ t('filter.kindsCount', { n: filter.kinds.length }) }}
+      <X class="size-3.5" />
+    </Button>
+    <Button v-if="filter.with_fee" variant="secondary" class="shrink-0" @click="filter = { ...filter, with_fee: false }">
+      {{ t('filter.withFee') }}
+      <X class="size-3.5" />
+    </Button>
+    <Button v-if="filter.realized" variant="secondary" class="shrink-0" @click="filter = { ...filter, realized: false }">
+      {{ t('filter.realized') }}
+      <X class="size-3.5" />
+    </Button>
     <Button
       v-if="filter.flow_id"
       variant="secondary"

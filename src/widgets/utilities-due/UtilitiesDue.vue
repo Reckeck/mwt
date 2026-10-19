@@ -6,11 +6,13 @@ import { Receipt } from 'lucide-vue-next'
 
 import { UtilityBillDialog } from '@/features/utility-bill'
 import { Money } from '@/entities/currency'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
+import { localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 
 /** This month's utilities per property: what is due, when, and one button to pay it all. */
@@ -47,6 +49,10 @@ const rows = computed(() =>
   }),
 )
 
+/** A bill still open after its due day: said in words and colour, not only by the date. */
+const today = localDate(new Date())
+const overdue = (row: { open: number; bill?: UtilityBill }) => row.open > 0 && Boolean(row.bill) && (row.bill?.due_at ?? '') < today
+
 const payFor = ref('')
 const payOpen = computed({
   get: () => payFor.value !== '',
@@ -67,7 +73,10 @@ const payOpen = computed({
       <li v-for="row in rows" :key="row.store.id" class="grid gap-1.5">
         <div class="flex items-center justify-between gap-2">
           <span class="truncate text-sm font-medium">{{ row.store.name }}</span>
-          <span v-if="row.bill" class="shrink-0 text-xs text-muted-foreground">
+          <Badge v-if="overdue(row)" variant="destructive" class="shrink-0">
+            {{ t('utilitiesDue.overdue', { date: formatDate(row.bill?.due_at ?? '') }) }}
+          </Badge>
+          <span v-else-if="row.bill" class="shrink-0 text-xs text-muted-foreground">
             {{ t('utilitiesDue.due', { date: formatDate(row.bill.due_at) }) }}
           </span>
         </div>

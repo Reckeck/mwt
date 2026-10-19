@@ -6,7 +6,6 @@ import { Money, PnlText, useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatMoney } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 import { StatCard } from '@/shared/ui/stat-card'
@@ -20,7 +19,6 @@ const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
 /** Each value also in the base and favourite currencies. */
 const moneyTooltip = useMoneyChartTooltip(computed(() => props.report.meta.currency))
-const money = (value: string) => formatMoney(value, { decimals: 0 })
 
 const PARTS = ['financial', 'non_financial', 'receivables'] as const
 const DEBTS = ['liabilities', 'payables'] as const
@@ -30,6 +28,7 @@ const option = computed<ChartOption>(() => ({
     props.report.points.map((point) => monthLabel(point.month, activeLocale.value)),
     axisColor.value,
     moneyTooltip.value,
+    props.report.meta.currency,
   ),
   series: [
     ...PARTS.map((part) => ({
@@ -78,7 +77,7 @@ const currency = computed(() => props.report.meta.currency)
       <dl class="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-sm tabular-nums @md:grid-cols-[1fr_auto_1fr_auto_1fr_auto]">
         <template v-for="part in [...PARTS, ...DEBTS, 'net' as const]" :key="part">
           <dt class="text-muted-foreground">{{ t(`report.networth.${part}`) }}</dt>
-          <dd class="text-right" :class="part === 'net' && 'font-semibold'">{{ money(last[part]) }}</dd>
+          <dd class="text-right" :class="part === 'net' && 'font-semibold'"><Money :amount="last[part]" :decimals="0" :currency="props.report.meta.currency" /></dd>
         </template>
       </dl>
     </Card>

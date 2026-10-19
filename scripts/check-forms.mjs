@@ -20,7 +20,12 @@
 // - `<option v-for>` over wallets (`….store.id`) → `StoreNodeSelect`;
 // - `<option v-for>` over assets → `AssetSelect` (or `AssetInput` to search);
 // - `<option v-for>` over currency codes, or an `<Input>` typed into a
-//   currency → `CurrencyPicker`.
+//   currency → `CurrencyPicker`;
+// - `<ToggleGroupItem v-for>` over currency codes → `ChartCurrencySwitch` or
+//   `CurrencyPicker` (they put the favourites first);
+// - an `<Input>` typed into a symbol, pair, ticker or contract → `PairInput`
+//   or `AssetInput`; a field that is not an asset says so with
+//   `data-picker-ok`.
 // The components themselves (PICKERS) are where such lists live.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -43,7 +48,7 @@ function walk(dir, out = []) {
 const lineOf = (text, index) => text.slice(0, index).split('\n').length
 
 /** The ready pickers: the only places a list of wallets, assets or currencies is drawn by hand. */
-const PICKERS = /(?:StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker)\.vue$/
+const PICKERS = /(?:StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker|ChartCurrencySwitch|PairInput)\.vue$/
 
 for (const file of walk(join(root, 'src'))) {
   const text = readFileSync(file, 'utf8')
@@ -77,9 +82,14 @@ for (const file of walk(join(root, 'src'))) {
         errors.push(`${where(match.index)}: a currency list by hand («${list}») — use CurrencyPicker (rule 14)`)
       }
     }
+    for (const match of text.matchAll(/<ToggleGroupItem\b[^>]*v-for="\s*\(?\s*(code|currency)\b[^"]*"/gs)) {
+      errors.push(`${where(match.index)}: currencies as hand-made toggles — use ChartCurrencySwitch or CurrencyPicker (rule 14)`)
+    }
     for (const match of text.matchAll(/<Input\b([^>]*?)>/gs)) {
       if (/v-model="[^"]*currency[^"]*"/i.test(match[1])) {
         errors.push(`${where(match.index)}: a currency typed into <Input> — use CurrencyPicker (rule 14)`)
+      } else if (/v-model="[^"]*(?:symbol|pair|ticker|contract)[^"]*"/i.test(match[1]) && !match[1].includes('data-picker-ok')) {
+        errors.push(`${where(match.index)}: a pair or ticker typed into <Input> — use PairInput or AssetInput (rule 14)`)
       }
     }
   }

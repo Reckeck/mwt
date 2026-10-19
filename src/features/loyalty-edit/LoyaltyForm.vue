@@ -74,7 +74,8 @@ const save = useMutation({
   <form class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
     <div class="grid gap-4 @sm:grid-cols-3">
       <FormField for="loyalty-symbol" :label="t('loyalty.symbol')" required :error="form.error('symbol')">
-        <Input id="loyalty-symbol" v-model="symbol" class="uppercase" maxlength="16" />
+        <!-- The name of a programme's points, not a listed asset. -->
+        <Input id="loyalty-symbol" v-model="symbol" class="uppercase" maxlength="16" data-picker-ok />
         <p class="text-xs text-muted-foreground">{{ t('loyalty.symbolHint') }}</p>
       </FormField>
       <FormField for="loyalty-value" :label="t('loyalty.pointValue')" required :error="form.error('value')">

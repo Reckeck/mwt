@@ -95,12 +95,22 @@ export const notificationsCommands: MockCommands = {
     for (const [key, value] of Object.entries(input)) {
       if (value !== null && value !== undefined) Object.assign(settings, { [key]: value })
     }
+    if (input.savings_rate || input.daily_budget_mode || input.budget_currency !== null)
+      settings.budget_configured = true
     return resolve(settings)
   },
 }
 
+/** Same rule as the core's `normalize_codes`: tickers of 2–10 letters or digits, uppercase, in order. */
+function normalizeCodes(raw: string[]): string[] {
+  const codes = raw.map((code) => code.trim().toUpperCase()).filter((code) => /^(?=.*[A-Z])[A-Z0-9]{2,10}$/.test(code))
+  return [...new Set(codes)]
+}
+
 /** Commands: app settings (outside the vault). */
 export const appSettingsOutsideCommands: MockCommands = {
+  // `?platform=android` in the address previews the phone build in the browser.
+  app_platform: (_call) => resolve(new URLSearchParams(location.search).get('platform') ?? 'linux'),
   get_app_settings: (_call) => {
     return resolve(mockAppSettings)
   },
@@ -109,7 +119,7 @@ export const appSettingsOutsideCommands: MockCommands = {
     if (input.theme) mockAppSettings.theme = input.theme
     if (input.locale) mockAppSettings.locale = input.locale
     if (input.base_currency) mockAppSettings.base_currency = input.base_currency
-    if (input.favorite_currencies) mockAppSettings.favorite_currencies = input.favorite_currencies
+    if (input.favorite_currencies) mockAppSettings.favorite_currencies = normalizeCodes(input.favorite_currencies)
     if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
     if (input.inflation) mockAppSettings.inflation = input.inflation
     if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)

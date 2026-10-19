@@ -75,9 +75,9 @@ const create = useMutation({
       <form class="grid gap-1" @submit.prevent="adder.submit(create.mutate, $event)">
         <div class="flex flex-wrap items-center gap-2">
           <span class="contents" :data-invalid="adder.invalidAttr('pattern')">
-            <Input v-model="pattern" class="h-9 w-56" :placeholder="t('rules.pattern')" :aria-label="t('rules.pattern')" />
+            <Input v-model="pattern" class="h-9 w-full sm:w-56" :placeholder="t('rules.pattern')" :aria-label="t('rules.pattern')" />
           </span>
-          <div class="w-56" :data-invalid="adder.invalidAttr('category')">
+          <div class="w-full sm:w-56" :data-invalid="adder.invalidAttr('category')">
             <CategorySelect
               v-model="category"
               :groups="CATEGORY_GROUPS"

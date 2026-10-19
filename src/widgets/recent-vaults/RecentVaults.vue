@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderOpen, Link2, LockKeyhole, X } from 'lucide-vue-next'
 
@@ -38,6 +38,9 @@ function displayName(path: string): string {
   return vault.recents.find((recent: RecentVault) => recent.path === path)?.display_name || path
 }
 
+/** The vault opened last, when its file is still there: the one big button. */
+const latest = computed(() => vault.recents.find((recent: RecentVault) => recent.exists) ?? null)
+
 function openUnlock(path: string | null) {
   unlockPath.value = path
   unlockOpen.value = true
@@ -55,6 +58,10 @@ function openUnlock(path: string | null) {
     </template>
 
     <div class="grid gap-3">
+      <Button v-if="latest" size="lg" class="w-full" @click="openUnlock(latest.path)">
+        <LockKeyhole class="size-4" />
+        <span class="truncate">{{ t('auth.openLatest', { name: latest.display_name || latest.path }) }}</span>
+      </Button>
       <div v-if="vault.recents.length" class="grid max-h-64 gap-1.5 overflow-y-auto">
         <div v-for="recent in vault.recents" :key="recent.path" class="flex items-center gap-1 rounded-md border border-border">
           <Button

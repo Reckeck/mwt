@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { AssetInput } from '@/entities/asset'
-import { CurrencyPicker } from '@/entities/currency'
+import { CurrencyPicker, Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { CategorySelect } from '@/features/category-select'
 import { AccountRefPicker } from '@/features/transaction-create'
@@ -15,7 +15,6 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { WEEKDAYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { WORKFLOW_KEYS, localized } from '@/shared/lib/workflow'
@@ -24,7 +23,8 @@ import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import TargetsField from './TargetsField.vue'
 
 /** One field of a node, edited by the control its kind asks for. */
-const props = defineProps<{ param: ParamDef; value: unknown; params: Record<string, unknown> }>()
+/** `error`: the check's word on this very field (an empty required one), shown under it. */
+const props = defineProps<{ param: ParamDef; value: unknown; params: Record<string, unknown>; error?: string | null }>()
 const emit = defineEmits<{ update: [value: unknown] }>()
 
 const { t, locale } = useI18n()
@@ -67,13 +67,13 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
 </script>
 
 <template>
-  <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0" :data-invalid="props.error ? '' : undefined">
     <div v-if="kind === 'bool'" class="flex items-center justify-between gap-2">
       <Label :for="id" class="min-w-0 [overflow-wrap:anywhere]">{{ localized(props.param.label, locale) }}</Label>
       <Switch :id="id" :model-value="Boolean(current)" @update:model-value="(on) => emit('update', on)" />
     </div>
     <template v-else>
-      <Label :for="id">{{ localized(props.param.label, locale) }}</Label>
+      <Label :for="id" :required="props.param.required">{{ localized(props.param.label, locale) }}</Label>
       <Select v-if="props.param.kind.kind === 'select'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next)">
         <SelectItem v-for="[value, label] in props.param.kind.options" :key="value" :value="value">
           {{ localized(label, locale) }}
@@ -124,7 +124,7 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
       <Select v-else-if="kind === 'budget'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
         <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
         <SelectItem v-for="budget in budgets.data.value ?? []" :key="budget.id" :value="budget.id">
-          {{ t(`budget.periodKind.${budget.period}`) }} · {{ formatMoney(budget.limit, { currency: budget.currency }) }}
+          {{ t(`budget.periodKind.${budget.period}`) }} · <Money :amount="budget.limit" :currency="budget.currency" />
         </SelectItem>
       </Select>
       <Select v-else-if="kind === 'goal'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
@@ -146,5 +146,6 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
       />
       <Input v-else :id="id" :model-value="text" @update:model-value="(next) => emit('update', String(next))" />
     </template>
+    <p v-if="props.error" class="text-xs text-destructive" role="alert">{{ props.error }}</p>
   </div>
 </template>

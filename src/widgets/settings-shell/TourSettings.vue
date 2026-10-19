@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { CircleCheck, GraduationCap, PlayCircle, Sparkles } from 'lucide-vue-next'
 
-import { LessonList } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
@@ -85,7 +84,10 @@ async function reset() {
           </Button>
         </li>
       </ul>
-      <LessonList />
+      <!-- The lessons live with the workflows; here only the way there. -->
+      <Button variant="link" class="h-auto w-fit p-0" @click="router.push({ name: 'workflows' })">
+        {{ t('tour.lessonsLink') }}
+      </Button>
     </div>
   </Card>
 </template>

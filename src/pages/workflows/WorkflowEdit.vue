@@ -21,7 +21,12 @@ let leaving = false
 /** Back to the list goes through the same «unsaved edits» question as any other way out. */
 const crumbs = computed<PageCrumb[]>(() => [
   { label: t('nav.workflows'), to: { name: 'workflows' } },
-  { label: lesson.value ? t('workflow.crumb.lesson') : workflowId.value ? t('workflow.crumb.edit') : t('workflow.crumb.new') },
+  // The workflow's own name once it has one, not a generic «Editing».
+  {
+    label:
+      editor.value?.name ||
+      (lesson.value ? t('workflow.crumb.lesson') : workflowId.value ? t('workflow.crumb.edit') : t('workflow.crumb.new')),
+  },
 ])
 
 /** A new workflow, once saved, gets its own address. */
@@ -79,8 +84,8 @@ function throwAway() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100dvh-7rem)] min-h-[36rem] flex-col gap-3 @container">
-    <PageHeader :crumbs="crumbs" />
+  <div class="flex h-full min-h-[36rem] flex-col gap-3 @container max-md:min-h-0 max-md:gap-0">
+    <PageHeader class="max-md:hidden" :crumbs="crumbs" />
     <WorkflowEditor
       class="min-h-0 flex-1"
       :key="workflowId ?? `new-${template ?? ''}-${lesson ?? ''}`"
@@ -91,8 +96,13 @@ function throwAway() {
       @saved="onSaved"
       @lesson="(id) => router.push({ name: 'workflow-new', query: { lesson: id } })"
     />
-    <Dialog v-model:open="leaveOpen" :title="t('workflow.leave.title')" :description="t('workflow.leave.body')" size="sm">
-      <p v-if="!editor?.canDraft" class="text-sm text-muted-foreground">{{ t('workflow.leave.newHint') }}</p>
+    <!-- A new workflow has nothing saved to keep running: its own title and text. -->
+    <Dialog
+      v-model:open="leaveOpen"
+      :title="editor?.canDraft ? t('workflow.leave.title') : t('workflow.leave.newTitle')"
+      :description="editor?.canDraft ? t('workflow.leave.body') : t('workflow.leave.newHint')"
+      size="sm"
+    >
       <template #footer>
         <Button variant="ghost" @click="leaveOpen = false">{{ t('workflow.leave.stay') }}</Button>
         <Button variant="outline" @click="throwAway">{{ t('workflow.leave.discard') }}</Button>

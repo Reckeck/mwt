@@ -711,6 +711,7 @@ mod tests {
             value_usd: amount("80000"),
             ts: "2026-02-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
         vault
             .create_goal(goal("House", "100000", &[&wallet], 3))

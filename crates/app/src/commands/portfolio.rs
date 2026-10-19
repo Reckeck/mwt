@@ -1,9 +1,14 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
+use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::SetManualPriceInput;
+use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
-use trade_core::service::{HistoryPoint, NetWorth, PortfolioSummary, RealizedPnl};
+use trade_core::service::{
+    AssetHoldings, HistoryPoint, NetWorth, PortfolioSummary, RealizedPnl, StoreMonthRow,
+};
 
+use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 #[tauri::command]
@@ -21,6 +26,36 @@ pub async fn get_history(
     let vault = guard.as_ref().unwrap();
     let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
     Ok(vault.history_series(&base))
+}
+
+/// The same asset on every wallet (the «elsewhere» block of the asset sheet).
+#[tauri::command]
+pub async fn get_asset_holdings(
+    asset: AssetRef,
+    state: State<'_, AppState>,
+) -> Result<AssetHoldings, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().asset_holdings(&asset))
+}
+
+/// Money in and out of a wallet per local month, the last `months` (default 6).
+#[tauri::command]
+pub async fn get_store_months(
+    app: AppHandle,
+    store_id: String,
+    include_children: Option<bool>,
+    months: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<StoreMonthRow>, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().store_months(
+        &store_id,
+        include_children.unwrap_or(true),
+        months.unwrap_or(6).clamp(1, 36),
+        now_secs(),
+        &zone,
+    ))
 }
 
 #[tauri::command]

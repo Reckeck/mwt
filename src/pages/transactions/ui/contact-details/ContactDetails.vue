@@ -16,6 +16,7 @@ import { Tabs } from '@/shared/ui/tabs'
 import { call } from '@/shared/api/ipc'
 import { txDebt } from '@/shared/lib/transactions'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
+import { openTxDetails } from '@/shared/lib/tx-details'
 
 /** One contact: its card to edit, and its debts, history and turnover. */
 const props = defineProps<{ contact: Contact; balances: ContactBalance[]; canTransfer: boolean }>()
@@ -77,11 +78,11 @@ const detailTabs = computed(() => [
         <template #debts>
           <div class="grid gap-4 @container">
             <DebtPanel :contact="props.contact" :balances="ownBalances" @operation="(effect) => emit('transfer', effect)" />
-            <TransactionsList v-if="debtHistory.length" :transactions="debtHistory" />
+            <TransactionsList v-if="debtHistory.length" :transactions="debtHistory" openable @open="openTxDetails" />
           </div>
         </template>
         <template #history>
-          <TransactionsList v-if="history.data.value?.length" :transactions="history.data.value" />
+          <TransactionsList v-if="history.data.value?.length" :transactions="history.data.value" openable @open="openTxDetails" />
           <EmptyState v-else compact :title="t('contacts.noHistory')" />
         </template>
         <template #turnover>

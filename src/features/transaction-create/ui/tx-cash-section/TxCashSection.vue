@@ -11,6 +11,7 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
 import { SplitRows } from '../split-rows'
+import { AvailableHint } from '../available-hint'
 
 /** Top-up, payment and DeFi: one asset on this wallet. */
 const { t } = useI18n()
@@ -26,6 +27,12 @@ const { form, check, props, isProperty, propertyName, overrunText } = useTxForm(
     <AssetInput v-else v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
     <FormField for="tx-amount" :label="isProperty ? t('tx.field.units') : t('form.amount')" required :error="check.error('amount')">
       <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
+      <AvailableHint
+        v-if="form.kind === 'payment'"
+        :store-id="props.storeId"
+        :asset="form.asset"
+        @max="(quantity) => (form.amount = quantity)"
+      />
     </FormField>
   </div>
   <p v-if="overrunText" class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">

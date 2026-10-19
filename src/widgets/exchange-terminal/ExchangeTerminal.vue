@@ -2,22 +2,23 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ArrowUpToLine, LineChart, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { ArrowUpToLine, LineChart, Plus, Trash2, X } from 'lucide-vue-next'
 
 import { PriceAlertList } from '@/widgets/price-alert-list'
 import { TradingChart, type IndicatorKey } from '@/widgets/trading-chart'
 import { PriceAlertDialog, type PriceAlertPreset } from '@/features/price-alert-edit'
+import { PairInput } from '@/entities/asset'
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
-import { Input } from '@/shared/ui/input'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { notify } from '@/shared/lib/notify'
+import { baseOf, pairOf } from '@/shared/lib/pair'
 
 import type { ExchangeTerminalProps } from './exchange-terminal.types'
-import { baseOf, pairOf } from './lib/pair'
 import { useTerminalDrawings } from './model/use-terminal-drawings'
 
 const props = defineProps<ExchangeTerminalProps>()
@@ -86,14 +87,14 @@ function watchActions(pair: string): UiAction[] {
   ]
 }
 
-const draft = ref('')
+const pairDraft = ref('')
 const adder = useFormValidation(() => ({
-  pair: required(draft.value) ?? (pairOf(draft.value) ? null : t('validation.pair')),
+  pair: required(pairDraft.value) ?? (pairOf(pairDraft.value) ? null : t('validation.pair')),
 }))
 function add() {
-  const pair = pairOf(draft.value)
+  const pair = pairOf(pairDraft.value)
   if (!pair) return
-  draft.value = ''
+  pairDraft.value = ''
   adder.reset()
   if (!watchlist.value.includes(pair)) {
     patch.mutate({ watchlist: [...watchlist.value, pair], active_symbol: pair, timeframe: null, indicators: null, layout: null })
@@ -155,14 +156,8 @@ function onIndicators(keys: IndicatorKey[]) {
     <aside class="flex flex-col gap-2 rounded-lg border border-border p-2">
       <form class="grid gap-1" @submit.prevent="adder.submit(add, $event)">
         <div class="flex items-center gap-1">
-          <div class="relative min-w-0 flex-1" :data-invalid="adder.invalidAttr('pair')">
-            <Search class="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              v-model="draft"
-              class="h-8 pl-7 uppercase"
-              :placeholder="t('trading.symbol')"
-              :aria-label="t('trading.symbol')"
-            />
+          <div class="min-w-0 flex-1" :data-invalid="adder.invalidAttr('pair')">
+            <PairInput v-model="pairDraft" :quotes="['USDT']" :placeholder="t('trading.symbol')" />
           </div>
           <Button type="submit" variant="ghost" size="icon" class="size-8" :title="t('terminal.add')" :aria-label="t('terminal.add')">
             <Plus class="size-4" />
@@ -187,12 +182,13 @@ function onIndicators(keys: IndicatorKey[]) {
           <Button
             variant="ghost"
             size="icon-xs"
-            class="invisible text-muted-foreground hover:text-destructive group-hover:visible focus-visible:visible"
+            class="invisible text-muted-foreground hover:text-destructive group-hover:visible focus-visible:visible pointer-coarse:visible"
             :aria-label="t('terminal.remove', { symbol: pair })"
             @click="removeFromList(pair)"
           >
             <X class="size-3.5" />
           </Button>
+          <span class="pointer-fine:hidden"><ActionMenu :actions="watchActions(pair)" :label="t('actions.more')" /></span>
         </li>
         </ContextMenu>
       </ul>

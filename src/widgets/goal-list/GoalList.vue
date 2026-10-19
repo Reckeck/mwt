@@ -3,9 +3,11 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CircleAlert, CircleCheck, Pencil, Plus, Star, Trash2 } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { GoalDialog } from '@/features/goal-edit'
 import { Button } from '@/shared/ui/button'
+import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -62,13 +64,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
 
 <template>
   <div class="grid gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted-foreground">{{ t('goal.intro') }}</p>
-      <Button @click="openNew">
-        <Plus class="size-4" />
-        {{ t('goal.new') }}
-      </Button>
-    </div>
+    <ListHeader :intro="t('goal.intro')" :action-label="t('goal.new')" :hide-action="empty" @action="openNew" />
 
     <EmptyState v-if="empty" compact :title="t('goal.empty')">
       <Button @click="openNew"><Plus class="size-4" />{{ t('goal.new') }}</Button>
@@ -109,9 +105,9 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
           <template v-if="progressOf(goal.id)">
             <div class="grid gap-1">
               <div class="flex items-baseline justify-between gap-2 text-sm tabular-nums">
-                <span class="font-medium">{{ formatMoney(progressOf(goal.id)?.saved, { currency: goal.currency }) }}</span>
+                <span class="font-medium"><Money :amount="progressOf(goal.id)?.saved" :currency="goal.currency" /></span>
                 <span class="text-muted-foreground">
-                  {{ formatMoney(goal.target_amount, { currency: goal.currency }) }} · {{ progressOf(goal.id)?.pct }}%
+                  <Money :amount="goal.target_amount" :currency="goal.currency" /> · {{ progressOf(goal.id)?.pct }}%
                 </span>
               </div>
               <div class="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" :aria-valuenow="pct(progressOf(goal.id)?.pct)" aria-valuemin="0" aria-valuemax="100">
@@ -120,13 +116,13 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
             </div>
             <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
               <dt class="text-muted-foreground">{{ t('goal.contributed') }}</dt>
-              <dd class="text-right tabular-nums">{{ formatMoney(progressOf(goal.id)?.contributed, { currency: goal.currency }) }}</dd>
+              <dd class="text-right tabular-nums"><Money :amount="progressOf(goal.id)?.contributed" :currency="goal.currency" /></dd>
               <dt class="text-muted-foreground">{{ t('goal.fxGain') }}</dt>
-              <dd class="text-right tabular-nums">{{ formatMoney(progressOf(goal.id)?.fx_gain, { currency: goal.currency }) }}</dd>
+              <dd class="text-right tabular-nums"><Money :amount="progressOf(goal.id)?.fx_gain" :currency="goal.currency" /></dd>
               <template v-if="progressOf(goal.id)?.need_per_month">
                 <dt class="text-muted-foreground">{{ t('goal.needPerMonth') }}</dt>
                 <dd class="text-right tabular-nums">
-                  {{ formatMoney(progressOf(goal.id)?.need_per_month, { currency: goal.currency }) }}
+                  <Money :amount="progressOf(goal.id)?.need_per_month" :currency="goal.currency" />
                   · {{ t('goal.monthsLeft', { count: progressOf(goal.id)?.months_left ?? 0 }) }}
                 </dd>
               </template>

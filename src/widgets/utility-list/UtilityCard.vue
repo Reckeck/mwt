@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ChevronDown, CircleAlert, Pencil, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { MeterReadingForm } from '@/features/meter-reading'
 import { TransactionCreateDialog } from '@/features/transaction-create'
@@ -126,11 +127,11 @@ function onPaid() {
         </template>
         <template v-if="trend.data.value?.average">
           <dt class="text-muted-foreground">{{ t('utilities.average') }}</dt>
-          <dd class="text-right">{{ money(trend.data.value.average) }}</dd>
+          <dd class="text-right"><Money :amount="trend.data.value.average" :currency="props.item.currency" /></dd>
         </template>
         <template v-if="trend.data.value?.forecast">
           <dt class="text-muted-foreground">{{ t('utilities.forecast') }}</dt>
-          <dd class="text-right">{{ money(trend.data.value.forecast) }}</dd>
+          <dd class="text-right"><Money :amount="trend.data.value.forecast" :currency="props.item.currency" /></dd>
         </template>
         <template v-if="'housing' in props.item.kind">
           <dt class="text-muted-foreground">{{ t('utilities.dueDay') }}</dt>

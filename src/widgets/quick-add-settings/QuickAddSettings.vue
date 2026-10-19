@@ -87,7 +87,7 @@ async function save(shortcut: string | null) {
           <Input
             id="quick-add-shortcut"
             v-model="draft"
-            class="w-64 font-mono"
+            class="w-full font-mono sm:w-64"
             :placeholder="t('quickAdd.shortcutPlaceholder')"
             @keydown="record"
           />

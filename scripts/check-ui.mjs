@@ -13,6 +13,10 @@
 // - transition-all  animate the properties that change, not `all`;
 // - to-fixed        `.toFixed()` in a template → `shared/lib/format`;
 // - div-click       `<div @click>` without a role → `Button`, or role + keyboard;
+// - format-money    `{{ formatMoney(…) }}` alone in a template → `<Money>`;
+// - viewport-height `h-screen`, `vh` → `dvh` or `h-full` (references/mobile.md);
+// - fixed-edge      `fixed` with `top-4`/`bottom-…`/`inset-4` and no `*-safe` offset;
+// - fixed-width     `w-56` and wider (`min-w-…`, `w-[20rem]`) without a breakpoint prefix;
 // - mutation-meta   `useMutation` without `meta: { success }` or `meta: { silent }`
 //                   — every action reports its outcome (phase «уведомления»);
 // - file-size       a `.vue` over 250 lines or a `.ts` over 300 → split it by meaning.
@@ -113,6 +117,52 @@ const RULES = [
     vueOnly: true,
     find: (text) => [...text.matchAll(/<div\b(?=[^>]*@click)(?![^>]*\brole=)[^>]*>/gs)],
     say: '<div @click> without a role — use Button, or give it a role and keyboard handling',
+  },
+  {
+    // A sum shown on its own in a template is a <Money>: it brings the conversions on hover.
+    // Text built with formatMoney (an i18n argument, a chart axis) is fine.
+    id: 'format-money',
+    vueOnly: true,
+    find: (text) => {
+      const start = text.indexOf('<template>')
+      if (start === -1) return []
+      const template = text.slice(start)
+      return [
+        ...template.matchAll(/\{\{\s*formatMoney\((?:[^{}]|\{[^{}]*\})*\)\s*\}\}/g),
+        ...template.matchAll(/:value="formatMoney\(/g),
+      ].map((match) => Object.assign(match, { index: match.index + start }))
+    },
+    say: 'a sum by formatMoney in a template — use <Money> (or StatCard with <Money> in its slot)',
+  },
+  {
+    // The phone's browser bars and keyboard change the height: `dvh` follows them, `vh` does not.
+    id: 'viewport-height',
+    vueOnly: false,
+    find: (text) => [...text.matchAll(/\b(?:min-|max-)?h-screen\b|(?<![dsl])\b\d+vh\b/g)],
+    say: 'h-screen / vh — use dvh (or h-full inside the shell), see references/mobile.md',
+  },
+  {
+    // Pinned to an edge with a plain offset: on a phone it lands under the status or gesture bar.
+    id: 'fixed-edge',
+    vueOnly: true,
+    find: (text) =>
+      [...text.matchAll(/class="([^"]*)"/g)].filter(
+        (match) =>
+          /(?:^|\s)fixed(?:\s|$)/.test(match[1]) &&
+          /(?:^|\s)(?:top|bottom|inset|inset-y)-(?:[1-9]|\[)/.test(match[1]) &&
+          !/safe/.test(match[1]),
+      ),
+    say: 'fixed at an edge without the safe-area offset — use *-safe / var(--safe-*)',
+  },
+  {
+    // 14rem and wider without a breakpoint does not fit a 360px phone beside anything else.
+    id: 'fixed-width',
+    vueOnly: true,
+    find: (text) =>
+      [...text.matchAll(/(?<![\w:-])(?:min-)?w-(?:(?:5[6-9]|[6-9]\d|\d{3})\b|\[(\d+(?:\.\d+)?)(rem|px)\])/g)].filter(
+        (match) => !match[1] || Number(match[1]) >= (match[2] === 'rem' ? 14 : 224),
+      ),
+    say: 'a wide fixed width without a breakpoint — prefix it (sm:w-56), cap it (min(…,100vw-2rem)) or let it flex',
   },
   {
     id: 'mutation-meta',

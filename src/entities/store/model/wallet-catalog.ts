@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
+import { i18n } from '@/shared/config/i18n'
 
 export const WALLET_CATALOG_QUERY_KEY = ['wallet-catalog'] as const
 
@@ -17,27 +18,25 @@ export function kindInfo(catalog: WalletCatalog | undefined, kind: StoreKind): W
   return catalog?.kinds.find((info) => info.kind === kind)
 }
 
-/** Short, human label of a binding: «USD», «BTC ↔ USDT», «Futures». */
+/** Short, human label of a binding: «USD», «BTC ↔ USDT», «Фьючерсы». */
 export function bindingLabel(binding: Binding): string {
   if (binding === 'any') return ''
   if ('asset' in binding) return binding.asset.symbol.toUpperCase()
   if ('pair' in binding) return `${binding.pair.base.symbol.toUpperCase()} ↔ ${binding.pair.quote.symbol.toUpperCase()}`
-  return binding.market.charAt(0).toUpperCase() + binding.market.slice(1)
+  return i18n.global.t(`store.market.${binding.market}`)
 }
 
-/** Quote assets a pair symbol may end with, longest first so USDT wins over USD. */
-const PAIR_QUOTES = ['FDUSD', 'USDT', 'USDC', 'BUSD', 'TUSD', 'DAI', 'USD', 'EUR', 'TRY', 'BTC', 'ETH', 'BNB']
-
-/** «BTCUSDT», «btc/usdt», «ETH-USDC» → base and quote tickers, or `null`. */
-export function parsePairSymbol(raw: string): { base: string; quote: string } | null {
-  const text = raw.trim().toUpperCase()
-  const split = text.split(/[/\-_: ]+/).filter(Boolean)
-  if (split.length === 2 && split[0] !== split[1]) return { base: split[0], quote: split[1] }
-  if (split.length !== 1) return null
-  for (const quote of PAIR_QUOTES) {
-    if (text.length > quote.length && text.endsWith(quote)) {
-      return { base: text.slice(0, -quote.length), quote }
-    }
-  }
-  return null
+/**
+ * The binding badge next to a wallet's name, or `''` when the name already
+ * says it («Futures» needs no «Фьючерсы» badge).
+ */
+export function bindingBadge(store: Pick<Store, 'name' | 'binding'>): string {
+  const label = bindingLabel(store.binding)
+  if (!label) return ''
+  const name = store.name.toLowerCase()
+  const raw = typeof store.binding === 'object' && 'market' in store.binding ? store.binding.market : ''
+  return name.includes(label.toLowerCase()) || (raw && name.includes(raw)) ? '' : label
 }
+
+/** Kept here for the callers that read it from the store entity. */
+export { PAIR_QUOTES, parsePairSymbol } from '@/shared/lib/pair'

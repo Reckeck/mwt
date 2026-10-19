@@ -3,13 +3,15 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatPct } from '@/shared/lib/format'
 import { call } from '@/shared/api/ipc'
 
 import type { DashboardAllocationProps } from './dashboard-allocation.types'
+import { AllocationPie } from '@/widgets/allocation-pie'
 
 const props = defineProps<DashboardAllocationProps>()
 
@@ -54,6 +56,13 @@ function pctWidth(value: string | number | null | undefined): string {
       compact
       @retry="summary.refetch()"
     >
+      <!-- A widget is placed and sized by the user: the ring only shows when it has a few slices to compare. -->
+      <AllocationPie
+        v-if="rows.length > 1"
+        bare
+        :slices="rows.map((row) => ({ label: row.label, value: row.value }))"
+        :currency="summary.data.value?.base_currency"
+      />
       <div class="flex flex-col gap-1">
         <component
           :is="row.storeId ? RouterLink : 'div'"
@@ -66,7 +75,7 @@ function pctWidth(value: string | number | null | undefined): string {
           <div class="flex items-center justify-between text-sm">
             <span class="truncate">{{ row.label }}</span>
             <span class="shrink-0 text-muted-foreground">
-              {{ formatMoney(row.value, { currency: summary.data.value?.base_currency }) }} · {{ formatPct(row.pct) }}
+              <Money :amount="row.value" :currency="summary.data.value?.base_currency" /> · {{ formatPct(row.pct) }}
             </span>
           </div>
           <div class="h-2 overflow-hidden rounded-full bg-muted">

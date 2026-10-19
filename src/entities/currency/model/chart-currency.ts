@@ -3,6 +3,7 @@ import { type Ref, computed, ref, watch } from 'vue'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { useConversions } from './conversions'
+import { useFavoriteCurrencies } from './favorites'
 
 /** Remembered per viewer: the last currency picked on any money chart. */
 const STORAGE_KEY = 'chart.currency'
@@ -33,13 +34,15 @@ watch(picked, (code) => {
  */
 export function useChartCurrency(source: Ref<string>) {
   const settings = useSettingsStore()
+  const favorites = useFavoriteCurrencies()
   const conversions = useConversions(true)
 
+  // A favourite without a rate (a coin never priced yet) would be a switch that does nothing.
   const options = computed(() => [
     ...new Set([
       source.value.toLowerCase(),
       settings.baseCurrency.toLowerCase(),
-      ...settings.favoriteCurrencies.map((code) => code.toLowerCase()),
+      ...favorites.codes.value.filter((code) => conversions.convertTo(1, source.value, code) !== null),
     ]),
   ])
 

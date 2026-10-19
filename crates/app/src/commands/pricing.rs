@@ -63,16 +63,22 @@ pub async fn refresh_all(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RefreshResult, String> {
+    let favorites = crate::commands::app_settings::current_settings(&app).favorite_currencies;
     let assets = {
         let guard = require_vault(&state).map_err(err_to_string)?;
         let vault = guard.as_ref().unwrap();
         let mut seen = std::collections::HashSet::new();
-        vault
+        let held = vault
             .doc
             .holdings
             .iter()
             .filter(|hit| hit.asset.is_crypto() && !hit.asset.is_derivative())
-            .map(|hit| hit.asset.clone())
+            .map(|hit| hit.asset.clone());
+        // Crypto favourites are priced too, so the rates table can show them.
+        let favored = favorites
+            .iter()
+            .filter_map(|code| vault.favorite_asset(code));
+        held.chain(favored)
             .filter(|asset| seen.insert(asset.key()))
             .collect::<Vec<_>>()
     };

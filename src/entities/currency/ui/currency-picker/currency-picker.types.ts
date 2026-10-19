@@ -27,4 +27,6 @@ export interface CurrencyOption {
   /** Localized fiat name from `Intl.DisplayNames`; empty for crypto. */
   name: string
   favorite: boolean
+  /** A group title row («Избранные», «Валюты»…), not a choice. */
+  header?: boolean
 }

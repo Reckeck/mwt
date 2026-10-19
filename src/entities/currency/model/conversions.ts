@@ -6,6 +6,8 @@ import { formatDate, formatMoney } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { useFavoriteCurrencies } from './favorites'
+
 /** FX table freshness for hover hints; rates move slowly enough. */
 export const FX_TABLE_STALE_MS = 10 * 60 * 1000
 /** Most rows a conversion list shows: the base, then favourites, then tracked. */
@@ -81,6 +83,7 @@ export function convertAll(
  */
 export function useConversions(enabled: MaybeRefOrGetter<boolean> = true) {
   const settings = useSettingsStore()
+  const favorites = useFavoriteCurrencies()
   const queryClient = useQueryClient()
   const today = localDate(new Date())
   const table = useQuery({
@@ -96,13 +99,16 @@ export function useConversions(enabled: MaybeRefOrGetter<boolean> = true) {
       if (!data || topUp.done) return
       const wanted = [
         ...new Set([
-          ...settings.favoriteCurrencies.map((code) => code.toLowerCase()),
+          ...favorites.codes.value,
           ...data.rows.filter((row) => row.tracked).map((row) => row.currency),
           data.base,
         ]),
       ]
+      // Coins are rated from the price cache (refreshed with the prices), never by the FX sources.
+      const coins = new Set(settings.cryptoCurrencies)
       const stale = wanted.filter((currency) => {
         const row = data.rows.find((entry) => entry.currency === currency)
+        if (row?.crypto || (!row && coins.has(currency))) return false
         return currency !== 'usd' && (!row || row.updated_at.slice(0, 10) < today)
       })
       topUp.done = true
@@ -121,7 +127,7 @@ export function useConversions(enabled: MaybeRefOrGetter<boolean> = true) {
   /** `amount` of `from` in the base and favourite currencies (empty until the table is there). */
   function convert(amount: number, from: string): Conversion[] {
     const data = table.data.value
-    return data ? convertAll(amount, from.toLowerCase(), data, settings.favoriteCurrencies, today) : []
+    return data ? convertAll(amount, from.toLowerCase(), data, favorites.codes.value, today) : []
   }
 
   /** `amount` of `from` in `to` at the cached rate; `null` while a rate is missing. */
@@ -136,12 +142,11 @@ export function useConversions(enabled: MaybeRefOrGetter<boolean> = true) {
     return fromRate === null || toRate === null ? null : (amount / fromRate) * toRate
   }
 
-  /** Whether `code` can be converted at all: the base, a favourite, a currency with a rate. */
+  /** Whether `code` can be converted at all: the base or a currency (coins included) with a rate. */
   function knows(code: string): boolean {
     const lower = code.toLowerCase()
     const data = table.data.value
     if (lower === settings.baseCurrency) return true
-    if (settings.favoriteCurrencies.some((entry) => entry.toLowerCase() === lower)) return true
     return Boolean(data && perBase(data, lower) !== null)
   }
 

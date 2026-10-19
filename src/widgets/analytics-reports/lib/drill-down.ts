@@ -12,17 +12,26 @@ export interface DrillDown {
   to?: string
   /** A category key; `''` = without a category. */
   category?: string
+  /** Kinds of transactions the figure is made of. */
+  kinds?: TxKind[]
+  /** Only transactions that paid a fee (losses). */
+  withFee?: boolean
+  /** Only transactions that closed a position (P&L). */
+  realized?: boolean
 }
 
 /**
  * The transactions behind a figure: the list filtered by its months, its
- * category and the report's wallet (the list takes one).
+ * category, kinds and the report's wallets.
  */
 export function transactionsOf(target: DrillDown, filter: ReportFilter): RouteLocationRaw {
   const query: Record<string, string> = {}
   if (target.from) query.from = `${target.from}-01`
   if (target.to ?? target.from) query.to = lastDay((target.to ?? target.from) as string)
   if (target.category !== undefined) query.cat = target.category
-  if (filter.scope.store_ids.length === 1) query.store = filter.scope.store_ids[0]
+  if (filter.scope.store_ids.length) query.store = filter.scope.store_ids.join(',')
+  if (target.kinds?.length) query.kind = target.kinds.join(',')
+  if (target.withFee) query.fee = '1'
+  if (target.realized) query.realized = '1'
   return { name: 'transactions', query }
 }

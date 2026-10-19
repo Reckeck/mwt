@@ -34,7 +34,7 @@ const { t } = useI18n()
     </template>
     <div v-if="props.hasData" class="grid gap-4">
       <div class="grid grid-cols-2 gap-3 @md:grid-cols-3"><slot /></div>
-      <ReportInsights :insights="props.insights" :currency="props.currency" />
+      <div data-tour="overview-insights"><ReportInsights :insights="props.insights" :currency="props.currency" /></div>
     </div>
     <EmptyState v-else compact :title="props.emptyTitle" :description="props.emptyDescription">
       <slot name="action" />

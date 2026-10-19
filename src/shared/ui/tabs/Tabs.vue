@@ -15,7 +15,7 @@ defineSlots<Record<string, () => unknown>>()
     :model-value="props.modelValue"
     @update:model-value="(value) => emit('update:modelValue', String(value))"
   >
-    <TabsList class="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+    <TabsList class="scrollbar-none inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1">
       <TabsTrigger
         v-for="tab in props.tabs"
         :key="tab.value"

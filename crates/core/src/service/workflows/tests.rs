@@ -2062,3 +2062,91 @@ fn a_queue_stands_after_a_trigger_and_does_not_sleep() {
         "{codes:?}"
     );
 }
+
+/// A price watch with no asset: it could never fire.
+fn price_watch(asset: Value) -> String {
+    graph(
+        vec![
+            node(
+                "t",
+                "trigger.price",
+                json!({ "asset": asset, "condition": "above", "value": "1" }),
+            ),
+            node("n", "action.notify", json!({ "text": "up" })),
+        ],
+        vec![wire("t", "out", "n", "in")],
+    )
+}
+
+#[test]
+fn a_draft_with_an_empty_required_field_saves_inactive() {
+    let (_dir, mut vault) = empty_vault();
+    let saved = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                active: false,
+                ..draft("Watch", price_watch(Value::Null))
+            },
+            now_secs(),
+        )
+        .unwrap();
+    assert!(!saved.workflow.active);
+    assert!(
+        saved
+            .issues
+            .iter()
+            .any(|issue| issue.code == "param_missing")
+    );
+}
+
+#[test]
+fn activating_with_an_empty_required_field_is_refused() {
+    let (_dir, mut vault) = empty_vault();
+    assert!(
+        vault
+            .save_workflow(None, draft("Watch", price_watch(Value::Null)), now_secs())
+            .is_err()
+    );
+    let off = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                active: false,
+                ..draft("Watch", price_watch(Value::Null))
+            },
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    assert!(
+        vault
+            .set_workflow_active(&off.id, true, now_secs())
+            .is_err()
+    );
+}
+
+#[test]
+fn opening_a_vault_turns_off_workflows_missing_a_required_field() {
+    let (dir, mut vault) = empty_vault();
+    let on = save(&mut vault, "Watch", price_watch(json!("BTC")));
+    // As if the field had become required after it was switched on.
+    vault.doc.workflows[0].graph = price_watch(Value::Null);
+    vault.persist().unwrap();
+    drop(vault);
+
+    let reopened = UnlockedVault::open(dir.path().join("test.wallet"), "pw").unwrap();
+    let workflow = reopened.workflow(&on.id).unwrap();
+    assert!(!workflow.active);
+    assert!(reopened.doc.workflow_runs.iter().any(|run| {
+        run.workflow_id == on.id
+            && matches!(&run.outcome, RunOutcome::Dropped { reason } if reason == "missing_params")
+    }));
+    assert!(
+        reopened
+            .doc
+            .notification_log
+            .iter()
+            .any(|record| record.key == format!("wf-off:{}", on.id))
+    );
+}

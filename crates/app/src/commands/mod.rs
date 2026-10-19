@@ -10,6 +10,7 @@ pub mod contacts;
 pub mod enrichment;
 pub mod exchange;
 pub mod losses;
+pub mod mobile;
 pub mod notifications;
 pub mod planning;
 pub mod portfolio;

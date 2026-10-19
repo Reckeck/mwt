@@ -133,5 +133,11 @@ export function useCanvasInsert(editor: EditorGraph) {
     openQuickAdd(point.clientX, point.clientY, { mode: 'port', ...dragFrom, type })
   })
 
-  return { quick, quickAddHere, quickAddFrom, onQuickPick, onPointerMove }
+  /** The «+» on a phone's canvas: no cursor, so the new node lands in the middle of the view. */
+  function quickAddCentre() {
+    pointer.value = editor.centerPoint()
+    quickAddHere()
+  }
+
+  return { quick, quickAddHere, quickAddCentre, quickAddFrom, onQuickPick, onPointerMove }
 }

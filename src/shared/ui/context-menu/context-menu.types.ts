@@ -27,4 +27,9 @@ export interface ContextMenuProps {
   actions: UiAction[]
   /** Turns the menu off (the native one stays off too). */
   disabled?: boolean
+  /**
+   * The actions are filled in by the right click itself (one menu over a whole
+   * list, each row says which item it is): an empty list does not turn it off.
+   */
+  lazy?: boolean
 }

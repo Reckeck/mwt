@@ -688,6 +688,12 @@ impl AssetRef {
         }
     }
 
+    /// The same asset as `other`: one cache key, or one ticker on the same (or
+    /// an unnamed) network. A derivative is never the same as its coin.
+    pub fn same_as(&self, other: &AssetRef) -> bool {
+        same_asset(self, other)
+    }
+
     pub fn is_derivative(&self) -> bool {
         self.contract
             .as_deref()

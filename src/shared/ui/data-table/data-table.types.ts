@@ -18,8 +18,15 @@ export interface DataTableProps<TData> {
   initialSorting?: SortingState
   /** Stable row ids keep sorting and selection steady across refetches. */
   getRowId?: (row: TData, index: number) => string
-  /** Keeps the header in view while the body scrolls; set a max height on the wrapper. */
+  /** Keeps the header in view while the body scrolls; give it a `containerClass` with a max height. */
   stickyHeader?: boolean
+  /**
+   * The first column stays put while the table scrolls sideways (a narrow
+   * screen): the row keeps its name in view.
+   */
+  stickyFirstColumn?: boolean
+  /** Classes of the scrolling wrapper, e.g. `max-h-[60dvh]` for a sticky header. */
+  containerClass?: string
   /** Shown in place of the rows when there are none. */
   emptyText?: string
   /** Rows react to a click (`row-click`) and look clickable. */

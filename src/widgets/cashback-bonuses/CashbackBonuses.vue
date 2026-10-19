@@ -8,7 +8,7 @@ import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate, formatQuantity } from '@/shared/lib/format'
 
 /** Cashback and points of the month or the year, by card, and the programmes' balances. */
 const { t } = useI18n()
@@ -59,7 +59,7 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
           <div class="flex items-center justify-between gap-2">
             <span class="truncate">{{ row.name }}</span>
             <span class="tabular-nums">
-              {{ formatMoney(row.points, { decimals: 0 }) }} {{ row.points_symbol }}
+              {{ formatQuantity(row.points, 0) }} {{ row.points_symbol }}
               <span class="text-muted-foreground">≈ <Money :amount="row.value_base" :currency="data.base_currency" :convert="false" /></span>
             </span>
           </div>

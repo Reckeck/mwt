@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RouterLink, useRouter } from 'vue-router'
-import { Copy, FileInput, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Copy, FileInput, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
 
 import { LessonList, OutcomeBadge, WORKFLOW_TEMPLATES } from '@/entities/workflow'
 import { WorkflowImportDialog, useWorkflowActions } from '@/features/workflow-manage'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Switch } from '@/shared/ui/switch'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -31,6 +32,15 @@ const lastRun = (id: string) =>
   (runs.data.value ?? []).filter((run) => run.workflow_id === id && !run.dry_run).slice(0, 1)
 const empty = computed(() => workflows.isSuccess.value && !(workflows.data.value ?? []).length)
 const importOpen = ref(false)
+/** Folded once the user has workflows of their own; open for a first visit. */
+const learnOpen = ref(false)
+watch(
+  () => workflows.isSuccess.value,
+  (loaded) => {
+    if (loaded) learnOpen.value = empty.value
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -49,23 +59,7 @@ const importOpen = ref(false)
       </div>
     </div>
 
-    <LessonList />
-
-    <section class="grid gap-2" data-tour="workflow-templates">
-      <h3 class="text-sm font-medium">{{ t('workflow.list.templates') }}</h3>
-      <div class="grid gap-2 @2xl:grid-cols-2 @5xl:grid-cols-3">
-        <RouterLink
-          v-for="template in WORKFLOW_TEMPLATES"
-          :key="template.id"
-          :to="{ name: 'workflow-new', query: { template: template.id } }"
-          class="rounded-lg border border-border p-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span class="block text-sm font-medium">{{ t(`workflow.template.${template.id}.name`) }}</span>
-          <span class="block text-xs text-muted-foreground">{{ t(`workflow.template.${template.id}.desc`) }}</span>
-        </RouterLink>
-      </div>
-    </section>
-
+    <h3 class="text-sm font-medium">{{ t('workflow.list.mine') }}</h3>
     <EmptyState v-if="empty" compact :title="t('workflow.list.empty')" />
 
     <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
@@ -111,6 +105,34 @@ const importOpen = ref(false)
         </div>
       </div>
     </Card>
+
+    <!-- Lessons and templates are for starting out: open while there is nothing of one's own. -->
+    <Collapsible v-model:open="learnOpen" class="grid gap-3 rounded-lg border border-border p-3">
+      <CollapsibleTrigger
+        class="flex w-full items-center justify-between gap-2 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {{ t('workflow.list.learn') }}
+        <ChevronDown class="size-4 shrink-0 text-muted-foreground transition-transform" :class="learnOpen && 'rotate-180'" />
+      </CollapsibleTrigger>
+      <CollapsibleContent class="grid gap-4">
+        <LessonList />
+
+        <section class="grid gap-2" data-tour="workflow-templates">
+          <h3 class="text-sm font-medium">{{ t('workflow.list.templates') }}</h3>
+          <div class="grid gap-2 @2xl:grid-cols-2 @5xl:grid-cols-3">
+            <RouterLink
+              v-for="template in WORKFLOW_TEMPLATES"
+              :key="template.id"
+              :to="{ name: 'workflow-new', query: { template: template.id } }"
+              class="rounded-lg border border-border p-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span class="block text-sm font-medium">{{ t(`workflow.template.${template.id}.name`) }}</span>
+              <span class="block text-xs text-muted-foreground">{{ t(`workflow.template.${template.id}.desc`) }}</span>
+            </RouterLink>
+          </div>
+        </section>
+      </CollapsibleContent>
+    </Collapsible>
 
     <WorkflowImportDialog v-model:open="importOpen" @imported="(workflow) => router.push({ name: 'workflow-edit', params: { id: workflow.id } })" />
   </div>

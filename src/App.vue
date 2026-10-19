@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 
+import { useIsPhone } from '@/shared/lib/phone'
 import { Sonner } from '@/shared/ui/sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { useLocale } from '@/shared/lib/locale'
@@ -15,6 +16,7 @@ const vault = useVaultStore()
 const settingsStore = useSettingsStore()
 
 const { resolved: theme } = useTheme()
+const phone = useIsPhone()
 useLocale()
 
 // Loaded before any vault work: the theme and language follow the user, not the
@@ -78,5 +80,12 @@ watch(
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <Sonner position="bottom-right" :theme="theme" rich-colors close-button />
+  <!-- On a phone the toasts drop from the top, below the status bar, clear of the bottom navigation. -->
+  <Sonner
+    :position="phone ? 'top-center' : 'bottom-right'"
+    :offset="phone ? 'calc(var(--safe-top) + 12px)' : undefined"
+    :theme="theme"
+    rich-colors
+    close-button
+  />
 </template>

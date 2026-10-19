@@ -6,3 +6,6 @@ export interface WorkflowEditorProps {
   /** A lesson from `WORKFLOW_LESSONS`: the canvas starts from its task. */
   lesson?: string | null
 }
+
+/** A tab of the phone editor's sheet. */
+export type MobileInspectorTab = 'inspector' | 'run' | 'lesson'

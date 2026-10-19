@@ -49,6 +49,7 @@ function bareReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockCo
           rows: months.map((month) => ({ month, realized: '0', fees: '0' })),
           total_realized: '0',
           total_fees: '0',
+          has_data: false,
         },
       }
     case 'portfolio': {
@@ -63,6 +64,7 @@ function bareReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockCo
             values: [point.net],
             shares: ['100'],
           })),
+          has_data: worth.has_data,
         },
       }
     }

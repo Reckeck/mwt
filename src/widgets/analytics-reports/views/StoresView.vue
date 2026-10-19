@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
-import { formatMoney, signClass } from '@/shared/lib/format'
+import { signClass } from '@/shared/lib/format'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
 const props = defineProps<{ report: StoresReport }>()
 
 const { t } = useI18n()
-const money = (value: string) => formatMoney(value, { decimals: 0 })
 const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as const
 </script>
 
@@ -18,7 +18,7 @@ const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as c
       <Table class="w-full text-sm tabular-nums">
         <TableHeader>
           <TableRow class="hover:bg-transparent">
-            <TableHead class="text-left">{{ t('report.stores.wallet') }}</TableHead>
+            <TableHead class="text-left sticky left-0 z-[1] bg-card">{{ t('report.stores.wallet') }}</TableHead>
             <TableHead v-for="column in columns" :key="column" class="text-right">
               {{ t(`report.stores.${column}`) }}
             </TableHead>
@@ -27,7 +27,7 @@ const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as c
         </TableHeader>
         <TableBody>
           <TableRow v-for="row in props.report.rows" :key="row.store_id">
-            <TableCell>
+            <TableCell class="sticky left-0 z-[1] bg-card">
               <RouterLink
                 :to="{ name: 'wallet', params: { id: row.store_id } }"
                 class="hover:underline"
@@ -42,15 +42,12 @@ const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as c
               class="text-right"
               :class="column === 'change' && signClass(row.change)"
             >
-              {{ money(row[column]) }}
+              <Money :amount="row[column]" :decimals="0" :currency="props.report.meta.currency" />
             </TableCell>
             <TableCell class="text-right">{{ row.tx_count }}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
     </div>
-    <p class="mt-3 text-xs text-muted-foreground">
-      {{ t('report.currencyNote', { currency: props.report.meta.currency.toUpperCase() }) }}
-    </p>
   </Card>
 </template>

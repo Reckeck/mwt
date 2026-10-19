@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { CircleAlert, RefreshCw } from 'lucide-vue-next'
 
 import { usePriceRefresh } from '@/features/price-refresh'
-import { Money } from '@/entities/currency'
-import { Button } from '@/shared/ui/button'
+import { Money, useFavoriteCurrencies } from '@/entities/currency'
+import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { formatDate } from '@/shared/lib/format'
@@ -15,7 +16,9 @@ import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
 const { t } = useI18n()
+const route = useRoute()
 const settings = useSettingsStore()
+const favorites = useFavoriteCurrencies()
 
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const table = useQuery({ queryKey: ['fx-table'], queryFn: () => call<FxTable>('get_fx_table') })
@@ -31,7 +34,7 @@ const baseUnpriced = computed(() => summary.data.value?.base_fx_as_of === null)
 const rows = computed(() => {
   const data = table.data.value
   if (!data) return []
-  const wanted = [...new Set(['usd', ...settings.favoriteCurrencies.map((code) => code.toLowerCase())])].filter(
+  const wanted = [...new Set(['usd', ...favorites.codes.value])].filter(
     (code) => code !== data.base,
   )
   return wanted.flatMap((code) => {
@@ -78,6 +81,11 @@ const refresh = () => priceRefresh.mutate()
       compact
       @retry="table.refetch()"
     >
+      <template #empty>
+        <RouterLink :to="{ query: { ...route.query, settings: 'general' } }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
+          {{ t('store.fxPickFavorites') }}
+        </RouterLink>
+      </template>
       <dl class="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 gap-y-1 text-sm">
         <template v-for="row in rows" :key="row.code">
           <dt class="font-medium uppercase">1 {{ row.code }}</dt>

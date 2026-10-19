@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 import { WorkflowVarDialog, useWorkflowActions } from '@/features/workflow-manage'
 import { Button } from '@/shared/ui/button'
+import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -48,14 +49,10 @@ const empty = computed(() => vars.isSuccess.value && !(vars.data.value ?? []).le
 
 <template>
   <div class="grid gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="max-w-2xl text-sm text-muted-foreground">{{ t('workflow.vars.intro') }}</p>
-      <Button @click="open(null)">
-        <Plus class="size-4" />
-        {{ t('workflow.vars.new') }}
-      </Button>
-    </div>
-    <EmptyState v-if="empty" compact :title="t('workflow.vars.empty')" />
+    <ListHeader :intro="t('workflow.vars.intro')" :action-label="t('workflow.vars.new')" :hide-action="empty" @action="open(null)" />
+    <EmptyState v-if="empty" compact :title="t('workflow.vars.empty')" :description="t('workflow.vars.emptyHint')">
+      <Button @click="open(null)"><Plus class="size-4" />{{ t('workflow.vars.new') }}</Button>
+    </EmptyState>
     <Card v-for="variable in vars.data.value ?? []" :key="`${JSON.stringify(variable.scope)}:${variable.name}`" size="sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="grid min-w-0 flex-1 gap-0.5">

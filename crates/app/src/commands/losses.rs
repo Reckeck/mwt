@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::LinkTransactionsInput;
 use trade_core::service::{FlowSummary, FxTable, TxLoss};
@@ -28,13 +28,15 @@ pub async fn get_tx_losses(state: State<'_, AppState>) -> Result<BTreeMap<String
 pub async fn list_flows(
     from: Option<String>,
     to: Option<String>,
+    store_ids: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<Vec<FlowSummary>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .list_flows(from.as_deref(), to.as_deref()))
+    Ok(guard.as_ref().unwrap().list_flows(
+        from.as_deref(),
+        to.as_deref(),
+        &store_ids.unwrap_or_default(),
+    ))
 }
 
 #[tauri::command]
@@ -61,7 +63,9 @@ pub async fn unlink_transaction(id: String, state: State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
-pub async fn get_fx_table(state: State<'_, AppState>) -> Result<FxTable, String> {
+pub async fn get_fx_table(app: AppHandle, state: State<'_, AppState>) -> Result<FxTable, String> {
+    // Favourites live outside the vault; coins among them get a row too.
+    let favorites = crate::commands::app_settings::current_settings(&app).favorite_currencies;
     let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard.as_ref().unwrap().fx_table())
+    Ok(guard.as_ref().unwrap().fx_table(&favorites))
 }

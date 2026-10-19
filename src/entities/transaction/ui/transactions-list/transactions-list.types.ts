@@ -10,4 +10,16 @@ export interface TransactionsListProps {
   openable?: boolean
   /** Right-click menu of a row; the page decides what can be done with it. */
   rowActions?: ((tx: Transaction) => UiAction[]) | null
+  /** Rows under a sticky header per day with the day's net in the base currency. */
+  groupByDay?: boolean
+  /** Base units per USD and the base code, for the day totals. */
+  fxPerUsd?: string | null
+  baseCurrency?: string
+  /**
+   * The page loads the list in pages from the backend: how many match in all.
+   * «Показать ещё» then asks for the next page (`more`) instead of revealing rows.
+   */
+  total?: number | null
+  /** The next page is on its way. */
+  loadingMore?: boolean
 }

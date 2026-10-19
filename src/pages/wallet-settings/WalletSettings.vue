@@ -95,7 +95,7 @@ const crumbs = computed<PageCrumb[]>(() =>
     skeleton="list"
     @retry="overview.refetch()"
   >
-    <div v-if="store" class="mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div v-if="store" class="flex w-full flex-col gap-4">
       <PageHeader :crumbs="crumbs">
         <component :is="storeIcon(store)" class="size-5 shrink-0" :style="{ color: store.color }" />
         <h2 class="heading-page min-w-0 truncate">{{ store.name }}</h2>

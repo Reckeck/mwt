@@ -25,10 +25,14 @@ const props = withDefaults(defineProps<DataTableProps<TData>>(), {
   initialSorting: () => [],
   getRowId: undefined,
   stickyHeader: false,
+  stickyFirstColumn: false,
   emptyText: undefined,
   clickable: false,
 })
 const emit = defineEmits<{ 'row-click': [row: TData] }>()
+
+/** The pinned first cell covers what scrolls under it; the header row stays above. */
+const STICKY_CELL = 'sticky left-0 z-[1] bg-card'
 
 const { t } = useI18n()
 
@@ -73,14 +77,21 @@ function headerLabel(column: Column<TData, unknown>): string {
 </script>
 
 <template>
-  <Table>
+  <Table :container-class="props.containerClass">
     <TableHeader :class="cn(props.stickyHeader && 'sticky top-0 z-10 bg-card')">
       <TableRow v-for="group in table.getHeaderGroups()" :key="group.id" class="hover:bg-transparent">
         <TableHead
-          v-for="header in group.headers"
+          v-for="(header, index) in group.headers"
           :key="header.id"
           :aria-sort="ariaSort(header.column)"
-          :class="cn('text-xs font-medium text-muted-foreground', alignOf(header.column), header.column.columnDef.meta?.class)"
+          :class="
+            cn(
+              'text-xs font-medium text-muted-foreground',
+              alignOf(header.column),
+              header.column.columnDef.meta?.class,
+              props.stickyFirstColumn && index === 0 && STICKY_CELL,
+            )
+          "
         >
           <template v-if="!header.isPlaceholder">
             <button
@@ -116,13 +127,14 @@ function headerLabel(column: Column<TData, unknown>): string {
           @keydown.enter="props.clickable && emit('row-click', row.original)"
         >
           <TableCell
-            v-for="cell in row.getVisibleCells()"
+            v-for="(cell, index) in row.getVisibleCells()"
             :key="cell.id"
             :class="
               cn(
                 alignOf(cell.column),
                 cell.column.columnDef.meta?.align === 'right' && 'tabular-nums',
                 cell.column.columnDef.meta?.class,
+                props.stickyFirstColumn && index === 0 && STICKY_CELL,
               )
             "
           >

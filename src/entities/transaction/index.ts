@@ -1,3 +1,5 @@
 export * from './ui/transaction-row'
 export * from './ui/transactions-list'
 export * from './ui/tx-preview'
+export * from './lib'
+export * from './model/use-tx-pages'

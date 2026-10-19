@@ -10,17 +10,16 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
-import { PLANNING_KEYS, WEEKDAYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
+import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
 import { Switch } from '@/shared/ui/switch'
-import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
-import { SCHEDULE_KINDS, type ScheduleKind } from './automation-edit.constants'
+import type { ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
+import { AutomationScheduleFields } from './ui/automation-schedule-fields'
 
 const props = withDefaults(defineProps<AutomationDialogProps>(), { automation: null, storeId: '', preset: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -162,48 +161,10 @@ const save = useMutation({
         <FormField for="automation-name" :label="t('automation.name')" required :error="fields.error('name')">
           <Input id="automation-name" v-model="name" :placeholder="t('automation.namePlaceholder')" />
         </FormField>
-        <div class="grid gap-1.5">
-          <Label for="automation-store">{{ t('automation.store') }}</Label>
+        <FormField for="automation-store" :label="t('automation.store')" :hint="t('automation.checkHint')">
           <StoreNodeSelect id="automation-store" v-model="storeId" :nodes="liveNodes" />
-        </div>
-      </div>
-
-      <div class="grid items-start gap-3 @sm:grid-cols-3">
-        <div class="grid gap-1.5">
-          <Label for="automation-schedule">{{ t('automation.schedule') }}</Label>
-          <Select id="automation-schedule" v-model="scheduleKind">
-            <SelectItem v-for="kind in SCHEDULE_KINDS" :key="kind" :value="kind">{{ t(`schedule.kind.${kind}`) }}</SelectItem>
-          </Select>
-        </div>
-        <FormField
-          v-if="scheduleKind === 'monthly'"
-          for="automation-day"
-          :label="t('schedule.day')"
-          required
-          :error="fields.error('day')"
-          :hint="t('schedule.dayHint')"
-        >
-          <Input id="automation-day" v-model="day" type="number" min="1" max="31" />
-        </FormField>
-        <FormField v-else-if="scheduleKind === 'weekly'" for="automation-weekday" :label="t('schedule.weekdayLabel')">
-          <Select id="automation-weekday" v-model="weekday">
-            <SelectItem v-for="entry in WEEKDAYS" :key="entry" :value="String(entry)">{{ t(`schedule.weekday.${entry}`) }}</SelectItem>
-          </Select>
-        </FormField>
-        <FormField v-else for="automation-days" :label="t('schedule.days')" required :error="fields.error('everyDays')">
-          <Input id="automation-days" v-model="everyDays" type="number" min="1" />
-        </FormField>
-        <FormField for="automation-start" :label="t('automation.startsAt')" required :error="fields.error('startsAt')">
-          <DateTimePicker id="automation-start" v-model="startsAt" />
         </FormField>
       </div>
-
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="automation-active">{{ t('automation.active') }}</Label>
-        <Switch id="automation-active" v-model="active" />
-      </div>
-
-      <p class="text-xs text-muted-foreground">{{ t('automation.checkHint') }}</p>
 
       <TransactionForm
         v-if="open && storeId"
@@ -215,6 +176,20 @@ const save = useMutation({
         template
         @submit="trySave()"
       />
+
+      <AutomationScheduleFields
+        v-model:kind="scheduleKind"
+        v-model:day="day"
+        v-model:weekday="weekday"
+        v-model:every-days="everyDays"
+        v-model:starts-at="startsAt"
+        :errors="{ day: fields.error('day'), everyDays: fields.error('everyDays'), startsAt: fields.error('startsAt') }"
+      />
+
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+        <Label for="automation-active">{{ t('automation.active') }}</Label>
+        <Switch id="automation-active" v-model="active" />
+      </div>
     </div>
 
     <template #footer>

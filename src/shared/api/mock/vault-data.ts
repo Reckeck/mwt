@@ -34,6 +34,8 @@ export const mockSettings: Settings = {
   daily_budget_mode: 'month',
   notifications: { system: true, hide_details_when_locked: false, default_time: '10:00', categories: [] },
   budget_currency: '',
+  budget_configured: false,
+  onboarding_skipped: [],
 }
 
 /** Mirrors what `app_settings.json` would hold. */
@@ -54,16 +56,20 @@ export const mockAppSettings: AppSettings = {
   minimize_to_tray: null,
   fx_refresh_interval_sec: null,
   display_decimals: null,
+  // An install older than the field: «Что нового» shows every entry, as after an update.
+  installed_at: null,
 }
 
 export const mockCurrencies: SupportedCurrencies = {
-  fiat: ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy', 'chf', 'cad', 'aud'],
+  fiat: ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy', 'chf', 'cad', 'aud', 'thb'],
   // Thousands of synthetic tickers, like the real CoinGecko list, so the picker's virtual scroll gets exercised.
   crypto: [
     'btc',
     'eth',
     'sol',
     'usdt',
+    'usdc',
+    'ton',
     'bnb',
     'xrp',
     'doge',

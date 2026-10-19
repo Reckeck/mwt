@@ -7,7 +7,7 @@ use trade_core::ipc_contract::{
 use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
 
-use trade_core::service::{AdjustmentDraft, TxFilter, TxGraph, TxPreview};
+use trade_core::service::{AdjustmentDraft, TxFilter, TxGraph, TxPage, TxPreview};
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
@@ -26,6 +26,24 @@ pub async fn list_transactions(
         .as_ref()
         .unwrap()
         .list_transactions(&filter.unwrap_or_default(), &zone)
+        .map_err(err_to_string)
+}
+
+/// One page of the operations list (newest first) and the total that match.
+#[tauri::command]
+pub async fn list_transactions_page(
+    filter: Option<TxFilter>,
+    offset: u32,
+    limit: u32,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TxPage, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .list_transactions_page(&filter.unwrap_or_default(), offset, limit, &zone)
         .map_err(err_to_string)
 }
 

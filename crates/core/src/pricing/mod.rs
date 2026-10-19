@@ -27,6 +27,32 @@ use crate::model::store::AssetRef;
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
 
 const COINGECKO_V3: &str = "https://api.coingecko.com/api/v3";
+
+/// One provider's answer for one asset.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Quote {
+    pub usd: Amount,
+    /// Percent over the last 24 hours, when the provider says it.
+    pub change_24h_pct: Option<Amount>,
+    /// Which provider answered (`PricePoint::source`).
+    pub source: &'static str,
+}
+
+/// CoinGecko `/simple/price` with `include_24hr_change`: id → (USD, 24 h %).
+fn parse_simple_price(
+    body: &HashMap<String, serde_json::Value>,
+) -> HashMap<String, (Amount, Option<Amount>)> {
+    body.iter()
+        .filter_map(|(id, quote)| {
+            let usd = quote.get("usd").and_then(|value| value.as_f64())?;
+            let change = quote
+                .get("usd_24h_change")
+                .and_then(|value| value.as_f64())
+                .map(|pct| Amount::from_f64(pct).round(2));
+            Some((id.clone(), (Amount::from_f64(usd), change)))
+        })
+        .collect()
+}
 const COINCAP_V2: &str = "https://api.coincap.io/v2";
 const BINANCE_API: &str = "https://api.binance.com/api/v3";
 const ER_API: &str = "https://open.er-api.com/v6";
@@ -56,21 +82,34 @@ impl PricingService {
         }
         let mut out = Vec::new();
         let mut seen = HashSet::new();
+        let mut last_err = None;
 
         for asset in assets {
             if asset.is_fiat() || seen.contains(&asset.key()) {
                 continue;
             }
             seen.insert(asset.key());
-            let value_usd = self.price_usd(asset).await?;
+            // One coin no provider quotes must not cost the rest their prices.
+            let quote = match self.price_usd(asset).await {
+                Ok(quote) => quote,
+                Err(err) => {
+                    last_err = Some(err);
+                    continue;
+                }
+            };
             out.push(PricePoint {
                 asset_key: asset.key(),
-                value_usd,
-                source: "cryptoprice".into(),
+                value_usd: quote.usd,
+                source: quote.source.into(),
+                change_24h_pct: quote.change_24h_pct,
                 ts: crate::model::vault::now_iso(),
             });
         }
-        Ok(out)
+        // Nothing priced at all is an outage worth reporting.
+        match last_err {
+            Some(err) if out.is_empty() => Err(err),
+            _ => Ok(out),
+        }
     }
 
     /// Insert fetched price points into the vault cache, keeping history
@@ -188,15 +227,19 @@ impl PricingService {
         Ok(out)
     }
 
-    async fn price_usd(&self, asset: &AssetRef) -> Result<Amount> {
+    async fn price_usd(&self, asset: &AssetRef) -> Result<Quote> {
         // 1) CoinGecko by id
         if let Some(id) = &asset.coingecko_id
             && let Ok(prices) = self
                 .coingecko_id_prices(&[(id.clone(), &asset.symbol)])
                 .await
-            && prices.get(id).is_some_and(|price| !price.is_zero())
+            && let Some((usd, change)) = prices.get(id).filter(|(price, _)| !price.is_zero())
         {
-            return Ok(prices[id]);
+            return Ok(Quote {
+                usd: *usd,
+                change_24h_pct: *change,
+                source: "coingecko",
+            });
         }
         // 2) CoinGecko token by contract
         if let (Some(chain), Some(contract)) = (asset.chain, &asset.contract)
@@ -204,20 +247,32 @@ impl PricingService {
                 .coingecko_token_price(chain, contract, &asset.symbol)
                 .await
         {
-            return Ok(price);
+            return Ok(Quote {
+                usd: price,
+                change_24h_pct: None,
+                source: "coingecko-token",
+            });
         }
         // 3) CoinCap search
-        if let Ok(price) = self.coincap_symbol(asset).await {
-            return Ok(price);
+        if let Ok((usd, change)) = self.coincap_symbol(asset).await {
+            return Ok(Quote {
+                usd,
+                change_24h_pct: change,
+                source: "coincap",
+            });
         }
         // 4) Binance ticker
-        self.binance_ticker(&asset.symbol).await
+        self.binance_ticker(&asset.symbol).await.map(|usd| Quote {
+            usd,
+            change_24h_pct: None,
+            source: "binance",
+        })
     }
 
     async fn coingecko_id_prices(
         &self,
         ids_symbols: &[(String, &str)],
-    ) -> Result<HashMap<String, Amount>> {
+    ) -> Result<HashMap<String, (Amount, Option<Amount>)>> {
         let ids: Vec<&str> = ids_symbols.iter().map(|(id, _)| id.as_str()).collect();
         let url = format!("{COINGECKO_V3}/simple/price");
         let resp = self
@@ -243,13 +298,7 @@ impl PricingService {
             .json()
             .await
             .map_err(|err| Error::Network(err.to_string()))?;
-        let mut out = HashMap::new();
-        for (id, quote) in body {
-            if let Some(price) = quote.get("usd").and_then(|value| value.as_f64()) {
-                out.insert(id, Amount::from_f64(price));
-            }
-        }
-        Ok(out)
+        Ok(parse_simple_price(&body))
     }
 
     async fn coingecko_token_price(
@@ -289,7 +338,7 @@ impl PricingService {
             .map(Amount::from_f64)
     }
 
-    async fn coincap_symbol(&self, asset: &AssetRef) -> Result<Amount> {
+    async fn coincap_symbol(&self, asset: &AssetRef) -> Result<(Amount, Option<Amount>)> {
         let url = format!("{COINCAP_V2}/assets");
         let resp = self
             .client
@@ -319,7 +368,11 @@ impl PricingService {
                     .as_str()
                     .and_then(|text| Decimal::from_str_exact(text).ok())
             {
-                return Ok(Amount(raw));
+                let change = item["changePercent24Hr"]
+                    .as_str()
+                    .and_then(|text| Decimal::from_str_exact(text).ok())
+                    .map(|pct| Amount(pct).round(2));
+                return Ok((Amount(raw), change));
             }
         }
         Err(Error::Pricing(format!(
@@ -404,4 +457,23 @@ pub struct AssetSearchHit {
 #[derive(serde::Deserialize)]
 struct CoinListEntry {
     symbol: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_price_reads_the_24h_change() {
+        let body: HashMap<String, serde_json::Value> = serde_json::from_str(
+            r#"{"bitcoin":{"usd":50000.5,"usd_24h_change":-1.23456},"tether":{"usd":1.0},"broken":{"eur":3}}"#,
+        )
+        .unwrap();
+        let parsed = parse_simple_price(&body);
+        let (usd, change) = parsed["bitcoin"];
+        assert_eq!(usd, Amount::parse("50000.5").unwrap());
+        assert_eq!(change, Some(Amount::parse("-1.23").unwrap()));
+        assert_eq!(parsed["tether"].1, None);
+        assert!(!parsed.contains_key("broken"));
+    }
 }

@@ -2,14 +2,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Copy, CopyPlus, ExternalLink, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Copy, CopyPlus, ExternalLink, Pencil, Trash2 } from 'lucide-vue-next'
 
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete, useTransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton, TransactionEditDialog } from '@/features/transaction-edit'
 import { TransactionFilterBar } from '@/features/transaction-filter'
-import { TransactionDetailsSheet } from '@/widgets/transaction-details'
-import { TransactionsList } from '@/entities/transaction'
+import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
@@ -20,34 +19,28 @@ import { txId, txStoreId } from '@/shared/lib/transactions'
 import { copyText } from '@/shared/lib/clipboard'
 
 import { useTxFilterInUrl } from './tx-filter.state'
+import { openTxDetails } from '@/shared/lib/tx-details'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const filter = useTxFilterInUrl()
 
-// The filter is part of the key, so changing it fetches (and caches) by itself.
-const txs = useQuery({
-  queryKey: computed(() => ['transactions', 'list', filter.value]),
-  queryFn: () => call<Transaction[]>('list_transactions', { filter: filter.value }),
-  placeholderData: (previous) => previous,
-})
+const { query: txs, rows, total } = useTxPages(filter)
 
+/** The day totals are in the base currency: the summary has its rate. */
+const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const losses = useQuery({
   queryKey: ['transactions', 'losses'],
   queryFn: () => call<Record<string, TxLoss>>('get_tx_losses'),
 })
 
-/** The details panel shows the latest copy of the opened transaction. */
-const openedId = ref<string | null>(null)
-const detailsOpen = ref(false)
-const opened = computed(() => (txs.data.value ?? []).find((tx) => txId(tx) === openedId.value) ?? null)
-function openDetails(tx: Transaction) {
-  openedId.value = txId(tx)
-  detailsOpen.value = true
-}
+const openDetails = openTxDetails
 
-/** Both lists, not one `['transactions', 'summary']` key — that prefix matches no query. */
+/**
+ * New prices change the values on the list. Both lists, not one
+ * `['transactions', 'summary']` key — that prefix matches no query.
+ */
 function refresh() {
   void queryClient.invalidateQueries({ queryKey: ['transactions'] })
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
@@ -89,21 +82,14 @@ function rowActions(tx: Transaction): UiAction[] {
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
     <div data-tour="tx-filter">
-      <TransactionFilterBar v-model="filter">
-        <template #actions>
-          <Button variant="outline" @click="refresh">
-            <RefreshCw class="size-4" />
-            {{ t('store.refresh') }}
-          </Button>
-        </template>
-      </TransactionFilterBar>
+      <TransactionFilterBar v-model="filter" />
     </div>
 
     <Card>
       <SectionState
         :loading="txs.isPending.value"
         :error="txs.error.value"
-        :empty="!txs.data.value?.length"
+        :empty="!rows.length"
         :empty-title="t('filter.empty')"
         :empty-description="t('ui.noDataHint')"
         compact
@@ -111,11 +97,17 @@ function rowActions(tx: Transaction): UiAction[] {
       >
         <div class="-my-3">
           <TransactionsList
-            :transactions="txs.data.value ?? []"
+            :transactions="rows"
+            :total="total"
+            :loading-more="txs.isFetchingNextPage.value"
             :losses="losses.data.value ?? null"
             openable
+            group-by-day
+            :fx-per-usd="summary.data.value?.fx_per_usd"
+            :base-currency="summary.data.value?.base_currency"
             :row-actions="rowActions"
             @open="openDetails"
+            @more="txs.fetchNextPage()"
           >
             <template #actions="{ tx }">
               <TransactionEditButton :tx="tx" />
@@ -126,7 +118,6 @@ function rowActions(tx: Transaction): UiAction[] {
       </SectionState>
     </Card>
 
-    <TransactionDetailsSheet v-model:open="detailsOpen" :tx="opened" />
     <TransactionEditDialog v-if="editing" v-model:open="editOpen" :transaction="editing" />
     <TransactionCreateDialog
       v-if="duplicate"

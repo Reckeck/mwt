@@ -53,18 +53,31 @@ export function mockFxTable(): FxTable {
   const base = mockAppSettings.base_currency
   const perUsd: Record<string, number> = { usd: 1, rub: 95, eur: 0.92, thb: 36 }
   const baseRate = perUsd[base] ?? 1
-  return {
-    base,
-    rows: Object.entries(perUsd)
-      .filter(([code]) => code !== base)
-      .map(([code, rate]) => ({
-        currency: code,
-        per_base: String(rate / baseRate),
-        in_base: String(baseRate / rate),
-        updated_at: new Date().toISOString(),
-        tracked: code === 'rub',
-      })),
-  }
+  const favorites = mockAppSettings.favorite_currencies.map((code) => code.toLowerCase())
+  const fiat = Object.entries(perUsd)
+    .filter(([code]) => code !== base)
+    .map(([code, rate]) => ({
+      currency: code,
+      per_base: String(rate / baseRate),
+      in_base: String(baseRate / rate),
+      updated_at: new Date().toISOString(),
+      tracked: code === 'rub',
+      crypto: false,
+      favorite: favorites.includes(code),
+    }))
+  // Like the core: a crypto favourite with a known price gets a row from that price.
+  const coins = favorites
+    .filter((code) => !(code in perUsd) && priceOf(code) > 0)
+    .map((code) => ({
+      currency: code,
+      per_base: String(1 / (priceOf(code) * baseRate)),
+      in_base: String(priceOf(code) * baseRate),
+      updated_at: new Date().toISOString(),
+      tracked: false,
+      crypto: true,
+      favorite: true,
+    }))
+  return { base, rows: [...fiat, ...coins] }
 }
 
 export function analyticsContext() {

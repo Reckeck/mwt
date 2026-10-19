@@ -44,6 +44,11 @@ const text = (value: LocalizedText) => localized(value, locale.value)
 const params = computed(() => props.node.data?.params ?? {})
 const fields = computed(() => (props.def?.params ?? []).filter((param) => paramVisible(props.def?.kind ?? '', param.name, params.value)))
 const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.text_ru : issue.text_en)
+/** An empty required field is told under the field itself, not only in the list above. */
+const fieldError = (name: string) => {
+  const issue = props.issues.find((entry) => entry.param === name)
+  return issue ? t('workflow.inspector.fillIn') : null
+}
 </script>
 
 <template>
@@ -99,7 +104,14 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
           </Button>
         </div>
       </div>
-      <ParamField v-else :param="param" :value="params[param.name]" :params="params" @update="(value) => emit('param', param.name, value)" />
+      <ParamField
+        v-else
+        :param="param"
+        :value="params[param.name]"
+        :params="params"
+        :error="fieldError(param.name)"
+        @update="(value) => emit('param', param.name, value)"
+      />
     </template>
 
     <p v-if="props.def?.params.some((param) => param.wirable)" class="text-xs text-muted-foreground">

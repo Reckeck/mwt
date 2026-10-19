@@ -1,11 +1,19 @@
 import type { ChartOption } from '@/shared/lib/echarts'
+import { formatMoney } from '@/shared/lib/format'
 
 /**
  * Axes, grid and tooltip every report chart shares; `labels` is the x axis.
  * A money chart passes `tooltip` (`useMoneyChartTooltip`): each value then also
- * shows in the base and favourite currencies.
+ * shows in the base and favourite currencies. With `currency` the value axis
+ * reads as money («12K ₽»), so a chart is never a column of bare numbers.
+ * On a narrow screen `Chart` scrolls the legend and thins the labels.
  */
-export function categoryChart(labels: string[], axisColor: string, tooltip?: (params: unknown) => string): ChartOption {
+export function categoryChart(
+  labels: string[],
+  axisColor: string,
+  tooltip?: (params: unknown) => string,
+  currency?: string,
+): ChartOption {
   return {
     backgroundColor: 'transparent',
     tooltip: tooltip ? { trigger: 'axis', formatter: tooltip } : { trigger: 'axis' },
@@ -19,7 +27,12 @@ export function categoryChart(labels: string[], axisColor: string, tooltip?: (pa
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: axisColor },
+      axisLabel: currency
+        ? {
+            color: axisColor,
+            formatter: (value: number) => formatMoney(value, { currency, compact: true, decimals: 0 }),
+          }
+        : { color: axisColor },
       splitLine: { lineStyle: { color: axisColor, opacity: 0.15 } },
     },
   }

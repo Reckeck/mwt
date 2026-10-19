@@ -2,7 +2,7 @@
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 
-import { bindingLabel } from '@/entities/store'
+import { bindingBadge } from '@/entities/store'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import {
   SidebarMenuAction,
@@ -13,7 +13,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/shared/ui/sidebar'
-import { getStoreIcon, storeIcon } from '@/shared/lib/store-icons'
+import { storeIcon } from '@/shared/lib/store-icons'
 import { cn } from '@/shared/lib/utils'
 
 import { nodeTotal } from '../../lib/totals'
@@ -41,7 +41,7 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
         :class="cn(props.node.store.archived && 'opacity-50')"
       >
         <RouterLink :to="{ name: 'wallet', params: { id: props.node.store.id } }">
-          <component :is="getStoreIcon(props.node.store.kind)" :style="{ color: props.node.store.color }" />
+          <component :is="storeIcon(props.node.store)" :style="{ color: props.node.store.color }" />
           <span>{{ props.node.store.name }}</span>
         </RouterLink>
       </SidebarMenuButton>
@@ -72,11 +72,8 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
             <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
               <component :is="storeIcon(child.store)" :style="{ color: child.store.color }" />
               <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
-              <span
-                v-if="bindingLabel(child.store.binding) && !child.store.name.includes(bindingLabel(child.store.binding))"
-                class="shrink-0 text-[10px] uppercase text-muted-foreground"
-              >
-                {{ bindingLabel(child.store.binding) }}
+              <span v-if="bindingBadge(child.store)" class="shrink-0 text-[10px] uppercase text-muted-foreground">
+                {{ bindingBadge(child.store) }}
               </span>
               <span v-if="total(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
                 {{ total(child) }}

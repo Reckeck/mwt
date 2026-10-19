@@ -2,22 +2,20 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { AlarmClock, ExternalLink, MoreVertical, Pencil, Plus, Repeat, Trash2 } from 'lucide-vue-next'
-import { RouterLink, type RouteLocationRaw } from 'vue-router'
+import { Plus } from 'lucide-vue-next'
 
 import { ReminderDialog } from '@/features/reminder-edit'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { DropdownMenu } from '@/shared/ui/dropdown-menu'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
+import { ListHeader } from '@/shared/ui/list-header'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { onEvent } from '@/shared/api/ipc'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { Checkbox } from '@/shared/ui/checkbox'
+
+import { type ReminderGroup, type SnoozeChoice, groupOf, snoozeUntil } from './lib/reminder'
+import ReminderRow from './ui/ReminderRow.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -25,7 +23,7 @@ const queryClient = useQueryClient()
 const reminders = useQuery({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
 /** «Мои» are written by the user, «Авто» are made from the data. */
 const show = ref<'all' | 'mine' | 'auto'>('all')
-/** Open ones first, by time; done ones after. Muted automatic ones are hidden. */
+/** By time; grouped below into overdue, today, later and done. Muted automatic ones are hidden. */
 const list = computed(() =>
   [...(reminders.data.value ?? [])]
     .filter((reminder) => !(reminder.source && reminder.muted))
@@ -34,32 +32,15 @@ const list = computed(() =>
     (left, right) => Number(left.done) - Number(right.done) || left.due_at.localeCompare(right.due_at),
   ),
 )
-/** When it comes next: its date, or the end of its snooze. */
-const dueOf = (reminder: Reminder) =>
-  reminder.snoozed_until && reminder.snoozed_until > reminder.due_at ? reminder.snoozed_until : reminder.due_at
-const overdue = (reminder: Reminder) => !reminder.done && new Date(dueOf(reminder)).getTime() < Date.now()
-const repeatLabel = (repeat: ReminderRepeat) =>
-  `${t('reminder.every')} ${repeat.every > 1 ? `${repeat.every} ` : ''}${t(`reminder.unit.${repeat.unit}`, repeat.every)}`
+const GROUPS: ReminderGroup[] = ['overdue', 'today', 'later', 'done']
+const groups = computed(() =>
+  GROUPS.map((key) => ({ key, items: list.value.filter((reminder) => groupOf(reminder) === key) })).filter(
+    (group) => group.items.length,
+  ),
+)
 
 // The scheduler made or moved automatic reminders.
 void onEvent('reminders-changed', () => void queryClient.invalidateQueries({ queryKey: ['reminders'] }))
-
-/** Where an automatic reminder comes from: the wallet, the goal, the contact. */
-function sourceLink(source: ReminderSource): RouteLocationRaw | null {
-  switch (source.kind) {
-    case 'goal_saving':
-    case 'goal_deadline':
-      return { name: 'planning-goals' }
-    case 'debt':
-      return { name: 'transactions-contacts' }
-    case 'rent':
-    case 'property_tax':
-    case 'interest_tax':
-      return null
-    default:
-      return { name: 'wallet', params: { id: source.id } }
-  }
-}
 
 function refresh() {
   for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
@@ -74,20 +55,8 @@ const setDone = useMutation({
   },
 })
 
-/* --- put off: in ten minutes, in an hour, tomorrow morning --- */
-const SNOOZES = ['10m', '1h', 'tomorrow'] as const
-function snoozeUntil(choice: (typeof SNOOZES)[number]): string {
-  const at = new Date()
-  if (choice === '10m') at.setMinutes(at.getMinutes() + 10)
-  else if (choice === '1h') at.setHours(at.getHours() + 1)
-  else {
-    at.setDate(at.getDate() + 1)
-    at.setHours(9, 0, 0, 0)
-  }
-  return at.toISOString()
-}
 const snooze = useMutation({
-  mutationFn: ({ reminder, choice }: { reminder: Reminder; choice: (typeof SNOOZES)[number] }) =>
+  mutationFn: ({ reminder, choice }: { reminder: Reminder; choice: SnoozeChoice }) =>
     call<Reminder>('snooze_reminder', { input: { id: reminder.id, until: snoozeUntil(choice) } }),
   onSuccess: refresh,
   meta: {
@@ -124,14 +93,13 @@ function openEdit(reminder: Reminder) {
 </script>
 
 <template>
-  <div class="grid gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted-foreground">{{ t('reminder.intro') }}</p>
-      <Button @click="openNew">
-        <Plus class="size-4" />
-        {{ t('reminder.new') }}
-      </Button>
-    </div>
+  <div class="grid grid-cols-1 gap-4">
+    <ListHeader
+      :intro="t('reminder.intro')"
+      :action-label="t('reminder.new')"
+      :hide-action="reminders.isSuccess.value && !list.length"
+      @action="openNew"
+    />
 
     <ToggleGroup
       v-model="show"
@@ -151,83 +119,26 @@ function openEdit(reminder: Reminder) {
       <Button @click="openNew"><Plus class="size-4" />{{ t('reminder.new') }}</Button>
     </EmptyState>
 
-    <ul class="grid gap-1">
-      <li
-        v-for="reminder in list"
-        :key="reminder.id"
-        class="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent/50"
-        :class="reminder.done && 'opacity-60'"
+    <section v-for="group in groups" :key="group.key" class="grid grid-cols-1 gap-1">
+      <h3
+        class="px-3 text-xs font-medium uppercase tracking-wide"
+        :class="group.key === 'overdue' ? 'text-destructive' : 'text-muted-foreground'"
       >
-        <Checkbox
-          :model-value="reminder.done"
-          :aria-label="t('reminder.done')"
-          :title="reminder.repeat ? t('reminder.doneRepeatHint') : t('reminder.done')"
-          @update:model-value="setDone.mutate(reminder)"
+        {{ t(`reminder.group.${group.key}`) }}
+      </h3>
+      <ul class="grid grid-cols-1 gap-1">
+        <ReminderRow
+          v-for="reminder in group.items"
+          :key="reminder.id"
+          :reminder="reminder"
+          @done="setDone.mutate(reminder)"
+          @snooze="(choice) => snooze.mutate({ reminder, choice })"
+          @finish="finish.mutate(reminder)"
+          @edit="openEdit(reminder)"
+          @remove="remove.mutate(reminder.id)"
         />
-        <span class="flex min-w-0 flex-1 items-center gap-2">
-          <span class="truncate text-sm" :class="reminder.done && 'line-through'">{{ reminder.text }}</span>
-          <Badge v-if="reminder.repeat" variant="outline" class="shrink-0 gap-1">
-            <Repeat class="size-3" />
-            {{ repeatLabel(reminder.repeat) }}
-          </Badge>
-          <Badge v-if="reminder.source" variant="secondary" class="shrink-0" :title="t('reminder.autoHint')">
-            {{ t('reminder.auto') }}
-          </Badge>
-          <RouterLink
-            v-if="reminder.source && sourceLink(reminder.source)"
-            :to="sourceLink(reminder.source) ?? '/'"
-            class="shrink-0 text-muted-foreground hover:text-foreground"
-            :title="t('reminder.openSource')"
-            :aria-label="t('reminder.openSource')"
-          >
-            <ExternalLink class="size-3.5" />
-          </RouterLink>
-        </span>
-        <span class="shrink-0 text-xs tabular-nums" :class="overdue(reminder) ? 'text-destructive' : 'text-muted-foreground'">
-          <AlarmClock v-if="reminder.snoozed_until && dueOf(reminder) === reminder.snoozed_until" class="mr-1 inline size-3" />
-          {{ formatDateTime(dueOf(reminder)) }}
-        </span>
-        <DropdownMenu v-if="!reminder.done" align="end">
-          <template #trigger>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="size-8 text-muted-foreground"
-              :title="t('reminder.more')"
-              :aria-label="t('reminder.more')"
-            >
-              <MoreVertical class="size-4" />
-            </Button>
-          </template>
-          <DropdownMenuItem
-            v-for="choice in SNOOZES"
-            :key="choice"
-            :value="`snooze-${choice}`"
-            @select="snooze.mutate({ reminder, choice })"
-          >
-            <AlarmClock class="size-4 shrink-0" />
-            {{ t(`reminder.snooze.${choice}`) }}
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="reminder.repeat || reminder.source" value="finish" @select="finish.mutate(reminder)">
-            <Repeat class="size-4 shrink-0" />
-            {{ reminder.source ? t('reminder.mute') : t('reminder.finishSeries') }}
-          </DropdownMenuItem>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-8 text-muted-foreground"
-          :title="t('reminder.edit')"
-          :aria-label="t('reminder.edit')"
-          @click="openEdit(reminder)"
-        >
-          <Pencil class="size-4" />
-        </Button>
-        <ConfirmButton :label="t('reminder.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(reminder.id)">
-          <Trash2 class="size-4" />
-        </ConfirmButton>
-      </li>
-    </ul>
+      </ul>
+    </section>
 
     <ReminderDialog v-model:open="dialogOpen" :reminder="editing" />
   </div>

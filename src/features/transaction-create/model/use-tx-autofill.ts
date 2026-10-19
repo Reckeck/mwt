@@ -12,9 +12,12 @@ import type { TxFormState } from './use-tx-form-state'
  * the asset a wallet or a side starts with, the received amount from the
  * rate, the network of the asset; plus the side swap and the debt choice.
  */
+/** Quote coins a spot trade spends by default, in order of preference. */
+const SPOT_QUOTES = ['USDT', 'USDC', 'FDUSD', 'BUSD']
+
 export function useTxAutofill(state: TxFormState) {
   const settings = useSettingsStore()
-  const { props, form, editing, isProperty, storeKind, overview } = state
+  const { props, form, editing, isProperty, storeKind, overview, contextStore } = state
 
   /** Property is named, not searched: a flat is not on CoinGecko. */
   const propertyName = ref(form.asset && isProperty.value ? form.asset.name : '')
@@ -25,24 +28,6 @@ export function useTxAutofill(state: TxFormState) {
       ? { symbol, name: name.trim(), coingecko_id: null, chain: null, contract: null, quote: symbol }
       : null
   })
-
-  /**
-   * A new operation starts with the wallet's main asset (its largest position);
-   * an empty bank or cash wallet starts with the base currency.
-   */
-  watch(
-    () => [overview.data.value, storeKind.value] as const,
-    ([data, kind]) => {
-      if (editing.value || form.asset || !kind || kind === 'property') return
-      const main = data?.positions[0]?.asset
-      if (main) form.asset = main
-      else if (kind === 'bank' || kind === 'cash') {
-        const code = settings.baseCurrency.toUpperCase()
-        form.asset = { symbol: code, name: code, coingecko_id: null, chain: 'fiat', contract: null, quote: code }
-      }
-    },
-    { immediate: true },
-  )
 
   /** Swap the ends of a transfer or conversion. */
   function swapSides() {
@@ -72,6 +57,27 @@ export function useTxAutofill(state: TxFormState) {
     autoSet[key] = toRaw(value)
     form[key] = value
   }
+  /**
+   * A new operation starts with the wallet's main asset (its largest position);
+   * an empty bank or cash wallet starts with the base currency. Nothing is
+   * guessed before the wallet's positions and the app settings are in: an
+   * early guess (USD) would then hold, as an autofill is replaced only by
+   * another autofill.
+   */
+  watch(
+    () => [overview.data.value, overview.isSuccess.value, storeKind.value, settings.appLoaded] as const,
+    ([data, loaded, kind, settingsLoaded]) => {
+      if (editing.value || !loaded || !kind || kind === 'property') return
+      const main = data?.positions[0]?.asset
+      if (main) autoFill('asset', main)
+      else if ((kind === 'bank' || kind === 'cash') && settingsLoaded) {
+        const code = settings.baseCurrency.toUpperCase()
+        autoFill('asset', { symbol: code, name: code, coingecko_id: null, chain: 'fiat', contract: null, quote: code })
+      }
+    },
+    { immediate: true },
+  )
+
   // The account money leaves gives its first asset.
   watch(
     () => [fromAccount.main.value, form.kind] as const,
@@ -89,10 +95,18 @@ export function useTxAutofill(state: TxFormState) {
     },
     { immediate: true },
   )
+  // A spot trade usually spends the quote: the pair's quote, else a dollar stablecoin held, else the largest position.
+  const spotSold = computed<AssetRef | null>(() => {
+    const binding = contextStore.value?.binding
+    if (binding && typeof binding === 'object' && 'pair' in binding) return binding.pair.quote
+    const positions = overview.data.value?.positions ?? []
+    const stable = positions.find((position) => SPOT_QUOTES.includes(position.asset.symbol.toUpperCase()))
+    return (stable ?? positions[0])?.asset ?? null
+  })
   watch(
-    () => [overview.data.value?.positions[0]?.asset ?? null, form.kind] as const,
-    ([main, kind]) => {
-      if (kind === 'trade_spot') autoFill('soldAsset', main)
+    () => [spotSold.value, form.kind] as const,
+    ([sold, kind]) => {
+      if (kind === 'trade_spot') autoFill('soldAsset', sold)
     },
     { immediate: true },
   )

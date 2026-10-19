@@ -42,14 +42,10 @@ const assetName = (symbol: string) => symbol || t('report.portfolio.other')
 
 /** The portfolio's value over the period. */
 const valueOption = computed<ChartOption>(() => {
-  const base = categoryChart(labels.value, axisColor.value, moneyTooltip.value)
+  const base = categoryChart(labels.value, axisColor.value, moneyTooltip.value, currency.value)
   return {
     ...base,
     legend: { show: false },
-    yAxis: {
-      ...(base.yAxis as object),
-      axisLabel: { color: axisColor.value, formatter: (value: number) => formatMoney(value, { currency: currency.value, compact: true }) },
-    },
     series: [
       {
         name: t('store.total'),

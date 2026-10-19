@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { AssetInput } from '@/entities/asset'
+import { AssetInput, PairInput } from '@/entities/asset'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 
@@ -18,7 +17,7 @@ const { form, check } = useTxForm()
 <template>
   <div class="grid gap-3 @sm:grid-cols-3">
     <FormField for="tx-symbol" :label="t('tx.field.contract')" required :error="check.error('symbol')">
-      <Input id="tx-symbol" v-model="form.symbol" placeholder="BTCUSDT" spellcheck="false" />
+      <PairInput id="tx-symbol" v-model="form.symbol" kind="futures" placeholder="BTCUSDT" />
     </FormField>
     <div class="grid gap-1.5">
       <Label for="tx-direction">{{ t('tx.field.direction') }}</Label>

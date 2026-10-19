@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, Undo2 } from 'lucide-vue-next'
+import { Money } from '@/entities/currency'
 
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate, } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
@@ -88,7 +89,7 @@ const ACTIONS: { effect: DebtEffect; icon: typeof ArrowUpRight }[] = [
             :class="entry.net > 0 ? 'text-success' : 'text-destructive'"
           >
             {{ entry.net > 0 ? t('debt.owesMe') : t('debt.iOwe') }}:
-            {{ formatMoney(Math.abs(entry.net), { currency: entry.row.asset.symbol }) }}
+            <Money :amount="Math.abs(entry.net)" :currency="entry.row.asset.symbol" />
           </span>
           <span v-if="entry.terms?.due_at" class="flex items-center gap-1 text-xs" :class="entry.overdue ? 'text-destructive' : 'text-muted-foreground'">
             <CalendarClock class="size-3.5" />

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
 import { useQuery } from '@tanstack/vue-query'
 import { GridItem, GridLayout } from 'grid-layout-plus'
-import { Plus } from 'lucide-vue-next'
+import { LayoutGrid } from 'lucide-vue-next'
 
 import { type DashboardCatalogExchange, DashboardCatalog } from '@/widgets/dashboard-catalog'
 import { DASHBOARD_COLS, DASHBOARD_ROW_HEIGHT, DASHBOARD_WIDGETS } from '@/widgets/dashboard-registry'
@@ -67,7 +67,14 @@ const actionsById = useWidgetActions({
 </script>
 
 <template>
-  <div ref="container" class="relative min-h-full pb-20" data-tour="dashboard-grid">
+  <div ref="container" class="relative min-h-full pb-6" data-tour="dashboard-grid">
+    <!-- The catalog of widgets not yet on the dashboard; the transaction button lives in the header. -->
+    <div v-if="hasMore" class="mb-3 flex justify-end">
+      <Button variant="outline" size="sm" data-tour="dashboard-add" @click="catalogOpen = true">
+        <LayoutGrid class="size-4" />
+        {{ t('dashboard.catalog.button') }}
+      </Button>
+    </div>
     <div v-if="!hydrated || !containerWidth" class="grid grid-cols-1 gap-4 md:grid-cols-12">
       <Skeleton class="h-40 md:col-span-6" />
       <Skeleton class="h-40 md:col-span-6" />
@@ -122,19 +129,6 @@ const actionsById = useWidgetActions({
     <div v-if="hydrated && !layout.length" class="py-16 text-center text-sm text-muted-foreground">
       {{ t('dashboard.emptyGrid') }}
     </div>
-
-    <!-- Floating «+»: the catalog of widgets not yet on the dashboard. -->
-    <Button
-      v-if="hasMore"
-      size="icon"
-      class="fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg"
-      :title="t('dashboard.catalog.open')"
-      :aria-label="t('dashboard.catalog.open')"
-      data-tour="dashboard-add"
-      @click="catalogOpen = true"
-    >
-      <Plus class="size-5" />
-    </Button>
 
     <DashboardCatalog v-model:open="catalogOpen" :placed="placed" :exchanges="exchanges" @add="add" />
   </div>

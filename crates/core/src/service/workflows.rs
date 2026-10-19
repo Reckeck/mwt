@@ -404,6 +404,72 @@ impl UnlockedVault {
         changed
     }
 
+    /// Active workflows a required field now stops (they used to run with it
+    /// empty and fail, or never fire): switched off on open, each with a line
+    /// in the journal and a notice, so `run_due_workflows` does not skip them
+    /// in silence. Returns whether anything changed.
+    pub(crate) fn disable_incomplete_workflows(&mut self, now: i64) -> bool {
+        let mut notices: Vec<NoticeRecord> = Vec::new();
+        for index in 0..self.doc.workflows.len() {
+            let workflow = &self.doc.workflows[index];
+            if !workflow.active {
+                continue;
+            }
+            let Ok(graph) = Graph::parse(&workflow.graph) else {
+                continue;
+            };
+            let Some(issue) = validate(&graph)
+                .into_iter()
+                .find(|issue| issue.code == "param_missing")
+            else {
+                continue;
+            };
+            let (id, name) = (workflow.id.clone(), workflow.name.clone());
+            self.doc.workflows[index].active = false;
+            self.doc.workflow_runs.push(WorkflowRun {
+                id: uuid::Uuid::new_v4().to_string(),
+                workflow_id: id.clone(),
+                trigger: String::new(),
+                started_at: crate::calendar::iso(now),
+                outcome: RunOutcome::Dropped {
+                    reason: "missing_params".to_string(),
+                },
+                created: Vec::new(),
+                queued: 0,
+                trace: vec![TraceStep {
+                    node_id: issue.node_id.clone().unwrap_or_default(),
+                    kind: String::new(),
+                    status: StepStatus::Skipped,
+                    text_ru: format!("Схема выключена: {}", issue.text_ru),
+                    text_en: format!("The workflow was switched off: {}", issue.text_en),
+                    values: Default::default(),
+                }],
+                dry_run: false,
+            });
+            notices.push(crate::service::notice(
+                crate::model::notify::NoticeCategory::Automation,
+                format!("wf-off:{id}"),
+                &name,
+                format!("Схема выключена: {}", issue.text_ru),
+                Some(format!("workflow-edit:{id}")),
+                crate::calendar::iso(now),
+            ));
+        }
+        if notices.is_empty() {
+            return false;
+        }
+        let overflow = self
+            .doc
+            .workflow_runs
+            .len()
+            .saturating_sub(MAX_WORKFLOW_RUNS);
+        self.doc.workflow_runs.drain(..overflow);
+        if self.notices_enabled(crate::model::notify::NoticeCategory::Automation) {
+            self.doc.notification_log.extend(notices);
+        }
+        true
+    }
+
     pub fn workflows(&self) -> Vec<Workflow> {
         self.doc.workflows.clone()
     }

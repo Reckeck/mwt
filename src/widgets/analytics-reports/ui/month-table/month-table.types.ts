@@ -29,4 +29,6 @@ export interface MonthTableProps {
   rows: MonthTableRow[]
   /** Header of the first column. */
   labelHeader: string
+  /** Currency of the sums (the report's `meta.currency`). */
+  currency?: string
 }

@@ -8,7 +8,7 @@ import { Variable } from 'lucide-vue-next'
 import { WorkflowVars } from '@/widgets/workflow-vars'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
-import { Tabs } from '@/shared/ui/tabs'
+import { RouteTabs } from '@/shared/ui/route-tabs'
 import { call } from '@/shared/api/ipc'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
@@ -24,17 +24,12 @@ const waiting = computed(
 )
 
 const tabs = computed(() => [
-  { value: 'workflows', label: t('workflow.tab.list') },
+  { name: 'workflows', label: t('workflow.tab.list') },
   {
-    value: 'workflows-journal',
+    name: 'workflows-journal',
     label: waiting.value ? `${t('workflow.tab.journal')} (${waiting.value})` : t('workflow.tab.journal'),
   },
 ])
-const tab = computed({
-  get: () => String(route.name ?? 'workflows'),
-  set: (name: string) => void router.push({ name }),
-})
-
 /** Variables open over any tab; `?vars=1` keeps the panel across Back and a reload. */
 const varsOpen = computed({
   get: () => route.query.vars === '1',
@@ -45,7 +40,7 @@ const varsOpen = computed({
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="w-fit max-w-full" data-tour="section-tabs"><Tabs v-model="tab" :tabs="tabs" /></div>
+      <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" /></div>
       <Button variant="outline" size="sm" data-tour="workflow-vars-open" @click="varsOpen = true">
         <Variable class="size-4" />
         {{ t('workflow.tab.vars') }}

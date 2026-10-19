@@ -471,6 +471,7 @@ mod tests {
             value_usd: amount("60000"),
             ts: "2000-01-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
         let open = Transaction::TradeFutures(crate::model::transaction::TradeFuturesTx {
             meta: meta("perp", &[]),

@@ -23,7 +23,7 @@ const outside = (key: string) => Boolean((props.min && key < props.min.slice(0, 
 </script>
 
 <template>
-  <div class="grid w-64 gap-2 p-3">
+  <div class="grid w-[min(16rem,calc(100vw-2rem))] gap-2 p-3">
     <div class="flex items-center justify-between">
       <Button variant="ghost" size="icon-sm" :aria-label="t('ui.prevYear')" @click="year -= 1">
         <ChevronLeft class="size-4" />

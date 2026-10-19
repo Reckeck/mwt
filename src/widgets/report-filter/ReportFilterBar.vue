@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
@@ -10,24 +11,27 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { Checkbox } from '@/shared/ui/checkbox'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { Switch } from '@/shared/ui/switch'
 import { activeLocale } from '@/shared/lib/locale'
 
 import { PERIOD_PRESETS, defaultRange, presetOf, presetRange } from './model/period-presets'
 import type { ReportFilterBarProps } from './report-filter.types'
 
-const props = withDefaults(defineProps<ReportFilterBarProps>(), { scoped: true, realTerms: false })
+const props = withDefaults(defineProps<ReportFilterBarProps>(), { realTerms: false })
 const filter = defineModel<ReportFilter>({ required: true })
+/** The overview's month: its own value, so it does not move the other sections' period. */
+const month = defineModel<string | null>('month', { default: null })
 const emit = defineEmits<{ reset: [] }>()
 
 const { t } = useI18n()
+const route = useRoute()
 
 const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
-/** Set filters among the folded ones: a currency, today's money. */
-const moreActive = computed(() => [filter.value.currency, props.realTerms && filter.value.real_terms].filter(Boolean).length)
+/** Set filters among the folded ones: the currency. */
+const moreActive = computed(() => (filter.value.currency ? 1 : 0))
 
 const storeIds = computed({
   get: () => filter.value.scope.store_ids,
@@ -45,6 +49,12 @@ const monthField = (field: 'from' | 'to') =>
   })
 const fromMonth = monthField('from')
 const toMonth = monthField('to')
+const overviewMonth = computed({
+  get: () => month.value ?? '',
+  set: (value: string) => {
+    month.value = value || null
+  },
+})
 
 /** An empty picker shows the month the report really starts or ends with. */
 const monthText = (key: string) =>
@@ -73,29 +83,31 @@ const years = computed(() => {
 
 <template>
   <FilterBar :active="props.active" :more-active="moreActive" @reset="emit('reset')">
-    <div v-if="props.period === 'year'" :class="FILTER_FIELD_CLASS">
-      <Label for="report-year">{{ t('report.filter.year') }}</Label>
-      <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
-        <SelectItem v-for="entry in years" :key="entry" :value="entry">{{ entry }}</SelectItem>
-      </Select>
-    </div>
-    <div v-else-if="props.period === 'month'" :class="FILTER_FIELD_CLASS">
-      <Label for="report-month">{{ t('report.filter.month') }}</Label>
-      <DateTimePicker
-        id="report-month"
-        v-model="toMonth"
-        mode="month"
-        :placeholder="monthText(defaults.to)"
-        class="w-full @3xl:w-40"
-      />
-    </div>
-    <template v-else>
-      <div :class="FILTER_FIELD_CLASS">
+    <template #lead>
+      <div v-if="props.period === 'year'" :class="FILTER_FIELD_CLASS">
+        <Label for="report-year">{{ t('report.filter.year') }}</Label>
+        <Select id="report-year" v-model="year" class="w-full @3xl:w-28">
+          <SelectItem v-for="entry in years" :key="entry" :value="entry">{{ entry }}</SelectItem>
+        </Select>
+      </div>
+      <div v-else-if="props.period === 'month'" :class="FILTER_FIELD_CLASS">
+        <Label for="report-month">{{ t('report.filter.month') }}</Label>
+        <DateTimePicker
+          id="report-month"
+          v-model="overviewMonth"
+          mode="month"
+          :placeholder="monthText(defaults.to)"
+          class="w-full @3xl:w-40"
+        />
+      </div>
+      <div v-else :class="FILTER_FIELD_CLASS">
         <Label for="report-preset">{{ t('report.filter.period') }}</Label>
         <Select id="report-preset" v-model="preset" :placeholder="t('report.preset.custom')" class="w-full @3xl:w-44">
           <SelectItem v-for="entry in PERIOD_PRESETS" :key="entry" :value="entry">{{ t(`report.preset.${entry}`) }}</SelectItem>
         </Select>
       </div>
+    </template>
+    <template v-if="props.period === 'range'">
       <div :class="FILTER_FIELD_CLASS">
         <Label for="report-from">{{ t('report.filter.from') }}</Label>
         <DateTimePicker
@@ -117,7 +129,7 @@ const years = computed(() => {
         />
       </div>
     </template>
-    <div v-if="props.scoped" :class="FILTER_FIELD_CLASS">
+    <div :class="FILTER_FIELD_CLASS">
       <Label for="report-scope">{{ t('report.filter.scope') }}</Label>
       <StoreNodeSelect
         id="report-scope"
@@ -128,7 +140,18 @@ const years = computed(() => {
         class="w-full @3xl:w-56"
       />
     </div>
-    <p v-else class="self-end pb-2 text-xs text-muted-foreground">{{ t('report.filter.notScoped') }}</p>
+    <!-- One visible switch for the sections where it means something. -->
+    <div v-if="props.realTerms" class="flex items-center gap-2 self-end pb-2" data-tour="real-terms" :title="t('analytics.realTermsHint')">
+      <Switch id="report-real-terms" v-model="filter.real_terms" />
+      <Label for="report-real-terms">{{ t('analytics.realTerms') }}</Label>
+      <RouterLink
+        v-if="filter.real_terms"
+        :to="{ query: { ...route.query, settings: 'inflation' } }"
+        class="text-xs text-muted-foreground underline"
+      >
+        {{ t('analytics.realTermsRate') }}
+      </RouterLink>
+    </div>
     <!-- Rarely changed: folded under «Ещё фильтры». -->
     <template #more>
       <div class="grid gap-1.5">
@@ -143,10 +166,6 @@ const years = computed(() => {
           />
         </div>
       </div>
-      <label v-if="props.realTerms" for="report-real-terms" class="flex items-center gap-2 text-sm">
-        <Checkbox id="report-real-terms" v-model="filter.real_terms" />
-        {{ t('report.filter.realTerms') }}
-      </label>
     </template>
   </FilterBar>
 </template>

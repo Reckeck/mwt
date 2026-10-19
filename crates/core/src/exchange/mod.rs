@@ -44,6 +44,11 @@ const WELL_KNOWN_COINS: &[(&str, &str, &str)] = &[
     ("NOT", "notcoin", "Notcoin"),
 ];
 
+/// Every well-known coin as `(ticker, coingecko_id, name)`.
+pub fn well_known_coins() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
+    WELL_KNOWN_COINS.iter().copied()
+}
+
 /// `(coingecko_id, name)` of a well-known ticker.
 pub fn well_known_coin(symbol: &str) -> Option<(&'static str, &'static str)> {
     WELL_KNOWN_COINS

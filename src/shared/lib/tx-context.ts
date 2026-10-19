@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { type InjectionKey, computed, inject, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
@@ -6,12 +6,30 @@ import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 
+export type TxContext = ReturnType<typeof buildTxContext>
+
+const TX_CONTEXT: InjectionKey<TxContext> = Symbol('tx-context')
+
 /**
  * Names a transaction row needs — wallets, contacts, categories — and the
  * wallet tree's roots for spotting internal moves. One set of cached queries
  * shared by every list that renders transactions.
  */
-export function useTxContext() {
+export function useTxContext(): TxContext {
+  return inject(TX_CONTEXT, null) ?? buildTxContext()
+}
+
+/**
+ * One context for a whole list: its rows inject it instead of each building
+ * its own maps and query observers (a page of rows did that a hundred times).
+ */
+export function provideTxContext(): TxContext {
+  const context = useTxContext()
+  provide(TX_CONTEXT, context)
+  return context
+}
+
+function buildTxContext() {
   const { t } = useI18n()
 
   const tree = useQuery({
@@ -31,16 +49,19 @@ export function useTxContext() {
 
   const storeName = (id: string) => nodes.value.get(id)?.path.join(' › ') ?? id
 
-  /** Top-level wallet of a store, by id. */
-  const rootOf = (id: string) => {
-    const node = nodes.value.get(id)
-    if (!node || node.depth === 0) return id
-    const rootName = node.path[0]
-    for (const candidate of nodes.value.values()) {
-      if (candidate.depth === 0 && candidate.store.name === rootName) return candidate.store.id
+  /** Store id → its top-level wallet's id, built once per tree. */
+  const roots = computed(() => {
+    const out = new Map<string, string>()
+    const walk = (node: StoreTreeNode, root: string) => {
+      out.set(node.store.id, root)
+      for (const child of node.children) walk(child, root)
     }
-    return id
-  }
+    for (const top of tree.data.value ?? []) walk(top, top.store.id)
+    return out
+  })
+
+  /** Top-level wallet of a store, by id. */
+  const rootOf = (id: string) => roots.value.get(id) ?? id
 
   const contactName = (id: string) => contacts.data.value?.find((contact) => contact.id === id)?.name ?? id
 

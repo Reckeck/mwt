@@ -8,6 +8,7 @@ const props = defineProps<{ id: string; data: EditorNoteData; selected?: boolean
 const emit = defineEmits<{ text: [id: string, value: string] }>()
 
 const { t } = useI18n()
+// check-ui-ignore fixed-width: a note on the canvas, which pans and zooms
 </script>
 
 <template>

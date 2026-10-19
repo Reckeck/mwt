@@ -26,7 +26,11 @@ const settings = useSettingsStore()
 const open = ref(false)
 const all = ref(false)
 
-const unseen = computed(() => WHATS_NEW.filter((entry) => !settings.app?.seen_whats_new.includes(entry.id)))
+/** Not seen yet and newer than this install: a new user is not handed the whole history. */
+const unseen = computed(() => {
+  const installed = settings.app?.installed_at ?? ''
+  return WHATS_NEW.filter((entry) => !settings.app?.seen_whats_new.includes(entry.id) && entry.date > installed)
+})
 const entries = computed(() => (all.value ? WHATS_NEW : unseen.value))
 
 watch(

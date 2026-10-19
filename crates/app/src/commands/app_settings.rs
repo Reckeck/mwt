@@ -12,7 +12,8 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
 use trade_core::appconfig::{
-    AppSettings, UpdateAppSettingsInput, build_currency_catalog, load_settings, save_settings,
+    AppSettings, UpdateAppSettingsInput, build_currency_catalog, load_or_init_settings,
+    save_settings,
 };
 use trade_core::ipc_contract::CurrencyCatalogOutput;
 
@@ -30,16 +31,32 @@ pub fn current_zone(app: &AppHandle) -> String {
     current_settings(app).zone_or(iana_time_zone::get_timezone().ok().as_deref())
 }
 
+/// The settings file, stamped with today's date on the very first run.
+fn load(dir: &std::path::Path) -> AppSettings {
+    let today = chrono::Local::now()
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
+    load_or_init_settings(dir, &today)
+}
+
 /// The app settings as stored now (defaults when the file is missing).
 pub fn current_settings(app: &AppHandle) -> AppSettings {
-    load_settings(&config_dir(app))
+    load(&config_dir(app))
+}
+
+/// The OS the app runs on (`linux`, `windows`, `macos`, `android`, `ios`):
+/// the settings show tray and autostart only where they exist.
+#[tauri::command]
+pub fn app_platform() -> &'static str {
+    std::env::consts::OS
 }
 
 /// Read the app settings. Never fails: a missing or corrupt file yields the
 /// defaults, and the lock screen must be able to render them.
 #[tauri::command]
 pub async fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
-    Ok(load_settings(&config_dir(&app)))
+    Ok(load(&config_dir(&app)))
 }
 
 /// Persist a partial update and report the resulting settings.
@@ -53,7 +70,7 @@ pub async fn update_app_settings(
     state: State<'_, AppState>,
 ) -> Result<AppSettings, String> {
     let dir = config_dir(&app);
-    let mut settings = load_settings(&dir);
+    let mut settings = load(&dir);
     settings.apply(&input);
     save_settings(&dir, &settings).map_err(err_to_string)?;
 
@@ -90,7 +107,7 @@ pub async fn set_quick_add_shortcut(
     shortcut: Option<String>,
 ) -> Result<AppSettings, String> {
     let dir = config_dir(&app);
-    let mut settings = load_settings(&dir);
+    let mut settings = load(&dir);
     let wanted = shortcut
         .map(|raw| raw.trim().to_string())
         .filter(|raw| !raw.is_empty());
@@ -132,7 +149,7 @@ pub async fn get_supported_currencies(
 /// base currency.
 pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
     let dir = config_dir(app);
-    let mut settings = load_settings(&dir);
+    let mut settings = load(&dir);
     // A poisoned lock must not fail the unlock that just succeeded.
     if let Ok(mut guard) = lock_vault(state)
         && let Some(vault) = guard.as_mut()
@@ -153,7 +170,7 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
 /// app's language) if it has none yet.
 pub fn ensure_device_name(app: &AppHandle) {
     let dir = config_dir(app);
-    let mut settings = load_settings(&dir);
+    let mut settings = load(&dir);
     if settings.ensure_device_name(crate::scheduler::russian(app)) {
         save_settings(&dir, &settings).ok();
     }
@@ -162,7 +179,7 @@ pub fn ensure_device_name(app: &AppHandle) {
 /// This installation's sync id, made and saved on first use.
 pub fn device_id(app: &AppHandle) -> String {
     let dir = config_dir(app);
-    let mut settings = load_settings(&dir);
+    let mut settings = load(&dir);
     if settings.ensure_device_id() {
         save_settings(&dir, &settings).ok();
     }

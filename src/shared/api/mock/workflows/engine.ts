@@ -49,6 +49,32 @@ export function validate(graph: WorkflowGraph): GraphIssue[] {
       ),
     )
   }
+  // Like `param_missing` in Rust: a required field, empty and not wired.
+  const blank = (value: unknown) =>
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && !value.trim()) ||
+    (Array.isArray(value) && !value.length) ||
+    (typeof value === 'object' && !Array.isArray(value) && !Object.keys(value as object).length)
+  for (const node of graph.nodes.filter((entry) => !entry.disabled)) {
+    const def = defs.get(node.kind)
+    for (const param of def?.params ?? []) {
+      const kind = String(node.params.tx_kind ?? 'transfer')
+      const needed =
+        param.required || (node.kind === 'action.transaction' && param.name === 'to' && kind === 'transfer')
+      const wired = graph.edges.some((edge) => edge.to === node.id && edge.to_port === param.name)
+      if (!needed || wired || !blank(node.params[param.name])) continue
+      out.push({
+        ...issue(
+          'param_missing',
+          `«${def?.title.ru}»: заполните поле «${param.label.ru}»`,
+          `«${def?.title.en}»: fill in «${param.label.en}»`,
+          node.id,
+        ),
+        param: param.name,
+      })
+    }
+  }
   for (const edge of graph.edges) {
     const fromNode = graph.nodes.find((node) => node.id === edge.from)
     const toNode = graph.nodes.find((node) => node.id === edge.to)

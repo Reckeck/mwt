@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FolderOpen } from 'lucide-vue-next'
+import { Eye, EyeOff, FolderOpen } from 'lucide-vue-next'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -19,8 +19,14 @@ const { t } = useI18n()
 const vault = useVaultStore()
 const { path, password, passwordRepeat, passwordMatch, error, busy, reset, browse, submit } = useCreateVault()
 
+/** Shown as typed: a new password is easy to mistype twice the same way. */
+const reveal = ref(false)
+
 watch(open, (isOpen) => {
-  if (isOpen) void reset()
+  if (isOpen) {
+    reveal.value = false
+    void reset()
+  }
 })
 
 const form = useFormValidation(
@@ -57,15 +63,36 @@ const form = useFormValidation(
         </div>
       </FormField>
 
-      <FormField for="create-password" :label="t('auth.password')" required :error="form.error('password')">
-        <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
-        <Input id="create-password" v-model="password" type="password" autocomplete="new-password" autofocus />
+      <FormField
+        for="create-password"
+        :label="t('auth.password')"
+        :hint="t('auth.passwordMinHint', { count: MIN_VAULT_PASSWORD })"
+        required
+        :error="form.error('password')"
+      >
+        <div class="flex gap-1.5">
+          <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
+          <Input id="create-password" v-model="password" :type="reveal ? 'text' : 'password'" autocomplete="new-password" autofocus />
+          <Button
+            variant="outline"
+            size="icon"
+            type="button"
+            :aria-pressed="reveal"
+            :aria-label="reveal ? t('auth.hidePassword') : t('auth.showPassword')"
+            :title="reveal ? t('auth.hidePassword') : t('auth.showPassword')"
+            @click="reveal = !reveal"
+          >
+            <component :is="reveal ? EyeOff : Eye" class="size-4" />
+          </Button>
+        </div>
       </FormField>
 
       <FormField for="create-password-repeat" :label="t('auth.passwordRepeat')" required :error="form.error('repeat')">
-        <Input id="create-password-repeat" v-model="passwordRepeat" type="password" autocomplete="new-password" />
+        <Input id="create-password-repeat" v-model="passwordRepeat" :type="reveal ? 'text' : 'password'" autocomplete="new-password" />
         <p v-if="passwordMatch && !form.error('repeat')" class="text-xs text-success">✓ {{ t('auth.passwordMatch') }}</p>
       </FormField>
+
+      <p class="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm">{{ t('auth.passwordNoRecovery') }}</p>
 
       <p
         v-if="error"

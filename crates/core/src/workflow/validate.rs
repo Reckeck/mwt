@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::catalog::{NodeDef, node_def};
-use super::graph::Graph;
+use super::catalog::{NodeDef, ParamDef, node_def};
+use super::graph::{Graph, Node};
 use super::types::PortType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -28,6 +28,9 @@ pub struct GraphIssue {
     pub edge_id: Option<String>,
     pub text_ru: String,
     pub text_en: String,
+    /// The node's field the problem is about, to point at it in the inspector.
+    #[serde(default)]
+    pub param: Option<String>,
 }
 
 impl GraphIssue {
@@ -39,6 +42,7 @@ impl GraphIssue {
             edge_id: None,
             text_ru: ru,
             text_en: en,
+            param: None,
         }
     }
 
@@ -54,10 +58,44 @@ impl GraphIssue {
         self
     }
 
+    fn on_param(mut self, name: &str) -> Self {
+        self.param = Some(name.to_string());
+        self
+    }
+
     fn on_edge(mut self, id: &str) -> Self {
         self.edge_id = Some(id.to_string());
         self
     }
+}
+
+/// A field left as it came: nothing, blank text, an empty list or record.
+fn is_blank(value: Option<&serde_json::Value>) -> bool {
+    match value {
+        None | Some(serde_json::Value::Null) => true,
+        Some(serde_json::Value::String(text)) => text.trim().is_empty(),
+        Some(serde_json::Value::Array(items)) => items.is_empty(),
+        Some(serde_json::Value::Object(map)) => map.is_empty(),
+        Some(_) => false,
+    }
+}
+
+/// Whether the node needs this field filled: marked required in the catalog,
+/// or the «to» of a transfer (a payment or a top-up does without one).
+fn needs_value(def: &NodeDef, param: &ParamDef, node: &Node) -> bool {
+    if param.required {
+        return true;
+    }
+    if def.kind == "action.transaction" && param.name == "to" {
+        let kind = node
+            .params
+            .get("tx_kind")
+            .or_else(|| def.param("tx_kind").map(|tx_kind| &tx_kind.default))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("transfer");
+        return kind == "transfer";
+    }
+    false
 }
 
 /// Inputs a node works without: a text template may leave a slot empty, an
@@ -241,6 +279,27 @@ pub fn validate(graph: &Graph) -> Vec<GraphIssue> {
                     format!("«{}»: wire the «{}» input", def.title.en, port.label.en),
                 )
                 .on_node(&node.id),
+            );
+        }
+        // A field the node cannot do without, empty and not taken from a wire.
+        for param in def
+            .params
+            .iter()
+            .filter(|param| needs_value(def, param, node))
+        {
+            if fed.contains(&(node.id.as_str(), param.name))
+                || !is_blank(node.params.get(param.name))
+            {
+                continue;
+            }
+            out.push(
+                GraphIssue::error(
+                    "param_missing",
+                    format!("«{}»: заполните поле «{}»", def.title.ru, param.label.ru),
+                    format!("«{}»: fill in «{}»", def.title.en, param.label.en),
+                )
+                .on_node(&node.id)
+                .on_param(param.name),
             );
         }
         // A write drawn apart from the flow runs on its own at the end of the run.
@@ -534,6 +593,108 @@ mod tests {
             .into_iter()
             .map(|issue| issue.code)
             .collect()
+    }
+
+    fn with(mut node: Node, name: &str, value: serde_json::Value) -> Node {
+        node.params.insert(name.into(), value);
+        node
+    }
+
+    fn missing(graph: &Graph) -> Vec<(String, String)> {
+        validate(graph)
+            .into_iter()
+            .filter(|issue| issue.code == "param_missing")
+            .map(|issue| {
+                (
+                    issue.node_id.unwrap_or_default(),
+                    issue.param.unwrap_or_default(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_empty_required_param_is_an_error() {
+        let graph = Graph {
+            nodes: vec![node("t", "trigger.price")],
+            ..Graph::default()
+        };
+        assert_eq!(missing(&graph), [("t".to_string(), "asset".to_string())]);
+        let filled = Graph {
+            nodes: vec![with(
+                node("t", "trigger.price"),
+                "asset",
+                serde_json::json!("BTC"),
+            )],
+            ..Graph::default()
+        };
+        assert!(missing(&filled).is_empty());
+    }
+
+    #[test]
+    fn a_wired_required_param_is_satisfied() {
+        let graph = Graph {
+            nodes: vec![
+                node("t", "trigger.manual"),
+                node("c", "data.constant"),
+                with(node("b", "data.balance"), "asset", serde_json::json!(null)),
+            ],
+            edges: vec![edge("c", "value", "b", "account")],
+            ..Graph::default()
+        };
+        assert!(
+            !missing(&graph)
+                .iter()
+                .any(|(id, name)| id == "b" && name == "account"),
+            "{:?}",
+            missing(&graph)
+        );
+    }
+
+    #[test]
+    fn a_disabled_node_skips_required_params() {
+        let mut off = node("n", "action.transaction");
+        off.disabled = true;
+        let graph = Graph {
+            nodes: vec![node("t", "trigger.manual"), off],
+            edges: vec![edge("t", "out", "n", "in")],
+            ..Graph::default()
+        };
+        assert!(missing(&graph).is_empty());
+    }
+
+    #[test]
+    fn an_optional_null_param_is_fine() {
+        // The transaction trigger's wallet is a filter: empty means any wallet.
+        let graph = Graph {
+            nodes: vec![with(
+                node("t", "trigger.transaction"),
+                "store",
+                serde_json::json!(null),
+            )],
+            ..Graph::default()
+        };
+        assert!(missing(&graph).is_empty());
+    }
+
+    #[test]
+    fn only_a_transfer_needs_a_destination() {
+        let transfer = with(
+            node("n", "action.transaction"),
+            "account",
+            serde_json::json!({ "store": "s1" }),
+        );
+        let payment = with(transfer.clone(), "tx_kind", serde_json::json!("payment"));
+        let graph = |action: Node| Graph {
+            nodes: vec![node("t", "trigger.manual"), action],
+            edges: vec![edge("t", "out", "n", "in")],
+            ..Graph::default()
+        };
+        assert_eq!(
+            missing(&graph(transfer)),
+            [("n".to_string(), "to".to_string())]
+        );
+        assert!(missing(&graph(payment)).is_empty());
     }
 
     #[test]

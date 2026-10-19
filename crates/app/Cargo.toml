@@ -51,6 +51,8 @@ rmp-serde.workspace = true
 tauri-plugin-saf = { path = "../plugin-saf" }
 # LAN sync: multicast lock and the Keystore-wrapped device key (src/platform_net.rs).
 tauri-plugin-net = { path = "../plugin-net" }
+# System bars: inset CSS variables, icon colour, minimise on Back (src/commands/mobile.rs).
+tauri-plugin-insets = { path = "../plugin-insets" }
 
 # Desktop-only: tray, autostart, global keys, window geometry and the OS keyring
 # have no Android/iOS counterpart (`cfg(desktop)` in the code).

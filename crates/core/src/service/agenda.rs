@@ -702,6 +702,7 @@ mod tests {
             value_usd: amount("100000"),
             ts: "2026-03-01T00:00:00Z".into(),
             source: "test".into(),
+            change_24h_pct: None,
         });
         vault
             .create_price_alert(PriceAlertDraft {
