@@ -101,7 +101,7 @@ Frontend парсит код и показывает локализованно�
 
 ### stores
 | `list_stores` | — | `Vec<Store>` (плоско) |
-| `get_store_tree` | — | `Vec<StoreTreeNode { store, depth, path, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children }>` — дерево с суммами; источник для сайдбара, страницы «Кошельки» и выбора узла |
+| `get_store_tree` | — | `Vec<StoreTreeNode { store, depth, path, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children, top_assets, last_tx_at }>` (`top_assets` — до трёх крупнейших активов, `last_tx_at` — последняя операция с субсчетами) — дерево с суммами; источник для сайдбара, страницы «Кошельки» и выбора узла |
 | `get_wallet_catalog` | — | `WalletCatalog { kinds[{kind, max_roots, user_creatable, default_purpose, sub_types[{sub_type, shape, default_purpose, credit}]}], providers[{provider, supported}] }` — правила типов кошельков, без vault |
 | `create_store` | `CreateStoreInput { name, kind, color, note, parent_id?, sub_type?, binding?, purpose?, liability?, contact_id?, custody?, property?, secured_by?, provider?, opening?, card? }` | `Store`. `opening: { asset, amount }` — начальный остаток: одно пополнение в служебной категории `opening_balance` (не доход), проверяется до записи — при ошибке кошелёк не создаётся; не для имущества и кредитов. Субсчёт: одного типа с родителем, глубина 1, `sub_type` из каталога, `binding` нужной формы (рынок подставляется сам). Корень: тип `user_creatable`, `cash` — ровно один. Коды: `CASH_SINGLETON`, `WALLET_NOT_CREATABLE`, `SUB_TYPE_NOT_ALLOWED`, `BINDING_REQUIRED`, `BINDING_MISMATCH`, `WALLET_NOT_APPLICABLE`  Банк верхнего уровня с `card: FirstCard { name, currency }` создаётся вместе с первой картой (`card`, привязка к валюте), `opening` ложится на карту; всё или ничего. |
 | `update_store` | `UpdateStoreInput { id, name, color, note, purpose?, binding?, liability?, contact_id?, custody?, property?, secured_by?, provider? }` | `Store` (место в дереве не меняет; `null` в `purpose`/`binding`/`custody`/`property`/`provider` — не менять; смена привязки отклоняется, если проведённые операции в неё не влезут) |
@@ -117,7 +117,9 @@ Frontend парсит код и показывает локализованно�
 | `apply_store_change` | `StoreChangeInput` | `StoreChangePlan` — то же и применить: при `error` или конфликтах — `INVALID_INPUT`, иначе сначала копия vault в `.bak`, затем всё одним сохранением |
 | `archive_store` | `id, archived` | `()` — каскадно на всё поддерево; восстановление под архивным родителем — ошибка |
 | `delete_store` | `id` | `()` — только без операций и без субсчетов |
-| `get_store_overview` | `store_id, include_children?` (по умолчанию `true`) | `StoreOverview` — см. `docs/data-model.md` |
+| `get_store_overview` | `store_id, include_children?` (по умолчанию `true`) | `StoreOverview` — см. `docs/data-model.md`; `unrealized_base`, `subtree_unrealized_base`, `prices_as_of` (самая старая рыночная цена позиций); у `StorePosition` — `change_24h_pct` и `price_info { origin, source, at }` (откуда цена) |
+| `get_asset_holdings` | `asset: AssetRef` | `AssetHoldings { asset, base_currency, total_quantity, total_value_base, rows: AssetHolding[] }` — тот же актив (`AssetRef::same_as`: один ключ или один тикер на той же сети) во всех кошельках; `peg_valued` — оценён по привязке $1, без цены |
+| `get_store_months` | `store_id, include_children?` (`true`), `months?` (6, до 36) | `Vec<StoreMonthRow { month, inflow, outflow, tx_count }>` — приход и расход кошелька по местным месяцам в базовой валюте, старые первыми; переводы внутри кошелька и его субсчетов не считаются |
 
 Ошибки правил дерева приходят со своими кодами (ключи `errors.<CODE>` в локалях):
 `STORE_CYCLE`, `STORE_TOO_DEEP`, `STORE_PARENT_ARCHIVED`, `STORE_NAME_TAKEN`,
@@ -132,6 +134,7 @@ Frontend парсит код и показывает локализованно�
 | Команда | Вход | Выход |
 |---|---|---|
 | `list_transactions` | `filter?: TxFilter { scope: StoreScope, kinds[], contact_id?, flow_id?, from?, to?, hide_internal, text? }` | `Vec<Transaction>` — новые сверху. `from`/`to` — `YYYY-MM-DD` включительно, по часовому поясу из настроек; `hide_internal` убирает переводы и обмены внутри одного кошелька верхнего уровня; `text` ищет по комментарию, категориям, активам, кошелькам, контактам и хешу. Без `filter` — все операции |
+| `list_transactions_page` | `filter?: TxFilter`, `offset: u32`, `limit: u32` | `TxPage { items: Vec<Transaction>, total }` — страница списка операций (новые сверху) и сколько всего подходит под фильтр; экран «Операции» грузит по 100 |
 | `get_tx_graph` | `filter?: TxFilter, collapsed?: string[]` | `TxGraph { currency, lanes[], nodes[], edges[], columns }`. Дорожка — кошелёк в порядке дерева; узел — операция на дорожке (`column` — порядковый номер по времени, `lane` — индекс дорожки, `value` — сумма в базовой валюте на момент операции); рёбра `seq` / `transfer` / `convert` / `flow` всегда идут вперёд по времени. `collapsed` — кошельки, чьи субсчета сворачиваются в их дорожку. Больше 2000 узлов → `TOO_LARGE` |
 | `add_transaction` | `TransactionInput` | `Transaction` — после автокатегоризации и проверок V1–V14 |
 | `add_linked_transactions` | `AddLinkedTransactionsInput { transactions: Vec<TransactionInput>, flow_id? }` | `Vec<Transaction>` — несколько операций одной цепочкой (`flow_id` общий, новый если не задан): обмен на нескольких получателей, P2P-сделка, пополнение нескольких счетов. Каждая видит балансы предыдущих; всё или ничего |
@@ -198,6 +201,9 @@ Frontend парсит код и показывает локализованно�
 | `calc_preview` | `CalcInput { mode, amount, price_in, price_out, target_price?, stop_price?, fee_pct? }` | `CalcResult { gross_in, fee, spent, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct }` |
 
 ### app settings (вне vault, в конфигах приложения)
+| `app_platform` | — | `string` — ОС приложения (`linux`, `windows`, `macos`, `android`, `ios`): трей и автозапуск показываются только на ПК; мок читает `?platform=` из адреса |
+| `set_system_bars` | `dark: bool` | `()` — цвет значков строки состояния и навигации под тему (Android, плагин `insets`); на ПК ничего не делает |
+| `move_to_back` | — | `()` — свернуть приложение (системный «Назад» на Главной, Android); на ПК ничего не делает |
 | `get_app_settings` | — | `AppSettings { theme, locale, base_currency, favorite_currencies[] }`. Не падает: битый/отсутствующий файл → дефолты |
 | `update_app_settings` | `UpdateAppSettingsInput { theme?, locale?, base_currency?, favorite_currencies?, timezone?, inflation?, enrichment_opt_in? }` | `AppSettings` после нормализации. Смена `base_currency` пересчитывает холдинги открытого vault. Коды приводятся к верхнему регистру, невалидные (не 3 буквы) отбрасываются. `timezone` — IANA-пояс, по которому режутся дни и месяцы (§7.6); пустая строка — пояс ОС, неизвестное имя отбрасывается. `inflation` — вся таблица «валюта → % в год» целиком (по умолчанию rub 8, usd 3, eur 2.5, thb 1) |
 | `set_quick_add_shortcut` | `shortcut?: string` (`CmdOrCtrl+Shift+Space`; пусто/`null` — выключить) | `AppSettings`. Сначала регистрирует глобальное сочетание, сохраняет только при успехе; не удалось (занято, неверный формат, нет глобальных клавиш) → `SHORTCUT_FAILED`, прежнее сочетание восстанавливается. Срабатывание показывает окно и шлёт событие `quick-add` |
@@ -218,10 +224,10 @@ JSON без шифрования — там нет ничего секретно
 |---|---|---|
 | `get_tx_loss` | `id` | `TxLoss { tx_id, currency, fee, slippage, total, internal, complete }` в базовой валюте |
 | `get_tx_losses` | — | `Record<id, TxLoss>` — все операции с ненулевой или неполной потерей (колонка списка) |
-| `list_flows` | `from?`, `to?` (RFC3339) | `Vec<FlowSummary { flow_id, currency, links[{ tx, loss }], started_at, ended_at, gave[], got[], gave_value, got_value, loss, difference }>` — новые первыми |
+| `list_flows` | `from?`, `to?` (RFC3339), `storeIds?` (цепочки, задевшие эти кошельки с подкошельками) | `Vec<FlowSummary { flow_id, currency, links[{ tx, loss }], started_at, ended_at, gave[], got[], gave_value, got_value, loss, difference }>` — новые первыми |
 | `link_transactions` | `LinkTransactionsInput { ids, flow_id? }` | `String` — id цепочки: заданный, иначе цепочка одной из операций, иначе новый |
 | `unlink_transaction` | `id` | `()` |
-| `get_fx_table` | — | `FxTable { base, rows[{ currency, per_base, in_base, updated_at, tracked }] }` — последние курсы к базовой |
+| `get_fx_table` | — | `FxTable { base, rows[{ currency, per_base, in_base, updated_at, tracked, crypto, favorite }] }` — последние курсы к базовой; избранные монеты — строкой из последней цены (`crypto`) |
 
 ### enrichment (`crates/app/src/commands/enrichment.rs`)
 
@@ -246,7 +252,7 @@ JSON без шифрования — там нет ничего секретно
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate?, insights }`; `insights` — факты для вывода словами (`Insight { code, amount?, pct?, subject? }`, текст собирает фронт по `insight.<code>`) |
+| `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate?, insights }`; `insights` — факты для вывода словами (`Insight { code, amount?, pct?, subject? }`, текст собирает фронт по `insight.<code>`); у `networth`, `pnl`, `portfolio` — `has_data` (строка или точка есть на каждый месяц, пустоту видно только по флагу) |
 | `get_report_overview` | `filter: ReportFilter` (берутся `scope`, `currency`, `real_terms` и месяц `to`, по умолчанию текущий) | `ReportOverview { currency, month, previous_month, year, flow, wealth, investments, savings }`: карточки стартового экрана аналитики — месяц против прошлого, вложения с начала года; у каждой `has_data` и `insights` |
 | `export_report_csv` | те же `kind`, `filter` | `Option<String>` — путь файла; `None`, если диалог закрыли. CSV: UTF-8 с BOM, `;`, CRLF, колонка валюты в каждой строке |
 | `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, days[{ date, income, spent, daily, tx_count, status }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future` |
@@ -316,7 +322,7 @@ JSON без шифрования — там нет ничего секретно
 | Команда | Вход | Выход |
 |---|---|---|
 | `workflow_node_catalog` | — | `Vec<NodeDef { kind, group, title, description, help, inputs, outputs, params, advanced, keywords }>`; тексты `{ ru, en }`; работает и без открытого vault |
-| `validate_workflow` | `ValidateWorkflowInput { graph }` | `Vec<GraphIssue { level, code, node_id?, edge_id?, text_ru, text_en }>`, ошибки первыми |
+| `validate_workflow` | `ValidateWorkflowInput { graph }` | `Vec<GraphIssue { level, code, node_id?, edge_id?, param?, text_ru, text_en }>`, ошибки первыми; `param_missing` — пустое обязательное поле (`ParamDef.required`, `REQUIRED_PARAMS`), `param` — его имя. Включённая схема с таким полем выключается при открытии хранилища (журнал + уведомление) |
 | `list_workflows` | — | `Vec<Workflow>` |
 | `get_workflow` | `id` | `Workflow` |
 | `save_workflow` | `SaveWorkflowInput { id?, workflow: WorkflowDraft { name, description, active, graph, react_to_workflows, max_amount? } }` | `SavedWorkflow { workflow, issues }`. Изменённый граф кладёт прежний в `versions` (до 20); включение начинает следить «с этого момента» |

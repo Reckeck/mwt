@@ -40,6 +40,20 @@ Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с м
 └─────────────────────────────────────────────────────┘
 ```
 
+## Плагины Android
+
+Платформенное на Android — отдельные крейты-плагины с Kotlin-частью; снаружи
+(в webview) они ничего не открывают, их зовёт Rust (`run_mobile_plugin`):
+
+- `crates/plugin-saf` — выбор документа с долговременным правом (`platform_fs`);
+- `crates/plugin-net` — синхронизация по локальной сети: multicast-lock,
+  фоновый сервис, ключ устройства в Keystore;
+- `crates/plugin-insets` — системные панели: отступы строки состояния,
+  навигации, выреза и клавиатуры как CSS-переменные `--native-inset-*` и
+  `--native-ime` (WebView отдаёт `env(safe-area-inset-*)` нулями), цвет значков
+  под тему (`set_system_bars`) и «свернуть» (`move_to_back`). Фронт читает их
+  через `--safe-*` и утилиты `*-safe` (`src/app/styles.css`).
+
 ## Где что лежит на диске
 
 | Путь (Linux) | Что | Формат |
