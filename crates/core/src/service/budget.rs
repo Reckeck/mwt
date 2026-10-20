@@ -433,7 +433,12 @@ impl UnlockedVault {
     /// Planned income and mandatory spending of the month containing `date`:
     /// active automations by their class, rent (`Housing`) and loan payments
     /// that no automation already covers.
-    fn month_plan(&self, cal: &Calendar, date: NaiveDate, currency: &str) -> (Amount, Amount) {
+    pub(crate) fn month_plan(
+        &self,
+        cal: &Calendar,
+        date: NaiveDate,
+        currency: &str,
+    ) -> (Amount, Amount) {
         let book = self.rate_book();
         let first = first_of_month(date);
         let last = calendar::next_month(first) - Duration::days(1);

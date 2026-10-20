@@ -1,6 +1,8 @@
 /** The report by kind, and the calendar of a month. */
 
 import { txLegs, txMeta } from '@/shared/lib/transactions'
+import { mockNotices } from '../demo'
+import { upcoming } from '../planning/budget-calc'
 import { flows, meta, money, monthsOf } from './flows'
 import type { AnalyticsMockContext } from './flows'
 import { mockInsights } from './overview'
@@ -109,6 +111,15 @@ export function mockCalendar(month: string, ctx: AnalyticsMockContext): Calendar
   const today = new Date().toISOString().slice(0, 10)
   const all = flows(ctx)
   const allowance = 100
+  const budget = allowance * length
+  let spentSoFar = 0
+  // Like the backend: days ahead are projected from today's rest and per-day share.
+  let anchor: { index: number; rest: number; share: number } | null =
+    `${month}-01` > today ? { index: -1, rest: budget, share: budget / length } : null
+  const localDate = (iso: string) => {
+    const at = new Date(iso)
+    return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
+  }
   const days = Array.from({ length }, (_unused, index): CalendarDay => {
     const date = `${month}-${String(index + 1).padStart(2, '0')}`
     const ofDay = all.filter((flow) => flow.date === date)
@@ -118,6 +129,20 @@ export function mockCalendar(month: string, ctx: AnalyticsMockContext): Calendar
     const spent = ofDay.filter((flow) => !flow.incoming).reduce((sum, flow) => sum + flow.value, 0)
     const status: DayStatus =
       date > today ? 'future' : daily > allowance ? 'over' : daily > allowance * 0.8 ? 'near' : 'under'
+    // Like the backend: the month's pool minus everyday spending so far, blank ahead of today.
+    spentSoFar += daily
+    const daysAfter = length - index - 1
+    const forecast = date > today
+    let left: number | null
+    let perDay: number | null
+    if (forecast) {
+      left = anchor ? anchor.rest - anchor.share * (index - anchor.index) : null
+      perDay = anchor && daysAfter > 0 ? anchor.share : null
+    } else {
+      left = budget - spentSoFar
+      perDay = daysAfter > 0 ? Math.max(0, left / daysAfter) : null
+      if (date === today && perDay !== null) anchor = { index, rest: left, share: perDay }
+    }
     return {
       date,
       income: money(ofDay.filter((flow) => flow.incoming).reduce((sum, flow) => sum + flow.value, 0)),
@@ -125,7 +150,24 @@ export function mockCalendar(month: string, ctx: AnalyticsMockContext): Calendar
       daily: money(daily),
       tx_count: ctx.transactions.filter((tx) => txMeta(tx).timestamp.slice(0, 10) === date).length,
       status,
+      left: left === null ? null : money(left),
+      per_day_left: perDay === null ? null : money(perDay),
+      forecast,
+      notices: mockNotices
+        .filter((record) => localDate(record.at) === date)
+        .map(({ key, category, title, at, link }) => ({ key, category, title, at, link })),
     }
   })
-  return { month, currency: ctx.currency, allowance: String(allowance), days, upcoming: [] }
+  const coming = upcoming(62).filter((item) => item.date.startsWith(month))
+  // A made-up split of the fixed pool: income − planned mandatory − savings.
+  const pool = { income: money(budget * 2), planned_fixed: money(budget * 0.8), savings: money(budget * 0.2) }
+  return {
+    month,
+    currency: ctx.currency,
+    allowance: String(allowance),
+    budget: String(budget),
+    pool,
+    days,
+    upcoming: coming,
+  }
 }

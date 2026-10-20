@@ -207,8 +207,36 @@ export function mockFilterTxs(storeIds: string[] | null): Transaction[] {
   return [...list].sort((left, right) => timestampOf(right).localeCompare(timestampOf(left)))
 }
 
-/** The notification log of the browser mock. */
-export const mockNotices: NoticeRecord[] = []
+const daysAgo = (days: number, hour: number) => {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  date.setHours(hour, 0, 0, 0)
+  return date.toISOString()
+}
+
+/** The notification log of the browser mock: two read ones, so the calendar has something to show. */
+export const mockNotices: NoticeRecord[] = [
+  {
+    key: 'reminder:demo-salary',
+    category: 'reminder',
+    title: 'Сегодня должна прийти зарплата',
+    body: 'Запишите этот перевод',
+    link: '/planning/reminders',
+    at: daysAgo(3, 9),
+    delivered_at: daysAgo(3, 9),
+    read: true,
+  },
+  {
+    key: 'alert:demo-btc',
+    category: 'price_alert',
+    title: 'BTC ≥ 90 000 $',
+    body: '',
+    link: '/planning/alerts',
+    at: daysAgo(2, 14),
+    delivered_at: daysAgo(2, 14),
+    read: true,
+  },
+]
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
 export const mockAutostart: { value: boolean } = { value: false }
 
