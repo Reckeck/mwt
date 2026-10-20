@@ -27,6 +27,7 @@ use serde::de::DeserializeOwned;
 
 use crate::VAULT_FORMAT_VERSION;
 use crate::crypto;
+use crate::crypto::SealKey;
 use crate::error::{Error, Result};
 use crate::model::vault::VaultDoc;
 
@@ -215,10 +216,41 @@ impl VaultFile {
 
     /// [`Self::open`], also telling the payload version found on disk.
     pub fn open_versioned(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat)> {
+        Self::open_keyed(path, password).map(|(decoded, fmt, _)| (decoded, fmt))
+    }
+
+    /// [`Self::open_versioned`], also handing back the derived key: the
+    /// session saves with it instead of running the KDF again.
+    pub fn open_keyed(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat, SealKey)> {
         let bytes = crypto::read_all(path)?;
-        let (plaintext, fmt) = crypto::open_bytes(&bytes, password.as_bytes())?;
+        let (plaintext, fmt, key) = crypto::open_bytes_keyed(&bytes, password.as_bytes())?;
         let decoded = decode_versioned(&plaintext, fmt)?;
-        Ok((decoded, fmt))
+        Ok((decoded, fmt, key))
+    }
+
+    /// Create a brand new vault at `path` sealed with `key` (refuses to overwrite).
+    pub fn create_keyed(path: &Path, key: &SealKey) -> Result<PathBuf> {
+        if path.exists() {
+            return Err(Error::AlreadyExists(path.display().to_string()));
+        }
+        let fmt = SnapshotFormat::for_profile();
+        let plaintext = encode(&VaultDoc::default(), fmt)?;
+        Self::seal_and_write(path, key, &plaintext, fmt)?;
+        Ok(path.to_path_buf())
+    }
+
+    /// Seal an encoded snapshot with the session key and write it atomically;
+    /// hands back the bytes written (for a mirror copy). Runs no KDF, so a
+    /// save costs the cipher and the disk, not a second of Argon2.
+    pub fn seal_and_write(
+        path: &Path,
+        key: &SealKey,
+        plaintext: &[u8],
+        fmt: SnapshotFormat,
+    ) -> Result<Vec<u8>> {
+        let file = crypto::seal_with(key, fmt, plaintext)?;
+        crypto::atomic_write(path, &file)?;
+        Ok(file)
     }
 
     /// Copy the file as it is before a migration rewrites it:

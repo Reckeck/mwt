@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use zeroize::Zeroizing;
 
 use crate::Amount;
+use crate::crypto::SealKey;
 use crate::error::{Error, Result, StoreTreeViolation, WalletRule};
 use crate::model::chain::Chain;
 use crate::model::store::{
@@ -22,6 +23,8 @@ use crate::model::transaction::{
 use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
 use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
+
+pub use saving::{FlushJob, Flushed, SaveHook};
 
 mod adjustments;
 mod agenda;
@@ -44,6 +47,7 @@ mod loyalty;
 mod notifications;
 mod notify_snapshot;
 mod peer_sync;
+mod saving;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
@@ -191,11 +195,16 @@ pub struct UnlockedVault {
     clock: crate::sync::Clock,
     /// Told every save's changed keys while a sync session is live.
     sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
+    /// The key derived at unlock: saves seal with it, Argon2 does not run again.
+    key: Option<std::sync::Arc<SealKey>>,
+    /// Unsaved changes and the batched writer (see `saving`).
+    save: saving::SaveState,
 }
 
 impl UnlockedVault {
     pub fn create(path: PathBuf, password: &str) -> Result<Self> {
-        VaultFile::create(&path, password)?;
+        let key = SealKey::fresh(password.as_bytes())?;
+        VaultFile::create_keyed(&path, &key)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let doc = VaultDoc::default();
         let fmt = SnapshotFormat::for_profile();
@@ -211,6 +220,8 @@ impl UnlockedVault {
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
+            key: Some(std::sync::Arc::new(key)),
+            save: saving::SaveState::default(),
         };
         vault.start_tracking()?;
         vault.ensure_cash_wallet("Cash")?;
@@ -235,7 +246,7 @@ impl UnlockedVault {
     }
 
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
-        let (decoded, fmt) = VaultFile::open_versioned(&path, password)?;
+        let (decoded, fmt, key) = VaultFile::open_keyed(&path, password)?;
         // After the password check: a wrong password must not hint the vault is in use.
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let migrated = decoded.from_version < crate::VAULT_FORMAT_VERSION;
@@ -255,6 +266,8 @@ impl UnlockedVault {
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
+            key: Some(std::sync::Arc::new(key)),
+            save: saving::SaveState::default(),
         };
         vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.
@@ -304,26 +317,9 @@ impl UnlockedVault {
             tracker: None,
             clock: self.clock.clone(),
             sync_tap: None,
+            key: None,
+            save: saving::SaveState::default(),
         }
-    }
-
-    /// Persist the current document (encrypt + atomic write); a sandbox
-    /// writes nothing.
-    pub fn persist(&mut self) -> Result<()> {
-        if self.sandbox {
-            return Ok(());
-        }
-        let changed = self.track_changes()?;
-        let sealed = VaultFile::save_sealed(&self.path, &self.password, &self.doc, self.fmt)?;
-        if let Some(mirror) = &self.mirror {
-            mirror.push(&sealed);
-        }
-        if !changed.is_empty()
-            && let Some(tap) = &self.sync_tap
-        {
-            tap.changed(&changed);
-        }
-        Ok(())
     }
 
     /// Copy every later save to `mirror` (`None` stops copying). A sandbox
@@ -377,15 +373,19 @@ impl UnlockedVault {
             ));
         }
         VaultFile::open(&self.path, current_password)?;
+        // A new password gets a new salt; the file is rewritten under it at once.
+        self.key = Some(std::sync::Arc::new(SealKey::fresh(
+            new_password.as_bytes(),
+        )?));
         self.password = Zeroizing::new(new_password.to_string());
-        self.persist()
+        self.persist_now()
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
     /// Legacy bincode is never written: asking for it writes MessagePack.
     pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()> {
         self.fmt = fmt.for_writing();
-        self.persist()
+        self.persist_now()
     }
 
     // -- settings -----------------------------------------------------------
@@ -403,6 +403,8 @@ impl UnlockedVault {
                 "the savings rate must be between 0 and 100%".into(),
             ));
         }
+        // A patch that changes nothing writes nothing (the dashboard re-saves its layout).
+        let before = self.doc.settings.clone();
         let settings = &mut self.doc.settings;
         if input.savings_rate.is_some()
             || input.daily_budget_mode.is_some()
@@ -459,7 +461,9 @@ impl UnlockedVault {
             settings.notifications = notifications;
         }
         let out = settings.clone();
-        self.persist()?;
+        if out != before {
+            self.persist()?;
+        }
         Ok(out)
     }
 
@@ -2399,6 +2403,7 @@ impl UnlockedVault {
         patch: TerminalPatch,
     ) -> Result<TerminalState> {
         let terminal = &mut self.exchange_profile_mut(store_id)?.terminal;
+        let before = terminal.clone();
         if let Some(watchlist) = patch.watchlist {
             let mut seen = HashSet::new();
             terminal.watchlist = watchlist
@@ -2422,7 +2427,10 @@ impl UnlockedVault {
             terminal.layout = layout;
         }
         let out = terminal.clone();
-        self.persist()?;
+        // The terminal re-sends its state on every symbol or timeframe click.
+        if out != before {
+            self.persist()?;
+        }
         Ok(out)
     }
 
@@ -2442,12 +2450,19 @@ impl UnlockedVault {
         }
         let terminal = &mut self.exchange_profile_mut(store_id)?.terminal;
         let empty = json.trim().is_empty() || json.trim() == "[]";
-        if empty {
-            terminal.drawings.remove(&symbol);
+        let changed = if empty {
+            terminal.drawings.remove(&symbol).is_some()
         } else {
-            terminal.drawings.insert(symbol, json.to_string());
+            terminal
+                .drawings
+                .insert(symbol, json.to_string())
+                .as_deref()
+                != Some(json)
+        };
+        if changed {
+            self.persist()?;
         }
-        self.persist()
+        Ok(())
     }
 
     /// The transaction a staged fill becomes: a spot trade, or a futures

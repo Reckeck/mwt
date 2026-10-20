@@ -365,6 +365,20 @@ fn dismiss(host: TestHost, mut events: Events) -> Arc<Mutex<Vec<String>>> {
     seen
 }
 
+/// Collects error events and answers nothing: the offer stays open on this side.
+fn errors_only(mut events: Events) -> Arc<Mutex<Vec<String>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = seen.clone();
+    tokio::spawn(async move {
+        while let Some((event, _payload)) = events.recv().await {
+            if event == super::ERROR_EVENT {
+                log.lock().unwrap().push(event);
+            }
+        }
+    });
+    seen
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_put_off_device_closes_quietly_and_is_not_offered_again() {
     let dir = tempfile::tempdir().unwrap();
@@ -372,7 +386,10 @@ async fn a_put_off_device_closes_quietly_and_is_not_offered_again() {
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     let main_errors = dismiss(main.clone(), main_events);
-    let client_errors = dismiss(client.clone(), client_events);
+    // Only the main device puts the offer off. Were the client to put it off too, whichever
+    // side is first closes the link, and the main device that loses the race never records
+    // the decline (a put-off is local and quiet): the test raced on save speed.
+    let client_errors = errors_only(client_events);
     connect(&main, &client).await;
     let client_id = client.settings().device_id;
     until("the offer put off", || {

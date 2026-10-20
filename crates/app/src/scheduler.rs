@@ -40,6 +40,8 @@ struct Memory {
     /// Last import poll per exchange store.
     last_bybit: HashMap<String, Instant>,
     last_alert_refresh: Option<Instant>,
+    /// Last automatic price refresh (the interval chosen on this device).
+    last_price_refresh: Option<Instant>,
 }
 
 /// How often the snapshot for a locked vault is taken while it is open.
@@ -60,6 +62,7 @@ pub fn spawn(app: AppHandle) {
             // others get their results by sync (docs/sync.md).
             if crate::sync::runs_jobs(&app) {
                 bybit_tick(&app, &mut memory);
+                prices_tick(&app, &mut memory);
                 automations_tick(&app);
                 workflows_tick(&app);
                 alerts_tick(&app, &mut memory);
@@ -68,6 +71,43 @@ pub fn spawn(app: AppHandle) {
             snapshot_tick(&app, false);
         }
     });
+}
+
+/// Refresh prices and rates every «Price refresh interval» (Settings → This
+/// device; 0 = off) while the window is on screen: a window hidden in the tray
+/// does not need fresh quotes, and the next look refreshes them anyway.
+fn prices_tick(app: &AppHandle, memory: &mut Memory) {
+    let state = app.state::<AppState>();
+    let vault_interval = state.vault.lock().ok().and_then(|guard| {
+        guard
+            .as_ref()
+            .map(|vault| vault.doc.settings.fx_refresh_interval_sec)
+    });
+    let interval = crate::commands::app_settings::current_settings(app)
+        .fx_refresh_interval_sec
+        .or(vault_interval)
+        .unwrap_or(300);
+    if interval == 0 {
+        return;
+    }
+    if memory
+        .last_price_refresh
+        .is_some_and(|last| last.elapsed() < Duration::from_secs(u64::from(interval)))
+    {
+        return;
+    }
+    let visible = app
+        .get_webview_window("main")
+        .is_some_and(|window| window.is_visible().unwrap_or(true));
+    if !visible {
+        return;
+    }
+    memory.last_price_refresh = Some(Instant::now());
+    // Offline is fine: the cached prices stay, labelled with their date.
+    let _ = tauri::async_runtime::block_on(crate::commands::pricing::refresh_all(
+        app.clone(),
+        app.state::<AppState>(),
+    ));
 }
 
 fn is_unlocked(app: &AppHandle) -> bool {
@@ -174,9 +214,21 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
         vault.notification_snapshot(now_secs(), &zone, ru)
     };
     if let Ok(mut notify) = state.notify.lock() {
+        // The same notices as a minute ago: no keyring call, no encrypted write.
+        let unchanged = notify.snapshot.as_ref().is_some_and(|kept| {
+            trade_core::service::NotificationSnapshot {
+                created_at: String::new(),
+                ..kept.clone()
+            } == trade_core::service::NotificationSnapshot {
+                created_at: String::new(),
+                ..snapshot.clone()
+            }
+        });
         notify.snapshot = Some(snapshot);
         notify.last_snapshot = Some(Instant::now());
-        crate::notify_store::save(app, &mut notify);
+        if force || !unchanged {
+            crate::notify_store::save(app, &mut notify);
+        }
     }
 }
 
@@ -355,10 +407,6 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     if confirmed > 0 {
         let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
     }
-    let _ = app.emit(
-        "bybit-synced",
-        serde_json::json!({ "staged": staged, "confirmed": confirmed }),
-    );
     if staged > 0 {
         let _ = app.emit(
             "bybit-import-pending",

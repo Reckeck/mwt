@@ -3,7 +3,7 @@
 //! `crate::sync` (network) and `trade_core` (merge).
 
 use tauri::{AppHandle, State};
-use trade_core::appconfig::{UpdateAppSettingsInput, load_settings, save_settings};
+use trade_core::appconfig::{UpdateAppSettingsInput, load_settings};
 use trade_core::ipc_contract::{SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus};
 use trade_core::service::{AppliedBatch, UndoReport};
 
@@ -45,7 +45,7 @@ pub async fn sync_set_settings(
         ..Default::default()
     });
     settings.ensure_device_id();
-    save_settings(&dir, &settings).map_err(err_to_string)?;
+    crate::commands::app_settings::save(&dir, &settings).map_err(err_to_string)?;
     #[cfg(target_os = "android")]
     if input.enabled == Some(true) {
         crate::platform_net::ask_notifications(&app);

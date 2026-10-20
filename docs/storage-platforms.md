@@ -49,9 +49,34 @@ UI ─ pick_vault_file ─► platform_fs::pick_vault
                          ─► UnlockedVault::open     (core: read, lock, миграция, .vN.bak)
                          ─► attach_mirror           (если привязан: поток копирования)
    ─ create_vault(path) ─► resolve_new_vault        (голое имя → vaults_dir, URI запрещён)
-мутация → UnlockedVault::persist → VaultFile::save_sealed → atomic_write
-                                 └► VaultMirror::push(bytes) → поток → write_location(URI, "wt")
+мутация → UnlockedVault::persist → dirty + будит vault_writer (пакет)
+vault_writer: 500 мс тишины (не дольше 3 с) → prepare_flush (под замком: отметки sync, encode)
+            → FlushJob::write (без замка: seal ключом сессии → atomic_write)
+            └► VaultMirror::push(bytes) → поток → write_location(URI, "wt")
 ```
+
+### Пакетная запись
+
+Изменения копятся в памяти и пишутся одним сохранением на пачку
+(`crates/core/src/service/saving.rs`, `crates/app/src/vault_writer.rs`).
+Чтения идут из памяти, поэтому интерфейс видит изменение сразу.
+
+Принудительно (`persist_now` / `flush_pending`, файл на диске до возврата):
+создание vault, смена пароля, смена формата, копия перед заменой документа и
+перед синхронизацией, передача vault, привязка внешней копии, блокировка
+(при ошибке vault остаётся открытым), переключение на другой vault, выход
+(`RunEvent::ExitRequested` — при ошибке выход отменяется и окно предлагает
+«Повторить» / «Выйти без сохранения»), скрытие окна в трей и уход страницы в
+фон (`visibilitychange` → `flush_vault`: Android может убить процесс в фоне).
+`Drop` открытого vault пишет несохранённое последним рубежом.
+
+Порядок записей не откатывается: каждое задание несёт ревизию, общий «шлюз»
+помнит последнюю записанную, и запоздавшее старое задание пропускается.
+Ошибка записи оставляет пачку несохранённой, писатель повторяет её через 1, 2,
+5, 10 с и сообщает `vault-save-failed` (потом `vault-saved`).
+
+**Окно потери:** при обычном выходе, блокировке и уходе в фон — ноль; при
+падении процесса или отключении питания — не больше ~3 с последних правок.
 
 ## Копия во внешнем файле
 
