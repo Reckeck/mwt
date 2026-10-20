@@ -492,7 +492,27 @@ daily: Amount,
 /**
  * Every transaction of the day, budget or not.
  */
-tx_count: number, status: DayStatus, };
+tx_count: number, status: DayStatus, 
+/**
+ * The month's pool for everyday spending minus what was spent through this day
+ * (a spreadsheet's `pool − spent so far`). Ahead of today it is a forecast: today's
+ * rest minus today's per-day share for every day until this one (`forecast`).
+ * `None` without an allowance.
+ */
+left: Amount | null, 
+/**
+ * `left` spread over the days after this one: what each of them may spend; ahead
+ * of today, today's share. `None` on the last day or without an allowance.
+ */
+per_day_left: Amount | null, 
+/**
+ * `left` and `per_day_left` are planned, not spent yet (a day ahead of today).
+ */
+forecast: boolean, 
+/**
+ * Notifications shown for this day: reminders, price alerts, payments due.
+ */
+notices: Array<CalendarNotice>, };
 
 type CalendarMonth = { 
 /**
@@ -502,11 +522,50 @@ month: string, currency: string,
 /**
  * The day's allowance: the month mode's, or the hand-set day limit when smaller.
  */
-allowance: Amount | null, days: Array<CalendarDay>, 
+allowance: Amount | null, 
+/**
+ * The month's pool for everyday spending: income − planned mandatory − savings
+ * (or the hand-set day limit × days when that is smaller).
+ */
+budget: Amount | null, 
+/**
+ * What the pool is made of, when it comes from the income.
+ */
+pool: CalendarPool | null, days: Array<CalendarDay>, 
 /**
  * What is still to come this month.
  */
 upcoming: Array<UpcomingItem>, };
+
+/**
+ * One notification of the log, placed on the day it was due.
+ */
+type CalendarNotice = { key: string, category: NoticeCategory, title: string, 
+/**
+ * RFC3339: when it was due.
+ */
+at: string, 
+/**
+ * In-app route the notice opens.
+ */
+link: string | null, };
+
+/**
+ * The month's pool, part by part: `budget = income − planned_fixed − savings`.
+ */
+type CalendarPool = { 
+/**
+ * The month's income: booked, or planned when the plan is bigger.
+ */
+income: Amount, 
+/**
+ * Mandatory spending planned by the automations.
+ */
+planned_fixed: Amount, 
+/**
+ * The savings plan: income × the savings rate.
+ */
+savings: Amount, };
 
 /**
  * Single OHLCV candle point for charting.

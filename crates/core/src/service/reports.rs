@@ -321,6 +321,30 @@ pub struct CalendarDay {
     /// Every transaction of the day, budget or not.
     pub tx_count: u32,
     pub status: DayStatus,
+    /// The month's pool for everyday spending minus what was spent through this day
+    /// (a spreadsheet's `pool − spent so far`). Ahead of today it is a forecast: today's
+    /// rest minus today's per-day share for every day until this one (`forecast`).
+    /// `None` without an allowance.
+    pub left: Option<Amount>,
+    /// `left` spread over the days after this one: what each of them may spend; ahead
+    /// of today, today's share. `None` on the last day or without an allowance.
+    pub per_day_left: Option<Amount>,
+    /// `left` and `per_day_left` are planned, not spent yet (a day ahead of today).
+    pub forecast: bool,
+    /// Notifications shown for this day: reminders, price alerts, payments due.
+    pub notices: Vec<CalendarNotice>,
+}
+
+/// One notification of the log, placed on the day it was due.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct CalendarNotice {
+    pub key: String,
+    pub category: crate::model::notify::NoticeCategory,
+    pub title: String,
+    /// RFC3339: when it was due.
+    pub at: String,
+    /// In-app route the notice opens.
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -330,9 +354,25 @@ pub struct CalendarMonth {
     pub currency: String,
     /// The day's allowance: the month mode's, or the hand-set day limit when smaller.
     pub allowance: Option<Amount>,
+    /// The month's pool for everyday spending: income − planned mandatory − savings
+    /// (or the hand-set day limit × days when that is smaller).
+    pub budget: Option<Amount>,
+    /// What the pool is made of, when it comes from the income.
+    pub pool: Option<CalendarPool>,
     pub days: Vec<CalendarDay>,
     /// What is still to come this month.
     pub upcoming: Vec<UpcomingItem>,
+}
+
+/// The month's pool, part by part: `budget = income − planned_fixed − savings`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct CalendarPool {
+    /// The month's income: booked, or planned when the plan is bigger.
+    pub income: Amount,
+    /// Mandatory spending planned by the automations.
+    pub planned_fixed: Amount,
+    /// The savings plan: income × the savings rate.
+    pub savings: Amount,
 }
 
 /// Everything a report needs to know about its range.
@@ -1226,13 +1266,18 @@ impl UnlockedVault {
         let currency = self.budget_currency();
         let (from, to) = cal.month_bounds(first);
         let flows = self.flows_between(&cal, &currency, from, to);
-        let allowance = {
-            let per_day = self.month_allowance(&cal, first, &currency, &flows).per_day;
-            let manual = self.manual_day_limit(&currency, now);
-            match (per_day.is_positive().then_some(per_day), manual) {
-                (Some(plan), Some(limit)) => Some(plan.min(limit)),
-                (plan, limit) => plan.or(limit),
-            }
+        let month = self.month_allowance(&cal, first, &currency, &flows);
+        let planned = month.per_day.is_positive().then_some(month.per_day);
+        let manual = self.manual_day_limit(&currency, now);
+        let allowance = match (planned, manual) {
+            (Some(plan), Some(limit)) => Some(plan.min(limit)),
+            (plan, limit) => plan.or(limit),
+        };
+        // The hand-set day limit wins when it is the smaller one (or the only one).
+        let by_limit = match (planned, manual) {
+            (Some(plan), Some(limit)) => limit < plan,
+            (None, Some(_)) => true,
+            _ => false,
         };
         let mut tx_counts: HashMap<NaiveDate, u32> = HashMap::new();
         for tx in &self.doc.transactions {
@@ -1241,9 +1286,56 @@ impl UnlockedVault {
                 *tx_counts.entry(cal.date_of(secs)).or_default() += 1;
             }
         }
+        let end = next_month(first);
+        // The running balance's pool. Mandatory spending does not count in it: only the
+        // *planned* mandatory is set aside, so paying rent or a bill (above plan or with no
+        // plan at all) never moves the balance; everyday spending alone draws it down.
+        let (_, planned_fixed) = self.month_plan(&cal, first, &currency);
+        // It exists whenever the month has income, even when mandatory spending above
+        // plan leaves no day allowance.
+        let pool = (!by_limit && month.income.is_positive()).then_some(CalendarPool {
+            income: month.income,
+            planned_fixed,
+            savings: month.savings_plan,
+        });
+        let budget = if by_limit {
+            allowance.map(|per_day| {
+                per_day * Amount::new(rust_decimal::Decimal::from((end - first).num_days()))
+            })
+        } else {
+            pool.as_ref()
+                .map(|parts| parts.income - parts.planned_fixed - parts.savings)
+        };
+        let mut notices: HashMap<NaiveDate, Vec<CalendarNotice>> = HashMap::new();
+        for record in &self.doc.notification_log {
+            let secs = secs_or_now(&record.at);
+            if secs >= from && secs < to {
+                notices
+                    .entry(cal.date_of(secs))
+                    .or_default()
+                    .push(CalendarNotice {
+                        key: record.key.clone(),
+                        category: record.category,
+                        title: record.title.clone(),
+                        at: record.at.clone(),
+                        link: record.link.clone(),
+                    });
+            }
+        }
+        let mut spent_so_far = Amount::ZERO;
+        // Days ahead are projected from the last real one: its rest, its per-day share.
+        // A month wholly ahead starts from the full pool over all its days.
+        let mut anchor: Option<(NaiveDate, Amount, Amount)> =
+            budget.filter(|_| first > today).map(|pool| {
+                let all = Amount::new(rust_decimal::Decimal::from((end - first).num_days()));
+                (
+                    first - Duration::days(1),
+                    pool,
+                    (pool / all).round(2).max(Amount::ZERO),
+                )
+            });
         let mut days = Vec::new();
         let mut date = first;
-        let end = next_month(first);
         while date < end {
             let of_day = |class: FlowClass| {
                 flows
@@ -1264,6 +1356,38 @@ impl UnlockedVault {
                     Some(_) => DayStatus::Under,
                 }
             };
+            spent_so_far += daily;
+            let days_after = (end - date).num_days() - 1;
+            let forecast = date > today;
+            let (left, per_day_left) = if forecast {
+                match anchor {
+                    Some((from, rest, share)) => {
+                        let ahead =
+                            Amount::new(rust_decimal::Decimal::from((date - from).num_days()));
+                        (
+                            Some(rest - share * ahead),
+                            (days_after > 0).then_some(share),
+                        )
+                    }
+                    None => (None, None),
+                }
+            } else {
+                let left = budget.map(|pool| pool - spent_so_far);
+                // Past the pool there is nothing to spend: the forecast then stays flat.
+                let per_day_left = left.filter(|_| days_after > 0).map(|rest| {
+                    (rest / Amount::new(rust_decimal::Decimal::from(days_after)))
+                        .round(2)
+                        .max(Amount::ZERO)
+                });
+                if date == today
+                    && let (Some(rest), Some(share)) = (left, per_day_left)
+                {
+                    anchor = Some((date, rest, share));
+                }
+                (left, per_day_left)
+            };
+            let mut day_notices = notices.remove(&date).unwrap_or_default();
+            day_notices.sort_by(|left, right| left.at.cmp(&right.at));
             days.push(CalendarDay {
                 date: date.format("%Y-%m-%d").to_string(),
                 income: of_day(FlowClass::Income),
@@ -1271,6 +1395,10 @@ impl UnlockedVault {
                 daily,
                 tx_count: tx_counts.get(&date).copied().unwrap_or(0),
                 status,
+                left,
+                per_day_left,
+                forecast,
+                notices: day_notices,
             });
             date += Duration::days(1);
         }
@@ -1289,6 +1417,8 @@ impl UnlockedVault {
             month: calendar::month_key(first),
             currency,
             allowance,
+            budget,
+            pool,
             days,
             upcoming,
         })
@@ -1971,5 +2101,95 @@ mod tests {
         assert_eq!(utc.days[2].status, DayStatus::Under);
         assert_eq!(utc.days[25].status, DayStatus::Future);
         assert_eq!(utc.days[0].tx_count, 2);
+    }
+
+    #[test]
+    fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
+        let (_dir, mut vault, card) = vault_with_card();
+        vault
+            .add_transaction(earn(&card, "3100", "2026-03-01T08:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(spend(&card, "150", "groceries", "2026-03-01T10:00:00Z"))
+            .unwrap();
+        vault
+            .doc
+            .notification_log
+            .push(crate::model::notify::NoticeRecord {
+                key: "alert:btc:2026-03-05T09:00:00Z".into(),
+                category: crate::model::notify::NoticeCategory::PriceAlert,
+                title: "BTC ≥ 90 000".into(),
+                body: String::new(),
+                link: Some("/planning/alerts".into()),
+                at: "2026-03-05T09:00:00Z".into(),
+                delivered_at: "2026-03-05T09:00:01Z".into(),
+                read: false,
+            });
+        let now = secs("2026-03-20T12:00:00Z");
+        let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+        // 90 a day × 31 days = the pool; 150 spent on the 1st.
+        assert_eq!(month.budget, Some(amount("2790")));
+        assert_eq!(month.days[0].left, Some(amount("2640")));
+        assert_eq!(month.days[0].per_day_left, Some(amount("88")));
+        // A mandatory payment (utilities) does not count in the balance.
+        vault
+            .add_transaction(spend(&card, "1000", "utilities", "2026-03-03T10:00:00Z"))
+            .unwrap();
+        let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+        assert_eq!(month.budget, Some(amount("2790")));
+        assert_eq!(month.days[2].left, Some(amount("2640")));
+        // Nor does one above the income: no day allowance is left, the balance stays.
+        vault
+            .add_transaction(spend(&card, "5000", "utilities", "2026-03-04T10:00:00Z"))
+            .unwrap();
+        let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+        assert_eq!(month.allowance, None);
+        assert_eq!(month.budget, Some(amount("2790")));
+        assert_eq!(month.days[3].left, Some(amount("2640")));
+        // Today: nothing more spent, the same rest over the 11 days after it.
+        assert_eq!(month.days[19].left, Some(amount("2640")));
+        assert_eq!(month.days[19].per_day_left, Some(amount("240")));
+        // Ahead of today: a forecast, today's 240 a day spent through each day.
+        assert!(month.days[20].forecast && !month.days[19].forecast);
+        assert_eq!(month.days[20].left, Some(amount("2400")));
+        assert_eq!(month.days[20].per_day_left, Some(amount("240")));
+        assert_eq!(month.days[30].left, Some(amount("0")));
+        assert_eq!(month.days[30].per_day_left, None);
+        assert_eq!(
+            month.pool,
+            Some(CalendarPool {
+                income: amount("3100"),
+                planned_fixed: Amount::ZERO,
+                savings: amount("310"),
+            })
+        );
+        // A month wholly ahead with no income yet has no pool: nothing to forecast.
+        let april = vault.calendar_month("2026-04", now, "UTC").unwrap();
+        assert!(april.days[0].forecast);
+        assert_eq!(april.days[0].left, None);
+        // With income booked ahead, the pool is spread evenly from its first day.
+        vault
+            .add_transaction(earn(&card, "3000", "2026-04-01T08:00:00Z"))
+            .unwrap();
+        let april = vault.calendar_month("2026-04", now, "UTC").unwrap();
+        let pool = april.budget.unwrap();
+        assert_eq!(april.days[0].left, Some(pool - april.allowance.unwrap()));
+        assert_eq!(april.days[0].per_day_left, april.allowance);
+        assert_eq!(april.days[29].left, Some(Amount::ZERO));
+        assert_eq!(month.days[4].notices.len(), 1);
+        assert_eq!(
+            month.days[4].notices[0].category,
+            crate::model::notify::NoticeCategory::PriceAlert
+        );
+        assert!(month.days[3].notices.is_empty());
+        // Past the pool: nothing to spend per day, and the forecast stays where it is.
+        vault
+            .add_transaction(spend(&card, "3000", "groceries", "2026-03-19T10:00:00Z"))
+            .unwrap();
+        let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+        assert_eq!(month.days[19].left, Some(amount("-360")));
+        assert_eq!(month.days[19].per_day_left, Some(Amount::ZERO));
+        assert_eq!(month.days[25].left, Some(amount("-360")));
+        assert_eq!(month.days[30].left, Some(amount("-360")));
     }
 }

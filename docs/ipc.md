@@ -14,7 +14,7 @@ Frontend парсит код и показывает локализованно�
 
 | Событие | Payload | Когда |
 |---|---|---|
-| `prices-updated` | `RefreshResult` | после `refresh_all` и `ensure_fx` (если что-то найдено) |
+| `prices-updated` | `RefreshResult` | после `refresh_all` (кнопка, трей, таймер «Интервал обновления цен» в планировщике, пока окно на экране) и `ensure_fx` (если что-то найдено); экраны обновляют «ценовые» ключи из `use-cache-events`, а не из ответа команды |
 | `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
@@ -37,6 +37,8 @@ Frontend парсит код и показывает локализованно�
 | `transfer-send` | `TransferSendView` | шаг передачи: ждём «Принять», код (`wrong_code`, `attempts_left`), прогресс, готово, ошибка |
 | `transfer-nearby` | `TransferNearby[]` | устройства рядом, ждущие приёма |
 | `vault-changed` | `VaultStatus` | vault заблокирован без запроса окна (Android: блокировка в фоне, кнопка на уведомлении синхронизации); окно уходит на экран разблокировки |
+| `vault-save-failed` | `string` или `{ reason, exiting }` | пакетная запись vault не удалась (повторяется сама); `exiting` — при выходе, окно предлагает «Повторить» / «Выйти без сохранения» |
+| `vault-saved` | — | запись снова удалась после ошибки |
 
 Фоновые задачи живут в `crates/app/src/scheduler.rs`: один поток, тик раз в 30 с,
 только при разблокированном vault — импорт Bybit, автоматизации, алерты (цены их
@@ -52,6 +54,8 @@ Frontend парсит код и показывает локализованно�
 | `create_vault` | `CreateVaultInput { path, password, cash_name? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя). `path` без разделителей — имя: файл ляжет в каталог приложения; URI — `INVALID_INPUT` |
 | `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo`; `content://` в `path` сначала копируется в каталог приложения; у привязанного vault сначала сверяется копия — `SYNC_CONFLICT`, если изменились обе стороны |
 | `lock_vault_cmd` | — | `()` |
+| `flush_vault` | — | `()` — записать отложенные изменения сейчас (окно ушло в фон, «Повторить» после ошибки) |
+| `exit_without_saving` | — | — выйти, хотя последние изменения записать не удалось |
 | `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; текущий пароль проверяется расшифровкой файла (`SECRET` при ошибке), `.bak` не пишется |
 
 ### vault recents (`crates/app/src/commands/vault_recents.rs`)
@@ -255,7 +259,7 @@ JSON без шифрования — там нет ничего секретно
 | `get_report` | `kind: ReportKind` (`cashflow` \| `year` \| `categories` \| `networth` \| `stores` \| `losses` \| `pnl` \| `portfolio` \| `inflation`), `filter: ReportFilter { scope, from?, to? (YYYY-MM, по умолчанию последние 12 месяцев), year?, currency?, real_terms }` | `Report` (в TS — `AnalyticsReport`, чтобы не путать с DOM-типом `Report`): внешне помеченный вариант с отчётом своего вида и `meta { currency, months, real_terms, inflation_rate?, insights }`; `insights` — факты для вывода словами (`Insight { code, amount?, pct?, subject? }`, текст собирает фронт по `insight.<code>`); у `networth`, `pnl`, `portfolio` — `has_data` (строка или точка есть на каждый месяц, пустоту видно только по флагу) |
 | `get_report_overview` | `filter: ReportFilter` (берутся `scope`, `currency`, `real_terms` и месяц `to`, по умолчанию текущий) | `ReportOverview { currency, month, previous_month, year, flow, wealth, investments, savings }`: карточки стартового экрана аналитики — месяц против прошлого, вложения с начала года; у каждой `has_data` и `insights` |
 | `export_report_csv` | те же `kind`, `filter` | `Option<String>` — путь файла; `None`, если диалог закрыли. CSV: UTF-8 с BOM, `;`, CRLF, колонка валюты в каждой строке |
-| `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, days[{ date, income, spent, daily, tx_count, status }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future` |
+| `get_calendar` | `month?` (`YYYY-MM`, по умолчанию текущий) | `CalendarMonth { month, currency, allowance?, budget?, days[{ date, income, spent, daily, tx_count, status, left?, per_day_left?, notices[] }], upcoming[] }`; `status`: `none` \| `under` \| `near` (> 80 % дневного бюджета) \| `over` \| `future`; `budget` — пул сальдо: доход − **плановые** обязательные − план накоплений (фактические обязательные платежи сальдо не двигают; при ручном дневном лимите меньше плана — лимит × дни); `left` — сальдо: `budget` минус ежедневные траты по этот день включительно, у дней впереди — прогноз (`forecast`): остаток сегодня минус доля дня за каждый день до этого; `per_day_left` — `left` на оставшиеся дни (впереди — сегодняшняя доля); `notices` — записи журнала уведомлений этого дня (`CalendarNotice { key, category, title, at, link? }`, ценовые алерты — `price_alert`) |
 
 ### planning (`crates/app/src/commands/planning.rs`)
 
