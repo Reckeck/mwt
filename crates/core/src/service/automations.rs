@@ -244,11 +244,14 @@ impl UnlockedVault {
             }
             _ => {}
         }
-        if unix_secs(&draft.starts_at).is_none() {
+        let Some(starts) = unix_secs(&draft.starts_at) else {
             return Err(Error::InvalidInput("choose a start date".into()));
-        }
+        };
+        // The probe is dated at the start, which may be months ahead: it is
+        // checked against the rules, not against today.
         let mut probe = draft_to_transaction(&draft.template, "", "", &draft.starts_at);
-        self.prepare_transaction(&mut probe)
+        let reference = starts.max(secs_or_now(&now_iso()));
+        self.prepare_transaction_at(&mut probe, reference * 1000)
     }
 
     pub fn create_automation(&mut self, draft: AutomationDraft) -> Result<Automation> {
@@ -571,7 +574,7 @@ impl UnlockedVault {
             );
             let outcome = match self.funds_shortfall(&tx, run.secs) {
                 Some(reason) => AutomationOutcome::Rejected { reason },
-                None => match self.insert_transaction(tx) {
+                None => match self.insert_transaction(tx, now) {
                     Ok(saved) => {
                         pass.created.push(saved.meta().id.clone());
                         AutomationOutcome::Created {
@@ -596,8 +599,9 @@ impl UnlockedVault {
     }
 
     /// Validate and append without persisting — a pass writes once at the end.
-    fn insert_transaction(&mut self, mut tx: Transaction) -> Result<Transaction> {
-        self.prepare_transaction(&mut tx)?;
+    /// `now` is the pass's clock, ahead of the wall clock in a simulation.
+    fn insert_transaction(&mut self, mut tx: Transaction, now: i64) -> Result<Transaction> {
+        self.prepare_transaction_at(&mut tx, now * 1000)?;
         self.doc.transactions.push(tx.clone());
         Ok(tx)
     }
@@ -731,7 +735,7 @@ impl UnlockedVault {
                 other => Error::InsufficientFunds(self.describe_shortfall(&other)),
             });
         }
-        let saved = self.insert_transaction(tx)?;
+        let saved = self.insert_transaction(tx, now)?;
         self.recompute_holdings();
         Ok(saved)
     }
@@ -834,6 +838,47 @@ mod tests {
                 AutomationOutcome::Skipped => "skipped",
             })
             .collect()
+    }
+
+    /// An emulation from today reaches months ahead: the runs are dated on
+    /// the emulated days and must not trip the future-date rule (V11).
+    #[test]
+    fn an_emulation_from_today_runs_a_year_ahead() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let salary = monthly(&mut vault, "Salary", 10, salary_draft(&card, "1000"));
+        let now = secs(&now_iso());
+
+        let sim = vault
+            .simulate_automations(Some(&salary.id), 365, now, "UTC")
+            .unwrap();
+        assert!(sim.runs.len() >= 12, "{} runs", sim.runs.len());
+        assert_eq!(sim.rejected, 0, "{:?}", sim.runs);
+        assert_eq!(sim.created as usize, sim.runs.len());
+    }
+
+    /// An automation may start months from now; a manual entry that far
+    /// ahead is still refused.
+    #[test]
+    fn a_future_start_is_accepted_but_a_future_entry_is_not() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let later = calendar::iso(secs(&now_iso()) + 30 * 86_400);
+        vault
+            .create_automation(AutomationDraft {
+                name: "Later".into(),
+                active: true,
+                preset: None,
+                schedule: Schedule::Monthly { day: 1 },
+                starts_at: later.clone(),
+                template: salary_draft(&card, "100"),
+            })
+            .unwrap();
+
+        let mut tx = income(&card, "100", "salary");
+        tx.meta_mut().timestamp = later;
+        let err = vault.add_transaction(tx).unwrap_err();
+        assert!(err.to_string().contains("too far in the future"), "{err}");
     }
 
     /// Emulation runs on a copy: what would happen is reported, nothing of it
