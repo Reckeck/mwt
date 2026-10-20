@@ -29,6 +29,9 @@ export function planAutomations(
         template: draftOf(ctx.transactionFrom(input.template, input.starts_at)),
         last_planned_at: null,
         created_at: iso(now()),
+        amount_mode: input.amount_mode ?? 'fixed',
+        workday_shift: input.workday_shift ?? 'none',
+        estimate: null,
       }
       automations.push(automation)
       return automation
@@ -43,6 +46,8 @@ export function planAutomations(
         schedule: input.automation.schedule,
         starts_at: input.automation.starts_at,
         template: draftOf(ctx.transactionFrom(input.automation.template, input.automation.starts_at)),
+        amount_mode: input.automation.amount_mode ?? 'fixed',
+        workday_shift: input.automation.workday_shift ?? 'none',
       })
     }
     case 'delete_automation':
@@ -60,6 +65,7 @@ export function planAutomations(
         planned_at: iso(now()),
         processed_at: iso(now()),
         outcome: { created: { tx_id: txMeta(tx).id } },
+        estimated: false,
       })
       return tx
     }

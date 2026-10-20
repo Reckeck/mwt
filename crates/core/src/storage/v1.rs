@@ -10,6 +10,7 @@
 
 use serde::Deserialize;
 
+use super::v2::{AutomationRunV2, AutomationV2, VaultDocV2};
 use crate::Amount;
 use crate::model::category::Category;
 use crate::model::contact::{Contact, ContactAccount, ContactKind, DebtTerms};
@@ -17,8 +18,8 @@ use crate::model::deposit::KeyRatePoint;
 use crate::model::enrichment::EnrichmentRecord;
 use crate::model::notify::NotificationSettings;
 use crate::model::planning::{
-    Automation, AutomationRun, Budget, CategorizationRule, Envelope, Goal, MeterReading,
-    PriceAlert, Reminder, UtilityItem, UtilityKind,
+    Budget, CategorizationRule, Envelope, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
+    UtilityKind,
 };
 use crate::model::store::{Holding, Store};
 use crate::model::transaction::Transaction;
@@ -159,8 +160,8 @@ pub struct VaultDocV1 {
     #[serde(default)]
     pub pending_imports: Vec<PendingImport>,
     pub contacts: Vec<ContactV1>,
-    pub automations: Vec<Automation>,
-    pub automation_runs: Vec<AutomationRun>,
+    pub automations: Vec<AutomationV2>,
+    pub automation_runs: Vec<AutomationRunV2>,
     pub budgets: Vec<Budget>,
     pub goals: Vec<Goal>,
     pub reminders: Vec<ReminderV1>,
@@ -181,10 +182,10 @@ pub struct VaultDocV1 {
 /// v1 → v2: reminders gain a repeat and a source, meter readings a day,
 /// contacts a group, settings the notification switches, and the document a
 /// notification log. Every v1 value keeps its place.
-impl From<VaultDocV1> for VaultDoc {
+impl From<VaultDocV1> for VaultDocV2 {
     fn from(old: VaultDocV1) -> Self {
         let settings = old.settings;
-        Self {
+        let doc = VaultDoc {
             version: 2,
             id: old.id,
             created_at: old.created_at,
@@ -222,8 +223,6 @@ impl From<VaultDocV1> for VaultDoc {
                     group: String::new(),
                 })
                 .collect(),
-            automations: old.automations,
-            automation_runs: old.automation_runs,
             budgets: old.budgets,
             goals: old.goals,
             reminders: old
@@ -266,6 +265,11 @@ impl From<VaultDocV1> for VaultDoc {
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
             sync: crate::sync::SyncState::default(),
+        };
+        VaultDocV2 {
+            doc,
+            automations: old.automations,
+            automation_runs: old.automation_runs,
         }
     }
 }

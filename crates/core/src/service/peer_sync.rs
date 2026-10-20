@@ -532,13 +532,6 @@ impl UnlockedVault {
             ) || keep.contains(&meta.id)
         });
 
-        let mut seen = std::collections::HashSet::new();
-        let mut runs = std::mem::take(&mut self.doc.automation_runs);
-        runs.sort_by(|left, right| left.id.cmp(&right.id));
-        runs.retain(|run| seen.insert((run.automation_id.clone(), run.planned_at.clone())));
-        runs.sort_by(|left, right| left.processed_at.cmp(&right.processed_at));
-        self.doc.automation_runs = runs;
-
         let mut first: HashMap<String, (Stamp, String)> = HashMap::new();
         for reminder in &self.doc.reminders {
             if reminder.source_key.is_empty() {

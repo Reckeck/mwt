@@ -9,6 +9,7 @@
 //! fires the triggers, keeps the journal, the variables and the queue of
 //! operations waiting for confirmation.
 
+pub mod automation;
 pub mod catalog;
 mod catalog_more;
 pub mod exec;

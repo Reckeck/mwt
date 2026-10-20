@@ -2203,7 +2203,7 @@ fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
         .unwrap()
         .clone();
     assert_eq!(made.meta().timestamp, "2026-12-18T09:00:00Z");
-    assert!(made.meta().estimated);
+    assert!(made.meta().origin.is_estimated());
     assert!(matches!(
         &made.meta().origin,
         TxOrigin::Workflow { planned_at: Some(at), .. } if at == "2026-12-18T09:00:00Z"
@@ -2268,7 +2268,9 @@ fn correct(vault: &mut UnlockedVault, id: &str, value: &str) {
         .unwrap();
     if let Transaction::Topup(inner) = tx {
         inner.amount = amount(value);
-        inner.meta.estimated = false;
+        if let TxOrigin::Workflow { estimated, .. } = &mut inner.meta.origin {
+            *estimated = false;
+        }
     }
 }
 

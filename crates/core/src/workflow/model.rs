@@ -42,6 +42,11 @@ pub struct Workflow {
     #[serde(default)]
     #[ts(optional)]
     pub draft: Option<GraphVersion>,
+    /// Set on a workflow made by the automation form: its graph is built
+    /// from this and edited there, not in the editor.
+    #[serde(default)]
+    #[ts(optional)]
+    pub automation: Option<crate::model::planning::AutomationSpec>,
 }
 
 /// An expectation checked by emulation: run the workflow as at a moment and

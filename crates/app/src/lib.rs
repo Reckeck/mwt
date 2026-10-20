@@ -233,6 +233,8 @@ pub fn run() {
             planning::list_automation_runs,
             planning::retry_automation_run,
             planning::skip_automation_run,
+            planning::confirm_estimated_amount,
+            planning::detach_automation,
             planning::list_budgets,
             planning::create_budget,
             planning::update_budget,

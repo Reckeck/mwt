@@ -125,8 +125,7 @@ impl UnlockedVault {
                 .iter()
                 .any(|item| item.category == key)
             || self
-                .doc
-                .automations
+                .automations()
                 .iter()
                 .any(|automation| in_draft(&automation.template))
     }

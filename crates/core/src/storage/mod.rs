@@ -16,7 +16,8 @@
 //! ## Versions and migrations
 //!
 //! The payload's `version` is read first, then the document is decoded with
-//! the schema of that version and migrated up step by step (`v1` → current).
+//! the schema of that version and migrated up step by step (`v1` → `v2` →
+//! current; v3 runs automations as workflows, see `v2`).
 //! A version from the future is refused. To change the schema in a way an
 //! older file cannot be read with: freeze the current shape in a `vN` module,
 //! bump [`VAULT_FORMAT_VERSION`], add the step and its tests.
@@ -32,6 +33,7 @@ use crate::error::{Error, Result};
 use crate::model::vault::VaultDoc;
 
 pub mod v1;
+pub mod v2;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
@@ -130,10 +132,14 @@ pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
     let doc = match version {
         VAULT_FORMAT_VERSION => parse::<VaultDoc>(bytes, fmt)
             .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        1 => VaultDoc::from(
-            parse::<v1::VaultDocV1>(bytes, fmt)
+        2 => VaultDoc::from(
+            parse::<v2::VaultDocV2>(bytes, fmt)
                 .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
         ),
+        1 => VaultDoc::from(v2::VaultDocV2::from(
+            parse::<v1::VaultDocV1>(bytes, fmt)
+                .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
+        )),
         _ => return Err(Error::Unsupported),
     };
     if doc.version != VAULT_FORMAT_VERSION {
@@ -581,6 +587,11 @@ mod tests {
         let root = json.as_object_mut().unwrap();
         root.remove("notification_log");
         root.remove("sync");
+        // v1 had neither workflows nor automations as workflows.
+        root.remove("workflows");
+        root.remove("workflow_runs");
+        root.insert("automations".into(), Json::Array(Vec::new()));
+        root.insert("automation_runs".into(), Json::Array(Vec::new()));
         root["settings"]
             .as_object_mut()
             .unwrap()
@@ -617,6 +628,8 @@ mod tests {
             }
         }
         let mut expected = doc.clone();
+        expected.workflows.clear();
+        expected.workflow_runs.clear();
         expected.notification_log.clear();
         expected.sync = crate::sync::SyncState::default();
         expected.settings.notifications = crate::model::notify::NotificationSettings::default();
@@ -695,6 +708,133 @@ mod tests {
         // A second open neither migrates nor replaces the first backup.
         drop(crate::service::UnlockedVault::open(path.clone(), "pw").unwrap());
         assert_eq!(std::fs::read(&backup).unwrap(), file);
+    }
+
+    /// A v2 document with automations, as v2 stored them.
+    fn v2_with_automations() -> Json {
+        let mut json: Json = serde_json::to_value(sample_doc()).unwrap();
+        json["version"] = Json::from(2);
+        let template = serde_json::to_value(crate::model::planning::TransactionDraft::Topup(
+            match crate::model::fixtures::full_doc()
+                .transactions
+                .into_iter()
+                .find(|tx| matches!(tx, crate::model::transaction::Transaction::Topup(_)))
+            {
+                Some(crate::model::transaction::Transaction::Topup(inner)) => inner,
+                _ => unreachable!(),
+            },
+        ))
+        .unwrap();
+        json["automations"] = serde_json::json!([{
+            "id": "salary", "name": "Salary", "active": true, "preset": "salary",
+            "schedule": { "monthly": { "day": 20 } },
+            "starts_at": "2026-01-01T00:00:00Z", "template": template,
+            "last_planned_at": "2026-09-20T09:00:00Z", "created_at": "2026-01-01T00:00:00Z"
+        }]);
+        json["automation_runs"] = serde_json::json!([
+            { "id": "r1", "automation_id": "salary", "planned_at": "2026-09-20T09:00:00Z",
+              "processed_at": "2026-09-20T09:00:01Z", "outcome": { "created": { "tx_id": "tx-1" } } },
+            { "id": "r2", "automation_id": "salary", "planned_at": "2026-08-20T09:00:00Z",
+              "processed_at": "2026-08-20T09:00:01Z", "outcome": { "rejected": { "reason": { "invalid": { "message": "archived" } } } } },
+            { "id": "r3", "automation_id": "salary", "planned_at": "2026-07-20T09:00:00Z",
+              "processed_at": "2026-07-20T09:00:01Z", "outcome": "skipped" }
+        ]);
+        json
+    }
+
+    /// v2 → v3: an automation becomes a workflow with the same id, its last
+    /// date the schedule's mark, its runs workflow runs with the same outcome;
+    /// in both v2 encodings.
+    #[test]
+    fn a_v2_automation_migrates_to_a_workflow_from_json_and_pack() {
+        let json = v2_with_automations();
+        for (bytes, fmt) in [
+            (serde_json::to_vec(&json).unwrap(), SnapshotFormat::Json),
+            (
+                rmp_serde::to_vec_named(&json).unwrap(),
+                SnapshotFormat::Pack,
+            ),
+        ] {
+            let decoded = decode_versioned(&bytes, fmt).unwrap();
+            assert_eq!(decoded.from_version, 2, "{fmt:?}");
+            let doc = decoded.doc;
+            assert_eq!(doc.version, VAULT_FORMAT_VERSION);
+            let workflow = doc
+                .workflows
+                .iter()
+                .find(|item| item.id == "salary")
+                .unwrap();
+            assert_eq!(workflow.name, "Salary");
+            let spec = workflow.automation.as_ref().unwrap();
+            assert_eq!(
+                spec.schedule,
+                crate::model::planning::Schedule::Monthly { day: 20 }
+            );
+            assert_eq!(
+                spec.preset,
+                Some(crate::model::planning::AutomationPreset::Salary)
+            );
+            let graph = crate::workflow::Graph::parse(&workflow.graph).unwrap();
+            assert!(!crate::workflow::validate::has_errors(
+                &crate::workflow::validate(&graph)
+            ));
+            let state = doc
+                .workflow_state
+                .iter()
+                .find(|state| state.workflow_id == "salary")
+                .unwrap();
+            assert_eq!(
+                state.marks.get("schedule:t").map(String::as_str),
+                Some("2026-09-20T09:00:00Z")
+            );
+            let outcomes: Vec<_> = doc
+                .workflow_runs
+                .iter()
+                .map(|run| (run.id.as_str(), run.outcome.clone(), run.created.clone()))
+                .collect();
+            assert!(outcomes.contains(&(
+                "r1",
+                crate::workflow::RunOutcome::Done,
+                vec!["tx-1".to_string()]
+            )));
+            assert!(outcomes.iter().any(|(id, outcome, _)| *id == "r2"
+                && matches!(outcome, crate::workflow::RunOutcome::Rejected { planned_at: Some(at), .. } if at == "2026-08-20T09:00:00Z")));
+            assert!(outcomes.contains(&(
+                "r3",
+                crate::workflow::RunOutcome::Dropped {
+                    reason: "skipped".into()
+                },
+                Vec::new()
+            )));
+        }
+    }
+
+    /// Opening a v2 vault with automations keeps the untouched file as
+    /// `.v2.bak`, and the automations show as before.
+    #[test]
+    fn opening_a_v2_vault_backs_it_up_and_keeps_its_automations() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v2.wallet");
+        let plain = rmp_serde::to_vec_named(&v2_with_automations()).unwrap();
+        let (header, _, _) = crypto::random_header(SnapshotFormat::Pack);
+        let file = crypto::seal(&header, b"pw", &plain).unwrap();
+        crypto::atomic_write(&path, &file).unwrap();
+
+        let vault = crate::service::UnlockedVault::open(path.clone(), "pw").unwrap();
+        let automations = vault.automations();
+        assert_eq!(automations.len(), 1);
+        assert_eq!(
+            automations[0].last_planned_at.as_deref(),
+            Some("2026-09-20T09:00:00Z")
+        );
+        assert_eq!(vault.automation_runs(Some("salary")).len(), 3);
+        drop(vault);
+        assert_eq!(
+            std::fs::read(dir.path().join("v2.wallet.v2.bak")).unwrap(),
+            file
+        );
+        let (decoded, _) = VaultFile::open_versioned(&path, "pw").unwrap();
+        assert_eq!(decoded.from_version, VAULT_FORMAT_VERSION);
     }
 
     /// v2 carries field names: a field missing from an older v2 file takes its

@@ -154,6 +154,7 @@ export function upcoming(days: number): UpcomingItem[] {
         amount: leg?.amount ?? null,
         asset: leg?.asset ?? null,
         shortfall: null,
+        estimated: false,
       })
     }
   }
@@ -168,6 +169,7 @@ export function upcoming(days: number): UpcomingItem[] {
       amount: null,
       asset: null,
       shortfall: null,
+      estimated: false,
     })
   }
   for (const run of runs.filter((entry) => isRejected(entry.outcome))) {
@@ -181,6 +183,7 @@ export function upcoming(days: number): UpcomingItem[] {
       amount: null,
       asset: null,
       shortfall: null,
+      estimated: false,
     })
   }
   return items.sort((left, right) => left.at.localeCompare(right.at))

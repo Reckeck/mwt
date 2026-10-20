@@ -8,13 +8,14 @@ use crate::model::enrichment::{
     EnrichmentData, EnrichmentRecord, EnrichmentSource, EnrichmentStatus,
 };
 use crate::model::planning::{
-    AlertCondition, Automation, AutomationOutcome, AutomationRun, Budget, BudgetPeriod,
+    AlertCondition, AmountMode, AutomationPreset, AutomationSpec, Budget, BudgetPeriod,
     BudgetTarget, CategorizationRule, Goal, MeterReading, PriceAlert, RejectReason, Reminder,
-    Schedule, TransactionDraft, UtilityItem, UtilityKind,
+    Schedule, TransactionDraft, UtilityItem, UtilityKind, WorkdayShift,
 };
 use crate::model::store::{AssetRef, LiabilityKind, LiabilityTerms, Store, StoreKind, StoreScope};
 use crate::model::transaction::*;
 use crate::model::vault::{ManualPrice, PendingImport, VaultDoc};
+use crate::workflow::model::{RunOutcome, Workflow, WorkflowRun};
 
 fn amount(raw: &str) -> Amount {
     Amount::parse(raw).unwrap()
@@ -253,55 +254,97 @@ pub fn full_doc() -> VaultDoc {
         TransactionDraft::Transfer(transfer()),
         TransactionDraft::Convert(convert()),
     ];
-    doc.automations = drafts
+    let shifts = [
+        WorkdayShift::Back,
+        WorkdayShift::None,
+        WorkdayShift::Forward,
+    ];
+    // Automations are workflows built from their form.
+    doc.workflows = drafts
         .into_iter()
         .zip(schedules.iter().cycle())
+        .zip(shifts.iter().cycle())
         .enumerate()
-        .map(|(index, (template, schedule))| Automation {
-            id: format!("auto-{index}"),
-            name: "Rent".into(),
-            active: true,
-            preset: None,
-            schedule: *schedule,
-            starts_at: "2026-01-01T09:00:00Z".into(),
-            template,
-            last_planned_at: Some("2026-02-01T09:00:00Z".into()),
-            created_at: "2026-01-01T00:00:00Z".into(),
+        .map(|(index, ((template, schedule), shift))| {
+            let spec = AutomationSpec {
+                preset: (index == 0).then_some(AutomationPreset::Salary),
+                schedule: *schedule,
+                starts_at: "2026-01-01T09:00:00Z".into(),
+                amount_mode: if matches!(template, TransactionDraft::Convert(_)) {
+                    AmountMode::Fixed
+                } else {
+                    AmountMode::Varies
+                },
+                template,
+                workday_shift: *shift,
+            };
+            Workflow {
+                id: format!("auto-{index}"),
+                name: "Rent".into(),
+                description: String::new(),
+                active: true,
+                graph: serde_json::to_string(&crate::workflow::automation::automation_graph(&spec))
+                    .unwrap(),
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+                react_to_workflows: false,
+                max_amount: None,
+                versions: Vec::new(),
+                tests: Vec::new(),
+                draft: None,
+                automation: Some(spec),
+            }
         })
         .collect();
     let outcomes = [
-        AutomationOutcome::Created { tx_id: "tx".into() },
-        AutomationOutcome::Rejected {
+        RunOutcome::Done,
+        RunOutcome::Rejected {
             reason: RejectReason::InsufficientFunds {
                 store_id: "bank".into(),
                 asset: usd(),
                 required: amount("25000"),
                 available: amount("8000"),
             },
+            trigger_node: "t".into(),
+            planned_at: Some("2026-01-15T09:00:00Z".into()),
         },
-        AutomationOutcome::Rejected {
+        RunOutcome::Rejected {
             reason: RejectReason::CreditLimitExceeded {
                 store_id: "card".into(),
                 limit: amount("1000"),
                 required: amount("1200"),
             },
+            trigger_node: "t".into(),
+            planned_at: None,
         },
-        AutomationOutcome::Rejected {
+        RunOutcome::Rejected {
             reason: RejectReason::Invalid {
                 message: "archived".into(),
             },
+            trigger_node: "t".into(),
+            planned_at: Some("2026-01-15T09:00:00Z".into()),
         },
-        AutomationOutcome::Skipped,
+        RunOutcome::Dropped {
+            reason: "skipped".into(),
+        },
     ];
-    doc.automation_runs = outcomes
+    doc.workflow_runs = outcomes
         .into_iter()
         .enumerate()
-        .map(|(index, outcome)| AutomationRun {
+        .map(|(index, outcome)| WorkflowRun {
             id: format!("run-{index}"),
-            automation_id: "auto-0".into(),
-            planned_at: "2026-01-15T09:00:00Z".into(),
-            processed_at: "2026-01-15T09:00:05Z".into(),
+            workflow_id: "auto-0".into(),
+            trigger: "schedule 2026-01-15T09:00:00Z".into(),
+            started_at: "2026-01-15T09:00:05Z".into(),
+            created: if outcome == RunOutcome::Done {
+                vec!["tx".into()]
+            } else {
+                Vec::new()
+            },
             outcome,
+            queued: 0,
+            trace: Vec::new(),
+            dry_run: false,
         })
         .collect();
     let targets = [

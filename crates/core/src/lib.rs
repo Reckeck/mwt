@@ -48,7 +48,7 @@ pub const VAULT_CONTAINER_VERSION: u32 = 1;
 ///
 /// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
 /// encrypted envelope and only moves when the on-disk bytes change.
-pub const VAULT_FORMAT_VERSION: u32 = 2;
+pub const VAULT_FORMAT_VERSION: u32 = 3;
 /// Magic bytes prefix of a vault file. Kept from the TradeApp days: changing
 /// them would make every existing vault unreadable.
 pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";

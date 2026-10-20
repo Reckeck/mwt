@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::model::notify::NoticeCategory;
-use crate::model::planning::Reminder;
+use crate::model::planning::{Reminder, TransactionDraft};
 use crate::model::store::AssetRef;
 use crate::model::transaction::{
     AccountRef, ConvertSide, ConvertTx, PaymentTx, TopupTx, Transaction, TransferTx, TxMeta,
@@ -126,6 +126,7 @@ impl Executor<'_> {
             workflow_id: self.ctx.workflow_id.clone(),
             run_id: self.ctx.run_id.clone(),
             planned_at: planned.map(crate::calendar::iso),
+            estimated: false,
         };
         meta
     }
@@ -177,7 +178,40 @@ impl Executor<'_> {
         Ok(saved)
     }
 
+    /// An operation from «Шаблон операции» (what the automation form keeps,
+    /// fee, contact and all): the amount and the date still come from the
+    /// node.
+    fn build_from_template(&mut self, node: &Node, raw: &str) -> Result<Transaction, String> {
+        let draft: TransactionDraft = serde_json::from_str(raw)
+            .map_err(|err| format!("the template does not read: {err}"))?;
+        let amount = positive(self.input(node, "amount")?.as_number(), "the amount")?;
+        let planned = self.date_input(node)?;
+        let comment = self.text_param(node, "comment");
+        let fresh = self.meta_at(&comment, None, planned);
+        let mut tx = crate::service::draft_to_transaction(&draft, "", "", &fresh.timestamp);
+        match &mut tx {
+            Transaction::Topup(inner) => inner.amount = amount,
+            Transaction::Payment(inner) => inner.amount = amount,
+            Transaction::Transfer(inner) => inner.amount = amount,
+            Transaction::Convert(inner) => inner.from.amount = amount,
+            _ => {}
+        }
+        let meta = tx.meta_mut();
+        meta.origin = fresh.origin;
+        if meta.comment.trim().is_empty() {
+            meta.comment = fresh.comment;
+        }
+        if let TxOrigin::Workflow { estimated, .. } = &mut meta.origin {
+            *estimated = self.bool_param(node, "estimated");
+        }
+        Ok(tx)
+    }
+
     fn build_transaction(&mut self, node: &Node) -> Result<Transaction, String> {
+        let template = self.text_param(node, "template");
+        if !template.trim().is_empty() {
+            return self.build_from_template(node, &template);
+        }
         let kind = self.text_param(node, "tx_kind");
         let account = self.account_input(node, "account")?;
         let to = self.account_input(node, "to")?;
@@ -194,7 +228,9 @@ impl Executor<'_> {
         let comment = self.input(node, "comment")?.as_text();
         let planned = self.date_input(node)?;
         let mut meta = self.meta_at(&comment, category, planned);
-        meta.estimated = self.bool_param(node, "estimated");
+        if let TxOrigin::Workflow { estimated, .. } = &mut meta.origin {
+            *estimated = self.bool_param(node, "estimated");
+        }
         Ok(match kind.as_str() {
             "topup" => Transaction::Topup(TopupTx {
                 meta,

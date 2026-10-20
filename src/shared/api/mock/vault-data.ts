@@ -91,8 +91,6 @@ export function mockVaultDoc(): VaultDoc {
     fx_cache: [],
     pending_imports: [],
     contacts: mockContacts,
-    automations: [],
-    automation_runs: [],
     budgets: [],
     goals: [],
     reminders: [],

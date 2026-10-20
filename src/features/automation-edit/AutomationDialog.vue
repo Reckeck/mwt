@@ -129,6 +129,8 @@ const save = useMutation({
       schedule: schedule.value,
       starts_at: dateInputToIso(startsAt.value),
       template: templateInput,
+      amount_mode: props.automation?.amount_mode ?? 'fixed',
+      workday_shift: props.automation?.workday_shift ?? 'none',
     }
     return props.automation
       ? call<Automation>('update_automation', { input: { id: props.automation.id, automation: input } })

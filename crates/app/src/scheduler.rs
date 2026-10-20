@@ -23,8 +23,10 @@ use trade_core::appconfig::{Locale, load_settings};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::AutomationRejectedEvent;
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
-use trade_core::model::planning::{AlertCondition, AutomationOutcome, RejectReason};
+use trade_core::model::planning::{AlertCondition, RejectReason};
+use trade_core::model::transaction::Transaction;
 use trade_core::service::{notice, notice_title};
+use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
@@ -63,7 +65,6 @@ pub fn spawn(app: AppHandle) {
             if crate::sync::runs_jobs(&app) {
                 bybit_tick(&app, &mut memory);
                 prices_tick(&app, &mut memory);
-                automations_tick(&app);
                 workflows_tick(&app);
                 alerts_tick(&app, &mut memory);
                 reminders_tick(&app, &mut memory);
@@ -458,12 +459,24 @@ async fn poll_bybit_once(
     Ok((staged_total, confirmed_total))
 }
 
-// -- 2b. Node workflows ------------------------------------------------------------
+// -- 2. Workflows and automations ---------------------------------------------------
 
-/// Fire the workflows whose triggers are due and show what they told.
+/// What a pass did to the automations, worked out under the lock.
+struct AutomationNews {
+    /// Operations automations made.
+    created: Vec<String>,
+    /// `(run id, automation id, automation name, planned moment, reason)` of
+    /// refused runs.
+    rejected: Vec<(String, String, String, String, RejectReason)>,
+    /// `(operation id, automation name, amount, asset)` booked approximately.
+    estimated: Vec<(String, String, String, String)>,
+}
+
+/// Fire the workflows (automations among them) whose triggers are due and
+/// show what they told. Automations keep their own events and notices.
 fn workflows_tick(app: &AppHandle) {
     let zone = current_zone(app);
-    let pass = {
+    let (pass, news, interest) = {
         let state = app.state::<AppState>();
         let Ok(mut guard) = state.vault.lock() else {
             return;
@@ -474,9 +487,69 @@ fn workflows_tick(app: &AppHandle) {
         let Ok(pass) = vault.run_due_workflows(now_secs(), &zone) else {
             return;
         };
-        pass
+        // Savings accounts that ask for it get last month's interest booked.
+        let today = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
+        let interest = vault.post_due_interest(today).unwrap_or(0);
+        let names: std::collections::HashMap<String, String> = vault
+            .automations()
+            .into_iter()
+            .map(|automation| (automation.id, automation.name))
+            .collect();
+        let mut news = AutomationNews {
+            created: Vec::new(),
+            rejected: Vec::new(),
+            estimated: Vec::new(),
+        };
+        for run in pass
+            .runs
+            .iter()
+            .filter(|run| names.contains_key(&run.workflow_id))
+        {
+            let name = names[&run.workflow_id].clone();
+            match &run.outcome {
+                RunOutcome::Rejected {
+                    reason, planned_at, ..
+                } => news.rejected.push((
+                    run.id.clone(),
+                    run.workflow_id.clone(),
+                    name,
+                    planned_at.clone().unwrap_or_else(|| run.started_at.clone()),
+                    reason.clone(),
+                )),
+                _ => {
+                    for id in &run.created {
+                        news.created.push(id.clone());
+                        let Some(tx) = vault.doc.transactions.iter().find(|tx| &tx.meta().id == id)
+                        else {
+                            continue;
+                        };
+                        if tx.meta().origin.is_estimated() {
+                            let (amount, asset) = match tx {
+                                Transaction::Topup(inner) => {
+                                    (inner.amount, inner.asset.symbol.clone())
+                                }
+                                Transaction::Payment(inner) => {
+                                    (inner.amount, inner.asset.symbol.clone())
+                                }
+                                Transaction::Transfer(inner) => {
+                                    (inner.amount, inner.asset.symbol.clone())
+                                }
+                                _ => continue,
+                            };
+                            news.estimated.push((
+                                id.clone(),
+                                name.clone(),
+                                amount.to_string(),
+                                asset,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        (pass, news, interest)
     };
-    if !pass.created.is_empty() {
+    if !pass.created.is_empty() || interest > 0 {
         let _ = app.emit(
             "automation-created",
             serde_json::json!({ "tx_ids": pass.created }),
@@ -489,88 +562,75 @@ fn workflows_tick(app: &AppHandle) {
         );
     }
     deliver(app, pass.notices, false);
+    automation_notices(app, &news, pass.skipped);
 }
 
-// -- 2. Automations --------------------------------------------------------------
-
-fn automations_tick(app: &AppHandle) {
-    let zone = current_zone(app);
-    let state = app.state::<AppState>();
-    let (pass, names) = {
-        let Ok(mut guard) = state.vault.lock() else {
-            return;
-        };
-        let Some(vault) = guard.as_mut() else {
-            return;
-        };
-        let Ok(pass) = vault.run_due_automations(now_secs(), &zone) else {
-            return;
-        };
-        // Savings accounts that ask for it get last month's interest booked.
-        let today = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
-        if let Ok(posted) = vault.post_due_interest(today)
-            && posted > 0
-        {
-            let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
-        }
-        let names: std::collections::HashMap<String, String> = vault
-            .doc
-            .automations
-            .iter()
-            .map(|automation| (automation.id.clone(), automation.name.clone()))
-            .collect();
-        (pass, names)
-    };
+fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
     let ru = russian(app);
-    if !pass.created.is_empty() {
-        let _ = app.emit(
-            "automation-created",
-            serde_json::json!({ "tx_ids": pass.created }),
-        );
+    if !news.created.is_empty() {
         record_and_deliver(
             app,
             vec![notice(
                 NoticeCategory::Automation,
-                format!("automation-created:{}", pass.created[0]),
+                format!("automation-created:{}", news.created[0]),
                 notice_title(NoticeCategory::Automation, ru),
                 if ru {
-                    format!("Созданы автоматические операции: {}", pass.created.len())
+                    format!("Созданы автоматические операции: {}", news.created.len())
                 } else {
-                    format!("Automatic transactions created: {}", pass.created.len())
+                    format!("Automatic transactions created: {}", news.created.len())
                 },
                 Some("planning-automations".into()),
                 trade_core::model::vault::now_iso(),
             )],
         );
     }
-    if pass.skipped > 0 {
-        let _ = app.emit(
-            "automation-skipped",
-            serde_json::json!({ "count": pass.skipped }),
-        );
-    }
-    for run in pass.rejected {
-        let AutomationOutcome::Rejected { reason } = &run.outcome else {
-            continue;
+    for (tx_id, name, amount, asset) in &news.estimated {
+        let (title, body) = if ru {
+            (
+                format!("«{name}»: уточните сумму"),
+                format!("Записано примерно: ~{amount} {asset}. Внесите сумму, которая пришла."),
+            )
+        } else {
+            (
+                format!("“{name}”: put in the amount"),
+                format!("Booked approximately: ~{amount} {asset}. Put in the amount that came."),
+            )
         };
-        let name = names.get(&run.automation_id).cloned().unwrap_or_default();
-        let event = AutomationRejectedEvent {
-            run_id: run.id.clone(),
-            automation_id: run.automation_id.clone(),
-            name: name.clone(),
-            planned_at: run.planned_at.clone(),
-            reason: reason.clone(),
-        };
-        let _ = app.emit("automation-rejected", &event);
-        let date = run.planned_at.get(..10).unwrap_or_default();
-        let (title, body) = rejected_text(ru, &name, date, reason);
         let mut record = notice(
             NoticeCategory::Automation,
-            format!("automation-rejected:{}", run.id),
+            format!("automation-estimated:{tx_id}"),
             &title,
             body,
             Some("planning-automations".into()),
-            run.planned_at.clone(),
+            trade_core::model::vault::now_iso(),
+        );
+        record.title = title;
+        record_and_deliver(app, vec![record]);
+    }
+    if skipped > 0 {
+        let _ = app.emit(
+            "automation-skipped",
+            serde_json::json!({ "count": skipped }),
+        );
+    }
+    for (run_id, automation_id, name, planned_at, reason) in &news.rejected {
+        let event = AutomationRejectedEvent {
+            run_id: run_id.clone(),
+            automation_id: automation_id.clone(),
+            name: name.clone(),
+            planned_at: planned_at.clone(),
+            reason: reason.clone(),
+        };
+        let _ = app.emit("automation-rejected", &event);
+        let date = planned_at.get(..10).unwrap_or_default();
+        let (title, body) = rejected_text(ru, name, date, reason);
+        let mut record = notice(
+            NoticeCategory::Automation,
+            format!("automation-rejected:{run_id}"),
+            &title,
+            body,
+            Some("planning-automations".into()),
+            planned_at.clone(),
         );
         record.title = title;
         record_and_deliver(app, vec![record]);

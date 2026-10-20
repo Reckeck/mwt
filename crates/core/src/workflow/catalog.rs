@@ -1243,6 +1243,12 @@ fn build() -> Vec<NodeDef> {
             json!(false),
         ),
         param(
+            "template",
+            ParamKind::LongText,
+            txt("Шаблон операции (JSON)", "Operation template (JSON)"),
+            json!(""),
+        ),
+        param(
             "on_shortfall",
             select(&[
                 ("fail", txt("ошибка", "an error")),

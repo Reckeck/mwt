@@ -66,9 +66,10 @@ pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
 pub use asset_holdings::{AssetHolding, AssetHoldings};
 pub use auto_reminders::category_of;
+pub(crate) use automations::draft_to_transaction;
 pub use automations::{
-    AutomationDraft, AutomationPass, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance,
-    SimulatedRun, describe_reject, planned_dates,
+    AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,
+    describe_reject,
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
@@ -1174,7 +1175,15 @@ impl UnlockedVault {
             .iter()
             .position(|known| known.meta().id == id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
-        let origin = self.doc.transactions[index].meta().origin.clone();
+        let mut origin = self.doc.transactions[index].meta().origin.clone();
+        // A new amount for an operation booked approximately is the real one.
+        if let TxOrigin::Workflow { estimated, .. } = &mut origin
+            && *estimated
+            && automations::main_amount(&self.doc.transactions[index])
+                != automations::main_amount(&tx)
+        {
+            *estimated = false;
+        }
         tx.meta_mut().id = id.to_string();
         tx.meta_mut().origin = origin;
         self.prepare_transaction(&mut tx)?;
