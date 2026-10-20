@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, Plus, Trash2 } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
@@ -12,11 +12,12 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { CATEGORY_GROUPS, categoryLabel } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
+import { useCategories } from '@/shared/api/queries'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
+const categories = useCategories()
 
 const sections = computed(() =>
   CATEGORY_GROUPS.map((group) => ({
@@ -104,7 +105,7 @@ const create = useMutation({
         <p v-if="adder.firstMessage()" class="text-xs text-destructive" role="alert">{{ adder.firstMessage() }}</p>
       </form>
 
-      <div v-for="section in sections" :key="section.group" class="grid gap-1">
+      <div v-for="section in sections" :key="section.group" class="grid gap-1 pointer-coarse:gap-2">
         <p class="text-xs font-medium text-muted-foreground">{{ t(`categoryGroup.${section.group}`) }}</p>
         <div
           v-for="category in section.items"
@@ -128,8 +129,8 @@ const create = useMutation({
           </Select>
           <Button
             variant="ghost"
-            size="icon"
-            class="size-8 text-muted-foreground"
+            size="icon-sm"
+            class="text-muted-foreground"
             :title="category.archived ? t('stores.unarchive') : t('stores.archive')"
             :aria-label="category.archived ? t('stores.unarchive') : t('stores.archive')"
             @click="archive.mutate(category)"

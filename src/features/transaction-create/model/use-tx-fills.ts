@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { call } from '@/shared/api/ipc'
@@ -33,6 +33,7 @@ export function useTxFills(state: TxFormState) {
   }
 
   let hashTimer: ReturnType<typeof setTimeout> | undefined
+  onScopeDispose(() => clearTimeout(hashTimer))
   watch(
     () => form.txHash,
     (value) => {

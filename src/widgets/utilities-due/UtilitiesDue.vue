@@ -13,12 +13,14 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useStoreTree } from '@/shared/api/queries'
+import { SectionState } from '@/shared/ui/section-state'
 
 /** This month's utilities per property: what is due, when, and one button to pay it all. */
 const { t } = useI18n()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const items = useQuery({ queryKey: ['utilities'], queryFn: () => call<UtilityItem[]>('list_utility_items') })
 const properties = computed(() => {
   const withBills = new Set((items.data.value ?? []).filter((item) => item.active).map((item) => item.property_id))
@@ -68,6 +70,7 @@ const payOpen = computed({
       <p data-widget-title class="text-sm text-muted-foreground">{{ t('utilitiesDue.title') }}</p>
     </template>
     <Skeleton v-if="tree.isPending.value || items.isPending.value" class="h-20 w-full" />
+    <SectionState v-else-if="items.error.value" :error="items.error.value" compact @retry="items.refetch()" />
     <p v-else-if="!rows.length" class="text-sm text-muted-foreground">{{ t('utilities.noProperty') }}</p>
     <ul v-else class="grid gap-3">
       <li v-for="row in rows" :key="row.store.id" class="grid gap-1.5">

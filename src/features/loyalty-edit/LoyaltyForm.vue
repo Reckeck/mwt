@@ -72,7 +72,7 @@ const save = useMutation({
 
 <template>
   <form class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
-    <div class="grid gap-4 @sm:grid-cols-3">
+    <div class="grid gap-4 @xl:grid-cols-3">
       <FormField for="loyalty-symbol" :label="t('loyalty.symbol')" required :error="form.error('symbol')">
         <!-- The name of a programme's points, not a listed asset. -->
         <Input id="loyalty-symbol" v-model="symbol" class="uppercase" maxlength="16" data-picker-ok />
@@ -89,7 +89,7 @@ const save = useMutation({
         :error="form.error('currency')"
       />
     </div>
-    <div class="grid gap-4 @sm:grid-cols-3">
+    <div class="grid gap-4 @xl:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="loyalty-expires">{{ t('loyalty.expiresAt') }}</Label>
         <DateTimePicker id="loyalty-expires" v-model="expiresAt" />

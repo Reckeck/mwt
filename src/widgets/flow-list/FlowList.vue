@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { ChevronDown } from 'lucide-vue-next'
 import { Money } from '@/entities/currency'
 
@@ -33,6 +33,7 @@ const range = computed(() => ({
 }))
 const flows = useQuery({
   queryKey: computed(() => ['flows', range.value]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<FlowSummary[]>('list_flows', range.value),
 })
 const expanded = ref<string | null>(null)

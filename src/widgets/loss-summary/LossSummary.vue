@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { Money } from '@/entities/currency'
 
 import { Button } from '@/shared/ui/button'
@@ -29,6 +29,7 @@ const context = useTxContext()
 /** Without a report handed in: the last twelve months in the budget currency. */
 const own = useQuery({
   queryKey: computed(() => ['report', 'losses', 'summary', props.storeIds]),
+  placeholderData: keepPreviousData,
   queryFn: () =>
     call<AnalyticsReport>('get_report', {
       kind: 'losses',
@@ -63,7 +64,7 @@ const groups = computed(() => {
 <template>
   <div v-if="data && !(props.hideEmpty && !Number(data.total.total))" class="grid gap-4">
     <h3 v-if="props.title" class="heading-card">{{ props.title }}</h3>
-    <div class="grid gap-4 @sm:grid-cols-3">
+    <div class="grid gap-4 @xl:grid-cols-3">
       <Card>
         <p class="text-xs text-muted-foreground">{{ t('losses.total') }}</p>
         <p class="text-xl font-semibold tabular-nums"><Money :amount="data.total.total" :currency="data?.meta.currency" /></p>
@@ -80,7 +81,7 @@ const groups = computed(() => {
     <p v-if="data.incomplete" class="text-xs text-warning">
       {{ t('losses.incompleteCount', { count: data.incomplete }) }}
     </p>
-    <div class="grid gap-4 @lg:grid-cols-3">
+    <div class="grid gap-4 @wide:grid-cols-3">
       <Card v-for="group in groups" :key="group.key">
         <template #header>
           <h3 class="heading-card">{{ t(`losses.${group.key}`) }}</h3>

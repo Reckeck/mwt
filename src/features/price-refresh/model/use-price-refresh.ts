@@ -3,8 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
-/** Everything a fresh quote or rate changes. */
-const PRICED_KEYS = [['store'], ['store-history'], ['stores'], ['summary'], ['fx-table'], ['net-worth']]
+/**
+ * Everything a fresh quote or rate changes. Refreshed by the shell on
+ * `prices-updated` (whoever started it: this button, the tray, the timer).
+ */
+export const PRICED_KEYS = [['store'], ['store-history'], ['stores'], ['summary'], ['fx-table'], ['net-worth']]
 
 /**
  * Fetch new quotes and exchange rates for everything held — one action from
@@ -17,10 +20,8 @@ export function usePriceRefresh() {
 
   return useMutation({
     mutationFn: () => call<RefreshResult>('refresh_all'),
-    onSuccess: (result) => {
-      queryClient.setQueryData(['refresh'], result)
-      for (const queryKey of PRICED_KEYS) void queryClient.invalidateQueries({ queryKey })
-    },
+    // The screens follow `prices-updated` (use-cache-events), not this result.
+    onSuccess: (result) => queryClient.setQueryData(['refresh'], result),
     meta: {
       error: 'wallet.pricesRefreshFailed',
       success: (data) => {

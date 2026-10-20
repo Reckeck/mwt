@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -10,12 +9,12 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { call } from '@/shared/api/ipc'
 import { cn } from '@/shared/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
+import { useContacts } from '@/shared/api/queries'
 
 const props = defineProps<StoreFormProps>()
 const { t } = useI18n()
@@ -35,11 +34,7 @@ const isRoot = computed(() => !props.store.parent_id)
 /** A loan's purpose is fixed: it is never everyday money. */
 const purposeEditable = computed(() => props.store.kind !== 'liability')
 
-const contacts = useQuery({
-  queryKey: ['contacts'],
-  queryFn: () => call<Contact[]>('list_contacts'),
-  enabled: isRoot,
-})
+const contacts = useContacts(isRoot)
 
 watch(
   () => props.store,
@@ -87,7 +82,7 @@ function submit() {
 
     <fieldset v-if="purposeEditable" class="grid gap-2" data-tour="wallet-purpose">
       <legend class="mb-1 text-sm font-medium">{{ t('purpose.title') }}</legend>
-      <RadioGroup v-model="purpose" class="grid gap-2 @md:grid-cols-2">
+      <RadioGroup v-model="purpose" class="grid gap-2 @mid:grid-cols-2">
         <label
           v-for="entry in PURPOSES"
           :key="entry"

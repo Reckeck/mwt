@@ -5,6 +5,7 @@ import type { useWorkflowActions } from '@/features/workflow-manage'
 import { outcomeKey } from '@/shared/lib/workflow'
 
 import type { EditorGraph } from './use-editor-graph'
+import { dateFormat } from '@/shared/lib/format'
 
 /**
  * The last emulation or real run: shown on the canvas (a step on every node,
@@ -70,7 +71,9 @@ export function useRunReport(
       test: {
         id: '',
         name: t('workflow.tests.defaultName', {
-          when: new Date().toLocaleString(locale.value, { dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23' }),
+          when: dateFormat({ dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23' }, locale.value).format(
+            new Date(),
+          ),
         }),
         trigger_node: result.run.trace[0]?.node_id ?? null,
         at: result.run.started_at,

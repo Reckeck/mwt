@@ -27,7 +27,7 @@ const { t } = useI18n()
       )
     "
   >
-    <component :is="storeIcon(props.store)" class="size-4 shrink-0" :style="{ color: props.store.color }" />
+    <component :is="storeIcon(props.store)" class="store-tint size-4 shrink-0" :style="{ '--store-color': props.store.color }" />
     <span class="min-w-0 flex-1 truncate">{{ props.store.name }}</span>
     <Badge v-if="props.store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
     <Badge v-else-if="bindingBadge(props.store)" variant="outline">{{ bindingBadge(props.store) }}</Badge>

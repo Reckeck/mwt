@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore control-swap: the button follows the saved opt-in setting, not a click on itself
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -22,6 +23,7 @@ const settings = useSettingsStore()
 const id = computed(() => txId(props.tx))
 const hasHash = computed(() => Boolean(txChainAndHash(props.tx).hash))
 const records = useQuery({
+  // no placeholder: suggestions belong to one operation
   queryKey: computed(() => ['enrichments', id.value]),
   queryFn: () => call<EnrichmentRecord[]>('get_enrichments', { txId: id.value }),
   enabled: hasHash,

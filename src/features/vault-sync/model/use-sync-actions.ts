@@ -1,3 +1,4 @@
+// check-ui-ignore invalidate-all: restoring or replacing the vault from sync changes every screen
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 

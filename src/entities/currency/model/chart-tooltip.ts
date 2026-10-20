@@ -16,7 +16,8 @@ interface TooltipParam {
 /** The number a tooltip param carries: a plain value, or the last of a `[time, value]` pair. */
 function pointValue(param: TooltipParam): number {
   const raw = Array.isArray(param.value) ? param.value[param.value.length - 1] : param.value
-  return Number(raw)
+  const value = Number(raw)
+  return Object.is(value, -0) ? 0 : value
 }
 
 const escapeHtml = (text: string) =>

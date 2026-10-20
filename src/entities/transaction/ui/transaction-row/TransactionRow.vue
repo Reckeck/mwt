@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
 
@@ -9,7 +9,6 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
-import { useCoarsePointer } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 import {
   DEFAULT_TX_BADGE,
@@ -34,17 +33,15 @@ import type { TransactionRowProps } from './transaction-row.types'
 const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null, loss: null, openable: false })
 const emit = defineEmits<{ open: [tx: Transaction] }>()
 
-/** Per-row actions (edit, delete…) come from the page: entities do not own user actions. */
-defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
+/**
+ * The row's menu («⋯») comes from the list: entities do not own user actions.
+ * Without one, the column holds the explorer link (or stays empty), so every
+ * row of a list keeps the same width for its amounts (rule 17).
+ */
+const slots = defineSlots<{ actions?(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
 const context = useTxContext()
-/**
- * The row's buttons mount on its first hover or focus (a finger sees them at
- * once): a page of rows with an edit and a delete each was slow to appear.
- */
-const armed = ref(false)
-const coarse = useCoarsePointer()
 
 const kind = computed(() => txKind(props.tx))
 const meta = computed(() => txMeta(props.tx))
@@ -87,7 +84,7 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
 </script>
 
 <template>
-  <div class="group flex flex-wrap items-start gap-x-3 gap-y-1 py-3" @pointerenter="armed = true" @focusin="armed = true">
+  <div class="flex flex-wrap items-start gap-x-3 gap-y-1 py-3">
     <Badge :variant="TX_KIND_BADGE[kind] ?? DEFAULT_TX_BADGE" class="mt-0.5 shrink-0">
       {{ t(`tx.kind.${kind}`) }}
     </Badge>
@@ -149,22 +146,20 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
       </p>
     </div>
 
-    <!-- With a mouse the buttons wait for the row's hover or focus; a finger always sees them. -->
-    <div
-      class="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100"
-    >
+    <!-- One column of fixed width in every row: nothing moves on hover, amounts line up. -->
+    <div class="flex w-8 shrink-0 justify-end">
+      <slot v-if="slots.actions" name="actions" :tx="props.tx" />
       <Button
-        v-if="explorer"
+        v-else-if="explorer"
         variant="ghost"
-        size="icon"
-        class="size-8 shrink-0"
+        size="icon-sm"
+        class="text-muted-foreground"
         :title="t('hist.openExplorer')"
         :aria-label="t('hist.openExplorer')"
         @click="openExplorer"
       >
         <ExternalLink class="size-4" />
       </Button>
-      <slot v-if="armed || coarse" name="actions" :tx="props.tx" />
     </div>
   </div>
 </template>

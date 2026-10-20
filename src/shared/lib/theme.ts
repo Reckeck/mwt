@@ -8,6 +8,9 @@ export type ResolvedTheme = 'light' | 'dark'
 
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 
+/** Read by the inline script in index.html: the theme is right from the first paint. */
+export const THEME_STORAGE_KEY = 'trade-app:theme'
+
 export function useTheme() {
   const settingsStore = useSettingsStore()
 
@@ -20,9 +23,22 @@ export function useTheme() {
 
   function apply() {
     const root = document.documentElement
+    const changed = root.getAttribute('data-theme') !== resolved.value
+    // One frame without transitions: otherwise the few `transition-colors` elements fade
+    // while everything else snaps, and the switch looks staggered.
+    if (changed) root.classList.add('theme-switching')
     root.classList.toggle('dark', resolved.value === 'dark')
     root.setAttribute('data-theme', resolved.value)
     root.style.colorScheme = resolved.value
+    if (changed) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')))
+    const preference = settingsStore.app?.theme
+    if (preference) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, preference)
+      } catch {
+        // Private storage off: the next start may flash the default theme once.
+      }
+    }
   }
 
   function onMediaChange() {

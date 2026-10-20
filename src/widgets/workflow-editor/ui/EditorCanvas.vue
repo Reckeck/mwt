@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore icon-button-size: the floating «+» is a 48px FAB on purpose, larger than any variant
 import { useI18n } from 'vue-i18n'
 import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'

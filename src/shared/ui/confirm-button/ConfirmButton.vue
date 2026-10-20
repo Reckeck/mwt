@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 
 import { Button } from '@/shared/ui/button'
+import { cn } from '@/shared/lib/utils'
 
 import type { ConfirmButtonProps } from './confirm-button.types'
 
@@ -11,6 +12,10 @@ const emit = defineEmits<{ confirm: [] }>()
 /**
  * Two-step destructive action without a modal: the first click arms the
  * button, the second (within `timeout`) confirms, anything else disarms it.
+ *
+ * One element in both states (rule 17): the icon button keeps its size and its
+ * focus; the armed «Delete?» is a label laid over its neighbours from the
+ * button's right edge, so nothing in the row moves.
  */
 const armed = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -35,26 +40,30 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <Button
-    v-if="armed"
-    variant="destructive"
-    size="sm"
-    class="h-8 shrink-0 px-2.5"
+    variant="ghost"
+    size="icon-sm"
+    data-slot="confirm-button"
+    :data-armed="armed || undefined"
+    :class="
+      cn(
+        'relative shrink-0 text-muted-foreground hover:text-destructive',
+        armed && 'z-10 text-destructive-foreground hover:text-destructive-foreground',
+      )
+    "
+    :title="armed ? props.confirmLabel : props.label"
+    :aria-label="armed ? props.confirmLabel : props.label"
     :disabled="props.disabled"
     @click="click"
     @blur="disarm"
-  >
-    {{ props.confirmLabel }}
-  </Button>
-  <Button
-    v-else
-    variant="ghost"
-    size="icon"
-    class="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-    :title="props.label"
-    :aria-label="props.label"
-    :disabled="props.disabled"
-    @click="click"
+    @keydown.escape="disarm"
   >
     <slot />
+    <span
+      v-if="armed"
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-y-0 right-0 flex items-center whitespace-nowrap rounded-md bg-destructive px-2.5 text-sm font-medium text-destructive-foreground shadow-sm"
+    >
+      {{ props.confirmLabel }}
+    </span>
   </Button>
 </template>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Plus, Trash2, Wallet as WalletIcon } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
@@ -16,10 +16,10 @@ import { StatCard } from '@/shared/ui/stat-card'
 import { Switch } from '@/shared/ui/switch'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { Money } from '@/entities/currency'
 import { Dialog } from '@/shared/ui/dialog'
+import { useStoreTree } from '@/shared/api/queries'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -27,10 +27,7 @@ const router = useRouter()
 const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
-const tree = useQuery({
-  queryKey: STORE_TREE_QUERY_KEY,
-  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-})
+const tree = useStoreTree()
 
 const roots = computed(() => tree.data.value ?? [])
 
@@ -113,7 +110,7 @@ function openWallet(created: Store) {
     >
       <div class="flex flex-wrap items-end gap-4">
         <StatCard
-          class="min-w-0 flex-1 @lg:min-w-56 @lg:flex-none"
+          class="min-w-0 flex-1 @wide:min-w-56 @wide:flex-none"
           :label="t('stores.total')"
           :hint="t('stores.totalHint')"
         >
@@ -131,7 +128,7 @@ function openWallet(created: Store) {
         </div>
       </div>
 
-      <div class="grid items-start gap-4 @sm:grid-cols-2 @lg:grid-cols-3" data-tour="stores-list">
+      <div class="grid items-start gap-4 @xl:grid-cols-2 @wide:grid-cols-3" data-tour="stores-list">
         <StoreCard
           v-for="node in shown"
           :key="node.store.id"

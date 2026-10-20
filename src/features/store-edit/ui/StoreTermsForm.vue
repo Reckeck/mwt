@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { emptyLiabilityTerms, LiabilityTermsFields, StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import type { StoreFormProps } from '../store-edit.types'
+import { useStoreTree } from '@/shared/api/queries'
 
 const props = defineProps<StoreFormProps>()
 const { t } = useI18n()
@@ -19,11 +17,7 @@ const terms = ref<LiabilityTerms>(emptyLiabilityTerms())
 const securedBy = ref('')
 const isLoan = computed(() => props.store.kind === 'liability')
 
-const tree = useQuery({
-  queryKey: STORE_TREE_QUERY_KEY,
-  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-  enabled: isLoan,
-})
+const tree = useStoreTree(isLoan)
 const properties = computed(() =>
   (tree.data.value ?? []).filter((node) => node.store.kind === 'property' && !node.store.archived),
 )

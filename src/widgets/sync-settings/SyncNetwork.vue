@@ -76,7 +76,7 @@ const lastError = computed(() => {
           {{ t('sync.firewall.open') }}
         </Button>
         <div v-for="command in network?.firewall_commands ?? []" :key="command" class="flex min-w-0 items-start gap-1">
-          <code class="min-w-0 flex-1 break-all rounded bg-muted px-2 py-1 font-mono text-[11px] text-foreground">{{ command }}</code>
+          <code class="min-w-0 flex-1 break-all rounded bg-muted px-2 py-1 font-mono text-2xs text-foreground">{{ command }}</code>
           <Button
             variant="ghost"
             size="icon-xs"

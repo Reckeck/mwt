@@ -147,8 +147,12 @@ const test = useMutation({
       </RouterLink>
     </div>
 
-    <div class="grid gap-1 rounded-lg border border-border">
-      <div class="grid grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem] items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">
+    <!-- A table from 36rem; narrower, each category is a card-less block: name and switch,
+         then its own labelled lines (the fixed columns left ~60px for the name on a phone). -->
+    <div class="@container grid gap-1 rounded-lg border border-border">
+      <div
+        class="hidden items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground @xl:grid @xl:grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem]"
+      >
         <span>{{ t('notices.category') }}</span>
         <span class="text-center">{{ t('notices.enabled') }}</span>
         <span class="text-center">{{ t('notices.leadDays') }}</span>
@@ -157,7 +161,7 @@ const test = useMutation({
       <div
         v-for="name in NOTICE_CATEGORIES"
         :key="name"
-        class="grid grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem] items-center gap-2 px-4 py-1.5"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-4 py-1.5 max-@xl:border-b max-@xl:border-border max-@xl:py-3 max-@xl:last:border-b-0 @xl:grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem]"
       >
         <span class="grid min-w-0">
           <span class="truncate text-sm">{{ t(`notices.cat.${name}`) }}</span>
@@ -170,10 +174,14 @@ const test = useMutation({
             @update:model-value="(value) => patchCategory(name, { enabled: Boolean(value) })"
           />
         </span>
-        <span class="flex justify-center">
+        <span
+          class="flex items-center justify-between gap-2 max-@xl:col-span-2 @xl:justify-center"
+          :class="!LEAD_CATEGORIES.includes(name) && 'max-@xl:hidden'"
+        >
+          <span class="text-xs text-muted-foreground @xl:hidden">{{ t('notices.leadDays') }}</span>
           <Input
             v-if="LEAD_CATEGORIES.includes(name)"
-            type="number"
+            type="text" inputmode="numeric"
             min="0"
             max="90"
             class="h-8 w-16 px-2 text-center"
@@ -182,7 +190,11 @@ const test = useMutation({
             @change="(event: Event) => patchCategory(name, { lead_days: leadOf((event.target as HTMLInputElement).value) })"
           />
         </span>
-        <span class="flex justify-center">
+        <span
+          class="flex items-center justify-between gap-2 max-@xl:col-span-2 @xl:justify-center"
+          :class="!AUTO_REMINDER_CATEGORIES.includes(name) && 'max-@xl:hidden'"
+        >
+          <span class="text-xs text-muted-foreground @xl:hidden">{{ t('notices.autoReminders') }}</span>
           <Switch
             v-if="AUTO_REMINDER_CATEGORIES.includes(name)"
             :model-value="category(name).auto_reminders"

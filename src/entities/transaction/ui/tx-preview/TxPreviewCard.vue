@@ -3,8 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AlertTriangle, ArrowRight } from 'lucide-vue-next'
 
-import { formatMoney } from '@/shared/lib/format'
-import { activeLocale } from '@/shared/lib/locale'
+import { formatMoney, numberFormat } from '@/shared/lib/format'
 import { parseError } from '@/shared/api/ipc'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
@@ -16,10 +15,7 @@ const { t } = useI18n()
 /** Fiat with cents, crypto with up to 8 significant decimals and no trailing zeros. */
 function qty(value: string, asset: AssetRef): string {
   const fiat = asset.chain === 'fiat'
-  return new Intl.NumberFormat(activeLocale.value, {
-    minimumFractionDigits: fiat ? 2 : 0,
-    maximumFractionDigits: fiat ? 2 : 8,
-  }).format(Number(value))
+  return numberFormat({ minimumFractionDigits: fiat ? 2 : 0, maximumFractionDigits: fiat ? 2 : 8 }).format(Number(value))
 }
 
 const rows = computed(() =>
@@ -61,7 +57,7 @@ const warningTexts = computed(() =>
 <template>
   <section
     v-if="props.preview && (rows.length || errorText)"
-    class="sticky bottom-0 z-10 grid gap-2 rounded-md border border-border bg-card/95 p-3 text-sm shadow-[0_-8px_16px_-12px_rgba(0,0,0,0.5)] backdrop-blur"
+    class="sticky bottom-0 z-10 grid gap-2 rounded-md border border-border bg-card p-3 text-sm shadow-[0_-8px_16px_-12px_rgba(0,0,0,0.5)]"
     :aria-busy="props.loading"
     data-tour="tx-preview"
   >

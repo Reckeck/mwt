@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
 import { call } from '@/shared/api/ipc'
 import { categoryLabel } from '@/shared/lib/categories'
 
 import type { CategorySelectProps } from './category-select.types'
+import { useCategories } from '@/shared/api/queries'
 
 const props = defineProps<CategorySelectProps>()
 
@@ -17,10 +18,7 @@ const model = defineModel<string | string[]>({ required: true })
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const categories = useQuery({
-  queryKey: ['categories'],
-  queryFn: () => call<Category[]>('list_categories'),
-})
+const categories = useCategories()
 
 const pickedKeys = computed(() => (Array.isArray(model.value) ? model.value : [model.value]))
 

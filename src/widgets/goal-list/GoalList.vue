@@ -16,6 +16,7 @@ import { formatDate, formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 import GoalCalendarTable from './GoalCalendarTable.vue'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -23,7 +24,11 @@ const queryClient = useQueryClient()
 const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_goals') })
 const progress = useQuery({ queryKey: ['goal-progress'], queryFn: () => call<GoalProgress[]>('get_goal_progress') })
 
-const progressOf = (id: string) => progress.data.value?.find((entry) => entry.goal.id === id) ?? null
+/** Each goal with its progress, matched once (the card reads it a dozen times). */
+const rows = computed(() => {
+  const byId = new Map((progress.data.value ?? []).map((entry) => [entry.goal.id, entry]))
+  return (goals.data.value ?? []).map((goal) => ({ goal, entry: byId.get(goal.id) ?? null }))
+})
 
 function issueText(issue: RealismIssue, currency: string): string {
   if ('over_commitment' in issue) {
@@ -70,8 +75,8 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
       <Button @click="openNew"><Plus class="size-4" />{{ t('goal.new') }}</Button>
     </EmptyState>
 
-    <div class="grid gap-4 @lg:grid-cols-2">
-      <Card v-for="goal in goals.data.value ?? []" :key="goal.id" :class="!goal.active && 'opacity-60'">
+    <div class="grid gap-4 @wide:grid-cols-2">
+      <Card v-for="{ goal, entry } in rows" :key="goal.id" :class="!goal.active && 'opacity-60'">
         <div class="grid gap-3">
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
@@ -88,8 +93,8 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
             <div class="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
-                size="icon"
-                class="size-8 text-muted-foreground"
+                size="icon-sm"
+                class="text-muted-foreground"
                 :title="t('goal.edit')"
                 :aria-label="t('goal.edit')"
                 @click="openEdit(goal)"
@@ -102,37 +107,35 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
             </div>
           </div>
 
-          <template v-if="progressOf(goal.id)">
+          <template v-if="entry">
             <div class="grid gap-1">
               <div class="flex items-baseline justify-between gap-2 text-sm tabular-nums">
-                <span class="font-medium"><Money :amount="progressOf(goal.id)?.saved" :currency="goal.currency" /></span>
+                <span class="font-medium"><Money :amount="entry?.saved" :currency="goal.currency" /></span>
                 <span class="text-muted-foreground">
-                  <Money :amount="goal.target_amount" :currency="goal.currency" /> · {{ progressOf(goal.id)?.pct }}%
+                  <Money :amount="goal.target_amount" :currency="goal.currency" /> · {{ entry?.pct }}%
                 </span>
               </div>
-              <div class="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" :aria-valuenow="pct(progressOf(goal.id)?.pct)" aria-valuemin="0" aria-valuemax="100">
-                <div class="h-full rounded-full bg-primary" :style="{ width: `${pct(progressOf(goal.id)?.pct)}%` }" />
-              </div>
+              <ProgressBar :value="pct(entry?.pct)" :label="goal.name" />
             </div>
             <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
               <dt class="text-muted-foreground">{{ t('goal.contributed') }}</dt>
-              <dd class="text-right tabular-nums"><Money :amount="progressOf(goal.id)?.contributed" :currency="goal.currency" /></dd>
+              <dd class="text-right tabular-nums"><Money :amount="entry?.contributed" :currency="goal.currency" /></dd>
               <dt class="text-muted-foreground">{{ t('goal.fxGain') }}</dt>
-              <dd class="text-right tabular-nums"><Money :amount="progressOf(goal.id)?.fx_gain" :currency="goal.currency" /></dd>
-              <template v-if="progressOf(goal.id)?.need_per_month">
+              <dd class="text-right tabular-nums"><Money :amount="entry?.fx_gain" :currency="goal.currency" /></dd>
+              <template v-if="entry?.need_per_month">
                 <dt class="text-muted-foreground">{{ t('goal.needPerMonth') }}</dt>
                 <dd class="text-right tabular-nums">
-                  <Money :amount="progressOf(goal.id)?.need_per_month" :currency="goal.currency" />
-                  · {{ t('goal.monthsLeft', { count: progressOf(goal.id)?.months_left ?? 0 }) }}
+                  <Money :amount="entry?.need_per_month" :currency="goal.currency" />
+                  · {{ t('goal.monthsLeft', { count: entry?.months_left ?? 0 }) }}
                 </dd>
               </template>
               <dt class="text-muted-foreground">{{ t('goal.forecast') }}</dt>
               <dd class="text-right">
-                {{ progressOf(goal.id)?.forecast ? formatDate(progressOf(goal.id)?.forecast) : t('goal.notAccumulating') }}
+                {{ entry?.forecast ? formatDate(entry?.forecast) : t('goal.notAccumulating') }}
               </dd>
             </dl>
             <p
-              v-if="progressOf(goal.id)?.realistic"
+              v-if="entry?.realistic"
               class="flex items-center gap-1.5 text-xs text-success"
             >
               <CircleCheck class="size-3.5" />
@@ -143,7 +146,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                 <CircleAlert class="size-3.5" />
                 {{ t('goal.revise') }}
               </p>
-              <p v-for="(issue, index) in progressOf(goal.id)?.issues ?? []" :key="index">
+              <p v-for="(issue, index) in entry?.issues ?? []" :key="index">
                 {{ issueText(issue, goal.currency) }}
               </p>
             </div>

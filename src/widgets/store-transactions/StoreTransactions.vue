@@ -4,19 +4,18 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { TransactionFilterBar } from '@/features/transaction-filter'
+import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { storeTxFilter } from '@/shared/lib/tx-filter'
 
-import type { StoreTransactionsProps } from './store-transactions.types'
 import { openTxDetails } from '@/shared/lib/tx-details'
 
-const props = withDefaults(defineProps<StoreTransactionsProps>(), { includeChildren: true })
+import type { StoreTransactionsProps } from './store-transactions.types'
 
-/** Per-row actions (edit, delete) come from the page. */
-defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
+const props = withDefaults(defineProps<StoreTransactionsProps>(), { includeChildren: true })
 
 const { t } = useI18n()
 
@@ -34,6 +33,9 @@ const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioS
 const { query: txs, rows, total } = useTxPages(filter)
 
 const openDetails = openTxDetails
+
+/** «⋯» and right-click on a row; an edit opens from this wallet's side. */
+const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
 </script>
 
 <template>
@@ -64,13 +66,11 @@ const openDetails = openTxDetails
           :fx-per-usd="summary.data.value?.fx_per_usd"
           :base-currency="summary.data.value?.base_currency"
           @open="openDetails"
+          :row-actions="rowMenu.actions"
           @more="txs.fetchNextPage()"
-        >
-          <template #actions="{ tx }">
-            <slot name="actions" :tx="tx" />
-          </template>
-        </TransactionsList>
+        />
       </div>
     </SectionState>
+    <TxRowMenuHost :menu="rowMenu" />
   </Card>
 </template>

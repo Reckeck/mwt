@@ -9,11 +9,14 @@ import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
+import { useCategories } from '@/shared/api/queries'
+import { SectionState } from '@/shared/ui/section-state'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const { t } = useI18n()
 
 const statuses = useQuery({ queryKey: ['budget-status'], queryFn: () => call<BudgetStatus[]>('get_budget_status') })
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
+const categories = useCategories()
 
 function label(target: BudgetTarget): string {
   if (target === 'total') return t('budget.targetKind.total')
@@ -38,17 +41,15 @@ const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.use
             <Money :amount="status.spent" :decimals="0" :currency="status.budget.currency" /> / <Money :amount="status.budget.limit" :decimals="0" :currency="status.budget.currency" />
           </span>
         </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            class="h-full rounded-full"
-            :class="Number(status.remaining) < 0 ? 'bg-destructive' : 'bg-primary'"
-            :style="{ width: `${pct(status)}%` }"
-          />
-        </div>
+        <ProgressBar :value="pct(status)" size="sm" :tone="Number(status.remaining) < 0 ? 'destructive' : 'primary'" />
       </li>
     </ul>
   </Card>
   <Card size="sm" v-else-if="statuses.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <!-- A failed load is not «nothing here»: it said «create one» to someone who has several. -->
+  <Card size="sm" v-else-if="statuses.error.value">
+    <SectionState :error="statuses.error.value" compact @retry="statuses.refetch()" />
+  </Card>
   <Card size="sm" v-else>
     <div class="flex flex-col items-start gap-2">
       <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>

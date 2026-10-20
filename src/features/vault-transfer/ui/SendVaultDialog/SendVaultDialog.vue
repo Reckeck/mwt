@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore control-swap: each phase of the transfer has its own footer action
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2 } from 'lucide-vue-next'
@@ -75,12 +76,10 @@ function retry() {
     </div>
 
     <template #footer>
-      <Button v-if="phase === 'idle'" type="submit" form="transfer-send-form" class="gap-2" :disabled="send.isPending.value">
-        <Spinner v-if="send.isPending.value" />
+      <Button v-if="phase === 'idle'" type="submit" form="transfer-send-form" class="gap-2" :disabled="send.isPending.value" :loading="send.isPending.value">
         {{ t('transfer.send.submit') }}
       </Button>
-      <Button v-else-if="phase === 'code'" type="submit" form="transfer-code-form" class="gap-2" :disabled="sendCode.isPending.value">
-        <Spinner v-if="sendCode.isPending.value" />
+      <Button v-else-if="phase === 'code'" type="submit" form="transfer-code-form" class="gap-2" :disabled="sendCode.isPending.value" :loading="sendCode.isPending.value">
         {{ t('transfer.send.confirm') }}
       </Button>
       <Button v-else-if="phase === 'failed'" @click="retry">{{ t('transfer.send.again') }}</Button>

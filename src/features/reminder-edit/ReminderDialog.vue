@@ -97,7 +97,7 @@ const save = useMutation({
         <div class="flex items-center gap-2">
           <template v-if="unit">
             <span class="shrink-0 text-sm text-muted-foreground">{{ t('reminder.every') }}</span>
-            <Input v-model="every" type="number" min="1" max="999" class="w-20" :aria-label="t('reminder.everyCount')" />
+            <Input v-model="every" type="text" inputmode="numeric" min="1" max="999" class="w-20" :aria-label="t('reminder.everyCount')" />
           </template>
           <Select id="reminder-repeat" v-model="unit" class="flex-1">
             <SelectItem value="">{{ t('reminder.once') }}</SelectItem>

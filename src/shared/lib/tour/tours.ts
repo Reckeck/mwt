@@ -46,6 +46,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-emulation-question', key: 'workflowEditor.question', side: 'top' },
   { target: 'workflow-event-runs', key: 'workflowEditor.eventRuns', side: 'top' },
   { target: 'workflow-active', key: 'workflowEditor.active', side: 'bottom' },
+  { target: 'workflow-edit-commands', key: 'workflowEditor.editCommands', side: 'bottom' },
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
   { target: 'workflow-discard', key: 'workflowEditor.discard', side: 'bottom' },
   { target: 'workflow-draft', key: 'workflowEditor.draft', side: 'bottom' },
@@ -84,6 +85,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
+    { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
     { target: 'notification-bell', key: 'dashboard.bell', side: 'bottom' },
     { target: 'sync-indicator', key: 'dashboard.sync', side: 'bottom' },
@@ -124,6 +126,7 @@ export const TOURS: Record<string, TourStep[]> = {
   'transactions-calendar': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'section-content', key: 'transactionsCalendar.content', side: 'top' },
+    { target: 'calendar-balance', key: 'transactionsCalendar.balance', side: 'bottom' },
   ],
   analytics: analytics([
     { target: 'overview-cards', key: 'analytics.overview', side: 'top' },
@@ -139,6 +142,10 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'section-content', key: 'analytics.wealth', side: 'top' },
   ]),
   'analytics-investments': analytics([{ target: 'section-content', key: 'analytics.investments', side: 'top' }]),
+  'analytics-saldo': analytics([
+    { target: 'section-content', key: 'analytics.saldo', side: 'top' },
+    { target: 'saldo-pool', key: 'analytics.saldoPool', side: 'top' },
+  ]),
   'transactions-contacts': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'contact-quick-create', key: 'directory.create', side: 'right' },

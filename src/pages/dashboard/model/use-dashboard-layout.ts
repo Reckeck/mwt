@@ -4,6 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import type { Layout } from 'grid-layout-plus'
 
 import {
+  DASHBOARD_COLS,
   DEFAULT_DASHBOARD,
   type DashboardWidgetDef,
   layoutSignature,
@@ -91,15 +92,35 @@ export function useDashboardLayout() {
     })
   }
 
-  /** S / M / L presets, in grid columns × rows, never below the widget's minimum. */
+  /**
+   * S / M / L from the widget's own sizes: its minimum, its default, the full width at
+   * its default height. One fixed set squeezed a calendar's eight rows into four and
+   * gave a wide table half a row.
+   */
   function resize(id: string, size: 's' | 'm' | 'l') {
     const def = widgetDef(id)
     if (!def) return
-    const presets = { s: [3, 4], m: [6, 6], l: [12, 8] } as const
+    const presets = { s: [def.minW, def.minH], m: [def.w, def.h], l: [DASHBOARD_COLS, def.h] } as const
     const [width, height] = presets[size]
-    const items = layout.value.map((item) =>
-      item.i === id ? { ...item, w: Math.max(width, def.minW), h: Math.max(height, def.minH) } : item,
-    )
+    const items = layout.value.map((item) => (item.i === id ? { ...item, w: width, h: height } : item))
+    void save(cfgsOf(items))
+  }
+
+  /**
+   * On the stacked (phone) dashboard nothing can be dragged: «Выше»/«Ниже» swap a widget
+   * with its neighbour in reading order, and the grid closes any gap.
+   */
+  function move(id: string, step: -1 | 1) {
+    const order = [...layout.value].sort((left, right) => left.y - right.y || left.x - right.x)
+    const index = order.findIndex((item) => item.i === id)
+    const other = order[index + step]
+    const self = order[index]
+    if (!self || !other) return
+    const items = layout.value.map((item) => {
+      if (item.i === self.i) return { ...item, x: other.x, y: other.y }
+      if (item.i === other.i) return { ...item, x: self.x, y: self.y }
+      return item
+    })
     void save(cfgsOf(items))
   }
 
@@ -118,5 +139,5 @@ export function useDashboardLayout() {
     return storeId ? { ...def?.props, storeId } : (def?.props ?? {})
   }
 
-  return { hydrated, layout, pinnedIds, saveLayout, setPinned, remove, resize, add, widgetProps }
+  return { hydrated, layout, pinnedIds, saveLayout, setPinned, remove, resize, move, add, widgetProps }
 }

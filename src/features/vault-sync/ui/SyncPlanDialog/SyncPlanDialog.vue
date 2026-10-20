@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Spinner } from '@/shared/ui/spinner'
 
 import { useSyncActions } from '../../model/use-sync-actions'
 import { useSyncStatus } from '../../model/use-sync-status'
@@ -54,8 +53,7 @@ function decide(accept: boolean) {
     </div>
     <template #footer>
       <Button variant="outline" @click="decide(false)">{{ t('sync.plan.decline') }}</Button>
-      <Button class="gap-2" :disabled="decidePlan.isPending.value" @click="decide(true)">
-        <Spinner v-if="decidePlan.isPending.value" />
+      <Button class="gap-2" :disabled="decidePlan.isPending.value" @click="decide(true)" :loading="decidePlan.isPending.value">
         {{ t('sync.plan.apply') }}
       </Button>
     </template>

@@ -43,7 +43,12 @@ function error(err: unknown, titleKey = 'toast.failed', opts: NotifyOptions = {}
   const title = textOf(titleKey)
   const description = opts.description ?? (err === null || err === undefined ? '' : errorReason(err))
   if (!fresh('error', `${title}\n${description}`)) return
-  toast.error(title, { description: description || undefined, action: opts.action })
+  toast.error(title, {
+    description: description || undefined,
+    action: opts.action,
+    cancel: opts.cancel,
+    duration: opts.sticky ? Number.POSITIVE_INFINITY : undefined,
+  })
 }
 
 function warning(keyOrText: string, opts: NotifyOptions = {}): void {

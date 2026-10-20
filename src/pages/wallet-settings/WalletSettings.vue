@@ -42,6 +42,7 @@ const catalog = useWalletCatalog()
 const storeId = computed(() => String(route.params.id ?? ''))
 
 const overview = useQuery({
+  // no placeholder: another wallet's settings
   queryKey: computed(() => ['store', storeId.value, true]),
   queryFn: () => call<StoreOverview>('get_store_overview', { storeId: storeId.value, includeChildren: true }),
 })
@@ -97,7 +98,7 @@ const crumbs = computed<PageCrumb[]>(() =>
   >
     <div v-if="store" class="flex w-full flex-col gap-4">
       <PageHeader :crumbs="crumbs">
-        <component :is="storeIcon(store)" class="size-5 shrink-0" :style="{ color: store.color }" />
+        <component :is="storeIcon(store)" class="store-tint size-5 shrink-0" :style="{ '--store-color': store.color }" />
         <h2 class="heading-page min-w-0 truncate">{{ store.name }}</h2>
         <Badge variant="secondary">{{ store.sub_type ? t(`subType.${store.sub_type}`) : t(`stores.kind.${store.kind}`) }}</Badge>
       </PageHeader>

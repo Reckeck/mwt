@@ -1,9 +1,9 @@
 <script setup lang="ts">
+// check-ui-ignore router-key: keyed by the page record and its params, not by the path
 import { computed, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { TransactionDetailsHost } from '@/widgets/transaction-details'
@@ -12,9 +12,9 @@ import { QuickAddDialog } from '@/features/quick-add'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { WhatsNewDialog } from '@/widgets/whats-new'
+import { MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -32,6 +32,7 @@ import { AppBottomNav } from './ui/app-bottom-nav'
 import { AppHeader } from './ui/app-header'
 import { AppSidebar } from './ui/app-sidebar'
 import { CommandPalette } from './ui/command-palette'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * The frame around every unlocked screen: sidebar, top bar, the page, and the
@@ -53,12 +54,15 @@ const { tour, routeTour } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 
 /** On a wallet page the bar names the wallet; elsewhere the screen. */
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const walletName = computed(() => {
   if (route.name !== 'wallet') return null
   return flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === route.params.id)?.store.name ?? null
 })
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
+
+/** The shell's child page and its params: a section's own sub-routes do not change it. */
+const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)
 
 const phone = useIsPhone()
 /** A full-screen route (the workflow editor) has the phone to itself. */
@@ -75,7 +79,7 @@ useEventListener(document, 'focusout', () => {
 const bottomNav = computed(() => phone.value && !fullscreen.value && !typing.value)
 /** Without the bar below, the page itself keeps clear of the gesture bar. */
 const pageClass = computed(() => {
-  if (fullscreen.value) return 'overflow-hidden p-0 pt-safe'
+  if (fullscreen.value) return 'overflow-hidden p-0 pt-safe pb-safe'
   if (bottomNav.value) return 'overflow-y-auto p-3'
   return 'overflow-y-auto p-3 pb-[calc(0.75rem+var(--safe-bottom))] md:p-4 md:pb-[calc(1rem+var(--safe-bottom))]'
 })
@@ -100,16 +104,20 @@ const pageClass = computed(() => {
         </template>
       </AppHeader>
 
-      <div class="@container min-h-0 flex-1" :class="pageClass">
+      <div class="@container min-h-0 flex-1 scrollbar-stable" :class="pageClass">
         <SyncBanner />
-        <!-- Keyed by path: /stores/a → /stores/b reuses the page component, and its
-             queries and child widgets would otherwise keep showing wallet a. -->
-        <RouterView :key="route.path" />
+        <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
+             page (its widgets keep local state per wallet), while a sub-tab of a section
+             (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->
+        <div class="mx-auto w-full" :class="fullscreen ? 'h-full' : 'min-h-full max-w-page'">
+          <RouterView :key="pageKey" />
+        </div>
       </div>
       <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" />
     </SidebarInset>
 
     <SettingsShell />
+    <MoneyTooltipHost />
     <QuickAddDialog v-model:open="quickAddOpen" />
     <TransactionDetailsHost />
     <ConverterDialog />

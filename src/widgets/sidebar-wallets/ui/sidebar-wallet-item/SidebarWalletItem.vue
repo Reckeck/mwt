@@ -41,7 +41,7 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
         :class="cn(props.node.store.archived && 'opacity-50')"
       >
         <RouterLink :to="{ name: 'wallet', params: { id: props.node.store.id } }">
-          <component :is="storeIcon(props.node.store)" :style="{ color: props.node.store.color }" />
+          <component :is="storeIcon(props.node.store)" class="store-tint" :style="{ '--store-color': props.node.store.color }" />
           <span>{{ props.node.store.name }}</span>
         </RouterLink>
       </SidebarMenuButton>
@@ -70,9 +70,9 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
             :class="cn(child.store.archived && 'opacity-50')"
           >
             <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
-              <component :is="storeIcon(child.store)" :style="{ color: child.store.color }" />
+              <component :is="storeIcon(child.store)" class="store-tint" :style="{ '--store-color': child.store.color }" />
               <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
-              <span v-if="bindingBadge(child.store)" class="shrink-0 text-[10px] uppercase text-muted-foreground">
+              <span v-if="bindingBadge(child.store)" class="shrink-0 text-2xs uppercase text-muted-foreground">
                 {{ bindingBadge(child.store) }}
               </span>
               <span v-if="total(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">

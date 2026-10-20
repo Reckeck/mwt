@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority'
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+  "touch-hit inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -17,11 +17,12 @@ export const buttonVariants = cva(
         sm: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-10 rounded-md px-8',
         icon: 'size-9',
-        'icon-sm': 'size-8',
+        'icon-sm': 'size-8 touch-hit-lg',
         /** A small «×» or icon inside a chip or a list row. */
-        'icon-xs': 'size-6 rounded-sm',
+        'icon-xs': 'size-6 rounded-sm touch-hit-lg',
         /** A list row or a card that is one big button: the content lays itself out. */
-        block: 'h-auto justify-start whitespace-normal rounded-md px-2 py-1.5 text-left font-normal',
+        block:
+          'h-auto justify-start whitespace-normal rounded-md px-2 py-1.5 text-left font-normal pointer-coarse:min-h-10',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },
@@ -37,4 +38,9 @@ export type ButtonSize = ButtonVariants['size']
 export interface ButtonProps {
   variant?: ButtonVariant
   size?: ButtonSize
+  /**
+   * Waiting for the action: the label stays in place (invisible) under a
+   * spinner, so the button keeps its width (rule 17); it is disabled meanwhile.
+   */
+  loading?: boolean
 }

@@ -17,7 +17,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="grid items-start gap-2 @sm:grid-cols-[minmax(0,1fr)_10rem_2rem]">
+  <div class="grid items-start gap-2 @xl:grid-cols-[minmax(0,1fr)_10rem_2rem]">
     <AccountRefPicker
       v-model="row.to"
       :contacts="props.kind === 'convert' && props.mode !== 'p2p'"
@@ -25,7 +25,7 @@ const { t } = useI18n()
       :aria-label="t('tx.split.accountN', { n: props.index + 2 })"
     />
     <AmountInput v-model="row.receive" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
-    <Button type="button" variant="ghost" size="icon" class="size-9" :aria-label="t('actions.delete')" @click="emit('remove')">
+    <Button type="button" variant="ghost" size="icon"  :aria-label="t('actions.delete')" @click="emit('remove')">
       <Trash2 class="size-4" />
     </Button>
   </div>

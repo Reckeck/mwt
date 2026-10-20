@@ -12,7 +12,6 @@ import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { SectionState } from '@/shared/ui/section-state'
 import { SettingsSection } from '@/shared/ui/settings-section'
-import { Spinner } from '@/shared/ui/spinner'
 
 /** The batches taken from other devices (20, a week): what each changed, «Отменить». */
 const { t } = useI18n()
@@ -56,9 +55,9 @@ const list = computed(() => history.data.value ?? [])
                 class="gap-1.5"
                 :disabled="undo.isPending.value"
                 @click="undo.mutate(batch.id)"
+                :loading="undo.isPending.value && undo.variables.value === batch.id"
               >
-                <Spinner v-if="undo.isPending.value && undo.variables.value === batch.id" />
-                <Undo2 v-else class="size-3.5" />
+                <Undo2 class="size-3.5" />
                 {{ t('actions.undo') }}
               </Button>
             </div>

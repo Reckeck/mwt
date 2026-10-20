@@ -12,11 +12,12 @@ import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import BillLineRow from './BillLineRow.vue'
 import type { BillRow, UtilityBillDialogProps } from './utility-bill.types'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * The month's utilities as one bill: meters get their reading typed in place
@@ -37,12 +38,13 @@ watch(open, (isOpen) => {
 })
 
 const bill = useQuery({
+  // no placeholder: a watcher fills the bill rows from this month's data
   queryKey: computed(() => ['utility-bill', props.propertyId, period.value]),
   queryFn: () => call<UtilityBill>('get_utility_bill', { propertyId: props.propertyId, period: period.value }),
   enabled: open,
 })
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const payable = computed(() =>
   flattenStoreTree(tree.data.value ?? []).filter(
     (node) => !node.store.archived && (node.store.kind === 'bank' || node.store.kind === 'cash'),
@@ -139,7 +141,7 @@ const pay = useMutation({
 <template>
   <Dialog v-model:open="open" :title="t('utilityBill.title')" size="lg">
     <form id="utility-bill-form" class="@container grid gap-4" @submit.prevent="form.submit(pay.mutate, $event)">
-      <div class="grid gap-3 @sm:grid-cols-2">
+      <div class="grid gap-3 @xl:grid-cols-2">
         <FormField for="bill-date" :label="t('utilityBill.date')" required :error="form.error('when')">
           <DateTimePicker id="bill-date" v-model="when" mode="datetime" />
           <p v-if="bill.data.value?.pay_day" class="text-xs text-muted-foreground">

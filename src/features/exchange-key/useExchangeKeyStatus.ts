@@ -11,6 +11,7 @@ import { call } from '@/shared/api/ipc'
  */
 export function useExchangeKeyStatus(storeId: Ref<string>, enabled: Ref<boolean>) {
   const status = useQuery({
+    // no placeholder: another exchange's key status
     queryKey: computed(() => ['bybit-key-status', storeId.value]),
     queryFn: () => call<ExchangeKeyStatus>('exchange_key_status', { input: { store_id: storeId.value } }),
     enabled,

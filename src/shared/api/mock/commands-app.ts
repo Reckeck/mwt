@@ -43,6 +43,9 @@ export const vaultCommands: MockCommands = {
     if (body?.current_password !== 'secret') throw { code: 'SECRET', message: 'Wrong password' }
     return resolve(undefined)
   },
+  // The mock keeps everything in memory: nothing is ever waiting for the disk.
+  flush_vault: () => resolve(undefined),
+  exit_without_saving: () => resolve(undefined),
   lock_vault_cmd: (_call) => {
     mockStatus.value = { ...mockStatus.value, unlocked: false, info: null }
     return resolve({})

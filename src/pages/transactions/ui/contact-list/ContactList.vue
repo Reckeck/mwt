@@ -61,7 +61,7 @@ function toggleSection(key: string) {
         <Button
           variant="ghost"
           size="sm"
-          class="h-7 justify-between px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          class="h-7 justify-between px-3 pointer-coarse:h-10 text-xs font-medium uppercase tracking-wide text-muted-foreground"
           :aria-expanded="!collapsed.includes(section.key)"
           @click="toggleSection(section.key)"
         >

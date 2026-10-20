@@ -14,6 +14,7 @@ const props = defineProps<UtilityListProps>()
 const { t } = useI18n()
 
 const summary = useQuery({
+  // no placeholder: another property's summary
   queryKey: computed(() => ['property-summary', props.propertyId]),
   queryFn: () => call<PropertySummary>('get_property_summary', { storeId: props.propertyId }),
 })
@@ -36,7 +37,7 @@ const rows = computed(() => {
 <template>
   <Card>
     <div class="grid gap-4 @container">
-      <div class="grid grid-cols-2 gap-4 @md:grid-cols-4">
+      <div class="grid grid-cols-2 gap-4 @mid:grid-cols-4">
         <div v-for="row in rows" :key="row.key" class="grid gap-0.5">
           <p class="truncate text-xs text-muted-foreground">{{ row.label }}</p>
           <p class="truncate text-lg font-semibold tabular-nums">

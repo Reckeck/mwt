@@ -11,9 +11,9 @@ import { Label } from '@/shared/ui/label'
 import { SectionState } from '@/shared/ui/section-state'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { SettingsSection } from '@/shared/ui/settings-section'
-import { Switch } from '@/shared/ui/switch'
 
 import SyncNetwork from './SyncNetwork.vue'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 /** This device's sync switches: on/off, its name, «спрашивать», «главное». */
 const { t } = useI18n()
@@ -51,46 +51,34 @@ const keyHint = computed(() => {
   <SettingsSection :title="t('sync.title')" :description="t('sync.description')">
     <SectionState :loading="status.isPending.value" :error="status.error.value" skeleton="list" compact @retry="status.refetch()">
       <div class="grid gap-4">
-        <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-          <div class="grid gap-0.5">
-            <Label for="sync-enabled">{{ t('sync.enabled') }}</Label>
-            <p class="text-xs text-muted-foreground">{{ t('sync.enabledHint') }}</p>
-          </div>
-          <Switch
-            id="sync-enabled"
-            :model-value="current?.enabled ?? false"
-            :disabled="settings.isPending.value"
-            @update:model-value="(value: boolean) => settings.mutate({ enabled: value })"
-          />
-        </div>
+        <SwitchRow
+          id="sync-enabled"
+          :label="t('sync.enabled')"
+          :hint="t('sync.enabledHint')"
+          :model-value="current?.enabled ?? false"
+          :disabled="settings.isPending.value"
+          @update:model-value="(value: boolean) => settings.mutate({ enabled: value })"
+        />
 
         <FormField :label="t('sync.deviceName')" for="sync-device-name" :hint="t('sync.deviceNameHint')">
           <Input id="sync-device-name" v-model="name" maxlength="40" :placeholder="current?.device_name" @blur="saveName" @keydown.enter.prevent="saveName" />
         </FormField>
 
-        <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-          <div class="grid gap-0.5">
-            <Label for="sync-confirm">{{ t('sync.confirmFirst') }}</Label>
-            <p class="text-xs text-muted-foreground">{{ t('sync.confirmFirstHint') }}</p>
-          </div>
-          <Switch
-            id="sync-confirm"
-            :model-value="current?.confirm_first ?? false"
-            @update:model-value="(value: boolean) => settings.mutate({ confirm_first: value })"
-          />
-        </div>
+        <SwitchRow
+          id="sync-confirm"
+          :label="t('sync.confirmFirst')"
+          :hint="t('sync.confirmFirstHint')"
+          :model-value="current?.confirm_first ?? false"
+          @update:model-value="(value: boolean) => settings.mutate({ confirm_first: value })"
+        />
 
-        <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-          <div class="grid gap-0.5">
-            <Label for="sync-main">{{ t('sync.preferMain') }}</Label>
-            <p class="text-xs text-muted-foreground">{{ t('sync.preferMainHint') }}</p>
-          </div>
-          <Switch
-            id="sync-main"
-            :model-value="current?.prefer_main ?? false"
-            @update:model-value="(value: boolean) => settings.mutate({ prefer_main: value })"
-          />
-        </div>
+        <SwitchRow
+          id="sync-main"
+          :label="t('sync.preferMain')"
+          :hint="t('sync.preferMainHint')"
+          :model-value="current?.prefer_main ?? false"
+          @update:model-value="(value: boolean) => settings.mutate({ prefer_main: value })"
+        />
 
         <div
           v-if="current?.background_supported"

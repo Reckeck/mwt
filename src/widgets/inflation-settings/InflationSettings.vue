@@ -92,8 +92,8 @@ function remove(index: number) {
         <span class="text-sm text-muted-foreground">{{ t('inflation.perYear') }}</span>
         <Button
           variant="ghost"
-          size="icon"
-          class="ml-auto size-8 text-muted-foreground"
+          size="icon-sm"
+          class="ml-auto text-muted-foreground"
           :aria-label="t('inflation.remove', { currency: row[0].toUpperCase() })"
           @click="remove(index)"
         >

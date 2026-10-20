@@ -48,29 +48,33 @@ function widget(
   }
 }
 
-/** Every widget the dashboard can hold, in the catalog's order; sizes are `[w, h, minW, minH]` in grid cells. */
+/**
+ * Every widget the dashboard can hold, in the catalog's order; sizes are `[w, h, minW, minH]`
+ * in grid cells (a row is 40px + 12px gap). `minH` is what the content needs, so «S» never
+ * scrolls inside; the default leaves little empty space when there is no data yet.
+ */
 export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
-  widget('onboarding', OnboardingChecklist, [12, 6, 6, 5]),
+  widget('onboarding', OnboardingChecklist, [12, 5, 6, 4]),
   widget('dailyBudget', DailyBudget, [4, 5, 3, 4]),
   widget('monthSummary', MonthSummary, [4, 6, 3, 5]),
-  widget('upcoming', UpcomingList, [4, 7, 3, 4], { props: { days: 14, limit: 6 } }),
+  widget('upcoming', UpcomingList, [4, 6, 3, 4], { props: { days: 14, limit: 6 } }),
   widget('total', DashboardTotal, [4, 4, 3, 3]),
   widget('netWorth', NetWorthCard, [4, 6, 3, 5], { link: { name: 'analytics-wealth' } }),
-  widget('fx', DashboardFx, [4, 4, 2, 3]),
+  widget('fx', DashboardFx, [4, 5, 2, 4]),
   widget('spending7d', Spending7d, [4, 6, 3, 4], { link: { name: 'transactions-calendar' } }),
   widget('miniCalendar', MiniCalendar, [4, 8, 3, 6], { link: { name: 'transactions-calendar' } }),
   widget('assets', DashboardAssets, [4, 7, 3, 4]),
-  widget('goals', DashboardGoals, [6, 6, 3, 4], { link: { name: 'planning-goals' } }),
-  widget('budgets', DashboardBudgets, [6, 6, 3, 4], { link: { name: 'planning-budgets' } }),
+  widget('goals', DashboardGoals, [6, 5, 3, 4], { link: { name: 'planning-goals' } }),
+  widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'planning-budgets' } }),
   widget('utilitiesDue', UtilitiesDue, [4, 5, 3, 4]),
-  widget('utilityStats', UtilityStats, [8, 6, 4, 5]),
+  widget('utilityStats', UtilityStats, [8, 6, 4, 6]),
   widget('cashback', CashbackBonuses, [4, 6, 3, 4]),
   widget('interestTax', InterestTax, [4, 4, 3, 3]),
   widget('fixedCosts', FixedCosts, [6, 5, 3, 4]),
   widget('byChain', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'chain' } }),
   widget('byStore', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'store' } }),
-  widget('exchangeBalances', ExchangeBalances, [8, 7, 6, 5], { requires: 'exchange' }),
-  widget('bybitSync', DashboardBybitSync, [8, 8, 6, 5], { requires: 'exchange' }),
+  widget('exchangeBalances', ExchangeBalances, [8, 5, 6, 4], { requires: 'exchange' }),
+  widget('bybitSync', DashboardBybitSync, [8, 5, 6, 4], { requires: 'exchange' }),
 ]
 
 /**

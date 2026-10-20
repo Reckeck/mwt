@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { DrawingKind } from 'lightweight-charts-drawing'
-import { Magnet, RefreshCw, Trash2, Undo2 } from 'lucide-vue-next'
+import { BellPlus, Magnet, RefreshCw, Trash2, Undo2 } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Separator } from '@/shared/ui/separator'
@@ -23,6 +23,8 @@ const props = defineProps<{
   hasDrawings: boolean
   refreshing: boolean
   stream: StreamStatus
+  /** «Алерт по цене» is offered (a price alert can be set for this symbol). */
+  canAlert?: boolean
 }>()
 const magnet = defineModel<boolean>('magnet', { required: true })
 const emit = defineEmits<{
@@ -31,6 +33,7 @@ const emit = defineEmits<{
   tool: [value: unknown]
   undo: []
   clear: []
+  alert: []
 }>()
 
 const { t } = useI18n()
@@ -100,7 +103,7 @@ const STREAM_DOT: Record<StreamStatus, string> = { live: 'bg-success', connectin
       </Tooltip>
       <Tooltip>
         <TooltipTrigger as-child>
-          <Button variant="ghost" size="icon" class="size-8" :aria-label="t('trading.undo')" :disabled="!props.canUndo" @click="emit('undo')">
+          <Button variant="ghost" size="icon-sm"  :aria-label="t('trading.undo')" :disabled="!props.canUndo" @click="emit('undo')">
             <Undo2 class="size-4" />
           </Button>
         </TooltipTrigger>
@@ -110,8 +113,7 @@ const STREAM_DOT: Record<StreamStatus, string> = { live: 'bg-success', connectin
         <TooltipTrigger as-child>
           <Button
             variant="ghost"
-            size="icon"
-            class="size-8"
+            size="icon-sm"
             :aria-label="t('trading.clearDrawings')"
             :disabled="!props.hasDrawings"
             @click="emit('clear')"
@@ -120,6 +122,16 @@ const STREAM_DOT: Record<StreamStatus, string> = { live: 'bg-success', connectin
           </Button>
         </TooltipTrigger>
         <TooltipContent>{{ t('trading.clearDrawings') }}</TooltipContent>
+      </Tooltip>
+      <!-- The right-click menu sets an alert at the price under the cursor; this does it from the
+           last price, for a mouse-only user and a finger alike (rule 16). -->
+      <Tooltip v-if="props.canAlert">
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('terminal.alertHere')" @click="emit('alert')">
+            <BellPlus class="size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ t('terminal.alertHere') }}</TooltipContent>
       </Tooltip>
     </div>
 

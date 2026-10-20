@@ -1,7 +1,7 @@
-import { onScopeDispose } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { call, onEvent } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
+import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { notify, textOf } from '@/shared/lib/notify'
 
 const LINK_KEY = ['vault-link']
@@ -17,11 +17,10 @@ export function useVaultLink() {
   })
 
   // A copy that fails in the background (drive offline, grant revoked) says so.
-  const stop = onEvent<string>('vault-mirror-failed', (reason) => {
+  useBackendEvent<string>('vault-mirror-failed', (reason) => {
     void refresh()
     notify.error(reason, 'vaultLink.copyFailed')
   })
-  onScopeDispose(() => void stop.then((unlisten) => unlisten()))
 
   const link = useMutation({
     /** `existing`: replace a file the user picks; otherwise create a new one. */

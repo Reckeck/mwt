@@ -17,6 +17,7 @@ const props = defineProps<{ asset: AssetRef; storeId: string; decimals: number }
 const { t } = useI18n()
 
 const holdings = useQuery({
+  // no placeholder: another asset's holdings
   queryKey: computed(() => ['asset-holdings', assetKey(props.asset)]),
   queryFn: () => call<AssetHoldings>('get_asset_holdings', { asset: props.asset }),
 })

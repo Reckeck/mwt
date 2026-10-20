@@ -31,8 +31,7 @@ const toggle = useMutation({
 <template>
   <Button
     variant="ghost"
-    size="icon"
-    :class="cn(props.size === 'xs' ? 'size-7' : 'size-8')"
+    :size="props.size === 'xs' ? 'icon-xs' : 'icon-sm'"
     :aria-pressed="on"
     :aria-label="label"
     :title="label"

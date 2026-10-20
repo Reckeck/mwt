@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, ArrowRight } from 'lucide-vue-next'
 
 import { StoreNodeSelect } from '@/entities/store'
@@ -22,6 +22,7 @@ import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import { CONVERTIBLE_KINDS } from './store-change.constants'
 import type { StoreChangeAction, StoreChangeDialogProps } from './store-change.types'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * «Сменить тип или перенести»: pick the change and its target, read what it
@@ -35,7 +36,7 @@ const { t } = useI18n()
 const router = useRouter()
 const queryClient = useQueryClient()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 const isRoot = computed(() => !props.store.parent_id)
@@ -101,6 +102,7 @@ const input = computed<StoreChangeInput | null>(() =>
 
 const plan = useQuery({
   queryKey: computed(() => ['store-change-plan', JSON.stringify(input.value)]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<StoreChangePlan>('plan_store_change', { input: input.value }),
   enabled: computed(() => open.value && input.value !== null),
 })

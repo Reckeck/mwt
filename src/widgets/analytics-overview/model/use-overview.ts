@@ -1,5 +1,5 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
@@ -7,6 +7,7 @@ import { call } from '@/shared/api/ipc'
 export function useOverview(filter: MaybeRefOrGetter<ReportFilter>) {
   return useQuery({
     queryKey: computed(() => ['report', 'overview', JSON.parse(JSON.stringify(toValue(filter)))]),
+    placeholderData: keepPreviousData,
     queryFn: () => call<ReportOverview>('get_report_overview', { filter: toValue(filter) }),
   })
 }

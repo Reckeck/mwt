@@ -31,7 +31,7 @@ const { t } = useI18n()
     <EmptyState v-if="!props.children.length" compact :title="t('walletSettings.noAccounts')" />
     <ul v-else class="flex flex-col divide-y divide-border">
       <li v-for="child in props.children" :key="child.store.id" class="flex items-center gap-3 py-2.5">
-        <component :is="storeIcon(child.store)" class="size-4 shrink-0" :style="{ color: child.store.color }" />
+        <component :is="storeIcon(child.store)" class="store-tint size-4 shrink-0" :style="{ '--store-color': child.store.color }" />
         <RouterLink
           :to="{ name: 'wallet-settings', params: { id: child.store.id } }"
           class="min-w-0 flex-1 truncate text-sm font-medium hover:underline"

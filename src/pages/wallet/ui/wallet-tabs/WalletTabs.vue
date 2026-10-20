@@ -4,8 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Receipt } from 'lucide-vue-next'
 
 import { AssetRevalueButton } from '@/features/asset-revalue'
-import { TransactionDelete } from '@/features/transaction-delete'
-import { TransactionEditButton } from '@/features/transaction-edit'
 import { UtilityBillDialog } from '@/features/utility-bill'
 import { UtilityRemindersButton } from '@/features/utility-reminders'
 import { AllocationPie } from '@/widgets/allocation-pie'
@@ -17,7 +15,6 @@ import { StorePositions } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { Tabs } from '@/shared/ui/tabs'
-import { txId } from '@/shared/lib/transactions'
 
 /** Utilities (a home), positions and history — the wallet's working area. */
 const props = defineProps<{
@@ -115,12 +112,7 @@ function openPosition(position: StorePosition) {
       />
     </template>
     <template #history>
-      <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren">
-        <template #actions="{ tx }">
-          <TransactionEditButton :tx="tx" :store-id="props.storeId" />
-          <TransactionDelete :id="txId(tx)" />
-        </template>
-      </StoreTransactions>
+      <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren" />
     </template>
   </Tabs>
 </template>

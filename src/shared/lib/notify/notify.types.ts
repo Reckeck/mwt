@@ -32,4 +32,8 @@ export interface NotifyOptions {
   description?: string
   /** A button in the toast ("Отменить", "Открыть"). */
   action?: { label: string; onClick: () => void }
+  /** A second, quieter button ("Выйти без сохранения"). */
+  cancel?: { label: string; onClick: () => void }
+  /** Stays until the user acts: a problem that does not go away by itself. */
+  sticky?: boolean
 }

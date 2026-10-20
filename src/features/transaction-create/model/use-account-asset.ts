@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { fiatRef } from '@/shared/lib/asset-ref'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** Wallet kinds that hold money only: a top-up or an exchange into them is in a currency. */
 const MONEY_ONLY: StoreKind[] = ['bank', 'cash']
@@ -20,11 +21,12 @@ export function useAccountAsset(side: Ref<AccountRef | null>) {
   const settings = useSettingsStore()
   const storeId = computed(() => (side.value && 'store' in side.value ? side.value.store : null))
 
-  const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+  const tree = useStoreTree()
   const store = computed(
     () => flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === storeId.value)?.store ?? null,
   )
   const overview = useQuery({
+    // no placeholder: another account's balance would read as this one's
     queryKey: computed(() => ['store', storeId.value, false]),
     queryFn: () => call<StoreOverview>('get_store_overview', { storeId: storeId.value, includeChildren: false }),
     enabled: computed(() => storeId.value !== null),

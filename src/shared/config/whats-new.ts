@@ -24,6 +24,25 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'stable',
+    date: '2026-10-20',
+    points: [
+      { key: 'rowMenu', route: 'transactions' },
+      { key: 'settingsSections', route: 'settings:money' },
+      { key: 'toasts' },
+      { key: 'start' },
+      { key: 'saving' },
+      { key: 'prices', route: 'settings:device' },
+      { key: 'settingsWindow', route: 'settings:general' },
+      { key: 'editCommands', route: 'workflows' },
+      { key: 'touch' },
+      { key: 'property', route: 'stores' },
+      { key: 'calendar', route: 'transactions-calendar' },
+      { key: 'sidebarToggle' },
+      { key: 'saldoReport', route: 'analytics-saldo' },
+    ],
+  },
+  {
     id: 'phone',
     date: '2026-10-20',
     points: [

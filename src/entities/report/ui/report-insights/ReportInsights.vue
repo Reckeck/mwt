@@ -1,22 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { Info, TrendingDown, TrendingUp } from 'lucide-vue-next'
 
-import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { activeLocale } from '@/shared/lib/locale'
 import { cn } from '@/shared/lib/utils'
 
 import { type InsightTone, insightText, insightTone } from '../../lib/insight-text'
 import type { ReportInsightsProps } from './report-insights.types'
+import { useCategories } from '@/shared/api/queries'
 
 /** What a report means, in sentences; the icon repeats the colour's direction. */
 const props = withDefaults(defineProps<ReportInsightsProps>(), { compact: false })
 
 const { t } = useI18n()
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
+const categories = useCategories()
 
 const ICONS = { good: TrendingUp, bad: TrendingDown, neutral: Info }
 const TONE_CLASS: Record<InsightTone, string> = {

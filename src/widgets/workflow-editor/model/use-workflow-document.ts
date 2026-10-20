@@ -52,6 +52,7 @@ export function useWorkflowDocument(
 
   const lesson = computed(() => WORKFLOW_LESSONS.find((entry) => entry.id === source.lesson()) ?? null)
   const workflow = useQuery({
+    // no placeholder: another workflow; the editor fills its document from it
     queryKey: computed(() => WORKFLOW_KEYS.one(source.workflowId() ?? '')),
     queryFn: () => call<Workflow>('get_workflow', { id: source.workflowId() }),
     enabled: computed(() => Boolean(source.workflowId())),

@@ -53,7 +53,7 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
             row.original.currency,
           ),
           row.original.crypto
-            ? h('span', { class: 'text-[10px] uppercase text-muted-foreground' }, t('currency.kind.crypto'))
+            ? h('span', { class: 'text-2xs uppercase text-muted-foreground' }, t('currency.kind.crypto'))
             : null,
         ]),
     },

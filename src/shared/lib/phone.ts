@@ -12,6 +12,7 @@ export function useIsPhone() {
   return useMediaQuery(PHONE_QUERY)
 }
 
+// check-ui-ignore raw-listener: one matchMedia listener for the app's lifetime, shared by every caller
 let coarse: Ref<boolean> | null = null
 
 /**

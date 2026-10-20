@@ -1,16 +1,14 @@
 import { type InjectionKey, type Ref, computed, inject, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { emptyLiabilityTerms, kindInfo, parsePairSymbol, useWalletCatalog } from '@/entities/store'
-import { call } from '@/shared/api/ipc'
 import { fiatRef, tickerRef } from '@/shared/lib/asset-ref'
 import { required, useFormValidation } from '@/shared/lib/form'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { DEFAULT_STORE_COLOR, KIND_COLORS } from '../store-create.constants'
 import type { StoreCreateDialogProps } from '../store-create.types'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * Everything the new-wallet dialog holds: the kind or sub-account type picked
@@ -100,11 +98,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     () => !openingAmountValue.value || (Number(openingAmountValue.value) > 0 && openingAsset.value !== null),
   )
 
-  const properties = useQuery({
-    queryKey: STORE_TREE_QUERY_KEY,
-    queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-    enabled: computed(() => open.value && kind.value === 'liability'),
-  })
+  const properties = useStoreTree(computed(() => open.value && kind.value === 'liability'))
   const propertyRoots = computed(() =>
     (properties.data.value ?? []).filter((node) => node.store.kind === 'property' && !node.store.archived),
   )

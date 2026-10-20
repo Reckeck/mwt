@@ -65,7 +65,7 @@ function submit() {
 
 <template>
   <form class="@container grid gap-4" @submit.prevent="submit">
-    <div class="grid gap-4 @md:grid-cols-2">
+    <div class="grid gap-4 @mid:grid-cols-2">
       <div class="grid gap-1.5">
         <Label for="property-category">{{ t('propertyCategory.title') }}</Label>
         <Select id="property-category" v-model="category">
@@ -81,7 +81,7 @@ function submit() {
       <Label for="property-address">{{ t('property.address') }}</Label>
       <Input id="property-address" v-model="address" />
     </div>
-    <div class="grid gap-4 @md:grid-cols-3">
+    <div class="grid gap-4 @mid:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="property-purchased">{{ t('property.purchasedAt') }}</Label>
         <DateTimePicker id="property-purchased" v-model="purchasedAt" />
@@ -92,9 +92,9 @@ function submit() {
       </div>
       <CurrencyPicker v-model="currency" :label="t('form.currency')" />
     </div>
-    <div class="grid gap-1.5 @md:w-1/3">
+    <div class="grid gap-1.5 @mid:w-1/3">
       <Label for="property-pay-day">{{ t('utilities.payDay') }}</Label>
-      <Input id="property-pay-day" v-model="payDay" type="number" min="1" max="31" :placeholder="t('utilities.payDayHint')" />
+      <Input id="property-pay-day" v-model="payDay" type="text" inputmode="numeric" min="1" max="31" :placeholder="t('utilities.payDayHint')" />
     </div>
     <div>
       <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>

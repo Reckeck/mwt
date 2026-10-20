@@ -6,11 +6,11 @@ import { useMutation, useQuery } from '@tanstack/vue-query'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { SettingsSection } from '@/shared/ui/settings-section'
-import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 import { usePlatform } from '@/shared/lib/platform'
 import { useSettingsStore } from '@/shared/store/settings'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 /**
  * What belongs to this device, not to the vault: how often prices refresh,
@@ -68,26 +68,20 @@ const setAutostart = useMutation({
       </div>
 
       <template v-if="isDesktop">
-        <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-          <Label for="minimize-to-tray">{{ t('settings.minimizeToTray') }}</Label>
-          <Switch
-            id="minimize-to-tray"
-            :model-value="settingsStore.app?.minimize_to_tray ?? settingsStore.vault?.minimize_to_tray ?? true"
-            @update:model-value="(value: boolean) => void persistDevice({ minimize_to_tray: value })"
-          />
-        </div>
-        <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-          <div class="grid gap-0.5">
-            <Label for="device-autostart">{{ t('notices.autostart') }}</Label>
-            <p class="text-xs text-muted-foreground">{{ t('notices.autostartHint') }}</p>
-          </div>
-          <Switch
-            id="device-autostart"
-            :model-value="autostart.data.value ?? false"
-            :disabled="setAutostart.isPending.value"
-            @update:model-value="(value) => setAutostart.mutate(Boolean(value))"
-          />
-        </div>
+        <SwitchRow
+          id="minimize-to-tray"
+          :label="t('settings.minimizeToTray')"
+          :model-value="settingsStore.app?.minimize_to_tray ?? settingsStore.vault?.minimize_to_tray ?? true"
+          @update:model-value="(value: boolean) => void persistDevice({ minimize_to_tray: value })"
+        />
+        <SwitchRow
+          id="device-autostart"
+          :label="t('notices.autostart')"
+          :hint="t('notices.autostartHint')"
+          :model-value="autostart.data.value ?? false"
+          :disabled="setAutostart.isPending.value"
+          @update:model-value="(value) => setAutostart.mutate(Boolean(value))"
+        />
       </template>
     </div>
   </SettingsSection>

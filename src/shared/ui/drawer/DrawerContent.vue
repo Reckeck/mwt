@@ -7,6 +7,7 @@ import { DrawerContent, DrawerHandle, DrawerPortal, useForwardPropsEmits } from 
 import { cn } from '@/shared/lib/utils'
 
 import DrawerOverlay from './DrawerOverlay.vue'
+import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 
 defineOptions({ inheritAttrs: false })
 
@@ -28,6 +29,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <DrawerOverlay v-if="props.overlay" />
     <DrawerContent
       data-slot="drawer-content"
+      @pointer-down-outside="keepOpenOnToast"
+      @interact-outside="keepOpenOnToast"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
@@ -37,8 +40,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           'data-[state=closed]:animate-out data-[state=open]:animate-in',
           'data-[swipe-direction=down]:inset-x-0 data-[swipe-direction=down]:bottom-0 data-[swipe-direction=down]:max-h-[calc(100dvh-var(--safe-top)-1.5rem)] data-[swipe-direction=down]:rounded-t-xl data-[swipe-direction=down]:border-t data-[swipe-direction=down]:pb-safe data-[swipe-direction=down]:data-[state=closed]:slide-out-to-bottom data-[swipe-direction=down]:data-[state=open]:slide-in-from-bottom',
           'data-[swipe-direction=up]:inset-x-0 data-[swipe-direction=up]:top-0 data-[swipe-direction=up]:max-h-[80dvh] data-[swipe-direction=up]:rounded-b-xl data-[swipe-direction=up]:border-b data-[swipe-direction=up]:pt-safe data-[swipe-direction=up]:data-[state=closed]:slide-out-to-top data-[swipe-direction=up]:data-[state=open]:slide-in-from-top',
-          'data-[swipe-direction=right]:inset-y-0 data-[swipe-direction=right]:right-0 data-[swipe-direction=right]:w-3/4 data-[swipe-direction=right]:border-l data-[swipe-direction=right]:pt-safe data-[swipe-direction=right]:pb-safe data-[swipe-direction=right]:sm:max-w-sm data-[swipe-direction=right]:data-[state=closed]:slide-out-to-right data-[swipe-direction=right]:data-[state=open]:slide-in-from-right',
-          'data-[swipe-direction=left]:inset-y-0 data-[swipe-direction=left]:left-0 data-[swipe-direction=left]:w-3/4 data-[swipe-direction=left]:border-r data-[swipe-direction=left]:pt-safe data-[swipe-direction=left]:pb-safe data-[swipe-direction=left]:sm:max-w-sm data-[swipe-direction=left]:data-[state=closed]:slide-out-to-left data-[swipe-direction=left]:data-[state=open]:slide-in-from-left',
+          'data-[swipe-direction=right]:inset-y-0 data-[swipe-direction=right]:right-0 data-[swipe-direction=right]:w-3/4 data-[swipe-direction=right]:border-l data-[swipe-direction=right]:pt-safe data-[swipe-direction=right]:pb-safe data-[swipe-direction=right]:sm:max-w-md data-[swipe-direction=right]:data-[state=closed]:slide-out-to-right data-[swipe-direction=right]:data-[state=open]:slide-in-from-right',
+          'data-[swipe-direction=left]:inset-y-0 data-[swipe-direction=left]:left-0 data-[swipe-direction=left]:w-3/4 data-[swipe-direction=left]:border-r data-[swipe-direction=left]:pt-safe data-[swipe-direction=left]:pb-safe data-[swipe-direction=left]:sm:max-w-md data-[swipe-direction=left]:data-[state=closed]:slide-out-to-left data-[swipe-direction=left]:data-[state=open]:slide-in-from-left',
           props.class,
         )
       "

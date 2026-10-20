@@ -32,7 +32,7 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
 <template>
   <!-- No price field: the backend prices the operation at the rates of its moment
        (a price from an exchange fill or the calculator still travels in `form.price`). -->
-  <div class="grid items-start gap-3 @sm:grid-cols-2">
+  <div class="grid items-start gap-3 @xl:grid-cols-2">
     <div class="grid gap-1.5">
       <Label for="tx-fee">{{ t('form.fee') }}</Label>
       <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0" />
@@ -75,7 +75,7 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
 
   <!-- Rarely needed: open by itself when one of these already has a value (editing, a template). -->
   <AdvancedFields :default-open="hasAdvanced">
-    <div v-if="showChain" class="grid gap-3 @sm:grid-cols-2">
+    <div v-if="showChain" class="grid gap-3 @xl:grid-cols-2">
       <div class="grid gap-1.5">
         <Label for="tx-network">{{ t('form.network') }}</Label>
         <Select id="tx-network" v-model="form.network">

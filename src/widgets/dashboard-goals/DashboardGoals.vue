@@ -9,6 +9,8 @@ import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
+import { SectionState } from '@/shared/ui/section-state'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const { t } = useI18n()
 
@@ -32,9 +34,7 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
           </span>
           <span class="shrink-0 tabular-nums text-muted-foreground">{{ item.pct }}%</span>
         </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div class="h-full rounded-full bg-primary" :style="{ width: `${pct(item.pct)}%` }" />
-        </div>
+        <ProgressBar :value="pct(item.pct)" size="sm" />
         <p v-if="item.need_per_month" class="text-xs tabular-nums text-muted-foreground">
           {{ t('goal.needShort', { amount: formatMoney(item.need_per_month, { decimals: 0, currency: item.goal.currency }) }) }}
         </p>
@@ -42,6 +42,10 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
     </ul>
   </Card>
   <Card size="sm" v-else-if="progress.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <!-- A failed load is not «nothing here»: it said «create one» to someone who has several. -->
+  <Card size="sm" v-else-if="progress.error.value">
+    <SectionState :error="progress.error.value" compact @retry="progress.refetch()" />
+  </Card>
   <Card size="sm" v-else>
     <div class="flex flex-col items-start gap-2">
       <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>

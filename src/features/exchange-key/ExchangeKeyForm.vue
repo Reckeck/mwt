@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 
 import { StoreNodeSelect } from '@/entities/store'
@@ -18,6 +18,7 @@ import { notify } from '@/shared/lib/notify'
 import { connectBybit } from './connect-bybit'
 import type { ExchangeKeyFormProps } from './exchange-key.types'
 import { useExchangeKeyStatus } from './useExchangeKeyStatus'
+import { useStoreTree } from '@/shared/api/queries'
 
 const props = defineProps<ExchangeKeyFormProps>()
 
@@ -56,7 +57,7 @@ async function save() {
   }
 }
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 
 /** Exchange sub-accounts of this wallet: where imported fills may land. */
 const targets = computed(() => {

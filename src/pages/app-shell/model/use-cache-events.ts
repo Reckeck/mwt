@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/vue-query'
 
+import { PRICED_KEYS } from '@/features/price-refresh'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { notify } from '@/shared/lib/notify'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
@@ -23,7 +24,11 @@ export function useCacheEvents() {
 
   // A refresh that priced operations saved without a price changes their
   // badges and every cost basis built on them.
+  // New quotes or rates, whoever fetched them (button, tray, the device's timer, a rate the
+  // transaction form needed): every figure in a currency re-reads once, from here.
   useBackendEvent<RefreshResult>('prices-updated', (result) => {
+    queryClient.setQueryData(['refresh'], result)
+    invalidate(PRICED_KEYS)
     if (result.restamped)
       invalidate([['transactions'], ['store'], ['store-pnl'], ['store-history'], ['history'], ['summary']])
   })
@@ -33,6 +38,8 @@ export function useCacheEvents() {
   useBackendEvent('workflows-ran', () => invalidate([WORKFLOW_KEYS.runs, WORKFLOW_KEYS.queue, WORKFLOW_KEYS.waits]))
   useBackendEvent('price-alert', () => invalidate([['price-alerts']]))
   useBackendEvent('reminder-due', () => invalidate([['reminders']]))
+  // The scheduler made or moved automatic reminders.
+  useBackendEvent('reminders-changed', () => invalidate([['reminders']]))
   useBackendEvent('enrichment-ready', () => {
     invalidate([['enrichments']])
     notify.info('enrichment.event')

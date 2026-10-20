@@ -16,7 +16,8 @@ import type { SectionStateProps } from './section-state.types'
  * Loading, failed, empty or the content — one of them, never "nothing here"
  * while the data is still on its way.
  *
- * The skeleton waits a moment before showing, so a fast answer does not flash
+ * The skeleton takes its height at once (nothing below jumps when it
+ * appears) but fades in only after a moment, so a fast answer does not flash
  * a placeholder. The empty block takes its action button from `#empty`.
  */
 const props = withDefaults(defineProps<SectionStateProps>(), {
@@ -59,21 +60,31 @@ function errorText(err: unknown): string {
 </script>
 
 <template>
-  <div v-if="props.loading" :aria-busy="true" :aria-label="t('ui.loading')">
-    <template v-if="showSkeleton">
-      <div v-if="props.skeleton === 'chart'" class="flex flex-col gap-2">
-        <Skeleton class="h-4 w-32" />
-        <Skeleton class="h-48 w-full" />
-      </div>
-      <div v-else-if="props.skeleton === 'figure'" class="flex flex-col gap-2">
-        <Skeleton class="h-3 w-24" />
-        <Skeleton class="h-8 w-40" />
-      </div>
-      <div v-else class="flex flex-col gap-2">
-        <Skeleton v-if="props.skeleton === 'table'" class="h-8 w-full" />
-        <Skeleton v-for="row in props.rows" :key="row" class="h-10 w-full" />
-      </div>
-    </template>
+  <div
+    v-if="props.loading"
+    :aria-busy="true"
+    :aria-label="t('ui.loading')"
+    class="transition-opacity duration-200"
+    :class="showSkeleton ? 'opacity-100' : 'opacity-0'"
+  >
+    <div v-if="props.skeleton === 'chart'" class="flex flex-col gap-2">
+      <Skeleton class="h-4 w-32" />
+      <Skeleton class="h-48 w-full" />
+    </div>
+    <!-- A report: the facts in words, a chart, the first rows of its table. -->
+    <div v-else-if="props.skeleton === 'report'" class="flex flex-col gap-4">
+      <Skeleton class="h-20 w-full" />
+      <Skeleton class="h-72 w-full" />
+      <Skeleton v-for="row in props.rows" :key="row" class="h-10 w-full" />
+    </div>
+    <div v-else-if="props.skeleton === 'figure'" class="flex flex-col gap-2">
+      <Skeleton class="h-3 w-24" />
+      <Skeleton class="h-8 w-40" />
+    </div>
+    <div v-else class="flex flex-col gap-2">
+      <Skeleton v-if="props.skeleton === 'table'" class="h-8 w-full" />
+      <Skeleton v-for="row in props.rows" :key="row" class="h-10 w-full" />
+    </div>
   </div>
 
   <Alert v-else-if="props.error" variant="destructive" role="alert">

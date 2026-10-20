@@ -47,7 +47,7 @@
   шагов — шаги (`stepper`), а не вкладки.
 - `Dialog`, `Sheet` всегда с заголовком (можно `sr-only`) и, если нужно
   пояснение, `description`.
-- Раскладка полей в диалоге — container queries (`@sm:grid-cols-2`); портал
+- Раскладка полей в диалоге — container queries (`@xl:grid-cols-2`; размеры: Tailwind `@xl` = 36rem, `@2xl` 42, `@3xl` 48, и свои `@mid` = 44rem, `@wide` = 52rem); портал
   вне страницы, поэтому нужен `@container` (в `FormDialog` есть).
 
 ## Вкладки

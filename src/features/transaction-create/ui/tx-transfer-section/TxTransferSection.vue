@@ -22,18 +22,27 @@ const fromStore = computed(() => accountStoreId(form.from))
 </script>
 
 <template>
-  <div class="grid gap-3 @sm:grid-cols-2">
+  <div class="grid gap-3 @xl:grid-cols-2">
     <AssetInput v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
     <FormField for="tx-amount" :label="t('form.amount')" required :error="check.error('amount')">
       <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
       <AvailableHint :store-id="fromStore" :asset="form.asset" @max="(quantity) => (form.amount = quantity)" />
     </FormField>
   </div>
-  <div class="grid items-end gap-3 @sm:grid-cols-[1fr_auto_1fr]">
+  <!-- Top-aligned: a two-line «Откуда» pushed the «Куда» label 8px down with items-end. -->
+  <div class="grid items-start gap-3 @xl:grid-cols-[1fr_auto_1fr]">
     <FormField :label="t('tx.field.from')" required :error="check.error('from')">
       <AccountRefPicker v-model="form.from" />
     </FormField>
-    <Button type="button" variant="ghost" size="icon" :title="t('tx.field.swap')" :aria-label="t('tx.field.swap')" @click="swapSides">
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      class="@xl:mt-6"
+      :title="t('tx.field.swap')"
+      :aria-label="t('tx.field.swap')"
+      @click="swapSides"
+    >
       <ArrowUpDown class="size-4" />
     </Button>
     <FormField :label="t('tx.field.to')" required :error="check.error('to')">

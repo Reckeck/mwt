@@ -92,7 +92,11 @@ CLI не умеет пробный прогон: ставь во временн�
     компонент, который её уже показывает, и встрои его — с пропсом, если не
     хватает. Любая сумма с валютой — `<Money>` (подсказка курсов), не
     `formatMoney` в шаблоне. → `check-ui` (format-money)
-18. **Избранное в каждом списке валют и активов:** группа «Избранные» сверху и
+18. **Интерфейс не двигается сам** (правило 17 AGENTS.md): место под кнопки
+    строки зарезервировано, кнопка не подменяется другой, запрос держит прежние
+    данные, подписка — `useBackendEvent`, без `backdrop-filter`. →
+    `check-ui`, `check-layout`, [stable-layout.md](references/stable-layout.md)
+19. **Избранное в каждом списке валют и активов:** группа «Избранные» сверху и
     звёздочка. Это дают пикеры (правило 8) и `useFavoriteCurrencies`; свой
     список валют не пишется. → `check-forms`
 
@@ -103,6 +107,8 @@ CLI не умеет пробный прогон: ставь во временн�
 | шапка страницы: крошки, заголовок, действия | `PageHeader` | `shared/ui/page-header` |
 | загрузка / ошибка с «Повторить» / пусто / данные | `SectionState` | `shared/ui/section-state` |
 | пустое состояние с кнопкой «Создать» | `EmptyState` | `shared/ui/empty-state` |
+| вкл/выкл с подписью и пояснением (настройка, «Активно» в диалоге) | `SwitchRow` | `shared/ui/switch-row` |
+| доля: бюджет, цель, передача файла (полоса) | `ProgressBar` | `shared/ui/progress-bar` |
 | таблица с сортировкой, числа справа | `DataTable` (колонки `ColumnDef`, `meta.align`) | `shared/ui/data-table` |
 | подпись + крупное число | `StatCard` | `shared/ui/stat-card` |
 | сумма с валютой и подсказкой курса | `Money` (`colored` — знак и цвет) | `entities/currency` |
@@ -187,6 +193,7 @@ CLI не умеет пробный прогон: ставь во временн�
 | `mise run check-ui` | сырые `button`/`checkbox`/`radio`/`table`, ручное пустое состояние, `emerald`/`red`/hex, `transition-all`, `toFixed` в `.vue`, `div @click` без роли, `formatMoney` в шаблоне, `h-screen`/`vh`, `fixed` у края без `*-safe`, широкая ширина без префикса, `useMutation` без `meta`, файл длиннее лимита |
 | `mise run check-forms` | кнопка сохранения заблокирована проверкой полей, ручная проверка в `@submit`, самодельные списки счетов/активов/валют |
 | `mise run check-onboarding` | экран без тура, шаг без элемента, нет текста, ключи ru ≠ en |
+| `mise run check-layout` | приложение в headless Chromium: прокрутка вбок, переполнение, сдвиг при наведении и загрузке, прыжок диалога, утечки слушателей, «Назад», цели касания |
 
 Долги, которые были до правила, записаны в `scripts/check-ui.baseline.json`.
 Файл не может стать хуже своей записи. Исправил — `node scripts/check-ui.mjs
@@ -204,6 +211,7 @@ CLI не умеет пробный прогон: ставь во временн�
 - [forms.md](references/forms.md) — правила 13 и 14 полностью, `useFormValidation`, `FormDialog`
 - [feedback.md](references/feedback.md) — уведомления, загрузка, ошибки, пусто, подтверждение и «Отменить»
 - [mobile.md](references/mobile.md) — правило 16: телефон, отступы, «Назад», шторки, ширины
+- [stable-layout.md](references/stable-layout.md) — правило 17: ничего не прыгает от наведения, загрузки, прокрутки
 - [data-display.md](references/data-display.md) — таблицы, деньги, проценты, даты, P&L, графики, длинные списки
 - [layout.md](references/layout.md) — страница, диалог, Sheet, вкладки, узкие окна
 - [a11y-motion.md](references/a11y-motion.md) — клавиатура, фокус, ARIA, контраст, анимация

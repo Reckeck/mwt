@@ -47,6 +47,20 @@ src/shared/          ui (компоненты), lib (format, notify, form…), a
   vault, настройки приложения и vault, буфер предзаполнения формы.
 - Одно и то же в двух местах — источник рассинхрона.
 
+Шаблон запроса, у которого меняется ключ (фильтр, период, страница):
+
+```ts
+const report = useQuery({
+  queryKey: computed(() => ['report', 'cashflow', filter.value]),
+  queryFn: () => call<CashflowReport>('report_cashflow', { input: filter.value }),
+  placeholderData: keepPreviousData, // экран не пустеет на смене ключа (правило 17)
+})
+```
+
+Общие списки (дерево кошельков, контакты, категории) — композаблы из
+`entities` (`useStoreTree`, `useContacts`, `useCategories`), а не
+`call('get_store_tree')` в каждом компоненте: одни ключи и опции.
+
 Ключи запросов короткие и общие: `['store', id, includeChildren]`,
 `['store-history', id]`, `['summary']`, `['stores']`, наборы — `LEDGER_KEYS`,
 `PLANNING_KEYS` (`shared/lib/planning`), `STORE_TREE_QUERY_KEY`.
@@ -77,7 +91,10 @@ import { call, onEvent, parseError } from '@/shared/api/ipc'
 - Ошибка — `AppError { code, message }` (`parseError`); текст для человека —
   `anyErrorMessage(err, t)` / `codeErrorMessage` (`shared/lib/vault-error`),
   ключи `errors.<CODE>` в обоих локалях.
-- `onEvent` возвращает отписку: в композабле вызывай её в `onScopeDispose`.
+- Событие бэкенда — только `useBackendEvent(event, handler)`
+  (`shared/api/use-backend-event`): отписка с областью видимости. Голый
+  `onEvent` в `setup` копит обработчики на каждый заход (`check-ui`
+  `raw-listener`). Событие инвалидирует свои ключи, не `invalidateQueries()`.
 - Вне Tauri `call` лениво грузит мок (`shared/api/mock/`,
   пароль `secret`). Команду, которую нужно видеть в `pnpm dev`, добавь в мок.
 

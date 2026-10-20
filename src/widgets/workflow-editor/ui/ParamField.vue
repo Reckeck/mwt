@@ -16,11 +16,11 @@ import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
 import { WEEKDAYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { WORKFLOW_KEYS, localized } from '@/shared/lib/workflow'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import TargetsField from './TargetsField.vue'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** One field of a node, edited by the control its kind asks for. */
 /** `error`: the check's word on this very field (an empty required one), shown under it. */
@@ -33,11 +33,7 @@ const kind = computed(() => props.param.kind.kind)
 const current = computed(() => props.value ?? props.param.default)
 const text = computed(() => (current.value === null || current.value === undefined ? '' : String(current.value)))
 
-const tree = useQuery({
-  queryKey: STORE_TREE_QUERY_KEY,
-  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-  enabled: computed(() => kind.value === 'store'),
-})
+const tree = useStoreTree(computed(() => kind.value === 'store'))
 const budgets = useQuery({
   queryKey: ['budgets'],
   queryFn: () => call<Budget[]>('list_budgets'),

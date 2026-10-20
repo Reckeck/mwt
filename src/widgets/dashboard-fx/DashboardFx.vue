@@ -56,8 +56,8 @@ const refresh = () => priceRefresh.mutate()
         <!-- An icon button keeps this header as tall as its neighbours'. -->
         <Button
           variant="ghost"
-          size="icon"
-          class="-my-2 size-8"
+          size="icon-sm"
+          class="-my-2"
           :title="t('store.refresh')"
           :aria-label="t('store.refresh')"
           :disabled="refreshBusy"

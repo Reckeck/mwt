@@ -9,5 +9,7 @@ interface MockCall {
 export type MockCommands = Record<string, (call: MockCall) => Promise<unknown>>
 
 export function resolve<T>(value: T): Promise<T> {
-  return new Promise((res) => setTimeout(() => res(structuredClone(value)), 30))
+  // check-layout slows the mock down (`__mockLatency`) so data arrives after the route has drawn.
+  const latency = (globalThis as { __mockLatency?: number }).__mockLatency ?? 30
+  return new Promise((res) => setTimeout(() => res(structuredClone(value)), latency))
 }

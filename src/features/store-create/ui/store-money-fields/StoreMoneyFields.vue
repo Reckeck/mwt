@@ -40,7 +40,7 @@ const {
     :hint="t('storeWizard.cardHint')"
     data-tour="store-bank-card"
   >
-    <div class="grid grid-cols-[10rem_1fr] gap-2">
+    <div class="grid grid-cols-[10rem_minmax(0,1fr)] gap-2">
       <CurrencyPicker id="store-card-currency" v-model="cardCurrency" :kinds="['fiat']" label="" />
       <Input
         v-model="cardName"
@@ -60,7 +60,7 @@ const {
     :hint="t('storeWizard.openingHint')"
     data-tour="store-opening"
   >
-    <div class="grid grid-cols-[1fr_10rem] gap-2">
+    <div class="grid grid-cols-[minmax(0,1fr)_10rem] gap-2">
       <AmountInput id="store-opening-amount" v-model="openingAmount" autocomplete="off" :placeholder="t('storeWizard.openingPlaceholder')" />
       <CurrencyPicker v-if="openingPicker === 'currency'" v-model="openingCurrency" />
       <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" />

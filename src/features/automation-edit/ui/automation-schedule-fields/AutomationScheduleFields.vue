@@ -21,7 +21,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="grid items-start gap-3 @sm:grid-cols-3">
+  <div class="grid items-start gap-3 @xl:grid-cols-3">
     <div class="grid gap-1.5">
       <Label for="automation-schedule">{{ t('automation.schedule') }}</Label>
       <Select id="automation-schedule" v-model="kind">
@@ -36,7 +36,7 @@ const { t } = useI18n()
       :error="props.errors.day ?? undefined"
       :hint="t('schedule.dayHint')"
     >
-      <Input id="automation-day" v-model="day" type="number" min="1" max="31" />
+      <Input id="automation-day" v-model="day" type="text" inputmode="numeric" min="1" max="31" />
     </FormField>
     <FormField v-else-if="kind === 'weekly'" for="automation-weekday" :label="t('schedule.weekdayLabel')">
       <Select id="automation-weekday" v-model="weekday">
@@ -44,7 +44,7 @@ const { t } = useI18n()
       </Select>
     </FormField>
     <FormField v-else for="automation-days" :label="t('schedule.days')" required :error="props.errors.everyDays ?? undefined">
-      <Input id="automation-days" v-model="everyDays" type="number" min="1" />
+      <Input id="automation-days" v-model="everyDays" type="text" inputmode="numeric" min="1" />
     </FormField>
     <FormField for="automation-start" :label="t('automation.startsAt')" required :error="props.errors.startsAt ?? undefined">
       <DateTimePicker id="automation-start" v-model="startsAt" />

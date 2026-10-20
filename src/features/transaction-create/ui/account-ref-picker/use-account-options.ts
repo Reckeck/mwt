@@ -1,14 +1,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { Building2, CreditCard, Hash, Landmark, Link, PenLine, Phone, User, Wallet } from 'lucide-vue-next'
 
 import { walletRow } from '@/entities/store'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { AccountOption, AccountRefPickerProps } from './account-ref-picker.types'
+import { useContacts, useStoreTree } from '@/shared/api/queries'
 
 export const RAW = 'raw'
 /** The «not set» row. Reka throws on an item whose value is `''`, which left the list half-rendered. */
@@ -51,16 +50,8 @@ export function useAccountOptions(
   const { t } = useI18n()
   const settings = useSettingsStore()
 
-  const tree = useQuery({
-    queryKey: STORE_TREE_QUERY_KEY,
-    queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-    enabled: computed(() => props.stores),
-  })
-  const contactList = useQuery({
-    queryKey: ['contacts'],
-    queryFn: () => call<Contact[]>('list_contacts'),
-    enabled: computed(() => props.contacts),
-  })
+  const tree = useStoreTree(computed(() => props.stores))
+  const contactList = useContacts(computed(() => props.contacts))
 
   const storeOptions = computed<AccountOption[]>(() =>
     flattenStoreTree(tree.data.value ?? [])

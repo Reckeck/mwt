@@ -14,9 +14,9 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { Switch } from '@/shared/ui/switch'
 
 import type { PriceAlertDialogProps } from './price-alert-edit.types'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 const props = withDefaults(defineProps<PriceAlertDialogProps>(), { alert: null, storeId: null, preset: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -83,7 +83,7 @@ const save = useMutation({
   <Dialog v-model:open="open" :title="props.alert ? t('alert.edit') : t('alert.new')">
     <form id="price-alert-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <AssetInput v-model="asset" :label="t('alert.asset')" required :error="form.error('asset')" />
-      <div class="grid gap-3 @sm:grid-cols-3">
+      <div class="grid gap-3 @xl:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="alert-condition">{{ t('alert.condition') }}</Label>
           <Select id="alert-condition" v-model="condition">
@@ -98,10 +98,7 @@ const save = useMutation({
           <CurrencyPicker id="alert-currency" v-model="currency" />
         </FormField>
       </div>
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="alert-active">{{ t('alert.active') }}</Label>
-        <Switch id="alert-active" v-model="active" />
-      </div>
+      <SwitchRow id="alert-active" :label="t('alert.active')" v-model="active" />
       <p class="text-xs text-muted-foreground">{{ t('alert.hint') }}</p>
     </form>
     <template #footer>

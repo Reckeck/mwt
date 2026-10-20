@@ -14,11 +14,11 @@ import { integerInRange, nonNegativeAmount, required, useFormValidation } from '
 import { call } from '@/shared/api/ipc'
 import { localDate } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
-import { Switch } from '@/shared/ui/switch'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { CAPITALIZATIONS, INCOME_BRACKETS } from './deposit-terms.constants'
 import type { DepositTermsFormProps } from './deposit-terms.types'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 /**
  * The terms of a savings account, deposit or ПДС. Rates are a history: a new
@@ -134,7 +134,7 @@ const save = useMutation({
       <p v-else class="text-xs text-muted-foreground">{{ t('deposit.ratesHint') }}</p>
     </div>
 
-    <div class="grid gap-4 @sm:grid-cols-3">
+    <div class="grid gap-4 @xl:grid-cols-3">
       <div class="grid gap-1.5">
         <Label for="deposit-cap">{{ t('deposit.capitalization') }}</Label>
         <Select id="deposit-cap" v-model="capitalization">
@@ -147,20 +147,17 @@ const save = useMutation({
           <DateTimePicker id="deposit-opened" v-model="openedAt" />
         </div>
         <FormField for="deposit-term" :label="t('deposit.termMonths')" :error="form.error('termMonths')">
-          <Input id="deposit-term" v-model="termMonths" type="number" min="1" max="120" />
+          <Input id="deposit-term" v-model="termMonths" type="text" inputmode="numeric" min="1" max="120" />
         </FormField>
       </template>
     </div>
 
-    <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-      <Label for="deposit-auto-accrue">{{ t('deposit.autoAccrue') }}</Label>
-      <Switch id="deposit-auto-accrue" v-model="autoAccrue" />
-    </div>
+    <SwitchRow id="deposit-auto-accrue" :label="t('deposit.autoAccrue')" v-model="autoAccrue" />
 
     <div v-if="isPds" class="grid gap-3 rounded-lg border border-border p-3">
       <p class="text-sm font-medium">{{ t('deposit.pds.title') }}</p>
       <p class="text-xs text-muted-foreground">{{ t('deposit.pds.hint') }}</p>
-      <div class="grid gap-4 @sm:grid-cols-2">
+      <div class="grid gap-4 @xl:grid-cols-2">
         <FormField for="pds-first" :label="t('deposit.pds.firstContribution')" required :error="form.error('firstContribution')">
           <DateTimePicker id="pds-first" v-model="firstContribution" />
         </FormField>

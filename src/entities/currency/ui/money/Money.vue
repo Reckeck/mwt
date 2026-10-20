@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { isFiatCode, moneyParts, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { useFavoriteCurrencies } from '../../model/favorites'
-import { MoneyConversions } from '../money-conversions'
 import type { MoneyProps } from './money.types'
 
 /**
@@ -15,7 +13,8 @@ import type { MoneyProps } from './money.types'
  *
  * Hovering it shows the amount in the base and favourite currencies (then the
  * tracked ones) at the latest cached rate — for the base currency, any fiat
- * and any favourite; a rate older than today is labelled with its date.
+ * and any favourite; a rate older than today is labelled with its date. The
+ * tooltip itself is one for the whole app: `MoneyTooltipHost`.
  */
 const props = withDefaults(defineProps<MoneyProps>(), {
   currency: '',
@@ -49,36 +48,16 @@ const known = computed(
 const convertible = computed(
   () => (props.convert ?? known.value) && Number.isFinite(numeric.value) && numeric.value !== 0,
 )
-/** The conversions load on the first hover only. */
-const hovered = ref(false)
-/**
- * The tooltip mounts on the first hover, open: a page of rows has hundreds of
- * sums, and a tooltip each made the page slow to appear.
- */
-const armed = ref(false)
-function arm() {
-  if (!convertible.value) return
-  armed.value = true
-  hovered.value = true
-}
 </script>
 
 <template>
-  <Tooltip v-if="convertible && armed" default-open @update:open="(isOpen: boolean) => isOpen && (hovered = true)">
-    <TooltipTrigger as-child>
-      <span :class="cn('money inline-flex cursor-default items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone)">
-        <span>{{ parts.number }}</span>
-        <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
-      </span>
-    </TooltipTrigger>
-    <TooltipContent side="top" class="min-w-44">
-      <MoneyConversions v-if="hovered" :amount="numeric" :currency="code" />
-    </TooltipContent>
-  </Tooltip>
+  <!-- One element for good: the conversions tooltip is shared (MoneyTooltipHost in the shell)
+       and finds this sum by its data attributes, so hovering mounts nothing here (rule 17). -->
   <span
-    v-else
     :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone, convertible && 'cursor-default')"
-    @pointerenter="arm"
+    :data-money-convertible="convertible || undefined"
+    :data-money-amount="convertible ? numeric : undefined"
+    :data-money-currency="convertible ? code : undefined"
   >
     <span>{{ parts.number }}</span>
     <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>

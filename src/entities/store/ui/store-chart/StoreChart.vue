@@ -9,10 +9,12 @@ import { SectionState } from '@/shared/ui/section-state'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { call } from '@/shared/api/ipc'
-import { currencySymbol, formatMoney } from '@/shared/lib/format'
+import { currencySymbol, } from '@/shared/lib/format'
 import { useTheme } from '@/shared/lib/theme'
 
 import type { StoreChartProps } from './store-chart.types'
+import { keepPreviousFor } from '@/shared/lib/query'
+import { axisMoney } from '@/shared/lib/chart-theme'
 
 const props = withDefaults(defineProps<StoreChartProps>(), { includeChildren: true })
 
@@ -21,6 +23,7 @@ const { resolved } = useTheme()
 
 const history = useQuery({
   queryKey: computed(() => ['store-history', props.storeId, props.includeChildren]),
+  placeholderData: keepPreviousFor(() => props.storeId),
   queryFn: () =>
     call<HistoryPoint[]>('get_store_history', {
       storeId: props.storeId,
@@ -54,7 +57,7 @@ const option = computed<ChartOption>(() => ({
     type: 'value',
     axisLabel: {
       color: axisColor.value,
-      formatter: (value: number) => formatMoney(value, { currency: currency.value, decimals: 0, compact: true }),
+      formatter: (value: number) => axisMoney(value, currency.value),
     },
     splitLine: { lineStyle: { color: axisColor.value, opacity: 0.15 } },
   },
@@ -76,7 +79,8 @@ const option = computed<ChartOption>(() => ({
 <template>
   <Card>
     <template #header>
-      <div class="flex items-center justify-between gap-2">
+      <!-- min-h-8: the currency switch arrives with the data; the row keeps its height. -->
+      <div class="flex min-h-8 items-center justify-between gap-2">
         <p class="font-medium">{{ t('wallet.chart') }}</p>
         <ChartCurrencySwitch v-if="shown.options.value.length > 1" v-model="shown.selected.value" :options="shown.options.value" />
         <span v-else class="text-xs text-muted-foreground">{{ currencySymbol(currency) }}</span>
@@ -85,6 +89,8 @@ const option = computed<ChartOption>(() => ({
 
     <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
          so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
+    <!-- The chart's own height in every state: the skeleton was 8px shorter and the page under it jumped. -->
+    <div class="min-h-56">
     <SectionState
       :loading="history.isPending.value"
       :error="history.error.value"
@@ -98,5 +104,6 @@ const option = computed<ChartOption>(() => ({
         <Chart :option="option" autoresize />
       </div>
     </SectionState>
+    </div>
   </Card>
 </template>

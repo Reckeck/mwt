@@ -10,12 +10,12 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatPct } from '@/shared/lib/format'
-import { activeLocale } from '@/shared/lib/locale'
+import { formatMonthKey, formatPct } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { useTheme } from '@/shared/lib/theme'
 
 import type { UtilityStatsProps } from './utility-stats.types'
+import { SectionState } from '@/shared/ui/section-state'
 
 /**
  * Utilities by month, stacked per bill, with the latest month against the one
@@ -89,8 +89,7 @@ const deltaPct = computed(() => {
   return ((last.value - before.value) / before.value) * 100
 })
 
-const monthLabel = (period: string) =>
-  new Intl.DateTimeFormat(activeLocale.value, { month: 'short' }).format(new Date(`${period}-01T12:00`))
+const monthLabel = (period: string) => formatMonthKey(period, { month: 'short' })
 
 const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
@@ -126,6 +125,7 @@ const option = computed<ChartOption>(() => ({
       </div>
     </template>
     <Skeleton v-if="items.isPending.value" class="h-40 w-full" />
+    <SectionState v-else-if="items.error.value" :error="items.error.value" compact @retry="items.refetch()" />
     <p v-else-if="!own.length" class="text-sm text-muted-foreground">{{ t('utilities.noProperty') }}</p>
     <p v-else-if="!lastTwo.last" class="text-sm text-muted-foreground">{{ t('utilityStats.noBills') }}</p>
     <template v-else>

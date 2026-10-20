@@ -19,6 +19,7 @@ const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()
 
 const balances = useQuery({
+  // no placeholder: another exchange's balances
   queryKey: computed(() => ['bybit-balances', props.storeId]),
   queryFn: () => call<ExchangeAccountBalance[]>('bybit_balances', { storeId: props.storeId }),
   enabled: false,
@@ -73,7 +74,7 @@ const columns = computed<ColumnDef<ExchangeCoinRow>[]>(() => [
     <p v-if="balances.isError.value" class="text-sm text-destructive">
       {{ t('exchangeBalances.failed') }}: {{ parseError(balances.error.value).message }}
     </p>
-    <div v-else-if="balances.data.value" class="grid gap-4 @lg:grid-cols-3">
+    <div v-else-if="balances.data.value" class="grid gap-4 @wide:grid-cols-3">
       <section v-for="account in balances.data.value" :key="account.account" class="grid content-start gap-1.5">
         <p class="text-sm font-medium">{{ t(`exchangeBalances.account.${account.account}`) }}</p>
         <p v-if="!account.store_id" class="text-xs text-muted-foreground">{{ t('exchangeBalances.noAccount') }}</p>

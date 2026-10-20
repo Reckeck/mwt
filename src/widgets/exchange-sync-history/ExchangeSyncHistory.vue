@@ -22,6 +22,7 @@ const { t } = useI18n()
 const sync = useExchangeSync()
 
 const runs = useQuery({
+  // no placeholder: another exchange's runs
   queryKey: computed(() => ['import-runs', props.storeId]),
   queryFn: () => call<ImportRun[]>('list_import_runs', { storeId: props.storeId }),
 })

@@ -159,7 +159,7 @@ function onIndicators(keys: IndicatorKey[]) {
           <div class="min-w-0 flex-1" :data-invalid="adder.invalidAttr('pair')">
             <PairInput v-model="pairDraft" :quotes="['USDT']" :placeholder="t('trading.symbol')" />
           </div>
-          <Button type="submit" variant="ghost" size="icon" class="size-8" :title="t('terminal.add')" :aria-label="t('terminal.add')">
+          <Button type="submit" variant="ghost" size="icon-sm"  :title="t('terminal.add')" :aria-label="t('terminal.add')">
             <Plus class="size-4" />
           </Button>
         </div>

@@ -2,7 +2,20 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ClipboardPaste, FlaskConical, MoreVertical, PanelBottom, Play, Save, StickyNote, Undo2 } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ClipboardPaste,
+  Copy,
+  CopyPlus,
+  FlaskConical,
+  MoreVertical,
+  PanelBottom,
+  Play,
+  Redo2,
+  Save,
+  StickyNote,
+  Undo2,
+} from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -11,6 +24,7 @@ import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
+import type { EditCommandSet } from '../model/edit-commands'
 
 /**
  * The phone editor's one row: back, the name (a tap renames it and switches
@@ -27,6 +41,8 @@ const props = defineProps<{
   emulating: boolean
   running: boolean
   saving: boolean
+  /** Undo, redo, duplicate, copy (paste has its own item). */
+  commands: EditCommandSet
 }>()
 const emit = defineEmits<{
   note: []
@@ -94,6 +110,22 @@ function back() {
       <DropdownMenuItem value="note" @select="emit('note')">
         <StickyNote class="size-4 shrink-0" />
         {{ t('workflow.note.add') }}
+      </DropdownMenuItem>
+      <DropdownMenuItem value="undo" :disabled="!props.commands.canUndo()" @select="props.commands.undo()">
+        <Undo2 class="size-4 shrink-0" />
+        {{ t('workflow.edit.undo') }}
+      </DropdownMenuItem>
+      <DropdownMenuItem value="redo" :disabled="!props.commands.canRedo()" @select="props.commands.redo()">
+        <Redo2 class="size-4 shrink-0" />
+        {{ t('workflow.edit.redo') }}
+      </DropdownMenuItem>
+      <DropdownMenuItem value="duplicate" @select="props.commands.duplicate()">
+        <CopyPlus class="size-4 shrink-0" />
+        {{ t('workflow.edit.duplicate') }}
+      </DropdownMenuItem>
+      <DropdownMenuItem value="copy" @select="props.commands.copy()">
+        <Copy class="size-4 shrink-0" />
+        {{ t('workflow.edit.copy') }}
       </DropdownMenuItem>
       <DropdownMenuItem value="paste" @select="emit('paste')">
         <ClipboardPaste class="size-4 shrink-0" />

@@ -1,3 +1,4 @@
+// check-ui-ignore intl-cache: currency DisplayNames are cached per locale right here (`namers`)
 import { type MaybeRefOrGetter, computed, toValue } from 'vue'
 
 import { activeLocale } from '@/shared/lib/locale'

@@ -17,8 +17,8 @@ const open = ref(false)
 <template>
   <Button
     variant="ghost"
-    size="icon"
-    class="size-8 shrink-0 text-muted-foreground"
+    size="icon-sm"
+    class="shrink-0 text-muted-foreground"
     :title="t('tx.edit')"
     :aria-label="t('tx.edit')"
     @click="open = true"

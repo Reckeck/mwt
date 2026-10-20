@@ -23,22 +23,22 @@ const { isMobile, state } = useSidebar()
 const delegatedProps = reactiveOmit(props, "tooltip")
 </script>
 
+<!-- The label tooltip exists only while the sidebar is collapsed to icons: an expanded
+     sidebar shows the label itself, and a tooltip per item cost a mount per wallet. -->
+
 <template>
-  <SidebarMenuButtonChild v-if="!tooltip" v-bind="{ ...delegatedProps, ...$attrs }">
+  <SidebarMenuButtonChild v-if="!tooltip || state !== 'collapsed' || isMobile" v-bind="{ ...delegatedProps, ...$attrs }">
     <slot />
   </SidebarMenuButtonChild>
 
-  <Tooltip v-else>
+  <!-- Icons only: the name shows at once, as a label would. -->
+  <Tooltip v-else :delay-duration="0">
     <TooltipTrigger as-child>
       <SidebarMenuButtonChild v-bind="{ ...delegatedProps, ...$attrs }">
         <slot />
       </SidebarMenuButtonChild>
     </TooltipTrigger>
-    <TooltipContent
-      side="right"
-      align="center"
-      :hidden="state !== 'collapsed' || isMobile"
-    >
+    <TooltipContent side="right" align="center">
       <template v-if="typeof tooltip === 'string'">
         {{ tooltip }}
       </template>

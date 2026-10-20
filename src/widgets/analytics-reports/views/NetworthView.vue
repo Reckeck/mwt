@@ -62,7 +62,7 @@ const currency = computed(() => props.report.meta.currency)
 
 <template>
   <div class="grid grid-cols-1 gap-4">
-    <div v-if="last" class="grid gap-4 @sm:grid-cols-2">
+    <div v-if="last" class="grid gap-4 @xl:grid-cols-2">
       <StatCard :label="t('report.networth.net')">
         <Money :amount="last.net" :currency="currency" :decimals="0" />
       </StatCard>
@@ -74,7 +74,7 @@ const currency = computed(() => props.report.meta.currency)
       <div class="h-80 w-full"><Chart :option="option" autoresize /></div>
     </Card>
     <Card v-if="last">
-      <dl class="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-sm tabular-nums @md:grid-cols-[1fr_auto_1fr_auto_1fr_auto]">
+      <dl class="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-sm tabular-nums @mid:grid-cols-[1fr_auto_1fr_auto_1fr_auto]">
         <template v-for="part in [...PARTS, ...DEBTS, 'net' as const]" :key="part">
           <dt class="text-muted-foreground">{{ t(`report.networth.${part}`) }}</dt>
           <dd class="text-right" :class="part === 'net' && 'font-semibold'"><Money :amount="last[part]" :decimals="0" :currency="props.report.meta.currency" /></dd>

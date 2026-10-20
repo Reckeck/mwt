@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { TransactionForm } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Label } from '@/shared/ui/label'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** «+ Операция» from anywhere: the wallet is the first field, not the page's. */
 const open = defineModel<boolean>('open', { required: true })
@@ -17,7 +16,7 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 const LAST_STORE_KEY = 'quick-add.store'
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 function remembered(): string {

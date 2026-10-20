@@ -1,3 +1,4 @@
+// check-ui-ignore invalidate-all: the whole document was replaced by the JSON editor
 import { type Ref, computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { EditorState } from '@codemirror/state'

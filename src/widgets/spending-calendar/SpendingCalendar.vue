@@ -2,30 +2,36 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
-import { Money } from '@/entities/currency'
 
-import { TransactionEditButton } from '@/features/transaction-edit'
+import { Money } from '@/entities/currency'
+import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList } from '@/entities/transaction'
 import { UpcomingList } from '@/widgets/upcoming-list'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
-import { activeLocale } from '@/shared/lib/locale'
+import { formatDate, formatMoney, formatMonthKey, formatWeekday } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { STATUS_CLASSES } from './spending-calendar.constants'
+import CalendarDayBalance from './ui/CalendarDayBalance.vue'
+import CalendarDayCell from './ui/CalendarDayCell.vue'
 import { openTxDetails } from '@/shared/lib/tx-details'
+import { useIsPhone } from '@/shared/lib/phone'
 
 const { t } = useI18n()
+/** «⋯» and right-click on a row of the chosen day. */
+const rowMenu = useTxRowMenu()
+const isPhone = useIsPhone()
 
 const today = localDate(new Date())
 const month = ref(today.slice(0, 7))
 const calendar = useQuery({
   queryKey: computed(() => ['calendar', month.value]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<CalendarMonth>('get_calendar', { month: month.value }),
 })
 
@@ -36,14 +42,12 @@ function shift(delta: number) {
   selected.value = null
 }
 
-const title = computed(() =>
-  new Intl.DateTimeFormat(activeLocale.value, { month: 'long', year: 'numeric' }).format(new Date(`${month.value}-01T12:00`)),
-)
+const title = computed(() => formatMonthKey(month.value, { month: 'long', year: 'numeric' }))
 
 /** Monday-first weekday names in the active language. */
 const weekdays = computed(() =>
   Array.from({ length: 7 }, (_unused, index) =>
-    new Intl.DateTimeFormat(activeLocale.value, { weekday: 'short' }).format(new Date(2024, 0, 1 + index)),
+    formatWeekday(new Date(2024, 0, 1 + index), 'short'),
   ),
 )
 
@@ -53,6 +57,7 @@ const lead = computed(() => (new Date(`${month.value}-01T12:00`).getDay() + 6) %
 const selected = ref<string | null>(null)
 // The day is cut in the user's zone by the backend, same as the calendar cells.
 const dayQuery = useQuery({
+  // no placeholder: another day's operations under this day's title
   queryKey: computed(() => ['transactions', 'day', selected.value]),
   queryFn: () =>
     call<Transaction[]>('list_transactions', { filter: emptyTxFilter({ from: selected.value, to: selected.value }) }),
@@ -61,49 +66,69 @@ const dayQuery = useQuery({
 const dayTxs = computed(() => (selected.value ? (dayQuery.data.value ?? []) : []))
 
 const openDetails = openTxDetails
+
+const currency = computed(() => calendar.data.value?.currency ?? '')
+/** What falls due on each day of the month (reminders, payments), by date. */
+const upcomingByDay = computed(() => {
+  const byDay = new Map<string, UpcomingItem[]>()
+  for (const item of calendar.data.value?.upcoming ?? []) byDay.set(item.date, [...(byDay.get(item.date) ?? []), item])
+  return byDay
+})
+const selectedDay = computed(() => calendar.data.value?.days.find((day) => day.date === selected.value) ?? null)
+/** The month's rest as of today (or the month's last day already past); forecasts do not count. */
+const latest = computed(
+  () => [...(calendar.data.value?.days ?? [])].reverse().find((day) => day.left !== null && !day.forecast) ?? null,
+)
 </script>
 
 <template>
-  <div class="grid items-start gap-4 @4xl:grid-cols-[1fr_20rem]">
+  <!-- One column at any width: the month, then the chosen day, then what is coming. -->
+  <div class="grid gap-4">
     <div class="grid gap-4">
       <Card>
         <template #header>
           <div class="flex items-center justify-between gap-2">
             <p class="font-medium capitalize">{{ title }}</p>
-            <div class="flex items-center gap-1">
-              <Button variant="ghost" size="icon" class="size-8" :aria-label="t('calendar.prev')" @click="shift(-1)">
+            <div class="flex items-center gap-1 pointer-coarse:gap-2">
+              <Button variant="ghost" size="icon-sm"  :aria-label="t('calendar.prev')" @click="shift(-1)">
                 <ChevronLeft class="size-4" />
               </Button>
-              <Button variant="ghost" size="icon" class="size-8" :aria-label="t('calendar.next')" @click="shift(1)">
+              <Button variant="ghost" size="icon-sm"  :aria-label="t('calendar.next')" @click="shift(1)">
                 <ChevronRight class="size-4" />
               </Button>
             </div>
           </div>
           <p v-if="calendar.data.value?.allowance" class="text-xs text-muted-foreground">
-            {{ t('calendar.allowance', { amount: formatMoney(calendar.data.value.allowance, { decimals: 0, currency: calendar.data.value.currency }) }) }}
+            {{ t('calendar.allowance', { amount: formatMoney(calendar.data.value.allowance, { decimals: 0, currency }) }) }}
+          </p>
+          <!-- The running balance: the month's pool, what is left of it, what each day after may spend. -->
+          <p v-if="calendar.data.value?.budget" class="text-xs text-muted-foreground" data-tour="calendar-balance">
+            {{ t('calendar.budgetMonth', { amount: formatMoney(calendar.data.value.budget, { decimals: 0, currency }) }) }}
+            <template v-if="latest?.left">
+              · {{ t('calendar.leftMonth') }}:
+              <span :class="Number(latest.left) < 0 ? 'text-destructive' : 'text-foreground'">
+                <Money :amount="latest.left" :decimals="0" :currency="currency" />
+              </span>
+            </template>
+            <template v-if="latest?.per_day_left">
+              · {{ t('calendar.perDayLeft') }}: <Money :amount="latest.per_day_left" :decimals="0" :currency="currency" />
+            </template>
           </p>
         </template>
         <div class="grid grid-cols-7 gap-1 text-center text-xs">
           <div v-for="name in weekdays" :key="name" class="pb-1 text-muted-foreground capitalize">{{ name }}</div>
           <div v-for="index in lead" :key="`lead-${index}`" />
-          <Button
-            variant="outline"
-            size="block"
+          <CalendarDayCell
             v-for="day in calendar.data.value?.days ?? []"
             :key="day.date"
-            class="h-auto text-xs grid min-h-16 content-start gap-0.5 rounded-md border p-1.5 text-left transition-colors"
-            :class="[STATUS_CLASSES[day.status], selected === day.date ? 'ring-2 ring-primary' : day.date === today ? 'ring-1 ring-primary' : '']"
-            :aria-pressed="selected === day.date"
-            :aria-current="day.date === today ? 'date' : undefined"
-            @click="selected = selected === day.date ? null : day.date"
-          >
-            <span class="font-medium">
-              {{ Number(day.date.slice(8)) }}
-              <span v-if="day.date === today" class="sr-only">{{ t('calendar.today') }}</span>
-            </span>
-            <span v-if="Number(day.daily)" class="tabular-nums">−<Money :amount="day.daily" :decimals="0" :currency="calendar.data.value?.currency" /></span>
-            <span v-if="Number(day.income)" class="tabular-nums text-success">+<Money :amount="day.income" :decimals="0" :currency="calendar.data.value?.currency" /></span>
-          </Button>
+            :day="day"
+            :currency="currency"
+            :today="today"
+            :selected="selected === day.date"
+            :upcoming="upcomingByDay.get(day.date)?.length ?? 0"
+            :compact="isPhone"
+            @pick="selected = selected === day.date ? null : day.date"
+          />
         </div>
         <div class="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span v-for="status in ['under', 'near', 'over'] as const" :key="status" class="flex items-center gap-1.5">
@@ -115,7 +140,7 @@ const openDetails = openTxDetails
 
     </div>
 
-    <!-- The chosen day sits next to the month, above what is coming. -->
+    <!-- The chosen day under the month, above what is coming. -->
     <div class="grid gap-4">
       <Card v-if="selected">
         <template #header>
@@ -130,13 +155,17 @@ const openDetails = openTxDetails
             </RouterLink>
           </div>
         </template>
+        <CalendarDayBalance
+          v-if="selectedDay"
+          class="mb-3"
+          :day="selectedDay"
+          :currency="currency"
+          :upcoming="upcomingByDay.get(selectedDay.date) ?? []"
+        />
         <p v-if="!dayTxs.length" class="text-sm text-muted-foreground">{{ t('calendar.dayEmpty') }}</p>
         <div v-else class="-my-3">
-          <TransactionsList :transactions="dayTxs" openable @open="openDetails">
-            <template #actions="{ tx }">
-              <TransactionEditButton :tx="tx" />
-            </template>
-          </TransactionsList>
+          <TransactionsList :transactions="dayTxs" openable :row-actions="rowMenu.actions" @open="openDetails" />
+          <TxRowMenuHost :menu="rowMenu" />
         </div>
       </Card>
       <UpcomingList :days="45" :limit="15" />

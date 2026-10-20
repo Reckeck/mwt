@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { watchDebounced } from '@vueuse/core'
 import { Link2, X } from 'lucide-vue-next'
 
@@ -12,14 +11,14 @@ import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree, storeDescendants } from '@/shared/lib/store-tree'
+import { flattenStoreTree, storeDescendants } from '@/shared/lib/store-tree'
 import { TX_KINDS } from '@/shared/lib/transactions'
 import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { TransactionFilterBarProps } from './transaction-filter.types'
+import { useContacts, useStoreTree } from '@/shared/api/queries'
 
 const props = withDefaults(defineProps<TransactionFilterBarProps>(), { fixedScope: false, idPrefix: 'tx-filter' })
 /** Things that belong to the row but are not filters (refresh, export). */
@@ -29,8 +28,8 @@ const filter = defineModel<TxFilter>({ required: true })
 const { t } = useI18n()
 const field = (name: string) => `${props.idPrefix}-${name}`
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
-const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })
+const tree = useStoreTree()
+const contacts = useContacts()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 const storeIds = computed({

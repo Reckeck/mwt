@@ -9,6 +9,8 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { useLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore, useVaultStore } from '@/shared/store'
+import { useVaultSave } from '@/features/vault-save'
+import { useBackendEvent } from '@/shared/api/use-backend-event'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +33,9 @@ if (!settingsStore.appLoaded) {
 // The backend may lock the vault by itself (Android: after a while in the
 // background, or from the sync notification): the window follows, and
 // checks again when it comes back in case the event came while it slept.
-void vault.listen()
+useBackendEvent<VaultStatus>('vault-changed', (status) => vault.applyStatus(status))
+// Batched saves: written when the window hides; a failed write offers to retry.
+useVaultSave()
 useEventListener(document, 'visibilitychange', () => {
   if (document.visibilityState === 'visible') vault.refreshStatus().catch(() => {})
 })
@@ -84,6 +88,7 @@ watch(
   <Sonner
     :position="phone ? 'top-center' : 'bottom-right'"
     :offset="phone ? 'calc(var(--safe-top) + 12px)' : undefined"
+    :mobile-offset="{ top: 'calc(var(--safe-top) + 12px)' }"
     :theme="theme"
     rich-colors
     close-button

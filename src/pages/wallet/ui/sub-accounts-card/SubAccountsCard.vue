@@ -37,7 +37,7 @@ const share = (value: number) => formatPct(value * 100, { decimals: 0 })
     </template>
     <div class="flex flex-col divide-y divide-border">
       <div class="flex items-center gap-3 py-2.5">
-        <component :is="storeIcon(props.store)" class="size-4 shrink-0" :style="{ color: props.store.color }" />
+        <component :is="storeIcon(props.store)" class="store-tint size-4 shrink-0" :style="{ '--store-color': props.store.color }" />
         <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ t('stores.ownFunds') }}</span>
         <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ share(props.ownShare) }}</span>
         <Money class="shrink-0 text-sm" :amount="props.ownBase" :currency="props.currency" :decimals="2" />

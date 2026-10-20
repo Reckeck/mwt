@@ -17,3 +17,8 @@ export function listenMock(event: string, handler: Handler): () => void {
 export function emitMock(event: string, payload: unknown) {
   for (const handler of handlers.get(event) ?? []) handler(payload)
 }
+
+/** How many handlers listen to `event` now: `check-layout` uses it to catch listeners that leak per visit. */
+export function mockListenerCount(event: string): number {
+  return handlers.get(event)?.size ?? 0
+}

@@ -17,6 +17,7 @@ export function useTxKind(state: TxFormState) {
 
   /** Which kinds this wallet accepts. The binding lives in Rust; the form only asks. */
   const kinds = useQuery({
+    // no placeholder: a watcher picks the form kind from this wallet's kinds
     queryKey: computed(() => ['transaction-kinds', storeKind.value]),
     queryFn: () => call<TransactionKinds>('transaction_kinds_for_store_kind', { kind: storeKind.value }),
     enabled: computed(() => storeKind.value !== null),

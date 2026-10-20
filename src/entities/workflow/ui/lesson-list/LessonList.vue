@@ -27,7 +27,7 @@ onMounted(() => {
           class="flex items-start gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <CircleCheck v-if="done.includes(lesson.id)" class="mt-0.5 size-4 shrink-0 text-primary" />
-          <span v-else class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-border text-[10px]">
+          <span v-else class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-border text-2xs">
             {{ index + 1 }}
           </span>
           <span class="grid gap-0.5">

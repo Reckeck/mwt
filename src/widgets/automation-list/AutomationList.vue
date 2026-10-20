@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore row-repeat-call: runsOf/pending read maps built once per list (computed)
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -13,13 +14,16 @@ import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
+import { useStoreTree } from '@/shared/api/queries'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS, rejectText, scheduleText } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txKind, txLegs } from '@/shared/lib/transactions'
 
 import type { AutomationListProps } from './automation-list.types'
 import { useNewFromRoute } from './model/use-new-from-route'
+
+import { NO_RUNS, groupRuns } from './lib/group-runs'
 
 const props = withDefaults(defineProps<AutomationListProps>(), { storeId: '', presets: () => [] })
 
@@ -31,9 +35,10 @@ const runs = useQuery({
   queryKey: ['automation-runs'],
   queryFn: () => call<AutomationRun[]>('list_automation_runs', { automationId: null }),
 })
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
-const storeName = (id: string) =>
-  flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === id)?.path.join(' › ') ?? id
+const tree = useStoreTree()
+/** Wallet paths by id, flattened once per tree (each card asks for one or two). */
+const paths = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node.path.join(' › ')])))
+const storeName = (id: string) => paths.value.get(id) ?? id
 
 /** «−25 000 RUB · Тинькофф» from the template's first leg. */
 function templateLine(automation: Automation): string {
@@ -56,8 +61,9 @@ const shown = computed(() =>
   }),
 )
 
-const runsOf = (id: string) => (runs.data.value ?? []).filter((run) => run.automation_id === id)
-const pending = (id: string) => runsOf(id).filter((run) => typeof run.outcome === 'object' && 'rejected' in run.outcome)
+const grouped = computed(() => groupRuns(runs.data.value ?? []))
+const runsOf = (id: string) => grouped.value.all.get(id) ?? NO_RUNS
+const pending = (id: string) => grouped.value.rejected.get(id) ?? NO_RUNS
 
 const expanded = ref<string | null>(null)
 const dialogOpen = ref(false)
@@ -95,17 +101,13 @@ function refresh() {
 
 const runNow = useMutation({
   mutationFn: (id: string) => call<Transaction>('run_automation', { id }),
-  onSuccess: () => {
-    refresh()
-  },
+  onSuccess: refresh,
   meta: { error: 'automation.runFailed', success: 'automation.ranNow' },
 })
 
 const remove = useMutation({
   mutationFn: (id: string) => call('delete_automation', { id }),
-  onSuccess: () => {
-    refresh()
-  },
+  onSuccess: refresh,
   meta: { error: 'automation.deleteFailed', success: 'automation.deleted' },
 })
 
@@ -164,8 +166,8 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
           <div class="flex shrink-0 items-center gap-1">
             <Button
               variant="ghost"
-              size="icon"
-              class="size-8 text-muted-foreground"
+              size="icon-sm"
+              class="text-muted-foreground"
               :title="t('simulation.openOne')"
               :aria-label="t('simulation.openOne')"
               @click="openSimulation(automation)"
@@ -174,8 +176,8 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-8 text-muted-foreground"
+              size="icon-sm"
+              class="text-muted-foreground"
               :title="t('automation.runNow')"
               :aria-label="t('automation.runNow')"
               :disabled="runNow.isPending.value"
@@ -185,8 +187,8 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-8 text-muted-foreground"
+              size="icon-sm"
+              class="text-muted-foreground"
               :title="t('automation.edit')"
               :aria-label="t('automation.edit')"
               @click="openEdit(automation)"

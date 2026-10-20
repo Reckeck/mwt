@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 
 import { call, parseError } from '@/shared/api/ipc'
+import { numberFormat } from '@/shared/lib/format'
 
 /**
  * The calculator's fields and its live result: `calc_preview` runs 200 ms
@@ -89,7 +90,7 @@ export function useCalcPreview() {
     const priceInUsd = Number(priceIn.value)
     const priceOutUsd = Number(priceOut.value)
     if (!priceInUsd || !priceOutUsd) return null
-    return (priceInUsd / priceOutUsd).toLocaleString(undefined, { maximumFractionDigits: 8 })
+    return numberFormat({ maximumFractionDigits: 8 }).format(priceInUsd / priceOutUsd)
   })
 
   return { mode, from, to, amount, priceIn, priceOut, targetPrice, stopPrice, feePct, result, error, impliedRate }

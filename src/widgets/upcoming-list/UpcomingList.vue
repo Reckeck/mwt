@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { type RouteLocationRaw, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { Bell, CalendarClock, CircleAlert, HandCoins, Home, Landmark } from 'lucide-vue-next'
 import { Money } from '@/entities/currency'
 
@@ -12,6 +12,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 
 import type { UpcomingListProps } from './upcoming-list.types'
+import { SectionState } from '@/shared/ui/section-state'
 
 const props = withDefaults(defineProps<UpcomingListProps>(), { days: 30, limit: 8 })
 
@@ -19,6 +20,7 @@ const { t } = useI18n()
 
 const upcoming = useQuery({
   queryKey: computed(() => ['upcoming', props.days]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<UpcomingItem[]>('get_upcoming', { days: props.days }),
 })
 const runs = useQuery({
@@ -61,7 +63,15 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
     <template #header>
       <p data-widget-title class="text-sm text-muted-foreground">{{ t('upcoming.title') }}</p>
     </template>
-    <p v-if="upcoming.isSuccess.value && !items.length" class="text-sm text-muted-foreground">{{ t('upcoming.empty') }}</p>
+    <SectionState
+      v-if="upcoming.isPending.value || upcoming.error.value"
+      :loading="upcoming.isPending.value"
+      :error="upcoming.error.value"
+      :rows="3"
+      compact
+      @retry="upcoming.refetch()"
+    />
+    <p v-else-if="!items.length" class="text-sm text-muted-foreground">{{ t('upcoming.empty') }}</p>
     <ul class="grid grid-cols-[minmax(0,1fr)] gap-2">
       <li
         v-for="item in items"

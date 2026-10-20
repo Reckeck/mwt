@@ -15,7 +15,7 @@ const { form, check, heldAssets, proceedsStores } = useTxForm()
 </script>
 
 <template>
-  <div class="grid gap-3 @sm:grid-cols-2">
+  <div class="grid gap-3 @xl:grid-cols-2">
     <FormField for="tx-sell-asset" :label="t('tx.field.property')" required :error="check.error('asset')">
       <AssetSelect
         id="tx-sell-asset"

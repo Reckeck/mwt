@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { Money } from '@/entities/currency'
 
@@ -9,19 +9,18 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
-import { activeLocale } from '@/shared/lib/locale'
+import { formatMoney, formatMonthKey } from '@/shared/lib/format'
 
 const { t } = useI18n()
 
 const year = ref(new Date().getFullYear())
 const calendar = useQuery({
   queryKey: computed(() => ['goal-calendar', year.value]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<GoalCalendar>('get_goal_calendar', { year: year.value }),
 })
 
-const monthName = (key: string) =>
-  new Intl.DateTimeFormat(activeLocale.value, { month: 'short' }).format(new Date(`${key}-01T12:00`))
+const monthName = (key: string) => formatMonthKey(key, { month: 'short' })
 const money = (value: string) => formatMoney(value, { currency: calendar.data.value?.currency })
 const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
 </script>
@@ -32,11 +31,11 @@ const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
       <div class="flex items-center justify-between gap-2">
         <h3 class="heading-card">{{ t('goalCalendar.title') }}</h3>
         <div class="flex items-center gap-1">
-          <Button variant="ghost" size="icon" class="size-8" :aria-label="t('goalCalendar.prev')" @click="year -= 1">
+          <Button variant="ghost" size="icon-sm"  :aria-label="t('goalCalendar.prev')" @click="year -= 1">
             <ChevronLeft class="size-4" />
           </Button>
           <span class="w-12 text-center text-sm tabular-nums">{{ year }}</span>
-          <Button variant="ghost" size="icon" class="size-8" :aria-label="t('goalCalendar.next')" @click="year += 1">
+          <Button variant="ghost" size="icon-sm"  :aria-label="t('goalCalendar.next')" @click="year += 1">
             <ChevronRight class="size-4" />
           </Button>
         </div>

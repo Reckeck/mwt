@@ -9,7 +9,6 @@ import { Badge } from '@/shared/ui/badge'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
-import { Spinner } from '@/shared/ui/spinner'
 import { openConverter } from '@/shared/lib/converter'
 import { storeIcon } from '@/shared/lib/store-icons'
 
@@ -102,15 +101,15 @@ const ownCurrency = computed(() => {
         </Button>
         <Button
           variant="outline"
-          size="icon"
-          class="size-8 max-md:hidden"
+          size="icon-sm"
+          class="max-md:hidden"
           :title="t('store.refresh')"
           :aria-label="t('store.refresh')"
           :disabled="props.refreshing"
           @click="emit('refresh')"
+          :loading="props.refreshing"
         >
-          <Spinner v-if="props.refreshing" />
-          <RefreshCw v-else class="size-4" />
+          <RefreshCw class="size-4" />
         </Button>
         <RouterLink
           :to="{ name: 'wallet-settings', params: { id: props.store.id } }"

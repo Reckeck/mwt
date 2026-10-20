@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
@@ -9,12 +9,14 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatQuantity } from '@/shared/lib/format'
+import { SectionState } from '@/shared/ui/section-state'
 
 /** Cashback and points of the month or the year, by card, and the programmes' balances. */
 const { t } = useI18n()
 const period = ref<'month' | 'year'>('month')
 const report = useQuery({
   queryKey: computed(() => ['cashback', period.value]),
+  placeholderData: keepPreviousData,
   queryFn: () => call<CashbackReport>('get_cashback_report', { period: period.value }),
 })
 const data = computed(() => report.data.value ?? null)
@@ -34,6 +36,7 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
       </div>
     </template>
     <Skeleton v-if="report.isPending.value" class="h-20 w-full" />
+    <SectionState v-else-if="report.error.value" :error="report.error.value" compact @retry="report.refetch()" />
     <div v-else-if="data" class="grid gap-3 text-sm">
       <div class="flex items-baseline justify-between gap-2">
         <Money :amount="total" :currency="data.base_currency" class="text-xl font-semibold @xs:text-2xl" />

@@ -17,7 +17,7 @@ const { form, check, props } = useTxForm()
 </script>
 
 <template>
-  <div class="grid gap-3 @sm:grid-cols-2">
+  <div class="grid gap-3 @xl:grid-cols-2">
     <AssetInput v-model="form.soldAsset" required :error="check.error('soldAsset')" :label="t('form.sellAsset')" />
     <FormField for="tx-sold" :label="t('form.sellQty')" required :error="check.error('soldQty')">
       <AmountInput id="tx-sold" v-model="form.soldQty" />
@@ -28,7 +28,7 @@ const { form, check, props } = useTxForm()
       <AmountInput id="tx-bought" v-model="form.boughtQty" />
     </FormField>
   </div>
-  <div class="grid gap-3 @sm:grid-cols-2">
+  <div class="grid gap-3 @xl:grid-cols-2">
     <div class="grid gap-1.5">
       <Label for="tx-liquidity">{{ t('tx.field.liquidity') }}</Label>
       <Select id="tx-liquidity" v-model="form.liquidity">
