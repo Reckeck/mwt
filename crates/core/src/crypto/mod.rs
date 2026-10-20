@@ -18,12 +18,18 @@
 //! Key derivation: `Argon2id(password, salt)` → 32-byte XChaCha20 key.
 //! A wrong password = AEAD authentication failure = `Error::Secret`.
 //! There is **no** stored password verifier or key material on disk.
+//!
+//! An open vault keeps its derived key in memory ([`SealKey`], zeroed on drop)
+//! and seals every save with it under the same salt and a fresh random nonce:
+//! Argon2 runs once per unlock, not once per save (it took ~80 ms on a desktop
+//! and several times that on a phone, under the vault lock). The salt changes
+//! with the password (`SealKey::fresh`).
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 use crate::VAULT_MAGIC;
 use crate::crypto::header::VaultHeader;
@@ -68,11 +74,54 @@ pub fn random_header(
     (header, salt, nonce)
 }
 
+/// The key of an open vault and the salt it was derived with. Zeroed on drop;
+/// never written, logged or sent anywhere.
+pub struct SealKey {
+    salt: [u8; SALT_LEN],
+    key: Zeroizing<[u8; KEY_LEN]>,
+}
+
+impl SealKey {
+    /// Derive the key for `salt` (the one in the file being opened).
+    pub fn derive(password: &[u8], salt: [u8; SALT_LEN]) -> Result<Self> {
+        let key = Zeroizing::new(derive_key(password, &salt)?);
+        Ok(Self { salt, key })
+    }
+
+    /// A new random salt and its key: a new vault or a new password.
+    pub fn fresh(password: &[u8]) -> Result<Self> {
+        let mut salt = [0u8; SALT_LEN];
+        rand::thread_rng().fill_bytes(&mut salt);
+        Self::derive(password, salt)
+    }
+
+    pub fn salt(&self) -> &[u8; SALT_LEN] {
+        &self.salt
+    }
+}
+
+impl std::fmt::Debug for SealKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SealKey(…)")
+    }
+}
+
+/// Encrypt `plaintext` with an already derived key: same salt, fresh nonce.
+pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -> Result<Vec<u8>> {
+    let mut nonce = [0u8; NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    let header = VaultHeader::new(payload_fmt, key.salt, nonce);
+    encrypt(&header, &key.key, plaintext)
+}
+
 /// Encrypt `plaintext` under a header+password. Returns the full file bytes.
 pub fn seal(header: &VaultHeader, password: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
-    let mut key = derive_key(password, &header.salt)?;
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
-    key.zeroize();
+    let key = Zeroizing::new(derive_key(password, &header.salt)?);
+    encrypt(header, &key, plaintext)
+}
+
+fn encrypt(header: &VaultHeader, key: &[u8; KEY_LEN], plaintext: &[u8]) -> Result<Vec<u8>> {
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
 
     let aad = header.bytes();
     let nonce = XNonce::from_slice(&header.nonce);
@@ -114,10 +163,17 @@ pub fn parse_file(bytes: &[u8]) -> Result<(VaultHeader, &[u8])> {
 
 /// Decrypt a vault file into its plaintext snapshot bytes.
 pub fn open_bytes(bytes: &[u8], password: &[u8]) -> Result<(Vec<u8>, SnapshotFormat)> {
+    open_bytes_keyed(bytes, password).map(|(plaintext, fmt, _)| (plaintext, fmt))
+}
+
+/// [`open_bytes`], also handing back the derived key for the session's saves.
+pub fn open_bytes_keyed(
+    bytes: &[u8],
+    password: &[u8],
+) -> Result<(Vec<u8>, SnapshotFormat, SealKey)> {
     let (header, ct) = parse_file(bytes)?;
-    let mut key = derive_key(password, &header.salt)?;
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
-    key.zeroize();
+    let key = SealKey::derive(password, header.salt)?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&*key.key));
 
     let aad = header.bytes();
     let nonce = XNonce::from_slice(&header.nonce);
@@ -125,7 +181,7 @@ pub fn open_bytes(bytes: &[u8], password: &[u8]) -> Result<(Vec<u8>, SnapshotFor
         .decrypt(nonce, Payload { msg: ct, aad: &aad })
         .map_err(|_| Error::Secret)?;
     let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
-    Ok((pt, fmt))
+    Ok((pt, fmt, key))
 }
 
 #[cfg(test)]
@@ -169,5 +225,54 @@ mod tests {
         let (h2, _, _) = random_header(SnapshotFormat::Json);
         assert_ne!(h1.salt, h2.salt);
         assert_ne!(h1.nonce, h2.nonce);
+    }
+
+    #[test]
+    fn a_save_with_the_session_key_opens_with_the_password() {
+        let password = b"correct horse battery staple";
+        let key = SealKey::fresh(password).unwrap();
+        let file = seal_with(&key, SnapshotFormat::Json, b"payload").unwrap();
+        let (plaintext, fmt) = open_bytes(&file, password).unwrap();
+        assert_eq!(plaintext, b"payload");
+        assert_eq!(fmt, SnapshotFormat::Json);
+    }
+
+    #[test]
+    fn saves_with_one_key_share_the_salt_but_never_the_nonce() {
+        let key = SealKey::fresh(b"pw").unwrap();
+        let first = seal_with(&key, SnapshotFormat::Pack, b"one").unwrap();
+        let second = seal_with(&key, SnapshotFormat::Pack, b"one").unwrap();
+        let (one, _) = parse_file(&first).unwrap();
+        let (two, _) = parse_file(&second).unwrap();
+        assert_eq!(one.salt, two.salt);
+        assert_eq!(&one.salt, key.salt());
+        assert_ne!(one.nonce, two.nonce);
+    }
+
+    #[test]
+    fn opening_hands_back_the_key_of_the_file() {
+        let key = SealKey::fresh(b"pw").unwrap();
+        let file = seal_with(&key, SnapshotFormat::Json, b"x").unwrap();
+        let (_, _, reopened) = open_bytes_keyed(&file, b"pw").unwrap();
+        assert_eq!(reopened.salt(), key.salt());
+        // The reopened key seals a file the password still opens.
+        let again = seal_with(&reopened, SnapshotFormat::Json, b"y").unwrap();
+        assert_eq!(open_bytes(&again, b"pw").unwrap().0, b"y");
+    }
+
+    #[test]
+    fn a_keyed_save_still_rejects_a_wrong_password_and_tampering() {
+        let key = SealKey::fresh(b"right").unwrap();
+        let mut file = seal_with(&key, SnapshotFormat::Json, b"secret").unwrap();
+        assert!(matches!(open_bytes(&file, b"wrong"), Err(Error::Secret)));
+        let last = file.len() - 1;
+        file[last] ^= 0x01;
+        assert!(matches!(open_bytes(&file, b"right"), Err(Error::Secret)));
+    }
+
+    #[test]
+    fn the_key_never_shows_in_debug_output() {
+        let key = SealKey::fresh(b"pw").unwrap();
+        assert_eq!(format!("{key:?}"), "SealKey(…)");
     }
 }

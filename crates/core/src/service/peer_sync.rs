@@ -631,7 +631,7 @@ impl UnlockedVault {
 
     /// Copy the vault file aside before the first batch of a session,
     /// keeping the last [`PRESYNC_BACKUPS`].
-    pub fn sync_backup(&self) -> Result<PathBuf> {
+    pub fn sync_backup(&mut self) -> Result<PathBuf> {
         if self.sandbox {
             return Ok(self.presync_path(0));
         }
@@ -643,6 +643,8 @@ impl UnlockedVault {
             }
         }
         let target = self.presync_path(0);
+        // The copy is of the file: batched changes go to it first.
+        self.flush_pending()?;
         std::fs::copy(&self.path, &target).map_err(|err| Error::Io(err.to_string()))?;
         Ok(target)
     }

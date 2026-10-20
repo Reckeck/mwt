@@ -16,6 +16,7 @@ mod shortcut;
 mod sync;
 #[cfg(desktop)]
 mod tray;
+mod vault_writer;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
@@ -64,6 +65,8 @@ pub fn run() {
             auth::create_vault,
             auth::unlock_vault,
             auth::lock_vault_cmd,
+            auth::flush_vault,
+            auth::exit_without_saving,
             auth::change_password,
             // stores
             stores::list_stores,
@@ -325,6 +328,8 @@ pub fn run() {
                 *notify = notify_store::load(app.handle());
             }
 
+            // Batched vault writes: one write per burst of changes, off the vault lock.
+            vault_writer::spawn(app.handle().clone());
             // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
             scheduler::spawn(app.handle().clone());
 
@@ -342,6 +347,23 @@ pub fn run() {
             legacy::migrate_autostart(app.handle());
             #[cfg(desktop)]
             autostart::guard_entry(app.handle());
+            // Until the page paints, the window shows its own background: the
+            // saved theme's, so a dark theme does not open white.
+            #[cfg(desktop)]
+            if let Some(window) = app.get_webview_window("main") {
+                use trade_core::appconfig::Theme;
+                let dark = match app_settings::current_settings(app.handle()).theme {
+                    Theme::Dark => true,
+                    Theme::Light => false,
+                    Theme::Auto => matches!(window.theme(), Ok(tauri::Theme::Dark)),
+                };
+                let color = if dark {
+                    tauri::window::Color(9, 9, 11, 255)
+                } else {
+                    tauri::window::Color(255, 255, 255, 255)
+                };
+                let _ = window.set_background_color(Some(color));
+            }
             // Started with the system: stay in the tray, remind from there.
             if std::env::args().any(|arg| arg == "--hidden")
                 && let Some(window) = app.get_webview_window("main")
@@ -365,9 +387,42 @@ pub fn run() {
                 if minimize_to_tray {
                     window.hide().ok();
                     api.prevent_close();
+                    // Hidden to the tray: what was batched goes to disk now, off the UI thread.
+                    let app = window.app_handle().clone();
+                    std::thread::spawn(move || {
+                        if let Err(err) = vault_writer::flush_now(&app) {
+                            eprintln!("vault: save on hide failed: {err}");
+                        }
+                    });
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Multi Wallet Tracker");
+        .build(tauri::generate_context!())
+        .expect("error while building Multi Wallet Tracker")
+        .run(|app, event| match event {
+            // Quitting (window closed, tray «Quit», session end) writes the batched
+            // changes first; if that fails, the app stays and asks.
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                if let Err(err) = vault_writer::flush_now(app)
+                    && !vault_writer::exit_unsaved_allowed()
+                {
+                    api.prevent_exit();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    let _ = tauri::Emitter::emit(
+                        app,
+                        vault_writer::SAVE_FAILED_EVENT,
+                        serde_json::json!({ "reason": err.to_string(), "exiting": true }),
+                    );
+                }
+            }
+            tauri::RunEvent::Exit => {
+                if let Err(err) = vault_writer::flush_now(app) {
+                    eprintln!("vault: unsaved changes lost on exit: {err}");
+                }
+            }
+            _ => {}
+        });
 }

@@ -31,13 +31,52 @@ pub fn current_zone(app: &AppHandle) -> String {
     current_settings(app).zone_or(iana_time_zone::get_timezone().ok().as_deref())
 }
 
+type Seen = (std::path::PathBuf, std::time::SystemTime, u64, AppSettings);
+static CACHE: std::sync::Mutex<Option<Seen>> = std::sync::Mutex::new(None);
+
+/// Write the app settings and drop the cached copy (a same-size rewrite within
+/// the file system's time resolution would otherwise look unchanged).
+pub fn save(dir: &std::path::Path, settings: &AppSettings) -> trade_core::Result<()> {
+    let result = save_settings(dir, settings);
+    if let Ok(mut cache) = CACHE.lock() {
+        *cache = None;
+    }
+    result
+}
+
 /// The settings file, stamped with today's date on the very first run.
+///
+/// Read on every command that needs the zone or the locale, by the scheduler
+/// and by the phone's sync poll: the parsed file is kept and re-read only when
+/// its size or time changed (any writer, anywhere, invalidates it that way).
 fn load(dir: &std::path::Path) -> AppSettings {
+    let path = trade_core::appconfig::settings_path(dir);
+    let stamp = std::fs::metadata(&path)
+        .ok()
+        .and_then(|meta| Some((meta.modified().ok()?, meta.len())));
+    if let Some((modified, len)) = stamp
+        && let Ok(cache) = CACHE.lock()
+        && let Some((seen_path, seen_time, seen_len, settings)) = cache.as_ref()
+        && *seen_path == path
+        && *seen_time == modified
+        && *seen_len == len
+    {
+        return settings.clone();
+    }
     let today = chrono::Local::now()
         .date_naive()
         .format("%Y-%m-%d")
         .to_string();
-    load_or_init_settings(dir, &today)
+    let settings = load_or_init_settings(dir, &today);
+    // Cached under the stamp seen *before* reading: a write that lands while this
+    // read runs gives the file a new stamp, so the next call reads it again. Taken
+    // after the read, the old content would sit under the new stamp for good.
+    if let Some((modified, len)) = stamp
+        && let Ok(mut cache) = CACHE.lock()
+    {
+        *cache = Some((path, modified, len, settings.clone()));
+    }
+    settings
 }
 
 /// The app settings as stored now (defaults when the file is missing).
@@ -72,7 +111,7 @@ pub async fn update_app_settings(
     let dir = config_dir(&app);
     let mut settings = load(&dir);
     settings.apply(&input);
-    save_settings(&dir, &settings).map_err(err_to_string)?;
+    save(&dir, &settings).map_err(err_to_string)?;
 
     // Push the base currency into the vault if one is open. The guard is taken
     // and released without any `.await` in between.
@@ -117,7 +156,7 @@ pub async fn set_quick_add_shortcut(
         return Err(err);
     }
     settings.quick_add_shortcut = wanted;
-    save_settings(&dir, &settings).map_err(err_to_string)?;
+    save(&dir, &settings).map_err(err_to_string)?;
     Ok(settings)
 }
 
@@ -161,7 +200,7 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
         let identified = settings.ensure_device_id();
         drop(guard);
         if adopted || identified {
-            save_settings(&dir, &settings).ok();
+            save(&dir, &settings).ok();
         }
     }
 }
@@ -172,7 +211,7 @@ pub fn ensure_device_name(app: &AppHandle) {
     let dir = config_dir(app);
     let mut settings = load(&dir);
     if settings.ensure_device_name(crate::scheduler::russian(app)) {
-        save_settings(&dir, &settings).ok();
+        save(&dir, &settings).ok();
     }
 }
 
@@ -181,7 +220,7 @@ pub fn device_id(app: &AppHandle) -> String {
     let dir = config_dir(app);
     let mut settings = load(&dir);
     if settings.ensure_device_id() {
-        save_settings(&dir, &settings).ok();
+        save(&dir, &settings).ok();
     }
     settings.device_id
 }

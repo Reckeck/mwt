@@ -164,6 +164,8 @@ impl UnlockedVault {
             self.doc = backup;
             return Err(Error::InvalidInput(message));
         }
+        // The backup is of the file: batched changes go to it first.
+        self.flush_pending()?;
         VaultFile::backup(&self.path)?;
         self.recompute_holdings();
         if let Err(err) = self.persist() {

@@ -47,6 +47,11 @@ fn status_of(state: &AppState) -> Result<VaultStatus, String> {
 /// sync notification): the window learns it from `vault-changed`.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn lock_now(app: &AppHandle) {
+    // Unsaved changes first: if they cannot be written, the vault stays open.
+    if let Err(err) = crate::vault_writer::flush_now(app) {
+        let _ = app.emit(crate::vault_writer::SAVE_FAILED_EVENT, err.to_string());
+        return;
+    }
     crate::scheduler::snapshot_tick(app, true);
     crate::sync::on_lock(app);
     let state = app.state::<AppState>();
@@ -70,6 +75,7 @@ pub async fn create_vault(
     }
     let mut vault = UnlockedVault::create(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
+    crate::vault_writer::install(&mut vault);
     if let Some(name) = input
         .cash_name
         .as_deref()
@@ -86,11 +92,7 @@ pub async fn create_vault(
             .update_store(&cash, name, "#16a34a", "", Default::default())
             .map_err(crate::commands::err_to_string)?;
     }
-    *state
-        .vault
-        .lock()
-        .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))? =
-        Some(vault);
+    store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the new vault
     // before reading the info back out.
     app_settings::sync_base_currency(&state, &app);
@@ -124,9 +126,8 @@ pub async fn unlock_vault(
     let mut vault = UnlockedVault::open(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
     crate::platform_fs::attach_mirror(&app, &mut vault);
-    *state.vault.lock().map_err(|err| {
-        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
-    })? = Some(vault);
+    crate::vault_writer::install(&mut vault);
+    store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the opened
     // vault before reading the info back out.
     app_settings::sync_base_currency(&state, &app);
@@ -155,8 +156,40 @@ pub async fn lock_vault_cmd(app: AppHandle, state: State<'_, AppState>) -> Resul
     crate::scheduler::snapshot_tick(&app, true);
     crate::sync::on_lock(&app);
     let mut guard = lock_vault(&state).map_err(err_to_string)?;
+    // Batched changes go to disk before the vault closes; a failed write keeps it open.
+    if let Some(vault) = guard.as_mut() {
+        vault.flush_pending().map_err(err_to_string)?;
+    }
     *guard = None;
     Ok(())
+}
+
+/// Put a freshly opened vault in place, writing the previous one's batched
+/// changes first (switching vaults must not lose them).
+fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), String> {
+    let mut guard = state
+        .vault
+        .lock()
+        .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))?;
+    if let Some(previous) = guard.as_mut() {
+        previous.flush_pending().map_err(err_to_string)?;
+    }
+    *guard = Some(vault);
+    Ok(())
+}
+
+/// Write the batched changes now: the window went to the background (a phone
+/// may kill the app there) or the user pressed «Retry» after a failed save.
+#[tauri::command]
+pub async fn flush_vault(app: AppHandle) -> Result<(), String> {
+    crate::vault_writer::flush_now(&app).map_err(err_to_string)
+}
+
+/// Quit although the last changes could not be written (the user chose so).
+#[tauri::command]
+pub fn exit_without_saving(app: AppHandle) {
+    crate::vault_writer::allow_exit_unsaved();
+    app.exit(0);
 }
 
 #[tauri::command]

@@ -412,7 +412,7 @@ fn save(app: &AppHandle, received: super::transfer::Received) -> Result<PathBuf>
     let mut settings = trade_core::appconfig::load_settings(&dir);
     if !settings.sync.enabled {
         settings.sync.enabled = true;
-        trade_core::appconfig::save_settings(&dir, &settings).ok();
+        crate::commands::app_settings::save(&dir, &settings).ok();
     }
     state(app).pending_trust = Some(PendingTrust {
         path: path.clone(),
@@ -554,12 +554,14 @@ fn update_send(app: &AppHandle, generation: u64, edit: impl FnOnce(&mut Transfer
 pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<TransferSendView> {
     let (vault, file_name) = {
         let app_state = app.state::<AppState>();
-        let guard = app_state
+        let mut guard = app_state
             .vault
             .lock()
             .map_err(|_| Error::Crypto("lock poisoned".into()))?;
-        let vault = guard.as_ref().ok_or(Error::RequiresUnlock)?;
+        let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;
         vault.check_password(&input.password)?;
+        // The file is what travels: the batched changes go into it first.
+        vault.flush_pending()?;
         let bytes = std::fs::read(&vault.path).map_err(|err| Error::Io(err.to_string()))?;
         let name = vault
             .path

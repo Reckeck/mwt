@@ -300,6 +300,12 @@ impl UnlockedVault {
         if settings.auto_confirm && !ids.is_empty() {
             run.confirmed = self.confirm_pending_imports(&ids)?;
         }
+        // A poll that brought nothing new refreshes the last empty run in memory
+        // and writes nothing: the background import polls every few minutes.
+        if run.staged == 0 && run.confirmed == 0 {
+            self.note_empty_run(run.clone());
+            return Ok(run);
+        }
         self.keep_import_run(run.clone());
         self.persist()?;
         Ok(run)
@@ -351,6 +357,24 @@ impl UnlockedVault {
         self.keep_import_run(run.clone());
         self.persist()?;
         Ok(run)
+    }
+
+    /// An empty run replaces the wallet's previous one if that was empty too,
+    /// so the history shows «checked at …» without a row per poll. Not saved
+    /// by itself: it reaches the file with the next real change.
+    fn note_empty_run(&mut self, run: ImportRun) {
+        let last = self
+            .doc
+            .import_runs
+            .iter_mut()
+            .rev()
+            .find(|kept| kept.store_id == run.store_id);
+        match last {
+            Some(kept) if kept.staged == 0 && kept.confirmed == 0 && kept.error.is_none() => {
+                *kept = run
+            }
+            _ => self.keep_import_run(run),
+        }
     }
 
     fn keep_import_run(&mut self, run: ImportRun) {
@@ -572,6 +596,29 @@ mod tests {
 
     fn now() -> i64 {
         crate::calendar::now_secs()
+    }
+
+    #[test]
+    fn empty_polls_keep_one_run_and_write_nothing() {
+        let (_dir, mut vault, wallet, _) = bybit();
+        let before = std::fs::read(&vault.path).unwrap();
+        for _ in 0..3 {
+            let run = vault
+                .sync_exchange(&wallet, Vec::new(), ImportSource::Auto, now())
+                .unwrap();
+            assert_eq!(run.staged, 0);
+        }
+        assert_eq!(
+            vault.import_runs(&wallet).len(),
+            1,
+            "one «checked at» row, not one per poll"
+        );
+        assert_eq!(
+            std::fs::read(&vault.path).unwrap(),
+            before,
+            "nothing written for an empty poll"
+        );
+        assert!(!vault.has_unsaved_changes());
     }
 
     #[test]
