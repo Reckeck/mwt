@@ -255,8 +255,8 @@ fn build() -> Vec<NodeDef> {
             "Every day, week or month at a set time.",
         ),
         help: txt(
-            "«Каждый месяц, 10-е, 09:00» — для зарплаты и платежей; «каждую неделю, пятница» — для DCA. Пропущенные, пока vault был заблокирован, даты выполнятся при разблокировке (не больше 12).",
-            "«Every month, the 10th, 09:00» for a salary or payments; «every week, Friday» for DCA. Dates missed while the vault was locked run at unlock (12 at most).",
+            "«Каждый месяц, 10-е, 09:00» — для зарплаты и платежей; «каждую неделю, пятница» — для DCA. «Выходной или праздник»: дата, выпавшая на субботу, воскресенье или праздник России, переносится на рабочий день — так платят зарплату. Пропущенные, пока vault был заблокирован, даты выполнятся при разблокировке (не больше 12).",
+            "«Every month, the 10th, 09:00» for a salary or payments; «every week, Friday» for DCA. «A day off or a holiday»: a date on a Saturday, a Sunday or a Russian public holiday moves to a working day, the way salaries are paid. Dates missed while the vault was locked run at unlock (12 at most).",
         ),
         inputs: vec![],
         outputs: vec![flow_out(), port("at", Ty::Date, txt("Когда", "When"))],
@@ -275,9 +275,22 @@ fn build() -> Vec<NodeDef> {
             param("day", ParamKind::Day, txt("День месяца", "Day of the month"), json!(1)),
             param("weekday", ParamKind::Weekday, txt("День недели", "Weekday"), json!(4)),
             param("time", ParamKind::Time, txt("Время", "Time"), json!("09:00")),
+            param(
+                "workday",
+                select(&[
+                    ("none", txt("не переносить", "keep the date")),
+                    ("back", txt("на рабочий день раньше", "to the working day before")),
+                    ("forward", txt("на рабочий день позже", "to the working day after")),
+                ]),
+                txt("Выходной или праздник", "A day off or a holiday"),
+                json!("none"),
+            ),
         ],
         advanced: false,
-        keywords: vec!["расписание", "время", "каждый", "cron", "schedule", "daily", "weekly", "monthly"],
+        keywords: vec![
+            "расписание", "время", "каждый", "cron", "schedule", "daily", "weekly", "monthly", "выходной",
+            "рабочий",
+        ],
     });
     out.push(NodeDef {
         kind: "trigger.transaction",
@@ -593,6 +606,41 @@ fn build() -> Vec<NodeDef> {
         ],
         advanced: false,
         keywords: vec!["сумма", "итого", "траты", "доход", "месяц", "sum", "total", "spent"],
+    });
+    let mut inputs = vec![];
+    let params = vec![
+        param(
+            "count",
+            ParamKind::Number,
+            txt("Сколько последних", "How many latest"),
+            json!("3"),
+        ),
+        wired(
+            "fallback",
+            ParamKind::Number,
+            Ty::Number,
+            txt("Если операций ещё нет", "When there are none yet"),
+            json!("0"),
+            &mut inputs,
+        ),
+    ];
+    out.push(NodeDef {
+        kind: "data.recent_average",
+        group: Data,
+        title: txt("Средняя сумма прошлых операций", "Average of past operations"),
+        description: txt(
+            "Среднее по последним операциям, которые сделала эта схема.",
+            "The average of the latest operations this workflow made.",
+        ),
+        help: txt(
+            "Для зарплаты, которая каждый раз разная: берёт суммы последних операций этой схемы, кроме ещё не уточнённых, и считает среднее. Пока операций нет — «Если операций ещё нет».",
+            "For a salary that differs every time: takes the latest operations of this workflow, except the ones not corrected yet, and averages them. With none yet it gives «When there are none yet».",
+        ),
+        inputs,
+        outputs: vec![port("amount", Ty::Money, txt("Сумма", "Amount"))],
+        params,
+        advanced: false,
+        keywords: vec!["среднее", "зарплата", "примерно", "average", "salary", "estimate"],
     });
     out.push(NodeDef {
         kind: "data.budget",
@@ -1177,6 +1225,38 @@ fn build() -> Vec<NodeDef> {
             json!(""),
             &mut inputs,
         ),
+        wired(
+            "date",
+            ParamKind::Date,
+            Ty::Date,
+            txt("Дата операции", "Date of the operation"),
+            json!(null),
+            &mut inputs,
+        ),
+        param(
+            "estimated",
+            ParamKind::Bool,
+            txt(
+                "Сумма примерная — уточню потом",
+                "The amount is approximate, I will correct it",
+            ),
+            json!(false),
+        ),
+        param(
+            "on_shortfall",
+            select(&[
+                ("fail", txt("ошибка", "an error")),
+                (
+                    "reject",
+                    txt(
+                        "отказ с «Повторить» и «Пропустить»",
+                        "a refusal to retry or skip",
+                    ),
+                ),
+            ]),
+            txt("Если не хватает денег", "If the money is short"),
+            json!("fail"),
+        ),
     ];
     out.push(NodeDef {
         kind: "action.transaction",
@@ -1184,8 +1264,8 @@ fn build() -> Vec<NodeDef> {
         title: txt("Создать операцию", "Create an operation"),
         description: txt("Пополнение, оплата, перевод или обмен.", "A top-up, payment, transfer or exchange."),
         help: txt(
-            "Проходит те же проверки, что операция из формы. Если денег не хватит или правило нарушено — выход «Ошибка» (или запуск отклоняется). Чтобы спросить вас перед операцией, поставьте перед ней «Ждать подтверждения».",
-            "Goes through the same checks as an operation from the form. Not enough money or a broken rule takes the «Error» way (or rejects the run). To be asked first, put a «Wait for confirmation» node before it.",
+            "Проходит те же проверки, что операция из формы. Если денег не хватит или правило нарушено — выход «Ошибка» (или запуск отклоняется). «Если не хватает денег: отказ» — запуск ждёт в журнале, пока вы не нажмёте «Повторить» или «Пропустить». «Дата операции» — подключите «Когда» расписания, чтобы операция встала на день по плану. «Сумма примерная» — операция помечается «уточните сумму». Чтобы спросить вас перед операцией, поставьте перед ней «Ждать подтверждения».",
+            "Goes through the same checks as an operation from the form. Not enough money or a broken rule takes the «Error» way (or rejects the run). «If the money is short: a refusal» keeps the run in the journal until you press «Retry» or «Skip». «Date of the operation»: wire the schedule's «When» so the operation lands on the planned day. «The amount is approximate» marks it «correct the amount». To be asked first, put a «Wait for confirmation» node before it.",
         ),
         inputs,
         outputs: vec![

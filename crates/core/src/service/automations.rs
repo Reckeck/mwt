@@ -741,7 +741,7 @@ impl UnlockedVault {
     }
 
     /// «Card: 500 USD of 800 USD» — with the store's name, for the error text.
-    fn describe_shortfall(&self, reason: &RejectReason) -> String {
+    pub(crate) fn describe_shortfall(&self, reason: &RejectReason) -> String {
         let name = |id: &str| {
             self.find_store(id)
                 .map_or_else(|| id.to_string(), |store| store.name.clone())

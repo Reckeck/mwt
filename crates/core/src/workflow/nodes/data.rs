@@ -94,6 +94,20 @@ impl Executor<'_> {
                     WfValue::money(total, self.vault.base_currency()),
                 ))
             }
+            "data.recent_average" => {
+                let count = self
+                    .text_param(node, "count")
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(3)
+                    .clamp(1, 24);
+                match self.vault.wf_recent_average(&self.ctx.workflow_id, count) {
+                    Some((average, symbol)) => {
+                        Ok(single("amount", WfValue::money(average, &symbol)))
+                    }
+                    None => Ok(single("amount", self.input(node, "fallback")?)),
+                }
+            }
             "data.budget" => {
                 let id = self.text_param(node, "budget");
                 let status = self

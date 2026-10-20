@@ -68,7 +68,14 @@ pub enum TxOrigin {
         planned_at: String,
     },
     /// Created by a node workflow in one of its runs.
-    Workflow { workflow_id: String, run_id: String },
+    Workflow {
+        workflow_id: String,
+        run_id: String,
+        /// The planned moment it was made for, when the workflow dated it by
+        /// its schedule: the same moment made on two devices is booked once.
+        #[serde(default)]
+        planned_at: Option<String>,
+    },
 }
 
 /// Fields every transaction carries, whatever it is.
@@ -91,6 +98,10 @@ pub struct TxMeta {
     #[serde(default)]
     #[ts(optional)]
     pub utility_item_id: Option<String>,
+    /// Booked with an approximate amount (a salary that differs every time);
+    /// cleared when the user puts in the real one.
+    #[serde(default)]
+    pub estimated: bool,
 }
 
 impl TxMeta {
@@ -104,6 +115,7 @@ impl TxMeta {
             contact_id: None,
             origin: TxOrigin::Manual,
             utility_item_id: None,
+            estimated: false,
         }
     }
 }

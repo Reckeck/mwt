@@ -7,6 +7,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::{Map, Value};
 
 use crate::Amount;
+use crate::calendar::workdays::{WorkdayRules, WorkdayShift};
 use crate::calendar::{Calendar, clamp_day};
 use crate::model::store::StoreScope;
 use crate::model::transaction::{AccountRef, LegRole, Transaction, TxOrigin};
@@ -19,6 +20,9 @@ use crate::workflow::types::WfValue;
 pub const MAX_SCHEDULE_CATCH_UP: usize = 12;
 /// How far back a schedule looks for missed moments.
 const LOOKBACK_DAYS: i64 = 400;
+/// How far a moved date may be from its planned one: the New Year holidays
+/// and the weekends around them stay well inside.
+const SHIFT_MARGIN_DAYS: i64 = 20;
 
 fn field<'map>(params: &'map Map<String, Value>, name: &str) -> Option<&'map Value> {
     params.get(name).filter(|value| !value.is_null())
@@ -46,6 +50,23 @@ pub fn schedule_moments(
     after: i64,
     until: i64,
 ) -> (Vec<i64>, usize) {
+    schedule_moments_limited(params, cal, after, until, MAX_SCHEDULE_CATCH_UP)
+}
+
+/// [`schedule_moments`] with its own catch-up limit.
+///
+/// With `workday` set to `back` or `forward` a planned date that falls on a
+/// weekend or a public holiday moves to a working day. The dates are looked
+/// for a little beyond `(after, until]` on both sides, so a date of next week
+/// moved back to today is not missed, and only the moved moments inside the
+/// window are kept.
+pub fn schedule_moments_limited(
+    params: &Map<String, Value>,
+    cal: &Calendar,
+    after: i64,
+    until: i64,
+    limit: usize,
+) -> (Vec<i64>, usize) {
     let every = field(params, "every").map_or_else(|| "month".to_string(), json_text);
     let interval = whole(field(params, "interval"), 1).max(1);
     let day = whole(field(params, "day"), 1).clamp(1, 31) as u8;
@@ -53,8 +74,17 @@ pub fn schedule_moments(
     let (hour, minute) =
         hour_minute(&field(params, "time").map_or_else(|| "09:00".to_string(), json_text));
 
-    let last = cal.date_of(until);
-    let first = cal.date_of(after).max(last - Duration::days(LOOKBACK_DAYS));
+    let shift =
+        WorkdayShift::from_param(&field(params, "workday").map_or_else(String::new, json_text));
+    let rules = WorkdayRules::ru_default();
+    let margin = if shift == WorkdayShift::None {
+        0
+    } else {
+        SHIFT_MARGIN_DAYS
+    };
+    let last = cal.date_of(until) + Duration::days(margin);
+    let first = (cal.date_of(after) - Duration::days(margin))
+        .max(cal.date_of(until) - Duration::days(LOOKBACK_DAYS));
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 5).unwrap_or_default(); // a Monday
     let planned = |date: NaiveDate| -> bool {
         match every.as_str() {
@@ -73,14 +103,17 @@ pub fn schedule_moments(
     let mut date = first;
     while date <= last {
         if planned(date) {
-            let moment = cal.at_local_hm(date, hour, minute);
+            let moment = cal.at_local_hm(shift.apply(date, &rules), hour, minute);
             if moment > after && moment <= until {
                 out.push(moment);
             }
         }
         date += Duration::days(1);
     }
-    let skipped = out.len().saturating_sub(MAX_SCHEDULE_CATCH_UP);
+    // Two planned dates moved onto one working day fire once.
+    out.sort_unstable();
+    out.dedup();
+    let skipped = out.len().saturating_sub(limit);
     out.drain(..skipped);
     (out, skipped)
 }
@@ -296,5 +329,90 @@ mod tests {
             secs("2026-03-02T09:00:00Z"),
         );
         assert_eq!(moments.len(), 1);
+    }
+
+    fn dates_of(moments: &[i64]) -> Vec<String> {
+        moments
+            .iter()
+            .map(|moment| crate::calendar::iso(*moment))
+            .collect()
+    }
+
+    #[test]
+    fn a_payday_on_a_day_off_moves_back_to_friday() {
+        let cal = Calendar::new("UTC");
+        let plan =
+            params(json!({ "every": "month", "day": 20, "time": "09:00", "workday": "back" }));
+        // 2026-12-20 is a Sunday.
+        let (moments, _) = schedule_moments(
+            &plan,
+            &cal,
+            secs("2026-11-21T00:00:00Z"),
+            secs("2026-12-31T00:00:00Z"),
+        );
+        assert_eq!(dates_of(&moments), vec!["2026-12-18T09:00:00Z"]);
+        let forward = params(json!({ "every": "month", "day": 20, "workday": "forward" }));
+        let (moments, _) = schedule_moments(
+            &forward,
+            &cal,
+            secs("2026-11-21T00:00:00Z"),
+            secs("2026-12-31T00:00:00Z"),
+        );
+        assert_eq!(dates_of(&moments), vec!["2026-12-21T09:00:00Z"]);
+    }
+
+    #[test]
+    fn a_date_moved_back_to_today_fires_today() {
+        let cal = Calendar::new("UTC");
+        // 2027-01-05 is a holiday: the payment comes on 2026-12-31.
+        let plan = params(json!({ "every": "month", "day": 5, "workday": "back" }));
+        let (moments, _) = schedule_moments(
+            &plan,
+            &cal,
+            secs("2026-12-30T12:00:00Z"),
+            secs("2026-12-31T10:00:00Z"),
+        );
+        assert_eq!(dates_of(&moments), vec!["2026-12-31T09:00:00Z"]);
+        // Not again once its moment is behind the mark.
+        let (moments, _) = schedule_moments(
+            &plan,
+            &cal,
+            secs("2026-12-31T09:00:00Z"),
+            secs("2027-01-06T10:00:00Z"),
+        );
+        assert!(moments.is_empty());
+    }
+
+    #[test]
+    fn days_moved_onto_one_working_day_fire_once() {
+        let cal = Calendar::new("UTC");
+        let plan = params(json!({ "every": "day", "workday": "back" }));
+        // Friday to Monday morning: Saturday and Sunday move to Friday.
+        let (moments, _) = schedule_moments(
+            &plan,
+            &cal,
+            secs("2026-03-12T12:00:00Z"),
+            secs("2026-03-16T10:00:00Z"),
+        );
+        assert_eq!(
+            dates_of(&moments),
+            vec!["2026-03-13T09:00:00Z", "2026-03-16T09:00:00Z"]
+        );
+    }
+
+    #[test]
+    fn the_catch_up_limit_can_be_raised() {
+        let cal = Calendar::new("UTC");
+        let plan = params(json!({ "every": "week", "weekday": 4 }));
+        let (moments, skipped) = schedule_moments_limited(
+            &plan,
+            &cal,
+            secs("2026-01-01T00:00:00Z"),
+            secs("2026-06-01T00:00:00Z"),
+            24,
+        );
+        // Fridays from January 2 to May 29: 22, over the default 12.
+        assert_eq!(moments.len(), 22);
+        assert_eq!(skipped, 0);
     }
 }

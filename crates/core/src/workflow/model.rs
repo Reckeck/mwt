@@ -105,9 +105,19 @@ pub enum RunOutcome {
     /// Ran to the end, but some branches failed: each failed branch was
     /// undone, the rest kept. One line per failed branch.
     Partial { failed: Vec<String> },
+    /// Refused for want of money at a «Создать операцию» set to refuse:
+    /// nothing was kept; the run waits for «Повторить» or «Пропустить».
+    /// `trigger_node` and `planned_at` let a retry fire it the same way.
+    Rejected {
+        reason: crate::model::planning::RejectReason,
+        trigger_node: String,
+        #[serde(default)]
+        planned_at: Option<String>,
+    },
     /// Never ran: `off` (the workflow was switched off while a run slept),
-    /// `node_removed` (its wait node is gone) or `rate_limit` (too many runs
-    /// this hour).
+    /// `node_removed` (its wait node is gone), `rate_limit` (too many runs
+    /// this hour) or `skipped` (a refused run the user skipped, or a planned
+    /// moment beyond the catch-up limit).
     Dropped { reason: String },
 }
 

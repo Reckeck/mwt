@@ -126,6 +126,9 @@ pub struct RunContext {
     /// Every firing of the trigger gathered for «Очередь», each one's trigger
     /// values; empty — just this one (`trigger_values`).
     pub batch: Vec<BTreeMap<String, WfValue>>,
+    /// «Повторить» of a refused run: operations are dated now, the money
+    /// checked now, while they still name the moment they were planned for.
+    pub retry: bool,
 }
 
 impl RunContext {
@@ -151,6 +154,7 @@ impl RunContext {
             call_depth: 0,
             answers: BTreeMap::new(),
             batch: Vec::new(),
+            retry: false,
         }
     }
 }
@@ -206,6 +210,8 @@ pub(crate) enum Halt {
     Return(Box<WfValue>),
     /// «Прервать цикл»: the nearest loop goes on to its «Готово».
     Break,
+    /// «Создать операцию» set to refuse found the money short.
+    Reject(Box<crate::model::planning::RejectReason>),
 }
 
 /// How a node can fail.
@@ -331,6 +337,15 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
         Ok(()) | Err(Halt::Return(_) | Halt::Break) => done(),
         Err(Halt::Stop(reason)) => RunOutcome::Stopped { reason },
         Err(Halt::Fail(message)) => RunOutcome::Failed { message },
+        Err(Halt::Reject(reason)) => RunOutcome::Rejected {
+            reason: *reason,
+            trigger_node: ctx.trigger_node.clone(),
+            planned_at: ctx
+                .trigger_values
+                .get("at")
+                .map(WfValue::as_text)
+                .filter(|at| !at.is_empty()),
+        },
         Err(Halt::Wait(asleep)) => {
             let outcome = match asleep.kind {
                 WaitKind::Timer => RunOutcome::Waiting {
@@ -346,7 +361,10 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
             outcome
         }
     };
-    let failed = matches!(outcome, RunOutcome::Failed { .. });
+    let failed = matches!(
+        outcome,
+        RunOutcome::Failed { .. } | RunOutcome::Rejected { .. }
+    );
     let Executor {
         created,
         queued,
@@ -816,6 +834,14 @@ impl Executor<'_> {
                         format!("«{}»: выход из цикла", def.title.ru),
                         format!("«{}»: leaving the loop", def.title.en),
                     ),
+                    Halt::Reject(reason) => {
+                        let why = crate::service::describe_reject(reason);
+                        (
+                            StepStatus::Error,
+                            format!("«{}»: отказ — {why}", def.title.ru),
+                            format!("«{}»: refused: {why}", def.title.en),
+                        )
+                    }
                 };
                 self.push_trace(node_id, status, ru, en);
                 Err(halt)

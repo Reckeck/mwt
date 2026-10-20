@@ -71,6 +71,10 @@ impl Executor<'_> {
         json_text(&self.raw_param(node, name))
     }
 
+    pub(crate) fn bool_param(&self, node: &Node, name: &str) -> bool {
+        self.raw_param(node, name).as_bool().unwrap_or(false)
+    }
+
     /// An asset from a field: the stored asset, or a symbol the vault knows.
     pub(crate) fn json_asset(&self, value: &Value) -> Option<AssetRef> {
         match value {
