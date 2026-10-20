@@ -3,3 +3,4 @@
 *
 !mise.toml
 !scripts/ci/apt-packages.sh
+!scripts/ci/install-chrome.sh

@@ -208,7 +208,7 @@ ci:image:
   variables:
     DOCKER_TLS_CERTDIR: /certs
   rules:
-    - changes: [scripts/ci/ci.Dockerfile, scripts/ci/apt-packages.sh, scripts/ci/image-tag.sh, scripts/ci/build-images.sh, mise.toml, .dockerignore]
+    - changes: [scripts/ci/ci.Dockerfile, scripts/ci/apt-packages.sh, scripts/ci/install-chrome.sh, scripts/ci/image-tag.sh, scripts/ci/build-images.sh, mise.toml, .dockerignore]
     - if: $FORCE_CI_IMAGE
   before_script:
     - apk add --no-cache bash coreutils
