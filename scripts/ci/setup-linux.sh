@@ -9,6 +9,7 @@
 #   source scripts/ci/setup-linux.sh            # webkit/gtk dev libs + toolchain
 #   CI_SKIP_GUI_LIBS=1 source scripts/ci/setup-linux.sh   # no GTK (Android)
 #   CI_MISE_TOOLS="node pnpm" source …   # only these tools; pnpm deps only if pnpm is among them
+#   CI_BROWSER=1 source …                 # + headless Chrome for check-layout (CHROMIUM)
 
 export MISE_YES=1
 export MISE_TRUSTED_CONFIG_PATHS="$CI_PROJECT_DIR"
@@ -31,6 +32,9 @@ else
   if [[ -z "${CI_SKIP_GUI_LIBS:-}" ]]; then
     packages+=("${APT_GUI[@]}")
   fi
+  if [[ -n "${CI_BROWSER:-}" ]]; then
+    packages+=("${APT_BROWSER[@]}")
+  fi
   apt-get update -qq
   apt-get install -y -qq --no-install-recommends "${packages[@]}" >/dev/null
   export MISE_DATA_DIR="$CI_PROJECT_DIR/.cache/mise"
@@ -49,6 +53,11 @@ if [[ -n "$(mise ls --missing 2>/dev/null)" ]]; then
   mise install ${CI_MISE_TOOLS:-}
 fi
 export PATH="$MISE_DATA_DIR/shims:$CARGO_HOME/bin:$PATH"
+# The image has it in /opt/chrome (CHROMIUM); a bare image downloads the same pinned build.
+if [[ -n "${CI_BROWSER:-}" && -z "${CHROMIUM:-}" ]]; then
+  CHROMIUM="$("$CI_PROJECT_DIR/scripts/ci/install-chrome.sh" "$CI_PROJECT_DIR/.cache/chrome")"
+  export CHROMIUM
+fi
 # mise.toml [env] (CARGO_TARGET_DIR, RUST_LOG) for every later command.
 eval "$(mise env -s bash)"
 # Absolute: `tauri build` runs cargo from crates/app, a relative dir would land there.

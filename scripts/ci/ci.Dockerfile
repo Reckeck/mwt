@@ -1,6 +1,7 @@
 # CI images, one per kind of job, so a job starts with its toolchain instead
 # of installing it (GitLab.com runners are fresh VMs every time):
-#   node     mise + node/pnpm from mise.toml         frontend checks
+#   node     mise + node/pnpm from mise.toml,        frontend checks
+#            headless Chrome for check-layout
 #   linux    + build tools, Tauri libraries, Rust,   Rust checks, Linux build
 #            sccache
 #   android  + JDK 17, Android SDK/NDK, Rust targets Android build
@@ -26,6 +27,13 @@ RUN curl -fsSL https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh
 COPY mise.toml /opt/ci/mise.toml
 RUN cd /opt/ci && mise trust mise.toml && mise install node pnpm \
  && rm -rf /opt/mise-cache && touch /etc/mwt-ci-image
+COPY scripts/ci/install-chrome.sh /opt/ci/install-chrome.sh
+RUN source /opt/ci/apt-packages.sh \
+ && apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends "${APT_BROWSER[@]}" \
+ && rm -rf /var/lib/apt/lists/* \
+ && /opt/ci/install-chrome.sh /opt/chrome
+ENV CHROMIUM=/opt/chrome/chrome-headless-shell-linux64/chrome-headless-shell
 
 FROM node AS linux
 ARG SCCACHE_VERSION=0.10.0

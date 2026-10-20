@@ -21,6 +21,14 @@
 //                   — every action reports its outcome (phase «уведомления»);
 // - file-size       a `.vue` over 250 lines or a `.ts` over 300 → split it by meaning.
 //
+// Stability rules (rule 17: the interface does not move by itself) live in
+// `scripts/check-ui/`: listeners and timers without cleanup, hover-mounted
+// content, swapped controls, queries that blank on a key change, keyed
+// RouterView, blur, hover-only actions, fixed grid tracks, the z/size scales,
+// raw fields, focus rings, and the stylesheet (`--container-*`, keyframes).
+// A rule with `primitives: true` also runs inside `src/shared/ui`.
+// `dup-classes` only warns: a long class string copied into 4+ files.
+//
 // Debts that predate a rule live in `scripts/check-ui.baseline.json` as
 // `{ "<rule> <file>": count }`. A file may not get worse than its entry; when
 // it gets better, `--update` writes the smaller number so it cannot slide back.
@@ -34,6 +42,11 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
+import { blankComments, callBody } from './check-ui/lib.mjs'
+import { BEHAVIOUR_RULES } from './check-ui/rules-behaviour.mjs'
+import { CSS_RULES } from './check-ui/rules-css.mjs'
+import { MARKUP_RULES } from './check-ui/rules-markup.mjs'
+
 const root = new URL('..', import.meta.url).pathname
 const baselinePath = join(root, 'scripts/check-ui.baseline.json')
 const update = process.argv.includes('--update')
@@ -45,26 +58,12 @@ function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) walk(path, out)
-    else if (/\.(?:vue|ts)$/.test(entry.name)) out.push(path)
+    else if (/\.(?:vue|ts|css)$/.test(entry.name)) out.push(path)
   }
   return out
 }
 
 const lineOf = (text, index) => text.slice(0, index).split('\n').length
-
-/** The text of a call starting at `open` (the index of its `(`), up to the matching `)`. */
-function callBody(text, open) {
-  let depth = 0
-  for (let index = open; index < text.length; index++) {
-    const char = text[index]
-    if (char === '(') depth++
-    else if (char === ')') {
-      depth--
-      if (depth === 0) return text.slice(open, index + 1)
-    }
-  }
-  return text.slice(open)
-}
 
 const RULES = [
   {
@@ -179,6 +178,8 @@ const RULES = [
       }),
     say: 'useMutation without meta.success (or meta.silent with a reason) — every action reports its outcome',
   },
+  ...BEHAVIOUR_RULES,
+  ...MARKUP_RULES,
 ]
 
 const counts = new Map()
@@ -190,21 +191,38 @@ function note(rule, file, text, index) {
   if (!firstHit.has(key)) firstHit.set(key, `${file}:${lineOf(text, index)}`)
 }
 
+const classFiles = new Map()
+
 for (const path of walk(join(root, 'src'))) {
   const file = relative(root, path)
-  const text = readFileSync(path, 'utf8')
+  const source = readFileSync(path, 'utf8')
+  const text = blankComments(source)
+  const ignored = new Set([...source.matchAll(/check-ui-ignore ([a-z-]+): \S/g)].map((match) => match[1]))
+  if (file.endsWith('.css')) {
+    for (const rule of CSS_RULES) {
+      if (ignored.has(rule.id)) continue
+      for (const match of rule.find(text, file)) note(rule, file, text, match.index)
+    }
+    continue
+  }
   const isVue = file.endsWith('.vue')
   const isPrimitive = file.startsWith('src/shared/ui/')
 
   // The browser mock is data, not UI: its hex values are the colours of mock wallets.
   const isMock = file.startsWith('src/shared/api/mock/')
-  const ignored = new Set([...text.matchAll(/check-ui-ignore ([a-z-]+): \S/g)].map((match) => match[1]))
-  if (!isPrimitive) {
-    for (const rule of RULES) {
-      if (isMock && rule.id === 'raw-color') continue
-      if (ignored.has(rule.id)) continue
-      if (rule.vueOnly && !isVue) continue
-      for (const match of rule.find(text)) note(rule, file, text, match.index)
+  for (const rule of RULES) {
+    if (isPrimitive && !rule.primitives) continue
+    if (isMock && rule.id === 'raw-color') continue
+    if (ignored.has(rule.id)) continue
+    if (rule.vueOnly && !isVue) continue
+    if (rule.skip?.(file)) continue
+    for (const match of rule.find(text, file, source)) note(rule, file, text, match.index)
+  }
+  if (isVue && !isPrimitive) {
+    for (const match of text.matchAll(/\bclass="([^"]{40,})"/g)) {
+      const key = match[1].trim().split(/\s+/).sort().join(' ')
+      if (!classFiles.has(key)) classFiles.set(key, new Set())
+      classFiles.get(key).add(file)
     }
   }
 
@@ -226,7 +244,7 @@ try {
   baseline = {}
 }
 
-const SAY = Object.fromEntries(RULES.map((rule) => [rule.id, rule.say]))
+const SAY = Object.fromEntries([...RULES, ...CSS_RULES].map((rule) => [rule.id, rule.say]))
 SAY['file-size'] = 'file too long — split it into model/ composables, lib/ helpers and ui/ parts'
 
 const errors = []
@@ -260,6 +278,11 @@ if (update) {
 }
 
 for (const error of errors) console.error(`error: ${error}`)
+// Repeated markup is a hint, not a failure: a shared component may be due.
+const copied = [...classFiles].filter(([, files]) => files.size >= 4)
+for (const [classes, files] of copied) {
+  console.warn(`warn: [dup-classes] "${classes.slice(0, 70)}…" in ${files.size} files — a shared component?`)
+}
 if (improved.length) {
   console.log(`check-ui: ${improved.length} baseline entries improved — run \`node scripts/check-ui.mjs --update\` to lock them in`)
 }

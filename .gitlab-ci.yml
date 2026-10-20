@@ -23,7 +23,7 @@ variables:
   PRERELEASES_KEPT: "10"
   SECRET_DETECTION_ENABLED: "true"
   # = scripts/ci/image-tag.sh; ci:image refuses to build when they differ.
-  CI_IMAGE_TAG: "2d8c301fe3bf"
+  CI_IMAGE_TAG: "8b66378ac116"
   # Override any of these with ubuntu:22.04 to run without the CI images
   # (setup-linux.sh then installs everything itself).
   CI_NODE_IMAGE: $CI_REGISTRY_IMAGE/ci-node:$CI_IMAGE_TAG
@@ -129,7 +129,7 @@ secret_detection:
   rules:
     - *full
     - changes:
-        paths: [src/**/*, index.html, package.json, pnpm-lock.yaml, "*.ts", "*.json", scripts/*.mjs, scripts/*.json, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
+        paths: [src/**/*, index.html, package.json, pnpm-lock.yaml, "*.ts", "*.json", scripts/*.mjs, scripts/*.json, scripts/check-ui/**/*, scripts/check-layout/**/*, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
         compare_to: refs/heads/development
 
 .ci-rules:
@@ -220,12 +220,20 @@ ci:image:
 frontend:check:
   extends: [.node, .frontend-rules]
   stage: check
+  variables:
+    # Headless Chrome for check-layout (in the node image; downloaded on a bare one).
+    CI_BROWSER: "1"
   script:
     - mise run lint
     - mise run typecheck
     - mise run check-onboarding
     - mise run check-forms
     - mise run check-ui
+    - mise run check-layout -- --quick
+  artifacts:
+    when: on_failure
+    expire_in: 1 week
+    paths: [.cache/check-layout/]
 
 ci:lint:
   extends: [.node, .ci-rules]
