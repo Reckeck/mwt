@@ -217,6 +217,13 @@ impl UnlockedVault {
 
     /// Plan §4.5, V1–V14 (V13 — negative balances — is a warning, not an error).
     pub(crate) fn validate_transaction(&self, tx: &Transaction) -> Result<()> {
+        self.validate_transaction_at(tx, iso_to_millis(&crate::model::vault::now_iso()))
+    }
+
+    /// The same rules, with V11 measured from `now_ms` instead of the wall
+    /// clock: an automation run is checked against the scheduler's clock,
+    /// which runs ahead of it in a simulation.
+    pub(crate) fn validate_transaction_at(&self, tx: &Transaction, now_ms: i64) -> Result<()> {
         let kind = tx.kind();
 
         // V1, V2
@@ -375,12 +382,12 @@ impl UnlockedVault {
             }
         }
 
-        self.check_meta(tx)?;
+        self.check_meta(tx, now_ms)?;
         self.check_on_chain_refs(tx)
     }
 
     /// V5, V10, V11, V12 — the shared fields.
-    fn check_meta(&self, tx: &Transaction) -> Result<()> {
+    fn check_meta(&self, tx: &Transaction, now_ms: i64) -> Result<()> {
         let meta = tx.meta();
         let kind = tx.kind();
 
@@ -389,8 +396,7 @@ impl UnlockedVault {
         if millis == 0 && !meta.timestamp.starts_with("1970-01-01T00:00:00") {
             return Err(invalid("the date is not a valid RFC3339 timestamp"));
         }
-        let now = iso_to_millis(&crate::model::vault::now_iso());
-        if millis > now + MAX_FUTURE_MS {
+        if millis > now_ms + MAX_FUTURE_MS {
             return Err(invalid("the date is too far in the future"));
         }
 

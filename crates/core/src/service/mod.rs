@@ -1089,12 +1089,18 @@ impl UnlockedVault {
     /// auto-filled, property prices completed, unpriced sides stamped, every
     /// rule checked.
     pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()> {
+        self.prepare_transaction_at(tx, iso_to_millis(&now_iso()))
+    }
+
+    /// [`Self::prepare_transaction`] with the future-date rule (V11) measured
+    /// from `now_ms` — the scheduler's clock for automation runs.
+    pub(crate) fn prepare_transaction_at(&self, tx: &mut Transaction, now_ms: i64) -> Result<()> {
         Self::normalize_categories(tx);
         self.apply_categorization_rules(tx);
         self.complete_transaction(tx);
         self.complete_adjustment(tx)?;
         Self::stamp_prices(&self.rate_book(), tx);
-        self.validate_transaction(tx)
+        self.validate_transaction_at(tx, now_ms)
     }
 
     /// Validate and append a transaction of any variant (plan §4.5, §8.1):
