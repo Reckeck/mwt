@@ -24,6 +24,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'salary',
+    date: '2026-10-20',
+    points: [
+      { key: 'varies', route: 'planning-automations' },
+      { key: 'workday', route: 'planning-automations' },
+      { key: 'confirm', route: 'planning-automations' },
+      { key: 'workflows', route: 'workflows' },
+    ],
+  },
+  {
     id: 'stable',
     date: '2026-10-20',
     points: [

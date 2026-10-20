@@ -9,4 +9,6 @@ export interface AutomationDialogProps {
 
 export interface AutomationRunActionsProps {
   run: AutomationRun
+  /** The automation's name, for the «Сколько пришло» dialog. */
+  name?: string
 }

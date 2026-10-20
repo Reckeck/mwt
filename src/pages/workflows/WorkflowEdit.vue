@@ -4,6 +4,7 @@ import { type RouteLocationRaw, onBeforeRouteLeave, useRoute, useRouter } from '
 import { useI18n } from 'vue-i18n'
 
 import { WorkflowEditor } from '@/widgets/workflow-editor'
+import { AutomationWorkflowBanner, useAutomationWorkflow } from '@/features/automation-edit'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
@@ -16,6 +17,7 @@ const workflowId = computed(() => (route.name === 'workflow-edit' ? String(route
 const template = computed(() => (typeof route.query.template === 'string' ? route.query.template : null))
 const lesson = computed(() => (typeof route.query.lesson === 'string' ? route.query.lesson : null))
 const editor = ref<InstanceType<typeof WorkflowEditor> | null>(null)
+const automation = useAutomationWorkflow(() => workflowId.value)
 let leaving = false
 
 /** Back to the list goes through the same «unsaved edits» question as any other way out. */
@@ -86,6 +88,11 @@ function throwAway() {
 <template>
   <div class="flex h-full min-h-[36rem] flex-col gap-3 @container max-md:min-h-0 max-md:gap-0">
     <PageHeader class="max-md:hidden" :crumbs="crumbs" />
+    <AutomationWorkflowBanner
+      v-if="workflowId && automation.isAutomation.value"
+      :workflow-id="workflowId"
+      :name="automation.workflow.data.value?.name ?? ''"
+    />
     <WorkflowEditor
       class="min-h-0 flex-1"
       :key="workflowId ?? `new-${template ?? ''}-${lesson ?? ''}`"
@@ -93,6 +100,7 @@ function throwAway() {
       :workflow-id="workflowId"
       :template="template"
       :lesson="lesson"
+      :locked="automation.isAutomation.value"
       @saved="onSaved"
       @lesson="(id) => router.push({ name: 'workflow-new', query: { lesson: id } })"
     />

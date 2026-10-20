@@ -39,6 +39,8 @@ const day = ref('1')
 const weekday = ref('0')
 const everyDays = ref('7')
 const startsAt = ref('')
+const varies = ref(false)
+const workdayShift = ref<WorkdayShift>('none')
 
 /** The stored template as a transaction the form can prefill from. */
 const template = computed(() => (props.automation?.template as Transaction | undefined) ?? null)
@@ -66,6 +68,9 @@ watch(open, (isOpen) => {
     everyDays.value = String(schedule.every_n_days.days)
   }
   startsAt.value = isoToDateInput(automation?.starts_at) || localDate(new Date())
+  varies.value = automation?.amount_mode === 'varies'
+  // Salaries come on the working day before a day off.
+  workdayShift.value = automation?.workday_shift ?? (props.preset?.preset === 'salary' ? 'back' : 'none')
 })
 
 const schedule = computed<Schedule | null>(() => {
@@ -95,6 +100,8 @@ const fields = useFormValidation(
         ? null
         : firstError(required(everyDays.value), integerInRange(everyDays.value, 1, 3650)),
     startsAt: required(startsAt.value),
+    // An exchange has two amounts: there is no one amount to average.
+    varies: varies.value && form.value?.input?.type === 'convert' ? t('automation.varies.notExchange') : null,
     // The template's own fields carry their messages; this only keeps the save from going through.
     template: form.value?.valid ? null : t('validation.summary'),
   }),
@@ -129,8 +136,8 @@ const save = useMutation({
       schedule: schedule.value,
       starts_at: dateInputToIso(startsAt.value),
       template: templateInput,
-      amount_mode: props.automation?.amount_mode ?? 'fixed',
-      workday_shift: props.automation?.workday_shift ?? 'none',
+      amount_mode: varies.value ? 'varies' : 'fixed',
+      workday_shift: workdayShift.value,
     }
     return props.automation
       ? call<Automation>('update_automation', { input: { id: props.automation.id, automation: input } })
@@ -185,9 +192,18 @@ const save = useMutation({
         v-model:weekday="weekday"
         v-model:every-days="everyDays"
         v-model:starts-at="startsAt"
+        v-model:workday-shift="workdayShift"
         :errors="{ day: fields.error('day'), everyDays: fields.error('everyDays'), startsAt: fields.error('startsAt') }"
       />
 
+      <FormField :error="fields.error('varies')">
+        <SwitchRow
+          id="automation-varies"
+          v-model="varies"
+          :label="t('automation.varies.label')"
+          :hint="t('automation.varies.hint')"
+        />
+      </FormField>
       <SwitchRow id="automation-active" :label="t('automation.active')" v-model="active" />
     </div>
 

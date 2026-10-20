@@ -49,7 +49,9 @@ export function nodeSummary(def: NodeDef | undefined, params: Record<string, unk
     case 'trigger.schedule': {
       const every = pick('every')
       const detail = params.every === 'day' ? '' : params.every === 'week' ? '' : `${pick('day')}-${ru ? 'е' : 'th'}`
-      return [every, detail, pick('time')].filter(Boolean).join(', ')
+      // A date moved off days off says so: «…, 09:00, на рабочий день раньше».
+      const moved = params.workday && params.workday !== 'none' ? pick('workday') : ''
+      return [every, detail, pick('time'), moved].filter(Boolean).join(', ')
     }
     case 'trigger.balance':
     case 'trigger.price':

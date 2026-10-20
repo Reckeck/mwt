@@ -50,6 +50,7 @@ const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-save', key: 'workflowEditor.save', side: 'bottom' },
   { target: 'workflow-discard', key: 'workflowEditor.discard', side: 'bottom' },
   { target: 'workflow-draft', key: 'workflowEditor.draft', side: 'bottom' },
+  { target: 'workflow-automation', key: 'workflowEditor.automation', side: 'bottom' },
 ]
 
 /** An empty new workflow: what to do first, not all fourteen stops of the editor. */
@@ -157,6 +158,9 @@ export const TOURS: Record<string, TourStep[]> = {
   'planning-automations': planning([
     { target: 'section-content', key: 'planningAutomations.content', side: 'top' },
     { target: 'automation-simulate', key: 'planningAutomations.simulate', side: 'bottom' },
+    { target: 'automation-unconfirmed', key: 'planningAutomations.unconfirmed', side: 'bottom' },
+    { target: 'automation-confirm-amount', key: 'planningAutomations.confirmAmount', side: 'left' },
+    { target: 'automation-open-workflow', key: 'planningAutomations.openWorkflow', side: 'left' },
   ]),
   'planning-budgets': planning([{ target: 'section-content', key: 'planningBudgets.content', side: 'top' }]),
   'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),

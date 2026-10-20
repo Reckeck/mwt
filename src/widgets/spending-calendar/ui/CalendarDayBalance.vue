@@ -53,7 +53,7 @@ const hasBalance = computed(() => props.day.left !== null)
         <span class="w-10 shrink-0 text-xs tabular-nums text-muted-foreground">{{ time(item.at) }}</span>
         <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
         <span v-if="item.amount" class="shrink-0 tabular-nums text-muted-foreground">
-          <Money :amount="item.amount" :currency="item.asset?.symbol ?? props.currency" />
+          <template v-if="item.estimated">~</template><Money :amount="item.amount" :currency="item.asset?.symbol ?? props.currency" />
         </span>
       </li>
     </ul>

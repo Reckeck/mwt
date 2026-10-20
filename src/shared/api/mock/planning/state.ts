@@ -35,8 +35,50 @@ export function draftOf(tx: Transaction): TransactionDraft {
   return fail('an automation repeats a top-up, payment, transfer or exchange')
 }
 
-/** Monthly dates (clamped to the month), weekly, every N days — from `start` up to `until`. */
-export function plannedDates(schedule: Schedule, start: Date, until: Date): Date[] {
+/** Public holidays of Russia by `month-day`, as the Rust calendar has them. */
+const RU_HOLIDAYS = new Set([
+  '1-1',
+  '1-2',
+  '1-3',
+  '1-4',
+  '1-5',
+  '1-6',
+  '1-7',
+  '1-8',
+  '2-23',
+  '3-8',
+  '5-1',
+  '5-9',
+  '6-12',
+  '11-4',
+])
+
+/** A date on a Saturday, a Sunday or a holiday moved to a working day before or after. */
+export function moveOffDayOff(date: Date, shift: WorkdayShift): Date {
+  if (shift === 'none') return date
+  const moved = new Date(date)
+  const step = shift === 'back' ? -1 : 1
+  for (let tries = 0; tries < 60; tries += 1) {
+    const day = moved.getDay()
+    if (day !== 0 && day !== 6 && !RU_HOLIDAYS.has(`${moved.getMonth() + 1}-${moved.getDate()}`)) return moved
+    moved.setDate(moved.getDate() + step)
+  }
+  return date
+}
+
+/**
+ * Monthly dates (clamped to the month), weekly, every N days — from `start`
+ * up to `until`, moved off days off as `shift` says (looked for 20 days past
+ * `until`, so a date moved back into the window still counts).
+ */
+export function plannedDates(schedule: Schedule, start: Date, until: Date, shift: WorkdayShift = 'none'): Date[] {
+  if (shift !== 'none') {
+    const later = new Date(until.getTime() + 20 * 86_400_000)
+    const seen = new Set<number>()
+    return plannedDates(schedule, start, later)
+      .map((date) => moveOffDayOff(date, shift))
+      .filter((date) => date <= until && !seen.has(date.getTime()) && Boolean(seen.add(date.getTime())))
+  }
   const out: Date[] = []
   const at = (year: number, month: number, day: number) => new Date(year, month, day, 9)
   if ('monthly' in schedule) {
