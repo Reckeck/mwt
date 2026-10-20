@@ -88,6 +88,11 @@ fee: Fee | null, };
 
 type AlertCondition = "above" | "below";
 
+/**
+ * Whether an automation books the same amount each time.
+ */
+type AmountMode = "fixed" | "varies";
+
 type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
 
 type AnswerWorkflowWaitInput = { id: string, 
@@ -261,7 +266,15 @@ type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_u
  */
 price_base: Amount, value_base: Amount, };
 
-type Automation = { id: string, name: string, active: boolean, 
+/**
+ * An automation as the app shows it: a workflow built from an
+ * [`AutomationSpec`]. Not stored as such (the vault keeps the workflow).
+ */
+type Automation = { 
+/**
+ * The workflow's id.
+ */
+id: string, name: string, active: boolean, 
 /**
  * The ready-made kind it was created from, for the wallet's list.
  */
@@ -271,9 +284,14 @@ preset: AutomationPreset | null, schedule: Schedule,
  */
 starts_at: string, template: TransactionDraft, 
 /**
- * Last planned date already processed (created or rejected).
+ * Last planned moment already processed (created, rejected or skipped).
  */
-last_planned_at: string | null, created_at: string, };
+last_planned_at: string | null, created_at: string, amount_mode: AmountMode, workday_shift: WorkdayShift, 
+/**
+ * With [`AmountMode::Varies`]: the amount the next run books (the
+ * average of the latest corrected ones); `None` — the template's.
+ */
+estimate: Amount | null, };
 
 /**
  * An automation as the form edits it. The template is an ordinary
@@ -283,26 +301,17 @@ type AutomationInput = { name: string, active: boolean, preset: AutomationPreset
 /**
  * RFC3339, the first planned date.
  */
-starts_at: string, template: TransactionInput, };
+starts_at: string, template: TransactionInput, 
+/**
+ * The same amount every time, or one that differs (a salary).
+ */
+amount_mode: AmountMode, 
+/**
+ * Where a planned date on a weekend or a holiday goes.
+ */
+workday_shift: WorkdayShift, };
 
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
-
-/**
- * The outcome of one scheduler pass.
- */
-type AutomationPass = { 
-/**
- * Ids of the transactions created.
- */
-created: Array<string>, 
-/**
- * Runs rejected in this pass, for the notification.
- */
-rejected: Array<AutomationRun>, 
-/**
- * Missed dates beyond the catch-up limit, recorded as skipped.
- */
-skipped: number, };
 
 /**
  * A ready-made automation a wallet offers: it decides the operation kind and
@@ -319,13 +328,39 @@ type AutomationRejectedEvent = { run_id: string, automation_id: string, name: st
  * One processed planned date of an automation. Never retried automatically;
  * doubles as the automation's history.
  */
-type AutomationRun = { id: string, automation_id: string, planned_at: string, processed_at: string, outcome: AutomationOutcome, };
+type AutomationRun = { 
+/**
+ * The workflow run's id.
+ */
+id: string, automation_id: string, planned_at: string, processed_at: string, outcome: AutomationOutcome, 
+/**
+ * The operation was booked with an approximate amount not corrected yet.
+ */
+estimated: boolean, };
 
 /**
  * What the automations would do over the next days, worked out on a copy
  * of the vault: nothing is written.
  */
 type AutomationSimulation = { from: string, until: string, runs: Array<SimulatedRun>, balances: Array<SimulatedBalance>, created: number, rejected: number, };
+
+/**
+ * What the user set in the automation form. Stored on the workflow the
+ * automation runs as (`Workflow::automation`); the graph is built from it.
+ */
+type AutomationSpec = { 
+/**
+ * The ready-made kind it was created from, for the wallet's list.
+ */
+preset: AutomationPreset | null, schedule: Schedule, 
+/**
+ * First planned date, RFC3339.
+ */
+starts_at: string, template: TransactionDraft, amount_mode: AmountMode, 
+/**
+ * Where a planned date on a weekend or a holiday goes.
+ */
+workday_shift: WorkdayShift, };
 
 /**
  * What a sub-account is locked to. A top-level wallet is always `Any`.
@@ -695,6 +730,15 @@ type CollectionChanges = { collection: string, added: number, updated: number, d
  * The first [`MAX_ITEMS`] changes, for the list under the summary.
  */
 items: Array<ChangeItem>, };
+
+/**
+ * The real amount of an operation booked approximately.
+ */
+type ConfirmEstimatedInput = { tx_id: string, 
+/**
+ * A decimal string, like every amount the app takes.
+ */
+amount: string, };
 
 /**
  * Turn staged fills into real trades (two legs each, like `add_trade`).
@@ -3700,12 +3744,7 @@ contact_id: string | null, origin: TxOrigin,
  * The utility bill (`UtilityItem.id`) this payment settles; older
  * payments are matched by comment and category instead.
  */
-utility_item_id?: string, 
-/**
- * Booked with an approximate amount (a salary that differs every time);
- * cleared when the user puts in the real one.
- */
-estimated: boolean, };
+utility_item_id?: string, };
 
 /**
  * How a transaction came to exist.
@@ -3715,7 +3754,13 @@ type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": 
  * The planned moment it was made for, when the workflow dated it by
  * its schedule: the same moment made on two devices is booked once.
  */
-planned_at: string | null, } };
+planned_at: string | null, 
+/**
+ * Booked with an approximate amount (a salary that differs every
+ * time); cleared when the user puts in the real one. Lives here, not
+ * in `TxMeta`, so v1 bincode files (read by position) keep reading.
+ */
+estimated: boolean, } };
 
 /**
  * One page of the operations list, newest first, and how many match in all.
@@ -3772,9 +3817,13 @@ amount: Amount | null, asset: AssetRef | null,
  * For money going out: how much will be missing by then, at the
  * balance forecast from today's balance and everything planned before.
  */
-shortfall: Amount | null, };
+shortfall: Amount | null, 
+/**
+ * The amount is approximate: an automation whose amount differs each time.
+ */
+estimated: boolean, };
 
-type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run" | "debt";
+type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run" | "unconfirmed_run" | "debt";
 
 /**
  * Partial update: only the fields present in the payload are touched.
@@ -4075,7 +4124,7 @@ type VaultDoc = { version: number, id: string, created_at: string, settings: Set
 /**
  * Staged Bybit fills awaiting user confirmation (D2.4).
  */
-pending_imports: Array<PendingImport>, contacts: Array<Contact>, automations: Array<Automation>, automation_runs: Array<AutomationRun>, budgets: Array<Budget>, goals: Array<Goal>, reminders: Array<Reminder>, price_alerts: Array<PriceAlert>, categorization_rules: Array<CategorizationRule>, utility_items: Array<UtilityItem>, meter_readings: Array<MeterReading>, enrichments: Array<EnrichmentRecord>, manual_prices: Array<ManualPrice>, 
+pending_imports: Array<PendingImport>, contacts: Array<Contact>, budgets: Array<Budget>, goals: Array<Goal>, reminders: Array<Reminder>, price_alerts: Array<PriceAlert>, categorization_rules: Array<CategorizationRule>, utility_items: Array<UtilityItem>, meter_readings: Array<MeterReading>, enrichments: Array<EnrichmentRecord>, manual_prices: Array<ManualPrice>, 
 /**
  * Virtual envelopes: earmarked parts of a store's balance.
  */
@@ -4163,6 +4212,11 @@ type WfValue = { "type": "null" } | { "type": "number", "value": Amount } | { "t
  */
 currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key: string]: WfValue } };
 
+/**
+ * Where a planned date that falls on a day off goes.
+ */
+type WorkdayShift = "none" | "back" | "forward";
+
 type Workflow = { id: string, name: string, description: string, active: boolean, 
 /**
  * The graph as JSON (`Graph`): nodes, edges, comments.
@@ -4189,7 +4243,12 @@ tests: Array<WorkflowTest>,
  * Edits left unsaved in the editor, kept to come back to; the saved
  * graph (and the runs) are not touched by them.
  */
-draft?: GraphVersion, };
+draft?: GraphVersion, 
+/**
+ * Set on a workflow made by the automation form: its graph is built
+ * from this and edited there, not in the editor.
+ */
+automation?: AutomationSpec, };
 
 /**
  * A note or a frame on the canvas: no effect on a run.
@@ -4238,7 +4297,12 @@ queued: number,
 /**
  * New notices to show.
  */
-notices: Array<NoticeRecord>, };
+notices: Array<NoticeRecord>, 
+/**
+ * Planned moments of automations beyond the catch-up limit, recorded as
+ * skipped.
+ */
+skipped: number, };
 
 type WorkflowPosition = { x: number, y: number, };
 

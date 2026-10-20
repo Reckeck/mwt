@@ -593,11 +593,7 @@ impl UnlockedVault {
                     return Err(Error::InvalidInput("the due day is 1–31".into()));
                 }
                 if let Some(id) = automation_id
-                    && !self
-                        .doc
-                        .automations
-                        .iter()
-                        .any(|automation| &automation.id == id)
+                    && self.automation(id).is_err()
                 {
                     return Err(Error::Missing(format!("automation {id}")));
                 }

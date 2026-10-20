@@ -9,6 +9,8 @@ use crate::Amount;
 use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{ConvertTx, PaymentTx, TopupTx, TransferTx};
 
+pub use crate::calendar::workdays::WorkdayShift;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Schedule {
@@ -99,8 +101,43 @@ impl AutomationPreset {
     }
 }
 
+/// Whether an automation books the same amount each time.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum AmountMode {
+    /// The template's amount, every time.
+    #[default]
+    Fixed,
+    /// Differs every time (a salary): booked at the average of the latest
+    /// corrected amounts, marked approximate until the user puts in the real one.
+    Varies,
+}
+
+/// What the user set in the automation form. Stored on the workflow the
+/// automation runs as (`Workflow::automation`); the graph is built from it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct AutomationSpec {
+    /// The ready-made kind it was created from, for the wallet's list.
+    #[serde(default)]
+    pub preset: Option<AutomationPreset>,
+    pub schedule: Schedule,
+    /// First planned date, RFC3339.
+    pub starts_at: String,
+    pub template: TransactionDraft,
+    #[serde(default)]
+    pub amount_mode: AmountMode,
+    /// Where a planned date on a weekend or a holiday goes.
+    #[serde(default)]
+    pub workday_shift: WorkdayShift,
+}
+
+/// An automation as the app shows it: a workflow built from an
+/// [`AutomationSpec`]. Not stored as such (the vault keeps the workflow).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Automation {
+    /// The workflow's id.
     pub id: String,
     pub name: String,
     pub active: bool,
@@ -111,9 +148,17 @@ pub struct Automation {
     /// First planned date, RFC3339.
     pub starts_at: String,
     pub template: TransactionDraft,
-    /// Last planned date already processed (created or rejected).
+    /// Last planned moment already processed (created, rejected or skipped).
     pub last_planned_at: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    pub amount_mode: AmountMode,
+    #[serde(default)]
+    pub workday_shift: WorkdayShift,
+    /// With [`AmountMode::Varies`]: the amount the next run books (the
+    /// average of the latest corrected ones); `None` — the template's.
+    #[serde(default)]
+    pub estimate: Option<Amount>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -151,15 +196,16 @@ pub enum AutomationOutcome {
 /// doubles as the automation's history.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct AutomationRun {
+    /// The workflow run's id.
     pub id: String,
     pub automation_id: String,
     pub planned_at: String,
     pub processed_at: String,
     pub outcome: AutomationOutcome,
+    /// The operation was booked with an approximate amount not corrected yet.
+    #[serde(default)]
+    pub estimated: bool,
 }
-
-/// Upper bound on stored automation runs; the oldest are dropped.
-pub const MAX_AUTOMATION_RUNS: usize = 2000;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]

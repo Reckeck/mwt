@@ -2,7 +2,7 @@
 //! firing their triggers, the confirmation queue, variables, the journal, and
 //! the vault lookups the executor (`workflow::exec`) runs on.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ops::Not;
 
 use chrono::{Datelike, Duration};
@@ -13,9 +13,10 @@ use crate::error::{Error, Result};
 use crate::model::notify::NoticeRecord;
 use crate::model::planning::RejectReason;
 use crate::model::store::AssetRef;
-use crate::model::transaction::Transaction;
+use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::now_iso;
 use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::workflow::automation;
 use crate::workflow::exec::{
     self, EmittedEvent, Resume, RunContext, RunMode, RunReport, StepStatus, TraceStep,
 };
@@ -25,13 +26,15 @@ use crate::workflow::model::{
     VarScope, WaitKind, Workflow, WorkflowRun, WorkflowState, WorkflowTest, WorkflowVar,
     WorkflowWait,
 };
-use crate::workflow::nodes::triggers::{schedule_moments, tx_matches, tx_trigger_values};
+use crate::workflow::nodes::triggers::{
+    schedule_moments, schedule_moments_limited, tx_matches, tx_trigger_values,
+};
 use crate::workflow::types::WfValue;
 use crate::workflow::validate::{GraphIssue, has_errors, validate};
 use crate::workflow::{catalog::node_def, graph::Node};
 
 use super::UnlockedVault;
-use super::automations::outflow;
+use super::automations::{MAX_CATCH_UP, outflow};
 use super::worth::FlowClass;
 
 /// Most live runs of one workflow in an hour; more look like a loop.
@@ -72,6 +75,10 @@ pub struct WorkflowPass {
     pub queued: u32,
     /// New notices to show.
     pub notices: Vec<NoticeRecord>,
+    /// Planned moments of automations beyond the catch-up limit, recorded as
+    /// skipped.
+    #[serde(default)]
+    pub skipped: usize,
 }
 
 /// How a test went.
@@ -275,7 +282,7 @@ impl UnlockedVault {
             .doc
             .transactions
             .iter()
-            .filter(|tx| !tx.meta().estimated && made_by(tx, workflow_id))
+            .filter(|tx| !tx.meta().origin.is_estimated() && made_by(tx, workflow_id))
             .collect();
         made.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
         made.truncate(count.max(1));
@@ -566,6 +573,7 @@ impl UnlockedVault {
                     versions: Vec::new(),
                     tests: Vec::new(),
                     draft: None,
+                    automation: None,
                 };
                 self.doc.workflows.push(workflow.clone());
                 let arm = workflow.active;
@@ -578,6 +586,7 @@ impl UnlockedVault {
                     .iter_mut()
                     .find(|workflow| workflow.id == id)
                     .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+                refuse_automation(workflow)?;
                 let arm = draft.active && !workflow.active;
                 if workflow.graph != graph_json && !workflow.graph.is_empty() {
                     workflow.versions.push(GraphVersion {
@@ -642,6 +651,7 @@ impl UnlockedVault {
             .iter_mut()
             .find(|workflow| workflow.id == id)
             .ok_or_else(|| Error::Missing(format!("workflow {id}")))?;
+        refuse_automation(workflow)?;
         workflow.draft = Some(GraphVersion {
             saved_at: crate::calendar::iso(now),
             graph: graph.to_json(),
@@ -1471,6 +1481,113 @@ impl UnlockedVault {
             .collect()
     }
 
+    /// Planned moments of automations already processed, by the operation
+    /// they made or by a run: `(workflow id, RFC3339 moment)`. Guards against
+    /// a second booking even when a schedule mark was rolled back (a sync).
+    pub(crate) fn automation_processed(&self) -> HashSet<(String, String)> {
+        let mut out = HashSet::new();
+        for tx in &self.doc.transactions {
+            match &tx.meta().origin {
+                TxOrigin::Automation {
+                    automation_id,
+                    planned_at,
+                } => {
+                    out.insert((automation_id.clone(), planned_at.clone()));
+                }
+                TxOrigin::Workflow {
+                    workflow_id,
+                    planned_at: Some(planned_at),
+                    ..
+                } => {
+                    out.insert((workflow_id.clone(), planned_at.clone()));
+                }
+                _ => {}
+            }
+        }
+        for run in &self.doc.workflow_runs {
+            let planned = match &run.outcome {
+                RunOutcome::Rejected {
+                    planned_at: Some(at),
+                    ..
+                } => Some(at.clone()),
+                _ => run.trigger.strip_prefix("schedule ").map(str::to_string),
+            };
+            if let Some(at) = planned {
+                out.insert((run.workflow_id.clone(), at));
+            }
+        }
+        out
+    }
+
+    /// Fire the due planned moments of every automation strictly by time
+    /// across all of them, so a salary on the 10th covers rent on the 15th
+    /// (plan §7.2). Only the newest [`MAX_CATCH_UP`] of an automation run;
+    /// older ones are kept in the journal as skipped. Automations are not
+    /// held to the hourly limit of workflows: a catch-up after a month away
+    /// is expected to book many at once.
+    fn fire_due_automations(
+        &mut self,
+        now: i64,
+        zone: &str,
+        pass: &mut WorkflowPass,
+    ) -> Vec<EmittedEvent> {
+        let cal = Calendar::new(zone);
+        let done = self.automation_processed();
+        let key = automation::schedule_key();
+        let mut due: Vec<(i64, Workflow, Graph, Node)> = Vec::new();
+        for workflow in self.active_workflows() {
+            let Some(spec) = workflow.automation.clone() else {
+                continue;
+            };
+            let Ok(graph) = Graph::parse(&workflow.graph) else {
+                continue;
+            };
+            let Some(trigger) = graph.node(automation::TRIGGER).cloned() else {
+                continue;
+            };
+            // Nothing is planned before the automation's start.
+            let start = unix_secs(&automation::start_mark(&spec)).unwrap_or(now);
+            let after = self
+                .wf_mark(&workflow.id, &key)
+                .and_then(|mark| unix_secs(&mark))
+                .map_or(start, |mark| mark.max(start));
+            let (moments, _) =
+                schedule_moments_limited(&trigger.params, &cal, after, now, usize::MAX);
+            let fresh: Vec<i64> = moments
+                .iter()
+                .copied()
+                .filter(|moment| {
+                    !done.contains(&(workflow.id.clone(), crate::calendar::iso(*moment)))
+                })
+                .collect();
+            let overflow = fresh.len().saturating_sub(MAX_CATCH_UP);
+            for moment in &fresh[..overflow] {
+                let label = trigger_label(&trigger.kind, &crate::calendar::iso(*moment));
+                self.keep_dropped(&workflow.id, &label, "skipped", now, pass);
+                pass.skipped += 1;
+            }
+            for moment in &fresh[overflow..] {
+                due.push((*moment, workflow.clone(), graph.clone(), trigger.clone()));
+            }
+            if let Some(last) = moments.last() {
+                self.wf_set_mark(&workflow.id, &key, &crate::calendar::iso(*last));
+            }
+        }
+        due.sort_by_key(|(moment, ..)| *moment);
+        let mut events = Vec::new();
+        for (moment, workflow, graph, trigger) in due {
+            let at = crate::calendar::iso(moment);
+            let mut ctx = self.context(&workflow, &trigger, now, zone);
+            ctx.trigger_label = trigger_label(&trigger.kind, &at);
+            ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
+            ctx.mode = RunMode::Live;
+            let report = exec::run(self, &graph, &ctx);
+            self.keep_run(&report, pass);
+            events.extend(report.events);
+        }
+        events
+    }
+
     /// Operations added since a workflow last looked, and where it is now.
     fn new_transactions(&self, workflow_id: &str) -> (Vec<Transaction>, usize, Option<String>) {
         let len = self.doc.transactions.len();
@@ -1544,7 +1661,14 @@ impl UnlockedVault {
             events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
         }
 
-        for workflow in self.active_workflows() {
+        events.extend(self.fire_due_automations(now, zone, &mut pass));
+
+        // Automations fired above, strictly by time across all of them.
+        for workflow in self
+            .active_workflows()
+            .into_iter()
+            .filter(|workflow| workflow.automation.is_none())
+        {
             let Ok(graph) = Graph::parse(&workflow.graph) else {
                 continue;
             };
@@ -1658,6 +1782,16 @@ impl UnlockedVault {
         }
         Ok(pass)
     }
+}
+
+/// An automation's graph is built from its form: the editor only shows it.
+fn refuse_automation(workflow: &Workflow) -> Result<()> {
+    if workflow.automation.is_some() {
+        return Err(Error::InvalidInput(
+            "this workflow is an automation: change it in the automation form, or make it an ordinary workflow first".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// The trigger to start from: the one named, else a manual one, else the first.

@@ -7,7 +7,6 @@ export const SYNC_COLLECTIONS = [
   'budgets',
   'goals',
   'reminders',
-  'automations',
   'workflows',
   'notification_log',
   'settings',

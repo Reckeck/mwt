@@ -19,7 +19,7 @@ use crate::model::vault::now_iso;
 use crate::pricing::history::{secs_or_now, unix_secs};
 
 use super::UnlockedVault;
-use super::automations::{draft_to_transaction, outflow, planned_dates};
+use super::automations::outflow;
 
 /// How many dates of one repeating reminder the agenda lists at most.
 const MAX_REPEATS_LISTED: usize = 60;
@@ -67,6 +67,9 @@ pub enum UpcomingKind {
     Reminder,
     /// A rejected automation run waiting for «Повторить / Пропустить».
     RejectedRun,
+    /// An operation an automation booked with an approximate amount, waiting
+    /// for the real one; `source_id` is the operation's id.
+    UnconfirmedRun,
     /// A debt with a contact falls due (overdue ones stay listed).
     Debt,
 }
@@ -90,6 +93,9 @@ pub struct UpcomingItem {
     /// For money going out: how much will be missing by then, at the
     /// balance forecast from today's balance and everything planned before.
     pub shortfall: Option<Amount>,
+    /// The amount is approximate: an automation whose amount differs each time.
+    #[serde(default)]
+    pub estimated: bool,
 }
 
 impl UnlockedVault {
@@ -381,18 +387,9 @@ impl UnlockedVault {
         // Automations, with a running balance forecast per (store, asset).
         let mut planned: Vec<(i64, String, Transaction)> = Vec::new();
         let mut paid_loans: HashSet<String> = HashSet::new();
-        for automation in self.doc.automations.iter().filter(|item| item.active) {
-            let Some(start) = cal.date_of_iso(&automation.starts_at) else {
-                continue;
-            };
-            let after = Some(today - Duration::days(1));
-            for date in planned_dates(&automation.schedule, start, after, last) {
-                let secs = cal.at_local(date, AUTOMATION_HOUR);
-                if secs <= now {
-                    continue;
-                }
-                let iso = calendar::iso(secs);
-                let tx = draft_to_transaction(&automation.template, &automation.id, &iso, &iso);
+        let automations = self.automations();
+        for automation in automations.iter().filter(|item| item.active) {
+            for (secs, tx) in self.automation_occurrences(automation, &cal, now, horizon - 1) {
                 if let Transaction::Transfer(inner) = &tx
                     && let Some(target) = inner.to.store_id()
                 {
@@ -404,13 +401,12 @@ impl UnlockedVault {
         planned.sort_by_key(|(secs, _, _)| *secs);
         let mut balances: HashMap<(String, String), Amount> = HashMap::new();
         for (secs, automation_id, tx) in planned {
-            let name = self
-                .doc
-                .automations
+            let name = automations
                 .iter()
                 .find(|item| item.id == automation_id)
                 .map(|item| item.name.clone())
                 .unwrap_or_default();
+            let estimated = tx.meta().origin.is_estimated();
             let mut item = UpcomingItem {
                 kind: UpcomingKind::Automation,
                 source_id: automation_id,
@@ -421,6 +417,7 @@ impl UnlockedVault {
                 amount: None,
                 asset: None,
                 shortfall: None,
+                estimated,
             };
             if let Some(flow) = outflow(&tx) {
                 let fee_same = flow
@@ -492,6 +489,7 @@ impl UnlockedVault {
                             &item.currency.to_uppercase(),
                         )),
                         shortfall: None,
+                        estimated: false,
                     });
                 }
             }
@@ -521,6 +519,7 @@ impl UnlockedVault {
                     amount: Some(Amount::ZERO - payment),
                     asset: None,
                     shortfall: None,
+                    estimated: false,
                 });
             }
         }
@@ -548,6 +547,7 @@ impl UnlockedVault {
                     amount: None,
                     asset: None,
                     shortfall: None,
+                    estimated: false,
                 });
                 let Some(next) = reminder
                     .repeat
@@ -598,33 +598,67 @@ impl UnlockedVault {
                 amount: Some(net),
                 asset: Some(row.asset.clone()),
                 shortfall: None,
+                estimated: false,
             });
         }
 
-        // Rejected runs wait for «Повторить / Пропустить».
-        for run in &self.doc.automation_runs {
-            let AutomationOutcome::Rejected { .. } = &run.outcome else {
-                continue;
-            };
-            let name = self
-                .doc
-                .automations
+        // Rejected runs wait for «Повторить / Пропустить»; operations booked
+        // approximately wait for their real amount.
+        for run in self.automation_runs(None) {
+            let name = automations
                 .iter()
                 .find(|item| item.id == run.automation_id)
                 .map(|item| item.name.clone())
                 .unwrap_or_default();
             let secs = secs_or_now(&run.planned_at);
-            out.push(UpcomingItem {
-                kind: UpcomingKind::RejectedRun,
-                source_id: run.id.clone(),
-                at: run.planned_at.clone(),
-                date: cal.date_of(secs).format("%Y-%m-%d").to_string(),
-                title: name,
-                store_id: None,
-                amount: None,
-                asset: None,
-                shortfall: None,
-            });
+            let date = cal.date_of(secs).format("%Y-%m-%d").to_string();
+            match &run.outcome {
+                AutomationOutcome::Rejected { .. } => out.push(UpcomingItem {
+                    kind: UpcomingKind::RejectedRun,
+                    source_id: run.id.clone(),
+                    at: run.planned_at.clone(),
+                    date,
+                    title: name,
+                    store_id: None,
+                    amount: None,
+                    asset: None,
+                    shortfall: None,
+                    estimated: false,
+                }),
+                AutomationOutcome::Created { tx_id } if run.estimated => {
+                    let Some(tx) = self
+                        .doc
+                        .transactions
+                        .iter()
+                        .find(|tx| &tx.meta().id == tx_id)
+                    else {
+                        continue;
+                    };
+                    let leg = tx.legs().into_iter().find(|leg| leg.amount.is_positive());
+                    let flow = outflow(tx);
+                    out.push(UpcomingItem {
+                        kind: UpcomingKind::UnconfirmedRun,
+                        source_id: tx_id.clone(),
+                        at: run.planned_at.clone(),
+                        date,
+                        title: name,
+                        store_id: flow
+                            .as_ref()
+                            .map(|flow| flow.store_id.clone())
+                            .or_else(|| leg.as_ref().map(|leg| leg.store_id.clone())),
+                        amount: flow
+                            .as_ref()
+                            .map(|flow| Amount::ZERO - flow.amount)
+                            .or_else(|| leg.as_ref().map(|leg| leg.amount)),
+                        asset: flow
+                            .map(|flow| flow.asset)
+                            .or_else(|| leg.map(|leg| leg.asset)),
+                        shortfall: None,
+                        estimated: true,
+                    });
+                }
+                _ => {}
+            }
         }
         out.sort_by_key(|item| secs_or_now(&item.at));
         out
@@ -662,6 +696,8 @@ mod tests {
                 schedule: Schedule::Monthly { day: 15 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Payment(rent),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap();
         let Transaction::Topup(salary) = income(&card, "1000", "salary") else {
@@ -675,6 +711,8 @@ mod tests {
                 schedule: Schedule::Monthly { day: 20 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Topup(salary),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap();
         let items = vault.upcoming(45, secs("2026-03-10T00:00:00Z"), "UTC");

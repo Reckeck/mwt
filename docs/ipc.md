@@ -19,6 +19,7 @@ Frontend парсит код и показывает локализованно�
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
 | `automation-skipped` | `{ count }` | после долгого перерыва старые даты сверх 24 записаны как пропущенные |
+| — (уведомление) | ключ `automation-estimated:<tx_id>` | автоматизация с разной суммой записала операцию примерно: «уточните сумму» |
 | `workflows-ran` | `{ runs, queued }` | планировщик запустил схемы (узлы); `queued` — операций ушло в очередь подтверждения. Созданные операции приходят ещё и через `automation-created` |
 | `price-alert` | `{ alert_id }` | сработал ценовой алерт (один раз) |
 | `reminder-due` | `{}` | наступило время напоминаний — обновить их список |
@@ -270,13 +271,15 @@ JSON без шифрования — там нет ничего секретно
 | Команда | Вход | Выход |
 |---|---|---|
 | `list_automations` | — | `Vec<Automation>` по имени |
-| `create_automation` | `AutomationInput { name, active, preset?, schedule, starts_at, template: TransactionInput }` (пресеты по типу кошелька — в `get_wallet_catalog`) | `Automation`. Шаблон — один из четырёх глаголов и проходит те же проверки, что операция |
-| `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; обработанные даты остаются обработанными |
+| `create_automation` | `AutomationInput { name, active, preset?, schedule, starts_at, template: TransactionInput, amount_mode?, workday_shift? }` (пресеты по типу кошелька — в `get_wallet_catalog`) | `Automation { …, amount_mode, workday_shift, estimate? }`. Автоматизация — схема, построенная из формы (`Workflow.automation`). Шаблон — один из четырёх глаголов и проходит те же проверки, что операция. `amount_mode: varies` (не для обмена) — сумма каждый раз разная: запуск записывает среднее за 3 последние уточнённые суммы (`estimate`, пока их нет — сумма шаблона) с отметкой «примерно». `workday_shift: back/forward` — дата на выходном или празднике РФ переносится на рабочий день раньше/позже |
+| `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; граф строится заново, прежний — в версиях схемы; обработанные даты остаются обработанными |
 | `delete_automation` | `id` | `()` — вместе с историей запусков; созданные операции остаются |
 | `run_automation` | `id` | `Transaction` «сейчас»; не хватает средств — `INSUFFICIENT_FUNDS` с суммами |
 | `simulate_automations` | `SimulateAutomationsInput { automation_id?, days (1–366) }` | `AutomationSimulation { from, until, runs[{ automation_id, automation_name, planned_at, outcome, transaction? }], balances[{ store_id, asset, before, after }], created, rejected }` — эмуляция: автоматизации прогоняются по дням на копии vault (`UnlockedVault::sandbox`, ничего не пишет) с теми же проверками денег и правил, что у планировщика; с `automation_id` в ответе только её запуски |
 | `list_automation_runs` | `automation_id?` | `Vec<AutomationRun>`, новые первыми |
 | `retry_automation_run` | `run_id` | `Transaction`: баланс проверяется на текущий момент, дата операции — сейчас |
+| `confirm_estimated_amount` | `ConfirmEstimatedInput { tx_id, amount }` | `Transaction` с фактической суммой и снятой отметкой «примерно»; она идёт в следующую оценку. Обычная правка суммы такой операции (`update_transaction`) тоже снимает отметку. Операция без отметки — `INVALID_INPUT` |
+| `detach_automation` | `id` | `Workflow` без `automation`: дальше схема правится в редакторе, форма её не показывает. Пока схема — автоматизация, `save_workflow`/`save_workflow_draft` для неё отвечают `INVALID_INPUT` |
 | `skip_automation_run` | `run_id` | `AutomationRun` с `Skipped` |
 | `list_budgets` / `create_budget` / `update_budget` / `delete_budget` | `BudgetInput { active, target, period, limit, currency }` / `UpdateBudgetInput { id, budget }` / `id` | `Budget` |
 | `get_budget_status` | — | `Vec<BudgetStatus { budget, spent, remaining, used, period_start, period_end }>` — активные лимиты, траты групп «обязательные» и «ежедневные» в валюте лимита |
@@ -307,7 +310,7 @@ JSON без шифрования — там нет ничего секретно
 | `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов |
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
 | `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |
-| `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall? }>` — автоматизации с прогнозом «не хватит N», аренда, платежи по кредитам, напоминания и отклонённые запуски |
+| `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall?, estimated }>` — автоматизации с прогнозом «не хватит N» (даты уже перенесены с выходных, у разной суммы — оценка и `estimated`), аренда, платежи по кредитам, напоминания, отклонённые запуски (`rejected_run`) и операции, записанные примерно (`unconfirmed_run`, `source_id` — id операции для `confirm_estimated_amount`) |
 
 ### workflows — схемы из узлов (`crates/app/src/commands/workflows.rs`)
 

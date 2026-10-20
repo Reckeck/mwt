@@ -123,13 +123,6 @@ pub static COLLECTIONS: &[Collection] = &[
     single("exchanges", &[]),
     records("pending_imports", &["exec_id"]),
     records("contacts", ID),
-    records("automations", ID),
-    log(
-        "automation_runs",
-        ID,
-        crate::model::planning::MAX_AUTOMATION_RUNS,
-        "processed_at",
-    ),
     records("budgets", ID),
     records("goals", ID),
     records("reminders", ID),

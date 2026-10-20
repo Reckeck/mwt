@@ -1051,6 +1051,12 @@ pub struct AutomationInput {
     /// RFC3339, the first planned date.
     pub starts_at: String,
     pub template: TransactionInput,
+    /// The same amount every time, or one that differs (a salary).
+    #[serde(default)]
+    pub amount_mode: crate::model::planning::AmountMode,
+    /// Where a planned date on a weekend or a holiday goes.
+    #[serde(default)]
+    pub workday_shift: crate::model::planning::WorkdayShift,
 }
 
 impl AutomationInput {
@@ -1073,8 +1079,18 @@ impl AutomationInput {
             schedule: self.schedule,
             starts_at: self.starts_at.clone(),
             template,
+            amount_mode: self.amount_mode,
+            workday_shift: self.workday_shift,
         })
     }
+}
+
+/// The real amount of an operation booked approximately.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ConfirmEstimatedInput {
+    pub tx_id: String,
+    /// A decimal string, like every amount the app takes.
+    pub amount: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

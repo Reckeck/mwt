@@ -18,7 +18,7 @@ use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::model::vault::DailyBudgetMode;
 use crate::pricing::history::secs_or_now;
 
-use super::automations::{draft_to_transaction, planned_dates};
+use super::automations::draft_to_transaction;
 use super::rates::RateBook;
 use super::{FlowClass, UnlockedVault};
 
@@ -416,8 +416,7 @@ impl UnlockedVault {
                 (out.savings_fact / out.income * Amount::parse("100").unwrap_or(one())).round(1);
         }
         out.not_executed = self
-            .doc
-            .automation_runs
+            .automation_runs(None)
             .iter()
             .filter(|run| !matches!(run.outcome, AutomationOutcome::Created { .. }))
             .filter(|run| {
@@ -445,16 +444,18 @@ impl UnlockedVault {
         let mut income = Amount::ZERO;
         let mut fixed = Amount::ZERO;
         let mut paid_loans: HashSet<String> = HashSet::new();
-        for automation in self.doc.automations.iter().filter(|item| item.active) {
-            let Some(start) = cal.date_of_iso(&automation.starts_at) else {
-                continue;
-            };
-            let dates = planned_dates(&automation.schedule, start, None, last)
-                .into_iter()
-                .filter(|planned| *planned >= first)
-                .count();
+        for automation in self.automations().iter().filter(|item| item.active) {
+            // Moved off days off: a payday on the 1st may land in the month before.
+            let dates = self
+                .automation_occurrences(
+                    automation,
+                    cal,
+                    cal.start_of(first) - 1,
+                    cal.start_of(last + Duration::days(1)) - 1,
+                )
+                .len();
             let probe = draft_to_transaction(
-                &automation.template,
+                &self.automation_draft(automation),
                 &automation.id,
                 "",
                 &calendar::iso(cal.at_local(first, AUTOMATION_HOUR)),
@@ -666,8 +667,7 @@ impl UnlockedVault {
     /// The first planned income date after `today` from active automations.
     fn next_income_date(&self, cal: &Calendar, today: NaiveDate) -> Option<NaiveDate> {
         let horizon = today + Duration::days(366);
-        self.doc
-            .automations
+        self.automations()
             .iter()
             .filter(|item| item.active)
             .filter(|automation| {
@@ -675,10 +675,14 @@ impl UnlockedVault {
                 self.classify_flow(&probe) == FlowClass::Income
             })
             .filter_map(|automation| {
-                let start = cal.date_of_iso(&automation.starts_at)?;
-                planned_dates(&automation.schedule, start, Some(today), horizon)
-                    .into_iter()
-                    .next()
+                self.automation_occurrences(
+                    automation,
+                    cal,
+                    cal.start_of(today + Duration::days(1)) - 1,
+                    cal.start_of(horizon + Duration::days(1)) - 1,
+                )
+                .first()
+                .map(|(secs, _)| cal.date_of(*secs))
             })
             .min()
     }
@@ -696,11 +700,8 @@ impl UnlockedVault {
         let last = end - Duration::days(1);
         let mut total = Amount::ZERO;
         let mut paid_loans: HashSet<String> = HashSet::new();
-        for automation in self.doc.automations.iter().filter(|item| item.active) {
-            let Some(start) = cal.date_of_iso(&automation.starts_at) else {
-                continue;
-            };
-            let probe = draft_to_transaction(&automation.template, "", "", "");
+        for automation in self.automations().iter().filter(|item| item.active) {
+            let probe = draft_to_transaction(&self.automation_draft(automation), "", "", "");
             if let Transaction::Transfer(inner) = &probe
                 && let Some(target) = inner.to.store_id()
             {
@@ -709,8 +710,14 @@ impl UnlockedVault {
             if self.classify_flow(&probe) != FlowClass::Fixed {
                 continue;
             }
-            let after = today - Duration::days(1);
-            let count = planned_dates(&automation.schedule, start, Some(after), last).len();
+            let count = self
+                .automation_occurrences(
+                    automation,
+                    cal,
+                    cal.start_of(today) - 1,
+                    cal.start_of(end) - 1,
+                )
+                .len();
             let (value, _) = Self::flow_value(&book, &probe, FlowClass::Fixed, currency);
             total += value * amount_of_days(count as u32);
         }
@@ -954,6 +961,8 @@ mod tests {
                 schedule: Schedule::Monthly { day: 25 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Topup(salary),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap();
         let early = vault.daily_budget(secs("2026-06-03T12:00:00Z"), "UTC");

@@ -6,8 +6,7 @@ use crate::model::chain::ChainInfo;
 use crate::model::contact::Contact;
 use crate::model::enrichment::EnrichmentRecord;
 use crate::model::planning::{
-    Automation, AutomationRun, Budget, CategorizationRule, Goal, MeterReading, PriceAlert,
-    Reminder, UtilityItem,
+    Budget, CategorizationRule, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
 };
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
@@ -504,8 +503,6 @@ pub struct VaultDoc {
     #[serde(default)]
     pub pending_imports: Vec<PendingImport>,
     pub contacts: Vec<Contact>,
-    pub automations: Vec<Automation>,
-    pub automation_runs: Vec<AutomationRun>,
     pub budgets: Vec<Budget>,
     pub goals: Vec<Goal>,
     pub reminders: Vec<Reminder>,
@@ -584,8 +581,6 @@ impl Default for VaultDoc {
             exchanges: Exchanges::default(),
             pending_imports: Vec::new(),
             contacts: Vec::new(),
-            automations: Vec::new(),
-            automation_runs: Vec::new(),
             budgets: Vec::new(),
             goals: Vec::new(),
             reminders: Vec::new(),
@@ -742,8 +737,8 @@ mod json_schema_tests {
         // (plan D11), so the editor can show and edit them.
         for collection in [
             "contacts",
-            "automations",
-            "automation_runs",
+            "workflows",
+            "workflow_runs",
             "budgets",
             "goals",
             "reminders",
@@ -762,7 +757,7 @@ mod json_schema_tests {
         for def in [
             "Contact",
             "Category",
-            "Automation",
+            "AutomationSpec",
             "Goal",
             "LiabilityTerms",
             "EnrichmentRecord",

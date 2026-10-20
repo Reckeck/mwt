@@ -11,8 +11,11 @@ const KEYS_OF: Record<string, ReadonlyArray<readonly unknown[]>> = {
   budgets: PLANNING_KEYS,
   goals: PLANNING_KEYS,
   reminders: [['reminders'], ['upcoming']],
-  automations: [['automations'], ['automation-runs'], ['upcoming']],
+  // Automations are workflows too.
   workflows: [
+    ['automations'],
+    ['automation-runs'],
+    ['upcoming'],
     WORKFLOW_KEYS.catalog,
     WORKFLOW_KEYS.list,
     ['workflow'],

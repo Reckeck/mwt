@@ -85,7 +85,12 @@ pub fn schedule_moments_limited(
     let last = cal.date_of(until) + Duration::days(margin);
     let first = (cal.date_of(after) - Duration::days(margin))
         .max(cal.date_of(until) - Duration::days(LOOKBACK_DAYS));
-    let epoch = NaiveDate::from_ymd_opt(1970, 1, 5).unwrap_or_default(); // a Monday
+    // «Every N days» counts from `anchor` when set (an automation's first
+    // date), else from a fixed Monday.
+    let epoch = field(params, "anchor")
+        .map(json_text)
+        .and_then(|raw| NaiveDate::parse_from_str(raw.get(..10).unwrap_or(&raw), "%Y-%m-%d").ok())
+        .unwrap_or_else(|| NaiveDate::from_ymd_opt(1970, 1, 5).unwrap_or_default());
     let planned = |date: NaiveDate| -> bool {
         match every.as_str() {
             "day" => (date - epoch).num_days().rem_euclid(interval) == 0,

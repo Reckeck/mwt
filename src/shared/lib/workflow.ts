@@ -103,7 +103,7 @@ export function outcomeKey(
 ): 'done' | 'stopped' | 'failed' | 'waiting' | 'asking' | 'partial' | 'dropped' {
   if (outcome === 'done') return 'done'
   if ('stopped' in outcome) return 'stopped'
-  if ('failed' in outcome) return 'failed'
+  if ('failed' in outcome || 'rejected' in outcome) return 'failed'
   if ('asking' in outcome) return 'asking'
   if ('partial' in outcome) return 'partial'
   if ('dropped' in outcome) return 'dropped'
@@ -127,7 +127,21 @@ export function outcomeDetail(outcome: RunOutcome): string {
   if ('asking' in outcome) return outcome.asking.question
   if ('partial' in outcome) return outcome.partial.failed.join('; ')
   if ('dropped' in outcome) return outcome.dropped.reason
+  if ('rejected' in outcome) return rejectText(outcome.rejected.reason)
   return outcome.waiting.until
+}
+
+/** A refusal for want of money, in figures: «8000 / 25000 RUB». */
+function rejectText(reason: RejectReason): string {
+  if ('insufficient_funds' in reason) {
+    const { available, required, asset } = reason.insufficient_funds
+    return `${available} / ${required} ${asset.symbol}`
+  }
+  if ('credit_limit_exceeded' in reason) {
+    const { required, limit } = reason.credit_limit_exceeded
+    return `${required} > ${limit}`
+  }
+  return reason.invalid.message
 }
 
 /** Query keys of everything workflows show. */

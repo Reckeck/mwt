@@ -7,7 +7,7 @@
 
 | Поле | Тип | Комментарий |
 |---|---|---|
-| `version` | `u32` | `VAULT_FORMAT_VERSION = 2`. Файл более старой версии открывается и мигрирует (`storage::decode_versioned`): нетронутая копия кладётся рядом как `<vault>.v1.bak`, затем документ переписывается в текущей версии. Версия из будущего — `UNSUPPORTED`; файл известной версии, не подходящий под её схему, — `INCOMPATIBLE_VAULT`. Подробности — раздел «Версии и миграции» ниже |
+| `version` | `u32` | `VAULT_FORMAT_VERSION = 3`. Файл более старой версии открывается и мигрирует (`storage::decode_versioned`): нетронутая копия кладётся рядом как `<vault>.v<N>.bak`, затем документ переписывается в текущей версии. Версия из будущего — `UNSUPPORTED`; файл известной версии, не подходящий под её схему, — `INCOMPATIBLE_VAULT`. Подробности — раздел «Версии и миграции» ниже |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
 | `settings` | `Settings` | vault-scoped: decimals, виджеты, интервалы, трей |
@@ -24,7 +24,7 @@
 | `manual_prices` | `Vec<ManualPrice>` | ручная оценка имущества |
 | `envelopes` | `Vec<Envelope>` | конверты (см. выше) |
 | `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
-| `automations`, `automation_runs`, `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. `Automation.preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий. v2: `Reminder.repeat` (каждые N дней/недель/месяцев/лет), `Reminder.source` (авто-напоминание и его источник), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (день месяца, `None` = конец месяца) |
+| `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. Автоматизации с v3 — схемы (`workflows`) с `Workflow.automation: AutomationSpec { preset, schedule, starts_at, template, amount_mode (fixed/varies), workday_shift (none/back/forward) }`: граф строится из формы (`workflow::automation`), запуски — `workflow_runs`; `Automation`/`AutomationRun` — только представления для IPC. `preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий. v2: `Reminder.repeat` (каждые N дней/недель/месяцев/лет), `Reminder.source` (авто-напоминание и его источник), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (день месяца, `None` = конец месяца) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: показанные уведомления (ключ «источник + вхождение», чтобы не повторять после перезапуска), не больше 500 |
 | `sync` | `SyncState` | `serde(default)`: штампы изменений, tombstone'ы, доверенные устройства, пачки для отмены, передачи хранилища на новые устройства (`transfers`) — синхронизация устройств (`docs/sync.md`); в TS не экспортируется, копия из JSON-редактора игнорируется |
 
@@ -445,6 +445,19 @@ release-файлы. JSON и MessagePack хранят имена: поле, до�
 Перед первой записью после миграции файл копируется в `<vault>.v1.bak`;
 существующая копия не перезаписывается. Файл bincode переписывается в
 MessagePack.
+
+v2 → v3 (`storage/v2.rs`): коллекций `automations` и `automation_runs` больше
+нет — каждая автоматизация становится схемой с тем же id и
+`Workflow.automation` (граф строится из формы), её `last_planned_at` — отметкой
+расписания `schedule:t` (повторного догона нет), каждый запуск — `WorkflowRun`
+с тем же исходом (`Created` → `Done` с операцией, `Rejected` → `Rejected` с
+плановым моментом, `Skipped` → `Dropped { "skipped" }`). Старые операции
+сохраняют `TxOrigin::Automation` и находятся по тому же id. Остальной документ
+v2 читается текущими типами (`serde(flatten)`), копия файла — `<vault>.v2.bak`.
+Бамп нужен и для синхронизации: устройство со старой версией не синхронизируется
+с v3 и не запускает автоматизации второй раз. Отметку «сумма примерная» несёт
+`TxOrigin::Workflow { planned_at, estimated }`, а не `TxMeta`: v1-файлы bincode
+читаются по позиции полей, и новое поле в `TxMeta` их бы сломало.
 
 Новая несовместимая правка: заморозить текущую схему в `storage::vN`, бампнуть
 `VAULT_FORMAT_VERSION`, добавить шаг миграции и тесты на оба формата.

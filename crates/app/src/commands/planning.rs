@@ -4,13 +4,14 @@
 
 use tauri::{AppHandle, State};
 
+use trade_core::Amount;
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    AdjustPointsInput, AutomationInput, BudgetInput, GoalInput, MeterReadingInput, PriceAlertInput,
-    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput,
-    SnoozeReminderInput, UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput,
-    UpdateMeterReadingInput, UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput,
-    UtilityInput,
+    AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput, GoalInput,
+    MeterReadingInput, PriceAlertInput, ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput,
+    SimulateAutomationsInput, SnoozeReminderInput, UpdateAutomationInput, UpdateBudgetInput,
+    UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput, UpdateReminderInput,
+    UpdateUtilityInput, UtilityInput,
 };
 use trade_core::model::planning::{
     Automation, AutomationRun, Budget, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
@@ -21,6 +22,7 @@ use trade_core::service::{
     GoalProgress, InterestTaxReport, MonthSummary, PayUtilityBillInput, PropertySummary,
     UnlockedVault, UpcomingItem, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
+use trade_core::workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -112,11 +114,33 @@ pub async fn list_automation_runs(
 #[tauri::command]
 pub async fn retry_automation_run(
     run_id: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Transaction, String> {
+    let zone = current_zone(&app);
     with_vault_mut(&state, |vault| {
-        vault.retry_automation_run(&run_id, now_secs())
+        vault.retry_automation_run(&run_id, now_secs(), &zone)
     })
+}
+
+/// The real amount of an operation an automation booked approximately (a
+/// salary that differs every time); it makes the next estimate.
+#[tauri::command]
+pub async fn confirm_estimated_amount(
+    input: ConfirmEstimatedInput,
+    state: State<'_, AppState>,
+) -> Result<Transaction, String> {
+    let amount = Amount::parse(&input.amount).map_err(err_to_string)?;
+    with_vault_mut(&state, |vault| {
+        vault.confirm_estimated_amount(&input.tx_id, amount)
+    })
+}
+
+/// «Сделать обычной схемой»: the automation's workflow is edited in the
+/// editor from now on.
+#[tauri::command]
+pub async fn detach_automation(id: String, state: State<'_, AppState>) -> Result<Workflow, String> {
+    with_vault_mut(&state, |vault| vault.detach_automation(&id))
 }
 
 #[tauri::command]

@@ -75,7 +75,25 @@ pub enum TxOrigin {
         /// its schedule: the same moment made on two devices is booked once.
         #[serde(default)]
         planned_at: Option<String>,
+        /// Booked with an approximate amount (a salary that differs every
+        /// time); cleared when the user puts in the real one. Lives here, not
+        /// in `TxMeta`, so v1 bincode files (read by position) keep reading.
+        #[serde(default)]
+        estimated: bool,
     },
+}
+
+impl TxOrigin {
+    /// Booked with an approximate amount the user has not corrected yet.
+    pub fn is_estimated(&self) -> bool {
+        matches!(
+            self,
+            Self::Workflow {
+                estimated: true,
+                ..
+            }
+        )
+    }
 }
 
 /// Fields every transaction carries, whatever it is.
@@ -98,10 +116,6 @@ pub struct TxMeta {
     #[serde(default)]
     #[ts(optional)]
     pub utility_item_id: Option<String>,
-    /// Booked with an approximate amount (a salary that differs every time);
-    /// cleared when the user puts in the real one.
-    #[serde(default)]
-    pub estimated: bool,
 }
 
 impl TxMeta {
@@ -115,7 +129,6 @@ impl TxMeta {
             contact_id: None,
             origin: TxOrigin::Manual,
             utility_item_id: None,
-            estimated: false,
         }
     }
 }

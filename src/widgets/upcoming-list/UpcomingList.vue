@@ -37,6 +37,7 @@ const ICONS = {
   loan_payment: Landmark,
   reminder: Bell,
   rejected_run: CircleAlert,
+  unconfirmed_run: CircleAlert,
   debt: HandCoins,
 } as const
 

@@ -1,29 +1,37 @@
-//! Automations (plan §7.2): transactions that repeat on a schedule.
+//! Automations (plan §7.2): operations that repeat on a schedule.
 //!
-//! A planned date fires at 09:00 local time. Each processed date leaves an
-//! [`AutomationRun`] — created, rejected for lack of funds (D26), or skipped —
-//! and is never retried by itself: the user retries or skips a rejected run.
+//! An automation is a workflow the app builds from the automation form
+//! (`Workflow::automation`, see `workflow::automation`): «По расписанию» →
+//! «Создать операцию». A planned date fires at 09:00 local time, moved off a
+//! day off when asked. Each processed date leaves a workflow run — done,
+//! refused for lack of funds (D26), or skipped — and a refused one waits for
+//! the user to retry or skip it. With an amount that differs every time the
+//! operation is booked at the average of the latest corrected amounts and
+//! marked approximate until the user puts in the real one.
 
 use std::collections::HashSet;
 
-use chrono::{Datelike, Duration, NaiveDate};
-
 use crate::Amount;
-use crate::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, next_month};
+use crate::calendar::{self, Calendar};
 use crate::error::{Error, Result};
 use crate::model::planning::{
-    Automation, AutomationOutcome, AutomationPreset, AutomationRun, MAX_AUTOMATION_RUNS,
-    RejectReason, Schedule, TransactionDraft,
+    AmountMode, Automation, AutomationOutcome, AutomationPreset, AutomationRun, AutomationSpec,
+    RejectReason, Schedule, TransactionDraft, WorkdayShift,
 };
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::{PriceStamp, Transaction, TxOrigin};
 use crate::model::vault::now_iso;
 use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::workflow::automation::{self as graph_of, automation_graph};
+use crate::workflow::exec::{StepStatus, TraceStep};
+use crate::workflow::model::{GraphVersion, MAX_GRAPH_VERSIONS, RunOutcome, Workflow, WorkflowRun};
+use crate::workflow::nodes::triggers::schedule_moments_limited;
 
 use super::UnlockedVault;
 
-/// Most planned dates one pass creates; older missed dates are recorded as
-/// skipped, so a long time away does not flood the history (plan §7.2).
+/// Most planned dates one pass creates per automation; older missed dates
+/// are recorded as skipped, so a long time away does not flood the history
+/// (plan §7.2).
 pub const MAX_CATCH_UP: usize = 24;
 
 /// What an automation is: everything the user edits.
@@ -35,17 +43,32 @@ pub struct AutomationDraft {
     pub schedule: Schedule,
     pub starts_at: String,
     pub template: TransactionDraft,
+    pub amount_mode: AmountMode,
+    pub workday_shift: WorkdayShift,
 }
 
-/// The outcome of one scheduler pass.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-pub struct AutomationPass {
-    /// Ids of the transactions created.
-    pub created: Vec<String>,
-    /// Runs rejected in this pass, for the notification.
-    pub rejected: Vec<AutomationRun>,
-    /// Missed dates beyond the catch-up limit, recorded as skipped.
-    pub skipped: usize,
+impl AutomationDraft {
+    fn spec(&self) -> AutomationSpec {
+        AutomationSpec {
+            preset: self.preset,
+            schedule: self.schedule,
+            starts_at: self.starts_at.clone(),
+            template: self.template.clone(),
+            amount_mode: self.amount_mode,
+            workday_shift: self.workday_shift,
+        }
+    }
+}
+
+fn spec_of(automation: &Automation) -> AutomationSpec {
+    AutomationSpec {
+        preset: automation.preset,
+        schedule: automation.schedule,
+        starts_at: automation.starts_at.clone(),
+        template: automation.template.clone(),
+        amount_mode: automation.amount_mode,
+        workday_shift: automation.workday_shift,
+    }
 }
 
 /// Longest emulation: a year ahead.
@@ -83,60 +106,8 @@ pub struct AutomationSimulation {
     pub rejected: u32,
 }
 
-/// One planned date that is due.
-#[derive(Debug, Clone, PartialEq)]
-struct DueRun {
-    automation_id: String,
-    secs: i64,
-}
-
-/// Every planned date of a schedule after `after` (exclusive) up to `until`
-/// (inclusive), starting no earlier than `start`.
-pub fn planned_dates(
-    schedule: &Schedule,
-    start: NaiveDate,
-    after: Option<NaiveDate>,
-    until: NaiveDate,
-) -> Vec<NaiveDate> {
-    let mut out = Vec::new();
-    let keep = |date: NaiveDate| date >= start && after.is_none_or(|last| date > last);
-    match *schedule {
-        Schedule::Monthly { day } => {
-            let mut month = calendar::first_of_month(start);
-            while month <= until {
-                let date = clamp_day(month, day);
-                if date <= until && keep(date) {
-                    out.push(date);
-                }
-                month = next_month(month);
-            }
-        }
-        Schedule::Weekly { weekday } => {
-            let offset = (i64::from(weekday) - i64::from(start.weekday().num_days_from_monday()))
-                .rem_euclid(7);
-            let mut date = start + Duration::days(offset);
-            while date <= until {
-                if keep(date) {
-                    out.push(date);
-                }
-                date += Duration::days(7);
-            }
-        }
-        Schedule::EveryNDays { days } => {
-            let step = Duration::days(i64::from(days.max(1)));
-            let mut date = start;
-            while date <= until {
-                if keep(date) {
-                    out.push(date);
-                }
-                date += step;
-            }
-        }
-    }
-    out
-}
-
 /// A transaction from a template, dated `ts`; prices are left to the stamp.
+/// It names the automation and the planned moment it was made for.
 pub(crate) fn draft_to_transaction(
     draft: &TransactionDraft,
     automation_id: &str,
@@ -152,14 +123,52 @@ pub(crate) fn draft_to_transaction(
     let meta = tx.meta_mut();
     meta.id = uuid::Uuid::new_v4().to_string();
     meta.timestamp = ts.to_string();
-    meta.origin = TxOrigin::Automation {
-        automation_id: automation_id.to_string(),
-        planned_at: planned_at.to_string(),
+    meta.origin = TxOrigin::Workflow {
+        workflow_id: automation_id.to_string(),
+        run_id: String::new(),
+        planned_at: (!planned_at.is_empty()).then(|| planned_at.to_string()),
+        estimated: false,
     };
     for (_, stamp) in tx.stamps_mut() {
         *stamp = PriceStamp::default();
     }
     tx
+}
+
+/// The amount a top-up, a payment or a transfer moves (an exchange: what it gives).
+pub(crate) fn main_amount(tx: &Transaction) -> Option<Amount> {
+    match tx {
+        Transaction::Topup(inner) => Some(inner.amount),
+        Transaction::Payment(inner) => Some(inner.amount),
+        Transaction::Transfer(inner) => Some(inner.amount),
+        Transaction::Convert(inner) => Some(inner.from.amount),
+        _ => None,
+    }
+}
+
+fn set_main_amount(tx: &mut Transaction, amount: Amount) -> Result<()> {
+    match tx {
+        Transaction::Topup(inner) => inner.amount = amount,
+        Transaction::Payment(inner) => inner.amount = amount,
+        Transaction::Transfer(inner) => inner.amount = amount,
+        _ => {
+            return Err(Error::InvalidInput(
+                "only a top-up, a payment or a transfer has one amount to correct".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn with_amount(draft: &TransactionDraft, amount: Amount) -> TransactionDraft {
+    let mut draft = draft.clone();
+    match &mut draft {
+        TransactionDraft::Topup(inner) => inner.amount = amount,
+        TransactionDraft::Payment(inner) => inner.amount = amount,
+        TransactionDraft::Transfer(inner) => inner.amount = amount,
+        TransactionDraft::Convert(inner) => inner.from.amount = amount,
+    }
+    draft
 }
 
 /// What a transaction takes from a store of the user's.
@@ -218,13 +227,96 @@ pub fn describe_reject(reason: &RejectReason) -> String {
 }
 
 impl UnlockedVault {
-    // -- CRUD ---------------------------------------------------------------
+    // -- views --------------------------------------------------------------
+
+    fn automation_of(&self, workflow: &Workflow) -> Option<Automation> {
+        let spec = workflow.automation.as_ref()?;
+        let estimate = (spec.amount_mode == AmountMode::Varies)
+            .then(|| self.wf_recent_average(&workflow.id, graph_of::ESTIMATE_OF))
+            .flatten()
+            .map(|(average, _)| average);
+        let last_planned_at = self
+            .wf_mark(&workflow.id, &graph_of::schedule_key())
+            .filter(|mark| *mark != graph_of::start_mark(spec));
+        Some(Automation {
+            id: workflow.id.clone(),
+            name: workflow.name.clone(),
+            active: workflow.active,
+            preset: spec.preset,
+            schedule: spec.schedule,
+            starts_at: spec.starts_at.clone(),
+            template: spec.template.clone(),
+            last_planned_at,
+            created_at: workflow.created_at.clone(),
+            amount_mode: spec.amount_mode,
+            workday_shift: spec.workday_shift,
+            estimate,
+        })
+    }
 
     pub fn automations(&self) -> Vec<Automation> {
-        let mut out = self.doc.automations.clone();
+        let mut out: Vec<Automation> = self
+            .doc
+            .workflows
+            .iter()
+            .filter_map(|workflow| self.automation_of(workflow))
+            .collect();
         out.sort_by_key(|automation| automation.name.to_lowercase());
         out
     }
+
+    pub fn automation(&self, id: &str) -> Result<Automation> {
+        self.doc
+            .workflows
+            .iter()
+            .find(|workflow| workflow.id == id)
+            .and_then(|workflow| self.automation_of(workflow))
+            .ok_or_else(|| Error::Missing(format!("automation {id}")))
+    }
+
+    /// The template the next run books: with an amount that differs, at the
+    /// current estimate.
+    pub(crate) fn automation_draft(&self, automation: &Automation) -> TransactionDraft {
+        match automation.estimate {
+            Some(estimate) => with_amount(&automation.template, estimate),
+            None => automation.template.clone(),
+        }
+    }
+
+    /// The planned moments of an automation in `(after, until]`, moved off
+    /// days off as it is set to, each with the operation it would make: what
+    /// the forecast, the calendar and the daily budget count on.
+    pub(crate) fn automation_occurrences(
+        &self,
+        automation: &Automation,
+        cal: &Calendar,
+        after: i64,
+        until: i64,
+    ) -> Vec<(i64, Transaction)> {
+        let spec = spec_of(automation);
+        let start = unix_secs(&graph_of::start_mark(&spec)).unwrap_or(after);
+        let (moments, _) = schedule_moments_limited(
+            &graph_of::schedule_params(&spec),
+            cal,
+            after.max(start),
+            until,
+            usize::MAX,
+        );
+        let draft = self.automation_draft(automation);
+        moments
+            .into_iter()
+            .map(|moment| {
+                let iso = calendar::iso(moment);
+                let mut tx = draft_to_transaction(&draft, &automation.id, &iso, &iso);
+                if let TxOrigin::Workflow { estimated, .. } = &mut tx.meta_mut().origin {
+                    *estimated = automation.amount_mode == AmountMode::Varies;
+                }
+                (moment, tx)
+            })
+            .collect()
+    }
+
+    // -- CRUD ---------------------------------------------------------------
 
     /// Reject a draft that could never run: a bad schedule, or a template
     /// that fails the transaction rules on its own.
@@ -244,6 +336,14 @@ impl UnlockedVault {
             }
             _ => {}
         }
+        if draft.amount_mode == AmountMode::Varies
+            && matches!(draft.template, TransactionDraft::Convert(_))
+        {
+            return Err(Error::InvalidInput(
+                "an amount that differs fits a top-up, a payment or a transfer, not an exchange"
+                    .into(),
+            ));
+        }
         let Some(starts) = unix_secs(&draft.starts_at) else {
             return Err(Error::InvalidInput("choose a start date".into()));
         };
@@ -256,69 +356,155 @@ impl UnlockedVault {
 
     pub fn create_automation(&mut self, draft: AutomationDraft) -> Result<Automation> {
         self.check_automation(&draft)?;
-        let automation = Automation {
-            id: uuid::Uuid::new_v4().to_string(),
+        let spec = draft.spec();
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = now_iso();
+        self.doc.workflows.push(Workflow {
+            id: id.clone(),
             name: draft.name.trim().to_string(),
+            description: String::new(),
             active: draft.active,
-            preset: draft.preset,
-            schedule: draft.schedule,
-            starts_at: draft.starts_at,
-            template: draft.template,
-            last_planned_at: None,
-            created_at: now_iso(),
-        };
-        self.doc.automations.push(automation.clone());
+            graph: serde_json::to_string(&automation_graph(&spec))
+                .map_err(|err| Error::InvalidInput(err.to_string()))?,
+            created_at: now.clone(),
+            updated_at: now,
+            react_to_workflows: false,
+            max_amount: None,
+            versions: Vec::new(),
+            tests: Vec::new(),
+            draft: None,
+            automation: Some(spec.clone()),
+        });
+        self.wf_set_mark(&id, &graph_of::schedule_key(), &graph_of::start_mark(&spec));
         self.persist()?;
-        Ok(automation)
+        self.automation(&id)
     }
 
-    /// Change what an automation does. Dates already processed stay
-    /// processed: the run history deduplicates by planned date.
+    /// Change what an automation does: its graph is built again, the old one
+    /// kept as a version. Dates already processed stay processed.
     pub fn update_automation(&mut self, id: &str, draft: AutomationDraft) -> Result<Automation> {
         self.check_automation(&draft)?;
-        let automation = self
+        let spec = draft.spec();
+        let graph = serde_json::to_string(&automation_graph(&spec))
+            .map_err(|err| Error::InvalidInput(err.to_string()))?;
+        let now = now_iso();
+        let workflow = self
             .doc
-            .automations
+            .workflows
             .iter_mut()
-            .find(|automation| automation.id == id)
+            .find(|workflow| workflow.id == id && workflow.automation.is_some())
             .ok_or_else(|| Error::Missing(format!("automation {id}")))?;
-        automation.name = draft.name.trim().to_string();
-        automation.active = draft.active;
-        automation.preset = draft.preset;
-        automation.schedule = draft.schedule;
-        automation.starts_at = draft.starts_at;
-        automation.template = draft.template;
-        let out = automation.clone();
+        if workflow.graph != graph {
+            workflow.versions.push(GraphVersion {
+                saved_at: now.clone(),
+                graph: std::mem::replace(&mut workflow.graph, graph),
+            });
+            let overflow = workflow.versions.len().saturating_sub(MAX_GRAPH_VERSIONS);
+            workflow.versions.drain(..overflow);
+        }
+        workflow.name = draft.name.trim().to_string();
+        workflow.active = draft.active;
+        workflow.updated_at = now;
+        workflow.automation = Some(spec.clone());
+        // A start moved later holds the schedule back until then.
+        let key = graph_of::schedule_key();
+        let start = graph_of::start_mark(&spec);
+        if self
+            .wf_mark(id, &key)
+            .is_none_or(|mark| secs_or_now(&mark) < secs_or_now(&start))
+        {
+            self.wf_set_mark(id, &key, &start);
+        }
         self.persist()?;
-        Ok(out)
+        self.automation(id)
     }
 
     /// Remove an automation and its run history. Transactions it created stay.
     pub fn delete_automation(&mut self, id: &str) -> Result<()> {
-        let before = self.doc.automations.len();
-        self.doc
-            .automations
-            .retain(|automation| automation.id != id);
-        if self.doc.automations.len() == before {
-            return Err(Error::Missing(format!("automation {id}")));
-        }
-        self.doc
-            .automation_runs
-            .retain(|run| run.automation_id != id);
-        self.persist()
+        self.automation(id)?;
+        self.delete_workflow(id)
+    }
+
+    /// Make an automation an ordinary workflow: the graph stays and is edited
+    /// in the editor from now on; the form no longer shows it.
+    pub fn detach_automation(&mut self, id: &str) -> Result<Workflow> {
+        let workflow = self
+            .doc
+            .workflows
+            .iter_mut()
+            .find(|workflow| workflow.id == id && workflow.automation.is_some())
+            .ok_or_else(|| Error::Missing(format!("automation {id}")))?;
+        workflow.automation = None;
+        workflow.updated_at = now_iso();
+        let out = workflow.clone();
+        self.persist()?;
+        Ok(out)
     }
 
     /// Run history, newest planned date first.
     pub fn automation_runs(&self, automation_id: Option<&str>) -> Vec<AutomationRun> {
+        let ids: HashSet<&str> = self
+            .doc
+            .workflows
+            .iter()
+            .filter(|workflow| workflow.automation.is_some())
+            .map(|workflow| workflow.id.as_str())
+            .filter(|id| automation_id.is_none_or(|only| only == *id))
+            .collect();
         let mut out: Vec<AutomationRun> = self
             .doc
-            .automation_runs
+            .workflow_runs
             .iter()
-            .filter(|run| automation_id.is_none_or(|id| run.automation_id == id))
-            .cloned()
+            .filter(|run| !run.dry_run && ids.contains(run.workflow_id.as_str()))
+            .filter_map(|run| self.automation_run_of(run))
             .collect();
         out.sort_by(|left, right| right.planned_at.cmp(&left.planned_at));
         out
+    }
+
+    fn automation_run_of(&self, run: &WorkflowRun) -> Option<AutomationRun> {
+        let planned_at = match &run.outcome {
+            RunOutcome::Rejected {
+                planned_at: Some(at),
+                ..
+            } => at.clone(),
+            _ => run
+                .trigger
+                .strip_prefix("schedule ")
+                .map_or_else(|| run.started_at.clone(), str::to_string),
+        };
+        let outcome = match &run.outcome {
+            RunOutcome::Done | RunOutcome::Partial { .. } => AutomationOutcome::Created {
+                tx_id: run.created.first()?.clone(),
+            },
+            RunOutcome::Rejected { reason, .. } => AutomationOutcome::Rejected {
+                reason: reason.clone(),
+            },
+            RunOutcome::Failed { message } => AutomationOutcome::Rejected {
+                reason: RejectReason::Invalid {
+                    message: message.clone(),
+                },
+            },
+            RunOutcome::Dropped { reason } if reason == "skipped" => AutomationOutcome::Skipped,
+            _ => return None,
+        };
+        let estimated = match &outcome {
+            AutomationOutcome::Created { tx_id } => self
+                .doc
+                .transactions
+                .iter()
+                .find(|tx| &tx.meta().id == tx_id)
+                .is_some_and(|tx| tx.meta().origin.is_estimated()),
+            _ => false,
+        };
+        Some(AutomationRun {
+            id: run.id.clone(),
+            automation_id: run.workflow_id.clone(),
+            planned_at,
+            processed_at: run.started_at.clone(),
+            outcome,
+            estimated,
+        })
     }
 
     // -- funds (D26) --------------------------------------------------------
@@ -386,61 +572,6 @@ impl UnlockedVault {
         None
     }
 
-    // -- running ------------------------------------------------------------
-
-    /// Planned dates already processed, by run or by the transaction's origin.
-    fn processed_dates(&self) -> HashSet<(String, String)> {
-        let mut out: HashSet<(String, String)> = self
-            .doc
-            .automation_runs
-            .iter()
-            .map(|run| (run.automation_id.clone(), run.planned_at.clone()))
-            .collect();
-        for tx in &self.doc.transactions {
-            if let TxOrigin::Automation {
-                automation_id,
-                planned_at,
-            } = &tx.meta().origin
-            {
-                out.insert((automation_id.clone(), planned_at.clone()));
-            }
-        }
-        out
-    }
-
-    /// Every due planned date of every active automation, oldest first.
-    fn due_runs(&self, now: i64, cal: &Calendar) -> Vec<DueRun> {
-        let done = self.processed_dates();
-        let today = cal.date_of(now);
-        let mut out = Vec::new();
-        for automation in self.doc.automations.iter().filter(|item| item.active) {
-            let Some(start) = cal.date_of_iso(&automation.starts_at) else {
-                continue;
-            };
-            let after = automation
-                .last_planned_at
-                .as_deref()
-                .and_then(|last| cal.date_of_iso(last));
-            for date in planned_dates(&automation.schedule, start, after, today) {
-                let secs = cal.at_local(date, AUTOMATION_HOUR);
-                if secs > now || done.contains(&(automation.id.clone(), calendar::iso(secs))) {
-                    continue;
-                }
-                out.push(DueRun {
-                    automation_id: automation.id.clone(),
-                    secs,
-                });
-            }
-        }
-        out.sort_by_key(|run| run.secs);
-        out
-    }
-
-    /// Process every due planned date (plan §7.2): strictly by date across
-    /// automations, so a salary on the 10th covers rent on the 15th. Funds are
-    /// checked at the planned moment; a shortfall records a rejected run and
-    /// creates nothing. Only the newest [`MAX_CATCH_UP`] dates are created;
-    /// older ones are recorded as skipped.
     /// Emulate the automations over the next `days` (one of them, or all):
     /// day by day on a sandbox copy, so each run sees the balance the earlier
     /// ones left, exactly as the scheduler would. The vault is not touched.
@@ -451,22 +582,20 @@ impl UnlockedVault {
         now: i64,
         zone: &str,
     ) -> Result<AutomationSimulation> {
-        if let Some(id) = automation_id
-            && !self.doc.automations.iter().any(|item| item.id == id)
-        {
-            return Err(Error::Missing(format!("automation {id}")));
+        if let Some(id) = automation_id {
+            self.automation(id)?;
         }
         let days = days.clamp(1, MAX_SIMULATION_DAYS);
         let mut sandbox = self.sandbox();
         let known: HashSet<String> = sandbox
             .doc
-            .automation_runs
+            .workflow_runs
             .iter()
             .map(|run| run.id.clone())
             .collect();
         let before = sandbox.doc.holdings.clone();
         for day in 0..=i64::from(days) {
-            sandbox.run_due_automations(now + day * 86_400, zone)?;
+            sandbox.run_due_workflows(now + day * 86_400, zone)?;
         }
         let wanted = |id: &str| automation_id.is_none_or(|only| only == id);
         let mut out = AutomationSimulation {
@@ -476,9 +605,8 @@ impl UnlockedVault {
         };
         let mut touched: HashSet<(String, String)> = HashSet::new();
         for run in sandbox
-            .doc
-            .automation_runs
-            .iter()
+            .automation_runs(None)
+            .into_iter()
             .filter(|run| !known.contains(&run.id) && wanted(&run.automation_id))
         {
             let transaction = match &run.outcome {
@@ -501,16 +629,16 @@ impl UnlockedVault {
                 }
             }
             out.runs.push(SimulatedRun {
-                automation_id: run.automation_id.clone(),
                 automation_name: sandbox
                     .doc
-                    .automations
+                    .workflows
                     .iter()
-                    .find(|item| item.id == run.automation_id)
-                    .map(|item| item.name.clone())
+                    .find(|workflow| workflow.id == run.automation_id)
+                    .map(|workflow| workflow.name.clone())
                     .unwrap_or_default(),
-                planned_at: run.planned_at.clone(),
-                outcome: run.outcome.clone(),
+                automation_id: run.automation_id,
+                planned_at: run.planned_at,
+                outcome: run.outcome,
                 transaction,
             });
         }
@@ -543,187 +671,128 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    pub fn run_due_automations(&mut self, now: i64, zone: &str) -> Result<AutomationPass> {
-        let cal = Calendar::new(zone);
-        let mut due = self.due_runs(now, &cal);
-        let mut pass = AutomationPass::default();
-        if due.is_empty() {
-            return Ok(pass);
-        }
-        let overflow = due.len().saturating_sub(MAX_CATCH_UP);
-        for run in due.drain(..overflow) {
-            self.record_run(&run.automation_id, run.secs, AutomationOutcome::Skipped);
-            pass.skipped += 1;
-        }
-        for run in due {
-            let Some(automation) = self
-                .doc
-                .automations
-                .iter()
-                .find(|item| item.id == run.automation_id)
-                .cloned()
-            else {
-                continue;
-            };
-            let planned_at = calendar::iso(run.secs);
-            let tx = draft_to_transaction(
-                &automation.template,
-                &automation.id,
-                &planned_at,
-                &planned_at,
-            );
-            let outcome = match self.funds_shortfall(&tx, run.secs) {
-                Some(reason) => AutomationOutcome::Rejected { reason },
-                None => match self.insert_transaction(tx, now) {
-                    Ok(saved) => {
-                        pass.created.push(saved.meta().id.clone());
-                        AutomationOutcome::Created {
-                            tx_id: saved.meta().id.clone(),
-                        }
-                    }
-                    Err(err) => AutomationOutcome::Rejected {
-                        reason: RejectReason::Invalid {
-                            message: err.to_string(),
-                        },
-                    },
-                },
-            };
-            let recorded = self.record_run(&automation.id, run.secs, outcome);
-            if matches!(recorded.outcome, AutomationOutcome::Rejected { .. }) {
-                pass.rejected.push(recorded);
-            }
-        }
-        self.recompute_holdings();
-        self.persist()?;
-        Ok(pass)
-    }
-
-    /// Validate and append without persisting — a pass writes once at the end.
-    /// `now` is the pass's clock, ahead of the wall clock in a simulation.
+    /// Validate and append without persisting.
+    /// `now` is the caller's clock, ahead of the wall clock in a simulation.
     fn insert_transaction(&mut self, mut tx: Transaction, now: i64) -> Result<Transaction> {
         self.prepare_transaction_at(&mut tx, now * 1000)?;
         self.doc.transactions.push(tx.clone());
         Ok(tx)
     }
 
-    /// Store a run, advance the automation's last processed date, keep the
-    /// history bounded.
-    fn record_run(
-        &mut self,
-        automation_id: &str,
-        secs: i64,
-        outcome: AutomationOutcome,
-    ) -> AutomationRun {
-        let planned_at = calendar::iso(secs);
-        let run = AutomationRun {
-            id: uuid::Uuid::new_v4().to_string(),
-            automation_id: automation_id.to_string(),
-            planned_at: planned_at.clone(),
-            processed_at: now_iso(),
-            outcome,
-        };
-        self.doc.automation_runs.push(run.clone());
-        if self.doc.automation_runs.len() > MAX_AUTOMATION_RUNS {
-            self.doc
-                .automation_runs
-                .sort_by(|left, right| left.processed_at.cmp(&right.processed_at));
-            let extra = self.doc.automation_runs.len() - MAX_AUTOMATION_RUNS;
-            self.doc.automation_runs.drain(..extra);
-        }
-        if let Some(automation) = self
-            .doc
-            .automations
-            .iter_mut()
-            .find(|item| item.id == automation_id)
-            && automation
-                .last_planned_at
-                .as_deref()
-                .is_none_or(|last| secs_or_now(last) < secs)
-        {
-            automation.last_planned_at = Some(planned_at);
-        }
-        run
-    }
-
     /// Create the transaction of an automation now («Создать сейчас»), with
     /// the same funds check as the schedule.
     pub fn run_automation(&mut self, id: &str, now: i64) -> Result<Transaction> {
-        let automation = self
-            .doc
-            .automations
-            .iter()
-            .find(|item| item.id == id)
-            .cloned()
-            .ok_or_else(|| Error::Missing(format!("automation {id}")))?;
+        let automation = self.automation(id)?;
         let planned_at = calendar::iso(now);
-        let tx = draft_to_transaction(&automation.template, id, &planned_at, &planned_at);
-        let saved = self.create_checked(tx, now)?;
-        self.push_created_run(id, &planned_at, &saved);
-        self.persist()?;
-        Ok(saved)
-    }
-
-    /// Retry a rejected or skipped run: funds are checked at the current
-    /// moment and the transaction is dated now.
-    pub fn retry_automation_run(&mut self, run_id: &str, now: i64) -> Result<Transaction> {
-        let run = self
-            .doc
-            .automation_runs
-            .iter()
-            .find(|run| run.id == run_id)
-            .cloned()
-            .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))?;
-        if matches!(run.outcome, AutomationOutcome::Created { .. }) {
-            return Err(Error::InvalidInput(
-                "this run already created its transaction".into(),
-            ));
-        }
-        let automation = self
-            .doc
-            .automations
-            .iter()
-            .find(|item| item.id == run.automation_id)
-            .cloned()
-            .ok_or_else(|| Error::Missing(format!("automation {}", run.automation_id)))?;
-        let tx = draft_to_transaction(
-            &automation.template,
-            &automation.id,
-            &run.planned_at,
-            &calendar::iso(now),
+        let mut tx = draft_to_transaction(
+            &self.automation_draft(&automation),
+            id,
+            &planned_at,
+            &planned_at,
         );
-        let saved = self.create_checked(tx, now)?;
-        if let Some(stored) = self
-            .doc
-            .automation_runs
-            .iter_mut()
-            .find(|stored| stored.id == run_id)
+        let run_id = uuid::Uuid::new_v4().to_string();
+        if let TxOrigin::Workflow {
+            estimated,
+            run_id: made_by,
+            ..
+        } = &mut tx.meta_mut().origin
         {
-            stored.outcome = AutomationOutcome::Created {
-                tx_id: saved.meta().id.clone(),
-            };
-            stored.processed_at = now_iso();
+            *estimated = automation.amount_mode == AmountMode::Varies;
+            made_by.clone_from(&run_id);
         }
+        let saved = self.create_checked(tx, now)?;
+        self.doc.workflow_runs.push(WorkflowRun {
+            id: run_id,
+            workflow_id: id.to_string(),
+            trigger: format!("manual {planned_at}"),
+            started_at: planned_at,
+            outcome: RunOutcome::Done,
+            created: vec![saved.meta().id.clone()],
+            queued: 0,
+            trace: vec![TraceStep {
+                node_id: graph_of::ACTION.into(),
+                kind: "action.transaction".into(),
+                status: StepStatus::Ok,
+                text_ru: "Создано вручную: «Создать сейчас»".into(),
+                text_en: "Made by hand: «Create now»".into(),
+                values: Default::default(),
+            }],
+            dry_run: false,
+        });
         self.persist()?;
         Ok(saved)
     }
 
-    /// Dismiss a rejected run.
+    /// Retry a refused run: funds are checked at the current moment and the
+    /// transaction is dated now.
+    pub fn retry_automation_run(
+        &mut self,
+        run_id: &str,
+        now: i64,
+        zone: &str,
+    ) -> Result<Transaction> {
+        let pass = self.retry_workflow_run(run_id, now, zone)?;
+        let made = pass
+            .created
+            .first()
+            .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))?;
+        self.doc
+            .transactions
+            .iter()
+            .find(|tx| &tx.meta().id == made)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("transaction {made}")))
+    }
+
+    /// Dismiss a refused run.
     pub fn skip_automation_run(&mut self, run_id: &str) -> Result<AutomationRun> {
-        let run = self
+        let run = self.skip_workflow_run(run_id)?;
+        self.automation_run_of(&run)
+            .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))
+    }
+
+    /// Put in the real amount of an operation booked approximately: it is
+    /// corrected with the usual checks and counts toward the next estimate.
+    pub fn confirm_estimated_amount(&mut self, tx_id: &str, amount: Amount) -> Result<Transaction> {
+        if !amount.is_positive() {
+            return Err(Error::InvalidInput("the amount must be above zero".into()));
+        }
+        let mut tx = self
             .doc
-            .automation_runs
-            .iter_mut()
-            .find(|run| run.id == run_id)
-            .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))?;
-        if matches!(run.outcome, AutomationOutcome::Created { .. }) {
+            .transactions
+            .iter()
+            .find(|tx| tx.meta().id == tx_id)
+            .cloned()
+            .ok_or_else(|| Error::Missing("transaction".into()))?;
+        if !tx.meta().origin.is_estimated() {
             return Err(Error::InvalidInput(
-                "this run already created its transaction".into(),
+                "this operation was not booked with an approximate amount".into(),
             ));
         }
-        run.outcome = AutomationOutcome::Skipped;
-        run.processed_at = now_iso();
-        let out = run.clone();
-        self.persist()?;
+        set_main_amount(&mut tx, amount)?;
+        self.update_transaction(tx_id, tx)?;
+        self.clear_estimated(tx_id)
+    }
+
+    /// Drop the «approximate» mark of an operation; persisted when it changed.
+    fn clear_estimated(&mut self, tx_id: &str) -> Result<Transaction> {
+        let tx = self
+            .doc
+            .transactions
+            .iter_mut()
+            .find(|tx| tx.meta().id == tx_id)
+            .ok_or_else(|| Error::Missing("transaction".into()))?;
+        let mut changed = false;
+        if let TxOrigin::Workflow { estimated, .. } = &mut tx.meta_mut().origin
+            && *estimated
+        {
+            *estimated = false;
+            changed = true;
+        }
+        let out = tx.clone();
+        if changed {
+            self.persist()?;
+        }
         Ok(out)
     }
 
@@ -765,18 +834,6 @@ impl UnlockedVault {
             RejectReason::Invalid { message } => message.clone(),
         }
     }
-
-    fn push_created_run(&mut self, automation_id: &str, planned_at: &str, saved: &Transaction) {
-        self.doc.automation_runs.push(AutomationRun {
-            id: uuid::Uuid::new_v4().to_string(),
-            automation_id: automation_id.to_string(),
-            planned_at: planned_at.to_string(),
-            processed_at: now_iso(),
-            outcome: AutomationOutcome::Created {
-                tx_id: saved.meta().id.clone(),
-            },
-        });
-    }
 }
 
 #[cfg(test)]
@@ -785,11 +842,8 @@ mod tests {
     use crate::model::store::{LiabilityKind, LiabilityTerms};
     use crate::model::transaction::{AccountRef, PaymentTx, TopupTx};
     use crate::service::StoreExtras;
+    use crate::service::WorkflowPass;
     use crate::service::test_support::*;
-
-    fn date(raw: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(raw, "%Y-%m-%d").unwrap()
-    }
 
     fn secs(iso: &str) -> i64 {
         unix_secs(iso).unwrap()
@@ -824,8 +878,20 @@ mod tests {
                 schedule: Schedule::Monthly { day },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template,
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap()
+    }
+
+    fn rejected_of(pass: &WorkflowPass) -> Vec<RejectReason> {
+        pass.runs
+            .iter()
+            .filter_map(|run| match &run.outcome {
+                RunOutcome::Rejected { reason, .. } => Some(reason.clone()),
+                _ => None,
+            })
+            .collect()
     }
 
     fn outcomes(vault: &UnlockedVault, id: &str) -> Vec<&'static str> {
@@ -872,6 +938,8 @@ mod tests {
                 schedule: Schedule::Monthly { day: 1 },
                 starts_at: later.clone(),
                 template: salary_draft(&card, "100"),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap();
 
@@ -928,7 +996,7 @@ mod tests {
 
         assert_eq!(vault.doc, before, "the vault is untouched");
         let pass = vault
-            .run_due_automations(secs("2026-02-20T12:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-02-20T12:00:00Z"), "UTC")
             .unwrap();
         assert_eq!(pass.created.len(), 3);
         assert!(
@@ -941,23 +1009,51 @@ mod tests {
 
     #[test]
     fn the_31st_runs_on_the_last_day_of_february() {
-        let dates = planned_dates(
-            &Schedule::Monthly { day: 31 },
-            date("2026-01-01"),
-            None,
-            date("2026-03-31"),
-        );
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let rent = monthly(&mut vault, "Rent", 31, rent_draft(&card, "1"));
+        let dates: Vec<String> = vault
+            .automation_occurrences(
+                &rent,
+                &Calendar::new("UTC"),
+                secs("2026-01-01T00:00:00Z"),
+                secs("2026-03-31T23:00:00Z"),
+            )
+            .into_iter()
+            .map(|(moment, _)| calendar::iso(moment))
+            .collect();
         assert_eq!(
             dates,
-            vec![date("2026-01-31"), date("2026-02-28"), date("2026-03-31")]
+            vec![
+                "2026-01-31T09:00:00Z",
+                "2026-02-28T09:00:00Z",
+                "2026-03-31T09:00:00Z"
+            ]
         );
-        let weekly = planned_dates(
-            &Schedule::Weekly { weekday: 0 },
-            date("2026-03-04"),
-            Some(date("2026-03-09")),
-            date("2026-03-23"),
-        );
-        assert_eq!(weekly, vec![date("2026-03-16"), date("2026-03-23")]);
+        let every = vault
+            .create_automation(AutomationDraft {
+                name: "Fortnight".into(),
+                active: true,
+                preset: None,
+                schedule: Schedule::EveryNDays { days: 14 },
+                starts_at: "2026-03-04T00:00:00Z".into(),
+                template: rent_draft(&card, "1"),
+                amount_mode: AmountMode::Fixed,
+                workday_shift: WorkdayShift::None,
+            })
+            .unwrap();
+        let dates: Vec<String> = vault
+            .automation_occurrences(
+                &every,
+                &Calendar::new("UTC"),
+                secs("2026-03-01T00:00:00Z"),
+                secs("2026-04-01T00:00:00Z"),
+            )
+            .into_iter()
+            .map(|(moment, _)| calendar::iso(moment))
+            .collect();
+        // Counted from the first date, not from some fixed day.
+        assert_eq!(dates, vec!["2026-03-04T09:00:00Z", "2026-03-18T09:00:00Z"]);
     }
 
     #[test]
@@ -968,32 +1064,30 @@ mod tests {
         let rent = monthly(&mut vault, "Rent", 5, rent_draft(&card, "800"));
 
         let pass = vault
-            .run_due_automations(secs("2026-02-20T12:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-02-20T12:00:00Z"), "UTC")
             .unwrap();
         // Jan 5 rent: nothing yet. Jan 10 salary. Feb 5 rent: 1000 ≥ 800. Feb 10 salary.
         assert_eq!(outcomes(&vault, &rent.id), vec!["rejected", "created"]);
         assert_eq!(outcomes(&vault, &salary.id), vec!["created", "created"]);
         assert_eq!(pass.created.len(), 3);
-        assert_eq!(pass.rejected.len(), 1);
-        let AutomationOutcome::Rejected {
-            reason:
-                RejectReason::InsufficientFunds {
-                    required,
-                    available,
-                    ..
-                },
-        } = &pass.rejected[0].outcome
+        let rejected = rejected_of(&pass);
+        assert_eq!(rejected.len(), 1);
+        let RejectReason::InsufficientFunds {
+            required,
+            available,
+            ..
+        } = &rejected[0]
         else {
-            panic!("{:?}", pass.rejected[0]);
+            panic!("{rejected:?}");
         };
         assert_eq!((*required, *available), (amount("800"), amount("0")));
         assert_eq!(holding_of(&vault, &card, &usd()), amount("1200"));
 
         // The processed dates are not processed again.
         let again = vault
-            .run_due_automations(secs("2026-02-20T13:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-02-20T13:00:00Z"), "UTC")
             .unwrap();
-        assert_eq!(again, AutomationPass::default());
+        assert!(again.runs.is_empty() && again.created.is_empty());
     }
 
     #[test]
@@ -1009,13 +1103,10 @@ mod tests {
         bill.fee = fee_usd("10");
         let automation = monthly(&mut vault, "Bill", 1, TransactionDraft::Payment(bill));
         let pass = vault
-            .run_due_automations(secs("2026-01-02T00:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-01-02T00:00:00Z"), "UTC")
             .unwrap();
         assert_eq!(outcomes(&vault, &automation.id), vec!["rejected"]);
-        let AutomationOutcome::Rejected {
-            reason: RejectReason::InsufficientFunds { required, .. },
-        } = &pass.rejected[0].outcome
-        else {
+        let RejectReason::InsufficientFunds { required, .. } = &rejected_of(&pass)[0] else {
             panic!()
         };
         assert_eq!(*required, amount("105"));
@@ -1033,21 +1124,31 @@ mod tests {
                 schedule: Schedule::EveryNDays { days: 1 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: salary_draft(&card, "1"),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
             })
             .unwrap();
         let pass = vault
-            .run_due_automations(secs("2026-01-30T12:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-01-30T12:00:00Z"), "UTC")
             .unwrap();
         assert_eq!(pass.created.len(), MAX_CATCH_UP);
         assert_eq!(pass.skipped, 30 - MAX_CATCH_UP);
         assert_eq!(vault.automation_runs(Some(&daily.id)).len(), 30);
 
         // Even with the processed marker rolled back nothing is created twice.
-        vault.doc.automations[0].last_planned_at = None;
+        vault.wf_set_mark(&daily.id, "schedule:t", "2025-12-31T00:00:00Z");
         let again = vault
-            .run_due_automations(secs("2026-01-30T12:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-01-30T12:00:00Z"), "UTC")
             .unwrap();
-        assert_eq!(again, AutomationPass::default());
+        assert!(
+            again.runs.is_empty() && again.created.is_empty(),
+            "{:?}",
+            again
+                .runs
+                .iter()
+                .map(|run| (&run.trigger, &run.outcome))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -1134,19 +1235,21 @@ mod tests {
         let card = store(&mut vault, "Card", StoreKind::Bank, None);
         let rent = monthly(&mut vault, "Rent", 5, rent_draft(&card, "800"));
         vault
-            .run_due_automations(secs("2026-02-20T12:00:00Z"), "UTC")
+            .run_due_workflows(secs("2026-02-20T12:00:00Z"), "UTC")
             .unwrap();
         let runs = vault.automation_runs(Some(&rent.id));
         assert_eq!(runs.len(), 2);
 
         let now = secs("2026-02-21T12:00:00Z");
-        let err = vault.retry_automation_run(&runs[0].id, now).unwrap_err();
+        let err = vault
+            .retry_automation_run(&runs[0].id, now, "UTC")
+            .unwrap_err();
         assert_eq!(err.code(), "INSUFFICIENT_FUNDS");
 
         let mut salary = income(&card, "1000", "salary");
         at(&mut salary, "2026-02-21T10:00:00Z");
         vault.add_transaction(salary).unwrap();
-        let created = vault.retry_automation_run(&runs[0].id, now).unwrap();
+        let created = vault.retry_automation_run(&runs[0].id, now, "UTC").unwrap();
         assert_eq!(created.meta().timestamp, "2026-02-21T12:00:00Z");
         assert!(matches!(
             vault.automation_runs(Some(&rent.id))[0].outcome,
@@ -1164,10 +1267,15 @@ mod tests {
         monthly(&mut vault, "Salary", 10, salary_draft(&card, "1"));
         // 09:00 in Bangkok on Jan 10 is 02:00 UTC.
         let pass = vault
-            .run_due_automations(secs("2026-01-10T02:30:00Z"), "Asia/Bangkok")
+            .run_due_workflows(secs("2026-01-10T02:30:00Z"), "Asia/Bangkok")
             .unwrap();
         assert_eq!(pass.created.len(), 1);
-        let tx = &vault.doc.transactions[0];
+        let tx = vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.meta().id == pass.created[0])
+            .unwrap();
         assert_eq!(tx.meta().timestamp, "2026-01-10T02:00:00Z");
     }
 
@@ -1187,6 +1295,179 @@ mod tests {
                 schedule: Schedule::Monthly { day: 1 },
                 starts_at: "2026-01-01T00:00:00Z".into(),
                 template: TransactionDraft::Payment(bill),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
+            })
+            .unwrap_err();
+        assert_eq!(err.code(), "INVALID_INPUT");
+    }
+
+    fn advance(vault: &mut UnlockedVault, card: &str) -> Automation {
+        vault
+            .create_automation(AutomationDraft {
+                name: "Advance".into(),
+                active: true,
+                preset: Some(AutomationPreset::Salary),
+                schedule: Schedule::Monthly { day: 20 },
+                starts_at: "2025-06-01T00:00:00Z".into(),
+                template: salary_draft(card, "1000"),
+                amount_mode: AmountMode::Varies,
+                workday_shift: WorkdayShift::Back,
+            })
+            .unwrap()
+    }
+
+    fn made(vault: &UnlockedVault, pass: &WorkflowPass) -> Transaction {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.meta().id == pass.created[0])
+            .unwrap()
+            .clone()
+    }
+
+    /// The advance of July 20, 2025, a Sunday, comes on Friday the 18th at the
+    /// template's amount, marked approximate; the real amount put in makes the
+    /// next estimate.
+    #[test]
+    fn a_salary_that_differs_is_booked_approximately_and_corrected() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let salary = advance(&mut vault, &card);
+        assert_eq!(salary.estimate, None);
+
+        let forecast = vault.automation_occurrences(
+            &salary,
+            &Calendar::new("UTC"),
+            secs("2025-07-01T00:00:00Z"),
+            secs("2025-07-31T00:00:00Z"),
+        );
+        assert_eq!(calendar::iso(forecast[0].0), "2025-07-18T09:00:00Z");
+        assert!(forecast[0].1.meta().origin.is_estimated());
+
+        // June 20, 2025 is a Friday; July 20 a Sunday.
+        let pass = vault
+            .run_due_workflows(secs("2025-06-20T10:00:00Z"), "UTC")
+            .unwrap();
+        let june = made(&vault, &pass);
+        assert!(june.meta().origin.is_estimated());
+        assert_eq!(main_amount(&june), Some(amount("1000")));
+        let runs = vault.automation_runs(Some(&salary.id));
+        assert!(runs[0].estimated);
+
+        let corrected = vault
+            .confirm_estimated_amount(&june.meta().id, amount("1300"))
+            .unwrap();
+        assert!(!corrected.meta().origin.is_estimated());
+        assert_eq!(main_amount(&corrected), Some(amount("1300")));
+        assert!(!vault.automation_runs(Some(&salary.id))[0].estimated);
+        assert_eq!(
+            vault.automation(&salary.id).unwrap().estimate,
+            Some(amount("1300"))
+        );
+        // Only an approximate operation takes a real amount.
+        assert!(
+            vault
+                .confirm_estimated_amount(&june.meta().id, amount("1"))
+                .is_err()
+        );
+
+        let pass = vault
+            .run_due_workflows(secs("2025-07-18T10:00:00Z"), "UTC")
+            .unwrap();
+        let july = made(&vault, &pass);
+        assert_eq!(july.meta().timestamp, "2025-07-18T09:00:00Z");
+        assert_eq!(main_amount(&july), Some(amount("1300")));
+        // Not again on the Sunday it was planned for.
+        let pass = vault
+            .run_due_workflows(secs("2025-07-20T10:00:00Z"), "UTC")
+            .unwrap();
+        assert!(pass.created.is_empty());
+
+        // An ordinary edit of the amount counts as the real one too.
+        let mut edited = july.clone();
+        if let Transaction::Topup(inner) = &mut edited {
+            inner.amount = amount("1500");
+        }
+        let saved = vault.update_transaction(&july.meta().id, edited).unwrap();
+        assert!(!saved.meta().origin.is_estimated());
+        assert_eq!(
+            vault.automation(&salary.id).unwrap().estimate,
+            Some(amount("1400"))
+        );
+    }
+
+    #[test]
+    fn an_automation_is_edited_in_its_form_until_made_an_ordinary_workflow() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let salary = advance(&mut vault, &card);
+        let workflow = vault.workflow(&salary.id).unwrap();
+        let draft = crate::service::WorkflowDraft {
+            name: workflow.name.clone(),
+            description: String::new(),
+            active: true,
+            graph: workflow.graph.clone(),
+            react_to_workflows: false,
+            max_amount: None,
+        };
+        let err = vault
+            .save_workflow(Some(&salary.id), draft.clone(), secs(&now_iso()))
+            .unwrap_err();
+        assert_eq!(err.code(), "INVALID_INPUT");
+
+        // A change in the form rebuilds the graph and keeps the old one.
+        let mut changed = AutomationDraft {
+            name: "Advance".into(),
+            active: true,
+            preset: Some(AutomationPreset::Salary),
+            schedule: Schedule::Monthly { day: 20 },
+            starts_at: "2025-06-01T00:00:00Z".into(),
+            template: salary_draft(&card, "1000"),
+            amount_mode: AmountMode::Fixed,
+            workday_shift: WorkdayShift::Forward,
+        };
+        vault
+            .update_automation(&salary.id, changed.clone())
+            .unwrap();
+        let workflow = vault.workflow(&salary.id).unwrap();
+        assert_eq!(workflow.versions.len(), 1);
+        assert!(workflow.graph.contains("\"forward\""), "{}", workflow.graph);
+
+        let ordinary = vault.detach_automation(&salary.id).unwrap();
+        assert!(ordinary.automation.is_none());
+        assert!(vault.automations().is_empty());
+        vault
+            .save_workflow(Some(&salary.id), draft, secs(&now_iso()))
+            .unwrap();
+        changed.name = "Again".into();
+        assert!(vault.update_automation(&salary.id, changed).is_err());
+    }
+
+    #[test]
+    fn an_exchange_cannot_have_an_amount_that_differs() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let Some(Transaction::Convert(mut inner)) = crate::model::fixtures::full_doc()
+            .transactions
+            .into_iter()
+            .find(|tx| matches!(tx, Transaction::Convert(_)))
+        else {
+            unreachable!()
+        };
+        inner.from.account = crate::model::transaction::AccountRef::Store(card.clone());
+        inner.to.account = crate::model::transaction::AccountRef::Store(card);
+        let err = vault
+            .create_automation(AutomationDraft {
+                name: "DCA".into(),
+                active: true,
+                preset: None,
+                schedule: Schedule::Weekly { weekday: 4 },
+                starts_at: "2026-01-01T00:00:00Z".into(),
+                template: TransactionDraft::Convert(inner),
+                amount_mode: AmountMode::Varies,
+                workday_shift: WorkdayShift::None,
             })
             .unwrap_err();
         assert_eq!(err.code(), "INVALID_INPUT");
