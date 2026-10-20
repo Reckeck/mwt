@@ -12,11 +12,13 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { rejectText } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { amountClass, txLegs } from '@/shared/lib/transactions'
 
 import { SIMULATION_HORIZONS } from './automation-simulate.constants'
 import type { AutomationSimulationDialogProps } from './automation-simulate.types'
+import { keepPreviousFor } from '@/shared/lib/query'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * «Проверить»: what the automations would do over the next days, played out
@@ -28,12 +30,13 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 const days = ref<number>(90)
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const storeName = (id: string) =>
   flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === id)?.path.join(' › ') ?? id
 
 const simulation = useQuery({
   queryKey: computed(() => ['automation-simulation', props.automationId, days.value]),
+  placeholderData: keepPreviousFor(() => props.automationId),
   queryFn: () =>
     call<AutomationSimulation>('simulate_automations', {
       input: { automation_id: props.automationId, days: days.value } satisfies SimulateAutomationsInput,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { StoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
@@ -13,7 +13,8 @@ import { Label } from '@/shared/ui/label'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** Credit or spend a programme's points; a credit can name the card that earned it. */
 const props = defineProps<{ store: Store; mode: 'credit' | 'spend' }>()
@@ -31,7 +32,7 @@ watch(open, () => {
   comment.value = ''
 })
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const cards = computed(() =>
   flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived && node.store.kind === 'bank'),
 )

@@ -99,7 +99,7 @@ function headerLabel(column: Column<TData, unknown>): string {
               type="button"
               :class="
                 cn(
-                  'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'touch-hit-xl inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   header.column.columnDef.meta?.align === 'right' && 'flex-row-reverse',
                 )
               "

@@ -7,7 +7,6 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Spinner } from '@/shared/ui/spinner'
 
 import SyncConflictChoice from './SyncConflictChoice.vue'
 import { useUnlockVault } from './useUnlockVault'
@@ -80,9 +79,8 @@ watch(open, (isOpen) => {
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="unlock-form" type="submit" :disabled="busy">
-        <Spinner v-if="busy" />
-        {{ busy ? t('auth.unlocking') : t('auth.enter') }}
+      <Button form="unlock-form" type="submit" :disabled="busy" :loading="busy">
+        {{ t('auth.enter') }}
       </Button>
     </template>
   </Dialog>

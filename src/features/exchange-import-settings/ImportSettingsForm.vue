@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore icon-button-size: the × inside a coin chip is 16px like the chip text; touch-hit-lg gives it the finger area
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -16,13 +17,14 @@ import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
 import { toIsoTimestamp } from '@/shared/lib/datetime'
 import { useFormValidation } from '@/shared/lib/form'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { notify } from '@/shared/lib/notify'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { IMPORT_ACCOUNTS, IMPORT_KINDS } from './exchange-import-settings.constants'
 import type { ImportSettingsFormProps } from './exchange-import-settings.types'
 import { useImportSettingsDraft } from './model/use-import-settings-draft'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * What an exchange import brings in and where it books it: set up right after
@@ -39,7 +41,7 @@ const stored = useQuery({
   queryKey,
   queryFn: () => call<ImportSettings>('get_import_settings', { storeId: props.storeId }),
 })
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 /** The wallet and its sub-accounts: where an account may book. */
 const targets = computed(() => {
   const root = (tree.data.value ?? []).find((node) => node.store.id === props.storeId)
@@ -97,7 +99,7 @@ const save = useMutation({
 
     <section class="grid gap-3" data-tour="import-routes">
       <h3 class="text-sm font-semibold">{{ t('importSettings.where') }}</h3>
-      <div v-for="account in IMPORT_ACCOUNTS" :key="account" class="grid items-start gap-2 @md:grid-cols-[11rem_13rem_1fr]">
+      <div v-for="account in IMPORT_ACCOUNTS" :key="account" class="grid items-start gap-2 @mid:grid-cols-[11rem_13rem_1fr]">
         <Label :for="`import-route-${account}`" class="pt-2">{{ t(`exchangeBalances.account.${account}`) }}</Label>
         <Select :id="`import-route-${account}`" v-model="routes[account].mode">
           <SelectItem value="default">{{ t('importSettings.mode.default') }}</SelectItem>
@@ -120,7 +122,7 @@ const save = useMutation({
 
     <section class="grid gap-3" data-tour="import-kinds">
       <h3 class="text-sm font-semibold">{{ t('importSettings.what') }}</h3>
-      <div v-for="kind in IMPORT_KINDS" :key="kind" class="grid items-center gap-2 @md:grid-cols-[12rem_1fr]">
+      <div v-for="kind in IMPORT_KINDS" :key="kind" class="grid items-center gap-2 @mid:grid-cols-[12rem_1fr]">
         <div class="flex items-center gap-2">
           <Switch :id="`import-kind-${kind}`" v-model="flags[kind]" />
           <Label :for="`import-kind-${kind}`">{{ t(`importSettings.kind.${kind}`) }}</Label>
@@ -158,7 +160,7 @@ const save = useMutation({
         <AssetInput v-model="coinPick" label="" :placeholder="t('importSettings.addCoin')" />
         <p class="text-xs text-muted-foreground">{{ t('importSettings.coinsHint') }}</p>
       </div>
-      <FormField for="import-since" :label="t('importSettings.since')" :error="form.error('since')" :hint="t('importSettings.sinceHint')" class="@md:max-w-64">
+      <FormField for="import-since" :label="t('importSettings.since')" :error="form.error('since')" :hint="t('importSettings.sinceHint')" class="@mid:max-w-64">
         <DateTimePicker id="import-since" v-model="since" />
       </FormField>
     </section>

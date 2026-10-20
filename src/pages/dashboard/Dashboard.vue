@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
-import { useQuery } from '@tanstack/vue-query'
 import { GridItem, GridLayout } from 'grid-layout-plus'
 import { LayoutGrid } from 'lucide-vue-next'
 
@@ -11,12 +10,11 @@ import { DASHBOARD_COLS, DASHBOARD_ROW_HEIGHT, DASHBOARD_WIDGETS } from '@/widge
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { WIDGET_DRAG_HANDLE } from '@/shared/ui/widget-frame'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
 import { useDashboardLayout } from './model/use-dashboard-layout'
 import { useWidgetActions } from './model/use-widget-actions'
 import { DashboardWidgetSlot } from './ui/dashboard-widget-slot'
+import { useStoreTree } from '@/shared/api/queries'
 
 const { t } = useI18n()
 
@@ -27,13 +25,37 @@ const { t } = useI18n()
  * widened again came back with every widget squeezed into one column.
  */
 const STACK_BELOW_PX = 768
+/** Half the band around the switch: a window resized across 768 px does not flip every pixel. */
+const STACK_HYSTERESIS_PX = 16
 
-const { hydrated, layout, pinnedIds, saveLayout, setPinned, remove, resize, add, widgetProps } = useDashboardLayout()
+const { hydrated, layout, pinnedIds, saveLayout, setPinned, remove, resize, move, add, widgetProps } = useDashboardLayout()
 
 /** The grid mounts once its container has a real width, so it never lays out at zero. */
 const container = useTemplateRef<HTMLElement>('container')
 const { width: containerWidth } = useElementSize(container)
-const stacked = computed(() => containerWidth.value > 0 && containerWidth.value < STACK_BELOW_PX)
+const stacked = ref(false)
+/** The first width decides inside the band; after that only leaving it flips the layout. */
+let settledOnce = false
+watch(
+  containerWidth,
+  (width) => {
+    if (!width) return
+    if (width < STACK_BELOW_PX - STACK_HYSTERESIS_PX) stacked.value = true
+    else if (width >= STACK_BELOW_PX + STACK_HYSTERESIS_PX) stacked.value = false
+    else if (!settledOnce) stacked.value = width < STACK_BELOW_PX
+    settledOnce = true
+  },
+  { immediate: true },
+)
+
+/**
+ * The grid animates every move of an item; on the first layout that is every
+ * widget sliding in from the corner. Transitions start once it has settled.
+ */
+const animate = ref(false)
+function onLayoutReady() {
+  requestAnimationFrame(() => requestAnimationFrame(() => (animate.value = true)))
+}
 /** The stack keeps the grid's reading order: top to bottom, then left to right. */
 const stackOrder = computed(() => [...layout.value].sort((left, right) => left.y - right.y || left.x - right.x))
 
@@ -42,7 +64,7 @@ const catalogOpen = ref(false)
 const placed = computed(() => layout.value.map((item) => String(item.i)))
 
 /** Trading widgets are offered only while the vault has an exchange with a provider. */
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const exchanges = computed<DashboardCatalogExchange[]>(() =>
   (tree.data.value ?? [])
     .map((node) => node.store)
@@ -57,6 +79,8 @@ const actionsById = useWidgetActions({
   layout,
   pinnedIds,
   hasMore,
+  stacked,
+  move,
   setPinned,
   resize,
   remove,
@@ -69,8 +93,17 @@ const actionsById = useWidgetActions({
 <template>
   <div ref="container" class="relative min-h-full pb-6" data-tour="dashboard-grid">
     <!-- The catalog of widgets not yet on the dashboard; the transaction button lives in the header. -->
-    <div v-if="hasMore" class="mb-3 flex justify-end">
-      <Button variant="outline" size="sm" data-tour="dashboard-add" @click="catalogOpen = true">
+    <!-- The row is always there: the button appearing once the wallets load must not push the grid down. -->
+    <div class="mb-3 flex justify-end">
+      <Button
+        variant="outline"
+        size="sm"
+        data-tour="dashboard-add"
+        :class="!hasMore && 'invisible'"
+        :aria-hidden="!hasMore"
+        :tabindex="hasMore ? undefined : -1"
+        @click="catalogOpen = true"
+      >
         <LayoutGrid class="size-4" />
         {{ t('dashboard.catalog.button') }}
       </Button>
@@ -81,7 +114,7 @@ const actionsById = useWidgetActions({
       <Skeleton class="h-56 md:col-span-12" />
     </div>
     <!-- Narrow: a plain stack in reading order; the 12-column layout stays untouched. -->
-    <div v-else-if="stacked" class="grid gap-3">
+    <div v-else-if="stacked" class="stack grid gap-3">
       <div v-for="item in stackOrder" :key="item.i" :style="{ minHeight: `${item.h * DASHBOARD_ROW_HEIGHT}px` }" class="grid">
         <DashboardWidgetSlot
           :id="String(item.i)"
@@ -100,6 +133,8 @@ const actionsById = useWidgetActions({
       :margin="[12, 12]"
       :vertical-compact="true"
       :use-css-transforms="true"
+      :class="!animate && 'no-motion'"
+      @layout-ready="onLayoutReady"
       @layout-updated="saveLayout"
     >
       <GridItem
@@ -140,6 +175,14 @@ const actionsById = useWidgetActions({
   --vgl-placeholder-bg: var(--primary);
   --vgl-placeholder-opacity: 15%;
   --vgl-resizer-border-color: var(--muted-foreground);
+}
+/* The stack moves by «Выше»/«Ниже» in the menu: its headers are not drag handles. */
+.stack :deep(.widget-drag-handle) {
+  cursor: auto;
+}
+.no-motion,
+.no-motion :deep(.vgl-item) {
+  transition: none;
 }
 :deep(.vgl-item--placeholder) {
   border-radius: 0.75rem;

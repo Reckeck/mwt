@@ -2,22 +2,21 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { CircleCheck, GraduationCap, PlayCircle, Sparkles } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { TOURS, tourLocation, useTour } from '@/shared/lib/tour'
 import { notify } from '@/shared/lib/notify'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** The learning centre: every screen's tour, what is done, and «Что нового». */
 const { t } = useI18n()
 const router = useRouter()
 const tour = useTour()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const firstWallet = computed(() => flattenStoreTree(tree.data.value ?? []).find((node) => !node.store.archived)?.store.id ?? null)
 
 const tours = computed(() =>
@@ -60,7 +59,7 @@ async function reset() {
           </Button>
         </div>
       </div>
-      <ul class="grid gap-1 @sm:grid-cols-2">
+      <ul class="grid gap-1 @xl:grid-cols-2">
         <li
           v-for="entry in tours"
           :key="entry.id"
@@ -73,8 +72,8 @@ async function reset() {
           </span>
           <Button
             variant="ghost"
-            size="icon"
-            class="size-7 shrink-0"
+            size="icon-sm"
+            class="shrink-0"
             :disabled="!entry.location"
             :title="t('tour.start')"
             :aria-label="t('tour.start')"

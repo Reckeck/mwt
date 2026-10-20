@@ -47,7 +47,7 @@ function insert(name: string) {
       <ToggleGroupItem value="tariff">{{ t('utilities.mode.tariff') }}</ToggleGroupItem>
       <ToggleGroupItem value="formula">{{ t('utilities.mode.formula') }}</ToggleGroupItem>
     </ToggleGroup>
-    <div class="grid gap-3 @sm:grid-cols-3">
+    <div class="grid gap-3 @xl:grid-cols-3">
       <FormField for="utility-unit" :label="t('utilities.unit')" required :error="props.unitError">
         <Input id="utility-unit" v-model="unit" />
       </FormField>

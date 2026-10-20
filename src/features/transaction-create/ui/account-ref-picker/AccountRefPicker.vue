@@ -143,7 +143,7 @@ const current = computed(() => allOptions.value.find((row) => row.value === choi
                 aria-hidden="true"
               />
               <span class="grid min-w-0 leading-tight">
-                <span class="truncate" :class="row.parent ? 'text-[13px]' : 'font-medium'">{{ row.title }}</span>
+                <span class="truncate" :class="row.parent ? 'text-sm' : 'font-medium'">{{ row.title }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ row.detail }}</span>
               </span>
             </ComboboxItem>

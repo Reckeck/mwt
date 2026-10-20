@@ -1,3 +1,4 @@
+// check-ui-ignore invalidate-all: an undo may revert any mutation, and the cache does not know its keys
 import { MutationCache, QueryClient } from '@tanstack/vue-query'
 
 import { type MutationNotice, notify, textOf } from '@/shared/lib/notify'
@@ -65,6 +66,10 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       refetchOnWindowFocus: false,
+      // Query data is replaced, never edited in place (every `setQueryData` builds a new
+      // value), so it needs no deep proxies: walking a page of transactions through them
+      // was ~140× slower than the plain objects (rule 17).
+      shallow: true,
     },
   },
 })

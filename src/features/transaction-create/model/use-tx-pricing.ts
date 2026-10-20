@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 import { pricedAsset, toIsoTimestamp } from '../transaction-form.model'
 import type { TxFormState } from './use-tx-form-state'
+import { keepPreviousFor } from '@/shared/lib/query'
 
 /**
  * The rate a new operation records (plan §6.2): the cached quote of its moment
@@ -29,6 +30,7 @@ export function useTxPricing(state: TxFormState) {
       priced.value?.contract,
       form.timestamp,
     ]),
+    placeholderData: keepPreviousFor(() => priced.value?.symbol),
     queryFn: () => {
       const asset = priced.value as AssetRef
       return call<CachedPrice>('get_cached_price', {
@@ -61,6 +63,7 @@ export function useTxPricing(state: TxFormState) {
 
   /** The cached USD quote, shown in the hint's currency. */
   const quoteInCurrency = useQuery({
+    // no placeholder: a hint of another price would read as this one
     queryKey: computed(() => ['convert', quote.data.value?.price_usd, hintCode.value, form.timestamp]),
     queryFn: () =>
       call<ConvertedAmount>('convert_amount', {

@@ -3,7 +3,6 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Spinner } from '@/shared/ui/spinner'
 
 import type { FormDialogProps } from './form-dialog.types'
 
@@ -44,8 +43,7 @@ const { t } = useI18n()
         <slot name="footer-start" />
       </div>
       <Button variant="ghost" type="button" @click="emit('update:open', false)">{{ t('actions.cancel') }}</Button>
-      <Button :form="props.formId" type="submit" :disabled="props.pending">
-        <Spinner v-if="props.pending" />
+      <Button :form="props.formId" type="submit" :disabled="props.pending" :loading="props.pending">
         {{ props.submitLabel ?? t('actions.save') }}
       </Button>
     </template>

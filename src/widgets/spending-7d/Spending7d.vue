@@ -8,9 +8,9 @@ import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
-import { activeLocale } from '@/shared/lib/locale'
+import { formatMoney, formatWeekday } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
+import { SectionState } from '@/shared/ui/section-state'
 
 const { t } = useI18n()
 
@@ -40,8 +40,7 @@ const days = computed(() => {
 })
 const max = computed(() => Math.max(1, ...days.value.map((day) => day.daily), Number(current.data.value?.allowance ?? 0)))
 const total = computed(() => days.value.reduce((sum, day) => sum + day.daily, 0))
-const weekday = (date: string) =>
-  new Intl.DateTimeFormat(activeLocale.value, { weekday: 'narrow' }).format(new Date(`${date}T12:00`))
+const weekday = (date: string) => formatWeekday(date, 'narrow')
 </script>
 
 <template>
@@ -66,10 +65,14 @@ const weekday = (date: string) =>
             :title="formatMoney(day.daily, { decimals: 0 })"
           />
         </div>
-        <span class="text-[10px] text-muted-foreground uppercase">{{ weekday(day.date) }}</span>
+        <span class="text-2xs text-muted-foreground uppercase">{{ weekday(day.date) }}</span>
       </div>
     </div>
   </Card>
   <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <!-- A failed load says so and offers a retry; it used to stay a skeleton for ever. -->
+  <Card size="sm" v-else-if="current.error.value">
+    <SectionState :error="current.error.value" compact @retry="current.refetch()" />
+  </Card>
   <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

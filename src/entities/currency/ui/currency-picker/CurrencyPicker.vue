@@ -173,7 +173,7 @@ function retryCatalog() {
               v-if="option.header"
               :value="option.code"
               disabled
-              class="h-8 w-full px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground data-[disabled]:opacity-100"
+              class="h-8 w-full px-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground data-[disabled]:opacity-100"
             >
               {{ option.name }}
             </ComboboxItem>
@@ -185,7 +185,7 @@ function retryCatalog() {
               <template v-if="option.code !== NONE">
                 <span class="w-14 shrink-0 font-medium uppercase">{{ option.code }}</span>
                 <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ option.name }}</span>
-                <span class="shrink-0 text-[10px] uppercase text-muted-foreground">
+                <span class="shrink-0 text-2xs uppercase text-muted-foreground">
                   {{ t(`currency.kind.${option.kind}`) }}
                 </span>
               </template>

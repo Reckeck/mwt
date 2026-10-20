@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore grid-fixed-track: the canvas + side panel grid is the desktop branch; a phone gets MobileInspector
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocalStorage } from '@vueuse/core'
@@ -26,6 +27,7 @@ import { useMobileSheet } from '../model/use-mobile-sheet'
 import DraftBanner from './DraftBanner.vue'
 import EditorCanvas from './EditorCanvas.vue'
 import EditorSidePanel from './EditorSidePanel.vue'
+import type { EditCommandSet } from '../model/edit-commands'
 import EditorToolbar from './EditorToolbar.vue'
 import HotkeysHelp from './HotkeysHelp.vue'
 import MobileEditorBar from './MobileEditorBar.vue'
@@ -110,16 +112,13 @@ const runProps = computed(() => ({
   canSaveTest: Boolean(props.workflowId) && Boolean(report.value?.run.dry_run) && !dirty.value,
 }))
 
+const commands: EditCommandSet = { ...doc.history, copy: clipboard.copySelected, duplicate: clipboard.duplicate, paste: () => clipboard.paste() }
 useEditorHotkeys(editorRoot, () => Boolean(quick.value), {
+  ...commands,
   save: (event) => form.submit(save, event),
   emulate: () => run.emulate(),
   toggleHelp: () => (helpOpen.value = !helpOpen.value),
   quickAdd: insert.quickAddHere,
-  undo: doc.history.undo,
-  redo: doc.history.redo,
-  duplicate: clipboard.duplicate,
-  copy: clipboard.copySelected,
-  paste: () => clipboard.paste(),
   toggleSelected: editor.toggleSelected,
   selectAll: () => flow.addSelectedNodes(nodes.value as never),
   fit: () => void flow.fitView({ padding: 0.2, duration: 300 }),
@@ -164,6 +163,7 @@ defineExpose({
       v-model:active="active"
       v-model:simple="simple"
       v-bind="barState"
+      :commands="commands"
       @note="editor.addNote"
       @paste="clipboard.paste()"
       @panel="sheet.show('inspector')"
@@ -180,6 +180,7 @@ defineExpose({
       v-model:hotkeys="hotkeysOpen"
       v-bind="barState"
       :triggers="triggers"
+      :commands="commands"
       @note="editor.addNote"
       @emulate="(id) => run.emulate(false, id)"
       @run="run.runNow"

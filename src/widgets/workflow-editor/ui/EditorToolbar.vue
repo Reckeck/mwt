@@ -9,6 +9,8 @@ import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 
 import type { TriggerChoice } from '../model/trigger-choices'
+import type { EditCommandSet } from '../model/edit-commands'
+import EditCommands from './EditCommands.vue'
 import RunFromMenu from './RunFromMenu.vue'
 
 /** The editor's top row: name, on/off, mode, and the actions on the whole workflow. */
@@ -25,6 +27,8 @@ defineProps<{
   saving: boolean
   /** Triggers the run buttons can start from, the default first. */
   triggers: TriggerChoice[]
+  /** Undo, redo, duplicate, copy, paste. */
+  commands: EditCommandSet
 }>()
 const emit = defineEmits<{
   note: []
@@ -56,6 +60,7 @@ const { t } = useI18n()
       <Switch id="workflow-active" v-model="active" />
       <Label for="workflow-active">{{ active ? t('workflow.active') : t('workflow.inactive') }}</Label>
     </div>
+    <EditCommands :commands="commands" data-tour="workflow-edit-commands" />
     <span class="flex-1" />
     <div class="flex items-center gap-2">
       <Switch id="workflow-simple" v-model="simple" />

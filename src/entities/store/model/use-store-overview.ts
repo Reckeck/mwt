@@ -2,6 +2,7 @@ import { type Ref, computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
+import { keepPreviousFor } from '@/shared/lib/query'
 
 /**
  * One wallet as its page shows it: the overview (with or without its
@@ -18,6 +19,7 @@ export function useStoreOverview(storeId: Ref<string>, includeChildren: Ref<bool
   })
   const pnl = useQuery({
     queryKey: computed(() => ['store-pnl', storeId.value, includeChildren.value]),
+    placeholderData: keepPreviousFor(storeId),
     queryFn: () =>
       call<RealizedPnl>('get_store_pnl', { storeId: storeId.value, includeChildren: includeChildren.value }),
   })

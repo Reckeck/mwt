@@ -1,0 +1,21 @@
+export const NO_RUNS: AutomationRun[] = []
+
+/**
+ * Runs per automation, and the rejected ones among them: built once per list,
+ * not filtered again for every read in every card.
+ */
+export function groupRuns(runs: AutomationRun[]) {
+  const all = new Map<string, AutomationRun[]>()
+  const rejected = new Map<string, AutomationRun[]>()
+  for (const run of runs) {
+    push(all, run)
+    if (typeof run.outcome === 'object' && 'rejected' in run.outcome) push(rejected, run)
+  }
+  return { all, rejected }
+}
+
+function push(byId: Map<string, AutomationRun[]>, run: AutomationRun) {
+  const list = byId.get(run.automation_id)
+  if (list) list.push(run)
+  else byId.set(run.automation_id, [run])
+}

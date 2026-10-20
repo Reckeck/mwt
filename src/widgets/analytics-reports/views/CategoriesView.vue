@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { RouterLink } from 'vue-router'
 import { Money } from '@/entities/currency'
 
 import { ReportTerm } from '@/entities/report'
 import { Card } from '@/shared/ui/card'
-import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { formatMoney, formatPct, signClass } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
@@ -15,11 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { transactionsOf } from '../lib/drill-down'
 import { monthLabel } from '../use-report'
+import { useCategories } from '@/shared/api/queries'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const props = defineProps<{ report: CategoriesReport; filter: ReportFilter }>()
 
 const { t } = useI18n()
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
+const categories = useCategories()
 const label = (key: string) => (key ? categoryKeyLabel(key, categories.data.value, t) : t('report.categories.none'))
 const money = (value: string) => formatMoney(value, { decimals: 0, currency: props.report.meta.currency })
 const months = computed(() => props.report.meta.months)
@@ -67,9 +67,7 @@ function heat(block: CategoryGroupBlock, value: string): string {
               {{ delta(row.delta_pct) }}
             </span>
           </div>
-          <div class="ml-7 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div class="h-full rounded-full bg-primary" :style="{ width: `${shareOf(row.total)}%` }" />
-          </div>
+          <ProgressBar class="ml-7" :value="shareOf(row.total)" size="sm" />
         </li>
       </ol>
     </Card>

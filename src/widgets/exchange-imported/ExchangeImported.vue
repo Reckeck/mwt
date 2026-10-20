@@ -10,6 +10,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { txId } from '@/shared/lib/transactions'
 import { openTxDetails } from '@/shared/lib/tx-details'
+import { keepPreviousFor } from '@/shared/lib/query'
 
 /**
  * The operations of one exchange wallet: what waits for confirmation, then
@@ -22,6 +23,7 @@ const PAGE = 50
 const shown = ref(PAGE)
 const imported = useQuery({
   queryKey: computed(() => ['imported-transactions', props.storeId, shown.value]),
+  placeholderData: keepPreviousFor(() => props.storeId),
   queryFn: () =>
     call<ImportedTransactions>('list_imported_transactions', {
       input: { store_id: props.storeId, limit: shown.value, offset: 0 },

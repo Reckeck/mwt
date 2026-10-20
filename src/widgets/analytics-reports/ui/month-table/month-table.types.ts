@@ -16,6 +16,7 @@ import type { RouteLocationRaw } from 'vue-router'
 export interface MonthTableRow {
   id: string
   label: string
+  /** `''` = no figure for this cell, shown as «—». */
   values: Record<string, string>
   /** Greyed out, cells shown as «—». */
   muted?: boolean

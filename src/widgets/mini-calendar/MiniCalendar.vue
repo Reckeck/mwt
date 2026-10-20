@@ -8,8 +8,9 @@ import { STATUS_CLASSES } from '@/widgets/spending-calendar'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
-import { activeLocale } from '@/shared/lib/locale'
 import { localDate } from '@/shared/lib/planning'
+import { formatMonthKey } from '@/shared/lib/format'
+import { SectionState } from '@/shared/ui/section-state'
 
 const { t } = useI18n()
 
@@ -19,7 +20,7 @@ const calendar = useQuery({
   queryFn: () => call<CalendarMonth>('get_calendar', { month }),
 })
 const lead = (new Date(`${month}-01T12:00`).getDay() + 6) % 7
-const title = new Intl.DateTimeFormat(activeLocale.value, { month: 'long' }).format(new Date(`${month}-01T12:00`))
+const title = formatMonthKey(month, { month: 'long' })
 const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? []).map((item) => item.date)))
 </script>
 
@@ -30,7 +31,7 @@ const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? [
         {{ t('miniCalendar.title', { month: title }) }}
       </RouterLink>
     </template>
-    <div class="grid grid-cols-7 gap-1 text-center text-[11px] tabular-nums">
+    <div class="grid grid-cols-7 gap-1 text-center text-2xs tabular-nums">
       <div v-for="index in lead" :key="`lead-${index}`" />
       <div
         v-for="day in calendar.data.value.days"
@@ -45,5 +46,9 @@ const upcomingDates = computed(() => new Set((calendar.data.value?.upcoming ?? [
     </div>
   </Card>
   <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <!-- A failed load says so and offers a retry; it used to stay a skeleton for ever. -->
+  <Card size="sm" v-else-if="calendar.error.value">
+    <SectionState :error="calendar.error.value" compact @retry="calendar.refetch()" />
+  </Card>
   <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

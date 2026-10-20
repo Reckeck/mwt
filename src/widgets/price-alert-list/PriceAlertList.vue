@@ -86,8 +86,8 @@ function openEdit(alert: PriceAlert) {
         <Badge v-else-if="!alert.active" variant="outline">{{ t('alert.paused') }}</Badge>
         <Button
           variant="ghost"
-          size="icon"
-          class="size-8 text-muted-foreground"
+          size="icon-sm"
+          class="text-muted-foreground"
           :title="t('alert.edit')"
           :aria-label="t('alert.edit')"
           @click="openEdit(alert)"

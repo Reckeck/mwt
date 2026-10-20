@@ -17,6 +17,7 @@ const emit = defineEmits<{ max: [quantity: string] }>()
 const { t } = useI18n()
 
 const overview = useQuery({
+  // no placeholder: another account's balance
   queryKey: computed(() => ['store', props.storeId, false]),
   queryFn: () => call<StoreOverview>('get_store_overview', { storeId: props.storeId, includeChildren: false }),
   enabled: computed(() => Boolean(props.storeId)),

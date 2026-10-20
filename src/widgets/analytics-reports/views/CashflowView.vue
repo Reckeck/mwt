@@ -72,7 +72,7 @@ const rows = computed<MonthTableRow[]>(() => [
 
 <template>
   <div class="grid grid-cols-1 gap-4">
-    <div class="grid gap-4 @sm:grid-cols-3">
+    <div class="grid gap-4 @xl:grid-cols-3">
       <StatCard :label="t('report.cashflow.income')">
         <Money :amount="props.report.total.income" :currency="currency" :decimals="0" />
       </StatCard>

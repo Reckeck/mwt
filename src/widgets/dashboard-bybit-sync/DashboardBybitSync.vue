@@ -23,6 +23,7 @@ const sync = useExchangeSync()
 const WIDGET_ROWS = 6
 
 const runs = useQuery({
+  // no placeholder: another exchange's runs
   queryKey: computed(() => ['import-runs', props.storeId]),
   queryFn: () => call<ImportRun[]>('list_import_runs', { storeId: props.storeId }),
 })

@@ -8,7 +8,6 @@ import { ReminderDialog } from '@/features/reminder-edit'
 import { Button } from '@/shared/ui/button'
 import { ListHeader } from '@/shared/ui/list-header'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { onEvent } from '@/shared/api/ipc'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
@@ -39,8 +38,6 @@ const groups = computed(() =>
   ),
 )
 
-// The scheduler made or moved automatic reminders.
-void onEvent('reminders-changed', () => void queryClient.invalidateQueries({ queryKey: ['reminders'] }))
 
 function refresh() {
   for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })

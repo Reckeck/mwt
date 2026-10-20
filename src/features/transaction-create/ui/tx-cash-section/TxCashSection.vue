@@ -19,7 +19,7 @@ const { form, check, props, isProperty, propertyName, overrunText } = useTxForm(
 </script>
 
 <template>
-  <div class="grid gap-3 @sm:grid-cols-2">
+  <div class="grid gap-3 @xl:grid-cols-2">
     <div v-if="isProperty && form.kind === 'topup'" class="grid gap-1.5">
       <Label for="tx-property">{{ t('tx.field.property') }}</Label>
       <Input id="tx-property" v-model="propertyName" :placeholder="t('tx.field.propertyHint')" />
@@ -43,7 +43,7 @@ const { form, check, props, isProperty, propertyName, overrunText } = useTxForm(
     <AmountInput id="tx-unit-price" v-model="form.unitPrice" />
     <p class="text-xs text-muted-foreground">{{ t('tx.field.unitPriceHint') }}</p>
   </div>
-  <div v-if="form.kind === 'defi'" class="grid gap-3 @sm:grid-cols-3">
+  <div v-if="form.kind === 'defi'" class="grid gap-3 @xl:grid-cols-3">
     <div class="grid gap-1.5">
       <Label for="tx-defi-action">{{ t('tx.field.action') }}</Label>
       <Select id="tx-defi-action" v-model="form.defiAction">

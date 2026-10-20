@@ -41,7 +41,7 @@ const fromStore = computed(() => accountStoreId(form.from))
   </ToggleGroup>
   <p v-if="form.convertMode === 'p2p'" class="text-xs text-muted-foreground">{{ t('tx.p2p.hint') }}</p>
 
-  <div class="grid gap-3 @sm:grid-cols-3">
+  <div class="grid gap-3 @xl:grid-cols-3">
     <FormField :label="form.convertMode === 'p2p' ? t('tx.p2p.from') : t('tx.field.give')" required :error="check.error('from')">
       <AccountRefPicker v-model="form.from" :contacts="form.convertMode !== 'p2p'" :raw="form.convertMode !== 'p2p'" />
     </FormField>
@@ -61,7 +61,7 @@ const fromStore = computed(() => accountStoreId(form.from))
   </div>
   <!-- What arrives: laid out like what leaves. The counterparty may pay out
        to several accounts; the extra rows go under it. -->
-  <div class="grid gap-3 @sm:grid-cols-3">
+  <div class="grid gap-3 @xl:grid-cols-3">
     <FormField
       :label="form.convertMode === 'p2p' ? t('tx.p2p.receiveTo') : t('tx.field.receive')"
       required

@@ -31,14 +31,15 @@ const { t } = useI18n()
         {{ props.title }}
       </RouterLink>
       <span v-else class="min-w-0 flex-1 truncate font-medium">{{ props.title }}</span>
-      <span class="opacity-0 transition-opacity focus-within:opacity-100 group-hover/frame:opacity-100">
+      <!-- Revealed on hover only for a mouse; a finger always sees the «⋯» (rule 16). -->
+      <span class="transition-opacity pointer-fine:opacity-0 pointer-fine:focus-within:opacity-100 pointer-fine:group-hover/frame:opacity-100">
         <ActionMenu :actions="props.actions" :label="t('widgetFrame.menu', { title: props.title })" />
       </span>
     </div>
     <button
       v-else
       type="button"
-      class="absolute right-1 top-1 z-10 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/frame:opacity-100"
+      class="touch-hit-lg absolute right-1 top-1 z-10 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground shadow-sm transition-opacity hover:text-foreground pointer-fine:opacity-0 pointer-fine:focus-visible:opacity-100 pointer-fine:group-hover/frame:opacity-100"
       :title="t('widgetFrame.unpin')"
       :aria-label="t('widgetFrame.unpin')"
       @click="emit('pin', false)"

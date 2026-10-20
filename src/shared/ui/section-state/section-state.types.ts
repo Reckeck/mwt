@@ -1,7 +1,7 @@
 import type { Component } from 'vue'
 
 /** The placeholder drawn while loading, shaped like what will replace it. */
-export type SectionSkeleton = 'list' | 'chart' | 'figure' | 'table'
+export type SectionSkeleton = 'list' | 'chart' | 'figure' | 'table' | 'report'
 
 export interface SectionStateProps {
   /** First load in progress (TanStack `isPending`); a refetch keeps the content. */

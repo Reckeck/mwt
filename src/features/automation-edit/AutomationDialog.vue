@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { TransactionForm } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
@@ -9,17 +9,17 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
-import { Label } from '@/shared/ui/label'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
-import { Switch } from '@/shared/ui/switch'
 
 import type { ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
 import { AutomationScheduleFields } from './ui/automation-schedule-fields'
+import { useStoreTree } from '@/shared/api/queries'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 const props = withDefaults(defineProps<AutomationDialogProps>(), { automation: null, storeId: '', preset: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -28,7 +28,7 @@ const emit = defineEmits<{ saved: [automation: Automation] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 const name = ref('')
@@ -157,7 +157,7 @@ const save = useMutation({
   >
     <!-- biome-ignore lint/a11y/useSemanticElements: a fieldset would wrap the operation form inside; this only catches Enter from the schedule fields. -->
     <div class="@container grid gap-4" role="group" @keydown.enter="saveOnEnter">
-      <div class="grid gap-3 @sm:grid-cols-2">
+      <div class="grid gap-3 @xl:grid-cols-2">
         <FormField for="automation-name" :label="t('automation.name')" required :error="fields.error('name')">
           <Input id="automation-name" v-model="name" :placeholder="t('automation.namePlaceholder')" />
         </FormField>
@@ -186,10 +186,7 @@ const save = useMutation({
         :errors="{ day: fields.error('day'), everyDays: fields.error('everyDays'), startsAt: fields.error('startsAt') }"
       />
 
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="automation-active">{{ t('automation.active') }}</Label>
-        <Switch id="automation-active" v-model="active" />
-      </div>
+      <SwitchRow id="automation-active" :label="t('automation.active')" v-model="active" />
     </div>
 
     <template #footer>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore control-swap: restore asks first only while the editor has unsaved edits
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleCheck, FlaskConical, History, Trash2, XCircle } from 'lucide-vue-next'

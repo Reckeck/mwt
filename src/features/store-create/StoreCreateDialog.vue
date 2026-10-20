@@ -7,7 +7,6 @@ import { Dialog } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Spinner } from '@/shared/ui/spinner'
 
 import { useCreateStore } from './model/use-create-store'
 import { provideStoreCreate } from './model/use-store-create-state'
@@ -67,9 +66,8 @@ const createStore = useCreateStore(state, (store) => emit('created', store))
         {{ t('storeWizard.back') }}
       </Button>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button v-if="step === 'details'" form="store-create-form" type="submit" :disabled="createStore.isPending.value">
-        <Spinner v-if="createStore.isPending.value" />
-        <Plus v-else class="size-4" />
+      <Button v-if="step === 'details'" form="store-create-form" type="submit" :disabled="createStore.isPending.value" :loading="createStore.isPending.value">
+        <Plus class="size-4" />
         {{ t('stores.create') }}
       </Button>
     </template>

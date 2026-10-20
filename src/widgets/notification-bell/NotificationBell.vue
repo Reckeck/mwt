@@ -70,14 +70,14 @@ function openNotice(record: NoticeRecord) {
     <Bell class="size-4" />
     <span
       v-if="unread"
-      class="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground"
+      class="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-2xs font-semibold leading-4 text-destructive-foreground"
     >
       {{ unread > 99 ? '99+' : unread }}
     </span>
   </Button>
 
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full gap-0 sm:max-w-md">
+    <SheetContent side="right" class="w-full gap-0 sm:max-w-lg">
       <SheetHeader class="border-b border-border">
         <div class="flex items-center justify-between gap-2 pr-8">
           <SheetTitle>{{ t('notices.title') }}</SheetTitle>

@@ -7,6 +7,7 @@ import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 /**
  * НДФЛ on deposit interest: how much of this year's tax-free limit
@@ -53,13 +54,7 @@ const used = computed(() => {
         <Money :amount="tax.data.value.income" currency="rub" class="font-semibold" />
       </div>
       <template v-if="tax.data.value.limit">
-        <div class="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            class="h-full rounded-full"
-            :class="used >= 100 ? 'bg-destructive' : used > 80 ? 'bg-warning' : 'bg-primary'"
-            :style="{ width: `${used}%` }"
-          />
-        </div>
+        <ProgressBar :value="used" size="sm" :tone="used >= 100 ? 'destructive' : used > 80 ? 'warning' : 'primary'" />
         <div class="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
           <span>{{ t('interestTax.limit') }} <Money :amount="tax.data.value.limit" currency="rub" :decimals="0" /></span>
           <span v-if="tax.data.value.remaining_free && Number(tax.data.value.remaining_free) > 0">

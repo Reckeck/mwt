@@ -1,4 +1,4 @@
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatMoney, formatMonthKey, formatPct } from '@/shared/lib/format'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
@@ -13,7 +13,7 @@ export interface InsightTextContext {
 
 /** «март 2026» from `YYYY-MM`. */
 export function monthName(key: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(`${key}-01T12:00`))
+  return formatMonthKey(key, { month: 'long', year: 'numeric' }, locale)
 }
 
 /** Which way a fact leans, for its icon and colour next to the words. */

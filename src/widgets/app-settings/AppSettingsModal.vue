@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore invalidate-all: a new base currency changes every figure on every screen
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'

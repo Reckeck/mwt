@@ -33,7 +33,7 @@ const createOpen = ref(false)
     <EmptyState v-if="items.isSuccess.value && !own.length" compact :title="t('utilities.empty')">
       <Button @click="createOpen = true"><Plus class="size-4" />{{ t('utilities.new') }}</Button>
     </EmptyState>
-    <div class="grid gap-4 @lg:grid-cols-2">
+    <div class="grid gap-4 @wide:grid-cols-2">
       <UtilityCard v-for="item in own" :key="item.id" :item="item" />
     </div>
     <UtilityDialog v-model:open="createOpen" :property-id="props.propertyId" />

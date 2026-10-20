@@ -48,7 +48,7 @@ const varsOpen = computed({
     </div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
     <Sheet v-model:open="varsOpen">
-      <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{{ t('workflow.tab.vars') }}</SheetTitle>
           <SheetDescription>{{ t('workflow.vars.sheetHint') }}</SheetDescription>

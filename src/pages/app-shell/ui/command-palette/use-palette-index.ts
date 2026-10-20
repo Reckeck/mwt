@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { SETTINGS_TABS } from '@/widgets/settings-shell'
 import { call } from '@/shared/api/ipc'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
+import { useContacts } from '@/shared/api/queries'
 
 export interface PaletteEntry {
   id: string
@@ -73,11 +74,7 @@ export function usePaletteIndex(open: Ref<boolean>, screenNames: Ref<string[]>) 
     })),
   )
 
-  const contactList = useQuery({
-    queryKey: ['contacts'],
-    queryFn: () => call<Contact[]>('list_contacts'),
-    enabled: open,
-  })
+  const contactList = useContacts(open)
   const contacts = computed<PaletteEntry[]>(() =>
     (contactList.data.value ?? []).map((contact) => ({
       id: `contact-${contact.id}`,

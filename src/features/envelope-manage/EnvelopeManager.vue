@@ -16,12 +16,14 @@ import { call } from '@/shared/api/ipc'
 import { formatQuantity } from '@/shared/lib/format'
 
 import type { EnvelopeManagerProps } from './envelope-manage.types'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const props = defineProps<EnvelopeManagerProps>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const envelopes = useQuery({
+  // no placeholder: another wallet's envelopes
   queryKey: computed(() => ['envelopes', props.storeId]),
   queryFn: () => call<EnvelopeView[]>('list_envelopes', { storeId: props.storeId }),
 })
@@ -124,9 +126,7 @@ const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbo
             <Trash2 class="size-4" />
           </ConfirmButton>
         </div>
-        <div v-if="view.pct !== null" class="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div class="h-full rounded-full bg-primary" :style="{ width: `${Math.min(100, view.pct)}%` }" />
-        </div>
+        <ProgressBar v-if="view.pct !== null" :value="view.pct" size="sm" />
         <p v-if="view.short" class="flex items-center gap-1.5 text-xs text-warning">
           <AlertTriangle class="size-3.5" />
           {{ t('envelope.short', { free: qty(view.free, view.envelope.asset.symbol) }) }}
@@ -159,7 +159,7 @@ const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbo
       @submit.prevent="form.submit(create.mutate, $event)"
     >
       <p class="text-sm font-medium">{{ t('envelope.new') }}</p>
-      <div class="grid gap-3 @md:grid-cols-[1fr_8rem_8rem_auto] @md:items-start">
+      <div class="grid gap-3 @mid:grid-cols-[1fr_8rem_8rem_auto] @mid:items-start">
         <FormField for="envelope-name" :label="t('envelope.name')" required :error="form.error('name')">
           <Input id="envelope-name" v-model="name" :placeholder="t('envelope.namePlaceholder')" />
         </FormField>
@@ -174,7 +174,7 @@ const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbo
         <FormField for="envelope-target" :label="t('envelope.target')" :error="form.error('target')">
           <AmountInput id="envelope-target" v-model="target" />
         </FormField>
-        <Button type="submit" class="@md:mt-[1.375rem]" :disabled="create.isPending.value">
+        <Button type="submit" class="@mid:mt-[1.375rem]" :disabled="create.isPending.value">
           <Plus class="size-4" />
           {{ t('envelope.add') }}
         </Button>

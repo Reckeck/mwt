@@ -7,7 +7,6 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { Spinner } from '@/shared/ui/spinner'
 
 import { MIN_VAULT_PASSWORD, useCreateVault } from './useCreateVault'
 import { useVaultStore } from '@/shared/store/vault'
@@ -105,9 +104,8 @@ const form = useFormValidation(
 
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="create-form" type="submit" :disabled="busy">
-        <Spinner v-if="busy" />
-        {{ busy ? t('auth.creating') : t('auth.createVaultButton') }}
+      <Button form="create-form" type="submit" :disabled="busy" :loading="busy">
+        {{ t('auth.createVaultButton') }}
       </Button>
     </template>
   </Dialog>

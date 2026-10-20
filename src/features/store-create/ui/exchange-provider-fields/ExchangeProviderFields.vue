@@ -16,7 +16,7 @@ const { catalog, provider, apiKey, apiSecret, form } = useStoreCreate()
 
 <template>
   <FormField :label="t('provider.title')" required :error="form.error('provider')">
-    <div class="grid gap-2 @sm:grid-cols-3">
+    <div class="grid gap-2 @xl:grid-cols-3">
       <Button
         v-for="info in catalog.data.value?.providers ?? []"
         :key="info.provider"
@@ -34,7 +34,7 @@ const { catalog, provider, apiKey, apiSecret, form } = useStoreCreate()
 
   <fieldset v-if="provider === 'bybit'" class="grid gap-3" data-tour="store-bybit-key">
     <p class="text-xs text-muted-foreground">{{ t('storeWizard.bybitKeyHint') }}</p>
-    <div class="grid gap-3 @sm:grid-cols-2">
+    <div class="grid gap-3 @xl:grid-cols-2">
       <FormField for="store-bybit-key" :label="t('wallet.bybit.apiKey')" :error="form.error('apiKey')">
         <Input id="store-bybit-key" v-model="apiKey" autocomplete="off" spellcheck="false" />
       </FormField>

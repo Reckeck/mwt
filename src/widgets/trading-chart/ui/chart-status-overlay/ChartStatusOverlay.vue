@@ -14,7 +14,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-card px-6 text-center text-sm">
+  <div class="absolute inset-0 z-sticky flex flex-col items-center justify-center gap-3 bg-card px-6 text-center text-sm">
     <template v-if="props.loading">
       <Spinner class="size-5 text-muted-foreground" />
       <span class="text-muted-foreground">{{ t('trading.loading') }}</span>

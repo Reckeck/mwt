@@ -25,7 +25,7 @@ const secondary = computed(() => props.columns.filter((column) => !column.primar
 
 /** Text for a muted row or a column with its own format; `null` draws the sum as `<Money>`. */
 function cell(column: MonthTableColumn, row: MonthTableRow): string | null {
-  if (row.muted) return '—'
+  if (row.muted || row.values[column.key] === '') return '—'
   return column.format ? column.format(row.values[column.key] ?? '0') : null
 }
 

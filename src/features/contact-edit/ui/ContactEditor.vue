@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { ClipboardPaste, Copy, Trash2 } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
@@ -9,7 +8,6 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
-import { call } from '@/shared/api/ipc'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { detectDetail } from '@/shared/lib/detect-detail'
 import { required, useFormValidation } from '@/shared/lib/form'
@@ -18,6 +16,7 @@ import { copyText } from '@/shared/lib/clipboard'
 import { CONTACT_KINDS, DETAIL_KINDS } from '../contact-edit.constants'
 import type { ContactEditorProps } from '../contact-edit.types'
 import { draftOf, useContactSave } from '../model/use-contact-save'
+import { useContacts } from '@/shared/api/queries'
 
 const props = defineProps<ContactEditorProps>()
 const { t } = useI18n()
@@ -39,7 +38,7 @@ watch(
 )
 
 /** Groups already in use, offered as the user types. */
-const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })
+const contacts = useContacts()
 const groups = computed(() =>
   [...new Set((contacts.data.value ?? []).map((contact) => contact.group.trim()).filter(Boolean))].sort((left, right) =>
     left.localeCompare(right),
@@ -146,7 +145,7 @@ const inlineInput =
     <Textarea
       v-model="note"
       rows="1"
-      :class="[inlineInput, 'min-h-8 resize-none text-sm text-muted-foreground']"
+      :class="[inlineInput, 'min-h-8 resize-none field-sizing-content text-sm text-muted-foreground']"
       :placeholder="t('contacts.notePlaceholder')"
       :aria-label="t('stores.note')"
       @blur="commitNote"
@@ -158,7 +157,7 @@ const inlineInput =
         <li
           v-for="(account, index) in props.contact.accounts"
           :key="account.id || index"
-          class="group grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,10rem)_auto] items-center gap-2 rounded-md border border-border p-2"
+          class="group grid grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)] items-center gap-2 rounded-md border border-border p-2 @wide:grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,10rem)_auto]"
           :class="!account.active && 'opacity-60'"
         >
           <Select
@@ -173,8 +172,8 @@ const inlineInput =
             <span class="min-w-0 flex-1 truncate font-mono text-xs" :title="account.value">{{ account.value }}</span>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-7 shrink-0 text-muted-foreground"
+              size="icon-sm"
+              class="shrink-0 text-muted-foreground"
               :title="t('contacts.copy')"
               :aria-label="t('contacts.copy')"
               @click="copy(account.value)"
@@ -188,7 +187,7 @@ const inlineInput =
             :placeholder="t('contacts.accountLabel')"
             @change="(event: Event) => patchAccount(index, { label: (event.target as HTMLInputElement).value.trim() })"
           />
-          <div class="flex items-center gap-1">
+          <div class="flex items-center justify-end gap-1 pointer-coarse:gap-2">
             <Select
               v-if="account.kind === 'crypto_address'"
               :model-value="account.network ?? ''"
@@ -202,8 +201,8 @@ const inlineInput =
             <Badge v-if="!account.active" variant="outline">{{ t('contacts.inactive') }}</Badge>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-7 text-muted-foreground hover:text-destructive"
+              size="icon-sm"
+              class="text-muted-foreground hover:text-destructive"
               :title="t('contacts.removeAccount')"
               :aria-label="t('contacts.removeAccount')"
               @click="removeAccount(index)"

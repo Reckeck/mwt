@@ -2,19 +2,17 @@ import { computed, reactive } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 import { emptyForm, formFromTransaction } from '../transaction-form.model'
 import type { TransactionFormProps } from '../transaction-form.types'
+import { useContacts, useStoreTree } from '@/shared/api/queries'
 
 /** The form's data and what it reads about the wallet it is opened on. */
 export function useTxFormState(props: TransactionFormProps) {
   const editing = computed(() => props.transaction !== null && !props.template)
 
-  const tree = useQuery({
-    queryKey: STORE_TREE_QUERY_KEY,
-    queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-  })
+  const tree = useStoreTree()
   const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
   /** Cards and accounts a cashback can come from. */
   const cashbackSources = computed(() =>
@@ -37,15 +35,13 @@ export function useTxFormState(props: TransactionFormProps) {
 
   /** What this wallet holds: property to sell, and the asset a new operation starts with. */
   const overview = useQuery({
+    // no placeholder: the form reads this wallet's assets, not the last one's
     queryKey: computed(() => ['store', props.storeId, false]),
     queryFn: () => call<StoreOverview>('get_store_overview', { storeId: props.storeId, includeChildren: false }),
   })
   const heldAssets = computed(() => overview.data.value?.positions.map((position) => position.asset) ?? [])
 
-  const contacts = useQuery({
-    queryKey: ['contacts'],
-    queryFn: () => call<Contact[]>('list_contacts'),
-  })
+  const contacts = useContacts()
 
   /** Every live store but the one the money leaves, for AssetSell proceeds. */
   const proceedsStores = computed(() =>

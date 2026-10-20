@@ -1,5 +1,5 @@
 import type { ChartOption } from '@/shared/lib/echarts'
-import { formatMoney } from '@/shared/lib/format'
+import { axisMoney } from '@/shared/lib/chart-theme'
 
 /**
  * Axes, grid and tooltip every report chart shares; `labels` is the x axis.
@@ -30,7 +30,7 @@ export function categoryChart(
       axisLabel: currency
         ? {
             color: axisColor,
-            formatter: (value: number) => formatMoney(value, { currency, compact: true, decimals: 0 }),
+            formatter: (value: number) => axisMoney(value, currency),
           }
         : { color: axisColor },
       splitLine: { lineStyle: { color: axisColor, opacity: 0.15 } },

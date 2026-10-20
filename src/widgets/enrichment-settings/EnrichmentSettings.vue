@@ -30,10 +30,14 @@ async function turnOff() {
       <span class="text-sm">
         {{ settings.app?.enrichment_opt_in ? t('enrichment.stateOn') : t('enrichment.stateOff') }}
       </span>
-      <Button v-if="settings.app?.enrichment_opt_in" variant="outline" size="sm" @click="turnOff">
-        {{ t('enrichment.turnOff') }}
+      <!-- One button for both states: turning it off keeps the focus where it was (rule 17). -->
+      <Button
+        :variant="settings.app?.enrichment_opt_in ? 'outline' : 'default'"
+        size="sm"
+        @click="settings.app?.enrichment_opt_in ? turnOff() : (settings.enrichmentConsentOpen = true)"
+      >
+        {{ settings.app?.enrichment_opt_in ? t('enrichment.turnOff') : t('enrichment.turnOn') }}
       </Button>
-      <Button v-else size="sm" @click="settings.enrichmentConsentOpen = true">{{ t('enrichment.turnOn') }}</Button>
     </div>
   </Card>
 </template>

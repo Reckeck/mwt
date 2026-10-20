@@ -2,14 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
+import { Link } from 'lucide-vue-next'
 
 import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
-import { ContextMenu } from '@/shared/ui/context-menu'
+import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Money } from '@/entities/currency'
 import { formatDay } from '@/shared/lib/format'
-import { useCoarsePointer } from '@/shared/lib/phone'
-import { txId } from '@/shared/lib/transactions'
+import { call } from '@/shared/api/ipc'
+import { txExplorerUrl, txId } from '@/shared/lib/transactions'
 import { provideTxContext } from '@/shared/lib/tx-context'
 
 import { type TxDay, groupByDay } from '../../lib/group-by-day'
@@ -29,8 +30,6 @@ const props = withDefaults(defineProps<TransactionsListProps>(), {
   loadingMore: false,
 })
 const emit = defineEmits<{ open: [tx: Transaction]; more: [] }>()
-
-defineSlots<{ actions(props: { tx: Transaction }): unknown }>()
 
 const { t } = useI18n()
 
@@ -57,11 +56,18 @@ const days = computed<TxDay[]>(() =>
     ? groupByDay(shown.value, Number(props.fxPerUsd ?? 1), context.rootOf, props.storeId)
     : [{ date: '', txs: shown.value, totalBase: 0, partial: false }],
 )
-const coarse = useCoarsePointer()
+/** The row's menu: the explorer link (when the operation has one) and the list's own actions. */
+function actionsFor(tx: Transaction): UiAction[] {
+  const url = txExplorerUrl(tx)
+  const explorer: UiAction[] = url
+    ? [{ id: 'explorer', label: t('hist.openExplorer'), icon: Link, run: () => void call('open_explorer', { url }) }]
+    : []
+  return [...explorer, ...(props.rowActions?.(tx) ?? [])]
+}
 
 const listRoot = ref<HTMLElement | null>(null)
 const menuTx = ref<Transaction | null>(null)
-const menuActions = computed(() => (menuTx.value && props.rowActions ? props.rowActions(menuTx.value) : []))
+const menuActions = computed(() => (menuTx.value ? actionsFor(menuTx.value) : []))
 /** Outside a row (a day header, «Показать ещё») there is nothing to act on: no menu. */
 function onContextMenu(event: MouseEvent) {
   const id = (event.target as Element | null)?.closest<HTMLElement>('[data-tx-row]')?.dataset.txRow
@@ -109,12 +115,9 @@ function showMore() {
             :openable="props.openable"
             @open="(row) => emit('open', row)"
           >
-            <template #actions="{ tx: row }">
-              <slot name="actions" :tx="row" />
-              <!-- A finger has no right click: the same menu behind «⋯». -->
-              <span v-if="coarse && props.rowActions?.(row).length">
-                <ActionMenu :actions="props.rowActions(row)" :label="t('actions.more')" />
-              </span>
+            <!-- The same list as the right-click menu, behind «⋯» for a mouse and a finger alike. -->
+            <template v-if="props.rowActions" #actions="{ tx: row }">
+              <ActionMenu :actions="actionsFor(row)" :label="t('actions.more')" />
             </template>
           </TransactionRow>
         </div>

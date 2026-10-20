@@ -104,8 +104,8 @@ const allocationOption = computed<ChartOption>(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4 @lg:grid-cols-[2fr_1fr]">
-    <Card class="@lg:col-span-2">
+  <div class="grid grid-cols-1 gap-4 @wide:grid-cols-[2fr_1fr]">
+    <Card class="@wide:col-span-2">
       <template #header>
         <h3 class="heading-card">{{ t('charts.title') }}</h3>
       </template>
@@ -117,7 +117,7 @@ const allocationOption = computed<ChartOption>(() => {
       </template>
       <div class="h-80 w-full"><Chart :option="shareOption" autoresize /></div>
     </Card>
-    <Card :class="!severalAssets && '@lg:col-span-2'">
+    <Card :class="!severalAssets && '@wide:col-span-2'">
       <template #header>
         <h3 class="heading-card">{{ t('charts.distribution') }}</h3>
       </template>

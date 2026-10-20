@@ -61,7 +61,7 @@ const meta = computed(() => (data.value ? Object.values(data.value)[0].meta : nu
     :empty="empty"
     :empty-title="t(`report.emptyState.${props.kind}.title`)"
     :empty-description="t(`report.emptyState.${props.kind}.description`)"
-    skeleton="chart"
+    skeleton="report"
     @retry="report.refetch()"
   >
     <template #empty>

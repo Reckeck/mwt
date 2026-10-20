@@ -7,11 +7,13 @@ import { assetKey } from '@/shared/lib/asset-ref'
 import { keepOriginalMoment, toLocalInput } from '@/shared/lib/datetime'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { body, txId } from '@/shared/lib/transactions'
 
 import { adjustmentLines, badRow, difference, mergeDraftRows } from '../lib/adjustment-rows'
 import type { AdjustmentDialogProps, AdjustmentRow } from '../store-adjust.types'
+import { keepPreviousFor } from '@/shared/lib/query'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * A balance correction: the ledger's balances at a moment, what is really
@@ -22,7 +24,7 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   const { t } = useI18n()
   const queryClient = useQueryClient()
 
-  const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+  const tree = useStoreTree()
   const node = computed(() => flattenStoreTree(tree.data.value ?? []).find((entry) => entry.store.id === props.storeId))
   /** Cash and bank accounts hold money only: a currency, not any asset. */
   const fiatOnly = computed(() => ['cash', 'bank'].includes(node.value?.store.kind ?? ''))
@@ -44,6 +46,7 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
       timestamp.value,
       props.transaction ? txId(props.transaction) : null,
     ]),
+    placeholderData: keepPreviousFor(() => props.storeId),
     queryFn: () =>
       call<AdjustmentDraft>('get_adjustment_draft', {
         input: {

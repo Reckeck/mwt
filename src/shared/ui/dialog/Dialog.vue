@@ -11,10 +11,11 @@ import {
   DialogTitle,
 } from 'reka-ui'
 
-import { useIsPhone } from '@/shared/lib/phone'
+import { useCoarsePointer, useIsPhone } from '@/shared/lib/phone'
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/shared/ui/drawer'
 
 import { dialogWidths, type DialogProps } from './dialog.constants'
+import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 
 const props = withDefaults(
   defineProps<DialogProps>(),
@@ -28,6 +29,7 @@ const widths = dialogWidths
 const { t } = useI18n()
 /** On a phone the same dialog is a sheet from the bottom that a swipe closes. */
 const phone = useIsPhone()
+const coarse = useCoarsePointer()
 
 const FIELD = '[autofocus], input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"]'
 
@@ -38,7 +40,16 @@ const FIELD = '[autofocus], input:not([type="hidden"]):not([disabled]), textarea
  */
 function focusFirstField(event: Event) {
   const panel = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  const field = panel?.querySelector<HTMLElement>('[data-dialog-body] [autofocus]') ?? panel?.querySelector<HTMLElement>(`[data-dialog-body] :is(${FIELD})`)
+  // A touch screen: a focused field opens the keyboard over half the sheet before the
+  // user chose to type. Only a field marked `autofocus` (a password: typing is all there
+  // is to do) takes it; otherwise the panel does (not the «×» Reka would pick).
+  const marked = panel?.querySelector<HTMLElement>('[data-dialog-body] [autofocus]')
+  if (coarse.value) {
+    event.preventDefault()
+    ;(marked ?? panel)?.focus()
+    return
+  }
+  const field = marked ?? panel?.querySelector<HTMLElement>(`[data-dialog-body] :is(${FIELD})`)
   if (!field) return
   event.preventDefault()
   field.focus()
@@ -47,7 +58,11 @@ function focusFirstField(event: Event) {
 
 <template>
   <Drawer v-if="phone" :open="props.open" @update:open="(value) => emit('update:open', value)">
-    <DrawerContent v-bind="props.description ? {} : { 'aria-describedby': undefined }">
+    <DrawerContent
+      v-bind="props.description ? {} : { 'aria-describedby': undefined }"
+      tabindex="-1"
+      @open-auto-focus="focusFirstField"
+    >
       <header class="flex items-start gap-3 border-b border-border px-4 pt-2 pb-3">
         <div class="min-w-0 flex-1">
           <DrawerTitle class="truncate">{{ props.title }}</DrawerTitle>
@@ -73,12 +88,14 @@ function focusFirstField(event: Event) {
 
   <DialogRoot v-else :open="props.open" @update:open="(value) => emit('update:open', value)">
     <DialogPortal>
-      <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in" />
+      <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
-        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in"
+        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
         :class="widths[props.size]"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"
         @open-auto-focus="focusFirstField"
+        @pointer-down-outside="keepOpenOnToast"
+        @interact-outside="keepOpenOnToast"
       >
         <header class="flex items-start gap-3 border-b border-border p-4">
           <div class="min-w-0 flex-1">

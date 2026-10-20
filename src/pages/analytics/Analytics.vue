@@ -7,7 +7,14 @@ import { ReportExportButton } from '@/features/report-export'
 import { ReportFilterBar, type ReportPeriod } from '@/widgets/report-filter'
 import { RouteTabs } from '@/shared/ui/route-tabs'
 
-import { type AnalyticsGroup, FLOW_VIEW_KIND, GROUP_EXPORTS, GROUP_ROUTE, flowViewOf } from './model/analytics-groups'
+import {
+  type AnalyticsGroup,
+  FLOW_VIEW_KIND,
+  GROUP_EXPORTS,
+  GROUP_ROUTE,
+  MONTH_GROUPS,
+  flowViewOf,
+} from './model/analytics-groups'
 import { useReportFilter } from './model/use-report-filter'
 
 const { t } = useI18n()
@@ -21,6 +28,7 @@ const TAB_LABEL: Record<AnalyticsGroup, string> = {
   flow: 'analytics.group.flow',
   wealth: 'analytics.groupShort.wealth',
   investments: 'analytics.group.investments',
+  saldo: 'analytics.group.saldo',
 }
 const tabs = computed(() =>
   (Object.keys(GROUP_ROUTE) as AnalyticsGroup[]).map((entry) => ({ name: GROUP_ROUTE[entry], label: t(TAB_LABEL[entry]) })),
@@ -33,7 +41,7 @@ function keepFilter(query: LocationQuery): LocationQuery {
 
 const exportKinds = computed(() => (group.value === 'flow' ? [FLOW_VIEW_KIND[view.value]] : GROUP_EXPORTS[group.value]))
 const period = computed<ReportPeriod>(() => {
-  if (group.value === 'overview') return 'month'
+  if (MONTH_GROUPS.includes(group.value)) return 'month'
   return group.value === 'flow' && view.value === 'year' ? 'year' : 'range'
 })
 
@@ -54,6 +62,7 @@ const { filter, effective, month, realTerms, narrowed, reset } = useReportFilter
         v-model:month="month"
         :period="period"
         :real-terms="realTerms"
+        :wallets="group !== 'saldo'"
         :active="narrowed"
         @reset="reset"
       />

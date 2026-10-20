@@ -22,6 +22,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const terms = useQuery({
+  // no placeholder: another contact's terms must not show under this one
   queryKey: computed(() => ['debt-terms', props.contact.id]),
   queryFn: () => call<DebtTerms[]>('list_debt_terms', { contactId: props.contact.id }),
 })
@@ -96,7 +97,7 @@ const ACTIONS: { effect: DebtEffect; icon: typeof ArrowUpRight }[] = [
             {{ entry.overdue ? t('debt.overdue', { date: formatDate(entry.terms.due_at) }) : t('debt.dueOn', { date: formatDate(entry.terms.due_at) }) }}
           </span>
         </div>
-        <div class="grid gap-2 @md:grid-cols-[10rem_1fr]">
+        <div class="grid gap-2 @mid:grid-cols-[10rem_1fr]">
           <DateTimePicker
             class="h-8"
             :model-value="entry.terms?.due_at ?? ''"

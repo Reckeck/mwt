@@ -73,9 +73,17 @@ function onApplyPlan(payload: CalculatorPlan) {
   plan.value = { ...payload }
   transactionOpen.value = true
 }
-/** Nothing recorded and nothing held: one first step instead of empty charts. */
+/**
+ * Nothing recorded and nothing held: one first step instead of empty charts. A property
+ * is never «empty»: its utilities live in its tabs, and a bill can be due before the
+ * first operation (the dashboard showed it, the page hid the tab).
+ */
 const isEmpty = computed(
-  () => !hasChildren.value && overview.data.value?.tx_count === 0 && !overview.data.value?.positions.length,
+  () =>
+    store.value?.kind !== 'property' &&
+    !hasChildren.value &&
+    overview.data.value?.tx_count === 0 &&
+    !overview.data.value?.positions.length,
 )
 
 function openWallet(created: Store) {

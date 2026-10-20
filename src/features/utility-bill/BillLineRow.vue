@@ -35,7 +35,7 @@ function onReading(value: string | number, zone: string | null) {
 </script>
 
 <template>
-  <li class="grid items-center gap-2 p-2.5 @sm:grid-cols-[1.5rem_1fr_9rem_9rem]">
+  <li class="grid items-center gap-2 p-2.5 @xl:grid-cols-[1.5rem_1fr_9rem_9rem]">
     <Checkbox v-model="props.row.include" :aria-label="t('utilityBill.include', { name: item.name })" />
     <div class="min-w-0">
       <p class="flex items-center gap-2 truncate text-sm font-medium">
@@ -68,7 +68,7 @@ function onReading(value: string | number, zone: string | null) {
       :aria-label="t('utilities.reading')"
       @update:model-value="(value) => onReading(value, null)"
     />
-    <span v-else class="hidden @sm:block" />
+    <span v-else class="hidden @xl:block" />
     <AmountInput v-model="props.row.amount" :decimals="2" :aria-label="t('utilities.amount')">
       <template #suffix>
         <span class="px-2 text-xs uppercase text-muted-foreground">{{ item.currency }}</span>

@@ -1,10 +1,8 @@
 import { type InjectionKey, computed, inject, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
-
-import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useCategories, useContacts, useStoreTree } from '@/shared/api/queries'
 
 export type TxContext = ReturnType<typeof buildTxContext>
 
@@ -32,18 +30,9 @@ export function provideTxContext(): TxContext {
 function buildTxContext() {
   const { t } = useI18n()
 
-  const tree = useQuery({
-    queryKey: STORE_TREE_QUERY_KEY,
-    queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-  })
-  const contacts = useQuery({
-    queryKey: ['contacts'],
-    queryFn: () => call<Contact[]>('list_contacts'),
-  })
-  const categories = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => call<Category[]>('list_categories'),
-  })
+  const tree = useStoreTree()
+  const contacts = useContacts()
+  const categories = useCategories()
 
   const nodes = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node])))
 

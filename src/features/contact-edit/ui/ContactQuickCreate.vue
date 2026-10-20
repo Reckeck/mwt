@@ -37,7 +37,7 @@ const create = useMutation({
       <Button
         type="submit"
         size="icon"
-        class="size-9 shrink-0"
+        class="shrink-0"
         :disabled="create.isPending.value"
         :title="t('contacts.new')"
         :aria-label="t('contacts.new')"

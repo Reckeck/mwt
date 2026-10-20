@@ -27,10 +27,12 @@ const { t } = useI18n()
 const ownBalances = computed(() => props.balances.filter((row) => row.contact_id === props.contact.id))
 
 const turnover = useQuery({
+  // no placeholder: another contact's turnover
   queryKey: computed(() => ['contacts', 'turnover', props.contact.id]),
   queryFn: () => call<ContactTurnover>('get_contact_turnover', { input: { contact_id: props.contact.id, account_id: null } }),
 })
 const history = useQuery({
+  // no placeholder: another contact's operations
   queryKey: computed(() => ['transactions', 'contact', props.contact.id]),
   queryFn: () => call<Transaction[]>('list_transactions', { filter: emptyTxFilter({ contact_id: props.contact.id }) }),
 })
@@ -48,7 +50,7 @@ const detailTabs = computed(() => [
   <div class="grid gap-4">
     <Card :class="props.contact.archived && 'opacity-70'">
       <template #header>
-        <div class="flex flex-wrap items-center justify-end gap-1">
+        <div class="flex flex-wrap items-center justify-end gap-1 pointer-coarse:gap-3">
           <RouterLink
             :to="{ name: 'transactions', query: { contact: props.contact.id } }"
             :class="buttonVariants({ variant: 'ghost', size: 'sm' })"

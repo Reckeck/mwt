@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
@@ -26,6 +26,7 @@ export function useTxBudget(state: TxFormState) {
       form.categories.join(','),
       budgetStatus.data.value,
     ]),
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const amount = Number(form.amount)
       const asset = form.asset

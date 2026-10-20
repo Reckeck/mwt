@@ -43,7 +43,7 @@ function pick(next: unknown) {
       :aria-invalid="props.invalid || (attrs['aria-invalid'] as boolean | undefined) || undefined"
       :class="
         cn(
-          'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm whitespace-nowrap shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground aria-invalid:border-destructive [&>span]:truncate',
+          'touch-hit flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm whitespace-nowrap shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground aria-invalid:border-destructive [&>span]:truncate',
           props.invalid && 'border-destructive',
           attrs.class as string,
         )

@@ -10,10 +10,10 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
-import { activeLocale } from '@/shared/lib/locale'
 import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { formatMonthKey } from '@/shared/lib/format'
 
 /**
  * The last months of one bill: the reading can be corrected or removed in
@@ -25,8 +25,7 @@ const queryClient = useQueryClient()
 
 const recent = computed(() => [...props.months].reverse().slice(0, 12))
 const unit = computed(() => ('metered' in props.item.kind ? props.item.kind.metered.unit : ''))
-const monthLabel = (period: string) =>
-  new Intl.DateTimeFormat(activeLocale.value, { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T12:00`))
+const monthLabel = (period: string) => formatMonthKey(period, { month: 'long', year: 'numeric' })
 
 function refresh() {
   for (const queryKey of [['utility-trend'], ['utility-bill'], ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
@@ -113,15 +112,14 @@ const txOpen = computed({
             </span>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-7"
+              size="icon-sm"
               :aria-label="t('actions.save')"
               :disabled="saveReading.isPending.value"
               @click="draftCheck.submit(() => saveReading.mutate(reading), $event)"
             >
               <Check class="size-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" class="size-7" :aria-label="t('actions.cancel')" @click="editing = null">
+            <Button variant="ghost" size="icon-sm"  :aria-label="t('actions.cancel')" @click="editing = null">
               <X class="size-3.5" />
             </Button>
           </template>
@@ -132,8 +130,7 @@ const txOpen = computed({
             </span>
             <Button
               variant="ghost"
-              size="icon"
-              class="size-6"
+              size="icon-xs"
               :aria-label="t('utilityHistory.editReading')"
               @click="startEdit(reading)"
             >
@@ -162,8 +159,7 @@ const txOpen = computed({
             <Money :amount="tx.payment.amount" :currency="tx.payment.asset.symbol.toLowerCase()" :convert="false" />
             <Button
               variant="ghost"
-              size="icon"
-              class="size-6"
+              size="icon-xs"
               :aria-label="t('utilityHistory.editPayment')"
               @click="editedTx = tx"
             >

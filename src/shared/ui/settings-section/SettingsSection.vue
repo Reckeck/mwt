@@ -23,7 +23,8 @@ const props = withDefaults(defineProps<SettingsSectionProps>(), { description: u
         </div>
       </div>
     </template>
-    <div class="flex flex-col gap-4">
+    <!-- pt-2: the header's gap plus this make the same 16px as between two fields. -->
+    <div class="flex flex-col gap-4 pt-2">
       <slot />
     </div>
     <template v-if="$slots.footer" #footer>

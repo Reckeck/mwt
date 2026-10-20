@@ -111,7 +111,7 @@ function onPick(value: unknown) {
             <ComboboxItem v-for="row in rows" :key="row.value" :value="row.value">
               <span class="w-24 shrink-0 font-medium">{{ row.base }}/{{ row.quote }}</span>
               <span class="min-w-0 flex-1 truncate text-muted-foreground">{{ row.name }}</span>
-              <span v-if="props.kind === 'futures'" class="shrink-0 text-[10px] uppercase text-muted-foreground">
+              <span v-if="props.kind === 'futures'" class="shrink-0 text-2xs uppercase text-muted-foreground">
                 {{ t('pair.perpetual') }}
               </span>
             </ComboboxItem>

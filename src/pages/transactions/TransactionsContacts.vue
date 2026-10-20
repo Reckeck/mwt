@@ -7,18 +7,19 @@ import { TransactionCreateDialog } from '@/features/transaction-create'
 import { type ContactDebtFilter, contactSections, filterContacts } from '@/entities/contact'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 import { useContactActions } from './model/use-contact-actions'
 import { ContactDetails } from './ui/contact-details'
 import { ContactList } from './ui/contact-list'
+import { useContacts, useStoreTree } from '@/shared/api/queries'
 
 /** Contacts and debts: the list on the left, the picked contact on the right. */
 const { t } = useI18n()
 
-const contacts = useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts') })
+const contacts = useContacts()
 const balances = useQuery({ queryKey: ['contacts', 'balances'], queryFn: () => call<ContactBalance[]>('get_contact_balances') })
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 
 const search = ref('')
 const filter = ref<ContactDebtFilter>('all')

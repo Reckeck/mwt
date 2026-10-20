@@ -15,7 +15,7 @@ const { form, check } = useTxForm()
 </script>
 
 <template>
-  <div class="grid gap-3 @sm:grid-cols-3">
+  <div class="grid gap-3 @xl:grid-cols-3">
     <FormField for="tx-symbol" :label="t('tx.field.contract')" required :error="check.error('symbol')">
       <PairInput id="tx-symbol" v-model="form.symbol" kind="futures" placeholder="BTCUSDT" />
     </FormField>

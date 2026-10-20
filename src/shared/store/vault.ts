@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-import { call, onEvent } from '@/shared/api/ipc'
+import { call } from '@/shared/api/ipc'
 
 interface VaultState {
   status: VaultStatus | null
@@ -104,11 +104,10 @@ export const useVaultStore = defineStore('vault', {
       this.status = status
       localStorage.setItem('trade-app:unlocked', 'false')
     },
-    listen() {
-      return onEvent<VaultStatus>('vault-changed', (status) => {
-        this.status = status
-        this.locked = status.unlocked !== true
-      })
+    /** The backend locked or unlocked the vault by itself (`vault-changed`, subscribed in App.vue). */
+    applyStatus(status: VaultStatus) {
+      this.status = status
+      this.locked = status.unlocked !== true
     },
   },
 })

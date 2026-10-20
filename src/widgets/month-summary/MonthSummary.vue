@@ -8,6 +8,7 @@ import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
+import { SectionState } from '@/shared/ui/section-state'
 
 const { t } = useI18n()
 
@@ -51,5 +52,9 @@ const rows = computed(() => {
     </p>
   </Card>
   <!-- Holds the cell while loading, so the widget does not pop in. -->
+  <!-- A failed load says so and offers a retry; it used to stay a skeleton for ever. -->
+  <Card size="sm" v-else-if="summary.error.value">
+    <SectionState :error="summary.error.value" compact @retry="summary.refetch()" />
+  </Card>
   <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

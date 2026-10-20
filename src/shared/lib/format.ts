@@ -1,4 +1,42 @@
+// check-ui-ignore intl-cache: the one place that builds Intl formatters, each cached below
 import { activeLocale } from '@/shared/lib/locale'
+
+const numberFormats = new Map<string, Intl.NumberFormat>()
+const dateFormats = new Map<string, Intl.DateTimeFormat>()
+
+/**
+ * A number formatter for the UI language, built once per options. Building one
+ * costs ~30 µs: a page of sums built two per sum (rule 17). Reading
+ * `activeLocale` keeps a template re-rendering when the language changes.
+ */
+export function numberFormat(
+  options: Intl.NumberFormatOptions = {},
+  locale: string = activeLocale.value,
+): Intl.NumberFormat {
+  const key = `${locale}|${JSON.stringify(options)}`
+  let format = numberFormats.get(key)
+  if (!format) {
+    format = new Intl.NumberFormat(locale, options)
+    numberFormats.set(key, format)
+  }
+  return format
+}
+
+/** A date formatter for the UI language, built once per options (see `numberFormat`). */
+export function dateFormat(
+  options: Intl.DateTimeFormatOptions = {},
+  locale: string = activeLocale.value,
+): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`
+  let format = dateFormats.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, options)
+    dateFormats.set(key, format)
+  }
+  return format
+}
+
+const symbols = new Map<string, string>()
 
 /** ISO 4217 codes the runtime knows; anything else (BTC, USDT, …) is shown by its ticker. */
 const ISO_CURRENCIES: Set<string> = (() => {
@@ -16,8 +54,12 @@ export function isFiatCode(code: string | null | undefined): boolean {
 /** Locale symbol for fiat (`₽`, `$`, `CA$`, `€`), the uppercase ticker otherwise. */
 export function currencySymbol(code: string): string {
   if (!isFiatCode(code)) return code.toUpperCase()
+  const key = `${activeLocale.value}|${code}`
+  const known = symbols.get(key)
+  if (known) return known
+  let symbol = code.toUpperCase()
   try {
-    const part = new Intl.NumberFormat(activeLocale.value, {
+    const part = numberFormat({
       style: 'currency',
       currency: code.toUpperCase(),
       // Not `narrowSymbol`: that turns CAD, AUD and USD all into a bare `$`.
@@ -25,10 +67,12 @@ export function currencySymbol(code: string): string {
     })
       .formatToParts(0)
       .find((entry) => entry.type === 'currency')
-    return part?.value ?? code.toUpperCase()
+    symbol = part?.value ?? symbol
   } catch {
-    return code.toUpperCase()
+    // An unknown code shows as its ticker.
   }
+  symbols.set(key, symbol)
+  return symbol
 }
 
 export interface MoneyFormatOptions {
@@ -52,9 +96,10 @@ export function moneyParts(
   if (!Number.isFinite(numeric)) return { number: String(value), symbol: currency ? currencySymbol(currency) : '' }
   const crypto = !!currency && !isFiatCode(currency)
   const decimals = opts.decimals ?? (crypto ? undefined : 2)
-  const fmt = new Intl.NumberFormat(activeLocale.value, {
+  const fmt = numberFormat({
     notation: compact ? 'compact' : 'standard',
-    signDisplay: signed ? 'exceptZero' : 'auto',
+    // 'negative', not 'auto': -0 and -0.001 read «0,00», not «−0,00».
+    signDisplay: signed ? 'exceptZero' : 'negative',
     ...(decimals === undefined
       ? { maximumFractionDigits: Math.abs(numeric) >= 1 ? 4 : 8, minimumFractionDigits: 0 }
       : { minimumFractionDigits: compact ? 0 : decimals, maximumFractionDigits: decimals }),
@@ -85,9 +130,10 @@ export function formatPct(value: string | number | null | undefined, opts: PctFo
   const numeric = typeof value === 'string' ? Number(value) : value
   if (!Number.isFinite(numeric)) return String(value)
   const { signed = false, decimals = 2 } = opts
-  return new Intl.NumberFormat(activeLocale.value, {
+  return numberFormat({
     style: 'percent',
-    signDisplay: signed ? 'exceptZero' : 'auto',
+    // 'negative', not 'auto': -0 and -0.001 read «0,00», not «−0,00».
+    signDisplay: signed ? 'exceptZero' : 'negative',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(numeric / 100)
@@ -102,7 +148,7 @@ export function formatQuantity(value: string | number | null | undefined, maxDec
   if (value === null || value === undefined || value === '') return '—'
   const numeric = typeof value === 'string' ? Number(value) : value
   if (!Number.isFinite(numeric)) return String(value)
-  return new Intl.NumberFormat(activeLocale.value, { maximumFractionDigits: maxDecimals }).format(numeric)
+  return numberFormat({ maximumFractionDigits: maxDecimals }).format(numeric)
 }
 
 /**
@@ -145,18 +191,34 @@ export function formatDay(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return new Intl.DateTimeFormat(activeLocale.value, { weekday: 'short', day: 'numeric', month: 'short' }).format(date)
+  return dateFormat({ weekday: 'short', day: 'numeric', month: 'short' }).format(date)
 }
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return new Intl.DateTimeFormat(activeLocale.value, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  }).format(date)
+  return dateFormat({ year: 'numeric', month: 'short', day: '2-digit' }).format(date)
+}
+
+/**
+ * A month by its `YYYY-MM` key (`2026-10` → «октябрь 2026 г.» / «окт.»). Noon
+ * of the 1st, so no time zone moves it into the month before.
+ */
+export function formatMonthKey(
+  key: string,
+  options: { month?: 'long' | 'short' | 'narrow'; year?: 'numeric' | '2-digit' } = { month: 'long', year: 'numeric' },
+  locale: string = activeLocale.value,
+): string {
+  const date = new Date(`${key.slice(0, 7)}-01T12:00`)
+  if (Number.isNaN(date.getTime())) return key
+  return dateFormat(options, locale).format(date)
+}
+
+/** A weekday's name; `date` is a `YYYY-MM-DD` key or a Date. */
+export function formatWeekday(date: string | Date, style: 'narrow' | 'short' | 'long' = 'short'): string {
+  const value = typeof date === 'string' ? new Date(`${date.slice(0, 10)}T12:00`) : date
+  return dateFormat({ weekday: style }).format(value)
 }
 
 /** Times read 0–23 in every language: no AM/PM, also in English. */
@@ -166,7 +228,7 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return new Intl.DateTimeFormat(activeLocale.value, {
+  return dateFormat({
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -182,11 +244,7 @@ export function formatAsOf(iso: string | null | undefined): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
   if (date.toDateString() !== new Date().toDateString()) return formatDateTime(iso)
-  return new Intl.DateTimeFormat(activeLocale.value, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: TIME_CYCLE,
-  }).format(date)
+  return dateFormat({ hour: '2-digit', minute: '2-digit', hourCycle: TIME_CYCLE }).format(date)
 }
 
 export function useMoney() {

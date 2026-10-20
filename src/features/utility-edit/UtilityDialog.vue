@@ -16,14 +16,15 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { firstError, integerInRange, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
-import { Switch } from '@/shared/ui/switch'
 
 import MeterFields from './MeterFields.vue'
 import { type MeterMode, useFormulaPreview, zoneKey, zoneList } from './meter-formula'
 import { UTILITY_KINDS, type UtilityKindName } from './utility-edit.constants'
 import type { UtilityDialogProps } from './utility-edit.types'
+import { useStoreTree } from '@/shared/api/queries'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 const props = withDefaults(defineProps<UtilityDialogProps>(), { item: null, propertyId: '' })
 const open = defineModel<boolean>('open', { required: true })
@@ -32,7 +33,7 @@ const { t, locale } = useI18n()
 const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 /** Bills belong to a property; only top-level property wallets qualify. */
 const properties = computed(() => nodes.value.filter((node) => node.store.kind === 'property' && !node.store.parent_id))
@@ -153,7 +154,7 @@ const save = useMutation({
 <template>
   <Dialog v-model:open="open" :title="props.item ? t('utilities.edit') : t('utilities.new')">
     <form id="utility-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
-      <div class="grid gap-3 @sm:grid-cols-[1fr_11rem]">
+      <div class="grid gap-3 @xl:grid-cols-[1fr_11rem]">
         <FormField for="utility-name" :label="t('utilities.name')" required :error="form.error('name')">
           <Input id="utility-name" v-model="name" :placeholder="t('utilities.namePlaceholder')" />
         </FormField>
@@ -180,7 +181,7 @@ const save = useMutation({
         :zones-error="form.error('zones')"
         :formula-error="form.error('formula')"
       />
-      <div v-else class="grid gap-3 @sm:grid-cols-3">
+      <div v-else class="grid gap-3 @xl:grid-cols-3">
         <FormField for="utility-amount" :label="kind === 'housing' ? t('utilities.rent') : t('utilities.amount')" required :error="form.error('amount')">
           <AmountInput id="utility-amount" v-model="amount" />
         </FormField>
@@ -189,7 +190,7 @@ const save = useMutation({
             <AmountInput id="utility-deposit" v-model="deposit" :placeholder="t('goal.optional')" />
           </FormField>
           <FormField for="utility-due" :label="t('utilities.dueDay')" required :error="form.error('dueDay')">
-            <Input id="utility-due" v-model="dueDay" type="number" min="1" max="31" />
+            <Input id="utility-due" v-model="dueDay" type="text" inputmode="numeric" min="1" max="31" />
           </FormField>
         </template>
       </div>
@@ -202,7 +203,7 @@ const save = useMutation({
         <p class="text-xs text-muted-foreground">{{ t('utilities.automationHint') }}</p>
       </div>
 
-      <div class="grid gap-3 @sm:grid-cols-3">
+      <div class="grid gap-3 @xl:grid-cols-3">
         <FormField for="utility-currency" :label="t('utilities.currency')" required :error="form.error('currency')">
           <CurrencyPicker id="utility-currency" v-model="currency" />
         </FormField>
@@ -226,10 +227,7 @@ const save = useMutation({
           <CategorySelect id="utility-category" v-model="category" :groups="['fixed']" />
         </div>
       </div>
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="utility-active">{{ t('utilities.active') }}</Label>
-        <Switch id="utility-active" v-model="active" />
-      </div>
+      <SwitchRow id="utility-active" :label="t('utilities.active')" v-model="active" />
     </form>
     <template #footer>
       <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { ArrowLeftRight } from 'lucide-vue-next'
 
 import { CurrencyPicker, Money } from '@/entities/currency'
@@ -39,6 +39,7 @@ watch(
 )
 const converted = useQuery({
   queryKey: computed(() => ['convert', from.value, to.value, amount.value, date.value]),
+  placeholderData: keepPreviousData,
   queryFn: () =>
     call<ConvertedAmount>('convert_amount', {
       input: {
@@ -62,7 +63,7 @@ function swap() {
         <Label for="convert-from">{{ t('rates.from') }}</Label>
         <CurrencyPicker id="convert-from" v-model="from" label="" compact :extra="codes" />
       </div>
-      <Button variant="ghost" size="icon" class="size-9" :aria-label="t('rates.swap')" @click="swap">
+      <Button variant="ghost" size="icon"  :aria-label="t('rates.swap')" @click="swap">
         <ArrowLeftRight class="size-4" />
       </Button>
       <div class="grid gap-1.5">

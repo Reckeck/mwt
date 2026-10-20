@@ -4,6 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Multi Wallet Tracker</title>
+    <!-- Theme and language before the first paint: the stylesheet arrives with the app code,
+         and a dark theme must not start white (rule 17). The values mirror --background. -->
+    <style>
+      html { background: #ffffff; color-scheme: light; }
+      html.dark { background: #09090b; color-scheme: dark; }
+    </style>
+    <script>
+      // Theme and language before the first paint: no white flash, no wrong hyphenation.
+      ;(() => {
+        try {
+          const root = document.documentElement
+          const pref = localStorage.getItem('trade-app:theme') || 'auto'
+          const dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
+          root.classList.toggle('dark', dark)
+          root.setAttribute('data-theme', dark ? 'dark' : 'light')
+          // The Linux window (WebKitGTK): overlays open without animation there, see styles.css.
+          const ua = navigator.userAgent
+          if (/Linux/.test(ua) && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Android/.test(ua)) {
+            root.dataset.engine = 'webkitgtk'
+          }
+          const lang = localStorage.getItem('trade-app:locale')
+          if (lang === 'ru' || lang === 'en') root.lang = lang
+        } catch {
+          // Storage blocked: the app sets both once it starts.
+        }
+      })()
+    </script>
   </head>
   <body class="h-full antialiased">
     <div id="app" class="h-full"></div>

@@ -30,34 +30,38 @@ const { t } = useI18n()
       :title="props.reminder.repeat ? t('reminder.doneRepeatHint') : t('reminder.done')"
       @update:model-value="emit('done')"
     />
-    <span class="flex min-w-0 flex-1 items-center gap-2">
+    <!-- Two lines: the text keeps the whole width; when, how often and where from go under it
+         (in one line the badges squeezed the text to a few letters on a phone). -->
+    <span class="grid min-w-0 flex-1 gap-0.5">
       <span class="truncate text-sm" :class="props.reminder.done && 'line-through'">{{ props.reminder.text }}</span>
-      <Badge v-if="props.reminder.repeat" variant="outline" class="shrink-0 gap-1">
-        <Repeat class="size-3" />
-        {{ repeatLabel(props.reminder.repeat) }}
-      </Badge>
-      <Badge v-if="props.reminder.source" variant="secondary" class="shrink-0" :title="t('reminder.autoHint')">
-        {{ t('reminder.auto') }}
-      </Badge>
-      <RouterLink
-        v-if="props.reminder.source && sourceLink(props.reminder.source)"
-        :to="sourceLink(props.reminder.source) ?? '/'"
-        class="shrink-0 text-muted-foreground hover:text-foreground"
-        :title="t('reminder.openSource')"
-        :aria-label="t('reminder.openSource')"
-      >
-        <ExternalLink class="size-3.5" />
-      </RouterLink>
-    </span>
-    <span
-      class="shrink-0 text-xs tabular-nums"
-      :class="overdue(props.reminder) ? 'text-destructive' : 'text-muted-foreground'"
-    >
-      <AlarmClock
-        v-if="props.reminder.snoozed_until && dueOf(props.reminder) === props.reminder.snoozed_until"
-        class="mr-1 inline size-3"
-      />
-      {{ formatDateTime(dueOf(props.reminder)) }}
+      <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          class="text-xs tabular-nums"
+          :class="overdue(props.reminder) ? 'text-destructive' : 'text-muted-foreground'"
+        >
+          <AlarmClock
+            v-if="props.reminder.snoozed_until && dueOf(props.reminder) === props.reminder.snoozed_until"
+            class="mr-1 inline size-3"
+          />
+          {{ formatDateTime(dueOf(props.reminder)) }}
+        </span>
+        <Badge v-if="props.reminder.repeat" variant="outline" class="gap-1">
+          <Repeat class="size-3" />
+          {{ repeatLabel(props.reminder.repeat) }}
+        </Badge>
+        <Badge v-if="props.reminder.source" variant="secondary" :title="t('reminder.autoHint')">
+          {{ t('reminder.auto') }}
+        </Badge>
+        <RouterLink
+          v-if="props.reminder.source && sourceLink(props.reminder.source)"
+          :to="sourceLink(props.reminder.source) ?? '/'"
+          class="text-muted-foreground hover:text-foreground"
+          :title="t('reminder.openSource')"
+          :aria-label="t('reminder.openSource')"
+        >
+          <ExternalLink class="size-3.5" />
+        </RouterLink>
+      </span>
     </span>
     <DropdownMenu v-if="!props.reminder.done" align="end">
       <template #trigger>
@@ -76,12 +80,12 @@ const { t } = useI18n()
       </DropdownMenuItem>
     </DropdownMenu>
     <div
-      class="flex shrink-0 items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100"
+      class="flex shrink-0 items-center gap-1 pointer-coarse:gap-2 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100"
     >
       <Button
         variant="ghost"
-        size="icon"
-        class="size-8 text-muted-foreground"
+        size="icon-sm"
+        class="text-muted-foreground"
         :title="t('reminder.edit')"
         :aria-label="t('reminder.edit')"
         @click="emit('edit')"

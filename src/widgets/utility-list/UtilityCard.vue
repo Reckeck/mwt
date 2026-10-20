@@ -15,10 +15,11 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { notify } from '@/shared/lib/notify'
 
 import UtilityHistory from './UtilityHistory.vue'
+import { useStoreTree } from '@/shared/api/queries'
 
 const props = defineProps<{ item: UtilityItem }>()
 
@@ -26,10 +27,11 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const trend = useQuery({
+  // no placeholder: another item's trend
   queryKey: computed(() => ['utility-trend', props.item.id]),
   queryFn: () => call<UtilityTrend>('get_meter_trend', { itemId: props.item.id }),
 })
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 
 const kindName = computed(() =>
   'metered' in props.item.kind ? 'metered' : 'static' in props.item.kind ? 'static' : 'housing',
@@ -100,8 +102,8 @@ function onPaid() {
         <div class="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
-            size="icon"
-            class="size-8 text-muted-foreground"
+            size="icon-sm"
+            class="text-muted-foreground"
             :title="t('utilities.edit')"
             :aria-label="t('utilities.edit')"
             @click="editOpen = true"

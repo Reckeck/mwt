@@ -1,11 +1,22 @@
+// check-ui-ignore invalidate-all: a batch that moved the ledger (or its undo) changes what every screen derives
 import { useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { notify } from '@/shared/lib/notify'
+import { useSettingsStore } from '@/shared/store/settings'
 
-import { SYNC_HISTORY_KEY } from './use-sync-status'
+import { keysOfBatch, touchesSettings } from '../lib/sync-keys'
+
+import { SYNC_HISTORY_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
+
+/** The sessions a status names, to tell a new or gone device from a progress tick. */
+const sessionSet = (status: SyncStatus | undefined) =>
+  (status?.sessions ?? [])
+    .map((session) => `${session.session_id}:${session.phase}`)
+    .sort()
+    .join('|')
 
 /**
  * What sync tells in the background: a batch arrived (every screen re-reads,
@@ -15,9 +26,26 @@ import { SYNC_HISTORY_KEY } from './use-sync-status'
 export function useSyncEvents() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
+  const settingsStore = useSettingsStore()
+
+  /** Re-read what a batch changed: the whole app only when the ledger moved. */
+  function refreshAfter(summary: SyncSummary) {
+    const keys = keysOfBatch(summary)
+    if (keys === 'all') void queryClient.invalidateQueries()
+    else for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey })
+    if (touchesSettings(summary)) void settingsStore.loadVault().catch(() => undefined)
+  }
+
+  // Pushed on every change, progress ticks included: the device list is re-read
+  // only when a session comes, goes or changes phase.
+  useBackendEvent<SyncStatus>('sync-status', (next) => {
+    const before = sessionSet(queryClient.getQueryData<SyncStatus>(SYNC_STATUS_KEY))
+    queryClient.setQueryData(SYNC_STATUS_KEY, next)
+    if (sessionSet(next) !== before) void queryClient.invalidateQueries({ queryKey: SYNC_PEERS_KEY })
+  })
 
   useBackendEvent<VaultSyncedEvent>('vault-synced', ({ batch }) => {
-    void queryClient.invalidateQueries()
+    refreshAfter(batch.summary)
     notify.success(t('sync.synced', { name: batch.peer_name, count: batch.summary.total }), {
       action: {
         label: t('actions.undo'),

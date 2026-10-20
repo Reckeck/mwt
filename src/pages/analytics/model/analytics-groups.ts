@@ -1,5 +1,5 @@
-/** The analytics sections: the overview and the three questions. */
-export type AnalyticsGroup = 'overview' | 'flow' | 'wealth' | 'investments'
+/** The analytics sections: the overview, the three questions and the month's running balance. */
+export type AnalyticsGroup = 'overview' | 'flow' | 'wealth' | 'investments' | 'saldo'
 
 /** «Income and spending» shows one of three reports. */
 export type FlowView = 'months' | 'year' | 'categories'
@@ -18,6 +18,7 @@ export const GROUP_ROUTE: Record<AnalyticsGroup, string> = {
   flow: 'analytics-flow',
   wealth: 'analytics-wealth',
   investments: 'analytics-investments',
+  saldo: 'analytics-saldo',
 }
 
 /** What the export button offers on each section (the flow view is added at runtime). */
@@ -25,10 +26,14 @@ export const GROUP_EXPORTS: Record<Exclude<AnalyticsGroup, 'flow'>, ReportKind[]
   overview: [],
   wealth: ['networth', 'stores'],
   investments: ['portfolio', 'pnl', 'losses'],
+  saldo: [],
 }
 
 /** Sections where «in today's money» means something; elsewhere the figures stay nominal. */
 export const REAL_TERMS_GROUPS: AnalyticsGroup[] = ['flow', 'wealth']
+
+/** Sections that show one month, picked with the overview's own `month` key. */
+export const MONTH_GROUPS: AnalyticsGroup[] = ['overview', 'saldo']
 
 export function flowViewOf(raw: unknown): FlowView {
   return FLOW_VIEWS.includes(raw as FlowView) ? (raw as FlowView) : 'months'

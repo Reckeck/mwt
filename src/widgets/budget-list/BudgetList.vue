@@ -16,15 +16,17 @@ import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useCategories, useStoreTree } from '@/shared/api/queries'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const budgets = useQuery({ queryKey: ['budgets'], queryFn: () => call<Budget[]>('list_budgets') })
 const statuses = useQuery({ queryKey: ['budget-status'], queryFn: () => call<BudgetStatus[]>('get_budget_status') })
-const categories = useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories') })
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const categories = useCategories()
+const tree = useStoreTree()
 
 function targetText(target: BudgetTarget): string {
   if (target === 'total') return t('budget.targetKind.total')
@@ -33,7 +35,11 @@ function targetText(target: BudgetTarget): string {
   return flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === id)?.path.join(' › ') ?? id
 }
 
-const statusOf = (id: string) => statuses.data.value?.find((status) => status.budget.id === id) ?? null
+/** Each budget with its status, matched once per list rather than per read. */
+const rows = computed(() => {
+  const byId = new Map((statuses.data.value ?? []).map((status) => [status.budget.id, status]))
+  return (budgets.data.value ?? []).map((budget) => ({ budget, status: byId.get(budget.id) ?? null }))
+})
 const usedPct = (status: BudgetStatus | null) => Math.min(100, Math.round(Number(status?.used ?? 0) * 100))
 
 const dialogOpen = ref(false)
@@ -66,8 +72,8 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
       <Button @click="openNew"><Plus class="size-4" />{{ t('budget.new') }}</Button>
     </EmptyState>
 
-    <div class="grid gap-4 @lg:grid-cols-2">
-      <Card v-for="budget in budgets.data.value ?? []" :key="budget.id">
+    <div class="grid gap-4 @wide:grid-cols-2">
+      <Card v-for="{ budget, status } in rows" :key="budget.id">
         <div class="grid gap-3">
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
@@ -77,7 +83,7 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
                 <Badge v-if="!budget.active" variant="outline">{{ t('budget.paused') }}</Badge>
               </div>
               <p class="text-sm tabular-nums text-muted-foreground">
-                <Money :amount="statusOf(budget.id)?.spent ?? '0'" :currency="budget.currency" />
+                <Money :amount="status?.spent ?? '0'" :currency="budget.currency" />
                 /
                 <Money :amount="budget.limit" :currency="budget.currency" />
               </p>
@@ -85,8 +91,8 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
             <div class="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
-                size="icon"
-                class="size-8 text-muted-foreground"
+                size="icon-sm"
+                class="text-muted-foreground"
                 :title="t('budget.edit')"
                 :aria-label="t('budget.edit')"
                 @click="openEdit(budget)"
@@ -99,21 +105,19 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
             </div>
           </div>
           <div v-if="budget.active" class="grid gap-1">
-            <div class="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" :aria-valuenow="usedPct(statusOf(budget.id))" aria-valuemin="0" aria-valuemax="100">
-              <div
-                class="h-full rounded-full transition-[width] motion-reduce:transition-none"
-                :class="Number(statusOf(budget.id)?.remaining ?? 1) < 0 ? 'bg-destructive' : 'bg-primary'"
-                :style="{ width: `${usedPct(statusOf(budget.id))}%` }"
-              />
-            </div>
+            <ProgressBar
+              :value="usedPct(status)"
+              :tone="Number(status?.remaining ?? 1) < 0 ? 'destructive' : 'primary'"
+              :label="targetText(budget.target)"
+            />
             <p
               class="text-xs tabular-nums"
-              :class="Number(statusOf(budget.id)?.remaining ?? 0) < 0 ? 'text-destructive' : 'text-muted-foreground'"
+              :class="Number(status?.remaining ?? 0) < 0 ? 'text-destructive' : 'text-muted-foreground'"
             >
               {{
-                Number(statusOf(budget.id)?.remaining ?? 0) < 0
-                  ? t('budget.over', { amount: formatMoney(String(-Number(statusOf(budget.id)?.remaining)), { currency: budget.currency }) })
-                  : t('budget.left', { amount: formatMoney(statusOf(budget.id)?.remaining ?? budget.limit, { currency: budget.currency }) })
+                Number(status?.remaining ?? 0) < 0
+                  ? t('budget.over', { amount: formatMoney(String(-Number(status?.remaining)), { currency: budget.currency }) })
+                  : t('budget.left', { amount: formatMoney(status?.remaining ?? budget.limit, { currency: budget.currency }) })
               }}
             </p>
           </div>

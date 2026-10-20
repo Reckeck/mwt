@@ -52,7 +52,7 @@ const analyticsLink = computed(() => ({ name: 'analytics-investments', query: { 
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-xl">
+    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
       <template v-if="props.position && asset">
         <SheetHeader>
           <SheetTitle>{{ symbol }}</SheetTitle>

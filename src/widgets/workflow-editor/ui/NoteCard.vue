@@ -13,11 +13,11 @@ const { t } = useI18n()
 
 <template>
   <div
-    class="w-56 rounded-lg border bg-muted p-2 shadow-sm"
+    class="w-56 rounded-lg border bg-muted p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring"
     :class="props.selected ? 'border-primary' : 'border-border'"
   >
     <textarea
-      class="nodrag nowheel block min-h-16 w-full resize-y bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+      class="nodrag nowheel block min-h-16 w-full resize-y bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
       :value="props.data.text"
       :placeholder="t('workflow.note.placeholder')"
       :aria-label="t('workflow.note.label')"

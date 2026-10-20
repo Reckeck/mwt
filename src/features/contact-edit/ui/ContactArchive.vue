@@ -37,8 +37,8 @@ const remove = useMutation({
 <template>
   <Button
     variant="ghost"
-    size="icon"
-    class="size-8 text-muted-foreground"
+    size="icon-sm"
+    class="text-muted-foreground"
     :title="props.contact.archived ? t('stores.unarchive') : t('stores.archive')"
     :aria-label="props.contact.archived ? t('stores.unarchive') : t('stores.archive')"
     :disabled="toggle.isPending.value"

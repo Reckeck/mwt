@@ -34,6 +34,7 @@ const id = computed(() => (props.tx ? txId(props.tx) : ''))
 const meta = computed(() => (props.tx ? txMeta(props.tx) : null))
 
 const loss = useQuery({
+  // no placeholder: another operation's loss
   queryKey: computed(() => ['tx-loss', id.value]),
   queryFn: () => call<TxLoss>('get_tx_loss', { id: id.value }),
   enabled: computed(() => open.value && Boolean(id.value)),
@@ -89,7 +90,7 @@ const unlink = useMutation({
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-md">
+    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-xl">
       <template v-if="props.tx && meta">
         <SheetHeader>
           <SheetTitle>{{ t(`tx.kind.${txKind(props.tx)}`) }}</SheetTitle>

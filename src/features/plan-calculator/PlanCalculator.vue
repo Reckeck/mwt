@@ -72,7 +72,7 @@ defineExpose({ apply })
       </ToggleGroupItem>
     </ToggleGroup>
 
-    <div class="grid gap-3 @sm:grid-cols-2">
+    <div class="grid gap-3 @xl:grid-cols-2">
       <AssetInput v-model="from" :label="t('calc.from')" :placeholder="t('asset.searchPlaceholder')" />
       <AssetInput v-if="mode === 'converter'" v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />
       <div v-else class="grid gap-1.5">
@@ -81,7 +81,7 @@ defineExpose({ apply })
       </div>
     </div>
 
-    <div class="grid gap-3 @sm:grid-cols-3">
+    <div class="grid gap-3 @xl:grid-cols-3">
       <FormField
         for="calc-amount"
         :label="t(mode === 'converter' ? 'calc.amount' : 'calc.quantity')"

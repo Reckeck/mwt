@@ -1,8 +1,7 @@
 import { computed } from 'vue'
-import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
-import { useBackendEvent } from '@/shared/api/use-backend-event'
 
 export const SYNC_STATUS_KEY = ['sync-status'] as const
 export const SYNC_PEERS_KEY = ['sync-peers'] as const
@@ -10,17 +9,13 @@ export const SYNC_HISTORY_KEY = ['sync-history'] as const
 
 /**
  * Sync of this vault with the other devices: the backend pushes every change
- * (`sync-status`), so the query is only the first read and a fallback.
+ * (`sync-status`, written into this query once by `useSyncEvents` in the
+ * shell), so the query is only the first read and a fallback.
  */
 export function useSyncStatus() {
-  const queryClient = useQueryClient()
   const status = useQuery({
     queryKey: SYNC_STATUS_KEY,
     queryFn: () => call<SyncStatus>('sync_status'),
-  })
-  useBackendEvent<SyncStatus>('sync-status', (next) => {
-    queryClient.setQueryData(SYNC_STATUS_KEY, next)
-    void queryClient.invalidateQueries({ queryKey: SYNC_PEERS_KEY })
   })
 
   const sessions = computed(() => status.data.value?.sessions ?? [])

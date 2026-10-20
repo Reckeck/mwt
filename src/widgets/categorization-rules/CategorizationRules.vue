@@ -114,10 +114,10 @@ const create = useMutation({
             @update:model-value="(key) => update.mutate({ ...rule, category: String(key) })"
           />
         </div>
-        <Button variant="ghost" size="icon" class="size-8" :title="t('rules.up')" :aria-label="t('rules.up')" @click="move(index, -1)">
+        <Button variant="ghost" size="icon-sm"  :title="t('rules.up')" :aria-label="t('rules.up')" @click="move(index, -1)">
           <ArrowUp class="size-4" />
         </Button>
-        <Button variant="ghost" size="icon" class="size-8" :title="t('rules.down')" :aria-label="t('rules.down')" @click="move(index, 1)">
+        <Button variant="ghost" size="icon-sm"  :title="t('rules.down')" :aria-label="t('rules.down')" @click="move(index, 1)">
           <ArrowDown class="size-4" />
         </Button>
         <ConfirmButton :label="t('rules.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(rule.id)">

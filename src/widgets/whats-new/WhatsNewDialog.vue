@@ -2,17 +2,16 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { Sparkles } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { call } from '@/shared/api/ipc'
 import { WHATS_NEW } from '@/shared/config/whats-new'
 import { formatDate } from '@/shared/lib/format'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { tourLocation } from '@/shared/lib/tour'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useStoreTree } from '@/shared/api/queries'
 
 /**
  * «Что нового»: after an update, what changed and where to see it. Opens by
@@ -67,7 +66,7 @@ watch(open, (isOpen) => {
   if (!isOpen && unseen.value.length) void markSeen()
 })
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const firstWallet = computed(() => flattenStoreTree(tree.data.value ?? []).find((node) => !node.store.archived)?.store.id ?? null)
 
 function show(target: string) {

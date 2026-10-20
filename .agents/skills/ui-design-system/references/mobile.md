@@ -7,7 +7,7 @@
 ## Правила
 
 1. **Граница — `md` (768 px).** Раскладка страницы переключается по `md:` /
-   `max-md:`; внутри компонента — container queries (`@container`, `@lg:`),
+   `max-md:`; внутри компонента — container queries (`@container`, `@wide:`),
    потому что компонент не знает, где стоит.
 2. **Отступы системных панелей — только `*-safe` и `--safe-*`.** Утилиты
    `pt-safe`, `pb-safe`, `px-safe`, `inset-safe`; в `calc` —

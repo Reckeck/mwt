@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
@@ -19,14 +18,13 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from '@/shared/ui/sidebar'
-import { call, onEvent } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { canAddOfKind, groupTotal } from './lib/totals'
 import { useExpandedStores } from './model/use-expanded-stores'
 import { useWalletMenu } from './model/use-wallet-menu'
 import { SidebarWalletItem } from './ui/sidebar-wallet-item'
+import { useStoreTree } from '@/shared/api/queries'
 
 /** The wallets in the sidebar, grouped by kind, with their totals and menus. */
 const { t } = useI18n()
@@ -36,15 +34,9 @@ const settings = useSettingsStore()
 
 // Totals come rolled up from the backend: the sidebar and the wallet page
 // read the same numbers instead of each summing on its own.
-const tree = useQuery({
-  queryKey: STORE_TREE_QUERY_KEY,
-  queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
-})
+const tree = useStoreTree()
 const roots = computed(() => tree.data.value ?? [])
 
-// New quotes change every total, wherever the refresh was started.
-const unlisten = onEvent<RefreshResult>('prices-updated', () => void tree.refetch())
-onScopeDispose(() => void unlisten.then((stop) => stop()))
 
 const activeId = computed(() => (route.name === 'wallet' ? String(route.params.id ?? '') : ''))
 const { isExpanded, toggle, collapseAll } = useExpandedStores(activeId, roots)

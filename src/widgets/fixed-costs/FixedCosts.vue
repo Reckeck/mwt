@@ -10,6 +10,7 @@ import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatMoney } from '@/shared/lib/format'
+import { SectionState } from '@/shared/ui/section-state'
 
 const { t } = useI18n()
 
@@ -66,6 +67,9 @@ const totals = computed(() => {
     <p class="mt-2 text-xs text-muted-foreground">{{ t('utilities.dashboardHint') }}</p>
   </Card>
   <Card size="sm" v-else-if="items.isPending.value"><Skeleton class="h-24 w-full" /></Card>
+  <Card size="sm" v-else-if="items.error.value">
+    <SectionState :error="items.error.value" compact @retry="items.refetch()" />
+  </Card>
   <Card size="sm" v-else>
     <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
   </Card>

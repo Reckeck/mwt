@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Search, Star } from 'lucide-vue-next'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
-import { Switch } from '@/shared/ui/switch'
 import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
@@ -16,11 +15,13 @@ import { Label } from '@/shared/ui/label'
 import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import type { GoalDialogProps } from './goal-edit.types'
+import { useStoreTree } from '@/shared/api/queries'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 const props = withDefaults(defineProps<GoalDialogProps>(), { goal: null, storeId: '' })
 const open = defineModel<boolean>('open', { required: true })
@@ -30,7 +31,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 const name = ref('')
@@ -121,7 +122,7 @@ const save = useMutation({
         <Input id="goal-name" v-model="name" :placeholder="t('goal.namePlaceholder')" />
       </FormField>
 
-      <div class="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_11rem]">
+      <div class="grid gap-3 @xl:grid-cols-[minmax(0,1fr)_11rem]">
         <FormField for="goal-target" :label="t('goal.target')" required :error="form.error('target')">
           <AmountInput id="goal-target" v-model="target" />
         </FormField>
@@ -134,7 +135,7 @@ const save = useMutation({
         />
       </div>
 
-      <div class="grid items-start gap-3 @sm:grid-cols-3">
+      <div class="grid items-start gap-3 @xl:grid-cols-3">
         <FormField for="goal-start" :label="t('goal.startsAt')" required :error="form.error('startsAt')">
           <DateTimePicker id="goal-start" v-model="startsAt" />
         </FormField>
@@ -173,12 +174,12 @@ const save = useMutation({
         <p v-if="form.error('stores')" class="text-xs text-destructive" role="alert">{{ form.error('stores') }}</p>
         <p v-else class="text-xs text-muted-foreground">{{ t('goal.storesHint') }}</p>
         <div class="overflow-hidden rounded-md border border-border">
-          <div class="relative border-b border-border">
+          <div class="relative border-b border-border focus-within:bg-accent/40 focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring">
             <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               v-model="storeSearch"
               type="search"
-              class="h-9 w-full bg-transparent pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground"
+              class="h-9 w-full bg-transparent pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none"
               :placeholder="t('goal.storesSearch')"
               :aria-label="t('goal.storesSearch')"
             />
@@ -203,10 +204,7 @@ const save = useMutation({
         </div>
       </div>
 
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="goal-active">{{ t('goal.active') }}</Label>
-        <Switch id="goal-active" v-model="active" />
-      </div>
+      <SwitchRow id="goal-active" :label="t('goal.active')" v-model="active" />
     </form>
 
     <template #footer>

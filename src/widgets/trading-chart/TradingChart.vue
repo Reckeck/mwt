@@ -92,6 +92,12 @@ function onChartMenu(event: MouseEvent) {
   cursorPrice.value = price === null || !Number.isFinite(price) || price <= 0 ? null : price
 }
 
+/** From the toolbar: the last close, which the alert dialog lets the user change. */
+function alertAtLast() {
+  const last = core.handles.bars[core.handles.bars.length - 1]?.close
+  if (last !== undefined) emit('alert', fmt(last), 'above')
+}
+
 const chartActions = computed<UiAction[]>(() => {
   const price = cursorPrice.value
   const shown = price === null ? '' : fmt(price)
@@ -148,6 +154,8 @@ const chartActions = computed<UiAction[]>(() => {
       :has-drawings="drawings.count.value > 0"
       :refreshing="loading && hasBars"
       :stream="stream.status.value"
+      :can-alert="props.canAlert && hasBars"
+      @alert="alertAtLast"
       @timeframe="(minutes) => (tf = minutes)"
       @indicators="(keys) => (indicators = keys)"
       @tool="drawings.pickTool"

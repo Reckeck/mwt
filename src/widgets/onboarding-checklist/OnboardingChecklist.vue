@@ -11,14 +11,15 @@ import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 import { quickAddOpen } from '@/shared/lib/quick-add'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useStoreTree } from '@/shared/api/queries'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
 
 // Each step is checked off from the vault itself, not by ticking a box.
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const balances = useQuery({
   queryKey: ['contacts', 'balances'],
   queryFn: () => call<ContactBalance[]>('get_contact_balances'),

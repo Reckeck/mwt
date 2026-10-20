@@ -18,7 +18,7 @@ const { t } = useI18n()
 
 <template>
   <div
-    class="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-card/80 px-2 py-1 text-xs tabular-nums text-muted-foreground backdrop-blur-sm"
+    class="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-card/90 px-2 py-1 text-xs tabular-nums text-muted-foreground"
   >
     <span class="font-semibold text-foreground">{{ props.title }}</span>
     <span>{{ props.legend.time }}</span>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// check-ui-ignore control-swap: each phase of the transfer has its own footer action
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useIntervalFn } from '@vueuse/core'
@@ -6,7 +7,6 @@ import { CheckCircle2, Smartphone } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Spinner } from '@/shared/ui/spinner'
 
 import { useReceiveVault } from '../../model/use-receive-vault'
 import { TransferProgress } from '../TransferProgress'
@@ -99,8 +99,7 @@ function openVault() {
     <template #footer>
       <template v-if="phase === 'request'">
         <Button variant="outline" :disabled="decide.isPending.value" @click="decide.mutate(false)">{{ t('transfer.receive.decline') }}</Button>
-        <Button class="gap-2" :disabled="decide.isPending.value" @click="decide.mutate(true)">
-          <Spinner v-if="decide.isPending.value" />
+        <Button class="gap-2" :disabled="decide.isPending.value" @click="decide.mutate(true)" :loading="decide.isPending.value">
           {{ t('transfer.receive.accept') }}
         </Button>
       </template>

@@ -67,7 +67,7 @@ function switchOff() {
       <Input
         id="utility-reminders-day"
         v-model="day"
-        type="number"
+        type="text"
         inputmode="numeric"
         min="1"
         max="31"

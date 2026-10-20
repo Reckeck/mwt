@@ -19,6 +19,8 @@ export function applyLocale(pref: LocalePreference): ResolvedLocale {
   const resolved = resolveLocale(pref)
   activeLocale.value = resolved
   i18n.global.locale.value = resolved
+  // Hyphenation and the screen reader's voice follow the page language.
+  document.documentElement.lang = resolved
   return resolved
 }
 

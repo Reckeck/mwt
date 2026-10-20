@@ -18,7 +18,7 @@ import type { FilterBarProps } from './filter-bar.types'
  * wrap on a narrow window; each takes `FILTER_FIELD_CLASS`. On a phone only
  * `lead` stays in the row: the rest open from «Фильтры (N)» in a sheet.
  */
-const props = withDefaults(defineProps<FilterBarProps>(), { active: 0, moreActive: 0 })
+const props = withDefaults(defineProps<FilterBarProps>(), { active: 0, moreActive: 0, folds: true })
 const emit = defineEmits<{ reset: [] }>()
 defineSlots<{ default(): unknown; lead?(): unknown; more?(): unknown; actions?(): unknown }>()
 
@@ -31,7 +31,7 @@ const sheetOpen = ref(false)
   <search class="flex flex-wrap items-end gap-3">
     <slot name="lead" />
 
-    <template v-if="phone">
+    <template v-if="phone && props.folds">
       <Button variant="outline" class="shrink-0" @click="sheetOpen = true">
         <SlidersHorizontal class="size-4" />
         {{ t('filter.open') }}

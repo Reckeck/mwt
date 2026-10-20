@@ -106,7 +106,7 @@ onMounted(() => {
     :class="
       props.docked
         ? 'grid min-h-0 gap-2 p-3'
-        : 'fixed z-50 grid w-80 gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg'
+        : 'fixed z-overlay grid w-80 gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg'
     "
     :style="props.docked ? undefined : { left: `${props.left}px`, top: `${props.top}px` }"
     data-tour="workflow-quick-add"

@@ -12,6 +12,7 @@ import { call } from '@/shared/api/ipc'
 
 import type { DashboardAllocationProps } from './dashboard-allocation.types'
 import { AllocationPie } from '@/widgets/allocation-pie'
+import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const props = defineProps<DashboardAllocationProps>()
 
@@ -37,10 +38,6 @@ const rows = computed(() => {
       }))
 })
 
-function pctWidth(value: string | number | null | undefined): string {
-  const pct = typeof value === 'string' ? Number(value) : (value ?? 0)
-  return `${Math.min(100, Math.max(0, pct))}%`
-}
 </script>
 
 <template>
@@ -78,9 +75,7 @@ function pctWidth(value: string | number | null | undefined): string {
               <Money :amount="row.value" :currency="summary.data.value?.base_currency" /> · {{ formatPct(row.pct) }}
             </span>
           </div>
-          <div class="h-2 overflow-hidden rounded-full bg-muted">
-            <div class="h-full rounded-full bg-primary" :style="{ width: pctWidth(row.pct) }" />
-          </div>
+          <ProgressBar :value="Number(row.pct ?? 0)" />
         </component>
       </div>
     </SectionState>

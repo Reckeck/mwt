@@ -30,7 +30,7 @@ const props = defineProps<ActionMenuProps>()
   <!-- The «⋯» twin of the right-click menu: built from the same action list. -->
   <DropdownMenuRoot :modal="false">
     <DropdownMenuTrigger
-      class="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="touch-hit-lg flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       :aria-label="props.label"
       :title="props.label"
     >

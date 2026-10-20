@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import { ArrowLeftRight, Lock, Plus, RefreshCw, Search, Settings, Sparkles } from 'lucide-vue-next'
 
@@ -10,15 +9,16 @@ import { walletRow } from '@/entities/store'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { Button } from '@/shared/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandSeparator } from '@/shared/ui/command'
-import { call } from '@/shared/api/ipc'
 import { openConverter } from '@/shared/lib/converter'
 import { useIsPhone } from '@/shared/lib/phone'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { NAV_GROUPS } from '../../app-shell.constants'
 import PaletteInput from './PaletteInput.vue'
 import { usePaletteIndex } from './use-palette-index'
+import { useStoreTree } from '@/shared/api/queries'
+import { pushBackLayer } from '@/shared/lib/back-stack'
 
 /**
  * The search in the header: type a few letters to go to any screen or wallet,
@@ -33,7 +33,7 @@ const router = useRouter()
 const settings = useSettingsStore()
 const priceRefresh = usePriceRefresh()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const wallets = computed(() =>
   flattenStoreTree(tree.data.value ?? [])
     .filter((node) => !node.store.archived)
@@ -45,8 +45,9 @@ const open = ref(false)
 /** A phone shows a magnifier; the field opens over the top bar while in use. */
 const phone = useIsPhone()
 const rootClass = computed(() => {
-  if (!phone.value) return 'relative w-40 min-w-0 sm:w-56 lg:w-72'
-  return open.value ? 'absolute inset-x-2 bottom-2.5 z-50' : 'shrink-0'
+  // xl, not lg: at 1024 the wide field left the page title three letters.
+  if (!phone.value) return 'relative w-40 min-w-0 sm:w-56 xl:w-72'
+  return open.value ? 'absolute inset-x-2 bottom-2.5 z-overlay' : 'shrink-0'
 })
 
 function openField() {
@@ -86,6 +87,14 @@ function close() {
   input.value?.blur()
 }
 
+// The system «Back» on a phone closes the open palette first, like any other layer.
+let releaseBack: (() => void) | null = null
+watch(open, (isOpen) => {
+  releaseBack?.()
+  releaseBack = isOpen ? pushBackLayer(close) : null
+})
+onScopeDispose(() => releaseBack?.())
+
 function run(action: () => void) {
   close()
   picked.value = ''
@@ -95,15 +104,23 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
 </script>
 
 <template>
-  <div ref="root" :class="rootClass" data-tour="command-palette">
-    <Button v-if="phone && !open" variant="ghost" size="icon" :aria-label="t('palette.title')" @click="openField">
+  <div ref="root" :class="rootClass" data-tour="command-palette" data-command-palette :data-open="open">
+    <Button
+      v-if="phone && !open"
+      variant="ghost"
+      size="icon"
+      data-command-palette-trigger
+      :aria-label="t('palette.title')"
+      @click="openField"
+    >
       <Search class="size-4" />
     </Button>
     <Command v-show="!phone || open" v-model="picked" class="overflow-visible" :class="phone ? 'bg-background' : 'bg-transparent'">
       <PaletteInput ref="input" :placeholder="t('palette.placeholder')" :label="t('palette.title')" @focus="open = true" />
       <div
         v-show="open"
-        class="absolute top-full right-0 z-50 mt-1 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+        class="absolute top-full z-overlay mt-1 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+        :class="phone ? 'inset-x-0' : 'right-0 w-[min(26rem,calc(100vw-2rem))]'"
       >
         <CommandList class="max-h-[min(24rem,70dvh)]">
           <CommandEmpty>{{ t('palette.nothing') }}</CommandEmpty>

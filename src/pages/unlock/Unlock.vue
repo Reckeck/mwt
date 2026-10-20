@@ -30,7 +30,7 @@ function onReceived(path: string) {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-muted/40">
+  <div class="flex h-full flex-col bg-muted/40 pb-safe">
     <!-- The app shell is not mounted on this public route, so the unlock screen
          carries its own header — otherwise the settings would be unreachable
          before a vault is open. -->
@@ -52,7 +52,7 @@ function onReceived(path: string) {
     </header>
 
     <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-6">
-      <div class="grid w-full max-w-md gap-4">
+      <div class="grid w-full max-w-2xl gap-4">
         <RecentVaults />
 
         <!-- Block 2: create a vault at any path. Always available — it does not

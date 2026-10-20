@@ -3,6 +3,7 @@
 import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockContactBalances, mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
 import { mockDebtTerms } from './catalog'
+import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockBalanceOf, mockPush, mockTransactions, priceOf } from './demo'
@@ -196,7 +197,10 @@ export const transactionsCommands: MockCommands = {
     return resolve({ points: [], missing: [] } satisfies EnsureFxOutput)
   },
   refresh_all: (_call) => {
-    return resolve({ prices: 3, fx: 1, restamped: 0, updated_at: new Date().toISOString() })
+    const result: RefreshResult = { prices: 3, fx: 1, restamped: 0, updated_at: new Date().toISOString() }
+    // Like the backend: the screens follow the event, not the command's answer.
+    setTimeout(() => emitMock('prices-updated', result), 0)
+    return resolve(result)
   },
   open_explorer: (_call) => {
     return resolve({})

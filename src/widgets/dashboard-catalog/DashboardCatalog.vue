@@ -40,7 +40,7 @@ function add(def: DashboardWidgetDef) {
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full gap-0 sm:max-w-md">
+    <SheetContent side="right" class="w-full gap-0 sm:max-w-lg">
       <SheetHeader class="border-b border-border">
         <SheetTitle>{{ t('dashboard.catalog.title') }}</SheetTitle>
         <SheetDescription>{{ t('dashboard.catalog.description') }}</SheetDescription>

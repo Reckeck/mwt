@@ -12,7 +12,7 @@ import { Card } from '@/shared/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Switch } from '@/shared/ui/switch'
-import { EmptyState } from '@/shared/ui/empty-state'
+import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -60,53 +60,65 @@ watch(
     </div>
 
     <h3 class="text-sm font-medium">{{ t('workflow.list.mine') }}</h3>
-    <EmptyState v-if="empty" compact :title="t('workflow.list.empty')" />
+    <!-- The skeleton holds the cards' place: «Как это устроено» below does not jump when they land. -->
+    <SectionState
+      :loading="workflows.isPending.value"
+      :error="workflows.error.value"
+      :empty="empty"
+      :empty-title="t('workflow.list.empty')"
+      :rows="2"
+      compact
+      @retry="workflows.refetch()"
+    >
+      <div class="grid gap-4">
+        <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
+          <div class="flex flex-wrap items-start gap-3">
+            <Switch
+              :model-value="workflow.active"
+              :aria-label="t('workflow.active')"
+              :disabled="actions.setActive.isPending.value"
+              @update:model-value="(active) => actions.setActive.mutate({ id: workflow.id, active })"
+            />
+            <div class="grid min-w-0 flex-1 gap-1">
+              <RouterLink :to="{ name: 'workflow-edit', params: { id: workflow.id } }" class="font-medium hover:underline">
+                {{ workflow.name }}
+              </RouterLink>
+              <p v-if="workflow.description" class="text-sm text-muted-foreground">{{ workflow.description }}</p>
+              <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <template v-for="run in lastRun(workflow.id)" :key="run.id">
+                  <OutcomeBadge :outcome="run.outcome" />
+                  {{ formatDateTime(run.started_at) }}
+                </template>
+                <template v-if="!lastRun(workflow.id).length">{{ t('workflow.list.neverRan') }}</template>
+              </p>
+            </div>
+            <div class="flex items-center gap-1">
+              <Button variant="ghost" size="icon" :aria-label="t('workflow.list.edit')" @click="router.push({ name: 'workflow-edit', params: { id: workflow.id } })">
+                <Pencil class="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                :aria-label="t('workflow.runNow')"
+                :disabled="actions.runNow.isPending.value"
+                @click="actions.runNow.mutate({ id: workflow.id })"
+              >
+                <Play class="size-4" />
+              </Button>
+              <Button variant="ghost" size="icon" :aria-label="t('workflow.list.export')" @click="actions.exportFile.mutate(workflow.id)">
+                <Copy class="size-4" />
+              </Button>
+              <ConfirmButton :label="t('workflow.list.delete')" :confirm-label="t('workflow.list.deleteConfirm')" @confirm="actions.remove.mutate(workflow.id)">
+                <Trash2 class="size-4" />
+              </ConfirmButton>
+            </div>
+          </div>
+        </Card>
 
-    <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
-      <div class="flex flex-wrap items-start gap-3">
-        <Switch
-          :model-value="workflow.active"
-          :aria-label="t('workflow.active')"
-          :disabled="actions.setActive.isPending.value"
-          @update:model-value="(active) => actions.setActive.mutate({ id: workflow.id, active })"
-        />
-        <div class="grid min-w-0 flex-1 gap-1">
-          <RouterLink :to="{ name: 'workflow-edit', params: { id: workflow.id } }" class="font-medium hover:underline">
-            {{ workflow.name }}
-          </RouterLink>
-          <p v-if="workflow.description" class="text-sm text-muted-foreground">{{ workflow.description }}</p>
-          <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <template v-for="run in lastRun(workflow.id)" :key="run.id">
-              <OutcomeBadge :outcome="run.outcome" />
-              {{ formatDateTime(run.started_at) }}
-            </template>
-            <template v-if="!lastRun(workflow.id).length">{{ t('workflow.list.neverRan') }}</template>
-          </p>
-        </div>
-        <div class="flex items-center gap-1">
-          <Button variant="ghost" size="icon" :aria-label="t('workflow.list.edit')" @click="router.push({ name: 'workflow-edit', params: { id: workflow.id } })">
-            <Pencil class="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            :aria-label="t('workflow.runNow')"
-            :disabled="actions.runNow.isPending.value"
-            @click="actions.runNow.mutate({ id: workflow.id })"
-          >
-            <Play class="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon" :aria-label="t('workflow.list.export')" @click="actions.exportFile.mutate(workflow.id)">
-            <Copy class="size-4" />
-          </Button>
-          <ConfirmButton :label="t('workflow.list.delete')" :confirm-label="t('workflow.list.deleteConfirm')" @confirm="actions.remove.mutate(workflow.id)">
-            <Trash2 class="size-4" />
-          </ConfirmButton>
-        </div>
+        <!-- Lessons and templates are for starting out: open while there is nothing of one's own. -->
       </div>
-    </Card>
+    </SectionState>
 
-    <!-- Lessons and templates are for starting out: open while there is nothing of one's own. -->
     <Collapsible v-model:open="learnOpen" class="grid gap-3 rounded-lg border border-border p-3">
       <CollapsibleTrigger
         class="flex w-full items-center justify-between gap-2 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

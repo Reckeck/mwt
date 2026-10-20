@@ -66,7 +66,7 @@ function intervalLabel(seconds: number): string {
   <div class="@container grid gap-4">
     <div class="grid gap-2">
       <Label>{{ t('provider.title') }}</Label>
-      <div class="grid gap-2 @md:grid-cols-3">
+      <div class="grid gap-2 @mid:grid-cols-3">
         <Button variant="outline" size="block" class="h-auto justify-between"
           v-for="info in catalog.data.value?.providers ?? []"
           :key="info.provider"

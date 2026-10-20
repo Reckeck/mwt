@@ -2,23 +2,22 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
-import { call } from '@/shared/api/ipc'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { Switch } from '@/shared/ui/switch'
-import { activeLocale } from '@/shared/lib/locale'
 
 import { PERIOD_PRESETS, defaultRange, presetOf, presetRange } from './model/period-presets'
 import type { ReportFilterBarProps } from './report-filter.types'
+import { formatMonthKey } from '@/shared/lib/format'
+import { useStoreTree } from '@/shared/api/queries'
 
-const props = withDefaults(defineProps<ReportFilterBarProps>(), { realTerms: false })
+const props = withDefaults(defineProps<ReportFilterBarProps>(), { realTerms: false, wallets: true })
 const filter = defineModel<ReportFilter>({ required: true })
 /** The overview's month: its own value, so it does not move the other sections' period. */
 const month = defineModel<string | null>('month', { default: null })
@@ -27,7 +26,7 @@ const emit = defineEmits<{ reset: [] }>()
 const { t } = useI18n()
 const route = useRoute()
 
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 /** Set filters among the folded ones: the currency. */
@@ -57,8 +56,7 @@ const overviewMonth = computed({
 })
 
 /** An empty picker shows the month the report really starts or ends with. */
-const monthText = (key: string) =>
-  new Intl.DateTimeFormat(activeLocale.value, { month: 'short', year: 'numeric' }).format(new Date(`${key}-01T12:00`))
+const monthText = (key: string) => formatMonthKey(key, { month: 'short', year: 'numeric' })
 const defaults = computed(() => defaultRange())
 
 const preset = computed({
@@ -82,7 +80,7 @@ const years = computed(() => {
 </script>
 
 <template>
-  <FilterBar :active="props.active" :more-active="moreActive" @reset="emit('reset')">
+  <FilterBar :active="props.active" :more-active="moreActive" :folds="props.wallets" @reset="emit('reset')">
     <template #lead>
       <div v-if="props.period === 'year'" :class="FILTER_FIELD_CLASS">
         <Label for="report-year">{{ t('report.filter.year') }}</Label>
@@ -129,7 +127,7 @@ const years = computed(() => {
         />
       </div>
     </template>
-    <div :class="FILTER_FIELD_CLASS">
+    <div v-if="props.wallets" :class="FILTER_FIELD_CLASS">
       <Label for="report-scope">{{ t('report.filter.scope') }}</Label>
       <StoreNodeSelect
         id="report-scope"
@@ -153,7 +151,7 @@ const years = computed(() => {
       </RouterLink>
     </div>
     <!-- Rarely changed: folded under «Ещё фильтры». -->
-    <template #more>
+    <template v-if="props.wallets" #more>
       <div class="grid gap-1.5">
         <Label for="report-currency">{{ t('report.filter.currency') }}</Label>
         <div>

@@ -1,4 +1,4 @@
-import { type Ref, ref, watch } from 'vue'
+import { onScopeDispose, type Ref, ref, watch } from 'vue'
 
 import type { MobileInspectorTab } from '../workflow-editor.types'
 import type { EditorGraph } from './use-editor-graph'
@@ -30,13 +30,16 @@ export function useMobileSheet(editor: EditorGraph, report: Ref<unknown>, phone:
     void editor.flow.setCenter(centreX, centreY + bounds.height / 4 / zoom, { zoom, duration: 250 })
   }
 
+  let settle: ReturnType<typeof setTimeout> | undefined
+  onScopeDispose(() => clearTimeout(settle))
   watch(
     () => editor.flow.getSelectedNodes.value[0]?.id,
     (id) => {
       if (!phone.value || !id) return
       show('inspector')
       // After the node is measured and the first fit to view is done, or that fit undoes the move.
-      setTimeout(() => keepInView(id), SETTLE_MS)
+      clearTimeout(settle)
+      settle = setTimeout(() => keepInView(id), SETTLE_MS)
     },
   )
   watch(report, (next) => {

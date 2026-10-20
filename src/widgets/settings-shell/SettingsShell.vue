@@ -27,6 +27,7 @@ import { cn } from '@/shared/lib/utils'
 
 import { SETTINGS_ALIASES, SETTINGS_TABS } from './settings-shell.constants'
 import TourSettings from './TourSettings.vue'
+import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -111,16 +112,18 @@ function focusActiveTab(event: Event) {
 <template>
   <DialogRoot v-model:open="open">
     <DialogPortal>
-      <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in" />
+      <DialogOverlay class="fixed inset-0 z-overlay bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
-        class="fixed inset-x-4 top-[calc(1rem+var(--safe-top))] bottom-[calc(1rem+var(--safe-bottom))] z-50 flex overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-overlay-in max-md:inset-x-0 max-md:top-0 max-md:bottom-0 max-md:flex-col max-md:rounded-none max-md:border-0 max-md:pt-safe max-md:pb-safe lg:inset-[120px]"
+        class="fixed inset-0 z-overlay flex overflow-hidden bg-card text-card-foreground focus:outline-none data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out max-md:flex-col max-md:pt-safe max-md:pb-safe md:settings-window md:rounded-xl md:border md:border-border md:shadow-lg"
         data-tour="settings-shell"
         @open-auto-focus="focusActiveTab"
+        @pointer-down-outside="keepOpenOnToast"
+        @interact-outside="keepOpenOnToast"
       >
         <!-- Sidebar: tabs; the active one lists its sections. A phone shows a strip of tabs under the title. -->
         <nav
           ref="nav"
-          class="flex w-full shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-muted/30 p-3 max-md:order-2 md:w-56 max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-2 max-md:scrollbar-none"
+          class="flex w-full shrink-0 flex-col gap-1 overflow-y-auto scrollbar-stable border-r border-border bg-muted/30 p-3 max-md:order-2 md:w-56 max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-2 max-md:scrollbar-none"
         >
           <DialogTitle class="px-2 pb-2 text-sm font-semibold max-md:sr-only">{{ t('settingsShell.title') }}</DialogTitle>
           <DialogDescription class="sr-only">{{ t('settingsShell.description') }}</DialogDescription>
@@ -136,37 +139,41 @@ function focusActiveTab(event: Event) {
               <component :is="tab.icon" class="size-4 shrink-0 text-muted-foreground" />
               <span class="truncate">{{ t(tab.titleKey) }}</span>
             </Button>
-            <ul v-if="activeTab.id === tab.id && tab.sections.length > 1" class="mb-1 ml-6 grid gap-0.5 max-md:hidden">
-              <li v-for="section in tab.sections" :key="section.id">
-                <Button
-                  variant="ghost"
-                  size="block"
-                  :class="
-                    cn(
-                      'w-full px-2 py-1 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground',
-                      visibleSection === section.id && 'font-medium text-foreground',
-                    )
-                  "
-                  @click="scrollTo(section.id)"
-                >
-                  {{ t(section.titleKey) }}
-                </Button>
-              </li>
-            </ul>
           </template>
         </nav>
 
         <div class="flex min-w-0 flex-1 flex-col max-md:contents">
-          <header class="flex items-center gap-3 border-b border-border px-4 py-3 max-md:order-1">
-            <h2 class="heading-section min-w-0 flex-1 truncate">{{ t(activeTab.titleKey) }}</h2>
-            <DialogClose as-child>
-              <Button variant="ghost" size="icon-sm" class="max-md:size-10" :aria-label="t('actions.close')">
-                <X class="size-4" />
+          <header class="grid gap-2 border-b border-border px-4 py-3 max-md:order-1">
+            <div class="flex items-center gap-3">
+              <h2 class="heading-section min-w-0 flex-1 truncate">{{ t(activeTab.titleKey) }}</h2>
+              <DialogClose as-child>
+                <Button variant="ghost" size="icon-sm" class="max-md:size-10" :aria-label="t('actions.close')">
+                  <X class="size-4" />
+                </Button>
+              </DialogClose>
+            </div>
+            <!-- The tab's sections live here, not under the tab in the sidebar: a list that
+                 opened there pushed the tabs below it away from the pointer (rule 17). -->
+            <nav
+              v-if="activeTab.sections.length > 1"
+              class="-mx-1 flex gap-1 overflow-x-auto scrollbar-none max-md:hidden"
+              :aria-label="t(activeTab.titleKey)"
+            >
+              <Button
+                v-for="section in activeTab.sections"
+                :key="section.id"
+                variant="ghost"
+                size="sm"
+                :class="cn('shrink-0 font-normal text-muted-foreground', visibleSection === section.id && 'bg-accent text-foreground')"
+                :aria-current="visibleSection === section.id ? 'location' : undefined"
+                @click="scrollTo(section.id)"
+              >
+                {{ t(section.titleKey) }}
               </Button>
-            </DialogClose>
+            </nav>
           </header>
 
-          <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 @container max-md:order-3">
+          <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-stable p-4 @container max-md:order-3">
             <div class="mx-auto grid max-w-3xl grid-cols-1 gap-4">
               <section
                 v-for="section in activeTab.sections"

@@ -48,7 +48,7 @@ const option = computed<ChartOption>(() => ({
 
 <template>
   <div class="grid grid-cols-1 gap-4">
-    <div class="grid gap-4 @sm:grid-cols-2">
+    <div class="grid gap-4 @xl:grid-cols-2">
       <StatCard :label="t('report.pnl.realized')">
         <PnlText :amount="props.report.total_realized" :currency="props.report.meta.currency" :decimals="2" />
       </StatCard>

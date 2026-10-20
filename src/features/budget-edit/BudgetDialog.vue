@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { CategorySelect } from '@/features/category-select'
@@ -14,13 +14,14 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
-import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
-import { Switch } from '@/shared/ui/switch'
 
 import { BUDGET_PERIODS, BUDGET_TARGETS, type BudgetTargetKind } from './budget-edit.constants'
 import type { BudgetDialogProps } from './budget-edit.types'
+import { useStoreTree } from '@/shared/api/queries'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 const props = withDefaults(defineProps<BudgetDialogProps>(), { budget: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -30,7 +31,7 @@ const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
 /** Limits watch spending, so only spending groups are offered. */
-const tree = useQuery({ queryKey: STORE_TREE_QUERY_KEY, queryFn: () => call<StoreTreeNode[]>('get_store_tree') })
+const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
 const targetKind = ref<BudgetTargetKind>('total')
@@ -94,7 +95,7 @@ const save = useMutation({
 <template>
   <Dialog v-model:open="open" :title="props.budget ? t('budget.edit') : t('budget.new')">
     <form id="budget-form" class="@container grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
-      <div class="grid gap-3 @sm:grid-cols-2">
+      <div class="grid gap-3 @xl:grid-cols-2">
         <div class="grid gap-1.5">
           <Label for="budget-target">{{ t('budget.target') }}</Label>
           <Select id="budget-target" v-model="targetKind">
@@ -126,7 +127,7 @@ const save = useMutation({
         </FormField>
       </div>
 
-      <div class="grid gap-3 @sm:grid-cols-3">
+      <div class="grid gap-3 @xl:grid-cols-3">
         <div class="grid gap-1.5">
           <Label for="budget-period">{{ t('budget.period') }}</Label>
           <Select id="budget-period" v-model="period">
@@ -141,10 +142,7 @@ const save = useMutation({
         </FormField>
       </div>
 
-      <div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-        <Label for="budget-active">{{ t('budget.active') }}</Label>
-        <Switch id="budget-active" v-model="active" />
-      </div>
+      <SwitchRow id="budget-active" :label="t('budget.active')" v-model="active" />
       <p class="text-xs text-muted-foreground">{{ t('budget.hint') }}</p>
     </form>
 

@@ -66,10 +66,16 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  --container-sm: 36rem;
-  --container-md: 44rem;
-  --container-lg: 52rem;
-  --container-xl: 62rem;
+  /* Container widths of the project's own. Not --container-sm/md/lg: in Tailwind v4 those
+     also size max-w-sm/md/lg, and overriding them made a «md» dialog wider than an «lg» one.
+     36rem is Tailwind's own @xl. */
+  /* Below text-xs: badges, calendar cells, axis-like captions (was text-[10px] / text-[11px]). */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+  --container-mid: 44rem;
+  --container-wide: 52rem;
+  /* A page's widest: on a 4K screen rows stretched to 3000px and the eye lost the line. */
+  --container-page: 96rem;
 }
 
 :root {
@@ -279,6 +285,88 @@
   bottom: var(--safe-bottom);
   left: var(--safe-left);
 }
+/* A scroller whose scrollbar coming and going does not move its content (rule 17). */
+@utility scrollbar-stable {
+  scrollbar-gutter: stable;
+}
+/* The settings window from tablet up: as large as the screen allows, up to a
+   comfortable 72×52rem, centred, never under the system bars. A fixed inset made it
+   cramped on 1280×720 and a sheet of wasted space on a 4K screen. */
+@utility settings-window {
+  inset: auto;
+  left: 50%;
+  top: calc(50% + (var(--safe-top) - var(--safe-bottom)) / 2);
+  translate: -50% -50%;
+  width: min(72rem, 100vw - 2rem - var(--safe-left) - var(--safe-right));
+  height: min(52rem, 100dvh - 2rem - var(--safe-top) - var(--safe-bottom));
+}
+/* A wallet's own colour on its icon. On white, yellow and amber read at ~1.9:1, so the
+   light theme mixes them toward black; the dark theme shows them as chosen. */
+@utility store-tint {
+  color: var(--store-color, currentColor);
+  :root:not(.dark) & {
+    color: color-mix(in oklab, var(--store-color, currentColor) 70%, black);
+  }
+}
+/* A finger needs ~40px: on a touch screen a control's hit area grows past its box by
+   an invisible ::after, so dense desktop layouts keep their look (rule 16). Nothing
+   changes with a mouse. -6px for 28-36px controls (neighbours share the gap), -8px for 24-32px, -12px for 16-20px
+   (a checkbox, a switch, an underlined term). */
+@utility touch-hit {
+  @media (pointer: coarse) {
+    /* The ::after needs a positioned box; one already absolute or fixed keeps its place. */
+    &:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+    }
+  }
+}
+@utility touch-hit-lg {
+  @media (pointer: coarse) {
+    /* The ::after needs a positioned box; one already absolute or fixed keeps its place. */
+    &:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+    }
+  }
+}
+@utility touch-hit-xl {
+  @media (pointer: coarse) {
+    /* The ::after needs a positioned box; one already absolute or fixed keeps its place. */
+    &:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -12px;
+    }
+  }
+}
+/* «Подробно», «Ещё поля»: a row that folds is a full-width tap target on a touch screen. */
+@media (pointer: coarse) {
+  [data-slot='collapsible-trigger'] {
+    min-height: 2.5rem;
+  }
+}
+/* Stacking scale: sticky headers < floating banners < dialogs and popovers (shadcn's z-50). */
+@utility z-sticky {
+  z-index: 10;
+}
+@utility z-banner {
+  z-index: 40;
+}
+@utility z-overlay {
+  z-index: 50;
+}
 /* A strip that scrolls sideways (tabs) without a scrollbar eating its height. */
 @utility scrollbar-none {
   scrollbar-width: none;
@@ -300,6 +388,48 @@
 html,
 body {
   overscroll-behavior: none;
+}
+
+/* While a modal is open Reka turns pointer events off on <body>: the toasts (an «Undo»
+   among them) stay clickable, and the overlays ignore those clicks (shared/lib/toast-outside). */
+[data-sonner-toaster],
+[data-sonner-toast] {
+  pointer-events: auto;
+}
+/* Two buttons («Отложить», «Выполнено») squeezed the text into a column of syllables:
+   such a toast wraps, the text takes the whole width and the buttons go under it. */
+[data-sonner-toast][data-styled='true']:has([data-cancel]) {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+[data-sonner-toast][data-styled='true']:has([data-cancel]) [data-content] {
+  flex: 1 1 calc(100% - 28px);
+  min-width: 0;
+}
+[data-sonner-toast][data-styled='true']:has([data-cancel]) [data-cancel] {
+  margin-left: auto;
+}
+[data-sonner-toast][data-styled='true']:has([data-cancel]) [data-button] {
+  margin-left: 8px;
+}
+
+/* WebKitGTK (the Linux window) on Wayland repaints the whole window whenever an animated
+   layer appears: every dialog, sheet, menu and tooltip made it flicker. There they open
+   and close at once (reka's Presence sees no animation and unmounts immediately), and
+   toasts stop sliding. index.html sets data-engine before the first paint. */
+:root[data-engine='webkitgtk'] [data-state] {
+  animation: none !important;
+}
+:root[data-engine='webkitgtk'] [data-sonner-toast] {
+  transition: none !important;
+}
+
+
+/* A theme switch repaints everything at once (shared/lib/theme.ts adds this for one frame). */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 /* Motion is decoration here; whoever asked the system for less gets none. */
@@ -336,25 +466,52 @@ body {
   opacity: 0.4;
   border-radius: 8px;
 }
-/* --- overlay surfaces (dialog / dropdown) --- */
+/* --- overlay surfaces (dialog / dropdown) ---
+   Utilities, not plain classes: only a utility gets the `data-[state=open]:` variant
+   (plain classes silently produced no animation at all). The panel animates opacity
+   and the `scale` property only: Tailwind v4 centres it with the `translate` property,
+   and a keyframe `transform: translate(…)` would shift it a second time. */
 @keyframes overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 @keyframes panel-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.97);
+    scale: 0.97;
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    scale: 1;
+  }
+}
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.97;
   }
 }
 
-.animate-overlay-in { animation: overlay-in 140ms ease-out; }
-.animate-panel-in { animation: panel-in 140ms ease-out; }
+@utility animate-overlay-in {
+  animation: overlay-in 140ms ease-out;
+}
+@utility animate-overlay-out {
+  animation: overlay-out 100ms ease-in;
+}
+@utility animate-panel-in {
+  animation: panel-in 140ms ease-out;
+}
+@utility animate-panel-out {
+  animation: panel-out 100ms ease-in;
+}
 
 /* Guided tours (driver.js) in the app's colours, light and dark alike. `body` outranks
    driver.css, which is imported later, with the tour code. */

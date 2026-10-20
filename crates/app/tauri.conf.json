@@ -16,8 +16,8 @@
         "title": "Multi Wallet Tracker",
         "width": 1320,
         "height": 860,
-        "minWidth": 720,
-        "minHeight": 620
+        "minWidth": 360,
+        "minHeight": 480
       }
     ],
     "security": {

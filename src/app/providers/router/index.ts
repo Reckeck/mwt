@@ -97,6 +97,12 @@ export const router = createRouter({
               component: () => import('@/pages/analytics').then((page) => page.AnalyticsInvestments),
               meta: { i18n: 'nav.analytics', group: 'investments' },
             },
+            {
+              path: 'saldo',
+              name: 'analytics-saldo',
+              component: () => import('@/pages/analytics').then((page) => page.AnalyticsSaldo),
+              meta: { i18n: 'nav.analytics', group: 'saldo' },
+            },
             // The nine reports of before, folded into the sections; old links keep working.
             { path: 'cashflow', redirect: (to) => ({ name: 'analytics-flow', query: to.query }) },
             { path: 'year', redirect: (to) => ({ name: 'analytics-flow', query: { ...to.query, view: 'year' } }) },

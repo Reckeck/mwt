@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { Spinner } from '@/shared/ui/spinner'
 
 import { useSyncActions } from '../../model/use-sync-actions'
 import { useSyncStatus } from '../../model/use-sync-status'
@@ -49,8 +48,7 @@ function decide(accept: boolean) {
     <p class="text-sm text-muted-foreground">{{ t('sync.pairing.hint') }}</p>
     <template #footer>
       <Button variant="outline" @click="decide(false)">{{ t('sync.pairing.differ') }}</Button>
-      <Button class="gap-2" :disabled="confirmPairing.isPending.value" @click="decide(true)">
-        <Spinner v-if="confirmPairing.isPending.value" />
+      <Button class="gap-2" :disabled="confirmPairing.isPending.value" @click="decide(true)" :loading="confirmPairing.isPending.value">
         {{ t('sync.pairing.match') }}
       </Button>
     </template>
