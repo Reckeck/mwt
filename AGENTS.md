@@ -16,13 +16,14 @@
 | `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
-| `mise run check-ui` | общие компоненты вместо своей разметки, токены вместо сырых цветов, `<Money>` вместо `formatMoney` в шаблоне, `meta` с исходом у каждой мутации, лимит размера файлов (правило 15); `dvh` вместо `vh`, `*-safe` у `fixed` по краю, широкие ширины только с префиксом (правило 16) |
+| `mise run check-ui` | общие компоненты вместо своей разметки, токены вместо сырых цветов, `<Money>` вместо `formatMoney` в шаблоне, `meta` с исходом у каждой мутации, лимит размера файлов (правило 15); `dvh` вместо `vh`, `*-safe` у `fixed` по краю, широкие ширины только с префиксом, раскрытие по наведению только с `pointer-fine:` (правило 16); слушатели без очистки, монтирование по наведению, подмена кнопок, запросы без `placeholderData`, `RouterView :key`, `backdrop-blur`, фиксированные треки сетки, шкалы `z-*`/размеров, `--container-*` в `@theme` (правило 17) |
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
 | `mise run changelog` | обновить список коммитов в `## [Unreleased]` CHANGELOG.md (git-cliff) |
 | `mise run bump` | следующая версия (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) во все файлы + раздел CHANGELOG |
 | `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах») |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
-| `mise run check` | lint + typecheck + onboarding + forms + ui + ci + clippy + tests |
+| `mise run check-layout` | приложение на мок-бэкенде в headless Chromium на 1920…720 и 390/360, тёмная и светлая тема: нет переполнения и прокрутки вбок, наведение и загрузка ничего не сдвигают, диалог открывается на месте, слушатели не копятся, «Назад» закрывает слой, цели касания ≥ 40 px (правило 17); `--quick` — 1280 и 390, `--report` — без падения; скриншоты в `.cache/check-layout/` |
+| `mise run check` | lint + typecheck + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
@@ -169,9 +170,27 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
     только `*-safe` / `var(--safe-*)`; высота — `dvh` или `h-full`, не `vh`;
     ни одного действия только с клавиатуры, наведения или правого клика
     (на касании — «⋯» `ActionMenu`); диалог на телефоне — шторка снизу;
-    системный «Назад» закрывает верхний слой (`shared/lib/back-stack`).
-    Проверка — `mise run check-ui` и глазами на 390 и 360 px с эмуляцией
-    отступов. Подробно — `ui-design-system/references/mobile.md`.
+    системный «Назад» закрывает верхний слой (`shared/lib/back-stack`):
+    свой оверлей вне Reka регистрируется `pushBackLayer`. Цели касания
+    (≥ 40 px) задаются в вариантах общих компонентов, а не в файлах экранов;
+    скрытое до наведения — только с `pointer-fine:` (`pointer-fine:opacity-0`).
+    Проверка — `mise run check-ui`, `mise run check-layout` и глазами на 390
+    и 360 px с эмуляцией отступов. Подробно — `ui-design-system/references/mobile.md`.
+
+17. **Интерфейс не двигается сам.** Наведение, фокус, нажатие, загрузка и
+    обновление данных, появление полосы прокрутки не меняют размер и место
+    соседей: место под кнопки строки зарезервировано, элемент управления не
+    подменяется другим (`v-if`/`v-else`), спиннер не расширяет кнопку,
+    скроллер со `scrollbar-gutter: stable`. Запрос с меняющимся ключом
+    держит прежние данные (`placeholderData: keepPreviousData`), скелетон —
+    высотой с контент. Подписка на событие бэкенда — только
+    `useBackendEvent`, таймер очищается в `onScopeDispose`. Анимация
+    оверлея не трогает `translate`/`transform` позиционированного элемента;
+    `backdrop-filter` запрещён (WebKitGTK замирает на нём). Проверка — `mise
+    run check-ui` (статически) и `mise run check-layout` (приложение в
+    headless Chromium: переполнение, сдвиг при наведении и загрузке, утечки
+    слушателей, «Назад», цели касания). Подробно —
+    `ui-design-system/references/stable-layout.md`.
 
 ## Конвенции
 
@@ -442,6 +461,10 @@ pnpm dlx skills list                             # что установлено
       `AccountRefPicker` / `AssetInput` / `AssetSelect` / `CurrencyPicker`
 - [ ] Общие компоненты и исход каждого действия (правило 15):
       `mise run check-ui` зелёный, база долгов не выросла
+- [ ] Стабильность (правило 17): `mise run check-layout` зелёный (полный, не
+      только `--quick` из `check`), если менялся интерфейс; в окне Tauri на
+      Linux (WebKitGTK) проверены наведение на строки, смена фильтра,
+      открытие диалогов, быстрые сохранения — ничего не прыгает и не замирает
 - [ ] Телефон (правило 16): экран проверен на 390 и 360 px с эмуляцией
       отступов, без горизонтальной прокрутки страницы, каждое действие
       доступно касанием

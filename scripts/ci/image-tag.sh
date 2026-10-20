@@ -10,6 +10,6 @@ cd "$(dirname "$0")/../.."
 
 tools="$(awk '/^\[tools\]/{on=1; next} /^\[/{on=0} on && NF' mise.toml)"
 {
-  cat scripts/ci/ci.Dockerfile scripts/ci/apt-packages.sh
+  cat scripts/ci/ci.Dockerfile scripts/ci/apt-packages.sh scripts/ci/install-chrome.sh
   printf '%s\n' "$tools"
 } | sha256sum | cut -c1-12
