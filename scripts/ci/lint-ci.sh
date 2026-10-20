@@ -5,7 +5,9 @@
 #     cp1252, where the bytes of «—» contain 0x94 = ” and end a string early;
 #     and a bare a,b among command arguments is an array, not one argument;
 #   - every shell script must parse (bash -n), be executable (CI runs it
-#     directly), and pass shellcheck if present.
+#     directly), and pass shellcheck if present;
+#   - every COPY source of scripts/ci/ci.Dockerfile must be let through by
+#     .dockerignore (a `*` plus an allow-list), or the image build finds nothing.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -30,6 +32,12 @@ for script in scripts/ci/*.sh scripts/local/*.sh packaging/aur/render.sh packagi
   # CI runs them directly: without the bit a job dies with "Permission denied".
   if [[ ! -x "$script" ]]; then
     echo "$script: not executable, chmod +x it" >&2
+    failed=1
+  fi
+done
+for source in $(awk '/^COPY / && !/--from=/ {print $2}' scripts/ci/ci.Dockerfile); do
+  if ! grep -qxF "!$source" .dockerignore; then
+    echo "scripts/ci/ci.Dockerfile copies $source, but .dockerignore filters it out — add !$source" >&2
     failed=1
   fi
 done

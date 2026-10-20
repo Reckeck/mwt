@@ -16,8 +16,11 @@
 #                                         over ssh; otherwise skipped
 #
 # Containers run with podman (rootless: files stay yours) or docker
-# (CONTAINER_ENGINE=docker). --native builds linux/flatpak on this host with
-# its own toolchain instead. Bundles land in .cache/build-all/builds/; the build directories
+# (CONTAINER_ENGINE=docker) on the host network (CONTAINER_NETWORK, default
+# host): podman's default pasta network refuses github.com on some hosts,
+# which breaks the flathub/shared-modules clone. --native builds
+# linux/flatpak on this host with its own toolchain instead. Bundles land in
+# .cache/build-all/builds/; the build directories
 # of each container are volumes (mwt-build-<checkout>-*), so the host .rust-target and
 # node_modules stay untouched. Android signs with the release key when the
 # ANDROID_KEYSTORE_* variables are set (sign-android.sh), else a test key.
@@ -45,6 +48,11 @@ out=.cache/build-all/builds
 engine="${CONTAINER_ENGINE:-$(command -v podman >/dev/null && echo podman || echo docker)}"
 image_tag="$(sed -n 's/^  CI_IMAGE_TAG: "\(.*\)".*/\1/p' .gitlab-ci.yml)"
 registry="${CI_REGISTRY_IMAGE:-registry.gitlab.com/reckeck/trade-app}"
+network="${CONTAINER_NETWORK:-host}"
+# podman builds OCI images by default, which do not keep SHELL: the stages of
+# ci.Dockerfile built FROM node would run `source` in /bin/sh. Docker keeps it.
+build_args=(--network="$network")
+[[ "$(basename "$engine")" == podman ]] && build_args+=(--format docker)
 arch_image=docker.io/library/archlinux:base-devel
 
 declare -A result
@@ -58,7 +66,7 @@ ci_image() { # kind (linux|android): the CI image, pulled, or built if the regis
   local image="$registry/ci-$1:$image_tag"
   if ! "$engine" image exists "$image" 2>/dev/null && ! "$engine" image inspect "$image" >/dev/null 2>&1; then
     "$engine" pull -q "$image" >&2 ||
-      "$engine" build --target "$1" -f scripts/ci/ci.Dockerfile -t "$image" . >&2 || return 1
+      "$engine" build "${build_args[@]}" --target "$1" -f scripts/ci/ci.Dockerfile -t "$image" . >&2 || return 1
   fi
   echo "$image"
 }
@@ -67,7 +75,7 @@ ci_image() { # kind (linux|android): the CI image, pulled, or built if the regis
 # project at /src, as a GitLab job would see it.
 run_ci() {
   local image="$1" volume="$2" command="$3"
-  "$engine" run --rm --init \
+  "$engine" run --rm --init --network="$network" \
     -v "$root:/src" -w /src \
     -v "mwt-build-$checkout-$volume-target:/src/.rust-target" \
     -v "mwt-build-$checkout-$volume-node:/src/node_modules" \
@@ -81,7 +89,7 @@ run_ci() {
 run_arch() { # <command> [engine args...]: the command in archlinux:base-devel
   local command="$1"
   shift
-  "$engine" run --rm --init "$@" -v "$root:/src" -w /src "$arch_image" bash -c "set -eo pipefail; $command"
+  "$engine" run --rm --init --network="$network" "$@" -v "$root:/src" -w /src "$arch_image" bash -c "set -eo pipefail; $command"
 }
 
 tarball="$out/multi-wallet-tracker-$version-linux-x86_64.tar.gz"
@@ -124,7 +132,7 @@ build_windows() {
   base="$(ci_image linux)" || return 1
   image="localhost/mwt-windows-cross:$image_tag"
   if ! "$engine" image inspect "$image" >/dev/null 2>&1; then
-    "$engine" build --build-arg "BASE=$base" -f scripts/local/windows-cross.Dockerfile -t "$image" scripts/local || return 1
+    "$engine" build "${build_args[@]}" --build-arg "BASE=$base" -f scripts/local/windows-cross.Dockerfile -t "$image" scripts/local || return 1
   fi
   run_ci "$image" windows "scripts/local/build-windows-cross.sh '$version' '$out'"
 }

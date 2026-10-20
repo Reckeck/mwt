@@ -81,7 +81,8 @@ check_android() {
   fi
   # Same volumes as build-all.sh, so the compiled crates are reused.
   checkout="$(printf '%s' "$root" | sha256sum | cut -c1-8)"
-  "$engine" run --rm --init \
+  # Host network: podman's default pasta refuses github.com on some hosts (build-all.sh).
+  "$engine" run --rm --init --network="${CONTAINER_NETWORK:-host}" \
     -v "$root:/src" -w /src \
     -v "mwt-build-$checkout-android-target:/src/.rust-target" \
     -v "mwt-build-$checkout-android-home:/root" \
