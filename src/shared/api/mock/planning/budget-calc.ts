@@ -1,6 +1,7 @@
 /** Month totals, the daily budget, goal progress and the agenda. */
 
 import { txLegs, txMeta } from '@/shared/lib/transactions'
+import { estimateOf } from './automation-workflow'
 import { automations, goals, isRejected, iso, now, plannedDates, reminders, runs } from './state'
 import type { PlanningMockContext } from './state'
 
@@ -140,7 +141,9 @@ export function upcoming(days: number): UpcomingItem[] {
   const until = new Date(now().getTime() + days * 86_400_000)
   const items: UpcomingItem[] = []
   for (const automation of automations.filter((entry) => entry.active)) {
-    for (const date of plannedDates(automation.schedule, new Date(automation.starts_at), until)) {
+    const estimate = automation.amount_mode === 'varies' ? estimateOf(automation.id) : null
+    const dates = plannedDates(automation.schedule, new Date(automation.starts_at), until, automation.workday_shift)
+    for (const date of dates) {
       if (date <= now()) continue
       const tx = automation.template as Transaction
       const leg = txLegs(tx).find((entry) => entry.role === 'principal')
@@ -151,12 +154,30 @@ export function upcoming(days: number): UpcomingItem[] {
         date: iso(date).slice(0, 10),
         title: automation.name,
         store_id: leg?.store_id ?? null,
-        amount: leg?.amount ?? null,
+        amount: estimate ?? leg?.amount ?? null,
         asset: leg?.asset ?? null,
         shortfall: null,
-        estimated: false,
+        estimated: automation.amount_mode === 'varies',
       })
     }
+  }
+  // Booked approximately: waits for the real amount.
+  for (const run of runs.filter(
+    (entry) => entry.estimated && typeof entry.outcome === 'object' && 'created' in entry.outcome,
+  )) {
+    const outcome = run.outcome as { created: { tx_id: string } }
+    items.push({
+      kind: 'unconfirmed_run',
+      source_id: outcome.created.tx_id,
+      at: run.planned_at,
+      date: run.planned_at.slice(0, 10),
+      title: automations.find((entry) => entry.id === run.automation_id)?.name ?? '',
+      store_id: null,
+      amount: run.amount,
+      asset: assetOf(run.automation_id),
+      shortfall: null,
+      estimated: true,
+    })
   }
   for (const reminder of reminders.filter((entry) => !entry.done && new Date(entry.due_at) <= until)) {
     items.push({
@@ -187,4 +208,10 @@ export function upcoming(days: number): UpcomingItem[] {
     })
   }
   return items.sort((left, right) => left.at.localeCompare(right.at))
+}
+
+/** The asset an automation books, for a line without its own. */
+function assetOf(automationId: string): AssetRef | null {
+  const template = automations.find((entry) => entry.id === automationId)?.template
+  return template ? (txLegs(template as Transaction)[0]?.asset ?? null) : null
 }

@@ -2,12 +2,12 @@
 // check-ui-ignore row-repeat-call: runsOf/pending read maps built once per list (computed)
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ChevronDown, FlaskConical, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
+import { FlaskConical, Pencil, Play, Plus, Trash2, Workflow } from 'lucide-vue-next'
 
-import { AutomationDialog, AutomationRunActions } from '@/features/automation-edit'
+import { AutomationDialog } from '@/features/automation-edit'
 import { AutomationSimulationDialog } from '@/features/automation-simulate'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
@@ -15,20 +15,23 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
-import { formatDate, formatMoney } from '@/shared/lib/format'
-import { LEDGER_KEYS, PLANNING_KEYS, rejectText, scheduleText } from '@/shared/lib/planning'
+import { formatMoney } from '@/shared/lib/format'
+import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txKind, txLegs } from '@/shared/lib/transactions'
 
 import type { AutomationListProps } from './automation-list.types'
-import { useNewFromRoute } from './model/use-new-from-route'
+import { useEditFromRoute, useNewFromRoute } from './model/use-new-from-route'
 
 import { NO_RUNS, groupRuns } from './lib/group-runs'
+import { AutomationRuns } from './ui/automation-runs'
+import { AutomationSummary } from './ui/automation-summary'
 
 const props = withDefaults(defineProps<AutomationListProps>(), { storeId: '', presets: () => [] })
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
+const router = useRouter()
 
 const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })
 const runs = useQuery({
@@ -40,12 +43,18 @@ const tree = useStoreTree()
 const paths = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node.path.join(' › ')])))
 const storeName = (id: string) => paths.value.get(id) ?? id
 
-/** «−25 000 RUB · Тинькофф» from the template's first leg. */
+/**
+ * «−25 000 RUB · Тинькофф» from the template's first leg. An amount that
+ * differs shows as «~» and the current estimate (the average of the latest).
+ */
 function templateLine(automation: Automation): string {
   const tx = automation.template as Transaction
   const leg = txLegs(tx)[0]
   if (!leg) return t(`tx.kind.${txKind(tx)}`)
-  return `${t(`tx.kind.${txKind(tx)}`)} · ${formatMoney(leg.amount, { currency: leg.asset.symbol })} · ${storeName(leg.store_id)}`
+  const varies = automation.amount_mode === 'varies'
+  const value = varies && automation.estimate ? automation.estimate : leg.amount
+  const money = `${varies ? '~' : ''}${formatMoney(value, { currency: leg.asset.symbol })}`
+  return `${t(`tx.kind.${txKind(tx)}`)} · ${money} · ${storeName(leg.store_id)}`
 }
 
 /** On a wallet: only the automations that move money in or out of it (or its sub-accounts). */
@@ -64,8 +73,8 @@ const shown = computed(() =>
 const grouped = computed(() => groupRuns(runs.data.value ?? []))
 const runsOf = (id: string) => grouped.value.all.get(id) ?? NO_RUNS
 const pending = (id: string) => grouped.value.rejected.get(id) ?? NO_RUNS
+const unconfirmed = (id: string) => grouped.value.unconfirmed.get(id) ?? NO_RUNS
 
-const expanded = ref<string | null>(null)
 const dialogOpen = ref(false)
 const editing = ref<Automation | null>(null)
 const preset = ref<PresetInfo | null>(null)
@@ -86,6 +95,11 @@ function openEdit(automation: Automation) {
   preset.value = null
   dialogOpen.value = true
 }
+// «Изменить в форме» from an automation's workflow: `?edit=<id>`.
+useEditFromRoute(
+  () => automations.data.value,
+  (automation) => openEdit(automation),
+)
 
 /* --- «Проверить»: emulate ahead without writing anything --- */
 const simulateOpen = ref(false)
@@ -110,12 +124,6 @@ const remove = useMutation({
   onSuccess: refresh,
   meta: { error: 'automation.deleteFailed', success: 'automation.deleted' },
 })
-
-function outcomeText(run: AutomationRun): string {
-  if (run.outcome === 'skipped') return t('automation.run.outcome.skipped')
-  if ('created' in run.outcome) return t('automation.run.outcome.created')
-  return rejectText(run.outcome.rejected.reason, t, storeName)
-}
 
 const empty = computed(() => automations.isSuccess.value && !shown.value.length)
 </script>
@@ -151,18 +159,12 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
     <Card v-for="automation in shown" :key="automation.id">
       <div class="grid gap-3">
         <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="grid min-w-0 gap-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="truncate font-medium">{{ automation.name }}</p>
-              <Badge v-if="automation.preset" variant="secondary">{{ t(`preset.${automation.preset}`) }}</Badge>
-              <Badge v-if="!automation.active" variant="outline">{{ t('automation.paused') }}</Badge>
-              <Badge v-if="pending(automation.id).length" variant="destructive">
-                {{ t('automation.pendingRuns', { count: pending(automation.id).length }) }}
-              </Badge>
-            </div>
-            <p class="text-sm text-muted-foreground">{{ scheduleText(automation.schedule, t) }}</p>
-            <p class="text-sm tabular-nums">{{ templateLine(automation) }}</p>
-          </div>
+          <AutomationSummary
+            :automation="automation"
+            :line="templateLine(automation)"
+            :rejected="pending(automation.id).length"
+            :unconfirmed="unconfirmed(automation.id).length"
+          />
           <div class="flex shrink-0 items-center gap-1">
             <Button
               variant="ghost"
@@ -195,6 +197,17 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
             >
               <Pencil class="size-4" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-muted-foreground"
+              :title="t('automation.openWorkflow')"
+              :aria-label="t('automation.openWorkflow')"
+              data-tour="automation-open-workflow"
+              @click="router.push({ name: 'workflow-edit', params: { id: automation.id } })"
+            >
+              <Workflow class="size-4" />
+            </Button>
             <ConfirmButton
               :label="t('automation.delete')"
               :confirm-label="t('actions.confirmDelete')"
@@ -205,36 +218,7 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
           </div>
         </div>
 
-        <Button
-          variant="ghost"
-          size="block"
-          class="w-fit px-1 py-0.5 text-xs flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          :aria-expanded="expanded === automation.id"
-          @click="expanded = expanded === automation.id ? null : automation.id"
-        >
-          <ChevronDown class="size-3.5 transition-transform" :class="expanded === automation.id && 'rotate-180'" />
-          {{ t('automation.history', { count: runsOf(automation.id).length }) }}
-        </Button>
-
-        <ul v-if="expanded === automation.id" class="grid gap-1">
-          <li v-if="!runsOf(automation.id).length" class="text-xs text-muted-foreground">{{ t('automation.noRuns') }}</li>
-          <li
-            v-for="run in runsOf(automation.id)"
-            :key="run.id"
-            class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm"
-          >
-            <span class="flex min-w-0 items-center gap-2">
-              <span class="shrink-0 tabular-nums text-muted-foreground">{{ formatDate(run.planned_at) }}</span>
-              <span
-                class="min-w-0"
-                :class="typeof run.outcome === 'object' && 'rejected' in run.outcome && 'text-destructive'"
-              >
-                {{ outcomeText(run) }}
-              </span>
-            </span>
-            <AutomationRunActions v-if="typeof run.outcome !== 'object' || !('created' in run.outcome)" :run="run" />
-          </li>
-        </ul>
+        <AutomationRuns :runs="runsOf(automation.id)" :name="automation.name" :store-name="storeName" />
       </div>
     </Card>
 

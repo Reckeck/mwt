@@ -29,7 +29,25 @@ const runs = useQuery({
 })
 
 const items = computed(() => (upcoming.data.value ?? []).slice(0, props.limit))
-const runOf = (id: string) => runs.data.value?.find((run) => run.id === id) ?? null
+/** The run behind an item: a refused run by its id, an approximate one by the operation it made. */
+const runOf = (item: UpcomingItem) =>
+  runs.data.value?.find((run) =>
+    item.kind === 'unconfirmed_run'
+      ? typeof run.outcome === 'object' && 'created' in run.outcome && run.outcome.created.tx_id === item.source_id
+      : run.id === item.source_id,
+  ) ?? null
+
+/** What the line says: a refusal and an approximate amount say what they wait for. */
+function titleOf(item: UpcomingItem): string {
+  if (item.kind === 'rejected_run') return t('upcoming.notCreated', { name: item.title })
+  if (item.kind === 'unconfirmed_run') return t('upcoming.unconfirmed', { name: item.title })
+  return item.title
+}
+
+const ICON_COLOR: Partial<Record<UpcomingKind, string>> = {
+  rejected_run: 'text-destructive',
+  unconfirmed_run: 'text-warning',
+}
 
 const ICONS = {
   automation: CalendarClock,
@@ -83,7 +101,7 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
           <component
             :is="ICONS[item.kind]"
             class="size-4 shrink-0"
-            :class="item.kind === 'rejected_run' ? 'text-destructive' : 'text-muted-foreground'"
+            :class="ICON_COLOR[item.kind] ?? 'text-muted-foreground'"
           />
           <span class="w-20 shrink-0 text-xs tabular-nums text-muted-foreground">{{ formatDate(item.date) }}</span>
           <RouterLink
@@ -95,21 +113,21 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
             {{ item.title }}
           </RouterLink>
           <span v-else class="min-w-0 flex-1 truncate" :title="item.title">
-            {{ item.kind === 'rejected_run' ? t('upcoming.notCreated', { name: item.title }) : item.title }}
+            {{ titleOf(item) }}
           </span>
           <span
             v-if="item.amount"
             class="shrink-0 tabular-nums"
             :class="Number(item.amount) > 0 ? 'text-success' : ''"
           >
-            <Money :amount="item.amount" :decimals="0" :currency="item.asset?.symbol" />
+            <template v-if="item.estimated">~</template><Money :amount="item.amount" :decimals="0" :currency="item.asset?.symbol" />
           </span>
         </div>
         <p v-if="item.shortfall" class="pl-6 text-xs text-destructive">
           {{ t('upcoming.short', { amount: formatMoney(item.shortfall, { currency: item.asset?.symbol }) }) }}
         </p>
-        <div v-if="item.kind === 'rejected_run' && runOf(item.source_id)" class="pl-6">
-          <AutomationRunActions :run="runOf(item.source_id) as AutomationRun" />
+        <div v-if="(item.kind === 'rejected_run' || item.kind === 'unconfirmed_run') && runOf(item)" class="pl-6">
+          <AutomationRunActions :run="runOf(item) as AutomationRun" :name="item.title" />
         </div>
       </li>
     </ul>

@@ -5,6 +5,8 @@ export interface WorkflowEditorProps {
   template?: string | null
   /** A lesson from `WORKFLOW_LESSONS`: the canvas starts from its task. */
   lesson?: string | null
+  /** An automation's workflow: built from its form, so it is looked at and run here, not saved. */
+  locked?: boolean
 }
 
 /** A tab of the phone editor's sheet. */

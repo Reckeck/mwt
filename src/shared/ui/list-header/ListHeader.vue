@@ -16,7 +16,8 @@ defineSlots<{ actions?(): unknown }>()
 
 <template>
   <div class="flex flex-wrap items-center justify-between gap-2">
-    <p class="min-w-0 flex-1 text-sm text-muted-foreground">{{ props.intro }}</p>
+    <!-- basis-64: on a narrow screen the buttons wrap below the text instead of squeezing it under them. -->
+    <p class="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">{{ props.intro }}</p>
     <div v-if="$slots.actions || (props.actionLabel && !props.hideAction)" class="flex flex-wrap items-center gap-2">
       <slot name="actions" />
       <Button v-if="props.actionLabel && !props.hideAction" @click="emit('action')">

@@ -205,6 +205,11 @@ pub struct AutomationRun {
     /// The operation was booked with an approximate amount not corrected yet.
     #[serde(default)]
     pub estimated: bool,
+    /// What the operation it made moves, and in which asset.
+    #[serde(default)]
+    pub amount: Option<Amount>,
+    #[serde(default)]
+    pub symbol: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

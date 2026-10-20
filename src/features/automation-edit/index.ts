@@ -1,4 +1,7 @@
 export { default as AutomationDialog } from './AutomationDialog.vue'
 export { default as AutomationRunActions } from './AutomationRunActions.vue'
+export { AutomationAmountDialog } from './ui/automation-amount-dialog'
+export { AutomationWorkflowBanner } from './ui/automation-workflow-banner'
+export { useAutomationWorkflow } from './model/use-automation-workflow'
 export * from './automation-edit.constants'
 export * from './automation-edit.types'

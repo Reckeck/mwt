@@ -7,6 +7,7 @@ import { ChevronDown, Copy, FileInput, Pencil, Play, Plus, Trash2 } from 'lucide
 
 import { LessonList, OutcomeBadge, WORKFLOW_TEMPLATES } from '@/entities/workflow'
 import { WorkflowImportDialog, useWorkflowActions } from '@/features/workflow-manage'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
@@ -80,9 +81,15 @@ watch(
               @update:model-value="(active) => actions.setActive.mutate({ id: workflow.id, active })"
             />
             <div class="grid min-w-0 flex-1 gap-1">
-              <RouterLink :to="{ name: 'workflow-edit', params: { id: workflow.id } }" class="font-medium hover:underline">
-                {{ workflow.name }}
-              </RouterLink>
+              <span class="flex flex-wrap items-center gap-2">
+                <RouterLink :to="{ name: 'workflow-edit', params: { id: workflow.id } }" class="font-medium hover:underline">
+                  {{ workflow.name }}
+                </RouterLink>
+                <!-- Built from the automation form: changed there. -->
+                <Badge v-if="workflow.automation" variant="secondary" :title="t('workflow.list.automationHint')">
+                  {{ t('workflow.list.automation') }}
+                </Badge>
+              </span>
               <p v-if="workflow.description" class="text-sm text-muted-foreground">{{ workflow.description }}</p>
               <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <template v-for="run in lastRun(workflow.id)" :key="run.id">

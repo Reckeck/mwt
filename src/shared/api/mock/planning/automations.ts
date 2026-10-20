@@ -2,7 +2,21 @@
 
 import { txMeta } from '@/shared/lib/transactions'
 import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTotals } from './budget-calc'
-import { automations, budgets, draftOf, fail, goals, iso, now, remove, replace, runs, uuid } from './state'
+import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
+import {
+  automations,
+  budgets,
+  draftOf,
+  fail,
+  goals,
+  iso,
+  moveOffDayOff,
+  now,
+  remove,
+  replace,
+  runs,
+  uuid,
+} from './state'
 import type { PlanningMockContext } from './state'
 
 /** Planning commands: Automations, budgets, goals and their simulation. `undefined` when `cmd` is not one. */
@@ -16,7 +30,7 @@ export function planAutomations(
   const rate = Number(settings.savings_rate)
   switch (cmd) {
     case 'list_automations':
-      return automations
+      return automations.map(listed)
     case 'create_automation': {
       const input = body as AutomationInput
       const automation: Automation = {
@@ -34,38 +48,55 @@ export function planAutomations(
         estimate: null,
       }
       automations.push(automation)
-      return automation
+      syncWorkflow(automation)
+      return listed(automation)
     }
     case 'update_automation': {
       const input = body as UpdateAutomationInput
       const current = automations.find((entry) => entry.id === input.id) ?? fail('not found', 'MISSING')
-      return replace(automations, input.id, {
-        ...current,
-        name: input.automation.name,
-        active: input.automation.active,
-        schedule: input.automation.schedule,
-        starts_at: input.automation.starts_at,
-        template: draftOf(ctx.transactionFrom(input.automation.template, input.automation.starts_at)),
-        amount_mode: input.automation.amount_mode ?? 'fixed',
-        workday_shift: input.automation.workday_shift ?? 'none',
-      })
+      return updated(
+        replace(automations, input.id, {
+          ...current,
+          name: input.automation.name,
+          active: input.automation.active,
+          schedule: input.automation.schedule,
+          starts_at: input.automation.starts_at,
+          template: draftOf(ctx.transactionFrom(input.automation.template, input.automation.starts_at)),
+          amount_mode: input.automation.amount_mode ?? 'fixed',
+          workday_shift: input.automation.workday_shift ?? 'none',
+        }),
+      )
     }
     case 'delete_automation':
       remove(automations, String(args?.id))
+      dropWorkflow(String(args?.id))
       return {}
     case 'run_automation': {
       const automation = automations.find((entry) => entry.id === args?.id) ?? fail('not found', 'MISSING')
       const tx = structuredClone(automation.template) as Transaction
+      const estimated = automation.amount_mode === 'varies'
+      const main = mainOf(tx)
+      const estimate = estimated ? listed(automation).estimate : null
+      if (estimate && main) {
+        const inner = 'topup' in tx ? tx.topup : 'payment' in tx ? tx.payment : 'transfer' in tx ? tx.transfer : null
+        if (inner) inner.amount = estimate
+      }
+      const runId = uuid()
       txMeta(tx).id = uuid()
       txMeta(tx).timestamp = iso(now())
+      txMeta(tx).origin = {
+        workflow: { workflow_id: automation.id, run_id: runId, planned_at: iso(now()), estimated },
+      }
       ctx.transactions.unshift(tx)
       runs.push({
-        id: uuid(),
+        id: runId,
         automation_id: automation.id,
         planned_at: iso(now()),
         processed_at: iso(now()),
         outcome: { created: { tx_id: txMeta(tx).id } },
-        estimated: false,
+        estimated,
+        amount: estimate ?? main?.amount ?? null,
+        symbol: main?.symbol ?? '',
       })
       return tx
     }
@@ -156,7 +187,7 @@ export function planAutomations(
           runs.push({
             automation_id: automation.id,
             automation_name: automation.name,
-            planned_at: at.toISOString(),
+            planned_at: moveOffDayOff(at, automation.workday_shift).toISOString(),
             outcome: { created: { tx_id: uuid() } },
             transaction: automation.template as Transaction,
           })
@@ -175,4 +206,10 @@ export function planAutomations(
     default:
       return undefined
   }
+}
+
+/** An automation saved in the form: its workflow follows, the list shows its estimate. */
+function updated(automation: Automation): Automation {
+  syncWorkflow(automation)
+  return listed(automation)
 }

@@ -488,15 +488,26 @@ impl UnlockedVault {
             RunOutcome::Dropped { reason } if reason == "skipped" => AutomationOutcome::Skipped,
             _ => return None,
         };
-        let estimated = match &outcome {
+        let made = match &outcome {
             AutomationOutcome::Created { tx_id } => self
                 .doc
                 .transactions
                 .iter()
-                .find(|tx| &tx.meta().id == tx_id)
-                .is_some_and(|tx| tx.meta().origin.is_estimated()),
-            _ => false,
+                .find(|tx| &tx.meta().id == tx_id),
+            _ => None,
         };
+        let estimated = made.is_some_and(|tx| tx.meta().origin.is_estimated());
+        let amount = made.and_then(main_amount);
+        let symbol = made
+            .and_then(|tx| {
+                outflow(tx).map(|flow| flow.asset.symbol).or_else(|| {
+                    tx.legs()
+                        .into_iter()
+                        .find(|leg| leg.amount.is_positive())
+                        .map(|leg| leg.asset.symbol)
+                })
+            })
+            .unwrap_or_default();
         Some(AutomationRun {
             id: run.id.clone(),
             automation_id: run.workflow_id.clone(),
@@ -504,6 +515,8 @@ impl UnlockedVault {
             processed_at: run.started_at.clone(),
             outcome,
             estimated,
+            amount,
+            symbol,
         })
     }
 

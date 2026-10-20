@@ -1,5 +1,6 @@
 /** The planning entry point: tries each group of commands. */
 
+import { planAutomationAmounts } from './automation-workflow'
 import { planAutomations } from './automations'
 import { upcoming } from './budget-calc'
 import { planReminders } from './reminders'
@@ -21,6 +22,7 @@ export function mockPlanning(
   if (cmd === 'get_upcoming') return upcoming(Number(args?.days ?? 30))
   return (
     planAutomations(cmd, args, ctx, settings) ??
+    planAutomationAmounts(cmd, args, ctx) ??
     planReminders(cmd, args, ctx, settings) ??
     planUtilities(cmd, args, ctx, settings)
   )

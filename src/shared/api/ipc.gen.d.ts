@@ -336,7 +336,11 @@ id: string, automation_id: string, planned_at: string, processed_at: string, out
 /**
  * The operation was booked with an approximate amount not corrected yet.
  */
-estimated: boolean, };
+estimated: boolean, 
+/**
+ * What the operation it made moves, and in which asset.
+ */
+amount: Amount | null, symbol: string, };
 
 /**
  * What the automations would do over the next days, worked out on a copy

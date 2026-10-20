@@ -8,15 +8,19 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { WEEKDAYS } from '@/shared/lib/planning'
 
-import { SCHEDULE_KINDS, type ScheduleKind } from '../../automation-edit.constants'
+import { SCHEDULE_KINDS, type ScheduleKind, WORKDAY_SHIFTS } from '../../automation-edit.constants'
 
-/** When an automation repeats: monthly on a day, weekly on a weekday or every N days, from a date. */
+/**
+ * When an automation repeats: monthly on a day, weekly on a weekday or every
+ * N days, from a date; and where a date on a day off goes.
+ */
 const props = defineProps<{ errors: { day?: string | null; everyDays?: string | null; startsAt?: string | null } }>()
 const kind = defineModel<ScheduleKind>('kind', { required: true })
 const day = defineModel<string>('day', { required: true })
 const weekday = defineModel<string>('weekday', { required: true })
 const everyDays = defineModel<string>('everyDays', { required: true })
 const startsAt = defineModel<string>('startsAt', { required: true })
+const workdayShift = defineModel<WorkdayShift>('workdayShift', { required: true })
 const { t } = useI18n()
 </script>
 
@@ -48,6 +52,18 @@ const { t } = useI18n()
     </FormField>
     <FormField for="automation-start" :label="t('automation.startsAt')" required :error="props.errors.startsAt ?? undefined">
       <DateTimePicker id="automation-start" v-model="startsAt" />
+    </FormField>
+    <!-- Every single day has nothing to move to. -->
+    <FormField
+      v-if="kind !== 'every_n_days' || everyDays !== '1'"
+      for="automation-workday"
+      class="@xl:col-span-3"
+      :label="t('automation.workday.label')"
+      :hint="t('automation.workday.hint')"
+    >
+      <Select id="automation-workday" v-model="workdayShift">
+        <SelectItem v-for="entry in WORKDAY_SHIFTS" :key="entry" :value="entry">{{ t(`automation.workday.${entry}`) }}</SelectItem>
+      </Select>
     </FormField>
   </div>
 </template>

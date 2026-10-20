@@ -1,4 +1,4 @@
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const SALARY_PRESET: PresetInfo = { preset: 'salary', tx_kind: 'topup', category: 'salary' }
@@ -16,4 +16,26 @@ export function useNewFromRoute(enabled: () => boolean, presets: () => PresetInf
     const { new: _new, ...rest } = route.query
     void router.replace({ query: rest })
   })
+}
+
+/**
+ * `?edit=<id>` (from the editor of an automation's workflow) opens that
+ * automation's form once the list is in, then drops the parameter.
+ */
+export function useEditFromRoute(list: () => Automation[] | undefined, open: (automation: Automation) => void) {
+  const route = useRoute()
+  const router = useRouter()
+  const stop = watch(
+    list,
+    (automations) => {
+      const id = route.query.edit
+      if (typeof id !== 'string' || !automations) return
+      const found = automations.find((entry) => entry.id === id)
+      if (found) open(found)
+      const { edit: _edit, ...rest } = route.query
+      void router.replace({ query: rest })
+      queueMicrotask(() => stop())
+    },
+    { immediate: true },
+  )
 }

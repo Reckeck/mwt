@@ -42,7 +42,7 @@ import RunPanel from './RunPanel.vue'
  * shows the run step by step and the value on every wire. The logic lives in
  * `model/use-*`; this file wires it to the layout.
  */
-const props = withDefaults(defineProps<WorkflowEditorProps>(), { workflowId: null, template: null, lesson: null })
+const props = withDefaults(defineProps<WorkflowEditorProps>(), { workflowId: null, template: null, lesson: null, locked: false })
 const emit = defineEmits<{ saved: [id: string]; lesson: [id: string] }>()
 
 const { t, locale } = useI18n()
@@ -90,7 +90,7 @@ const form = useFormValidation(() => ({
   name: required(name.value),
   graph: active.value && errors.value.length ? t('workflow.missing.errors') : null,
 }))
-const save = () => doc.save((id) => emit('saved', id))
+const save = () => (props.locked ? undefined : doc.save((id) => emit('saved', id)))
 
 /** A phone: one row on top, the canvas on the whole screen, the panels in a sheet. */
 const phone = useIsPhone()
@@ -104,7 +104,7 @@ const barState = computed(() => ({
   hasNodes: nodes.value.length > 0,
   emulating: actions.dryRun.isPending.value,
   running: actions.runNow.isPending.value,
-  saving: actions.save.isPending.value,
+  saving: actions.save.isPending.value || props.locked,
 }))
 const runProps = computed(() => ({
   report: report.value as NonNullable<typeof report.value>,
@@ -143,7 +143,7 @@ defineExpose({
   /** For the page's breadcrumbs. */
   name: computed(() => doc.name.value.trim()),
   dirty: computed(() => dirty.value && !lesson.value),
-  canDraft: computed(() => Boolean(props.workflowId)),
+  canDraft: computed(() => Boolean(props.workflowId) && !props.locked),
   saveDraft: doc.saveDraft,
   discardEdits: doc.discardEdits,
 })
