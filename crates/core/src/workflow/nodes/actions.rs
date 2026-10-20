@@ -101,6 +101,12 @@ impl Executor<'_> {
     }
 
     fn meta(&self, comment: &str, category: Option<String>) -> TxMeta {
+        self.meta_at(comment, category, None)
+    }
+
+    /// [`Self::meta`] dated `planned` (a moment the schedule planned) when
+    /// given, else the run's own moment.
+    fn meta_at(&self, comment: &str, category: Option<String>, planned: Option<i64>) -> TxMeta {
         let comment = if comment.trim().is_empty() {
             self.ctx.workflow_name.clone()
         } else {
@@ -109,14 +115,34 @@ impl Executor<'_> {
         let mut meta = TxMeta::new(&comment);
         // The run's own moment, not the emulated clock: a sandbox operation
         // dated after a long «Подождать» would fail the future-date check,
-        // which the real run (made at that later moment) passes.
-        meta.timestamp = crate::calendar::iso(self.ctx.now);
+        // which the real run (made at that later moment) passes. A planned
+        // moment after the run is not taken either.
+        let moment = planned
+            .filter(|moment| *moment <= self.ctx.now && !self.ctx.retry)
+            .unwrap_or(self.ctx.now);
+        meta.timestamp = crate::calendar::iso(moment);
         meta.categories = category.into_iter().collect();
         meta.origin = TxOrigin::Workflow {
             workflow_id: self.ctx.workflow_id.clone(),
             run_id: self.ctx.run_id.clone(),
+            planned_at: planned.map(crate::calendar::iso),
         };
         meta
+    }
+
+    /// The moment wired into «Дата операции», if any.
+    fn date_input(&mut self, node: &Node) -> Result<Option<i64>, String> {
+        Ok(match self.input(node, "date")? {
+            WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
+                let cal = crate::calendar::Calendar::new(&self.ctx.zone);
+                let moment = crate::pricing::history::unix_secs(&text).or_else(|| {
+                    super::data::parse_date(&text, &cal)
+                        .map(|date| cal.at_local(date, crate::calendar::AUTOMATION_HOUR))
+                });
+                Some(moment.ok_or_else(|| format!("«{text}» is not a date"))?)
+            }
+            _ => None,
+        })
     }
 
     fn category_input(&mut self, node: &Node) -> Result<Option<String>, String> {
@@ -145,7 +171,7 @@ impl Executor<'_> {
             ))
             .into());
         }
-        let saved = self.vault.wf_insert(txs)?;
+        let saved = self.vault.wf_insert(txs, self.now())?;
         self.moved += value;
         self.created.extend(saved.iter().cloned());
         Ok(saved)
@@ -166,7 +192,9 @@ impl Executor<'_> {
         };
         let category = self.category_input(node)?;
         let comment = self.input(node, "comment")?.as_text();
-        let meta = self.meta(&comment, category);
+        let planned = self.date_input(node)?;
+        let mut meta = self.meta_at(&comment, category, planned);
+        meta.estimated = self.bool_param(node, "estimated");
         Ok(match kind.as_str() {
             "topup" => Transaction::Topup(TopupTx {
                 meta,
@@ -317,6 +345,13 @@ impl Executor<'_> {
         match node.kind.as_str() {
             "action.transaction" => {
                 let tx = self.build_transaction(node)?;
+                if self.text_param(node, "on_shortfall") == "reject"
+                    && let Some(reason) = self
+                        .vault
+                        .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
+                {
+                    return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
+                }
                 let saved = self.commit(vec![tx])?;
                 if let Some(first) = saved.first() {
                     self.set_output(
@@ -604,6 +639,14 @@ impl Executor<'_> {
                 return Err(Fault::Error(format!("«{}»: {message}", callee.name)));
             }
             Err(Halt::Wait(_)) => return Err(Fault::Error("a called workflow cannot wait".into())),
+            // The caller's own «Создать операцию» decides how to refuse.
+            Err(Halt::Reject(reason)) => {
+                return Err(Fault::Error(format!(
+                    "«{}»: {}",
+                    callee.name,
+                    crate::service::describe_reject(&reason)
+                )));
+            }
         };
         let text = answer.as_text();
         self.set_output(node, "result", answer);
@@ -613,4 +656,8 @@ impl Executor<'_> {
             format!("«{}»: «{}» answered {text}", def.title.en, callee.name),
         ))
     }
+}
+
+fn secs_of(timestamp: &str, fallback: i64) -> i64 {
+    crate::pricing::history::unix_secs(timestamp).unwrap_or(fallback)
 }

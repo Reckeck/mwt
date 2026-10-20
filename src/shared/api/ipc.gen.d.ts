@@ -2664,7 +2664,7 @@ type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
 
 type RunMode = "live" | "dry_run";
 
-type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } } | { "partial": { failed: Array<string>, } } | { "dropped": { reason: string, } };
+type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } } | { "partial": { failed: Array<string>, } } | { "rejected": { reason: RejectReason, trigger_node: string, planned_at: string | null, } } | { "dropped": { reason: string, } };
 
 /**
  * Everything a run did. The vault already holds its operations; the caller
@@ -3700,12 +3700,22 @@ contact_id: string | null, origin: TxOrigin,
  * The utility bill (`UtilityItem.id`) this payment settles; older
  * payments are matched by comment and category instead.
  */
-utility_item_id?: string, };
+utility_item_id?: string, 
+/**
+ * Booked with an approximate amount (a salary that differs every time);
+ * cleared when the user puts in the real one.
+ */
+estimated: boolean, };
 
 /**
  * How a transaction came to exist.
  */
-type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } } | { "workflow": { workflow_id: string, run_id: string, } };
+type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": { automation_id: string, planned_at: string, } } | { "workflow": { workflow_id: string, run_id: string, 
+/**
+ * The planned moment it was made for, when the workflow dated it by
+ * its schedule: the same moment made on two devices is booked once.
+ */
+planned_at: string | null, } };
 
 /**
  * One page of the operations list, newest first, and how many match in all.

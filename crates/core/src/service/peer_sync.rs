@@ -493,10 +493,17 @@ impl UnlockedVault {
             let meta = tx.meta();
             let natural = match &meta.origin {
                 TxOrigin::Import { exec_id } => format!("import:{exec_id}"),
+                // An automation is a workflow now and kept its id: both
+                // kinds of origin name the same planned moment alike.
                 TxOrigin::Automation {
-                    automation_id,
+                    automation_id: maker,
                     planned_at,
-                } => format!("auto:{automation_id}:{planned_at}"),
+                }
+                | TxOrigin::Workflow {
+                    workflow_id: maker,
+                    planned_at: Some(planned_at),
+                    ..
+                } => format!("auto:{maker}:{planned_at}"),
                 _ => continue,
             };
             let rank = (
@@ -515,8 +522,14 @@ impl UnlockedVault {
             best.into_values().map(|(_, id)| id).collect();
         self.doc.transactions.retain(|tx| {
             let meta = tx.meta();
-            matches!(meta.origin, TxOrigin::Manual | TxOrigin::Workflow { .. })
-                || keep.contains(&meta.id)
+            matches!(
+                meta.origin,
+                TxOrigin::Manual
+                    | TxOrigin::Workflow {
+                        planned_at: None,
+                        ..
+                    }
+            ) || keep.contains(&meta.id)
         });
 
         let mut seen = std::collections::HashSet::new();

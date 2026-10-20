@@ -2150,3 +2150,219 @@ fn opening_a_vault_turns_off_workflows_missing_a_required_field() {
             .any(|record| record.key == format!("wf-off:{}", on.id))
     );
 }
+
+fn secs_at(iso: &str) -> i64 {
+    crate::pricing::history::unix_secs(iso).unwrap()
+}
+
+/// «The 20th, moved back off a day off → top the card up by the average of
+/// the latest salaries, marked approximate».
+fn salary_graph(card: &str) -> String {
+    graph(
+        vec![
+            node(
+                "t",
+                "trigger.schedule",
+                json!({ "every": "month", "day": 20, "time": "09:00", "workday": "back" }),
+            ),
+            node(
+                "avg",
+                "data.recent_average",
+                json!({ "count": "3", "fallback": "1000" }),
+            ),
+            node(
+                "tx",
+                "action.transaction",
+                json!({ "tx_kind": "topup", "account": store_ref(card), "asset": "USD", "category": "salary", "estimated": true }),
+            ),
+        ],
+        vec![
+            wire("t", "out", "tx", "in"),
+            wire("t", "at", "tx", "date"),
+            wire("avg", "amount", "tx", "amount"),
+        ],
+    )
+}
+
+#[test]
+fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
+    let (_dir, mut vault, card, _) = wallets();
+    let workflow = save(&mut vault, "Advance", salary_graph(&card));
+    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-21T00:00:00Z");
+
+    // 2026-12-20 is a Sunday: the advance comes on Friday the 18th.
+    let pass = vault
+        .run_due_workflows(secs_at("2026-12-18T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1, "{:?}", pass.runs);
+    let made = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+        .unwrap()
+        .clone();
+    assert_eq!(made.meta().timestamp, "2026-12-18T09:00:00Z");
+    assert!(made.meta().estimated);
+    assert!(matches!(
+        &made.meta().origin,
+        TxOrigin::Workflow { planned_at: Some(at), .. } if at == "2026-12-18T09:00:00Z"
+    ));
+    // Nothing yet to average: the fallback.
+    assert_eq!(tx_amount(&made), amount("1000"));
+    // Not again on the planned Sunday.
+    let pass = vault
+        .run_due_workflows(secs_at("2026-12-20T10:00:00Z"), "UTC")
+        .unwrap();
+    assert!(pass.created.is_empty());
+
+    // The user puts in the real amount.
+    correct(&mut vault, &made.meta().id, "1200");
+    let pass = vault
+        .run_due_workflows(secs_at("2027-01-20T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1);
+    let next = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+        .unwrap()
+        .clone();
+    assert_eq!(tx_amount(&next), amount("1200"));
+    // Approximate ones stay out of the average.
+    let pass = vault
+        .run_due_workflows(secs_at("2027-02-20T10:00:00Z"), "UTC")
+        .unwrap();
+    let third = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+        .unwrap()
+        .clone();
+    assert_eq!(tx_amount(&third), amount("1200"));
+    correct(&mut vault, &next.meta().id, "1400");
+    correct(&mut vault, &third.meta().id, "1600");
+    assert_eq!(
+        vault.wf_recent_average(&workflow.id, 3),
+        Some((amount("1400"), "USD".to_string()))
+    );
+}
+
+fn tx_amount(tx: &Transaction) -> Amount {
+    match tx {
+        Transaction::Topup(inner) => inner.amount,
+        Transaction::Payment(inner) => inner.amount,
+        Transaction::Transfer(inner) => inner.amount,
+        _ => Amount::ZERO,
+    }
+}
+
+fn correct(vault: &mut UnlockedVault, id: &str, value: &str) {
+    let tx = vault
+        .doc
+        .transactions
+        .iter_mut()
+        .find(|tx| tx.meta().id == id)
+        .unwrap();
+    if let Transaction::Topup(inner) = tx {
+        inner.amount = amount(value);
+        inner.meta.estimated = false;
+    }
+}
+
+fn rent_graph(card: &str, savings: &str) -> String {
+    graph(
+        vec![
+            node(
+                "t",
+                "trigger.schedule",
+                json!({ "every": "month", "day": 1, "time": "09:00" }),
+            ),
+            node(
+                "tx",
+                "action.transaction",
+                json!({ "tx_kind": "transfer", "account": store_ref(card), "to": store_ref(savings), "asset": "USD", "amount": "3000", "on_shortfall": "reject" }),
+            ),
+        ],
+        vec![wire("t", "out", "tx", "in"), wire("t", "at", "tx", "date")],
+    )
+}
+
+#[test]
+fn a_refused_run_waits_for_retry_or_skip() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Rent", rent_graph(&card, &savings));
+    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-20T00:00:00Z");
+
+    let pass = vault
+        .run_due_workflows(secs_at("2026-12-01T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.runs.len(), 1);
+    let refused = pass.runs[0].clone();
+    let RunOutcome::Rejected { planned_at, .. } = &refused.outcome else {
+        panic!("{:?}", refused.outcome);
+    };
+    assert_eq!(planned_at.as_deref(), Some("2026-12-01T09:00:00Z"));
+    assert!(pass.created.is_empty());
+
+    // Still short: the error says so and the refusal stays.
+    let err = vault
+        .retry_workflow_run(&refused.id, secs_at("2026-12-02T10:00:00Z"), "UTC")
+        .unwrap_err();
+    assert_eq!(err.code(), "INSUFFICIENT_FUNDS");
+    assert!(
+        vault
+            .doc
+            .workflow_runs
+            .iter()
+            .any(|run| run.id == refused.id)
+    );
+
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    let pass = vault
+        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1);
+    assert!(
+        vault
+            .doc
+            .workflow_runs
+            .iter()
+            .all(|run| run.id != refused.id)
+    );
+    let made = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+        .unwrap();
+    // Dated when it was made, still naming its planned moment.
+    assert_eq!(made.meta().timestamp, "2026-12-03T10:00:00Z");
+    assert!(matches!(
+        &made.meta().origin,
+        TxOrigin::Workflow { planned_at: Some(at), .. } if at == "2026-12-01T09:00:00Z"
+    ));
+
+    // January is covered by the rest of the top-up; February is refused
+    // and skipped.
+    let pass = vault
+        .run_due_workflows(secs_at("2027-01-01T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1);
+    let pass = vault
+        .run_due_workflows(secs_at("2027-02-01T10:00:00Z"), "UTC")
+        .unwrap();
+    assert!(matches!(pass.runs[0].outcome, RunOutcome::Rejected { .. }));
+    let skipped = vault.skip_workflow_run(&pass.runs[0].id).unwrap();
+    assert_eq!(
+        skipped.outcome,
+        RunOutcome::Dropped {
+            reason: "skipped".into()
+        }
+    );
+    assert!(vault.skip_workflow_run(&pass.runs[0].id).is_err());
+}

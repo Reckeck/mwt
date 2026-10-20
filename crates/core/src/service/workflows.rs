@@ -11,6 +11,7 @@ use crate::Amount;
 use crate::calendar::{Calendar, first_of_month};
 use crate::error::{Error, Result};
 use crate::model::notify::NoticeRecord;
+use crate::model::planning::RejectReason;
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
@@ -93,7 +94,7 @@ fn outcome_word(outcome: &crate::workflow::RunOutcome) -> &'static str {
         Done => "done",
         Stopped { .. } | Dropped { .. } => "stopped",
         Partial { .. } => "partial",
-        Failed { .. } => "failed",
+        Failed { .. } | Rejected { .. } => "failed",
         Waiting { .. } | Asking { .. } => "waiting",
     }
 }
@@ -262,6 +263,38 @@ impl UnlockedVault {
 
     /// Live accounts under a wallet, or every live wallet: id, name and value
     /// in the base currency.
+    /// The average amount of the latest `count` operations a workflow made
+    /// (or the automation it was before, which kept its id), leaving out the
+    /// ones still booked with an approximate amount; with the asset symbol.
+    pub(crate) fn wf_recent_average(
+        &self,
+        workflow_id: &str,
+        count: usize,
+    ) -> Option<(Amount, String)> {
+        let mut made: Vec<&Transaction> = self
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| !tx.meta().estimated && made_by(tx, workflow_id))
+            .collect();
+        made.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
+        made.truncate(count.max(1));
+        let first = made.first()?;
+        let (_, asset, _) = crate::workflow::nodes::triggers::tx_main(first);
+        let symbol = match asset {
+            WfValue::Asset(asset) => asset.symbol,
+            _ => String::new(),
+        };
+        let total = made.iter().fold(Amount::ZERO, |sum, tx| {
+            sum + crate::workflow::nodes::triggers::tx_main(tx)
+                .0
+                .as_number()
+                .unwrap_or(Amount::ZERO)
+        });
+        let len = Amount::new(rust_decimal::Decimal::from(made.len()));
+        Some(((total / len).round(2), symbol))
+    }
+
     pub(crate) fn wf_accounts(&self, parent: Option<&str>) -> Vec<(String, String, Amount)> {
         self.doc
             .stores
@@ -294,6 +327,7 @@ impl UnlockedVault {
     pub(crate) fn wf_insert(
         &mut self,
         txs: Vec<Transaction>,
+        now: i64,
     ) -> std::result::Result<Vec<Transaction>, String> {
         let backup = self.doc.clone();
         let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
@@ -305,8 +339,10 @@ impl UnlockedVault {
             let secs = secs_or_now(&tx.meta().timestamp);
             let result = match self.funds_shortfall(&tx, secs) {
                 Some(reason) => Err(super::automations::describe_reject(&reason)),
+                // The run's clock, not the wall one: an emulated run days
+                // ahead dates its operations days ahead too.
                 None => self
-                    .prepare_transaction(&mut tx)
+                    .prepare_transaction_at(&mut tx, now.max(secs) * 1000)
                     .map_err(|err| err.to_string()),
             };
             if let Err(message) = result {
@@ -1021,6 +1057,10 @@ impl UnlockedVault {
                 "Узел ожидания удалён из схемы: продолжения не будет",
                 "The wait node was removed from the workflow: the run does not go on",
             ),
+            "skipped" => (
+                "Пропущено: запуск не выполнялся",
+                "Skipped: the run was not made",
+            ),
             _ => (
                 "Больше 60 запусков за час: этот пропущен",
                 "More than 60 runs this hour: this one is skipped",
@@ -1058,6 +1098,86 @@ impl UnlockedVault {
             .filter(|run| !matches!(run.outcome, RunOutcome::Dropped { .. }))
             .filter(|run| unix_secs(&run.started_at).is_some_and(|secs| now - secs < 3600))
             .count()
+    }
+
+    /// Run a refused run again now: the money is checked now and the
+    /// operation dated now, still naming the moment it was planned for. On
+    /// success the refused entry gives way to the new run; still short, it
+    /// stays and the error says why.
+    pub fn retry_workflow_run(
+        &mut self,
+        run_id: &str,
+        now: i64,
+        zone: &str,
+    ) -> Result<WorkflowPass> {
+        let run = self
+            .doc
+            .workflow_runs
+            .iter()
+            .find(|run| run.id == run_id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("workflow run {run_id}")))?;
+        let RunOutcome::Rejected {
+            trigger_node,
+            planned_at,
+            ..
+        } = &run.outcome
+        else {
+            return Err(Error::InvalidInput(
+                "only a refused run can be retried".into(),
+            ));
+        };
+        let workflow = self.workflow(&run.workflow_id)?;
+        let graph = Graph::parse(&workflow.graph)?;
+        let trigger = graph
+            .node(trigger_node)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("trigger {trigger_node}")))?;
+        let mut ctx = self.context(&workflow, &trigger, now, zone);
+        ctx.trigger_label.clone_from(&run.trigger);
+        ctx.retry = true;
+        if let Some(at) = planned_at {
+            ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at.clone()))]);
+        }
+        ctx.mode = RunMode::Live;
+        let report = exec::run(self, &graph, &ctx);
+        if let RunOutcome::Rejected { reason, .. } = &report.run.outcome {
+            return Err(match reason {
+                RejectReason::Invalid { message } => Error::InvalidInput(message.clone()),
+                other => Error::InsufficientFunds(self.describe_shortfall(other)),
+            });
+        }
+        self.doc.workflow_runs.retain(|stored| stored.id != run_id);
+        let mut pass = WorkflowPass::default();
+        self.keep_run(&report, &mut pass);
+        self.run_events(report.events.clone(), now, zone, &mut pass);
+        self.recompute_holdings();
+        self.persist()?;
+        if !pass.notices.is_empty() {
+            pass.notices = self.log_notices(std::mem::take(&mut pass.notices))?;
+        }
+        Ok(pass)
+    }
+
+    /// Dismiss a refused run: it stays in the journal as skipped.
+    pub fn skip_workflow_run(&mut self, run_id: &str) -> Result<WorkflowRun> {
+        let run = self
+            .doc
+            .workflow_runs
+            .iter_mut()
+            .find(|run| run.id == run_id)
+            .ok_or_else(|| Error::Missing(format!("workflow run {run_id}")))?;
+        if !matches!(run.outcome, RunOutcome::Rejected { .. }) {
+            return Err(Error::InvalidInput(
+                "only a refused run can be skipped".into(),
+            ));
+        }
+        run.outcome = RunOutcome::Dropped {
+            reason: "skipped".into(),
+        };
+        let out = run.clone();
+        self.persist()?;
+        Ok(out)
     }
 
     /// Run one trigger for real and keep the result. Returns the events sent.
@@ -1581,4 +1701,19 @@ fn has_queue(graph: &Graph) -> bool {
         .nodes
         .iter()
         .any(|node| node.kind == "flow.queue" && !node.disabled)
+}
+
+/// Whether a workflow (or the automation it was migrated from, which kept
+/// its id) made the operation.
+pub(crate) fn made_by(tx: &Transaction, workflow_id: &str) -> bool {
+    match &tx.meta().origin {
+        crate::model::transaction::TxOrigin::Workflow {
+            workflow_id: maker, ..
+        }
+        | crate::model::transaction::TxOrigin::Automation {
+            automation_id: maker,
+            ..
+        } => maker == workflow_id,
+        _ => false,
+    }
 }
