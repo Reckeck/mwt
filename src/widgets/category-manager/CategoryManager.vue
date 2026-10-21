@@ -11,7 +11,7 @@ import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
-import { CATEGORY_GROUPS, categoryLabel, isEssential } from '@/shared/lib/categories'
+import { CATEGORY_GROUPS, categoryLabel, isEssential, isPassive } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useCategories } from '@/shared/api/queries'
 
@@ -37,13 +37,18 @@ const update = useMutation({
   meta: { success: 'categories.manage.renamed', error: 'settings.saveFailed' },
 })
 
-const essential = useMutation({
+/** The essential and passive switches: the toast names the flag that changed. */
+function flagMessage(input: UpdateCategoryInput): string {
+  if (input.passive !== null) return input.passive ? t('categories.manage.passiveOn') : t('categories.manage.passiveOff')
+  return input.essential ? t('categories.manage.essentialOn') : t('categories.manage.essentialOff')
+}
+
+const flag = useMutation({
   mutationFn: (input: UpdateCategoryInput) => call<Category>('update_category', { input }),
   onSuccess: refresh,
   meta: {
     error: 'settings.saveFailed',
-    success: (_data, input) =>
-      (input as UpdateCategoryInput).essential ? t('categories.manage.essentialOn') : t('categories.manage.essentialOff'),
+    success: (_data, input) => flagMessage(input as UpdateCategoryInput),
   },
 })
 
@@ -69,7 +74,7 @@ const remove = useMutation({
 function rename(category: Category, raw: string) {
   const name = raw.trim()
   if (name === categoryLabel(category, t)) return
-  update.mutate({ key: category.key, name: name || null, group: category.group, essential: null })
+  update.mutate({ key: category.key, name: name || null, group: category.group, essential: null, passive: null })
 }
 
 const newName = ref('')
@@ -121,6 +126,9 @@ const create = useMutation({
         <p v-if="section.group === 'daily'" class="text-xs text-muted-foreground">
           {{ t('categories.manage.essentialHint') }}
         </p>
+        <p v-else-if="section.group === 'income'" class="text-xs text-muted-foreground">
+          {{ t('categories.manage.passiveHint') }}
+        </p>
         <div
           v-for="category in section.items"
           :key="category.key"
@@ -137,7 +145,7 @@ const create = useMutation({
             class="h-8 w-40"
             :model-value="category.group"
             :aria-label="t('categories.manage.group')"
-            @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup, essential: null })"
+            @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup, essential: null, passive: null })"
           >
             <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
           </Select>
@@ -146,8 +154,16 @@ const create = useMutation({
             :model-value="isEssential(category)"
             :title="t('categories.manage.essential')"
             :aria-label="t('categories.manage.essential')"
-            :disabled="essential.isPending.value"
-            @update:model-value="(on) => essential.mutate({ key: category.key, name: category.name, group: category.group, essential: on })"
+            :disabled="flag.isPending.value"
+            @update:model-value="(on) => flag.mutate({ key: category.key, name: category.name, group: category.group, essential: on, passive: null })"
+          />
+          <Switch
+            v-if="category.group === 'income'"
+            :model-value="isPassive(category)"
+            :title="t('categories.manage.passive')"
+            :aria-label="t('categories.manage.passive')"
+            :disabled="flag.isPending.value"
+            @update:model-value="(on) => flag.mutate({ key: category.key, name: category.name, group: category.group, essential: null, passive: on })"
           />
           <Button
             variant="ghost"

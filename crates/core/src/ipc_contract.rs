@@ -860,6 +860,9 @@ pub struct UpdateCategoryInput {
     /// Mandatory spending flag for `Daily`; `None` keeps it.
     #[serde(default)]
     pub essential: Option<bool>,
+    /// Passive income flag for `Income`; `None` keeps it.
+    #[serde(default)]
+    pub passive: Option<bool>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

@@ -162,7 +162,7 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `list_categories` | — | `Vec<Category>` |
 | `create_category` | `CreateCategoryInput { key?, name, group }` | `Category` (ключ выводится из имени и делается уникальным) |
-| `update_category` | `UpdateCategoryInput { key, name?, group, essential? }` | `Category` (пустое имя — встроенная подпись; `essential: null` оставляет флаг обязательной траты как есть) |
+| `update_category` | `UpdateCategoryInput { key, name?, group, essential?, passive? }` | `Category` (пустое имя — встроенная подпись; `essential: null` / `passive: null` оставляют флаг обязательной траты / пассивного дохода как есть) |
 | `archive_category` | `key, archived` | `()` |
 | `delete_category` | `key` | `()` — только неиспользуемую |
 | `list_categorization_rules` | — | `Vec<CategorizationRule>` в порядке применения |

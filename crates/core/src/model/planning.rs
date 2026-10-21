@@ -87,8 +87,8 @@ impl AutomationPreset {
         match self {
             Self::Salary => Some("salary"),
             Self::DepositInterest => Some("deposit_interest"),
-            Self::StakingReward => Some("income_other"),
-            Self::RentIncome => Some("income_other"),
+            Self::StakingReward => Some("staking"),
+            Self::RentIncome => Some("rent_income"),
             Self::ToSavings => Some("savings"),
             Self::DcaBuy => Some("trading"),
             Self::MarketTransfer | Self::TopUp => Some("transfer"),

@@ -12,6 +12,10 @@ const GROUPS: Array<[CategoryGroup, string[]]> = [
       'gift_received',
       'cashback',
       'deposit_interest',
+      'dividends',
+      'coupons',
+      'staking',
+      'rent_income',
       'income_other',
     ],
   ],
@@ -62,7 +66,7 @@ const GROUPS: Array<[CategoryGroup, string[]]> = [
 
 /** Same defaults as `default_categories()` in Rust. */
 export const mockCategories: Category[] = GROUPS.flatMap(([group, keys]) =>
-  keys.map((key) => ({ key, name: null, group, archived: false, essential: null })),
+  keys.map((key) => ({ key, name: null, group, archived: false, essential: null, passive: null })),
 )
 
 export const mockContacts: Contact[] = [

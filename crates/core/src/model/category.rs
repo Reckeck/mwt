@@ -33,6 +33,11 @@ pub struct Category {
     /// is always essential.
     #[serde(default)]
     pub essential: Option<bool>,
+    /// Whether income here comes from capital rather than work (plan D).
+    /// `None` takes the default by key ([`DEFAULT_PASSIVE`]); only `Income`
+    /// reads it.
+    #[serde(default)]
+    pub passive: Option<bool>,
 }
 
 impl Category {
@@ -43,6 +48,7 @@ impl Category {
             group,
             archived: false,
             essential: None,
+            passive: None,
         }
     }
 
@@ -57,6 +63,30 @@ impl Category {
             _ => false,
         }
     }
+
+    /// Income from capital: `Income` categories flagged by the user or, without
+    /// a flag, by [`DEFAULT_PASSIVE`].
+    pub fn is_passive(&self) -> bool {
+        self.group == CategoryGroup::Income
+            && self.passive.unwrap_or_else(|| is_passive_key(&self.key))
+    }
+}
+
+/// Income that counts as passive until the user says otherwise (plan
+/// decision 22): returns on capital, not cashback or gifts. `earn` is what
+/// the Bybit Earn import books.
+pub const DEFAULT_PASSIVE: &[&str] = &[
+    "deposit_interest",
+    "earn",
+    "dividends",
+    "coupons",
+    "staking",
+    "rent_income",
+];
+
+/// The default passive flag for a key, also for keys with no category record.
+pub fn is_passive_key(key: &str) -> bool {
+    DEFAULT_PASSIVE.contains(&key)
 }
 
 /// Everyday categories that count as mandatory until the user says otherwise
@@ -74,6 +104,14 @@ pub const DEFAULT_ESSENTIAL: &[&str] = &[
     "repair",
     "family_help",
 ];
+
+/// Built-in categories added after vaults already existed, by the revision
+/// that brought them. An older vault receives each batch once when opened.
+pub const CATEGORY_ADDITIONS: &[(u32, &[&str])] =
+    &[(1, &["dividends", "coupons", "staking", "rent_income"])];
+
+/// The latest revision in [`CATEGORY_ADDITIONS`]: what a new vault starts at.
+pub const CATEGORIES_REV: u32 = 1;
 
 /// Marks every operation brought in from an exchange, so they can be found
 /// and told apart from the ones entered by hand.
@@ -94,6 +132,10 @@ pub fn default_categories() -> Vec<Category> {
                 "gift_received",
                 "cashback",
                 "deposit_interest",
+                "dividends",
+                "coupons",
+                "staking",
+                "rent_income",
                 "income_other",
             ],
         ),

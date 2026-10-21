@@ -40,6 +40,7 @@ export const mockSettings: Settings = {
   onboarding_skipped: [],
   manual_income: null,
   manual_expenses: null,
+  categories_rev: 1,
 }
 
 /** Mirrors what `app_settings.json` would hold. */

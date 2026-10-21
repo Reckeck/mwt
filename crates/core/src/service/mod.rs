@@ -39,6 +39,7 @@ mod emergency;
 mod enrichment;
 mod envelopes;
 mod exchange_sync;
+mod passive;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
 mod inflation;
@@ -100,6 +101,7 @@ pub use losses::{
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use notifications::{notice, notice_title};
 pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
+pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use price_info::{PriceInfo, PriceOrigin};
 pub use rates::RateBook;
@@ -291,10 +293,12 @@ impl UnlockedVault {
         vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
+        // Built-in categories added in later versions reach old vaults too.
+        let categories_added = vault.ensure_default_categories();
         let graphs_migrated = vault.migrate_workflow_graphs();
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
-        if migrated || graphs_migrated || incomplete || fmt != vault.fmt {
+        if migrated || categories_added || graphs_migrated || incomplete || fmt != vault.fmt {
             vault.persist()?;
         }
         Ok(vault)
@@ -4811,6 +4815,7 @@ mod persist_tests {
             .into(),
             manual_income: Some(Amount::parse("1500").unwrap()),
             manual_expenses: Some(Amount::parse("1100").unwrap()),
+            categories_rev: 7,
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
