@@ -182,6 +182,31 @@ mockStores.push({
   },
 })
 seedUtilityDemo(mockStores[mockStores.length - 1].id)
+// A car with papers, so the car card has something to show.
+mockStores.push({
+  ...newStore('Машина', 'property', '#0ea5e9'),
+  property: {
+    category: 'car',
+    address: '',
+    area: null,
+    purchased_at: null,
+    purchase_price: null,
+    currency: 'rub',
+    car: {
+      model: 'Kia Rio',
+      year: 2019,
+      plate: 'А123ВС77',
+      osago_until: '2027-03-15',
+      kasko_until: null,
+      service_due_at: '2027-01-20',
+      service_due_km: 75000,
+      service_interval_months: 12,
+      service_interval_km: 15000,
+      mileage_km: 72400,
+      mileage_at: '2026-10-01',
+    },
+  },
+})
 
 export const mockTransactions: Transaction[] = []
 

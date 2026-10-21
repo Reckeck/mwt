@@ -362,7 +362,7 @@ type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { rea
  * A ready-made automation a wallet offers: it decides the operation kind and
  * the category, the user fills in only the amount and the date.
  */
-type AutomationPreset = "expense" | "top_up" | "salary" | "card_payment" | "to_savings" | "deposit_interest" | "dca_buy" | "staking_reward" | "market_transfer" | "rent_income" | "property_tax" | "insurance" | "utilities" | "loan_payment";
+type AutomationPreset = "expense" | "top_up" | "salary" | "card_payment" | "to_savings" | "deposit_interest" | "dca_buy" | "staking_reward" | "market_transfer" | "rent_income" | "property_tax" | "insurance" | "utilities" | "loan_payment" | "vehicle_service" | "fuel";
 
 /**
  * Payload of `automation-rejected`: one run the scheduler could not create.
@@ -685,6 +685,47 @@ type CapFreq = "daily" | "monthly" | "quarterly" | "yearly" | "at_end";
  * When earned interest joins the balance.
  */
 type Capitalization = "none" | "daily" | "monthly" | "at_end";
+
+/**
+ * What the app knows about a car: its papers, insurance and service.
+ */
+type CarInfo = { 
+/**
+ * Make and model, free text.
+ */
+model: string, year: number | null, 
+/**
+ * Licence plate.
+ */
+plate: string, 
+/**
+ * `YYYY-MM-DD` the compulsory insurance (ОСАГО) ends.
+ */
+osago_until: string | null, 
+/**
+ * `YYYY-MM-DD` the voluntary insurance (КАСКО) ends.
+ */
+kasko_until: string | null, 
+/**
+ * `YYYY-MM-DD` the next service is due.
+ */
+service_due_at: string | null, 
+/**
+ * Mileage the next service is due at, km.
+ */
+service_due_km: number | null, 
+/**
+ * Months between services; «service done» moves the date by it.
+ */
+service_interval_months: number | null, 
+/**
+ * Kilometres between services; «service done» moves the mileage by it.
+ */
+service_interval_km: number | null, 
+/**
+ * Last known mileage, km, and the `YYYY-MM-DD` it was read.
+ */
+mileage_km: number | null, mileage_at: string | null, };
 
 /**
  * One banknote line of a cash count.
@@ -2614,7 +2655,7 @@ type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list" |
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
  */
-type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "rates" | "health" | "security";
+type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "rates" | "health" | "vehicle" | "security";
 
 /**
  * One category's switches.
@@ -3115,7 +3156,16 @@ purchased_at: string | null, purchase_price: Amount | null, currency: string,
 /**
  * Day of the month the utilities are usually paid (1–31), all at once.
  */
-utilities_pay_day?: number, };
+utilities_pay_day?: number, 
+/**
+ * A car's papers, insurance and service; only for [`PropertyCategory::Car`].
+ */
+car?: CarInfo, };
+
+/**
+ * Ready-made automations of one property type.
+ */
+type PropertyPresetsInfo = { category: PropertyCategory, presets: Array<PresetInfo>, };
 
 /**
  * One property at a glance: what it is worth, what is owed on it and what
@@ -3276,7 +3326,7 @@ type ReminderSource = { kind: ReminderSourceKind, id: string, };
  * What an automatic reminder is made from (plan §15). Its `id` is the id of
  * the store, utility item, contact debt or goal it follows.
  */
-type ReminderSourceKind = "loan_payment" | "credit_card_payment" | "rent" | "utilities" | "meter_readings" | "deposit_end" | "pds_contribution" | "loyalty_expiry" | "debt" | "goal_saving" | "goal_deadline" | "property_tax" | "interest_tax";
+type ReminderSourceKind = "loan_payment" | "credit_card_payment" | "rent" | "utilities" | "meter_readings" | "deposit_end" | "pds_contribution" | "loyalty_expiry" | "debt" | "goal_saving" | "goal_deadline" | "property_tax" | "interest_tax" | "vehicle_insurance" | "vehicle_service";
 
 /**
  * Unit of a reminder's repeat interval.
@@ -5040,6 +5090,16 @@ type VaultStorage = "files" | "app";
 type VaultSyncedEvent = { session_id: string, batch: AppliedBatch, };
 
 /**
+ * The odometer of a car, read today.
+ */
+type VehicleMileageInput = { store_id: string, km: number, };
+
+/**
+ * A car's service done on `date` (`YYYY-MM-DD`), at `km` if read.
+ */
+type VehicleServiceDoneInput = { store_id: string, date: string, km: number | null, };
+
+/**
  * What a sleeping run waits for.
  */
 type WaitKind = "timer" | "confirm";
@@ -5048,7 +5108,11 @@ type WaitKind = "timer" | "confirm";
  * What every wallet kind allows, in sidebar order. Static domain data, so the
  * UI never duplicates these rules.
  */
-type WalletCatalog = { kinds: Array<WalletKindInfo>, providers: Array<ExchangeProviderInfo>, };
+type WalletCatalog = { kinds: Array<WalletKindInfo>, providers: Array<ExchangeProviderInfo>, 
+/**
+ * A property's presets depend on its type: they replace the kind's list.
+ */
+property_presets: Array<PropertyPresetsInfo>, };
 
 type WalletKindInfo = { kind: StoreKind, presets: Array<PresetInfo>, max_roots: number | null, user_creatable: boolean, default_purpose: Purpose, sub_types: Array<SubTypeInfo>, };
 

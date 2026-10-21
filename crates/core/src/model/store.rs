@@ -289,12 +289,71 @@ pub struct LiabilityTerms {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum PropertyCategory {
+    /// A home: a flat or a house. New records write this one.
     #[default]
     Flat,
+    /// Older vaults only: shown and treated as a home, never offered.
     House,
     Car,
     Land,
     Other,
+}
+
+impl PropertyCategory {
+    /// A flat and a house are one type, «home».
+    pub fn is_home(self) -> bool {
+        matches!(self, Self::Flat | Self::House)
+    }
+
+    /// Ready-made automations an object of this type offers.
+    pub fn automation_presets(self) -> &'static [crate::model::planning::AutomationPreset] {
+        use crate::model::planning::AutomationPreset::*;
+        match self {
+            Self::Flat | Self::House => &[RentIncome, Insurance, Utilities],
+            Self::Car => &[Insurance, VehicleService, Fuel],
+            Self::Land => &[PropertyTax],
+            Self::Other => &[Expense],
+        }
+    }
+}
+
+/// What the app knows about a car: its papers, insurance and service.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(default)]
+pub struct CarInfo {
+    /// Make and model, free text.
+    pub model: String,
+    pub year: Option<u16>,
+    /// Licence plate.
+    pub plate: String,
+    /// `YYYY-MM-DD` the compulsory insurance (ОСАГО) ends.
+    pub osago_until: Option<String>,
+    /// `YYYY-MM-DD` the voluntary insurance (КАСКО) ends.
+    pub kasko_until: Option<String>,
+    /// `YYYY-MM-DD` the next service is due.
+    pub service_due_at: Option<String>,
+    /// Mileage the next service is due at, km.
+    pub service_due_km: Option<u32>,
+    /// Months between services; «service done» moves the date by it.
+    pub service_interval_months: Option<u16>,
+    /// Kilometres between services; «service done» moves the mileage by it.
+    pub service_interval_km: Option<u32>,
+    /// Last known mileage, km, and the `YYYY-MM-DD` it was read.
+    pub mileage_km: Option<u32>,
+    pub mileage_at: Option<String>,
+}
+
+impl CarInfo {
+    /// Kilometres before the service is due by mileage counts as «due».
+    pub const SERVICE_KM_AHEAD: u32 = 1000;
+
+    /// Whether the mileage alone says the service is due now.
+    pub fn service_due_by_km(&self) -> bool {
+        match (self.service_due_km, self.mileage_km) {
+            (Some(due), Some(now)) => due.saturating_sub(now) < Self::SERVICE_KM_AHEAD,
+            _ => false,
+        }
+    }
 }
 
 /// A bonus programme: its points and what one point is worth.
@@ -349,6 +408,10 @@ pub struct PropertyInfo {
     #[serde(default)]
     #[ts(optional)]
     pub utilities_pay_day: Option<u8>,
+    /// A car's papers, insurance and service; only for [`PropertyCategory::Car`].
+    #[serde(default)]
+    #[ts(optional)]
+    pub car: Option<CarInfo>,
 }
 
 #[derive(

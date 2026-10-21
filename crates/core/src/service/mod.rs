@@ -55,6 +55,7 @@ mod notify_snapshot;
 mod peer_sync;
 mod saving;
 mod scenarios;
+mod vehicle;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;

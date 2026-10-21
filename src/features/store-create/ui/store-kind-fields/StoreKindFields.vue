@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { LiabilityTermsFields, StoreNodeSelect } from '@/entities/store'
+import { LiabilityTermsFields, PROPERTY_CATEGORIES, StoreNodeSelect } from '@/entities/store'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
@@ -25,7 +25,7 @@ const { isSub, kind, subInfo, custody, propertyCategory, terms, propertyRoots, s
   <div v-if="!isSub && kind === 'property'" class="grid gap-1.5">
     <Label for="store-property-category">{{ t('propertyCategory.title') }}</Label>
     <Select id="store-property-category" v-model="propertyCategory">
-      <SelectItem v-for="entry in ['flat', 'house', 'car', 'land', 'other']" :key="entry" :value="entry">
+      <SelectItem v-for="entry in PROPERTY_CATEGORIES" :key="entry" :value="entry">
         {{ t(`propertyCategory.${entry}`) }}
       </SelectItem>
     </Select>

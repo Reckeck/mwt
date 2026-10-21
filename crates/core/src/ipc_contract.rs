@@ -775,6 +775,26 @@ pub struct ExchangeProviderInfo {
 pub struct WalletCatalog {
     pub kinds: Vec<WalletKindInfo>,
     pub providers: Vec<ExchangeProviderInfo>,
+    /// A property's presets depend on its type: they replace the kind's list.
+    pub property_presets: Vec<PropertyPresetsInfo>,
+}
+
+/// Ready-made automations of one property type.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct PropertyPresetsInfo {
+    pub category: crate::model::store::PropertyCategory,
+    pub presets: Vec<PresetInfo>,
+}
+
+fn preset_infos(presets: &[crate::model::planning::AutomationPreset]) -> Vec<PresetInfo> {
+    presets
+        .iter()
+        .map(|&preset| PresetInfo {
+            preset,
+            tx_kind: preset.tx_kind(),
+            category: preset.category().map(str::to_string),
+        })
+        .collect()
 }
 
 impl WalletCatalog {
@@ -784,15 +804,7 @@ impl WalletCatalog {
             .iter()
             .map(|&kind| WalletKindInfo {
                 kind,
-                presets: kind
-                    .automation_presets()
-                    .iter()
-                    .map(|&preset| PresetInfo {
-                        preset,
-                        tx_kind: preset.tx_kind(),
-                        category: preset.category().map(str::to_string),
-                    })
-                    .collect(),
+                presets: preset_infos(kind.automation_presets()),
                 max_roots: kind.max_roots().map(|max| max as u32),
                 user_creatable: kind.user_creatable(),
                 default_purpose: kind.default_purpose(),
@@ -823,7 +835,25 @@ impl WalletCatalog {
             supported: provider.supported(),
         })
         .collect();
-        Self { kinds, providers }
+        use crate::model::store::PropertyCategory;
+        let property_presets = [
+            PropertyCategory::Flat,
+            PropertyCategory::House,
+            PropertyCategory::Car,
+            PropertyCategory::Land,
+            PropertyCategory::Other,
+        ]
+        .into_iter()
+        .map(|category| PropertyPresetsInfo {
+            category,
+            presets: preset_infos(category.automation_presets()),
+        })
+        .collect();
+        Self {
+            kinds,
+            providers,
+            property_presets,
+        }
     }
 }
 
@@ -962,6 +992,21 @@ pub struct CreateLoyaltyProgramInput {
     /// The shop or bank behind the programme, from the contacts.
     pub contact_id: Option<String>,
     pub info: crate::model::store::LoyaltyInfo,
+}
+
+/// The odometer of a car, read today.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct VehicleMileageInput {
+    pub store_id: String,
+    pub km: u32,
+}
+
+/// A car's service done on `date` (`YYYY-MM-DD`), at `km` if read.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct VehicleServiceDoneInput {
+    pub store_id: String,
+    pub date: String,
+    pub km: Option<u32>,
 }
 
 /// Credit (positive) or spend (negative) points of a programme.

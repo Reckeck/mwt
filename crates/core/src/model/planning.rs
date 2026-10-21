@@ -61,6 +61,9 @@ pub enum AutomationPreset {
     Insurance,
     Utilities,
     LoanPayment,
+    /// A car's regular service.
+    VehicleService,
+    Fuel,
 }
 
 impl AutomationPreset {
@@ -78,7 +81,9 @@ impl AutomationPreset {
             | Self::CardPayment
             | Self::PropertyTax
             | Self::Insurance
-            | Self::Utilities => TxKind::Payment,
+            | Self::Utilities
+            | Self::VehicleService
+            | Self::Fuel => TxKind::Payment,
         }
     }
 
@@ -96,6 +101,8 @@ impl AutomationPreset {
             Self::PropertyTax => Some("taxes"),
             Self::Insurance => Some("insurance"),
             Self::Utilities => Some("utilities"),
+            Self::VehicleService => Some("repair"),
+            Self::Fuel => Some("fuel"),
             Self::Expense | Self::CardPayment => None,
         }
     }
@@ -480,6 +487,10 @@ pub enum ReminderSourceKind {
     GoalDeadline,
     PropertyTax,
     InterestTax,
+    /// A car's insurance (ОСАГО or КАСКО) ends.
+    VehicleInsurance,
+    /// A car's service is due by date or by mileage.
+    VehicleService,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

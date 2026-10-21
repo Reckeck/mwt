@@ -29,13 +29,15 @@ pub enum NoticeCategory {
     Rates,
     /// The monthly capital checkup changed its colour or reasons.
     Health,
+    /// A car's insurance ends or its service is due.
+    Vehicle,
     /// Something about the vault itself: it was handed to another device.
     /// Always shown; there is no switch for it.
     Security,
 }
 
 impl NoticeCategory {
-    pub const ALL: [NoticeCategory; 16] = [
+    pub const ALL: [NoticeCategory; 17] = [
         Self::Reminder,
         Self::PriceAlert,
         Self::Automation,
@@ -52,6 +54,7 @@ impl NoticeCategory {
         Self::Tax,
         Self::Rates,
         Self::Health,
+        Self::Vehicle,
     ];
 
     /// Days ahead a notice of this kind comes by default.
@@ -59,7 +62,7 @@ impl NoticeCategory {
         match self {
             Self::Loan | Self::Rent | Self::Utilities | Self::Debt | Self::Shortfall => 1,
             Self::Deposit | Self::Loyalty => 7,
-            Self::Tax | Self::Goal => 14,
+            Self::Tax | Self::Goal | Self::Vehicle => 14,
             _ => 0,
         }
     }

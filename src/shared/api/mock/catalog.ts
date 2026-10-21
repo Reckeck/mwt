@@ -54,6 +54,8 @@ function mockPresets(names: AutomationPreset[]): PresetInfo[] {
     insurance: 'payment',
     utilities: 'payment',
     loan_payment: 'transfer',
+    vehicle_service: 'payment',
+    fuel: 'payment',
   }
   const categories: Partial<Record<AutomationPreset, string>> = {
     salary: 'salary',
@@ -68,6 +70,8 @@ function mockPresets(names: AutomationPreset[]): PresetInfo[] {
     property_tax: 'taxes',
     insurance: 'insurance',
     utilities: 'utilities',
+    vehicle_service: 'repair',
+    fuel: 'fuel',
   }
   return names.map((preset) => ({ preset, tx_kind: kinds[preset], category: categories[preset] ?? null }))
 }
@@ -152,6 +156,13 @@ export function mockWalletCatalog(): WalletCatalog {
         default_purpose: 'investment',
         sub_types: [],
       },
+    ],
+    property_presets: [
+      { category: 'flat', presets: mockPresets(['rent_income', 'insurance', 'utilities']) },
+      { category: 'house', presets: mockPresets(['rent_income', 'insurance', 'utilities']) },
+      { category: 'car', presets: mockPresets(['insurance', 'vehicle_service', 'fuel']) },
+      { category: 'land', presets: mockPresets(['property_tax']) },
+      { category: 'other', presets: mockPresets(['expense']) },
     ],
     providers: [
       { provider: 'bybit', supported: true },
