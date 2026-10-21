@@ -54,6 +54,9 @@ pub struct MonthSummary {
     pub income: Amount,
     pub fixed: Amount,
     pub daily: Amount,
+    /// The part of `daily` in essential categories (plan C1).
+    #[serde(default)]
+    pub essential_daily: Amount,
     /// `income × savings_rate`.
     pub savings_plan: Amount,
     /// What was left: `income − fixed − daily`.
@@ -80,6 +83,8 @@ pub struct MonthAvg {
     pub income: Amount,
     pub fixed: Amount,
     pub daily: Amount,
+    /// Mandatory spending `E_mand`: `fixed` plus essential everyday spending.
+    pub essential: Amount,
     /// How many months went into the average.
     pub months: u32,
     pub currency: String,
@@ -151,6 +156,20 @@ fn amount_of_days(days: u32) -> Amount {
 }
 
 impl UnlockedVault {
+    /// Whether everyday spending under these categories is mandatory: the
+    /// first known category decides, as it decides the flow's group.
+    fn is_essential_spending(&self, categories: &[String]) -> bool {
+        categories
+            .iter()
+            .find_map(|key| {
+                self.doc
+                    .categories
+                    .iter()
+                    .find(|category| &category.key == key)
+            })
+            .is_some_and(|category| category.is_essential())
+    }
+
     /// The budget currency, never empty (D20).
     pub fn budget_currency(&self) -> String {
         let code = self.doc.settings.budget_currency.trim().to_lowercase();
@@ -417,7 +436,12 @@ impl UnlockedVault {
             match flow.class {
                 FlowClass::Income => out.income += flow.value,
                 FlowClass::Fixed => out.fixed += flow.value,
-                FlowClass::Daily => out.daily += flow.value,
+                FlowClass::Daily => {
+                    out.daily += flow.value;
+                    if self.is_essential_spending(&flow.categories) {
+                        out.essential_daily += flow.value;
+                    }
+                }
                 FlowClass::Savings => out.savings_moved += flow.value,
                 FlowClass::BudgetIn => out.budget_in += flow.value,
                 FlowClass::BudgetOut => out.budget_out += flow.value,
@@ -544,10 +568,12 @@ impl UnlockedVault {
     pub fn manual_month(&self) -> Option<MonthAvg> {
         let settings = &self.doc.settings;
         let income = settings.manual_income.filter(|value| value.is_positive())?;
+        let expenses = settings.manual_expenses.unwrap_or(Amount::ZERO);
         Some(MonthAvg {
             income,
-            fixed: settings.manual_expenses.unwrap_or(Amount::ZERO),
+            fixed: expenses,
             daily: Amount::ZERO,
+            essential: expenses,
             months: 0,
             currency: self.budget_currency(),
         })
@@ -596,6 +622,7 @@ impl UnlockedVault {
             income: average(|summary| summary.income),
             fixed: average(|summary| summary.fixed),
             daily: average(|summary| summary.daily),
+            essential: average(|summary| summary.fixed + summary.essential_daily),
             months: found.len() as u32,
             currency: self.budget_currency(),
         })

@@ -208,7 +208,7 @@ impl UnlockedVault {
     }
 
     /// The money an account holds: its bound currency, else the base one.
-    fn deposit_asset(&self, store: &Store) -> AssetRef {
+    pub(crate) fn deposit_asset(&self, store: &Store) -> AssetRef {
         match &store.binding {
             Binding::Asset(asset) => asset.clone(),
             _ => {

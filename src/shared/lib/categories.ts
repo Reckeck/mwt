@@ -16,3 +16,25 @@ export function categoryKeyLabel(key: string, categories: Category[] | undefined
 }
 
 export const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings', 'service']
+
+/** Everyday categories that count as a must until the user says otherwise; mirrors `DEFAULT_ESSENTIAL` in core. */
+export const DEFAULT_ESSENTIAL: readonly string[] = [
+  'groceries',
+  'transport',
+  'fuel',
+  'medicine',
+  'pharmacy',
+  'household_chemicals',
+  'pets',
+  'therapy',
+  'education',
+  'repair',
+  'family_help',
+]
+
+/** Whether spending in the category is mandatory: fixed always, everyday by flag or default. */
+export function isEssential(category: Pick<Category, 'key' | 'group' | 'essential'>): boolean {
+  if (category.group === 'fixed') return true
+  if (category.group !== 'daily') return false
+  return category.essential ?? DEFAULT_ESSENTIAL.includes(category.key)
+}

@@ -9,8 +9,9 @@ import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
+import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
-import { CATEGORY_GROUPS, categoryLabel } from '@/shared/lib/categories'
+import { CATEGORY_GROUPS, categoryLabel, isEssential } from '@/shared/lib/categories'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useCategories } from '@/shared/api/queries'
 
@@ -36,6 +37,16 @@ const update = useMutation({
   meta: { success: 'categories.manage.renamed', error: 'settings.saveFailed' },
 })
 
+const essential = useMutation({
+  mutationFn: (input: UpdateCategoryInput) => call<Category>('update_category', { input }),
+  onSuccess: refresh,
+  meta: {
+    error: 'settings.saveFailed',
+    success: (_data, input) =>
+      (input as UpdateCategoryInput).essential ? t('categories.manage.essentialOn') : t('categories.manage.essentialOff'),
+  },
+})
+
 const archive = useMutation({
   mutationFn: (category: Category) => call('archive_category', { key: category.key, archived: !category.archived }),
   onSuccess: refresh,
@@ -58,7 +69,7 @@ const remove = useMutation({
 function rename(category: Category, raw: string) {
   const name = raw.trim()
   if (name === categoryLabel(category, t)) return
-  update.mutate({ key: category.key, name: name || null, group: category.group })
+  update.mutate({ key: category.key, name: name || null, group: category.group, essential: null })
 }
 
 const newName = ref('')
@@ -107,6 +118,9 @@ const create = useMutation({
 
       <div v-for="section in sections" :key="section.group" class="grid gap-1 pointer-coarse:gap-2">
         <p class="text-xs font-medium text-muted-foreground">{{ t(`categoryGroup.${section.group}`) }}</p>
+        <p v-if="section.group === 'daily'" class="text-xs text-muted-foreground">
+          {{ t('categories.manage.essentialHint') }}
+        </p>
         <div
           v-for="category in section.items"
           :key="category.key"
@@ -123,10 +137,18 @@ const create = useMutation({
             class="h-8 w-40"
             :model-value="category.group"
             :aria-label="t('categories.manage.group')"
-            @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup })"
+            @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup, essential: null })"
           >
             <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
           </Select>
+          <Switch
+            v-if="category.group === 'daily'"
+            :model-value="isEssential(category)"
+            :title="t('categories.manage.essential')"
+            :aria-label="t('categories.manage.essential')"
+            :disabled="essential.isPending.value"
+            @update:model-value="(on) => essential.mutate({ key: category.key, name: category.name, group: category.group, essential: on })"
+          />
           <Button
             variant="ghost"
             size="icon-sm"

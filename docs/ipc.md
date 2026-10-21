@@ -162,7 +162,7 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `list_categories` | — | `Vec<Category>` |
 | `create_category` | `CreateCategoryInput { key?, name, group }` | `Category` (ключ выводится из имени и делается уникальным) |
-| `update_category` | `UpdateCategoryInput { key, name?, group }` | `Category` (пустое имя — встроенная подпись) |
+| `update_category` | `UpdateCategoryInput { key, name?, group, essential? }` | `Category` (пустое имя — встроенная подпись; `essential: null` оставляет флаг обязательной траты как есть) |
 | `archive_category` | `key, archived` | `()` |
 | `delete_category` | `key` | `()` — только неиспользуемую |
 | `list_categorization_rules` | — | `Vec<CategorizationRule>` в порядке применения |
@@ -299,6 +299,9 @@ JSON без шифрования — там нет ничего секретно
 | `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating, planned_now? }>` |
 | `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
 | `goal_from_scenario` | `id` | `GoalInput` — черновик цели на итог сценария (срок, взнос в месяц, кошельки, `scenario_id`); сохраняет форма цели |
+| `emergency_fund_get` | — | `EmergencyStatus` — подушка: счета, сумма, обязательные траты в месяц (`e_mand`), покрытие в месяцах, цель, излишек, проценты за 12 мес., счета-кандидаты (валюта бюджета) |
+| `emergency_fund_set` | `fund: EmergencyFund { scope, target_months, avg_months }` | `EmergencyFund`; только живые счета «Сбережения», месяцы 1–24, пустой список = подушки нет |
+| `emergency_fund_toggle` | `storeId`, `on` | `EmergencyFund` — добавить счёт в подушку или убрать |
 | `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` (`list_reminders` сначала синхронизирует авто-напоминания) | `ReminderInput { text, due_at (RFC3339: дата и время), repeat?: { every, unit: day\|week\|month\|year } }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder { …, repeat?, source?, muted, user_edited, snoozed_until? }`; правка снимает откладывание, у авто-напоминания ставит `user_edited` |
 | `set_reminder_done` | `id, done` | `Reminder` — у повторяющегося «выполнено» не закрывает, а переносит `due_at` на первую дату серии после «сейчас» (отсчёт от исходной даты: 31-е остаётся 31-м, в коротком месяце — последний день) |
 | `finish_reminder_series` | `id` | `Reminder` — завершить серию: `repeat = None`, `done`; авто-напоминание ещё и `muted`, чтобы синхронизация его не вернула |

@@ -14,17 +14,19 @@ use trade_core::ipc_contract::{
     UpdateUtilityInput, UtilityInput,
 };
 use trade_core::model::planning::{
-    Automation, AutomationRun, Budget, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
+    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
+    UtilityItem,
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
-    AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport, GoalCalendar,
-    GoalProgress, InterestTaxReport, MonthSummary, PayUtilityBillInput, PropertySummary,
-    UnlockedVault, UpcomingItem, UtilityBill, UtilityPaymentDraft, UtilityTrend,
+    AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
+    EmergencyStatus, GoalCalendar, GoalProgress, InterestTaxReport, MonthSummary,
+    PayUtilityBillInput, PropertySummary, UnlockedVault, UpcomingItem, UtilityBill,
+    UtilityPaymentDraft, UtilityTrend,
 };
 use trade_core::workflow::Workflow;
 
-use crate::commands::app_settings::current_zone;
+use crate::commands::app_settings::{current_settings, current_zone};
 use crate::commands::{AppState, err_to_string, require_vault};
 
 /// Run `read` against the open vault.
@@ -272,6 +274,39 @@ pub async fn get_goal_calendar(
 ) -> Result<GoalCalendar, String> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| vault.goal_calendar(year, now_secs(), &zone))
+}
+
+// -- emergency fund --------------------------------------------------------------
+
+/// The emergency fund with how many months of mandatory spending it covers.
+#[tauri::command]
+pub async fn emergency_fund_get(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<EmergencyStatus, String> {
+    let zone = current_zone(&app);
+    let inflation = current_settings(&app).inflation;
+    with_vault(&state, |vault| {
+        Ok(vault.emergency_fund_status(now_secs(), &zone, &inflation))
+    })
+}
+
+#[tauri::command]
+pub async fn emergency_fund_set(
+    fund: EmergencyFund,
+    state: State<'_, AppState>,
+) -> Result<EmergencyFund, String> {
+    with_vault_mut(&state, |vault| vault.set_emergency_fund(fund))
+}
+
+/// Add a savings account to the fund or take it out.
+#[tauri::command]
+pub async fn emergency_fund_toggle(
+    store_id: String,
+    on: bool,
+    state: State<'_, AppState>,
+) -> Result<EmergencyFund, String> {
+    with_vault_mut(&state, |vault| vault.emergency_fund_toggle(&store_id, on))
 }
 
 // -- reminders -------------------------------------------------------------------

@@ -21,7 +21,15 @@ export function updateInputOf(store: Store, patch: Partial<UpdateStoreInput> = {
   }
 }
 
-export const STORE_STALE_KEYS = [['stores'], ['store'], ['summary'], ['net-worth'], ['budget'], ['daily-budget']]
+export const STORE_STALE_KEYS = [
+  ['stores'],
+  ['store'],
+  ['summary'],
+  ['net-worth'],
+  ['budget'],
+  ['daily-budget'],
+  ['emergency-fund'],
+]
 
 /** One save path for every wallet settings form. */
 export function useStoreUpdate() {

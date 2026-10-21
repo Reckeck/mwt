@@ -565,6 +565,9 @@ pub struct VaultDoc {
     /// Inflation by currency and month, fetched in the background (plan I1).
     #[serde(default)]
     pub inflation_points: Vec<crate::model::inflation::InflationReading>,
+    /// The emergency fund; an empty store list means none (plan C1).
+    #[serde(default)]
+    pub emergency_fund: crate::model::planning::EmergencyFund,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -624,6 +627,7 @@ impl Default for VaultDoc {
             discarded_imports: Vec::new(),
             calc_scenarios: Vec::new(),
             inflation_points: Vec::new(),
+            emergency_fund: Default::default(),
             sync: crate::sync::SyncState::default(),
         }
     }

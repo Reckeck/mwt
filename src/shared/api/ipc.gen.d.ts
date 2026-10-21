@@ -703,7 +703,13 @@ name: string | null, group: CategoryGroup,
 /**
  * Hidden from pickers; existing transactions keep it.
  */
-archived: boolean, };
+archived: boolean, 
+/**
+ * Whether everyday spending here is a must (plan C1). `None` takes the
+ * default by key ([`DEFAULT_ESSENTIAL`]); only `Daily` reads it, `Fixed`
+ * is always essential.
+ */
+essential: boolean | null, };
 
 type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
 
@@ -1170,6 +1176,84 @@ trigger_node: string | null,
  * without one pauses the emulation (outcome `asking`).
  */
 answers?: { [key: string]: boolean }, };
+
+/**
+ * The emergency fund (plan C1): savings accounts set aside for bad times,
+ * measured in months of mandatory spending. No stores = no fund.
+ */
+type EmergencyFund = { 
+/**
+ * An explicit list of `Purpose::Savings` stores, `include_children`
+ * off: an empty `StoreScope` would mean every store.
+ */
+scope: StoreScope, 
+/**
+ * How many months of mandatory spending the fund should cover.
+ */
+target_months: number, 
+/**
+ * Finished months mandatory spending is averaged over.
+ */
+avg_months: number, };
+
+/**
+ * The fund at a glance (plan C1).
+ */
+type EmergencyStatus = { fund: EmergencyFund, 
+/**
+ * The budget currency every amount here is in.
+ */
+currency: string, stores: Array<EmergencyStore>, total: Amount, 
+/**
+ * Average monthly mandatory spending; `None` without history or a
+ * hand-entered month.
+ */
+e_mand: Amount | null, 
+/**
+ * Finished months behind `e_mand`; 0 when it is the hand-entered month.
+ */
+e_mand_months: number, 
+/**
+ * `total / e_mand`; `None` when `e_mand` is unknown or zero.
+ */
+months_covered: Amount | null, 
+/**
+ * `target_months × e_mand`.
+ */
+target_amount: Amount | null, 
+/**
+ * What lies above the target and could be invested (decision 33).
+ */
+surplus: Amount | null, interest_12m: Amount, 
+/**
+ * Savings accounts not in the fund yet, for «Сделать подушкой».
+ */
+candidates: Array<string>, };
+
+/**
+ * One account of the fund, in the budget currency.
+ */
+type EmergencyStore = { store_id: string, value: Amount, 
+/**
+ * Deposit rate in force today, percent; `None` without deposit terms.
+ */
+rate: Amount | null, 
+/**
+ * Inflation of the account's currency this month, percent.
+ */
+inflation: Amount | null, 
+/**
+ * The rate is known and below inflation: a hint, not a warning light.
+ */
+below_inflation: boolean, 
+/**
+ * Interest booked here over the last twelve months.
+ */
+interest_12m: Amount, 
+/**
+ * Active goals that count this account too (decision 34).
+ */
+goal_ids: Array<string>, };
 
 /**
  * An event a run sent with «Отправить событие».
@@ -2203,6 +2287,10 @@ type MonthSummary = {
  * `YYYY-MM`.
  */
 month: string, currency: string, income: Amount, fixed: Amount, daily: Amount, 
+/**
+ * The part of `daily` in essential categories (plan C1).
+ */
+essential_daily: Amount, 
 /**
  * `income × savings_rate`.
  */
@@ -4231,7 +4319,11 @@ type UpdateCategoryInput = { key: string,
 /**
  * Empty = the built-in label.
  */
-name: string | null, group: CategoryGroup, };
+name: string | null, group: CategoryGroup, 
+/**
+ * Mandatory spending flag for `Daily`; `None` keeps it.
+ */
+essential: boolean | null, };
 
 type UpdateContactInput = { id: string, contact: ContactDraft, };
 
@@ -4546,7 +4638,11 @@ calc_scenarios: Array<CalcScenario>,
 /**
  * Inflation by currency and month, fetched in the background (plan I1).
  */
-inflation_points: Array<InflationReading>, };
+inflation_points: Array<InflationReading>, 
+/**
+ * The emergency fund; an empty store list means none (plan C1).
+ */
+emergency_fund: EmergencyFund, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

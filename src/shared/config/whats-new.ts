@@ -5,24 +5,19 @@
  * `onboarding` skill. Texts: `whatsNew.<id>.title` and
  * `whatsNew.<id>.<point>` in both locales.
  */
-export interface WhatsNewPoint {
-  /** i18n key under `whatsNew.<entry id>.`. */
-  key: string
-  /**
-   * Route whose tour shows it, or `settings:<tab>` for a settings tab;
-   * omitted when there is nothing to point at.
-   */
-  route?: string
-}
+import type { WhatsNewEntry } from './whats-new.types'
 
-export interface WhatsNewEntry {
-  id: string
-  /** `YYYY-MM-DD`. */
-  date: string
-  points: WhatsNewPoint[]
-}
+export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    id: 'emergency',
+    date: '2026-10-21',
+    points: [
+      { key: 'essential', route: 'settings:categories' },
+      { key: 'fund', route: 'wallet-settings' },
+    ],
+  },
   {
     id: 'goalReturn',
     date: '2026-10-21',

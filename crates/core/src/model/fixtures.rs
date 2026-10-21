@@ -519,7 +519,16 @@ pub fn full_doc() -> VaultDoc {
         name: Some("Custom".into()),
         group: CategoryGroup::Savings,
         archived: true,
+        essential: Some(false),
     });
+    doc.emergency_fund = crate::model::planning::EmergencyFund {
+        scope: crate::model::store::StoreScope {
+            store_ids: vec!["reserve".into()],
+            include_children: false,
+        },
+        target_months: 3,
+        avg_months: 12,
+    };
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).
     let stamp = crate::sync::Stamp::new(1_700_000_000_000, 2, "devaaaaa");
