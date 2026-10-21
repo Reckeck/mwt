@@ -39,8 +39,11 @@ pub struct InflationCurrency {
     pub mode: InflationMode,
     /// The mode was chosen by the user rather than inferred.
     pub chosen: bool,
-    /// The built-in source, if the currency has one.
+    /// The built-in source, if the currency has one; `Custom` in source mode.
     pub source: Option<InflationSource>,
+    /// The user's data source of this currency (plan I2), even when another
+    /// mode is chosen.
+    pub source_id: Option<String>,
     pub latest: Option<InflationReading>,
     /// The reading of the month before `latest`.
     pub previous: Option<Amount>,
@@ -175,17 +178,59 @@ fn code(currency: &str) -> String {
 }
 
 impl UnlockedVault {
-    /// Readings of a currency, oldest first.
-    pub fn inflation_series(&self, currency: &str) -> Vec<&InflationReading> {
+    /// Readings of a currency, oldest first: the fetched ones, or in source
+    /// mode the ones read from the user's data source.
+    pub fn inflation_series(&self, currency: &str) -> Vec<InflationReading> {
         let currency = code(currency);
-        let mut rows: Vec<&InflationReading> = self
+        if self.doc.settings.inflation_mode.get(&currency) == Some(&InflationMode::Source) {
+            return self.source_inflation(&currency);
+        }
+        let mut rows: Vec<InflationReading> = self
             .doc
             .inflation_points
             .iter()
             .filter(|row| row.currency == currency)
+            .cloned()
             .collect();
         rows.sort_by(|left, right| left.month.cmp(&right.month));
         rows
+    }
+
+    /// Monthly readings from the currency's data source: a series whose
+    /// labels are dates gives a month per row; a number gives the latest
+    /// value of each month it was fetched in. They are derived each time,
+    /// not stored, so fixing the source fixes the history.
+    fn source_inflation(&self, currency: &str) -> Vec<InflationReading> {
+        let Some(source) = self
+            .doc
+            .settings
+            .inflation_source
+            .get(currency)
+            .and_then(|id| self.doc.data_sources.iter().find(|source| source.id == *id))
+        else {
+            return Vec::new();
+        };
+        let mut by_month: BTreeMap<String, Amount> = BTreeMap::new();
+        let values = source.history.iter().chain(source.last.iter());
+        for value in values {
+            for point in &value.series {
+                if let Some(date) = crate::datasource::parse_date_label(&point.label) {
+                    by_month.insert(date.format("%Y-%m").to_string(), point.value);
+                }
+            }
+            if let (Some(number), Some(month)) = (value.number, value.at.get(..7)) {
+                by_month.insert(month.to_string(), number);
+            }
+        }
+        by_month
+            .into_iter()
+            .map(|(month, yoy_pct)| InflationReading {
+                currency: currency.to_string(),
+                month,
+                yoy_pct,
+                source: InflationSource::Custom,
+            })
+            .collect()
     }
 
     /// The mode the user chose, else: no built-in source → manual; a flat rate
@@ -253,6 +298,7 @@ impl UnlockedVault {
         manual
             .keys()
             .cloned()
+            .chain(self.doc.settings.inflation_source.keys().cloned())
             .chain(
                 InflationSource::ALL
                     .iter()
@@ -274,7 +320,7 @@ impl UnlockedVault {
         from: NaiveDate,
         today: NaiveDate,
     ) -> Option<BTreeMap<NaiveDate, Amount>> {
-        if self.inflation_mode(currency, manual) != InflationMode::Auto {
+        if self.inflation_mode(currency, manual) == InflationMode::Manual {
             return None;
         }
         let series = self.inflation_series(currency);
@@ -409,10 +455,37 @@ impl UnlockedVault {
                 "{currency}: no built-in inflation source"
             )));
         }
+        if mode == Some(InflationMode::Source)
+            && !self.doc.settings.inflation_source.contains_key(&currency)
+        {
+            return Err(Error::InvalidInput(format!(
+                "{currency}: no data source chosen for inflation"
+            )));
+        }
         match mode {
             Some(mode) => self.doc.settings.inflation_mode.insert(currency, mode),
             None => self.doc.settings.inflation_mode.remove(&currency),
         };
+        self.persist()
+    }
+
+    /// Read a currency's inflation from one of the user's data sources.
+    pub fn set_inflation_source(&mut self, currency: &str, source_id: &str) -> Result<()> {
+        let currency = code(currency);
+        if currency.is_empty() {
+            return Err(Error::InvalidInput("currency is empty".into()));
+        }
+        if self.data_source(source_id).is_none() {
+            return Err(Error::NotFound(format!("data source {source_id}")));
+        }
+        self.doc
+            .settings
+            .inflation_source
+            .insert(currency.clone(), source_id.to_string());
+        self.doc
+            .settings
+            .inflation_mode
+            .insert(currency, InflationMode::Source);
         self.persist()
     }
 
@@ -423,18 +496,24 @@ impl UnlockedVault {
             .into_iter()
             .map(|currency| {
                 let series = self.inflation_series(&currency);
-                let latest = series.last().map(|row| (*row).clone());
+                let latest = series.last().cloned();
+                let mode = self.inflation_mode(&currency, manual);
                 let previous = series.iter().rev().nth(1).map(|row| row.yoy_pct);
                 let tail = series.len().saturating_sub(INFLATION_CHART_MONTHS);
                 InflationCurrency {
-                    mode: self.inflation_mode(&currency, manual),
+                    mode,
                     chosen: self.doc.settings.inflation_mode.contains_key(&currency),
-                    source: InflationSource::for_currency(&currency),
+                    source: if mode == InflationMode::Source {
+                        Some(InflationSource::Custom)
+                    } else {
+                        InflationSource::for_currency(&currency)
+                    },
+                    source_id: self.doc.settings.inflation_source.get(&currency).cloned(),
                     latest,
                     previous,
                     manual: manual.get(&currency).copied(),
                     effective: self.inflation_on(&currency, "9999-12", manual),
-                    series: series[tail..].iter().map(|row| (*row).clone()).collect(),
+                    series: series[tail..].to_vec(),
                     currency,
                 }
             })

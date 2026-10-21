@@ -35,6 +35,7 @@ mod automations;
 mod budget;
 mod categories;
 mod contacts;
+mod datasources;
 mod debts;
 mod emergency;
 mod enrichment;
@@ -88,6 +89,7 @@ pub use automations::{
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
+pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
 pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
@@ -4862,6 +4864,7 @@ mod persist_tests {
             notifications: crate::model::notify::NotificationSettings::default(),
             budget_configured: true,
             onboarding_skipped: vec!["debts".into()],
+            inflation_source: [("thb".into(), "src-1".into())].into_iter().collect(),
             inflation_mode: [(
                 "rub".to_string(),
                 crate::model::inflation::InflationMode::Manual,

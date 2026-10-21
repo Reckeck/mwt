@@ -16,6 +16,7 @@ pub mod fx_sources;
 pub mod history;
 pub mod inflation;
 pub mod key_rate;
+pub mod page;
 
 use reqwest::Client;
 use reqwest::header::{ACCEPT, USER_AGENT};

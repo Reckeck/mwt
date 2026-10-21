@@ -2,6 +2,7 @@
 
 import { resolve } from './core'
 import type { MockCommands } from './core'
+import { mockInflationSources } from './commands-sources'
 import { mockAppSettings } from './vault-data'
 
 const SOURCES: Record<string, InflationSource> = { rub: 'cbr', usd: 'bls', eur: 'eurostat' }
@@ -23,7 +24,8 @@ function overview(): InflationCurrency[] {
   return codes.map((currency) => {
     const source = SOURCES[currency] ?? null
     const manual = manualTable[currency] ?? null
-    const mode = modes[currency] ?? (source ? 'auto' : 'manual')
+    const sourceId = mockInflationSources[currency] ?? null
+    const mode = modes[currency] ?? (sourceId ? 'source' : source ? 'auto' : 'manual')
     const months = monthsBack(21)
     const [last, drift] = SHAPE[currency] ?? [0, 0]
     const series: InflationReading[] = source
@@ -40,10 +42,11 @@ function overview(): InflationCurrency[] {
       mode,
       chosen: currency in modes,
       source,
+      source_id: sourceId,
       latest,
       previous: series.at(-2)?.yoy_pct ?? null,
       manual,
-      effective: mode === 'auto' && latest ? latest.yoy_pct : manual,
+      effective: mode !== 'manual' && latest ? latest.yoy_pct : manual,
       series,
     }
   })

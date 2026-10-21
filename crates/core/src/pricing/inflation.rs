@@ -210,6 +210,9 @@ impl PricingService {
                 ("coicop18", "TOTAL".to_string()),
                 ("sinceTimePeriod", from.format("%Y-%m").to_string()),
             ]),
+            InflationSource::Custom => {
+                return Err(Error::Unsupported);
+            }
         };
         let resp = request
             .header(USER_AGENT, "multi-wallet-tracker")
@@ -230,7 +233,7 @@ impl PricingService {
         match source {
             InflationSource::Cbr => parse_inflation_cbr(&text),
             InflationSource::Bls => parse_inflation_bls(&text),
-            InflationSource::Eurostat => parse_inflation_eurostat(&text),
+            InflationSource::Eurostat | InflationSource::Custom => parse_inflation_eurostat(&text),
         }
     }
 }

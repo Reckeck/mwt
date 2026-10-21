@@ -9,7 +9,7 @@ const { t } = useI18n()
 
 /** Each tab is a child route, so a tab has its own address. */
 const tabs = computed(() =>
-  ['automations', 'budgets', 'goals', 'calculator', 'reminders', 'alerts'].map((key) => ({
+  ['automations', 'sources', 'budgets', 'goals', 'calculator', 'reminders', 'alerts'].map((key) => ({
     name: `planning-${key}`,
     label: t(`planning.tab.${key}`),
   })),

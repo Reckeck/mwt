@@ -124,6 +124,30 @@ impl Executor<'_> {
                     ("used", number(percent(status.used))),
                 ]))
             }
+            "data.source" => {
+                let id = self.text_param(node, "source");
+                let source = self
+                    .vault
+                    .data_source(&id)
+                    .ok_or("choose one of your data sources")?;
+                let last = source.last.as_ref().ok_or("the source has no value yet")?;
+                Ok(Outputs::from([
+                    ("value", last.number.map_or(WfValue::Null, number)),
+                    (
+                        "text",
+                        last.text.clone().map_or(WfValue::Null, WfValue::Text),
+                    ),
+                    (
+                        "series",
+                        WfValue::List(
+                            last.series
+                                .iter()
+                                .map(|point| number(point.value))
+                                .collect(),
+                        ),
+                    ),
+                ]))
+            }
             "data.goal" => {
                 let id = self.text_param(node, "goal");
                 let progress = self

@@ -17,6 +17,7 @@ pub mod portfolio;
 pub mod pricing;
 pub mod rates;
 pub mod settings;
+pub mod sources;
 pub mod stores;
 pub mod sync;
 pub mod transactions;

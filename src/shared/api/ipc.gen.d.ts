@@ -266,6 +266,20 @@ type AssetPriceInput = { symbol: string, coingecko_id: string | null, chain: Cha
  */
 at: string | null, };
 
+/**
+ * An asset priced by a source (plan I2): the source's number is the price
+ * of one unit in `currency`.
+ */
+type AssetPriceSource = { 
+/**
+ * `AssetRef::key()`.
+ */
+asset_key: string, source_id: string, 
+/**
+ * Lowercase code of the currency the number is in.
+ */
+currency: string, };
+
 type AssetRef = { symbol: string, name: string, 
 /**
  * e.g. `bitcoin` — used by CoinGecko.
@@ -1170,6 +1184,42 @@ pinned: boolean,
 store_id: string | null, };
 
 /**
+ * A source the user set up.
+ */
+type DataSource = { id: string, name: string, 
+/**
+ * `https://…` address of the page, JSON answer or file.
+ */
+url: string, method: SourceMethod, output: SourceOutput, number: NumberFormat, interval: SourceInterval, last: SourceValue | null, 
+/**
+ * Earlier values, oldest first, at most [`MAX_SOURCE_HISTORY`].
+ */
+history: Array<SourceValue>, 
+/**
+ * The value waiting for confirmation while `status` is `Pending`.
+ */
+pending: SourceValue | null, failures: number, status: SourceStatus, 
+/**
+ * The last error, for «Починить».
+ */
+error: string | null, 
+/**
+ * RFC3339 of the last attempt, successful or not.
+ */
+checked_at: string | null, created_at: string, };
+
+/**
+ * What the form sends. `uses` replaces the inflation, price and deposit uses
+ * of the source; workflow uses are ignored.
+ */
+type DataSourceDraft = { id: string | null, name: string, url: string, method: SourceMethod, output: SourceOutput, number: NumberFormat, interval: SourceInterval, uses: Array<SourceUse>, };
+
+/**
+ * A source with the places that use it.
+ */
+type DataSourceView = { source: DataSource, used_by: Array<SourceUse>, };
+
+/**
  * How one day of the calendar went against its allowance.
  */
 type DayStatus = "none" | "under" | "near" | "over" | "future";
@@ -1226,6 +1276,11 @@ type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: Asset
 type DeleteWorkflowTestInput = { workflow_id: string, test_id: string, };
 
 type DeleteWorkflowVarInput = { scope: VarScope, name: string, };
+
+/**
+ * A deposit whose rate a source follows: a change is announced, not applied.
+ */
+type DepositRateSource = { store_id: string, source_id: string, };
 
 /**
  * Where an account stands and what it will earn.
@@ -1560,12 +1615,24 @@ type ExchangeProviderInfo = { provider: ExchangeProvider,
 supported: boolean, };
 
 /**
+ * What a method found, before it gets a timestamp.
+ */
+type Extracted = { number: Amount | null, text: string | null, series: Array<SeriesPoint>, 
+/**
+ * Set when the value came from a fallback (the selector stopped
+ * matching and `text_hint` was used): the source works but needs fixing.
+ */
+warning: string | null, };
+
+/**
  * A fee paid in some asset. It is booked as its own outgoing leg, so holdings
  * shrink by it — before this model fees were recorded and then ignored.
  */
 type Fee = { asset: AssetRef, amount: Amount, price: PriceStamp, };
 
 type FeeInput = { asset: AssetIdent, amount: Amount, };
+
+type FileFormat = "csv" | "xlsx";
 
 /**
  * The first card of a new bank: a sub-account bound to one currency.
@@ -2100,9 +2167,14 @@ type InflationCurrency = { currency: string, mode: InflationMode,
  */
 chosen: boolean, 
 /**
- * The built-in source, if the currency has one.
+ * The built-in source, if the currency has one; `Custom` in source mode.
  */
-source: InflationSource | null, latest: InflationReading | null, 
+source: InflationSource | null, 
+/**
+ * The user's data source of this currency (plan I2), even when another
+ * mode is chosen.
+ */
+source_id: string | null, latest: InflationReading | null, 
 /**
  * The reading of the month before `latest`.
  */
@@ -2123,7 +2195,7 @@ series: Array<InflationReading>, };
 /**
  * Where a currency's inflation comes from.
  */
-type InflationMode = "auto" | "manual";
+type InflationMode = "auto" | "manual" | "source";
 
 type InflationPoint = { month: string, 
 /**
@@ -2157,7 +2229,7 @@ nominal_change_pct: Amount | null, real_change_pct: Amount | null, };
 /**
  * Who published a reading.
  */
-type InflationSource = "cbr" | "bls" | "eurostat";
+type InflationSource = "cbr" | "bls" | "eurostat" | "custom";
 
 /**
  * One fact a report states; which fields are set depends on the code.
@@ -2718,6 +2790,24 @@ default_time: string,
 categories: Array<NoticeCategoryCfg>, };
 
 /**
+ * How to read a number written for people: «6,35 %», «1 234,5».
+ */
+type NumberFormat = { 
+/**
+ * `,` separates the fraction (Russian style); otherwise it groups
+ * thousands.
+ */
+decimal_comma: boolean, 
+/**
+ * Applied after parsing: 0.01 turns «635 bp» into 6.35.
+ */
+multiplier: Amount, 
+/**
+ * Text removed before parsing (a currency sign, «руб.»).
+ */
+strip: string, };
+
+/**
  * What a new wallet already holds. Booked as a top-up in the service
  * category `opening_balance`, so it is neither income nor spending.
  */
@@ -2770,7 +2860,7 @@ required: boolean, };
 /**
  * What kind of field edits a parameter.
  */
-type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
+type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "source" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
 type PassiveIncome = { 
 /**
@@ -3066,6 +3156,11 @@ type PositionChange = { store_id: string, store_name: string, asset: AssetRef, b
 delta_base: Amount, };
 
 type PresetInfo = { preset: AutomationPreset, tx_kind: TxKind, category: string | null, };
+
+/**
+ * What the address returned, as the picker shows it.
+ */
+type PreviewKind = "html" | "json" | "csv" | "xlsx";
 
 /**
  * A draft to preview; `replaces` is the id of the transaction being edited.
@@ -3616,6 +3711,11 @@ type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number,
 type SelectVaultInput = { path: string, };
 
 /**
+ * One row of a series value.
+ */
+type SeriesPoint = { label: string, value: Amount, };
+
+/**
  * Set or clear the interest terms of a savings account, deposit or ПДС.
  */
 type SetDepositTermsInput = { store_id: string, terms: DepositTerms | null, };
@@ -3692,6 +3792,10 @@ onboarding_skipped: Array<string>,
  */
 inflation_mode: { [key: string]: InflationMode }, 
 /**
+ * The data source of each currency in `InflationMode::Source`.
+ */
+inflation_source: { [key: string]: string }, 
+/**
  * The user's usual monthly income in the budget currency, used until
  * three months of history exist (plan B).
  */
@@ -3764,6 +3868,51 @@ input: InvestInput, result: InvestResult, };
  * What [`solve`] looks for.
  */
 type SolveUnknown = "contribution" | "term" | "rate";
+
+type SourceInterval = "hour" | "day" | "week";
+
+/**
+ * How to find the value in what the address returns.
+ */
+type SourceMethod = { "kind": "css", selector: string, text_hint: string, } | { "kind": "table", table_selector: string, column_header: string, row: TableRow, } | { "kind": "json", path: string, } | { "kind": "label", label: string, } | { "kind": "file", format: FileFormat, sheet: string, column: string, row: TableRow, };
+
+/**
+ * What the source gives.
+ */
+type SourceOutput = "number" | "series" | "text";
+
+/**
+ * The page for the picker: a safe HTML copy, the JSON text or file rows.
+ */
+type SourcePreview = { kind: PreviewKind, 
+/**
+ * Sanitized HTML for the sandboxed frame (`kind = html`).
+ */
+html: string | null, 
+/**
+ * Pretty-printed JSON (`kind = json`); the picker parses it itself.
+ */
+json: string | null, 
+/**
+ * The first rows of a CSV/XLSX file (header first).
+ */
+rows: Array<Array<string>>, };
+
+type SourceStatus = "ok" | "broken" | "pending";
+
+/**
+ * Where a source's value goes.
+ */
+type SourceUse = { "kind": "inflation", currency: string, } | { "kind": "asset_price", asset_key: string, currency: string, } | { "kind": "deposit_rate", store_id: string, } | { "kind": "workflow", workflow_id: string, name: string, };
+
+/**
+ * One fetched value.
+ */
+type SourceValue = { 
+/**
+ * RFC3339: when it was fetched.
+ */
+at: string, number: Amount | null, text: string | null, series: Array<SeriesPoint>, };
 
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
@@ -4260,6 +4409,8 @@ background_lock_min: number,
 network: SyncNetworkView, };
 
 type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, };
+
+type TableRow = "first" | "last" | "by_date";
 
 type TaxMode = "yearly" | "at_end";
 
@@ -5200,7 +5351,19 @@ valuations: Array<Valuation>,
 /**
  * Operations linked to a property (plan G4).
  */
-tx_properties: Array<TxProperty>, };
+tx_properties: Array<TxProperty>, 
+/**
+ * The user's own data sources (plan I2).
+ */
+data_sources: Array<DataSource>, 
+/**
+ * Assets priced by a data source, by `AssetRef::key()`.
+ */
+asset_price_sources: Array<AssetPriceSource>, 
+/**
+ * Deposits whose rate a data source follows.
+ */
+deposit_rate_sources: Array<DepositRateSource>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

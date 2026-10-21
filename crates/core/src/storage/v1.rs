@@ -238,6 +238,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 budget_configured: false,
                 onboarding_skipped: Vec::new(),
                 inflation_mode: std::collections::BTreeMap::new(),
+                inflation_source: std::collections::BTreeMap::new(),
                 manual_income: None,
                 manual_expenses: None,
                 categories_rev: 0,
@@ -314,6 +315,9 @@ impl From<VaultDocV1> for VaultDocV2 {
             asset_class_of: Vec::new(),
             valuations: Vec::new(),
             tx_properties: Vec::new(),
+            data_sources: Vec::new(),
+            asset_price_sources: Vec::new(),
+            deposit_rate_sources: Vec::new(),
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

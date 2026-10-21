@@ -11,8 +11,8 @@ import { formatMonthKey, formatPct } from '@/shared/lib/format'
 import InflationSpark from './InflationSpark.vue'
 
 /**
- * One currency: Auto (the statistics office's latest month) or Manual (the
- * user's flat rate). The rate field stays in place in both modes, so a
+ * One currency: Auto (the statistics office's latest month), Source (the
+ * user's own data source, plan I2) or Manual (the user's flat rate). The rate field stays in place in both modes, so a
  * switch moves nothing; in Auto it shows the fetched value, read-only.
  */
 const props = defineProps<{ code: string; entry: InflationCurrency | null; removable: boolean }>()
@@ -21,7 +21,9 @@ const emit = defineEmits<{ change: []; mode: [mode: InflationMode]; remove: [] }
 
 const { t } = useI18n()
 const label = computed(() => props.code.toUpperCase())
-const auto = computed(() => props.entry?.mode === 'auto')
+/** Auto and Source both fill the field from a series; only Manual edits it. */
+const auto = computed(() => props.entry?.mode === 'auto' || props.entry?.mode === 'source')
+const switchable = computed(() => !!props.entry?.source || !!props.entry?.source_id)
 const latest = computed(() => props.entry?.latest ?? null)
 const delta = computed(() => {
   const previous = props.entry?.previous
@@ -41,7 +43,7 @@ const shown = computed({
     <div class="flex flex-wrap items-center gap-2">
       <span class="w-12 text-sm font-medium">{{ label }}</span>
       <ToggleGroup
-        v-if="props.entry?.source"
+        v-if="props.entry && switchable"
         type="single"
         size="sm"
         variant="outline"
@@ -49,7 +51,8 @@ const shown = computed({
         :aria-label="t('inflation.modeFor', { currency: label })"
         @update:model-value="(mode) => mode && emit('mode', mode as InflationMode)"
       >
-        <ToggleGroupItem value="auto">{{ t('inflation.mode.auto') }}</ToggleGroupItem>
+        <ToggleGroupItem v-if="props.entry.source" value="auto">{{ t('inflation.mode.auto') }}</ToggleGroupItem>
+        <ToggleGroupItem v-if="props.entry.source_id" value="source">{{ t('inflation.mode.source') }}</ToggleGroupItem>
         <ToggleGroupItem value="manual">{{ t('inflation.mode.manual') }}</ToggleGroupItem>
       </ToggleGroup>
       <AmountInput
@@ -74,7 +77,14 @@ const shown = computed({
         <Trash2 class="size-4" />
       </Button>
     </div>
-    <p v-if="props.entry?.source" class="text-xs text-muted-foreground">
+    <p v-if="props.entry?.mode === 'source'" class="text-xs text-muted-foreground">
+      {{ t('inflation.fromOwnSource') }}
+      <template v-if="latest">
+        · {{ t('inflation.latest', { month: formatMonthKey(latest.month), value: formatPct(latest.yoy_pct) }) }}
+      </template>
+      <template v-else> · {{ t('inflation.noReadings') }}</template>
+    </p>
+    <p v-else-if="props.entry?.source" class="text-xs text-muted-foreground">
       {{ t(`inflation.source.${props.entry.source}`) }}
       <template v-if="latest">
         · {{ t('inflation.latest', { month: formatMonthKey(latest.month), value: formatPct(latest.yoy_pct) }) }}

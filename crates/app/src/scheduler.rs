@@ -71,6 +71,7 @@ pub fn spawn(app: AppHandle) {
                 bybit_tick(&app, &mut memory);
                 prices_tick(&app, &mut memory);
                 rates_tick(&app, &mut memory);
+                sources_tick(&app);
                 workflows_tick(&app);
                 alerts_tick(&app, &mut memory);
                 reminders_tick(&app, &mut memory);
@@ -130,6 +131,12 @@ fn rates_tick(app: &AppHandle, memory: &mut Memory) {
         RATES_RETRY_SEC
     };
     memory.next_rates = Some(Instant::now() + Duration::from_secs(wait));
+}
+
+/// The user's data sources whose interval has passed (each keeps its own
+/// `checked_at`, so nothing is remembered here).
+fn sources_tick(app: &AppHandle) {
+    tauri::async_runtime::block_on(crate::commands::sources::refresh_due_sources(app));
 }
 
 fn is_unlocked(app: &AppHandle) -> bool {
@@ -195,7 +202,7 @@ pub fn deliver(app: &AppHandle, records: Vec<NoticeRecord>, force: bool) {
 }
 
 /// Log notices shown by a job (so they are never repeated) and show the new ones.
-fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
+pub fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
     let fresh = {
         let state = app.state::<AppState>();
         let Ok(mut guard) = state.vault.lock() else {

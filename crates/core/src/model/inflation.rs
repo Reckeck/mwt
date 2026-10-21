@@ -20,6 +20,9 @@ pub enum InflationSource {
     Bls,
     /// Eurostat HICP, euro area annual rate (`prc_hicp_minr`).
     Eurostat,
+    /// The user's own data source (plan I2); readings of this kind are
+    /// derived from the source, not stored.
+    Custom,
 }
 
 impl InflationSource {
@@ -39,6 +42,7 @@ impl InflationSource {
             Self::Cbr => "rub",
             Self::Bls => "usd",
             Self::Eurostat => "eur",
+            Self::Custom => "",
         }
     }
 
@@ -66,4 +70,6 @@ pub enum InflationMode {
     Auto,
     /// The user's flat rate from the app settings.
     Manual,
+    /// The user's own data source, chosen in `Settings.inflation_source`.
+    Source,
 }

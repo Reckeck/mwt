@@ -125,6 +125,7 @@ impl Executor<'_> {
             | ParamKind::Budget
             | ParamKind::Goal
             | ParamKind::Workflow
+            | ParamKind::Source
             | ParamKind::Select { .. } => WfValue::Text(json_text(&raw)),
             ParamKind::Targets => WfValue::Null,
         }
