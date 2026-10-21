@@ -10,6 +10,7 @@ import type { WhatsNewEntry } from './whats-new.types'
 export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  { id: 'loanKinds', date: '2026-10-21', points: [{ key: 'networth', route: 'dashboard' }] },
   {
     id: 'emergency',
     date: '2026-10-21',

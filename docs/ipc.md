@@ -195,7 +195,7 @@ Frontend парсит код и показывает локализованно�
 
 ### portfolio
 | `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store, assets_base, liabilities_base, net_worth_base, prices_as_of? }` (деривативы не входят; `prices_as_of` — время самой свежей цены/курса в кэше) |
-| `get_net_worth` | — | `NetWorth { base_currency, financial, non_financial, receivables, liabilities, payables, net }` |
+| `get_net_worth` | — | `NetWorth { base_currency, financial, non_financial, receivables, liabilities, liabilities_by_kind: [{ kind, amount }], payables, net }` — `liabilities_by_kind` раскладывает `liabilities` по видам кредитов, по убыванию |
 | `set_manual_price` | `SetManualPriceInput { asset_key, unit_price, currency }` | `ManualPrice` — оценка имущества в узле `asset`, на всю историю |
 | `clear_manual_price` | `asset_key` | `()` — назад к цене покупки |
 | `get_history` | `base_currency?` | `Vec<HistoryPoint { ts, ts_ms, value_usd, value_base }>` |

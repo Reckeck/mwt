@@ -3505,6 +3505,8 @@
   "whatsNew.emergency.title": "Essential spending and the emergency fund",
   "whatsNew.emergency.essential": "Everyday categories can be marked essential — groceries, medicine and transport already are. Together with fixed costs they make up the basic costs of a month.",
   "whatsNew.emergency.fund": "A savings account can join the emergency fund with a switch in its settings. Changing its purpose or archiving it takes it out.",
+  "whatsNew.loanKinds.title": "Loans by kind",
+  "whatsNew.loanKinds.networth": "The net worth card splits what you owe into mortgages, loans, cards and installments when you have more than one kind.",
   "whatsNew.goalReturn.title": "Goals with a return",
   "whatsNew.goalReturn.return": "A goal can have an expected return: the monthly need and the forecast count the interest.",
   "whatsNew.goalReturn.manual": "While history is short, the budget settings take your usual income and spending: goals and the calculator use them for the free surplus.",

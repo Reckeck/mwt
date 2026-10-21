@@ -39,6 +39,12 @@ const rows = computed(() => {
   ].filter((row) => Number(row.value) !== 0)
 })
 
+/** Debts by loan kind, under «Кредиты»; one kind would only repeat the total. */
+const loanKinds = computed(() => {
+  const shares = worth.data.value?.liabilities_by_kind ?? []
+  return shares.length > 1 ? shares : []
+})
+
 const moneyTooltip = useMoneyChartTooltip(computed(() => worth.data.value?.base_currency ?? 'usd'))
 
 /** A sparkline: no axes, no grid, just the shape of the last twelve months. */
@@ -74,6 +80,14 @@ const option = computed<ChartOption>(() => ({
               :decimals="0"
             />
           </dd>
+          <template v-if="row.key === 'liabilities'">
+            <template v-for="share in loanKinds" :key="share.kind">
+              <dt class="pl-3 text-muted-foreground">{{ t(`liabilityKind.${share.kind}`) }}</dt>
+              <dd class="text-right text-muted-foreground">
+                <Money :amount="-Number(share.amount)" :currency="worth.data.value.base_currency" :decimals="0" />
+              </dd>
+            </template>
+          </template>
         </template>
       </dl>
     </div>
