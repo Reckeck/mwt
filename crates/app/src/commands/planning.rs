@@ -431,25 +431,6 @@ pub async fn get_interest_tax(
     })
 }
 
-/// Fetch the Bank of Russia key rate since the start of last year and cache
-/// it. Returns how many rate changes are known.
-#[tauri::command]
-pub async fn refresh_key_rates(state: State<'_, AppState>) -> Result<u32, String> {
-    use chrono::Datelike;
-    let today = chrono::Utc::now().date_naive();
-    let from = chrono::NaiveDate::from_ymd_opt(today.year() - 1, 1, 1).unwrap_or(today);
-    let points = state
-        .pricing
-        .fetch_key_rates(from, today)
-        .await
-        .map_err(err_to_string)?;
-    with_vault_mut(&state, |vault| {
-        vault.apply_key_rates(&points);
-        vault.persist()?;
-        Ok(vault.doc.key_rates.len() as u32)
-    })
-}
-
 // -- bonuses and cashback -----------------------------------------------------------
 
 #[tauri::command]

@@ -155,6 +155,8 @@ pub static COLLECTIONS: &[Collection] = &[
     records("workflow_state", &["workflow_id"]),
     records("workflow_waits", ID),
     records("calc_scenarios", ID),
+    // A revised month replaces the old reading instead of piling up.
+    records("inflation_points", &["currency", "month"]),
     log(
         "import_runs",
         ID,

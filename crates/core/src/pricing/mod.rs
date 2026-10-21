@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 
 pub mod fx_sources;
 pub mod history;
+pub mod inflation;
 pub mod key_rate;
 
 use reqwest::Client;

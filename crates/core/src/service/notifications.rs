@@ -54,6 +54,8 @@ pub fn notice_title(category: NoticeCategory, ru: bool) -> &'static str {
         (Shortfall, false) => "Money will run short",
         (Tax, true) => "Налоги",
         (Tax, false) => "Taxes",
+        (Rates, true) => "Инфляция и ставка",
+        (Rates, false) => "Inflation and rates",
         (Security, true) => "Безопасность",
         (Security, false) => "Security",
     }

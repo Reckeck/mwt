@@ -15,6 +15,7 @@ Frontend парсит код и показывает локализованно�
 | Событие | Payload | Когда |
 |---|---|---|
 | `prices-updated` | `RefreshResult` | после `refresh_all` (кнопка, трей, таймер «Интервал обновления цен» в планировщике, пока окно на экране) и `ensure_fx` (если что-то найдено); экраны обновляют «ценовые» ключи из `use-cache-events`, а не из ответа команды |
+| `rates-updated` | — | после `refresh_rates` (кнопка «Обновить» в настройках инфляции и суточный `rates_tick` планировщика) и `set_inflation_mode`; фронт обновляет `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
 | `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
@@ -316,7 +317,9 @@ JSON без шифрования — там нет ничего секретно
 | `set_deposit_terms` | `SetDepositTermsInput { store_id, terms? }` | `Store` — ставки (история), капитализация, срок, автоначисление, ПДС; только сабсчета `savings`/`deposit`/`pds` банка |
 | `get_deposit_report` | `store_id` | `DepositReport { balance, rate?, accrued_month, accrued_year, posted_year, projected_year, matures_at?, at_maturity?, pds? }` — проценты по дням по фактическому балансу |
 | `get_interest_tax` | `year?` | `InterestTaxReport { max_key_rate?, limit?, income, taxable, tax, remaining_free? }` — НДФЛ 13% сверх 1 000 000 ₽ × макс. ключевая ставка на 1-е числа года |
-| `refresh_key_rates` | — | `u32` — ключевая ставка ЦБ РФ (SOAP `DailyInfo.KeyRate`) с начала прошлого года в `VaultDoc.key_rates` |
+| `refresh_rates` | — | `Vec<InflationCurrency>` — сейчас забрать ключевую ставку ЦБ РФ (SOAP `DailyInfo.KeyRate`, с 1 января прошлого года, в `VaultDoc.key_rates`) и инфляцию г/г за 25 мес. (RUB — таблица Банка России `hd_base/infl`, USD — BLS CPI-U, EUR — Eurostat HICP `prc_hicp_minr`) в `VaultDoc.inflation_points`; недоступный источник пропускается, `NETWORK` — если не ответил ни один. Новые цифры — уведомления категории `rates`, затем `rates-updated`. То же делает планировщик раз в сутки (при ошибке — через час) |
+| `get_inflation_overview` | — | `Vec<InflationCurrency { currency, mode, chosen, source?, latest?, previous?, manual?, effective?, series[] }>` — по каждой валюте со встроенным источником или ручным числом: режим (`chosen` — выбран ли он явно), последняя и предыдущая цифра, ручное значение из `AppSettings.inflation`, `effective` — что используют отчёты и калькулятор (в `auto` до первой цифры — ручное) |
+| `set_inflation_mode` | `currency`, `mode?` (`auto` \| `manual`, `null` — по умолчанию) | `Vec<InflationCurrency>` — режим в `Settings.inflation_mode`; затем `rates-updated` |
 | `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов |
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
 | `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |

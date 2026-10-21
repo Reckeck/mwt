@@ -24,6 +24,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'inflationAuto',
+    date: '2026-10-21',
+    points: [
+      { key: 'auto', route: 'settings:money' },
+      { key: 'notices', route: 'settings:notifications' },
+      { key: 'keyRate' },
+    ],
+  },
+  {
     id: 'calculator',
     date: '2026-10-21',
     points: [

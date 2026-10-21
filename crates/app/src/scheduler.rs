@@ -35,6 +35,9 @@ use crate::commands::app_settings::current_zone;
 const SCHEDULER_TICK_SEC: u64 = 30;
 /// Least time between two price refreshes for alerts.
 const ALERT_REFRESH_SEC: u64 = 5 * 60;
+/// Inflation and the key rate: once a day, an hour after a failure.
+const RATES_REFRESH_SEC: u64 = 24 * 60 * 60;
+const RATES_RETRY_SEC: u64 = 60 * 60;
 
 /// What the scheduler remembers between ticks.
 #[derive(Default)]
@@ -44,6 +47,8 @@ struct Memory {
     last_alert_refresh: Option<Instant>,
     /// Last automatic price refresh (the interval chosen on this device).
     last_price_refresh: Option<Instant>,
+    /// When inflation and the key rate are fetched next (`None`: now).
+    next_rates: Option<Instant>,
 }
 
 /// How often the snapshot for a locked vault is taken while it is open.
@@ -65,6 +70,7 @@ pub fn spawn(app: AppHandle) {
             if crate::sync::runs_jobs(&app) {
                 bybit_tick(&app, &mut memory);
                 prices_tick(&app, &mut memory);
+                rates_tick(&app, &mut memory);
                 workflows_tick(&app);
                 alerts_tick(&app, &mut memory);
                 reminders_tick(&app, &mut memory);
@@ -109,6 +115,21 @@ fn prices_tick(app: &AppHandle, memory: &mut Memory) {
         app.clone(),
         app.state::<AppState>(),
     ));
+}
+
+/// Inflation and the key rate from the statistics offices; offline just
+/// tries again later.
+fn rates_tick(app: &AppHandle, memory: &mut Memory) {
+    if memory.next_rates.is_some_and(|next| Instant::now() < next) {
+        return;
+    }
+    let fetched = tauri::async_runtime::block_on(crate::commands::rates::refresh_rates_now(app));
+    let wait = if fetched.is_ok() {
+        RATES_REFRESH_SEC
+    } else {
+        RATES_RETRY_SEC
+    };
+    memory.next_rates = Some(Instant::now() + Duration::from_secs(wait));
 }
 
 fn is_unlocked(app: &AppHandle) -> bool {

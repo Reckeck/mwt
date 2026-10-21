@@ -28,6 +28,7 @@ export const mockInfo: VaultInfo = {
 export const mockSettings: Settings = {
   display_decimals: 8,
   dashboard_widgets: [],
+  inflation_mode: {},
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
   savings_rate: '0.10',
@@ -113,5 +114,6 @@ export function mockVaultDoc(): VaultDoc {
     import_runs: [],
     discarded_imports: [],
     calc_scenarios: [],
+    inflation_points: [],
   }
 }

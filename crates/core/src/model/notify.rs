@@ -25,13 +25,15 @@ pub enum NoticeCategory {
     /// Planned money going out that the forecast balance will not cover.
     Shortfall,
     Tax,
+    /// A new inflation figure or a key-rate decision (fetched daily).
+    Rates,
     /// Something about the vault itself: it was handed to another device.
     /// Always shown; there is no switch for it.
     Security,
 }
 
 impl NoticeCategory {
-    pub const ALL: [NoticeCategory; 14] = [
+    pub const ALL: [NoticeCategory; 15] = [
         Self::Reminder,
         Self::PriceAlert,
         Self::Automation,
@@ -46,6 +48,7 @@ impl NoticeCategory {
         Self::Budget,
         Self::Shortfall,
         Self::Tax,
+        Self::Rates,
     ];
 
     /// Days ahead a notice of this kind comes by default.

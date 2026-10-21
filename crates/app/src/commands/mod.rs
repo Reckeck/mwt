@@ -15,6 +15,7 @@ pub mod notifications;
 pub mod planning;
 pub mod portfolio;
 pub mod pricing;
+pub mod rates;
 pub mod settings;
 pub mod stores;
 pub mod sync;

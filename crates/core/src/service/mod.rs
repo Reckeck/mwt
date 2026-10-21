@@ -39,6 +39,7 @@ mod envelopes;
 mod exchange_sync;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
+mod inflation;
 mod insights;
 mod interest;
 mod ledger;
@@ -77,6 +78,10 @@ pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use inflation::{
+    FetchedRates, INFLATION_CHART_MONTHS, InflationCurrency, InflationNews, inflation_notice,
+    key_rate_notice,
+};
 pub use insights::{
     Insight, InsightCode, OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear,
     ReportOverview, report_insights,
@@ -4777,6 +4782,11 @@ mod persist_tests {
             notifications: crate::model::notify::NotificationSettings::default(),
             budget_configured: true,
             onboarding_skipped: vec!["debts".into()],
+            inflation_mode: [(
+                "rub".to_string(),
+                crate::model::inflation::InflationMode::Manual,
+            )]
+            .into(),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
