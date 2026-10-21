@@ -1,7 +1,7 @@
 import { type Ref, computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { type AnalyticsGroup, MONTH_GROUPS, REAL_TERMS_GROUPS } from './analytics-groups'
+import { type AnalyticsGroup, MONTH_GROUPS, REAL_TERMS_GROUPS, UNFILTERED_GROUPS } from './analytics-groups'
 
 const KEYS = ['store', 'from', 'to', 'year', 'cur', 'real', 'month'] as const
 type Key = (typeof KEYS)[number]
@@ -68,6 +68,7 @@ export function useReportFilter(group: Ref<AnalyticsGroup>) {
 
   /** Keys that change what this section shows. */
   const applies = (key: Key) => {
+    if (UNFILTERED_GROUPS.includes(group.value)) return false
     if (key === 'real') return realTerms.value
     const byMonth = MONTH_GROUPS.includes(group.value)
     if (key === 'month') return byMonth

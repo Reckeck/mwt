@@ -40,6 +40,7 @@ export const mockSettings: Settings = {
   onboarding_skipped: [],
   manual_income: null,
   manual_expenses: null,
+  freedom_rate: null,
   categories_rev: 1,
 }
 
@@ -120,5 +121,6 @@ export function mockVaultDoc(): VaultDoc {
     calc_scenarios: [],
     inflation_points: [],
     emergency_fund: fund,
+    health_last: null,
   }
 }

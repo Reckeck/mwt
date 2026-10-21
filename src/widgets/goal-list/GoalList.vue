@@ -14,6 +14,8 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
+import { useEmergencyStatus, useStoreTree } from '@/shared/api/queries'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 import GoalCalendarTable from './GoalCalendarTable.vue'
 import { ProgressBar } from '@/shared/ui/progress-bar'
@@ -26,6 +28,19 @@ const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_
 const progress = useQuery({ queryKey: ['goal-progress'], queryFn: () => call<GoalProgress[]>('get_goal_progress') })
 const scenarios = useQuery({ queryKey: ['calc-scenarios'], queryFn: () => call<CalcScenario[]>('calc_scenarios_list') })
 const scenarioName = (id: string) => scenarios.data.value?.find((entry) => entry.id === id)?.name ?? ''
+
+const fund = useEmergencyStatus()
+const tree = useStoreTree()
+const storeName = (id: string) =>
+  flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === id)?.store.name ?? ''
+/** Fund accounts that a goal also counts, by goal (decision 34: both cards say so). */
+const fundStores = computed(() => {
+  const byGoal = new Map<string, string[]>()
+  for (const row of fund.data.value?.stores ?? []) {
+    for (const goal of row.goal_ids) byGoal.set(goal, [...(byGoal.get(goal) ?? []), row.store_id])
+  }
+  return byGoal
+})
 
 /** Each goal with its progress, matched once (the card reads it a dozen times). */
 const rows = computed(() => {
@@ -152,6 +167,10 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                 </dd>
               </template>
             </dl>
+            <p v-if="fundStores.get(goal.id)" class="text-xs text-muted-foreground">
+              {{ t('goal.alsoFund') }}
+              <EntityLink v-for="id in fundStores.get(goal.id)" :key="id" :target="{ kind: 'store', id }" :label="storeName(id)" class="ml-1" />
+            </p>
             <p
               v-if="entry?.realistic"
               class="flex items-center gap-1.5 text-xs text-success"

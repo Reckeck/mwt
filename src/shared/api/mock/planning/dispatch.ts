@@ -5,6 +5,7 @@ import { planAutomations } from './automations'
 import { upcoming } from './budget-calc'
 import { planCalculator } from './calculator'
 import { planEmergency } from './emergency'
+import { planHealth } from './health'
 import { planReminders } from './reminders'
 import { mockContext } from './state'
 import type { PlanningMockContext } from './state'
@@ -28,6 +29,7 @@ export function mockPlanning(
     planReminders(cmd, args, ctx, settings) ??
     planUtilities(cmd, args, ctx, settings) ??
     planCalculator(cmd, args, ctx) ??
-    planEmergency(cmd, args, ctx)
+    planEmergency(cmd, args, ctx) ??
+    planHealth(cmd, args, ctx, settings)
   )
 }

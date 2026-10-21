@@ -119,7 +119,8 @@ const picked = computed({
       {{ current ? t('invest.scenario.update') : t('invest.scenario.save') }}
     </Button>
     <ActionMenu v-if="current" :actions="actions" :label="t('actions.more')" />
-    <p v-if="!scenarios.length && list.isSuccess.value" class="basis-full text-xs text-muted-foreground">
+    <!-- Always shown: appearing after the list loads would push the calculator down. -->
+    <p class="basis-full text-xs text-muted-foreground">
       {{ t('invest.scenario.emptyHint') }}
     </p>
 

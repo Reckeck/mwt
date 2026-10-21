@@ -33,14 +33,14 @@ function toggle(storeId: string, on: boolean, ctx: PlanningMockContext): Emergen
   return setFund({ ...fund, scope: { ...fund.scope, store_ids: on ? [...ids, storeId] : ids } }, ctx)
 }
 
-function storeValue(storeId: string, ctx: PlanningMockContext): number {
+export function storeValue(storeId: string, ctx: PlanningMockContext): number {
   return ctx.transactions
     .flatMap((tx) => txLegs(tx))
     .filter((leg) => leg.role === 'principal' && leg.store_id === storeId)
     .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
 }
 
-function status(ctx: PlanningMockContext): EmergencyStatus {
+export function emergencyStatus(ctx: PlanningMockContext): EmergencyStatus {
   const stores: EmergencyStore[] = fund.scope.store_ids.map((id) => ({
     store_id: id,
     value: money(storeValue(id, ctx)),
@@ -77,7 +77,7 @@ export function planEmergency(
 ): unknown {
   switch (cmd) {
     case 'emergency_fund_get':
-      return status(ctx)
+      return emergencyStatus(ctx)
     case 'emergency_fund_set':
       return setFund(args?.fund as EmergencyFund, ctx)
     case 'emergency_fund_toggle':

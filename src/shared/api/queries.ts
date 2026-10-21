@@ -23,3 +23,12 @@ export const useContacts = (enabled: MaybeRefOrGetter<boolean> = true) =>
 
 export const useCategories = (enabled: MaybeRefOrGetter<boolean> = true) =>
   useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories'), enabled: toRef(enabled) })
+
+/** The emergency fund (`emergency_fund_get`): the wallet switch and the checkup both change it. */
+export const EMERGENCY_FUND_KEY = ['emergency-fund']
+/** The capital checkup (`capital_health`): every change to the fund or its settings refreshes it. */
+export const CAPITAL_HEALTH_KEY = ['capital-health']
+
+/** The fund status, shared by the wallet switch and the checkup. */
+export const useEmergencyStatus = () =>
+  useQuery({ queryKey: EMERGENCY_FUND_KEY, queryFn: () => call<EmergencyStatus>('emergency_fund_get') })

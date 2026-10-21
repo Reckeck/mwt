@@ -203,6 +203,8 @@ pub fn run() {
             // analytics
             analytics::get_report,
             analytics::get_report_overview,
+            analytics::capital_health,
+            analytics::health_settings_set,
             analytics::export_report_csv,
             analytics::get_calendar,
             analytics::get_entity_card,

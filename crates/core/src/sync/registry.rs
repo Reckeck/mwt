@@ -122,6 +122,7 @@ pub static COLLECTIONS: &[Collection] = &[
     },
     single("exchanges", &[]),
     single("emergency_fund", &[]),
+    single("health_last", &[]),
     records("pending_imports", &["exec_id"]),
     records("contacts", ID),
     records("budgets", ID),

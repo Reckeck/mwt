@@ -1724,6 +1724,76 @@ value: Amount, flow_id: string | null, internal: boolean, comment: string, };
 
 type GraphVersion = { saved_at: string, graph: string, };
 
+/**
+ * The capital checkup's light (plan C4), worst first in `Ord` terms last.
+ */
+type HealthColor = "no_data" | "green" | "yellow" | "red";
+
+/**
+ * One reason for the light, with what its first step needs.
+ */
+type HealthReason = { code: HealthReasonCode, 
+/**
+ * The colour this reason alone would give; `Green` marks a hint.
+ */
+level: HealthColor, 
+/**
+ * What the step is about: the debt, the gap to the fund level, the
+ * monthly shortfall, the spending growth.
+ */
+amount: Amount | null, 
+/**
+ * The rate, the DTI, the months covered, the savings rate.
+ */
+pct: Amount | null, 
+/**
+ * The loan's store id.
+ */
+subject: string | null, };
+
+/**
+ * Why the checkup shows its colour; each comes with a first step.
+ */
+type HealthReasonCode = "no_history" | "costly_loan" | "loan_without_rate" | "dti_high" | "dti_elevated" | "fund_not_set" | "fund_below_one" | "fund_below_three" | "savings_below_plan" | "lifestyle_creep";
+
+/**
+ * The whole checkup (plan C4).
+ */
+type HealthReport = { color: HealthColor, 
+/**
+ * Worst first.
+ */
+reasons: Array<HealthReason>, 
+/**
+ * The budget currency every amount here is in.
+ */
+currency: string, emergency: EmergencyStatus, debts: DebtLoad, passive: PassiveIncome, 
+/**
+ * The last finished months, oldest first.
+ */
+savings: Array<SavingsMonth>, 
+/**
+ * `savings_rate` as a percent.
+ */
+savings_target_pct: Amount, 
+/**
+ * Saved against income over the last months with income, percent.
+ */
+savings_avg_pct: Amount | null, creep: Insight | null, 
+/**
+ * The yearly return the freedom potential assumes when set by hand.
+ */
+freedom_rate: Amount | null, };
+
+/**
+ * What the last monthly checkup notice said (plan C4, decision 28).
+ */
+type HealthSnapshot = { 
+/**
+ * `YYYY-MM` of the check.
+ */
+month: string, color: HealthColor, reasons: Array<HealthReasonCode>, };
+
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
 /**
@@ -1989,7 +2059,7 @@ type Insight = { code: InsightCode, amount: Amount | null, pct: Amount | null,
  */
 subject: string | null, };
 
-type InsightCode = "overspent" | "saved" | "no_income" | "costliest_month" | "spent_up" | "spent_down" | "top_category" | "category_grew" | "below_plan" | "best_month" | "wealth_up" | "wealth_down" | "wealth_flat" | "owes" | "store_grew_most" | "profit" | "loss" | "fees_paid" | "conversion_losses" | "top_asset" | "real_change" | "no_inflation_rate";
+type InsightCode = "overspent" | "saved" | "no_income" | "costliest_month" | "spent_up" | "spent_down" | "top_category" | "category_grew" | "below_plan" | "best_month" | "wealth_up" | "wealth_down" | "wealth_flat" | "owes" | "store_grew_most" | "profit" | "loss" | "fees_paid" | "conversion_losses" | "top_asset" | "real_change" | "no_inflation_rate" | "lifestyle_creep";
 
 /**
  * Chain the user picked when the hash alone was ambiguous. Without it the
@@ -2466,7 +2536,7 @@ type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list" |
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
  */
-type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "rates" | "security";
+type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "rates" | "health" | "security";
 
 /**
  * One category's switches.
@@ -3253,6 +3323,23 @@ type SaveWorkflowTestInput = { workflow_id: string, test: WorkflowTest, };
 type SavedWorkflow = { workflow: Workflow, issues: Array<GraphIssue>, };
 
 /**
+ * The savings rate of one finished month.
+ */
+type SavingsMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, income: Amount, 
+/**
+ * `income − fixed − daily`.
+ */
+saved: Amount, 
+/**
+ * `saved / income`, percent; `None` without income.
+ */
+saved_pct: Amount | null, };
+
+/**
  * Numbers «Из данных» puts into the calculator, with where they came from.
  */
 type ScenarioPrefill = { 
@@ -3402,7 +3489,12 @@ manual_expenses: Amount | null,
  * ([`crate::model::category::CATEGORY_ADDITIONS`]): each batch is added
  * once, so a category the user deleted does not come back.
  */
-categories_rev: number, };
+categories_rev: number, 
+/**
+ * Yearly return the freedom index potential assumes, percent; `None`
+ * takes the key rate (plan C3).
+ */
+freedom_rate: Amount | null, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -4775,7 +4867,11 @@ inflation_points: Array<InflationReading>,
 /**
  * The emergency fund; an empty store list means none (plan C1).
  */
-emergency_fund: EmergencyFund, };
+emergency_fund: EmergencyFund, 
+/**
+ * The last monthly checkup notice, so the next one comes only on a change.
+ */
+health_last: HealthSnapshot | null, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

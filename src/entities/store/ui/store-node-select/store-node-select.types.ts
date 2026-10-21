@@ -9,6 +9,8 @@ export interface StoreNodeSelectProps {
   flat?: boolean
   /** Several nodes at once (a filter), bound with `v-model:ids`; none picked = `emptyLabel`. */
   multiple?: boolean
+  /** Offer only nodes with this purpose (the emergency fund takes savings accounts only). */
+  purpose?: Purpose
   /** Marks the field as wrong (red border), next to an error under it. */
   invalid?: boolean
 }

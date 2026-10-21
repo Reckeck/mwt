@@ -72,6 +72,10 @@ pub enum InsightCode {
     RealChange,
     /// Today's money asked for but no inflation set for the currency.
     NoInflationRate,
+    /// Spending grew as fast as income or faster (plan C4): `amount` the
+    /// monthly growth of spending, `pct` of the income growth, `subject` =
+    /// `year` (against the same months a year back) or `previous`.
+    LifestyleCreep,
 }
 
 /// One fact a report states; which fields are set depends on the code.
@@ -462,6 +466,15 @@ impl UnlockedVault {
                 .into_iter()
                 .filter(|fact| fact.code == InsightCode::TopCategory),
         );
+        // Creep is measured over the whole budget in its currency.
+        let whole_budget = filter.scope.store_ids.is_empty()
+            && filter
+                .currency
+                .as_ref()
+                .is_none_or(|code| code.eq_ignore_ascii_case(&self.budget_currency()));
+        if whole_budget {
+            flow_insights.extend(self.lifestyle_creep(now, zone));
+        }
         let flow = OverviewFlow {
             income: current.income,
             spent,
