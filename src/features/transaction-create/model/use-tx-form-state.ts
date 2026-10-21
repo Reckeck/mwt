@@ -1,12 +1,13 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { txId } from '@/shared/lib/transactions'
 
 import { emptyForm, formFromTransaction } from '../transaction-form.model'
 import type { TransactionFormProps } from '../transaction-form.types'
-import { useContacts, useStoreTree } from '@/shared/api/queries'
+import { TX_PROPERTY_LINKS_KEY, useContacts, useStoreTree } from '@/shared/api/queries'
 
 /** The form's data and what it reads about the wallet it is opened on. */
 export function useTxFormState(props: TransactionFormProps) {
@@ -17,6 +18,10 @@ export function useTxFormState(props: TransactionFormProps) {
   /** Cards and accounts a cashback can come from. */
   const cashbackSources = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.kind === 'bank'),
+  )
+  /** Live property an operation can belong to (the «Объект» field). */
+  const properties = computed(() =>
+    nodes.value.filter((node) => !node.store.archived && node.store.kind === 'property'),
   )
   const contextStore = computed(() => nodes.value.find((node) => node.store.id === props.storeId)?.store ?? null)
   const storeKind = computed(() => contextStore.value?.kind ?? null)
@@ -32,6 +37,7 @@ export function useTxFormState(props: TransactionFormProps) {
   )
   // Continuing a chain: the new operation joins it.
   if (props.flowId && !props.transaction) form.flowId = props.flowId
+  if (props.propertyId) form.propertyId = props.propertyId
 
   /** What this wallet holds: property to sell, and the asset a new operation starts with. */
   const overview = useQuery({
@@ -43,6 +49,22 @@ export function useTxFormState(props: TransactionFormProps) {
 
   const contacts = useContacts()
 
+  /** The edited operation's property link lives beside it in the vault, not inside it. */
+  const links = useQuery({
+    queryKey: TX_PROPERTY_LINKS_KEY,
+    queryFn: () => call<TxProperty[]>('tx_property_links'),
+    enabled: editing,
+  })
+  watch(
+    () => links.data.value,
+    (rows) => {
+      if (!props.transaction || form.propertyId) return
+      const id = txId(props.transaction)
+      form.propertyId = rows?.find((row) => row.tx_id === id)?.property_id ?? ''
+    },
+    { immediate: true },
+  )
+
   /** Every live store but the one the money leaves, for AssetSell proceeds. */
   const proceedsStores = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.id !== props.storeId),
@@ -53,6 +75,7 @@ export function useTxFormState(props: TransactionFormProps) {
     editing,
     nodes,
     cashbackSources,
+    properties,
     contextStore,
     storeKind,
     isProperty,

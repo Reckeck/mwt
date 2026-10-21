@@ -698,6 +698,7 @@ mod tests {
                 template: TransactionDraft::Payment(rent),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap();
         let Transaction::Topup(salary) = income(&card, "1000", "salary") else {
@@ -713,6 +714,7 @@ mod tests {
                 template: TransactionDraft::Topup(salary),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap();
         let items = vault.upcoming(45, secs("2026-03-10T00:00:00Z"), "UTC");

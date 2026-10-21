@@ -22,6 +22,8 @@ export interface TransactionFormProps {
   prefill?: Transaction | null
   /** A new operation starting as this kind with these categories (an automation preset). */
   initial?: TransactionInitial | null
+  /** The property the operation starts linked to (an automation's link, a preset opened on a property). */
+  propertyId?: string | null
 }
 
 export interface TransactionInitial {

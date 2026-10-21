@@ -3,7 +3,7 @@ import { computed, ref, toRaw, watch } from 'vue'
 import { parseDecimal } from '@/shared/lib/decimal'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { debtChoices } from '../transaction-form.model'
+import { debtChoices, suggestedProperty } from '../transaction-form.model'
 import { useAccountAsset } from './use-account-asset'
 import type { TxFormState } from './use-tx-form-state'
 
@@ -17,7 +17,22 @@ const SPOT_QUOTES = ['USDT', 'USDC', 'FDUSD', 'BUSD']
 
 export function useTxAutofill(state: TxFormState) {
   const settings = useSettingsStore()
-  const { props, form, editing, isProperty, storeKind, overview, contextStore } = state
+  const { props, form, editing, isProperty, storeKind, overview, contextStore, properties } = state
+
+  /** Rent goes to the one flat, fuel to the one car — unless the user picked a property already. */
+  let autoProperty = ''
+  watch(
+    () => [form.categories.join(','), properties.value.length],
+    () => {
+      if (editing.value || (form.propertyId && form.propertyId !== autoProperty)) return
+      autoProperty = suggestedProperty(
+        form.categories,
+        properties.value.map((node) => node.store),
+      )
+      form.propertyId = autoProperty
+    },
+    { immediate: true },
+  )
 
   /** Property is named, not searched: a flat is not on CoinGecko. */
   const propertyName = ref(form.asset && isProperty.value ? form.asset.name : '')

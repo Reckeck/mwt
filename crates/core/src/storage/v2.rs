@@ -74,6 +74,7 @@ impl From<VaultDocV2> for VaultDoc {
                 template: automation.template,
                 amount_mode: AmountMode::Fixed,
                 workday_shift: WorkdayShift::None,
+                property_id: None,
             };
             let graph = crate::workflow::automation::automation_graph(&spec);
             let mark = automation

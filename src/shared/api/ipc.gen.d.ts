@@ -336,7 +336,11 @@ last_planned_at: string | null, created_at: string, amount_mode: AmountMode, wor
  * With [`AmountMode::Varies`]: the amount the next run books (the
  * average of the latest corrected ones); `None` — the template's.
  */
-estimate: Amount | null, };
+estimate: Amount | null, 
+/**
+ * The property its operations belong to (plan G4).
+ */
+property_id: string | null, };
 
 /**
  * An automation as the form edits it. The template is an ordinary
@@ -409,7 +413,11 @@ starts_at: string, template: TransactionDraft, amount_mode: AmountMode,
 /**
  * Where a planned date on a weekend or a holiday goes.
  */
-workday_shift: WorkdayShift, };
+workday_shift: WorkdayShift, 
+/**
+ * The property its operations belong to (plan G4).
+ */
+property_id: string | null, };
 
 /**
  * What a sub-account is locked to. A top-level wallet is always `Any`.
@@ -3200,7 +3208,27 @@ utilities_month_base: Amount,
 /**
  * Mandatory loan payments a month, from the loans' terms.
  */
-loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, };
+loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, 
+/**
+ * Rent received over the last 12 months (operations linked to it).
+ */
+rent_12m_base: Amount, 
+/**
+ * Linked operations, utility bills and loan payments over 12 months.
+ */
+expenses_12m_base: Amount, 
+/**
+ * Rent over 12 months to the current value, %; `None` without a value.
+ */
+rent_yield_pct: Amount | null, 
+/**
+ * A car: expenses and the loss of value over the year, a month.
+ */
+ownership_month_base: Amount | null, 
+/**
+ * The value lost over the year (a car's wear); zero when it grew.
+ */
+wear_12m_base: Amount, };
 
 /**
  * Everything the value of one asset of a property shows.
@@ -4535,7 +4563,11 @@ price: Amount | null,
 /**
  * Lowercase code `price` is in; empty means the base currency.
  */
-price_currency: string | null, };
+price_currency: string | null, 
+/**
+ * The property the operation belongs to (plan G4); empty — none.
+ */
+property_id?: string, };
 
 /**
  * A single field suggestion for the trade form.
@@ -4697,6 +4729,17 @@ flow: FlowClass, warnings: Array<PreviewWarning>,
  * return; `None` when the draft would be accepted.
  */
 error: string | null, };
+
+/**
+ * An operation that belongs to a property (plan G4): rent received for a
+ * flat, fuel or insurance for a car. Kept beside the operations, not in
+ * them, so the operation format the older files store by position stays put.
+ */
+type TxProperty = { tx_id: string, 
+/**
+ * Id of a `StoreKind::Property` store.
+ */
+property_id: string, };
 
 /**
  * What an undo did.
@@ -5153,7 +5196,11 @@ asset_class_of: Array<AssetClassLink>,
 /**
  * Dated valuations of property (plan G3).
  */
-valuations: Array<Valuation>, };
+valuations: Array<Valuation>, 
+/**
+ * Operations linked to a property (plan G4).
+ */
+tx_properties: Array<TxProperty>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

@@ -147,6 +147,16 @@ pub struct Valuation {
     pub currency: String,
 }
 
+/// An operation that belongs to a property (plan G4): rent received for a
+/// flat, fuel or insurance for a car. Kept beside the operations, not in
+/// them, so the operation format the older files store by position stays put.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct TxProperty {
+    pub tx_id: String,
+    /// Id of a `StoreKind::Property` store.
+    pub property_id: String,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -606,6 +616,9 @@ pub struct VaultDoc {
     /// Dated valuations of property (plan G3).
     #[serde(default)]
     pub valuations: Vec<Valuation>,
+    /// Operations linked to a property (plan G4).
+    #[serde(default)]
+    pub tx_properties: Vec<TxProperty>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -670,6 +683,7 @@ impl Default for VaultDoc {
             asset_classes: Vec::new(),
             asset_class_of: Vec::new(),
             valuations: Vec::new(),
+            tx_properties: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

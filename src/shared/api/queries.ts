@@ -24,6 +24,9 @@ export const useContacts = (enabled: MaybeRefOrGetter<boolean> = true) =>
 export const useCategories = (enabled: MaybeRefOrGetter<boolean> = true) =>
   useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories'), enabled: toRef(enabled) })
 
+/** Which operations belong to which property (`tx_property_links`); every saved operation refreshes it. */
+export const TX_PROPERTY_LINKS_KEY = ['tx-property-links']
+
 /** The emergency fund (`emergency_fund_get`): the wallet switch and the checkup both change it. */
 export const EMERGENCY_FUND_KEY = ['emergency-fund']
 /** The capital checkup (`capital_health`): every change to the fund or its settings refreshes it. */

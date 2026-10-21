@@ -277,6 +277,7 @@ pub fn full_doc() -> VaultDoc {
                 },
                 template,
                 workday_shift: *shift,
+                property_id: None,
             };
             Workflow {
                 id: format!("auto-{index}"),
@@ -552,6 +553,10 @@ pub fn full_doc() -> VaultDoc {
         date: "2025-06-01".into(),
         unit_price: Amount::new(rust_decimal::Decimal::from(9_000_000)),
         currency: "rub".into(),
+    }];
+    doc.tx_properties = vec![crate::model::vault::TxProperty {
+        tx_id: "tx1".into(),
+        property_id: "flat".into(),
     }];
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).

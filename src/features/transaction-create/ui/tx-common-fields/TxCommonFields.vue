@@ -23,9 +23,14 @@ import { useTxForm } from '../../model/use-tx-form'
  * under «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, contacts } = useTxForm()
+const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, contacts, properties, isProperty } =
+  useTxForm()
 
 // The network fills in by itself from the asset, so only what the user set opens the section.
+/** Rent, fuel, repair: the operation can belong to a property (plan G4); a property's own buy or sell cannot. */
+const showProperty = computed(
+  () => properties.value.length > 0 && !isProperty.value && ['topup', 'payment', 'transfer'].includes(form.kind),
+)
 const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
 </script>
 
@@ -66,6 +71,18 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
       flat
       :empty-label="t('loyalty.noSource')"
     />
+  </div>
+
+  <div v-if="showProperty" class="grid gap-1.5">
+    <Label for="tx-link-property">{{ t('tx.field.linkProperty') }}</Label>
+    <StoreNodeSelect
+      id="tx-link-property"
+      v-model="form.propertyId"
+      :nodes="properties"
+      flat
+      :empty-label="t('tx.field.noLinkProperty')"
+    />
+    <p class="text-xs text-muted-foreground">{{ t('tx.field.linkPropertyHint') }}</p>
   </div>
 
   <div class="grid gap-1.5">

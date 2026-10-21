@@ -45,6 +45,7 @@ export function planAutomations(
         created_at: iso(now()),
         amount_mode: input.amount_mode ?? 'fixed',
         workday_shift: input.workday_shift ?? 'none',
+        property_id: input.template.common.property_id ?? null,
         estimate: null,
       }
       automations.push(automation)
@@ -64,6 +65,7 @@ export function planAutomations(
           template: draftOf(ctx.transactionFrom(input.automation.template, input.automation.starts_at)),
           amount_mode: input.automation.amount_mode ?? 'fixed',
           workday_shift: input.automation.workday_shift ?? 'none',
+          property_id: input.automation.template.common.property_id ?? null,
         }),
       )
     }

@@ -41,6 +41,8 @@ const everyDays = ref('7')
 const startsAt = ref('')
 const varies = ref(false)
 const workdayShift = ref<WorkdayShift>('none')
+/** The property the automation's operations belong to (plan G4). */
+const propertyId = ref('')
 
 /** The stored template as a transaction the form can prefill from. */
 const template = computed(() => (props.automation?.template as Transaction | undefined) ?? null)
@@ -51,9 +53,12 @@ watch(open, (isOpen) => {
   const automation = props.automation
   name.value = automation?.name ?? (props.preset ? t(`preset.${props.preset.preset}`) : '')
   active.value = automation?.active ?? true
+  // A property takes no money: a preset opened on it books to the everyday wallet and links the property.
+  const opener = liveNodes.value.find((node) => node.store.id === props.storeId)?.store
+  propertyId.value = automation ? (automation.property_id ?? '') : opener?.kind === 'property' ? opener.id : ''
   storeId.value =
     (template.value && txLegs(template.value)[0]?.store_id) ||
-    props.storeId ||
+    (propertyId.value && !automation ? '' : props.storeId) ||
     (liveNodes.value.find((node) => node.store.purpose === 'everyday') ?? liveNodes.value[0])?.store.id ||
     ''
   const schedule = automation?.schedule ?? { monthly: { day: new Date().getDate() } }
@@ -182,6 +187,7 @@ const save = useMutation({
         :store-id="storeId"
         :transaction="template"
         :initial="initialTx"
+        :property-id="propertyId"
         template
         @submit="trySave()"
       />

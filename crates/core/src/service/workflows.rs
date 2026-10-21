@@ -1581,7 +1581,24 @@ impl UnlockedVault {
             ctx.trigger_label = trigger_label(&trigger.kind, &at);
             ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
             ctx.mode = RunMode::Live;
+            let before = self.doc.transactions.len();
             let report = exec::run(self, &graph, &ctx);
+            // What an automation books belongs to its property (plan G4).
+            if let Some(property) = workflow
+                .automation
+                .as_ref()
+                .and_then(|spec| spec.property_id.clone())
+                .filter(|id| self.check_property_link(Some(id)).is_ok())
+            {
+                let made: Vec<String> = self.doc.transactions
+                    [before.min(self.doc.transactions.len())..]
+                    .iter()
+                    .map(|tx| tx.meta().id.clone())
+                    .collect();
+                for id in made {
+                    self.set_property_link(&id, Some(&property));
+                }
+            }
             self.keep_run(&report, pass);
             events.extend(report.events);
         }

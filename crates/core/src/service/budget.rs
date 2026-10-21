@@ -1098,6 +1098,7 @@ mod tests {
                 template: TransactionDraft::Topup(salary),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap();
         let early = vault.daily_budget(secs("2026-06-03T12:00:00Z"), "UTC");

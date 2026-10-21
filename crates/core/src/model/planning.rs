@@ -138,6 +138,9 @@ pub struct AutomationSpec {
     /// Where a planned date on a weekend or a holiday goes.
     #[serde(default)]
     pub workday_shift: WorkdayShift,
+    /// The property its operations belong to (plan G4).
+    #[serde(default)]
+    pub property_id: Option<String>,
 }
 
 /// An automation as the app shows it: a workflow built from an
@@ -166,6 +169,9 @@ pub struct Automation {
     /// average of the latest corrected ones); `None` — the template's.
     #[serde(default)]
     pub estimate: Option<Amount>,
+    /// The property its operations belong to (plan G4).
+    #[serde(default)]
+    pub property_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
