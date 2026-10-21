@@ -188,6 +188,16 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'automation-confirm-amount', key: 'planningAutomations.confirmAmount', side: 'left' },
     { target: 'automation-open-workflow', key: 'planningAutomations.openWorkflow', side: 'left' },
   ]),
+  'planning-sources': planning([
+    { target: 'section-content', key: 'planningSources.content', side: 'top' },
+    { target: 'sources-add', key: 'planningSources.add', side: 'bottom' },
+    { target: 'sources-list', key: 'planningSources.list', side: 'top' },
+    { target: 'source-url', key: 'planningSources.url', side: 'bottom' },
+    { target: 'source-picker', key: 'planningSources.picker', side: 'top' },
+    { target: 'source-method', key: 'planningSources.method', side: 'top' },
+    { target: 'source-test', key: 'planningSources.test', side: 'top' },
+    { target: 'source-uses', key: 'planningSources.uses', side: 'top' },
+  ]),
   'planning-budgets': planning([{ target: 'section-content', key: 'planningBudgets.content', side: 'top' }]),
   'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),
   'planning-calculator': planning([

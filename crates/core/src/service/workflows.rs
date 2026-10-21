@@ -1385,8 +1385,25 @@ impl UnlockedVault {
                 .threshold_value(trigger, now)
                 .map(|(value, _)| BTreeMap::from([("price".to_string(), value)]))
                 .unwrap_or_default(),
+            "trigger.source" => self.source_trigger_values(trigger).unwrap_or_default(),
             _ => at(),
         }
+    }
+
+    /// What a source trigger hands on: the source's latest value.
+    fn source_trigger_values(&self, trigger: &Node) -> Option<BTreeMap<String, WfValue>> {
+        let id = trigger.params.get("source")?.as_str()?;
+        let last = self.data_source(id)?.last.as_ref()?;
+        Some(BTreeMap::from([
+            (
+                "value".to_string(),
+                last.number.map_or(WfValue::Null, WfValue::Number),
+            ),
+            (
+                "text".to_string(),
+                last.text.clone().map_or(WfValue::Null, WfValue::Text),
+            ),
+        ]))
     }
 
     /// The watched value of a threshold trigger and which side of it it is on.
@@ -1753,6 +1770,65 @@ impl UnlockedVault {
                             firings.push(ctx);
                         }
                         events.extend(self.fire_all(&workflow, &graph, firings, &mut pass));
+                    }
+                    "trigger.source" => {
+                        let Some(id) = trigger
+                            .params
+                            .get("source")
+                            .and_then(serde_json::Value::as_str)
+                        else {
+                            continue;
+                        };
+                        let Some(last) =
+                            self.data_source(id).and_then(|source| source.last.clone())
+                        else {
+                            continue;
+                        };
+                        let wanted = trigger
+                            .params
+                            .get("condition")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("changed");
+                        let key = format!("source:{}", trigger.id);
+                        let previous = self.wf_mark(&workflow.id, &key);
+                        // «Changed» remembers the moment of the last value seen,
+                        // a threshold the side it was on.
+                        let mark = if wanted == "changed" {
+                            let number = last.number.map(|number| number.to_string());
+                            format!("{}|{}", last.at, number.unwrap_or_default())
+                        } else {
+                            let Some(number) = last.number else {
+                                continue;
+                            };
+                            let threshold = trigger
+                                .params
+                                .get("value")
+                                .and_then(crate::workflow::nodes::json_number)
+                                .unwrap_or(Amount::ZERO);
+                            if number >= threshold {
+                                "above"
+                            } else {
+                                "below"
+                            }
+                            .to_string()
+                        };
+                        if previous.as_deref() == Some(mark.as_str()) {
+                            continue;
+                        }
+                        // The first look only remembers: a value that was
+                        // there before the workflow is not news.
+                        let fires = match wanted {
+                            "changed" => previous.is_some(),
+                            side => side == mark,
+                        };
+                        if fires {
+                            let mut ctx = self.context(&workflow, trigger, now, zone);
+                            ctx.trigger_label = trigger_label(&trigger.kind, &last.at);
+                            ctx.trigger_values =
+                                self.source_trigger_values(trigger).unwrap_or_default();
+                            events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
+                        }
+                        self.wf_set_mark(&workflow.id, &key, &mark);
                     }
                     "trigger.balance" | "trigger.price" => {
                         let Some((value, above)) = self.threshold_value(trigger, now) else {

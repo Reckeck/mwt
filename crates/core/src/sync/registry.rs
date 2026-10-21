@@ -164,6 +164,9 @@ pub static COLLECTIONS: &[Collection] = &[
     records("valuations", ID),
     // One link per operation: a new property replaces the old one.
     records("tx_properties", &["tx_id"]),
+    records("data_sources", ID),
+    records("asset_price_sources", &["asset_key"]),
+    records("deposit_rate_sources", &["store_id"]),
     log(
         "import_runs",
         ID,

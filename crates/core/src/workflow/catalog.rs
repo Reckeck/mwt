@@ -70,6 +70,8 @@ pub enum ParamKind {
     Goal,
     /// Another workflow (its id).
     Workflow,
+    /// One of the user's data sources (its id).
+    Source,
     Select {
         options: Vec<(&'static str, Text)>,
     },
@@ -193,6 +195,8 @@ pub(super) fn wired(
 pub const REQUIRED_PARAMS: &[(&str, &str)] = &[
     ("trigger.price", "asset"),
     ("trigger.balance", "store"),
+    ("trigger.source", "source"),
+    ("data.source", "source"),
     ("data.balance", "account"),
     ("data.price", "asset"),
     ("action.transaction", "account"),
@@ -215,6 +219,12 @@ pub(super) fn select(options: &[(&'static str, Text)]) -> ParamKind {
 }
 
 const CONDITIONS: [(&str, Text); 2] = [
+    ("above", txt("выше или равно", "at or above")),
+    ("below", txt("ниже или равно", "at or below")),
+];
+
+const SOURCE_CONDITIONS: [(&str, Text); 3] = [
+    ("changed", txt("изменилось", "changed")),
     ("above", txt("выше или равно", "at or above")),
     ("below", txt("ниже или равно", "at or below")),
 ];
@@ -385,6 +395,37 @@ fn build() -> Vec<NodeDef> {
         ],
         advanced: false,
         keywords: vec!["цена", "курс", "алерт", "price", "alert"],
+    });
+    out.push(NodeDef {
+        kind: "trigger.source",
+        group: Trigger,
+        title: txt("Новое значение источника", "Data source changed"),
+        description: txt(
+            "Когда ваш источник данных принёс новое значение или пересёк порог.",
+            "When one of your data sources brings a new value or crosses a threshold.",
+        ),
+        help: txt(
+            "Источники настраиваются в «Планирование → Источники» и обновляются в фоне по своему интервалу. «Изменилось» срабатывает на каждое новое значение, порог — один раз при пересечении.",
+            "Sources are set up in «Planning → Sources» and refresh in the background on their own interval. «Changed» fires on every new value, a threshold once per crossing.",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            flow_out(),
+            port("value", Ty::Number, txt("Значение", "Value")),
+            port("text", Ty::Text, txt("Текст", "Text")),
+        ],
+        params: vec![
+            param("source", ParamKind::Source, txt("Источник", "Source"), json!(null)),
+            param(
+                "condition",
+                select(&SOURCE_CONDITIONS),
+                txt("Условие", "Condition"),
+                json!("changed"),
+            ),
+            param("value", ParamKind::Number, txt("Порог", "Threshold"), json!("0")),
+        ],
+        advanced: false,
+        keywords: vec!["источник", "сайт", "инфляция", "ставка", "source", "website", "scrape"],
     });
     out.push(NodeDef {
         kind: "trigger.event",
@@ -641,6 +682,33 @@ fn build() -> Vec<NodeDef> {
         params,
         advanced: false,
         keywords: vec!["среднее", "зарплата", "примерно", "average", "salary", "estimate"],
+    });
+    out.push(NodeDef {
+        kind: "data.source",
+        group: Data,
+        title: txt("Значение источника", "Data source value"),
+        description: txt(
+            "Последнее значение вашего источника данных.",
+            "The latest value of one of your data sources.",
+        ),
+        help: txt(
+            "Источник — страница, JSON или файл, откуда приложение берёт число («Планирование → Источники»). Ряд приходит списком чисел.",
+            "A source is a page, JSON or file the app reads a number from («Planning → Sources»). A series comes as a list of numbers.",
+        ),
+        inputs: vec![],
+        outputs: vec![
+            port("value", Ty::Number, txt("Значение", "Value")),
+            port("text", Ty::Text, txt("Текст", "Text")),
+            port("series", Ty::List, txt("Ряд", "Series")),
+        ],
+        params: vec![param(
+            "source",
+            ParamKind::Source,
+            txt("Источник", "Source"),
+            json!(null),
+        )],
+        advanced: false,
+        keywords: vec!["источник", "сайт", "парсинг", "source", "website", "scrape"],
     });
     out.push(NodeDef {
         kind: "data.budget",

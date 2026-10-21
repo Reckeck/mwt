@@ -50,6 +50,11 @@ snow = "0.10"
 spake2 = "0.4"
 serde_bytes = "0.11"
 mdns-sd = "0.21"
+# Own data sources: elements of a web page, CSV and XLSX files.
+scraper = { version = "0.25", default-features = false }
+csv = "1"
+calamine = { version = "0.30", default-features = false }
+ego-tree = "0.10"
 
 [profile.release]
 codegen-units = 1

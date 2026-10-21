@@ -8,6 +8,7 @@ pub mod appconfig;
 pub mod calc;
 pub mod calendar;
 pub mod crypto;
+pub mod datasource;
 pub mod error;
 pub mod exchange;
 pub mod ipc_contract;

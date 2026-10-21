@@ -35,6 +35,11 @@ export function useCacheEvents() {
 
   // Inflation or the key rate came in (the daily fetch, «Обновить», a mode change).
   useBackendEvent('rates-updated', () => invalidate([['inflation-overview'], ['report'], ['interest-tax']]))
+  // Own data sources (plan I2) feed inflation and asset prices.
+  useBackendEvent('sources-updated', () => {
+    invalidate([['data-sources'], ['inflation-overview'], ['report']])
+    invalidate(PRICED_KEYS)
+  })
   useBackendEvent('automation-created', () => invalidate(PLANNING_AND_LEDGER))
   // Runs in the background may leave questions, queued operations or sleeping runs.
   useBackendEvent('workflows-ran', () => invalidate([WORKFLOW_KEYS.runs, WORKFLOW_KEYS.queue, WORKFLOW_KEYS.waits]))

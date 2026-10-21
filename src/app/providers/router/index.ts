@@ -159,6 +159,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.planning' },
             },
             {
+              path: 'sources',
+              name: 'planning-sources',
+              component: () => import('@/pages/planning').then((page) => page.PlanningSources),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
               path: 'calculator',
               name: 'planning-calculator',
               component: () => import('@/pages/planning').then((page) => page.PlanningCalculator),

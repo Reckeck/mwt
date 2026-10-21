@@ -31,6 +31,7 @@ export const mockSettings: Settings = {
   display_decimals: 8,
   dashboard_widgets: [],
   inflation_mode: {},
+  inflation_source: {},
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
   savings_rate: '0.10',
@@ -127,5 +128,8 @@ export function mockVaultDoc(): VaultDoc {
     asset_class_of: [],
     valuations: [],
     tx_properties: [...mockPropertyLinks],
+    data_sources: [],
+    asset_price_sources: [],
+    deposit_rate_sources: [],
   }
 }

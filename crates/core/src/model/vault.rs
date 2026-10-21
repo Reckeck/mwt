@@ -89,6 +89,9 @@ pub struct Settings {
     /// reads as [`crate::service::inflation`] decides.
     #[serde(default)]
     pub inflation_mode: std::collections::BTreeMap<String, crate::model::inflation::InflationMode>,
+    /// The data source of each currency in `InflationMode::Source`.
+    #[serde(default)]
+    pub inflation_source: std::collections::BTreeMap<String, String>,
     /// The user's usual monthly income in the budget currency, used until
     /// three months of history exist (plan B).
     #[serde(default)]
@@ -171,6 +174,7 @@ impl Default for Settings {
             budget_configured: false,
             onboarding_skipped: Vec::new(),
             inflation_mode: std::collections::BTreeMap::new(),
+            inflation_source: std::collections::BTreeMap::new(),
             manual_income: None,
             manual_expenses: None,
             categories_rev: crate::model::category::CATEGORIES_REV,
@@ -619,6 +623,15 @@ pub struct VaultDoc {
     /// Operations linked to a property (plan G4).
     #[serde(default)]
     pub tx_properties: Vec<TxProperty>,
+    /// The user's own data sources (plan I2).
+    #[serde(default)]
+    pub data_sources: Vec<crate::model::datasource::DataSource>,
+    /// Assets priced by a data source, by `AssetRef::key()`.
+    #[serde(default)]
+    pub asset_price_sources: Vec<crate::model::datasource::AssetPriceSource>,
+    /// Deposits whose rate a data source follows.
+    #[serde(default)]
+    pub deposit_rate_sources: Vec<crate::model::datasource::DepositRateSource>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -684,6 +697,9 @@ impl Default for VaultDoc {
             asset_class_of: Vec::new(),
             valuations: Vec::new(),
             tx_properties: Vec::new(),
+            data_sources: Vec::new(),
+            asset_price_sources: Vec::new(),
+            deposit_rate_sources: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

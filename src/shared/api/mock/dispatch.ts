@@ -9,6 +9,7 @@ import { bybitImportStagingCommands, exchangeAccountsCommands, exchangeReadOnlyC
 import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { ratesCommands } from './commands-rates'
+import { sourcesCommands } from './commands-sources'
 import { storeTreeCommands } from './commands-store-tree'
 import { valuationCommands } from './commands-valuation'
 import { vehicleCommands } from './commands-vehicle'
@@ -40,6 +41,7 @@ const MOCK_COMMANDS: MockCommands = {
   ...overviewCommands,
   ...loyaltyDepositCommands,
   ...ratesCommands,
+  ...sourcesCommands,
   ...exchangeAccountsCommands,
   ...devReportCommands,
 }

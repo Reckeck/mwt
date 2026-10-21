@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { AssetInput } from '@/entities/asset'
+import { useDataSources } from '@/entities/data-source'
 import { CurrencyPicker, Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { CategorySelect } from '@/features/category-select'
@@ -53,6 +54,8 @@ const goals = useQuery({
   queryFn: () => call<Goal[]>('list_goals'),
   enabled: computed(() => kind.value === 'goal'),
 })
+
+const sources = useDataSources(computed(() => kind.value === 'source'))
 
 const storeId = computed(() => {
   const raw = current.value as { store?: string } | string | null
@@ -126,6 +129,12 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
       <Select v-else-if="kind === 'goal'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
         <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
         <SelectItem v-for="goal in goals.data.value ?? []" :key="goal.id" :value="goal.id">{{ goal.name }}</SelectItem>
+      </Select>
+      <Select v-else-if="kind === 'source'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
+        <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
+        <SelectItem v-for="view in sources.data.value ?? []" :key="view.source.id" :value="view.source.id">
+          {{ view.source.name }}
+        </SelectItem>
       </Select>
       <template v-else-if="kind === 'workflow'">
         <Select :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">

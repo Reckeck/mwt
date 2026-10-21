@@ -16,6 +16,7 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `prices-updated` | `RefreshResult` | после `refresh_all` (кнопка, трей, таймер «Интервал обновления цен» в планировщике, пока окно на экране) и `ensure_fx` (если что-то найдено); экраны обновляют «ценовые» ключи из `use-cache-events`, а не из ответа команды |
 | `rates-updated` | — | после `refresh_rates` (кнопка «Обновить» в настройках инфляции и суточный `rates_tick` планировщика) и `set_inflation_mode`; фронт обновляет `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
+| `sources-updated` | — | после `datasource_*` и фонового `sources_tick`; фронт обновляет `data-sources` (вместе с ним шлются `prices-updated` и `rates-updated`) |
 | `bybit-import-pending` | `{ staged: number }` | фоновый опрос Bybit нашёл новые сделки (D2.4) |
 | `automation-created` | `{ tx_ids: string[] }` | планировщик создал операции автоматизаций |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | запуск не создан: не хватило средств, лимит кредитки или операция не прошла проверку (D26); тост с «Повторить / Пропустить» + системное уведомление |
@@ -335,7 +336,15 @@ JSON без шифрования — там нет ничего секретно
 | `get_interest_tax` | `year?` | `InterestTaxReport { max_key_rate?, limit?, income, taxable, tax, remaining_free? }` — НДФЛ 13% сверх 1 000 000 ₽ × макс. ключевая ставка на 1-е числа года |
 | `refresh_rates` | — | `Vec<InflationCurrency>` — сейчас забрать ключевую ставку ЦБ РФ (SOAP `DailyInfo.KeyRate`, с 1 января прошлого года, в `VaultDoc.key_rates`) и инфляцию г/г за 25 мес. (RUB — таблица Банка России `hd_base/infl`, USD — BLS CPI-U, EUR — Eurostat HICP `prc_hicp_minr`) в `VaultDoc.inflation_points`; недоступный источник пропускается, `NETWORK` — если не ответил ни один. Новые цифры — уведомления категории `rates`, затем `rates-updated`. То же делает планировщик раз в сутки (при ошибке — через час) |
 | `get_inflation_overview` | — | `Vec<InflationCurrency { currency, mode, chosen, source?, latest?, previous?, manual?, effective?, series[] }>` — по каждой валюте со встроенным источником или ручным числом: режим (`chosen` — выбран ли он явно), последняя и предыдущая цифра, ручное значение из `AppSettings.inflation`, `effective` — что используют отчёты и калькулятор (в `auto` до первой цифры — ручное) |
-| `set_inflation_mode` | `currency`, `mode?` (`auto` \| `manual`, `null` — по умолчанию) | `Vec<InflationCurrency>` — режим в `Settings.inflation_mode`; затем `rates-updated` |
+| `set_inflation_mode` | `currency`, `mode?` (`auto` \| `manual` \| `source`, `null` — по умолчанию) | `Vec<InflationCurrency>` — режим в `Settings.inflation_mode`; затем `rates-updated` |
+| `set_inflation_source` | `currency`, `sourceId` | `()` — инфляция валюты читается из своего источника: `Settings.inflation_source[currency]`, режим `source`; затем `rates-updated` |
+| `datasource_preview` | `url` | `SourcePreview` — страница для окна выбора: HTML без скриптов, обработчиков, форм и фреймов, с CSP и `<base>` (`kind = html`), JSON-текст (`json`) или первые 200 строк CSV/XLSX (`rows`). Размер страницы — до 8 МБ |
+| `datasource_test` | `draft: DataSourceDraft` | `Extracted` — значение, которое метод находит на странице сейчас; ничего не сохраняет. Ошибка разбора — `INVALID_INPUT` |
+| `datasources_list` | — | `Vec<DataSourceView>` — свои источники с местами использования (`used_by`: инфляция, цена актива, ставка вклада, сценарии) |
+| `datasource_save` | `draft: DataSourceDraft` | `DataSourceView` — создать/изменить; `uses` заменяет инфляцию, цены и вклады источника. Новый источник сразу забирается. Затем `sources-updated` |
+| `datasource_delete` | `id` | `()` — удалить; инфляция, читавшая его, возвращается к режиму по умолчанию |
+| `datasource_refresh` | `id` | `DataSourceView` — забрать сейчас. Ошибка не меняет значение, 3 подряд — `broken` и уведомление; скачок больше 10 раз — `pending` до `datasource_confirm`. То же делает планировщик по интервалу источника |
+| `datasource_confirm` | `id`, `accept` | `()` — принять или отбросить значение, ждущее подтверждения после скачка |
 | `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов |
 | `create_loyalty_program` | `CreateLoyaltyProgramInput { name, color, contact_id?, info: LoyaltyInfo }` | `Store` — программа бонусов создаётся сразу с баллами (`login`, `source_store_ids`); отказ проверки не оставляет кошелька |
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |

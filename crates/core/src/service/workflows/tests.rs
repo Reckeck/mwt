@@ -451,6 +451,98 @@ fn a_counter_lives_between_runs() {
 }
 
 #[test]
+fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
+    use crate::datasource::Extracted;
+    use crate::model::datasource::{NumberFormat, SourceInterval, SourceMethod, SourceOutput};
+    use crate::service::DataSourceDraft;
+
+    let (_dir, mut vault) = empty_vault();
+    let source = vault
+        .save_data_source(DataSourceDraft {
+            id: None,
+            name: "Rate".into(),
+            url: "https://example.com".into(),
+            method: SourceMethod::Label {
+                label: "rate".into(),
+            },
+            output: SourceOutput::Number,
+            number: NumberFormat::default(),
+            interval: SourceInterval::Day,
+            uses: vec![],
+        })
+        .unwrap()
+        .source
+        .id;
+    let fetch = |vault: &mut UnlockedVault, value: &str| {
+        vault
+            .apply_source_fetch(
+                &source,
+                Ok(Extracted {
+                    number: Some(amount(value)),
+                    ..Extracted::default()
+                }),
+                true,
+            )
+            .unwrap();
+    };
+    fetch(&mut vault, "14");
+    let notify = |id: &str| node(id, "action.notify", json!({ "text": "rate" }));
+    let nodes = vec![
+        node(
+            "changed",
+            "trigger.source",
+            json!({ "source": source, "condition": "changed" }),
+        ),
+        node(
+            "low",
+            "trigger.source",
+            json!({ "source": source, "condition": "below", "value": "13" }),
+        ),
+        notify("n1"),
+        notify("n2"),
+    ];
+    let workflow = save(
+        &mut vault,
+        "Rate",
+        graph(
+            nodes,
+            vec![
+                wire("changed", "out", "n1", "in"),
+                wire("low", "out", "n2", "in"),
+            ],
+        ),
+    );
+    assert_eq!(vault.source_uses(&source).len(), 1);
+    // The value that was there before the workflow is not news.
+    assert!(
+        vault
+            .run_due_workflows(later(), "UTC")
+            .unwrap()
+            .runs
+            .is_empty()
+    );
+    fetch(&mut vault, "13.5");
+    assert_eq!(
+        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        1
+    );
+    assert!(
+        vault
+            .run_due_workflows(later(), "UTC")
+            .unwrap()
+            .runs
+            .is_empty()
+    );
+    // Below 13: both the change and the crossing fire.
+    fetch(&mut vault, "12");
+    assert_eq!(
+        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        2
+    );
+    vault.delete_workflow(&workflow.id).unwrap();
+}
+
+#[test]
 fn a_balance_threshold_fires_on_crossing_only() {
     let (_dir, mut vault, card, _savings) = wallets();
     let nodes = vec![
