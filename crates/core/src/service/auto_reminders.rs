@@ -17,7 +17,7 @@ use crate::model::notify::NoticeCategory;
 use crate::model::planning::{
     Reminder, ReminderRepeat, ReminderSource, ReminderSourceKind, RepeatUnit, UtilityKind,
 };
-use crate::model::store::{StoreKind, SubType};
+use crate::model::store::{PropertyCategory, StoreKind, SubType};
 use crate::model::transaction::{LegRole, Transaction};
 use crate::pricing::history::secs_or_now;
 
@@ -56,6 +56,7 @@ pub fn category_of(kind: ReminderSourceKind) -> NoticeCategory {
         Debt => NoticeCategory::Debt,
         GoalSaving | GoalDeadline => NoticeCategory::Goal,
         PropertyTax | InterestTax => NoticeCategory::Tax,
+        VehicleInsurance | VehicleService => NoticeCategory::Vehicle,
     }
 }
 
@@ -320,14 +321,87 @@ impl UnlockedVault {
             }
         }
 
-        // Taxes, when there is a reason: property, interest on deposits.
-        if live().any(|store| store.kind == StoreKind::Property && store.parent_id.is_none()) {
-            let text = if ru {
-                "Налог на имущество — заплатить до 1 декабря".to_string()
-            } else {
-                "Property tax is due by December 1".to_string()
+        // Cars: the insurance ends, the service is due by date or by mileage.
+        for store in
+            live().filter(|store| store.kind == StoreKind::Property && store.parent_id.is_none())
+        {
+            let Some(car) = store
+                .property
+                .as_ref()
+                .filter(|info| info.category == PropertyCategory::Car)
+                .and_then(|info| info.car.as_ref())
+            else {
+                continue;
             };
-            push(PropertyTax, "property-tax", text, When::Yearly(12, 1));
+            for (policy, until) in [("osago", &car.osago_until), ("kasko", &car.kasko_until)] {
+                let Some(date) = until.as_deref().and_then(ymd).filter(|date| *date >= today)
+                else {
+                    continue;
+                };
+                let name = match (policy, ru) {
+                    ("osago", true) => "ОСАГО",
+                    ("osago", false) => "Compulsory insurance",
+                    (_, true) => "КАСКО",
+                    (_, false) => "Comprehensive insurance",
+                };
+                let text = if ru {
+                    format!("{name} «{}» заканчивается {}", store.name, date_text(date))
+                } else {
+                    format!("{name} of «{}» ends on {}", store.name, date_text(date))
+                };
+                push(
+                    VehicleInsurance,
+                    &format!("{}:{policy}", store.id),
+                    text,
+                    When::Once(date),
+                );
+            }
+            // Whichever comes first: the date, or the mileage close to the service.
+            let by_date = car.service_due_at.as_deref().and_then(ymd);
+            // Pinned to the day the mileage was read, so the reminder does not move daily.
+            let read_on = car.mileage_at.as_deref().and_then(ymd).unwrap_or(today);
+            let due = if car.service_due_by_km() {
+                Some(by_date.map_or(read_on, |date| date.min(read_on)))
+            } else {
+                by_date
+            };
+            if let Some(date) = due {
+                let text = if ru {
+                    format!("ТО «{}» — {}", store.name, date_text(date))
+                } else {
+                    format!("Service of «{}» is due on {}", store.name, date_text(date))
+                };
+                push(VehicleService, &store.id, text, When::Once(date));
+            }
+        }
+
+        // Taxes, when there is a reason: each object by its type, interest on deposits.
+        for store in
+            live().filter(|store| store.kind == StoreKind::Property && store.parent_id.is_none())
+        {
+            let category = store
+                .property
+                .as_ref()
+                .map(|info| info.category)
+                .unwrap_or_default();
+            let text = match (category, ru) {
+                (PropertyCategory::Car, true) => {
+                    format!("Транспортный налог: {} — до 1 декабря", store.name)
+                }
+                (PropertyCategory::Car, false) => {
+                    format!("Vehicle tax for {} is due by December 1", store.name)
+                }
+                (PropertyCategory::Land, true) => {
+                    format!("Земельный налог: {} — до 1 декабря", store.name)
+                }
+                (PropertyCategory::Land, false) => {
+                    format!("Land tax for {} is due by December 1", store.name)
+                }
+                (PropertyCategory::Other, _) => continue,
+                (_, true) => format!("Налог на имущество: {} — до 1 декабря", store.name),
+                (_, false) => format!("Property tax for {} is due by December 1", store.name),
+            };
+            push(PropertyTax, &store.id, text, When::Yearly(12, 1));
         }
         if live().any(|store| store.deposit.is_some()) {
             let text = if ru {
@@ -870,5 +944,135 @@ mod tests {
         assert_eq!(auto(&vault, ReminderSourceKind::PropertyTax).len(), 1);
         assert_eq!(auto(&vault, ReminderSourceKind::Utilities).len(), 1);
         assert_eq!(auto(&vault, ReminderSourceKind::MeterReadings).len(), 1);
+    }
+
+    fn property(vault: &mut UnlockedVault, name: &str, info: PropertyInfo) -> String {
+        vault
+            .create_store_with(
+                name,
+                StoreKind::Property,
+                "#555",
+                "",
+                None,
+                StoreExtras {
+                    property: Some(info),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id
+    }
+
+    #[test]
+    fn each_object_gets_the_tax_of_its_type() {
+        use crate::model::store::PropertyCategory;
+        let (_dir, mut vault) = empty_vault();
+        let home = property(
+            &mut vault,
+            "Дом",
+            PropertyInfo {
+                category: PropertyCategory::House,
+                ..PropertyInfo::default()
+            },
+        );
+        let car = property(
+            &mut vault,
+            "Октавия",
+            PropertyInfo {
+                category: PropertyCategory::Car,
+                ..PropertyInfo::default()
+            },
+        );
+        let land = property(
+            &mut vault,
+            "Дача",
+            PropertyInfo {
+                category: PropertyCategory::Land,
+                ..PropertyInfo::default()
+            },
+        );
+        property(
+            &mut vault,
+            "Лодка",
+            PropertyInfo {
+                category: PropertyCategory::Other,
+                ..PropertyInfo::default()
+            },
+        );
+        vault
+            .sync_auto_reminders(secs_or_now("2026-03-10T08:00:00Z"), "UTC", true)
+            .unwrap();
+        let taxes = auto(&vault, ReminderSourceKind::PropertyTax);
+        assert_eq!(taxes.len(), 3, "other has no tax");
+        let text_of = |id: &str| {
+            taxes
+                .iter()
+                .find(|reminder| reminder.source.as_ref().unwrap().id == id)
+                .unwrap()
+                .text
+                .clone()
+        };
+        assert!(text_of(&home).starts_with("Налог на имущество: Дом"));
+        assert!(text_of(&car).starts_with("Транспортный налог: Октавия"));
+        assert!(text_of(&land).starts_with("Земельный налог: Дача"));
+        // 14 days ahead of December 1.
+        assert!(
+            taxes
+                .iter()
+                .all(|reminder| reminder.due_at.starts_with("2026-11-17"))
+        );
+    }
+
+    #[test]
+    fn a_car_is_reminded_of_its_insurance_and_service_whichever_comes_first() {
+        use crate::model::store::{CarInfo, PropertyCategory};
+        let (_dir, mut vault) = empty_vault();
+        let car = property(
+            &mut vault,
+            "Октавия",
+            PropertyInfo {
+                category: PropertyCategory::Car,
+                car: Some(CarInfo {
+                    osago_until: Some("2026-06-01".into()),
+                    kasko_until: Some("2025-01-01".into()),
+                    service_due_at: Some("2026-09-01".into()),
+                    service_due_km: Some(60_000),
+                    mileage_km: Some(50_000),
+                    mileage_at: Some("2026-03-01".into()),
+                    ..CarInfo::default()
+                }),
+                ..PropertyInfo::default()
+            },
+        );
+        let now = secs_or_now("2026-03-10T08:00:00Z");
+        vault.sync_auto_reminders(now, "UTC", true).unwrap();
+        let insurance = auto(&vault, ReminderSourceKind::VehicleInsurance);
+        assert_eq!(insurance.len(), 1, "an expired policy is not reminded");
+        assert_eq!(
+            insurance[0].source.as_ref().unwrap().id,
+            format!("{car}:osago")
+        );
+        let service = auto(&vault, ReminderSourceKind::VehicleService);
+        let by_date = service[0].due_at.clone();
+        assert!(
+            by_date.starts_with("2026-08-18"),
+            "by date, 14 days ahead: far by km"
+        );
+        assert_eq!(
+            category_of(ReminderSourceKind::VehicleService),
+            NoticeCategory::Vehicle
+        );
+
+        // 59 500 km: the mileage says now, earlier than the date.
+        let today = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+        vault.vehicle_update_mileage(&car, 59_500, today).unwrap();
+        vault.sync_auto_reminders(now, "UTC", true).unwrap();
+        let service = auto(&vault, ReminderSourceKind::VehicleService);
+        assert_eq!(service.len(), 1);
+        assert!(
+            service[0].due_at < by_date,
+            "the mileage moved it earlier: {}",
+            service[0].due_at
+        );
     }
 }

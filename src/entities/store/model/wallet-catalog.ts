@@ -18,6 +18,16 @@ export function kindInfo(catalog: WalletCatalog | undefined, kind: StoreKind): W
   return catalog?.kinds.find((info) => info.kind === kind)
 }
 
+/** Ready-made automations of a wallet: a property's follow its type (home, car, plot). */
+export function presetsOf(catalog: WalletCatalog | undefined, store: Pick<Store, 'kind' | 'property'>): PresetInfo[] {
+  const category = store.kind === 'property' ? store.property?.category : undefined
+  if (category) {
+    const own = catalog?.property_presets.find((entry) => entry.category === category)
+    if (own) return own.presets
+  }
+  return kindInfo(catalog, store.kind)?.presets ?? []
+}
+
 /** Short, human label of a binding: «USD», «BTC ↔ USDT», «Фьючерсы». */
 export function bindingLabel(binding: Binding): string {
   if (binding === 'any') return ''

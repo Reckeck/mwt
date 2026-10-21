@@ -60,6 +60,8 @@ pub fn notice_title(category: NoticeCategory, ru: bool) -> &'static str {
         (Health, false) => "Capital checkup",
         (Security, true) => "Безопасность",
         (Security, false) => "Security",
+        (Vehicle, true) => "Машина",
+        (Vehicle, false) => "Car",
     }
 }
 

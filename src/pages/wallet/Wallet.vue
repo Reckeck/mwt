@@ -13,7 +13,8 @@ import { StoreCreateDialog } from '@/features/store-create'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
-import { StoreChart, useStoreOverview } from '@/entities/store'
+import { VehicleCard } from '@/widgets/vehicle-card'
+import { isHome, StoreChart, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
@@ -57,7 +58,9 @@ const isExchangeNode = computed(() => store.value?.kind === 'exchange' && !store
 const hasTerminal = computed(() => isExchangeNode.value && !!store.value?.exchange)
 const { hasKey: bybitHasKey } = useExchangeKeyStatus(storeId, isExchangeNode)
 const isPropertyRoot = computed(() => store.value?.kind === 'property' && !store.value.parent_id)
-const { tab, tabs, view, views } = useWalletTabs(isPropertyRoot, hasTerminal)
+/** Utilities and meters belong to a home only (plan G2). */
+const isHomeRoot = computed(() => isPropertyRoot.value && isHome(store.value?.property?.category))
+const { tab, tabs, view, views } = useWalletTabs(isHomeRoot, hasTerminal)
 
 const priceRefresh = usePriceRefresh()
 
@@ -161,6 +164,8 @@ function openWallet(created: Store) {
           v-if="store.sub_type === 'savings' || store.sub_type === 'deposit' || store.sub_type === 'pds'"
           :store-id="store.id"
         />
+
+        <VehicleCard v-if="isPropertyRoot && store.property?.category === 'car'" :store="store" />
 
         <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />
         <WalletExtras :store="store" :has-key="bybitHasKey" />

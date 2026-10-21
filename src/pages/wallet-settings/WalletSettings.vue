@@ -21,7 +21,7 @@ import { StoreAssetClassField } from '@/features/asset-class-edit'
 import { AutomationList } from '@/widgets/automation-list'
 import { ExchangeImported } from '@/widgets/exchange-imported'
 import { ExchangeSyncHistory } from '@/widgets/exchange-sync-history'
-import { kindInfo, useWalletCatalog } from '@/entities/store'
+import { presetsOf, useWalletCatalog } from '@/entities/store'
 import { Badge } from '@/shared/ui/badge'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 import { SectionState } from '@/shared/ui/section-state'
@@ -67,7 +67,7 @@ const envelopeAssets = computed<AssetRef[]>(() => {
 const hasBasket = computed(() => !!store.value && !['property', 'loyalty', 'liability'].includes(store.value.kind))
 
 /** Ready-made automations this kind of wallet offers. */
-const presets = computed(() => (store.value ? (kindInfo(catalog.data.value, store.value.kind)?.presets ?? []) : []))
+const presets = computed(() => (store.value ? presetsOf(catalog.data.value, store.value) : []))
 
 const createOpen = ref(false)
 const moveTarget = ref<Store | null>(null)

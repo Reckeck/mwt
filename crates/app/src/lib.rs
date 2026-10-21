@@ -81,6 +81,8 @@ pub fn run() {
             stores::move_between_envelopes,
             stores::delete_envelope,
             stores::update_store,
+            stores::vehicle_update_mileage,
+            stores::vehicle_service_done,
             stores::archive_store,
             stores::delete_store,
             stores::get_store_overview,

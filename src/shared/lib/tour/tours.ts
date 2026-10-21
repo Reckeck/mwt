@@ -102,6 +102,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
+    { target: 'vehicle-card', key: 'wallet.vehicle', side: 'bottom' },
     { target: 'chart-currency', key: 'wallet.chartCurrency', side: 'left' },
     { target: 'wallet-positions', key: 'wallet.positions', side: 'top' },
     { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
@@ -110,6 +111,8 @@ export const TOURS: Record<string, TourStep[]> = {
   'wallet-settings': [
     { target: 'wallet-purpose', key: 'walletSettings.purpose', side: 'top' },
     { target: 'wallet-emergency', key: 'walletSettings.emergency', side: 'top' },
+    { target: 'property-category', key: 'walletSettings.propertyType', side: 'bottom' },
+    { target: 'property-car', key: 'walletSettings.car', side: 'top' },
     { target: 'wallet-envelopes', key: 'walletSettings.envelopes', side: 'top' },
     { target: 'automation-presets', key: 'walletSettings.presets', side: 'bottom' },
     { target: 'exchange-configure-import', key: 'walletSettings.importSetup', side: 'top' },

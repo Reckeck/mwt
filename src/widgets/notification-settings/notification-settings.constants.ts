@@ -9,6 +9,7 @@ export const NOTICE_CATEGORIES: NoticeCategory[] = [
   'loyalty',
   'goal',
   'tax',
+  'vehicle',
   'shortfall',
   'budget',
   'health',
@@ -28,6 +29,7 @@ export const AUTO_REMINDER_CATEGORIES: NoticeCategory[] = [
   'loyalty',
   'goal',
   'tax',
+  'vehicle',
 ]
 
 /** Categories whose notice can come ahead of a date. */
@@ -44,4 +46,5 @@ export const DEFAULT_LEAD_DAYS: Partial<Record<NoticeCategory, number>> = {
   loyalty: 7,
   tax: 14,
   goal: 14,
+  vehicle: 14,
 }

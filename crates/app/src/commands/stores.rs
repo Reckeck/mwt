@@ -1,8 +1,9 @@
 use tauri::State;
 
+use trade_core::calendar::{Calendar, now_secs};
 use trade_core::ipc_contract::{
     CreateStoreInput, FundEnvelopeInput, MoveEnvelopeInput, MoveStoreInput, UpdateEnvelopeInput,
-    UpdateStoreInput, WalletCatalog,
+    UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput, WalletCatalog,
 };
 use trade_core::model::planning::Envelope;
 use trade_core::model::store::{Store, StoreKind};
@@ -11,6 +12,7 @@ use trade_core::service::{
     StoreOverview, StoreTreeNode,
 };
 
+use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 /// What every wallet kind allows (sub-account types, limits, exchanges).
@@ -257,5 +259,37 @@ pub async fn apply_store_change(
         .as_mut()
         .unwrap()
         .apply_store_change(&input)
+        .map_err(err_to_string)
+}
+
+// -- cars ---------------------------------------------------------------------------
+
+/// The odometer of a car, read today.
+#[tauri::command]
+pub async fn vehicle_update_mileage(
+    input: VehicleMileageInput,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Store, String> {
+    let today = Calendar::new(&current_zone(&app)).date_of(now_secs());
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault
+        .vehicle_update_mileage(&input.store_id, input.km, today)
+        .map_err(err_to_string)
+}
+
+/// A car's service done: the next one moves by its intervals.
+#[tauri::command]
+pub async fn vehicle_service_done(
+    input: VehicleServiceDoneInput,
+    state: State<'_, AppState>,
+) -> Result<Store, String> {
+    let date = chrono::NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
+        .map_err(|_| err_to_string(trade_core::Error::InvalidInput("date".into())))?;
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().unwrap();
+    vault
+        .vehicle_service_done(&input.store_id, date, input.km)
         .map_err(err_to_string)
 }
