@@ -124,5 +124,6 @@ export function mockVaultDoc(): VaultDoc {
     health_last: null,
     asset_classes: [],
     asset_class_of: [],
+    valuations: [],
   }
 }

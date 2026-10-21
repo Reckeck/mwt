@@ -68,6 +68,7 @@ mod store_months;
 mod test_support;
 mod utilities;
 mod validate;
+mod valuation;
 mod workflows;
 mod worth;
 
@@ -139,6 +140,7 @@ pub use utilities::{
     UtilityPaymentDraft, UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput,
     preview_utility_formula,
 };
+pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
 pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
 pub use worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
 
@@ -828,6 +830,15 @@ impl UnlockedVault {
             store.property = extras
                 .property
                 .or_else(|| (kind == StoreKind::Property).then(PropertyInfo::default));
+            // New objects start with the rule of their type (plan §11.4).
+            if let Some(info) = store
+                .property
+                .as_mut()
+                .filter(|_| kind == StoreKind::Property)
+                && info.revalue.is_none()
+            {
+                info.revalue = valuation::initial_rule(info.category);
+            }
             store.exchange = match (kind, extras.provider) {
                 (StoreKind::Exchange, Some(provider)) => Some(ExchangeProfile {
                     provider,
@@ -972,8 +983,13 @@ impl UnlockedVault {
                 if extras.custody.is_some() {
                     store.custody = extras.custody;
                 }
-                if extras.property.is_some() {
-                    store.property = extras.property;
+                if let Some(mut next) = extras.property {
+                    // The rule is set by its own command only.
+                    next.revalue = store
+                        .property
+                        .as_ref()
+                        .and_then(|info| info.revalue.clone());
+                    store.property = Some(next);
                 }
                 if let Some(provider) = extras.provider {
                     let profile = store.exchange.get_or_insert_with(|| ExchangeProfile {

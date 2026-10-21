@@ -591,6 +591,7 @@ mod tests {
         root.remove("health_last");
         root.remove("asset_classes");
         root.remove("asset_class_of");
+        root.remove("valuations");
         // v1 had neither workflows nor automations as workflows.
         root.remove("workflows");
         root.remove("workflow_runs");
@@ -640,6 +641,7 @@ mod tests {
         expected.health_last = None;
         expected.asset_classes.clear();
         expected.asset_class_of.clear();
+        expected.valuations.clear();
         expected.settings.notifications = crate::model::notify::NotificationSettings::default();
         // A migrated v1 vault has seen no category batch yet, so `open` adds them.
         expected.settings.categories_rev = 0;

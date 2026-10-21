@@ -1,71 +1,68 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Tag } from 'lucide-vue-next'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
-import { Dialog } from '@/shared/ui/dialog'
+import { FormDialog } from '@/shared/ui/form-dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { AssetRevalueButtonProps } from './asset-revalue.types'
-import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
+import { thingKey, usePropertyValues, useValuationMutations } from './model/use-valuations'
+import { ValuationList } from './ui/valuation-list'
 
 const props = defineProps<AssetRevalueButtonProps>()
 
 const { t } = useI18n()
-const queryClient = useQueryClient()
 const settings = useSettingsStore()
 
 const open = ref(false)
+const date = ref('')
 const price = ref('')
 const currency = ref('')
 
+const values = usePropertyValues(() => props.storeId)
+const value = computed(() => values.data.value?.find((row) => row.asset_key === thingKey(props.asset)) ?? null)
+const base = computed(() => {
+  const row = value.value
+  if (!row?.base || !row.base_date || !row.base_price) return null
+  const currency = row.base === 'purchase' ? (row.purchase?.currency ?? row.currency) : row.currency
+  return { kind: row.base, date: row.base_date, price: row.base_price, currency }
+})
+
 const form = useFormValidation(
-  () => ({ price: positiveAmount(price.value), currency: required(currency.value, 'pick') }),
+  () => ({
+    date: required(date.value, 'pick'),
+    price: positiveAmount(price.value),
+    currency: required(currency.value, 'pick'),
+  }),
   { resetOn: open },
 )
 
 watch(open, (isOpen) => {
   if (!isOpen) return
+  date.value = new Date().toISOString().slice(0, 10)
   price.value = ''
-  currency.value = settings.baseCurrency
+  currency.value = value.value?.currency || settings.baseCurrency
 })
 
-/** `AssetRef::key()` in Rust for a thing with no chain or contract. */
-const assetKey = () => `asset:${props.asset.symbol}`
-
-// The new value applies to the whole history, so every value view is stale.
-const STALE = [...LEDGER_KEYS, ...PLANNING_KEYS]
-const refresh = () => {
-  for (const queryKey of STALE) void queryClient.invalidateQueries({ queryKey })
-}
-
-const save = useMutation({
-  mutationFn: () =>
-    call<ManualPrice>('set_manual_price', {
-      input: { asset_key: assetKey(), unit_price: price.value.trim().replace(',', '.'), currency: currency.value },
-    }),
-  onSuccess: () => {
-    refresh()
-    open.value = false
-  },
-  meta: { error: 'asset.revalueFailed', success: 'asset.revalued' },
+const { add, remove, reset } = useValuationMutations(() => {
+  price.value = ''
 })
 
-const reset = useMutation({
-  mutationFn: () => call('clear_manual_price', { assetKey: assetKey() }),
-  onSuccess: () => {
-    refresh()
-    open.value = false
-  },
-  meta: { error: 'asset.revalueFailed', success: 'asset.revalueCleared' },
-})
+const save = () =>
+  add.mutate({
+    store_id: props.storeId,
+    asset_key: thingKey(props.asset),
+    date: date.value,
+    unit_price: price.value.trim().replace(',', '.'),
+    currency: currency.value,
+  })
 </script>
 
 <template>
@@ -74,9 +71,18 @@ const reset = useMutation({
     {{ t('asset.revalue') }}
   </Button>
 
-  <Dialog v-model:open="open" :title="t('asset.revalueTitle', { name: props.asset.name || props.asset.symbol })" size="sm">
-    <form id="asset-revalue-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
-      <div class="grid grid-cols-[1fr_8rem] gap-3">
+  <FormDialog
+    v-model:open="open"
+    :title="t('asset.revalueTitle', { name: props.asset.name || props.asset.symbol })"
+    form-id="asset-revalue-form"
+    :submit-label="t('valuation.add')"
+    :pending="add.isPending.value"
+    @submit="form.submit(save, $event)"
+  >
+      <div class="grid gap-3 @mid:grid-cols-[9rem_1fr_8rem]">
+        <FormField for="revalue-date" :label="t('valuation.date')" required :error="form.error('date')">
+          <DateTimePicker id="revalue-date" v-model="date" />
+        </FormField>
         <FormField for="revalue-price" :label="t('tx.field.unitPrice')" required :error="form.error('price')">
           <AmountInput id="revalue-price" v-model="price" />
         </FormField>
@@ -84,14 +90,18 @@ const reset = useMutation({
           <CurrencyPicker id="revalue-currency" v-model="currency" />
         </FormField>
       </div>
-      <p class="text-xs text-muted-foreground">{{ t('asset.revalueHint') }}</p>
-    </form>
-
-    <template #footer>
-      <Button variant="ghost" :disabled="reset.isPending.value" @click="reset.mutate()">{{ t('asset.revalueReset') }}</Button>
-      <Button form="asset-revalue-form" type="submit" :disabled="save.isPending.value">
-        {{ t('actions.save') }}
+      <p class="text-xs text-muted-foreground">{{ t('valuation.hint') }}</p>
+      <ValuationList
+        v-if="value && (value.valuations.length || base)"
+        :valuations="value.valuations"
+        :base="base"
+        :pending="remove.isPending.value"
+        @remove="remove.mutate"
+      />
+    <template v-if="value?.base === 'manual'" #footer-start>
+      <Button variant="ghost" type="button" :disabled="reset.isPending.value" @click="reset.mutate(value.asset_key)">
+        {{ t('asset.revalueReset') }}
       </Button>
     </template>
-  </Dialog>
+  </FormDialog>
 </template>

@@ -11,7 +11,6 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { useSettingsStore } from '@/shared/store/settings'
-import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import { type CarField, carDraftOf, carErrors, carInfoOf } from '../model/car-draft'
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
@@ -25,8 +24,6 @@ const settings = useSettingsStore()
 const category = ref<PropertyCategory>('flat')
 const address = ref('')
 const area = ref('')
-const purchasedAt = ref('')
-const purchasePrice = ref('')
 const currency = ref('')
 /** Day of the month all utilities are paid; empty — no fixed day. */
 const payDay = ref('')
@@ -46,8 +43,6 @@ watch(
     category.value = shownPropertyCategory(info?.category)
     address.value = info?.address ?? ''
     area.value = info?.area ?? ''
-    purchasedAt.value = info?.purchased_at ?? ''
-    purchasePrice.value = info?.purchase_price ?? ''
     currency.value = info?.currency || settings.baseCurrency.toLowerCase()
     payDay.value = info?.utilities_pay_day ? String(info.utilities_pay_day) : ''
     car.value = carDraftOf(info?.car)
@@ -64,8 +59,9 @@ function submit() {
         category: category.value,
         address: located.value ? address.value.trim() : '',
         area: located.value ? area.value.trim() || null : null,
-        purchased_at: purchasedAt.value || null,
-        purchase_price: purchasePrice.value.trim() || null,
+        // the purchase now comes from the «Приобрести» operation; these stay as a fallback
+        purchased_at: props.store.property?.purchased_at ?? null,
+        purchase_price: props.store.property?.purchase_price ?? null,
         currency: currency.value,
         utilities_pay_day:
           home.value && payDay.value ? Math.min(31, Math.max(1, Number(payDay.value))) : undefined,
@@ -94,15 +90,7 @@ function submit() {
       <Label for="property-address">{{ t('property.address') }}</Label>
       <Input id="property-address" v-model="address" />
     </div>
-    <div class="grid gap-4 @mid:grid-cols-3">
-      <div class="grid gap-1.5">
-        <Label for="property-purchased">{{ t('property.purchasedAt') }}</Label>
-        <DateTimePicker id="property-purchased" v-model="purchasedAt" />
-      </div>
-      <div class="grid gap-1.5">
-        <Label for="property-price">{{ t('property.purchasePrice') }}</Label>
-        <AmountInput id="property-price" v-model="purchasePrice" />
-      </div>
+    <div class="grid gap-4 @mid:w-1/3">
       <CurrencyPicker v-model="currency" :label="t('form.currency')" />
     </div>
     <CarFields v-if="isCar" v-model="car" :error="form.error" />

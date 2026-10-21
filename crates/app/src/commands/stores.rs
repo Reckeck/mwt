@@ -293,3 +293,20 @@ pub async fn vehicle_service_done(
         .vehicle_service_done(&input.store_id, date, input.km)
         .map_err(err_to_string)
 }
+
+/// Set or switch off the automatic revaluation of a property.
+#[tauri::command]
+pub async fn property_set_revalue(
+    store_id: String,
+    rule: Option<trade_core::model::store::RevalueRule>,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let zone = current_zone(&app);
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_revalue_rule(&store_id, rule, &zone)
+        .map_err(err_to_string)
+}

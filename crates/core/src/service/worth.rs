@@ -89,6 +89,11 @@ impl UnlockedVault {
     /// USD value of one unit of a hand-priced asset, if it has a price and the
     /// rate of its currency is known.
     pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount> {
+        if let Some(curve) = self.valuation_curve(asset_key) {
+            let value = curve.value_at(crate::pricing::history::secs_or_now(""))?;
+            let rate = self.per_usd(&curve.currency)?;
+            return (!rate.is_zero()).then(|| value / rate);
+        }
         let manual = self
             .doc
             .manual_prices

@@ -5,4 +5,6 @@ export interface AssetDetailsSheetProps {
   storeId: string
   baseCurrency: string
   decimals: number
+  /** A property's thing: its value is set by dated valuations. */
+  revaluable?: boolean
 }

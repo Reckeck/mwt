@@ -10,6 +10,7 @@ import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { ratesCommands } from './commands-rates'
 import { storeTreeCommands } from './commands-store-tree'
+import { valuationCommands } from './commands-valuation'
 import { vehicleCommands } from './commands-vehicle'
 import { syncCommands } from './commands-sync'
 import { transferCommands } from './commands-transfer'
@@ -35,6 +36,7 @@ const MOCK_COMMANDS: MockCommands = {
   ...walletsCommands,
   ...storeTreeCommands,
   ...vehicleCommands,
+  ...valuationCommands,
   ...overviewCommands,
   ...loyaltyDepositCommands,
   ...ratesCommands,

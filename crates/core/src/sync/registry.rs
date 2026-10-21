@@ -161,6 +161,7 @@ pub static COLLECTIONS: &[Collection] = &[
     records("inflation_points", &["currency", "month"]),
     records("asset_classes", ID),
     records("asset_class_of", &["asset_key"]),
+    records("valuations", ID),
     log(
         "import_runs",
         ID,

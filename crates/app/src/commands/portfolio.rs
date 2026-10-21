@@ -6,12 +6,13 @@ use trade_core::ipc_contract::SetManualPriceInput;
 use trade_core::model::planning::AssetClass;
 use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
+use trade_core::model::vault::Valuation;
 use trade_core::service::{
     AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, NetWorth, PortfolioSummary,
-    RealizedPnl, StoreMonthRow, TopupAdvice,
+    PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
 };
 
-use crate::commands::app_settings::current_zone;
+use crate::commands::app_settings::{current_settings, current_zone};
 use crate::commands::{AppState, err_to_string, require_vault};
 
 #[tauri::command]
@@ -179,4 +180,50 @@ pub async fn topup_advice(
         .as_ref()
         .unwrap()
         .topup_advice(amount, now_secs(), &zone))
+}
+
+/// The value story of a property's assets: purchase, dated valuations, the
+/// rule and today's change, nominal and real.
+#[tauri::command]
+pub async fn property_valuations(
+    store_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<PropertyValue>, String> {
+    let inflation = current_settings(&app).inflation;
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .property_values(&store_id, &inflation, &zone)
+        .map_err(err_to_string)
+}
+
+/// A dated valuation of a property asset; one on the same day replaces it.
+#[tauri::command]
+pub async fn property_valuation_add(
+    input: ValuationInput,
+    state: State<'_, AppState>,
+) -> Result<Valuation, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .add_valuation(input)
+        .map_err(err_to_string)
+}
+
+/// Remove a valuation; the removed one comes back for «Отменить».
+#[tauri::command]
+pub async fn property_valuation_delete(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Valuation, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .delete_valuation(&id)
+        .map_err(err_to_string)
 }

@@ -12,6 +12,7 @@ use crate::model::vault::{FxPoint, PricePoint};
 use crate::pricing::history::{self, RateIndex, secs_or_now};
 
 use super::UnlockedVault;
+use super::valuation::ValuationCurve;
 
 const FIAT_PREFIX: &str = "fiat:";
 const PERP_PREFIX: &str = "perp:";
@@ -25,6 +26,8 @@ pub struct RateBook {
     stamps: RateIndex,
     /// Hand-set unit prices: `(price, currency)` per asset key (D24).
     manual: HashMap<String, (Amount, String)>,
+    /// Dated property valuations (G3); win over `manual`.
+    curves: HashMap<String, ValuationCurve>,
     /// Asset key by upper-case symbol, so a currency code can name a crypto asset.
     keys_by_symbol: HashMap<String, String>,
 }
@@ -46,6 +49,9 @@ impl RateBook {
         if asset_key.starts_with(PERP_PREFIX) {
             return None;
         }
+        if let Some(valued) = self.curve_usd(asset_key, secs) {
+            return Some(valued);
+        }
         if let Some(manual) = self.manual_usd(asset_key) {
             return Some(manual);
         }
@@ -60,6 +66,9 @@ impl RateBook {
     pub fn quote_at(&self, asset_key: &str, secs: i64) -> Option<(Amount, Option<i64>)> {
         if asset_key.starts_with(PERP_PREFIX) {
             return None;
+        }
+        if let Some(valued) = self.curve_usd(asset_key, secs) {
+            return Some((valued, None));
         }
         if let Some(manual) = self.manual_usd(asset_key) {
             return Some((manual, None));
@@ -82,6 +91,9 @@ impl RateBook {
     pub fn history_price(&self, asset_key: &str, secs: i64) -> Option<Amount> {
         if asset_key.starts_with(PERP_PREFIX) {
             return None;
+        }
+        if let Some(valued) = self.curve_usd(asset_key, secs) {
+            return Some(valued);
         }
         if let Some(manual) = self.manual_usd(asset_key) {
             return Some(manual);
@@ -131,6 +143,17 @@ impl RateBook {
         }
         let key = self.keys_by_symbol.get(&code.to_uppercase())?;
         self.price_at(key, secs)
+    }
+
+    /// USD of a valued property unit at `secs`, through the rate of that
+    /// moment (the latest one when the history has none).
+    fn curve_usd(&self, asset_key: &str, secs: i64) -> Option<Amount> {
+        let curve = self.curves.get(asset_key)?;
+        let value = curve.value_at(secs)?;
+        let rate = self
+            .fx_at(&curve.currency, secs)
+            .or_else(|| self.fx.latest(&curve.currency))?;
+        (!rate.is_zero()).then(|| value / rate)
     }
 
     fn manual_usd(&self, asset_key: &str) -> Option<Amount> {
@@ -187,6 +210,7 @@ impl UnlockedVault {
             fx: RateIndex::of_fx(&self.doc.fx_cache),
             prices: RateIndex::of_prices(&self.doc.price_cache),
             stamps,
+            curves: self.valuation_curves(),
             manual: self
                 .doc
                 .manual_prices
@@ -254,6 +278,9 @@ impl UnlockedVault {
         }
         for price in &self.doc.manual_prices {
             out.insert(price.currency.to_lowercase());
+        }
+        for valuation in &self.doc.valuations {
+            out.insert(valuation.currency.to_lowercase());
         }
         out
     }

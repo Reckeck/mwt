@@ -132,6 +132,21 @@ pub struct ManualPrice {
     pub updated_at: String,
 }
 
+/// A dated value of one unit of a property asset (plan G3). Between two
+/// valuations the price runs in a straight line.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct Valuation {
+    pub id: String,
+    pub store_id: String,
+    /// `AssetRef::key()` of the asset.
+    pub asset_key: String,
+    /// YYYY-MM-DD.
+    pub date: String,
+    pub unit_price: Amount,
+    /// Lowercase currency code of `unit_price`.
+    pub currency: String,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -588,6 +603,9 @@ pub struct VaultDoc {
     /// Assets placed in a basket by hand, by `AssetRef::key()`.
     #[serde(default)]
     pub asset_class_of: Vec<crate::model::planning::AssetClassLink>,
+    /// Dated valuations of property (plan G3).
+    #[serde(default)]
+    pub valuations: Vec<Valuation>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -651,6 +669,7 @@ impl Default for VaultDoc {
             health_last: None,
             asset_classes: Vec::new(),
             asset_class_of: Vec::new(),
+            valuations: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

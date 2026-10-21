@@ -3160,12 +3160,29 @@ utilities_pay_day?: number,
 /**
  * A car's papers, insurance and service; only for [`PropertyCategory::Car`].
  */
-car?: CarInfo, };
+car?: CarInfo, 
+/**
+ * How the value moves after the last valuation (plan G3); none = it stays.
+ */
+revalue?: RevalueRule, };
 
 /**
  * Ready-made automations of one property type.
  */
 type PropertyPresetsInfo = { category: PropertyCategory, presets: Array<PresetInfo>, };
+
+/**
+ * The purchase of one property asset.
+ */
+type PropertyPurchase = { 
+/**
+ * YYYY-MM-DD.
+ */
+date: string, unit_price: Amount, currency: string, 
+/**
+ * The first «Приобрести» operation, else the old form fields.
+ */
+from_operation: boolean, };
 
 /**
  * One property at a glance: what it is worth, what is owed on it and what
@@ -3184,6 +3201,31 @@ utilities_month_base: Amount,
  * Mandatory loan payments a month, from the loans' terms.
  */
 loan_month_base: Amount, monthly_cost_base: Amount, utility_count: number, };
+
+/**
+ * Everything the value of one asset of a property shows.
+ */
+type PropertyValue = { store_id: string, asset_key: string, symbol: string, quantity: Amount, 
+/**
+ * Currency of the prices below.
+ */
+currency: string, 
+/**
+ * Unit price today; `None` when nothing priced it yet.
+ */
+unit_price: Amount | null, purchase: PropertyPurchase | null, 
+/**
+ * The first point when it is not a valuation of its own.
+ */
+base: ValuationBaseKind | null, base_date: string | null, base_price: Amount | null, valuations: Array<Valuation>, rule: RevalueRule | null, 
+/**
+ * Today's value against the purchase, per unit.
+ */
+change: Amount | null, change_pct: Amount | null, 
+/**
+ * The same against the purchase price grown by inflation since.
+ */
+real_change_pct: Amount | null, };
 
 /**
  * What the money in a wallet is for. Replaces the old «count in budget»
@@ -3393,6 +3435,24 @@ month: string, previous_month: string, year: number, flow: OverviewFlow, wealth:
 type ResolveVaultConflictInput = { path: string, keep: ConflictSide, };
 
 type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
+
+/**
+ * Where depreciation stops.
+ */
+type RevalueFloor = { "kind": "amount", amount: Amount, } | { "kind": "pct_of_purchase", pct: Amount, };
+
+/**
+ * Automatic revaluation from the last valuation onwards, month by month.
+ */
+type RevalueRule = { 
+/**
+ * Percent a year; none = the inflation of the valuation's currency.
+ */
+pct_per_year: Amount | null, 
+/**
+ * The value the rule stops at; required when the percent is negative.
+ */
+floor: RevalueFloor | null, };
 
 type RunMode = "live" | "dry_run";
 
@@ -4991,6 +5051,38 @@ monthly: Amount, };
  */
 type ValidateWorkflowInput = { graph: string, };
 
+/**
+ * A dated value of one unit of a property asset (plan G3). Between two
+ * valuations the price runs in a straight line.
+ */
+type Valuation = { id: string, store_id: string, 
+/**
+ * `AssetRef::key()` of the asset.
+ */
+asset_key: string, 
+/**
+ * YYYY-MM-DD.
+ */
+date: string, unit_price: Amount, 
+/**
+ * Lowercase currency code of `unit_price`.
+ */
+currency: string, };
+
+/**
+ * Where the first point of a curve comes from.
+ */
+type ValuationBaseKind = "manual" | "purchase";
+
+/**
+ * A new dated valuation.
+ */
+type ValuationInput = { store_id: string, asset_key: string, 
+/**
+ * YYYY-MM-DD.
+ */
+date: string, unit_price: Amount, currency: string, };
+
 type VarScope = "global" | { "workflow": string };
 
 /**
@@ -5057,7 +5149,11 @@ asset_classes: Array<AssetClass>,
 /**
  * Assets placed in a basket by hand, by `AssetRef::key()`.
  */
-asset_class_of: Array<AssetClassLink>, };
+asset_class_of: Array<AssetClassLink>, 
+/**
+ * Dated valuations of property (plan G3).
+ */
+valuations: Array<Valuation>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

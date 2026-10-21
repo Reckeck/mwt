@@ -286,6 +286,8 @@ fn main() {
         trade_core::service::AssetClassesView,
         trade_core::service::AssetClassTarget,
         trade_core::service::TopupAdvice,
+        trade_core::service::PropertyValue,
+        trade_core::service::ValuationInput,
         trade_core::service::TopupRow,
         trade_core::service::HealthReason,
         trade_core::service::SavingsMonth,
