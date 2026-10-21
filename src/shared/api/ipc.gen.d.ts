@@ -970,6 +970,15 @@ type CreateCategoryInput = {
  */
 key: string | null, name: string, group: CategoryGroup, };
 
+/**
+ * Create a bonus programme with its points in one action.
+ */
+type CreateLoyaltyProgramInput = { name: string, color: string, 
+/**
+ * The shop or bank behind the programme, from the contacts.
+ */
+contact_id: string | null, info: LoyaltyInfo, };
+
 type CreateRuleInput = { pattern: string, category: string, };
 
 type CreateStoreInput = { name: string, 
@@ -2419,7 +2428,15 @@ point_value: Amount, currency: string,
 /**
  * `YYYY-MM-DD` the next batch of points burns, if the programme has one.
  */
-expires_at: string | null, expiring_points: Amount | null, };
+expires_at: string | null, expiring_points: Amount | null, 
+/**
+ * What the programme knows the user by: a phone, a card number, an account.
+ */
+login: string | null, 
+/**
+ * Cards whose purchases earn the points; the first is the default source.
+ */
+source_store_ids: Array<string>, };
 
 /**
  * A hand-set value of a non-financial asset; applies to its whole history

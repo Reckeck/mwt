@@ -20,6 +20,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { Money } from '@/entities/currency'
 import { Dialog } from '@/shared/ui/dialog'
 import { useStoreTree } from '@/shared/api/queries'
+import { withoutLoyalty } from '@/shared/lib/store-tree'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -29,7 +30,7 @@ const settings = useSettingsStore()
 
 const tree = useStoreTree()
 
-const roots = computed(() => tree.data.value ?? [])
+const roots = computed(() => withoutLoyalty(tree.data.value ?? []))
 
 /* --- overview: the total, the order, archived ones on demand; both live in the URL --- */
 type SortKey = 'value' | 'name' | 'kind'

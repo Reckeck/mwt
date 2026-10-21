@@ -27,6 +27,7 @@ const STATIC_ROUTES = [
   '/transactions',
   '/transactions/contacts',
   '/transactions/calendar',
+  '/transactions/bonuses',
   '/analytics',
   '/analytics/flow',
   '/analytics/wealth',

@@ -5,6 +5,7 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockPrices, mockPush, mockStores, priceOf } from './demo'
 import { mockOwnPositions } from './tree'
+import { storeTreeCommands } from './commands-store-tree'
 
 /** Commands: loyalty points, cashback, deposits and interest. */
 export const loyaltyDepositCommands: MockCommands = {
@@ -15,6 +16,22 @@ export const loyaltyDepositCommands: MockCommands = {
     store.loyalty = { ...input.info, points_symbol: input.info.points_symbol.toUpperCase() }
     mockPrices[store.loyalty.points_symbol] = Number(input.info.point_value) * (priceOf(input.info.currency) || 1)
     return resolve(store)
+  },
+  create_loyalty_program: async ({ body }) => {
+    const input = body as CreateLoyaltyProgramInput
+    const symbol = input.info.points_symbol.trim().toUpperCase()
+    if (mockStores.some((store) => store.loyalty?.points_symbol === symbol))
+      return Promise.reject({ code: 'INVALID_INPUT', message: `${symbol} already names another programme's points` })
+    const store = (await storeTreeCommands.create_store({
+      cmd: 'create_store',
+      args: {},
+      body: { name: input.name, kind: 'loyalty', color: input.color, note: '', contact_id: input.contact_id },
+    })) as Store
+    return loyaltyDepositCommands.set_loyalty_info({
+      cmd: 'set_loyalty_info',
+      args: {},
+      body: { store_id: store.id, info: input.info },
+    })
   },
   adjust_points: ({ body }) => {
     const input = body as AdjustPointsInput

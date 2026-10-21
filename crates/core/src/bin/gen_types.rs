@@ -305,6 +305,7 @@ fn main() {
         trade_core::service::CashbackSource,
         trade_core::service::LoyaltyBalance,
         trade_core::ipc_contract::SetLoyaltyInfoInput,
+        trade_core::ipc_contract::CreateLoyaltyProgramInput,
         trade_core::ipc_contract::AdjustPointsInput,
         trade_core::service::PdsReport,
         trade_core::service::InterestTaxReport,

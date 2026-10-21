@@ -954,6 +954,16 @@ pub struct SetLoyaltyInfoInput {
     pub info: crate::model::store::LoyaltyInfo,
 }
 
+/// Create a bonus programme with its points in one action.
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct CreateLoyaltyProgramInput {
+    pub name: String,
+    pub color: String,
+    /// The shop or bank behind the programme, from the contacts.
+    pub contact_id: Option<String>,
+    pub info: crate::model::store::LoyaltyInfo,
+}
+
 /// Credit (positive) or spend (negative) points of a programme.
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct AdjustPointsInput {

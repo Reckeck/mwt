@@ -11,6 +11,8 @@ export interface StoreNodeSelectProps {
   multiple?: boolean
   /** Offer only nodes with this purpose (the emergency fund takes savings accounts only). */
   purpose?: Purpose
+  /** Offer bonus programmes too; they are hidden from account lists unless already picked. */
+  includeLoyalty?: boolean
   /** Marks the field as wrong (red border), next to an error under it. */
   invalid?: boolean
 }

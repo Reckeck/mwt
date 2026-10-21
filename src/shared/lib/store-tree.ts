@@ -29,3 +29,13 @@ export function storeAncestorIds(roots: StoreTreeNode[], id: string): string[] {
 export function storeDescendants(node: StoreTreeNode): StoreTreeNode[] {
   return flattenStoreTree(node.children)
 }
+
+/**
+ * The tree without bonus programmes: they are counted in totals and scopes but
+ * live under Operations → Bonuses, not among wallets (plan G1).
+ */
+export function withoutLoyalty(roots: StoreTreeNode[]): StoreTreeNode[] {
+  return roots
+    .filter((node) => node.store.kind !== 'loyalty')
+    .map((node) => (node.children.length ? { ...node, children: withoutLoyalty(node.children) } : node))
+}

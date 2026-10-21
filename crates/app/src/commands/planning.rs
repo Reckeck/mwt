@@ -7,11 +7,11 @@ use tauri::{AppHandle, State};
 use trade_core::Amount;
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
-    AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput, GoalInput,
-    MeterReadingInput, PriceAlertInput, ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput,
-    SimulateAutomationsInput, SnoozeReminderInput, UpdateAutomationInput, UpdateBudgetInput,
-    UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput, UpdateReminderInput,
-    UpdateUtilityInput, UtilityInput,
+    AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
+    CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
+    SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput, SnoozeReminderInput,
+    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
+    UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use trade_core::model::planning::{
     Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
@@ -475,6 +475,16 @@ pub async fn set_loyalty_info(
 ) -> Result<trade_core::model::store::Store, String> {
     with_vault_mut(&state, |vault| {
         vault.set_loyalty_info(&input.store_id, input.info)
+    })
+}
+
+#[tauri::command]
+pub async fn create_loyalty_program(
+    input: CreateLoyaltyProgramInput,
+    state: State<'_, AppState>,
+) -> Result<trade_core::model::store::Store, String> {
+    with_vault_mut(&state, |vault| {
+        vault.create_loyalty_program(&input.name, &input.color, input.contact_id, input.info)
     })
 }
 

@@ -1,0 +1,73 @@
+import { computed, ref } from 'vue'
+
+import { i18n } from '@/shared/config/i18n'
+import { nonNegativeAmount, positiveAmount, required } from '@/shared/lib/form'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useStoreTree } from '@/shared/api/queries'
+import { useSettingsStore } from '@/shared/store/settings'
+
+/** The fields of a bonus programme, shared by «Добавить программу» and its settings. */
+export function useLoyaltyInfo() {
+  const settings = useSettingsStore()
+  const tree = useStoreTree()
+
+  const symbol = ref('')
+  const value = ref('1')
+  const currency = ref(settings.baseCurrency)
+  const expiresAt = ref('')
+  const expiring = ref('')
+  const login = ref('')
+  const sources = ref<string[]>([])
+  /** The programme being edited: its own symbol is not taken. */
+  const ownId = ref<string | null>(null)
+
+  const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
+  /** Cards whose purchases earn the points: bank accounts, as the core allows. */
+  const cards = computed(() => nodes.value.filter((node) => !node.store.archived && node.store.kind === 'bank'))
+  const takenSymbols = computed(
+    () =>
+      new Set(
+        nodes.value
+          .filter((node) => node.store.id !== ownId.value && node.store.loyalty)
+          .map((node) => node.store.loyalty?.points_symbol.toUpperCase() ?? ''),
+      ),
+  )
+
+  function load(store: Store | null) {
+    const info = store?.loyalty
+    ownId.value = store?.id ?? null
+    symbol.value = info?.points_symbol ?? ''
+    value.value = info?.point_value ?? '1'
+    currency.value = info?.currency ?? settings.baseCurrency
+    expiresAt.value = info?.expires_at ?? ''
+    expiring.value = info?.expiring_points ?? ''
+    login.value = info?.login ?? ''
+    sources.value = [...(info?.source_store_ids ?? [])]
+  }
+
+  const rules = () => ({
+    symbol:
+      required(symbol.value) ??
+      (takenSymbols.value.has(symbol.value.trim().toUpperCase()) ? i18n.global.t('loyalty.symbolTaken') : null),
+    value: positiveAmount(value.value),
+    currency: required(currency.value, 'pick'),
+    expiring: nonNegativeAmount(expiring.value),
+  })
+
+  function toInfo(): LoyaltyInfo {
+    return {
+      points_symbol: symbol.value.trim(),
+      point_value: value.value || '0',
+      currency: currency.value,
+      expires_at: expiresAt.value || null,
+      expiring_points: expiring.value || null,
+      login: login.value.trim() || null,
+      source_store_ids: sources.value,
+    }
+  }
+
+  return { symbol, value, currency, expiresAt, expiring, login, sources, cards, load, rules, toInfo }
+}
+
+export type LoyaltyInfoState = ReturnType<typeof useLoyaltyInfo>
+export type LoyaltyField = keyof ReturnType<LoyaltyInfoState['rules']>

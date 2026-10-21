@@ -68,7 +68,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'planning-budgets' } }),
   widget('utilitiesDue', UtilitiesDue, [4, 5, 3, 4]),
   widget('utilityStats', UtilityStats, [8, 6, 4, 6]),
-  widget('cashback', CashbackBonuses, [4, 6, 3, 4]),
+  widget('cashback', CashbackBonuses, [4, 6, 3, 4], { link: { name: 'transactions-bonuses' } }),
   widget('interestTax', InterestTax, [4, 4, 3, 3]),
   widget('fixedCosts', FixedCosts, [6, 5, 3, 4]),
   widget('byChain', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'chain' } }),

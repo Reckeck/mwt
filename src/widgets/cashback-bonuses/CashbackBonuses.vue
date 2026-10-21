@@ -30,8 +30,8 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
       <div class="flex items-center justify-between gap-2">
         <p data-widget-title class="text-sm text-muted-foreground">{{ t('cashback.title') }}</p>
         <ToggleGroup v-model="period" type="single" size="sm" variant="outline" :aria-label="t('cashback.title')">
-          <ToggleGroupItem value="month" class="h-6 px-2 text-xs">{{ t('cashback.month') }}</ToggleGroupItem>
-          <ToggleGroupItem value="year" class="h-6 px-2 text-xs">{{ t('cashback.year') }}</ToggleGroupItem>
+          <ToggleGroupItem value="month">{{ t('cashback.month') }}</ToggleGroupItem>
+          <ToggleGroupItem value="year">{{ t('cashback.year') }}</ToggleGroupItem>
         </ToggleGroup>
       </div>
     </template>

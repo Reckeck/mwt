@@ -20,10 +20,13 @@ const storeId = defineModel<string>({ default: '' })
 /** With `multiple`: the picked ids, empty = the empty option. */
 const ids = defineModel<string[]>('ids', { default: () => [] })
 
+const isPicked = (id: string) => storeId.value === id || ids.value.includes(id)
+
 // Native <SelectItem> cannot hold markup: the path says where a node sits.
 const options = computed(() =>
   (props.flat ? props.nodes : flattenStoreTree(props.nodes))
     .filter((node) => !props.purpose || node.store.purpose === props.purpose)
+    .filter((node) => props.includeLoyalty || node.store.kind !== 'loyalty' || isPicked(node.store.id))
     .map((node) => ({
       id: node.store.id,
       label: node.path.join(' › '),
