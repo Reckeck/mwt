@@ -1141,6 +1141,9 @@ pub struct GoalInput {
     /// The calculator scenario the goal follows.
     #[serde(default)]
     pub scenario_id: Option<String>,
+    /// Expected return, percent a year.
+    #[serde(default)]
+    pub expected_return: Option<Amount>,
 }
 
 impl From<GoalInput> for GoalDraft {
@@ -1156,6 +1159,7 @@ impl From<GoalInput> for GoalDraft {
             monthly_commitment: input.monthly_commitment,
             scope: input.scope,
             scenario_id: input.scenario_id.filter(|value| !value.is_empty()),
+            expected_return: input.expected_return.filter(|value| !value.is_zero()),
         }
     }
 }
@@ -1334,6 +1338,12 @@ pub struct UpdateSettingsInput {
     /// Replaces the list of checklist steps marked «Не нужно».
     #[serde(default)]
     pub onboarding_skipped: Option<Vec<String>>,
+    /// Usual monthly income while there is no history; zero clears it.
+    #[serde(default)]
+    pub manual_income: Option<Amount>,
+    /// Usual monthly spending while there is no history; zero clears it.
+    #[serde(default)]
+    pub manual_expenses: Option<Amount>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------

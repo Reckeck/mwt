@@ -1472,7 +1472,12 @@ monthly_commitment: Amount | null, scope: StoreScope, created_at: string,
 /**
  * The calculator scenario the goal follows: «по плану к сегодня».
  */
-scenario_id: string | null, };
+scenario_id: string | null, 
+/**
+ * What the savings are expected to earn, percent a year, compounded
+ * monthly: the monthly need and the forecast count on it (plan B).
+ */
+expected_return: Amount | null, };
 
 type GoalCalendar = { year: number, currency: string, months: Array<GoalCalendarMonth>, };
 
@@ -1498,7 +1503,11 @@ priority: number, monthly_commitment: Amount | null, scope: StoreScope,
 /**
  * The calculator scenario the goal follows.
  */
-scenario_id: string | null, };
+scenario_id: string | null, 
+/**
+ * Expected return, percent a year.
+ */
+expected_return: Amount | null, };
 
 type GoalProgress = { goal: Goal, 
 /**
@@ -3060,7 +3069,12 @@ income_avg: Amount | null,
  * Finished months the average really took; fewer than asked when the
  * history is short.
  */
-income_months_used: number, prefilled_at: string, };
+income_months_used: number, 
+/**
+ * The income is the hand-entered one: history is shorter than three
+ * finished months.
+ */
+income_manual: boolean, prefilled_at: string, };
 
 /**
  * Where a calculator scenario takes its numbers from (plan A, «Из данных»).
@@ -3162,7 +3176,16 @@ onboarding_skipped: Array<string>,
  * Where each currency's inflation comes from; a currency missing here
  * reads as [`crate::service::inflation`] decides.
  */
-inflation_mode: { [key: string]: InflationMode }, };
+inflation_mode: { [key: string]: InflationMode }, 
+/**
+ * The user's usual monthly income in the budget currency, used until
+ * three months of history exist (plan B).
+ */
+manual_income: Amount | null, 
+/**
+ * The user's usual monthly spending, same rule.
+ */
+manual_expenses: Amount | null, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -4254,7 +4277,15 @@ notifications: NotificationSettings | null,
 /**
  * Replaces the list of checklist steps marked «Не нужно».
  */
-onboarding_skipped: Array<string> | null, };
+onboarding_skipped: Array<string> | null, 
+/**
+ * Usual monthly income while there is no history; zero clears it.
+ */
+manual_income: Amount | null, 
+/**
+ * Usual monthly spending while there is no history; zero clears it.
+ */
+manual_expenses: Amount | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

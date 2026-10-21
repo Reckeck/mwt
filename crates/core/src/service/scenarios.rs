@@ -57,6 +57,9 @@ pub struct ScenarioPrefill {
     /// Finished months the average really took; fewer than asked when the
     /// history is short.
     pub income_months_used: u32,
+    /// The income is the hand-entered one: history is shorter than three
+    /// finished months.
+    pub income_manual: bool,
     pub prefilled_at: String,
 }
 
@@ -244,7 +247,7 @@ impl UnlockedVault {
             None => (None, None, None, false),
         };
 
-        let average = self.avg_month(source.income_months as usize, now, zone);
+        let average = self.income_basis(source.income_months as usize, now, zone);
         let income_avg = average.as_ref().and_then(|avg| {
             book.convert(avg.income, &avg.currency, currency, now)
                 .map(|value| value.round(2))
@@ -259,6 +262,7 @@ impl UnlockedVault {
             rate_store_id,
             monthly_contribution,
             income_avg,
+            income_manual: average.as_ref().is_some_and(|avg| avg.months == 0),
             income_months_used: average.map_or(0, |avg| avg.months),
             prefilled_at: calendar::iso(now),
         })
@@ -296,6 +300,7 @@ impl UnlockedVault {
                 .as_ref()
                 .map_or_else(StoreScope::default, |source| source.scope.clone()),
             scenario_id: Some(scenario.id.clone()),
+            expected_return: Some(scenario.input.rate_pct).filter(|rate| rate.is_positive()),
         })
     }
 }

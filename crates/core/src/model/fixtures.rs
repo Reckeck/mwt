@@ -379,6 +379,7 @@ pub fn full_doc() -> VaultDoc {
         scope: StoreScope::store("bank", false),
         created_at: "2026-01-01T00:00:00Z".into(),
         scenario_id: None,
+        expected_return: None,
     }];
     doc.reminders = vec![Reminder {
         id: "rem".into(),

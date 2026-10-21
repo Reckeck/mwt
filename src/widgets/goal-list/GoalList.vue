@@ -132,6 +132,10 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                   · {{ t('goal.monthsLeft', { count: entry?.months_left ?? 0 }) }}
                 </dd>
               </template>
+              <template v-if="goal.expected_return">
+                <dt class="text-muted-foreground">{{ t('goal.expectedReturnShort') }}</dt>
+                <dd class="text-right tabular-nums">{{ t('goal.returnPerYear', { pct: goal.expected_return }) }}</dd>
+              </template>
               <dt class="text-muted-foreground">{{ t('goal.forecast') }}</dt>
               <dd class="text-right">
                 {{ entry?.forecast ? formatDate(entry?.forecast) : t('goal.notAccumulating') }}

@@ -256,6 +256,10 @@ pub struct Goal {
     /// The calculator scenario the goal follows: «по плану к сегодня».
     #[serde(default)]
     pub scenario_id: Option<String>,
+    /// What the savings are expected to earn, percent a year, compounded
+    /// monthly: the monthly need and the forecast count on it (plan B).
+    #[serde(default)]
+    pub expected_return: Option<Amount>,
 }
 
 /// Where a calculator scenario takes its numbers from (plan A, «Из данных»).

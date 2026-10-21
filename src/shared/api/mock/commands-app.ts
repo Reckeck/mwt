@@ -98,6 +98,10 @@ export const notificationsCommands: MockCommands = {
     for (const [key, value] of Object.entries(input)) {
       if (value !== null && value !== undefined) Object.assign(settings, { [key]: value })
     }
+    // Zero clears a hand-entered month, as in the core.
+    for (const key of ['manual_income', 'manual_expenses'] as const) {
+      if (input[key] !== null && Number(input[key]) <= 0) settings[key] = null
+    }
     if (input.savings_rate || input.daily_budget_mode || input.budget_currency !== null)
       settings.budget_configured = true
     return resolve(settings)

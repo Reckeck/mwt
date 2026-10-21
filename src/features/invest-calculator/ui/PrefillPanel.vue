@@ -109,7 +109,7 @@ function pickMonths(value: unknown) {
         </p>
       </div>
       <p v-if="last?.income_avg" class="text-xs text-muted-foreground">
-        {{ t('invest.prefillIncome', { months: last.income_months_used }) }}
+        {{ last.income_manual ? t('invest.prefillIncomeManual') : t('invest.prefillIncome', { months: last.income_months_used }) }}
         <Money :amount="last.income_avg" :currency="props.calc.form.currency" />
       </p>
       <p v-else-if="last" class="text-xs text-muted-foreground">{{ t('invest.prefillNoIncome') }}</p>

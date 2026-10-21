@@ -26,6 +26,28 @@ watch(
   { immediate: true },
 )
 
+/** A usual month for a vault without history; blank is sent as zero, which clears it. */
+const manualIncome = ref('')
+const manualExpenses = ref('')
+watch(
+  () => [settings.vault?.manual_income, settings.vault?.manual_expenses],
+  ([income, expenses]) => {
+    manualIncome.value = income ?? ''
+    manualExpenses.value = expenses ?? ''
+  },
+  { immediate: true },
+)
+
+function saveManual(key: 'manual_income' | 'manual_expenses', raw: string) {
+  const value = raw.trim().replace(',', '.') || '0'
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    notify.error(null, 'settings.manualInvalid')
+    return
+  }
+  if (value !== (settings.vault?.[key] ?? '0')) void persist({ [key]: value })
+}
+
 async function persist(patch: Partial<Settings>) {
   try {
     await settings.updateVault(patch)
@@ -78,6 +100,25 @@ function saveRate() {
         <Label for="savings-rate">{{ t('settings.savingsRate') }}</Label>
         <AmountInput id="savings-rate" v-model="percent" class="w-32" @change="saveRate" />
         <p class="text-xs text-muted-foreground">{{ t('settings.savingsRateHint') }}</p>
+      </div>
+
+      <div class="grid gap-1.5">
+        <div class="flex flex-wrap gap-3">
+          <div class="grid gap-1.5">
+            <Label for="manual-income">{{ t('settings.manualIncome') }}</Label>
+            <AmountInput id="manual-income" v-model="manualIncome" class="w-40" @change="saveManual('manual_income', manualIncome)" />
+          </div>
+          <div class="grid gap-1.5">
+            <Label for="manual-expenses">{{ t('settings.manualExpenses') }}</Label>
+            <AmountInput
+              id="manual-expenses"
+              v-model="manualExpenses"
+              class="w-40"
+              @change="saveManual('manual_expenses', manualExpenses)"
+            />
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">{{ t('settings.manualHint') }}</p>
       </div>
 
       <div class="grid gap-1.5">
