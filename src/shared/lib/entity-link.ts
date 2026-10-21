@@ -4,7 +4,7 @@ import { type LocationQuery, type RouteLocationRaw, useRoute, useRouter } from '
 /**
  * Addresses of entities (plan J1). Every entity opens as a card over the
  * current screen: `?open=goal:g1~tx:t9` is a stack, the last one on top.
- * Only a wallet and a workflow have pages of their own.
+ * A wallet, a workflow and a calculator scenario have pages of their own.
  */
 export const ENTITY_KINDS: readonly EntityKind[] = [
   'store',
@@ -18,6 +18,7 @@ export const ENTITY_KINDS: readonly EntityKind[] = [
   'reminder',
   'alert',
   'asset',
+  'scenario',
 ]
 
 /** The query key of the card stack. */
@@ -61,10 +62,11 @@ export function withOpenStack(query: LocationQuery, stack: EntityRef[]): Locatio
   return { ...rest, [OPEN_QUERY_KEY]: stack.slice(-STACK_LIMIT).map(entityKey).join(STACK_SEPARATOR) }
 }
 
-/** The page of an entity that has one: a wallet, a workflow. */
+/** The page of an entity that has one: a wallet, a workflow, a calculator scenario. */
 export function entityPage(target: EntityRef): RouteLocationRaw | null {
   if (target.kind === 'store') return { name: 'wallet', params: { id: target.id } }
   if (target.kind === 'workflow') return { name: 'workflow-edit', params: { id: target.id } }
+  if (target.kind === 'scenario') return { name: 'planning-calculator', query: { scenario: target.id } }
   return null
 }
 

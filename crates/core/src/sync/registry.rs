@@ -154,6 +154,7 @@ pub static COLLECTIONS: &[Collection] = &[
     records("workflow_queue", ID),
     records("workflow_state", &["workflow_id"]),
     records("workflow_waits", ID),
+    records("calc_scenarios", ID),
     log(
         "import_runs",
         ID,

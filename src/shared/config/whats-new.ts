@@ -24,6 +24,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'calculator',
+    date: '2026-10-21',
+    points: [
+      { key: 'calc', route: 'planning-calculator' },
+      { key: 'reverse', route: 'planning-calculator' },
+      { key: 'prefill', route: 'planning-calculator' },
+      { key: 'scenarios', route: 'planning-calculator' },
+      { key: 'goal', route: 'planning-goals' },
+    ],
+  },
+  {
     id: 'links',
     date: '2026-10-21',
     points: [{ key: 'card', route: 'transactions' }, { key: 'chips' }, { key: 'notices' }, { key: 'address' }],

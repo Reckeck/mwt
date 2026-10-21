@@ -112,5 +112,6 @@ export function mockVaultDoc(): VaultDoc {
     workflow_waits: [],
     import_runs: [],
     discarded_imports: [],
+    calc_scenarios: [],
   }
 }

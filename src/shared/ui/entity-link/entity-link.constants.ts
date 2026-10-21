@@ -2,6 +2,7 @@ import type { Component } from 'vue'
 import {
   ArrowLeftRight,
   Bell,
+  Calculator,
   CalendarClock,
   Coins,
   Gauge,
@@ -26,6 +27,7 @@ export const ENTITY_ICONS: Record<EntityKind, Component> = {
   reminder: CalendarClock,
   alert: Bell,
   asset: Coins,
+  scenario: Calculator,
 }
 
 /** The link itself: inline, truncating, underlined on hover; the caller may add a colour. */

@@ -23,7 +23,7 @@ import type { GoalDialogProps } from './goal-edit.types'
 import { useStoreTree } from '@/shared/api/queries'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
-const props = withDefaults(defineProps<GoalDialogProps>(), { goal: null, storeId: '' })
+const props = withDefaults(defineProps<GoalDialogProps>(), { goal: null, draft: null, storeId: '' })
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [goal: Goal] }>()
 
@@ -43,10 +43,12 @@ const priority = ref(3)
 const commitment = ref('')
 const storeIds = ref<string[]>([])
 const active = ref(true)
+const scenarioId = ref<string | null>(null)
 
 watch(open, (isOpen) => {
   if (!isOpen) return
-  const goal = props.goal
+  // A draft (a goal from a calculator scenario) fills a new goal like a saved one.
+  const goal = props.goal ?? props.draft
   name.value = goal?.name ?? ''
   target.value = goal?.target_amount ?? ''
   currency.value = goal?.currency ?? (settings.vault?.budget_currency || settings.baseCurrency)
@@ -54,8 +56,9 @@ watch(open, (isOpen) => {
   deadline.value = isoToDateInput(goal?.deadline)
   priority.value = goal?.priority ?? 3
   commitment.value = goal?.monthly_commitment ?? ''
-  storeIds.value = goal ? [...goal.scope.store_ids] : props.storeId ? [props.storeId] : []
+  storeIds.value = goal?.scope.store_ids.length ? [...goal.scope.store_ids] : props.storeId ? [props.storeId] : []
   active.value = goal?.active ?? true
+  scenarioId.value = goal?.scenario_id ?? null
 })
 
 /** The wallet list is long: a search narrows it, the chosen ones stay on top. */
@@ -98,6 +101,7 @@ const save = useMutation({
       priority: priority.value,
       monthly_commitment: commitment.value.trim() || null,
       scope: { store_ids: storeIds.value, include_children: true },
+      scenario_id: scenarioId.value,
     }
     return props.goal
       ? call<Goal>('update_goal', { input: { id: props.goal.id, goal: input } })

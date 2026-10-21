@@ -41,7 +41,18 @@ const BISECTION_STEPS: u32 = 80;
 const TERM_VERIFY_STEPS: u32 = 36;
 
 /// How often earned interest joins the balance.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CapFreq {
     Daily,
@@ -54,7 +65,18 @@ pub enum CapFreq {
 }
 
 /// How often a contribution or a withdrawal repeats, counted from its start month.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Freq {
     #[default]
@@ -64,7 +86,18 @@ pub enum Freq {
 }
 
 /// Whether a contribution arrives before the month's interest or after it.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Timing {
     Start,
@@ -72,7 +105,18 @@ pub enum Timing {
     End,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum TaxMode {
     /// Every year on the interest capitalized during it.
@@ -83,14 +127,20 @@ pub enum TaxMode {
 }
 
 /// Tax on interest; `pct = 0` means no tax.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
+)]
+#[serde(default)]
 pub struct TaxRule {
     pub pct: Amount,
     pub mode: TaxMode,
 }
 
 /// A contribution plan from `from_month` until the next stage starts.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
+)]
+#[serde(default)]
 pub struct ContributionStage {
     /// 1-based month the stage starts in.
     pub from_month: u32,
@@ -100,7 +150,10 @@ pub struct ContributionStage {
 }
 
 /// Regular withdrawals; they stop once the balance runs out.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
+)]
+#[serde(default)]
 pub struct Withdrawal {
     pub amount: Amount,
     pub freq: Freq,
@@ -110,7 +163,10 @@ pub struct Withdrawal {
     pub index_to_inflation: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
+)]
+#[serde(default)]
 pub struct InvestInput {
     /// Display only: the currency every amount is in.
     pub currency: String,

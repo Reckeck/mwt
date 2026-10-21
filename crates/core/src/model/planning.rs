@@ -253,6 +253,37 @@ pub struct Goal {
     pub monthly_commitment: Option<Amount>,
     pub scope: StoreScope,
     pub created_at: String,
+    /// The calculator scenario the goal follows: «по плану к сегодня».
+    #[serde(default)]
+    pub scenario_id: Option<String>,
+}
+
+/// Where a calculator scenario takes its numbers from (plan A, «Из данных»).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ScenarioSource {
+    /// The wallets whose value is the start amount and whose deposit terms
+    /// give the rate.
+    pub scope: StoreScope,
+    /// Finished months the average income is taken over: 3, 6 or 12.
+    pub income_months: u8,
+    /// Share of that income contributed each month, percent.
+    pub income_pct: Amount,
+}
+
+/// A saved investment calculation, comparable with others and followed by
+/// goals made from it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct CalcScenario {
+    pub id: String,
+    pub name: String,
+    pub input: crate::calc::invest::InvestInput,
+    #[serde(default)]
+    pub source: Option<ScenarioSource>,
+    /// RFC3339 of the last «Обновить из данных»: the numbers are a snapshot.
+    #[serde(default)]
+    pub prefilled_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Unit of a reminder's repeat interval.

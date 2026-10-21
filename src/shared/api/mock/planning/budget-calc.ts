@@ -2,6 +2,7 @@
 
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { estimateOf } from './automation-workflow'
+import { plannedNow } from './calculator'
 import { automations, goals, isRejected, iso, now, plannedDates, reminders, runs } from './state'
 import type { PlanningMockContext } from './state'
 
@@ -133,6 +134,7 @@ export function goalProgress(ctx: PlanningMockContext): GoalProgress[] {
         issues,
         forecast: null,
         accumulating: false,
+        planned_now: plannedNow(goal),
       }
     })
 }

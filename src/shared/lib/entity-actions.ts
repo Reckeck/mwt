@@ -2,6 +2,7 @@ import { type Component, ref } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import {
   Bell,
+  Calculator,
   CalendarClock,
   ExternalLink,
   Gauge,
@@ -72,6 +73,15 @@ const ACTIONS: Record<EntityKind, EntityAction[]> = {
     page('entity.action.openContacts', () => ({ name: 'transactions-contacts' })),
   ],
   goal: [page('entity.action.openGoals', () => ({ name: 'planning-goals' }))],
+  scenario: [
+    {
+      ...page('entity.action.openCalculator', (target) => ({
+        name: 'planning-calculator',
+        query: { scenario: target.id },
+      })),
+      icon: Calculator,
+    },
+  ],
   budget: [page('entity.action.openBudgets', () => ({ name: 'planning-budgets' }))],
   automation: [
     {

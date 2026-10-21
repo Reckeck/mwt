@@ -1138,6 +1138,9 @@ pub struct GoalInput {
     pub priority: u8,
     pub monthly_commitment: Option<Amount>,
     pub scope: StoreScope,
+    /// The calculator scenario the goal follows.
+    #[serde(default)]
+    pub scenario_id: Option<String>,
 }
 
 impl From<GoalInput> for GoalDraft {
@@ -1152,6 +1155,7 @@ impl From<GoalInput> for GoalDraft {
             priority: input.priority,
             monthly_commitment: input.monthly_commitment,
             scope: input.scope,
+            scenario_id: input.scenario_id.filter(|value| !value.is_empty()),
         }
     }
 }

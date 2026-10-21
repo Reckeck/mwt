@@ -164,6 +164,16 @@ export const TOURS: Record<string, TourStep[]> = {
   ]),
   'planning-budgets': planning([{ target: 'section-content', key: 'planningBudgets.content', side: 'top' }]),
   'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),
+  'planning-calculator': planning([
+    { target: 'calc-scenarios', key: 'planningCalculator.scenarios', side: 'bottom' },
+    { target: 'calc-mode', key: 'planningCalculator.mode', side: 'bottom' },
+    { target: 'calc-stages', key: 'planningCalculator.stages', side: 'top' },
+    { target: 'calc-prefill', key: 'planningCalculator.prefill', side: 'top' },
+    { target: 'calc-result', key: 'planningCalculator.result', side: 'left' },
+    { target: 'calc-compare', key: 'planningCalculator.compare', side: 'top' },
+    { target: 'calc-overlay', key: 'planningCalculator.overlay', side: 'top' },
+    { target: 'calc-table', key: 'planningCalculator.table', side: 'top' },
+  ]),
   'planning-reminders': planning([
     { target: 'section-content', key: 'planningReminders.content', side: 'top' },
     { target: 'reminder-filter', key: 'planningReminders.filter', side: 'bottom' },

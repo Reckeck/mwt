@@ -162,6 +162,14 @@ pub fn run() {
             portfolio::clear_manual_price,
             // calculator
             calc::calc_preview,
+            calc::calc_invest_simulate,
+            calc::calc_invest_solve,
+            calc::calc_invest_compare,
+            calc::calc_scenarios_list,
+            calc::calc_scenario_save,
+            calc::calc_scenario_delete,
+            calc::calc_scenario_restore,
+            calc::calc_scenario_prefill,
             // app settings (outside the vault)
             app_settings::get_app_settings,
             app_settings::app_platform,
@@ -249,6 +257,7 @@ pub fn run() {
             planning::delete_goal,
             planning::get_goal_progress,
             planning::get_goal_calendar,
+            planning::goal_from_scenario,
             planning::list_reminders,
             planning::create_reminder,
             planning::update_reminder,
