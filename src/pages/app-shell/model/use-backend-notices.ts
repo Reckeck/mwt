@@ -54,7 +54,8 @@ export function useBackendNotices() {
   useBackendEvent<NoticeRecord>('notification', (record) => {
     void queryClient.invalidateQueries({ queryKey: ['notifications'] })
     if (record.key.startsWith('automation-rejected:')) return
-    const target = noticeRoute(record.link)
+    // The card opens over the screen the user is on when they click.
+    const targetNow = () => noticeRoute(record.link, router.currentRoute.value.query)
     const reminderId = noticeReminderId(record.key)
     const settle = (cmd: 'set_reminder_done' | 'snooze_reminder') => {
       const until = new Date(Date.now() + 10 * 60_000).toISOString()
@@ -72,8 +73,8 @@ export function useBackendNotices() {
       duration: reminderId ? 60_000 : 8_000,
       action: reminderId
         ? { label: t('reminder.done'), onClick: () => settle('set_reminder_done') }
-        : target
-          ? { label: t('actions.open'), onClick: () => void router.push(target) }
+        : targetNow()
+          ? { label: t('actions.open'), onClick: () => void router.push(targetNow() ?? '/') }
           : undefined,
       cancel: reminderId ? { label: t('reminder.snooze.10m'), onClick: () => settle('snooze_reminder') } : undefined,
     })

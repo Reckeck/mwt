@@ -14,6 +14,8 @@
 // - to-fixed        `.toFixed()` in a template → `shared/lib/format`;
 // - div-click       `<div @click>` without a role → `Button`, or role + keyboard;
 // - format-money    `{{ formatMoney(…) }}` alone in a template → `<Money>`;
+// - entity-text     `{{ storeName(…) }}` (category, contact) as text → `<EntityLink>`
+//                   — a name of an entity opens its card (plan J1);
 // - viewport-height `h-screen`, `vh` → `dvh` or `h-full` (references/mobile.md);
 // - fixed-edge      `fixed` with `top-4`/`bottom-…`/`inset-4` and no `*-safe` offset;
 // - fixed-width     `w-56` and wider (`min-w-…`, `w-[20rem]`) without a breakpoint prefix;
@@ -132,6 +134,20 @@ const RULES = [
       ].map((match) => Object.assign(match, { index: match.index + start }))
     },
     say: 'a sum by formatMoney in a template — use <Money> (or StatCard with <Money> in its slot)',
+  },
+  {
+    // The name of a wallet, category or contact shown as text cannot be opened: it is an
+    // <EntityLink :label="…">. Names inside i18n arguments and attributes are fine.
+    id: 'entity-text',
+    vueOnly: true,
+    find: (text) => {
+      const start = text.indexOf('<template>')
+      if (start === -1) return []
+      return [...text.slice(start).matchAll(/\{\{[^{}]*\b(?:storeName|categoryName|contactName)\(/g)].map((match) =>
+        Object.assign(match, { index: match.index + start }),
+      )
+    },
+    say: 'an entity name as plain text — show it with <EntityLink :target :label> so it opens its card',
   },
   {
     // The phone's browser bars and keyboard change the height: `dvh` follows them, `vh` does not.

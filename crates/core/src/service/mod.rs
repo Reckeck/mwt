@@ -52,6 +52,7 @@ pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
 mod rates;
+mod relations;
 mod reports;
 mod store_change;
 mod store_months;
@@ -92,6 +93,10 @@ pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, 
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use price_info::{PriceInfo, PriceOrigin};
 pub use rates::RateBook;
+pub use relations::{
+    EntityCard, EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem,
+    RelationKind,
+};
 pub use reports::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
     CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,

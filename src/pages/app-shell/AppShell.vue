@@ -6,7 +6,6 @@ import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
-import { TransactionDetailsHost } from '@/widgets/transaction-details'
 import { ConverterDialog } from '@/features/currency-convert'
 import { QuickAddDialog } from '@/features/quick-add'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
@@ -32,6 +31,7 @@ import { AppBottomNav } from './ui/app-bottom-nav'
 import { AppHeader } from './ui/app-header'
 import { AppSidebar } from './ui/app-sidebar'
 import { CommandPalette } from './ui/command-palette'
+import { EntityHost } from './ui/entity-host'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
@@ -119,7 +119,7 @@ const pageClass = computed(() => {
     <SettingsShell />
     <MoneyTooltipHost />
     <QuickAddDialog v-model:open="quickAddOpen" />
-    <TransactionDetailsHost />
+    <EntityHost />
     <ConverterDialog />
     <WhatsNewDialog />
     <SyncPairingDialog />

@@ -160,7 +160,7 @@ impl UnlockedVault {
                 format!("reminder:{}:{at}", reminder.id),
                 notice_title(category, ru),
                 reminder.text.clone(),
-                Some("planning-reminders".into()),
+                Some(format!("open:reminder:{}", reminder.id)),
                 at,
             ));
         }
@@ -233,7 +233,7 @@ impl UnlockedVault {
                 ),
                 notice_title(NoticeCategory::Budget, ru),
                 body,
-                Some("planning-budgets".into()),
+                Some(format!("open:budget:{}", status.budget.id)),
                 calendar::iso(now),
             ));
         }

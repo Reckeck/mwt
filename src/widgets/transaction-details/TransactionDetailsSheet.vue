@@ -10,8 +10,8 @@ import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { TransactionLinkDialog } from '@/features/transaction-link'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime, formatMoney, formatQuantity } from '@/shared/lib/format'
@@ -104,7 +104,7 @@ const unlink = useMutation({
               :key="leg.store_id + leg.asset.symbol"
               class="flex justify-between gap-2 tabular-nums"
             >
-              <span class="text-muted-foreground">{{ context.storeName(leg.store_id) }}</span>
+              <EntityLink :target="{ kind: 'store', id: leg.store_id }" :label="context.storeName(leg.store_id)" class="text-muted-foreground" />
               <span class="font-medium tabular-nums"><Money :amount="leg.amount" :currency="leg.asset.symbol" signed /></span>
             </p>
             <p v-if="rate" class="text-xs text-muted-foreground">{{ t('txDetails.rate', { rate }) }}</p>
@@ -128,10 +128,13 @@ const unlink = useMutation({
           </section>
 
           <section v-if="meta.categories.length || meta.contact_id || meta.comment" class="grid gap-1.5">
-            <div v-if="meta.categories.length" class="flex flex-wrap gap-1">
-              <Badge v-for="key in meta.categories" :key="key" variant="outline">{{ context.categoryName(key) }}</Badge>
+            <div v-if="meta.categories.length" class="flex flex-wrap gap-x-3 gap-y-1">
+              <EntityLink v-for="key in meta.categories" :key="key" :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" />
             </div>
-            <p v-if="meta.contact_id" class="text-xs">{{ t('tx.field.contact') }}: {{ context.contactName(meta.contact_id) }}</p>
+            <p v-if="meta.contact_id" class="text-xs">
+              {{ t('tx.field.contact') }}:
+              <EntityLink :target="{ kind: 'contact', id: meta.contact_id }" :label="context.contactName(meta.contact_id)" />
+            </p>
             <p v-if="meta.comment" class="text-xs text-muted-foreground">{{ meta.comment }}</p>
           </section>
 
@@ -170,6 +173,8 @@ const unlink = useMutation({
               </Button>
             </div>
           </section>
+
+          <slot name="relations" />
 
           <LegPrices :tx="props.tx" />
 

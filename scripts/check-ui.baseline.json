@@ -1,4 +1,7 @@
 {
+  "entity-text src/entities/transaction/ui/transaction-row/TransactionRow.vue": 2,
+  "entity-text src/features/automation-simulate/AutomationSimulationDialog.vue": 1,
+  "entity-text src/widgets/analytics-overview/AnalyticsOverview.vue": 1,
   "long-line src/entities/asset/ui/asset-input/AssetInput.vue": 1,
   "long-line src/entities/asset/ui/pair-input/PairInput.vue": 1,
   "long-line src/entities/report/ui/report-term/ReportTerm.vue": 1,

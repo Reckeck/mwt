@@ -1,0 +1,4 @@
+export { default as EntityLink } from './EntityLink.vue'
+export * from './entity-link.constants'
+export * from './entity-link.types'
+export { useEntityActions } from './use-entity-actions'

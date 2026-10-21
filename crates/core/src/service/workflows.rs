@@ -1037,7 +1037,7 @@ impl UnlockedVault {
                     } else {
                         format!("Нужен ваш ответ: {}", wait.question)
                     },
-                    Some("workflows-queue".to_string()),
+                    Some("workflows-journal".to_string()),
                     wait.created_at.clone(),
                 ));
             }
