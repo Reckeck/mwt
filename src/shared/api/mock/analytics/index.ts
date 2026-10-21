@@ -8,3 +8,4 @@
 export type { AnalyticsMockContext } from './flows'
 export * from './entry'
 export { mockInsights, mockOverview } from './overview'
+export { mockSpendingOverview } from './spending'

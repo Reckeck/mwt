@@ -31,6 +31,21 @@ pub struct DashboardWidgetCfg {
     /// A widget about one wallet (an exchange's chart) remembers which.
     #[serde(default)]
     pub store_id: Option<String>,
+    /// Own period; `None` follows the dashboard's (plan H1).
+    #[serde(default)]
+    pub period: Option<DashPeriod>,
+}
+
+/// The window a dashboard widget measures (plan H1, decision 54).
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DashPeriod {
+    #[default]
+    Month,
+    Quarter,
+    Year,
 }
 
 impl Default for DashboardWidgetCfg {
@@ -43,6 +58,7 @@ impl Default for DashboardWidgetCfg {
             height: 4,
             pinned: false,
             store_id: None,
+            period: None,
         }
     }
 }
@@ -111,6 +127,9 @@ pub struct Settings {
     /// The sidebar's «Pinned» block, in its order (plan J2).
     #[serde(default)]
     pub pinned: Vec<crate::model::entity_ref::Pinned>,
+    /// The period every dashboard widget measures unless it has its own.
+    #[serde(default)]
+    pub dashboard_period: DashPeriod,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -183,6 +202,7 @@ impl Default for Settings {
             categories_rev: crate::model::category::CATEGORIES_REV,
             freedom_rate: None,
             pinned: Vec::new(),
+            dashboard_period: DashPeriod::Month,
         }
     }
 }

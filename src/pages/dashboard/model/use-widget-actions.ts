@@ -1,7 +1,9 @@
 import { type ComputedRef, type Ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Layout } from 'grid-layout-plus'
-import { ArrowDown, ArrowUp, LayoutGrid, Lock, Maximize2, PinOff, X } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, CalendarRange, LayoutGrid, Lock, Maximize2, PinOff, X } from 'lucide-vue-next'
+
+import { widgetDef } from '@/widgets/dashboard-registry'
 
 import type { UiAction } from '@/shared/ui/context-menu'
 
@@ -15,6 +17,9 @@ interface WidgetActionDeps {
   setPinned: (id: string, pinned: boolean) => void
   resize: (id: string, size: 's' | 'm' | 'l') => void
   remove: (id: string) => void
+  /** The widget's own period, `null` while it follows the dashboard. */
+  ownPeriod: (id: string) => DashPeriod | null
+  setPeriod: (id: string, period: DashPeriod | null) => void
   openCatalog: () => void
 }
 
@@ -54,6 +59,18 @@ export function useWidgetActions(deps: WidgetActionDeps) {
           id: `size-${size}`,
           label: t(`widgetFrame.size_${size}`),
           run: () => deps.resize(id, size),
+        })),
+      },
+      {
+        id: 'period',
+        label: t('widgetFrame.period'),
+        icon: CalendarRange,
+        hidden: !widgetDef(id)?.periodic,
+        children: ([null, 'month', 'quarter', 'year'] as const).map((period) => ({
+          id: `period-${period ?? 'dashboard'}`,
+          // The menu has no checked state: the chosen option is marked in its label.
+          label: `${deps.ownPeriod(id) === period ? '✓ ' : ''}${t(period ? `dashboard.period.${period}` : 'widgetFrame.periodDashboard')}`,
+          run: () => deps.setPeriod(id, period),
         })),
       },
       {

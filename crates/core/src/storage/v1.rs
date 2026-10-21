@@ -244,6 +244,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 categories_rev: 0,
                 freedom_rate: None,
                 pinned: Vec::new(),
+                dashboard_period: Default::default(),
             },
             stores: old.stores,
             holdings: old.holdings,

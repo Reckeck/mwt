@@ -1,6 +1,9 @@
 /** Which breakdown of the portfolio the widget shows. */
-export type AllocationAxis = 'chain' | 'store'
+export type AllocationAxis = 'store' | 'chain' | 'class'
+
+export const ALLOCATION_AXES: readonly AllocationAxis[] = ['store', 'chain', 'class']
 
 export interface DashboardAllocationProps {
-  by: AllocationAxis
+  /** The breakdown it opens with; the widget switches it in place. */
+  by?: AllocationAxis
 }

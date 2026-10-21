@@ -20,4 +20,12 @@ export interface DashboardWidgetDef {
   requires?: 'exchange'
   /** Where the frame's title leads: the full screen behind the widget. */
   link?: RouteLocationRaw
+  /** Shows a period: gets `period` and offers «Период» in its menu (plan H1). */
+  periodic?: boolean
+}
+
+/** What a stored widget carries besides its place: the wallet it is bound to and its own period. */
+export interface DashboardWidgetExtras {
+  store_id: string | null
+  period: DashPeriod | null
 }

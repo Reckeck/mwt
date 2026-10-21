@@ -10,17 +10,13 @@ import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardBybitSync } from '@/widgets/dashboard-bybit-sync'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
-import { DashboardTotal } from '@/widgets/dashboard-total'
+import { DashboardSpending } from '@/widgets/dashboard-spending'
+import { DashboardUtilities } from '@/widgets/dashboard-utilities'
 import { ExchangeBalances } from '@/widgets/exchange-balances'
-import { FixedCosts } from '@/widgets/fixed-costs'
 import { InterestTax } from '@/widgets/interest-tax'
-import { UtilitiesDue } from '@/widgets/utilities-due'
-import { UtilityStats } from '@/widgets/utility-stats'
-import { MiniCalendar } from '@/widgets/mini-calendar'
 import { MonthSummary } from '@/widgets/month-summary'
 import { NetWorthCard } from '@/widgets/net-worth'
 import { OnboardingChecklist } from '@/widgets/onboarding-checklist'
-import { Spending7d } from '@/widgets/spending-7d'
 import { UpcomingList } from '@/widgets/upcoming-list'
 
 /** Columns of the dashboard grid. */
@@ -58,29 +54,21 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('dailyBudget', DailyBudget, [4, 5, 3, 4]),
   widget('monthSummary', MonthSummary, [4, 6, 3, 5]),
   widget('upcoming', UpcomingList, [4, 6, 3, 4], { props: { days: 14, limit: 6 } }),
-  widget('total', DashboardTotal, [4, 4, 3, 3]),
   widget('netWorth', NetWorthCard, [4, 6, 3, 5], { link: { name: 'analytics-wealth' } }),
   widget('fx', DashboardFx, [4, 5, 2, 4]),
-  widget('spending7d', Spending7d, [4, 6, 3, 4], { link: { name: 'transactions-calendar' } }),
-  widget('miniCalendar', MiniCalendar, [4, 8, 3, 6], { link: { name: 'transactions-calendar' } }),
+  widget('spending', DashboardSpending, [4, 6, 3, 4], { link: { name: 'transactions-calendar' }, periodic: true }),
   widget('assets', DashboardAssets, [4, 7, 3, 4]),
   widget('goals', DashboardGoals, [6, 5, 3, 4], { link: { name: 'planning-goals' } }),
   widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'planning-budgets' } }),
-  widget('utilitiesDue', UtilitiesDue, [4, 5, 3, 4]),
-  widget('utilityStats', UtilityStats, [8, 6, 4, 6]),
+  widget('utilities', DashboardUtilities, [6, 6, 3, 5]),
+  widget('allocation', DashboardAllocation, [6, 9, 4, 7]),
   widget('cashback', CashbackBonuses, [4, 6, 3, 4], { link: { name: 'transactions-bonuses' } }),
   widget('interestTax', InterestTax, [4, 4, 3, 3]),
-  widget('fixedCosts', FixedCosts, [6, 5, 3, 4]),
-  widget('byChain', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'chain' } }),
-  widget('byStore', DashboardAllocation, [6, 8, 4, 6], { props: { by: 'store' } }),
   widget('exchangeBalances', ExchangeBalances, [8, 5, 6, 4], { requires: 'exchange' }),
   widget('bybitSync', DashboardBybitSync, [8, 5, 6, 4], { requires: 'exchange' }),
 ]
 
-/**
- * Widgets a fresh vault starts with. Net worth once: `netWorth` (breakdown,
- * a year's line, a link to the report) rather than `total` next to it.
- */
+/** Widgets a fresh vault starts with. */
 export const DEFAULT_DASHBOARD = [
   'onboarding',
   'dailyBudget',
@@ -88,6 +76,6 @@ export const DEFAULT_DASHBOARD = [
   'upcoming',
   'netWorth',
   'assets',
-  'spending7d',
-  'utilitiesDue',
+  'spending',
+  'utilities',
 ]

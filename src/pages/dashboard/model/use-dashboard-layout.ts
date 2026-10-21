@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDebounceFn } from '@vueuse/core'
 import type { Layout } from 'grid-layout-plus'
@@ -7,6 +7,8 @@ import {
   DASHBOARD_COLS,
   DEFAULT_DASHBOARD,
   type DashboardWidgetDef,
+  type DashboardWidgetExtras,
+  hasMergedIds,
   layoutSignature,
   packWidgets,
   repaired,
@@ -33,16 +35,22 @@ export function useDashboardLayout() {
 
   /** What is on the dashboard, as stored; a fresh vault gets the default set. */
   const stored = computed<DashboardWidgetCfg[]>(() => {
-    const saved = (settingsStore.vault?.dashboard_widgets ?? []).filter((cfg) => widgetDef(cfg.id))
-    return saved.length ? repaired(saved) : packWidgets(DEFAULT_DASHBOARD)
+    const saved = repaired(settingsStore.vault?.dashboard_widgets ?? [])
+    return saved.length ? saved : packWidgets(DEFAULT_DASHBOARD)
   })
   const storedSignature = computed(() => layoutSignature(stored.value))
 
   const pinnedIds = computed(() => new Set(stored.value.filter((cfg) => cfg.pinned).map((cfg) => cfg.id)))
   /** Pins as the grid currently draws them (static items). */
   const shownPinned = () => new Set(layout.value.filter((item) => item.static).map((item) => String(item.i)))
-  const storeIds = computed(() => new Map(stored.value.map((cfg) => [cfg.id, cfg.store_id ?? null])))
-  const cfgsOf = (items: Layout, pinned = pinnedIds.value, bound = storeIds.value) => toCfgs(items, pinned, bound)
+  /** What each widget keeps besides its cell: the wallet it is bound to and its own period. */
+  const extras = computed(
+    () =>
+      new Map<string, DashboardWidgetExtras>(
+        stored.value.map((cfg) => [cfg.id, { store_id: cfg.store_id ?? null, period: cfg.period ?? null }]),
+      ),
+  )
+  const cfgsOf = (items: Layout, pinned = pinnedIds.value, kept = extras.value) => toCfgs(items, pinned, kept)
 
   watch(
     storedSignature,
@@ -69,6 +77,18 @@ export function useDashboardLayout() {
       notify.error(err, 'settings.saveFailed')
     }
   }
+
+  /** A layout saved before widgets were merged is written back once under the new ids. */
+  let migrated = false
+  watchEffect(() => {
+    const raw = settingsStore.vault?.dashboard_widgets
+    if (migrated || !raw || !hasMergedIds(raw)) return
+    migrated = true
+    // `save` skips a layout equal to the stored one, and the renamed layout is exactly that.
+    settingsStore
+      .updateVault({ dashboard_widgets: stored.value })
+      .catch((err) => notify.error(err, 'settings.saveFailed'))
+  })
 
   /** Drags fire many updates; only the settled layout is written. */
   const saveLayout = useDebounceFn((items: Layout) => {
@@ -128,16 +148,49 @@ export function useDashboardLayout() {
   function add(def: DashboardWidgetDef, storeId: string | null) {
     const bottom = layout.value.reduce((max, item) => Math.max(max, item.y + item.h), 0)
     const items: Layout = [...layout.value, { i: def.id, x: 0, y: bottom, w: def.w, h: def.h }]
-    void save(cfgsOf(items, pinnedIds.value, new Map([...storeIds.value, [def.id, storeId]])))
+    const kept = new Map(extras.value).set(def.id, { store_id: storeId, period: null })
+    void save(cfgsOf(items, pinnedIds.value, kept))
     notify.success('widgetFrame.added', { description: t(def.titleKey) })
   }
 
-  /** A widget bound to a wallet (a trading widget to its exchange) gets it as `storeId`. */
-  function widgetProps(id: string): Record<string, unknown> {
-    const def = widgetDef(id)
-    const storeId = storeIds.value.get(id)
-    return storeId ? { ...def?.props, storeId } : (def?.props ?? {})
+  /** The dashboard's period, unless the widget keeps its own. */
+  const dashboardPeriod = computed<DashPeriod>(() => settingsStore.vault?.dashboard_period ?? 'month')
+  const ownPeriod = (id: string) => extras.value.get(id)?.period ?? null
+
+  /** `null` puts the widget back on the dashboard's period. */
+  function setPeriod(id: string, period: DashPeriod | null) {
+    const kept = new Map(extras.value)
+    kept.set(id, { store_id: kept.get(id)?.store_id ?? null, period })
+    void save(cfgsOf(layout.value, pinnedIds.value, kept))
   }
 
-  return { hydrated, layout, pinnedIds, saveLayout, setPinned, remove, resize, move, add, widgetProps }
+  /**
+   * A widget bound to a wallet (a trading widget to its exchange) gets it as `storeId`;
+   * one that follows a period gets it as `period`.
+   */
+  function widgetProps(id: string): Record<string, unknown> {
+    const def = widgetDef(id)
+    const storeId = extras.value.get(id)?.store_id
+    return {
+      ...def?.props,
+      ...(storeId ? { storeId } : {}),
+      ...(def?.periodic ? { period: ownPeriod(id) ?? dashboardPeriod.value } : {}),
+    }
+  }
+
+  return {
+    hydrated,
+    layout,
+    pinnedIds,
+    dashboardPeriod,
+    ownPeriod,
+    saveLayout,
+    setPinned,
+    setPeriod,
+    remove,
+    resize,
+    move,
+    add,
+    widgetProps,
+  }
 }
