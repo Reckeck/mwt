@@ -11,11 +11,13 @@
 
 pub mod automation;
 pub mod catalog;
+mod catalog_capital;
 mod catalog_more;
 pub mod exec;
 pub mod graph;
 pub mod model;
 pub mod nodes;
+pub mod templates;
 pub mod types;
 pub mod validate;
 

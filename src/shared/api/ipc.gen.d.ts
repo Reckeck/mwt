@@ -4419,6 +4419,21 @@ type TaxMode = "yearly" | "at_end";
  */
 type TaxRule = { pct: Amount, mode: TaxMode, };
 
+type TemplateField = { 
+/**
+ * Key in the params and in `workflowTemplates.<id>.field.<key>`.
+ */
+key: string, kind: TemplateFieldKind, required: boolean, 
+/**
+ * Prefilled value; empty when the user has to choose.
+ */
+default: string, };
+
+/**
+ * What a form field picks.
+ */
+type TemplateFieldKind = "store" | "category" | "number" | "currency" | "budget" | "weekday" | "day";
+
 /**
  * Terminal panels' layout, as the UI left it.
  */
@@ -5495,6 +5510,11 @@ type WorkflowDraft = { name: string, description: string, active: boolean, graph
 
 type WorkflowEdge = { id: string, from: string, from_port: string, to: string, to_port: string, };
 
+/**
+ * A workflow from a gallery template: the form's fields by key.
+ */
+type WorkflowFromTemplateInput = { template_id: string, params: { [key: string]: string }, };
+
 type WorkflowGraph = { version: number, nodes: Array<WorkflowNode>, edges: Array<WorkflowEdge>, comments: Array<WorkflowComment>, };
 
 type WorkflowNode = { id: string, 
@@ -5573,6 +5593,15 @@ marks: { [key: string]: string },
  * The last operation an «operation added» trigger looked at, and where it was.
  */
 tx_cursor: string | null, tx_index: number, };
+
+/**
+ * One template of the gallery; titles live in the locales.
+ */
+type WorkflowTemplateInfo = { id: string, fields: Array<TemplateField>, 
+/**
+ * Creates transfers (always behind a confirmation).
+ */
+moves_money: boolean, };
 
 /**
  * An expectation checked by emulation: run the workflow as at a moment and

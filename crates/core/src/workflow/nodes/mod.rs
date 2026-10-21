@@ -3,6 +3,7 @@
 //! Fields are read here from the node's JSON parameters.
 
 mod actions;
+mod capital;
 mod data;
 mod dates;
 mod lists;

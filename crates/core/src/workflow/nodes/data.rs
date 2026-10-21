@@ -122,6 +122,11 @@ impl Executor<'_> {
                         WfValue::money(status.remaining, &status.budget.currency),
                     ),
                     ("used", number(percent(status.used))),
+                    (
+                        "elapsed",
+                        super::capital::elapsed_pct(&status.period_start, &status.period_end, now)
+                            .map_or(WfValue::Null, number),
+                    ),
                 ]))
             }
             "data.source" => {
@@ -199,6 +204,8 @@ impl Executor<'_> {
                 WfValue::Null => Ok(Outputs::new()),
                 other => Err(format!("not an operation: {}", other.as_text())),
             },
+            "data.emergency_gap" | "data.key_rate" | "data.inflation" | "data.recurring"
+            | "data.topup_advice" => self.eval_capital(node),
             other => Err(format!("unknown data node {other}")),
         }
     }

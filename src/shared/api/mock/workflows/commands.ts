@@ -3,6 +3,7 @@
 import { emptyGraph, parseGraph } from '@/shared/lib/workflow'
 import { fakeRun, keepQuestion, validate } from './engine'
 import { catalog, find, now, queue, runs, sameScope, save, uuid, vars, waits, workflows } from './state'
+import { fromTemplate, templates } from './templates'
 
 /** Answer a workflow command, or `undefined` when `cmd` is not one. */
 export function mockWorkflows(cmd: string, args: Record<string, unknown> | undefined): unknown {
@@ -116,6 +117,10 @@ export function mockWorkflows(cmd: string, args: Record<string, unknown> | undef
         2,
       )
     }
+    case 'workflow_templates':
+      return templates
+    case 'workflow_from_template':
+      return fromTemplate(input as unknown as WorkflowFromTemplateInput)
     case 'import_workflow': {
       const file = JSON.parse(String(args?.json ?? '{}')) as Record<string, unknown>
       if (file.format !== 'trade-app-workflow') throw { code: 'INVALID_INPUT', message: 'not a workflow file' }
