@@ -20,6 +20,8 @@ use super::UnlockedVault;
 pub const SURPLUS_MONTHS: usize = 6;
 /// Days of history the pace forecast fits a trend to.
 pub const FORECAST_DAYS: i64 = 90;
+/// Average days in a month, to turn a daily pace into a monthly one.
+const DAYS_PER_MONTH: f64 = 30.44;
 
 /// What a goal is: everything the user edits.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +36,46 @@ pub struct GoalDraft {
     pub monthly_commitment: Option<Amount>,
     pub scope: StoreScope,
     pub scenario_id: Option<String>,
+    pub expected_return: Option<Amount>,
+}
+
+/// Highest expected return a goal accepts, percent a year.
+const MAX_EXPECTED_RETURN: u32 = 100;
+/// Months the forecast with a return looks ahead before giving up.
+const RETURN_FORECAST_MONTHS: u32 = 1200;
+
+/// What to put aside a month for `left` months to grow `saved` into
+/// `target` at the monthly rate `monthly` (an annuity; linear at zero).
+pub fn need_with_return(saved: Amount, target: Amount, monthly: Amount, left: u32) -> Amount {
+    let months = Amount::from(left.max(1));
+    if !monthly.is_positive() {
+        return ((target - saved) / months).max(Amount::ZERO);
+    }
+    let growth = (Amount::from(1) + monthly).pow_int(left.max(1));
+    let missing = target - saved * growth;
+    if !missing.is_positive() {
+        return Amount::ZERO;
+    }
+    missing * monthly / (growth - Amount::from(1))
+}
+
+/// Months until `saved` plus `per_month` a month, growing at `monthly`,
+/// reaches `target`; `None` beyond [`RETURN_FORECAST_MONTHS`].
+pub fn months_to_target(
+    saved: Amount,
+    target: Amount,
+    monthly: Amount,
+    per_month: Amount,
+) -> Option<u32> {
+    let growth = Amount::from(1) + monthly.max(Amount::ZERO);
+    let mut balance = saved;
+    for month in 0..=RETURN_FORECAST_MONTHS {
+        if balance >= target {
+            return Some(month);
+        }
+        balance = balance * growth + per_month;
+    }
+    None
 }
 
 /// Why a goal is marked «Пересмотреть».
@@ -184,6 +226,13 @@ impl UnlockedVault {
                 "choose the wallets that hold the savings".into(),
             ));
         }
+        if let Some(rate) = draft.expected_return
+            && (rate.is_negative() || rate > Amount::from(MAX_EXPECTED_RETURN))
+        {
+            return Err(Error::InvalidInput(
+                "the expected return must be between 0 and 100% a year".into(),
+            ));
+        }
         if let Some(id) = &draft.scenario_id
             && self.find_calc_scenario(id).is_none()
         {
@@ -215,6 +264,7 @@ impl UnlockedVault {
             scope: draft.scope,
             created_at: now_iso(),
             scenario_id: draft.scenario_id,
+            expected_return: draft.expected_return,
         };
         self.doc.goals.push(goal.clone());
         self.persist()?;
@@ -239,6 +289,7 @@ impl UnlockedVault {
         goal.monthly_commitment = draft.monthly_commitment;
         goal.scope = draft.scope;
         goal.scenario_id = draft.scenario_id;
+        goal.expected_return = draft.expected_return;
         let out = goal.clone();
         self.persist()?;
         Ok(out)
@@ -420,6 +471,12 @@ impl UnlockedVault {
                 break;
             }
         }
+        // Short history: the user's own month, when given (plan B).
+        if found.len() < super::budget::MIN_HISTORY_MONTHS as usize
+            && let Some(manual) = self.manual_month()
+        {
+            return Some(manual.income - manual.fixed - manual.daily);
+        }
         if found.is_empty() {
             return None;
         }
@@ -498,7 +555,15 @@ impl UnlockedVault {
                 let months_total = deadline.map(|end| months_between(start, end).max(1));
                 let months_left = deadline.map(|end| months_between(today.max(start), end).max(1));
                 let left_to_save = (goal.target_amount - saved).max(Amount::ZERO);
-                let need_per_month = months_left.map(|months| left_to_save / amount_of(months));
+                // Percent a year compounded monthly, as the calculator's Monthly.
+                let monthly = goal
+                    .expected_return
+                    .map(|rate| rate / Amount::from(1200))
+                    .filter(|rate| rate.is_positive());
+                let need_per_month = months_left.map(|months| match monthly {
+                    Some(rate) => need_with_return(saved, goal.target_amount, rate, months),
+                    None => left_to_save / amount_of(months),
+                });
                 let pct = (saved / goal.target_amount * hundred()).round(1);
 
                 let points = self.daily_values(&scope, &cal, now);
@@ -506,6 +571,15 @@ impl UnlockedVault {
                 let accumulating = per_day_usd > 0.0;
                 let forecast = if left_to_save.is_zero() {
                     Some(today)
+                } else if let Some(rate) = monthly {
+                    // The commitment, else the pace of the last months.
+                    let per_month = goal.monthly_commitment.unwrap_or_else(|| {
+                        let usd = Amount::from_f64(per_day_usd.max(0.0) * DAYS_PER_MONTH);
+                        book.convert(usd, "usd", &goal.currency, now)
+                            .unwrap_or(Amount::ZERO)
+                    });
+                    months_to_target(saved, goal.target_amount, rate, per_month)
+                        .and_then(|months| today.checked_add_months(chrono::Months::new(months)))
                 } else if accumulating {
                     let left_usd = book
                         .convert(left_to_save, &goal.currency, "usd", now)
@@ -653,6 +727,7 @@ mod tests {
                 include_children: true,
             },
             scenario_id: None,
+            expected_return: None,
         }
     }
 
@@ -750,6 +825,75 @@ mod tests {
         assert_eq!(progress[0].contributed, amount("50000"));
         assert_eq!(progress[0].saved, amount("80000"));
         assert_eq!(progress[0].fx_gain, amount("30000"));
+    }
+
+    #[test]
+    fn need_with_return_is_an_annuity_and_linear_at_zero() {
+        // 0.01 a month for 12 months from nothing to 12 682.50: 1000 a month.
+        let need = need_with_return(Amount::ZERO, amount("12682.50"), amount("0.01"), 12);
+        assert_eq!(need.round(2), amount("1000"));
+        assert_eq!(
+            need_with_return(amount("200"), amount("1400"), Amount::ZERO, 12),
+            amount("100")
+        );
+        // Growth alone gets there: nothing to put aside.
+        assert_eq!(
+            need_with_return(amount("1000"), amount("1100"), amount("0.01"), 12),
+            Amount::ZERO
+        );
+        assert_eq!(
+            months_to_target(
+                Amount::ZERO,
+                amount("12682.50"),
+                amount("0.01"),
+                amount("1000")
+            ),
+            Some(12)
+        );
+        assert_eq!(
+            months_to_target(Amount::ZERO, amount("100"), Amount::ZERO, Amount::ZERO),
+            None
+        );
+    }
+
+    #[test]
+    fn expected_return_lowers_the_need_and_dates_the_forecast() {
+        let (_dir, mut vault, savings) = setup_savings();
+        deposit(&mut vault, &savings, "1000", "2026-01-02T00:00:00Z");
+        let mut draft = goal("House", "13000", &[&savings], 3);
+        draft.monthly_commitment = Some(amount("1000"));
+        let id = vault.create_goal(draft.clone()).unwrap().id;
+        let now = secs("2026-01-15T00:00:00Z");
+        let flat = vault.goal_progress(now, "UTC")[0].need_per_month.unwrap();
+        draft.expected_return = Some(amount("12"));
+        vault.update_goal(&id, draft.clone()).unwrap();
+        let with_return = &vault.goal_progress(now, "UTC")[0];
+        assert!(with_return.need_per_month.unwrap() < flat);
+        // 1000 now plus 1000 a month at 1 %: twelve months to 13 000.
+        assert_eq!(with_return.forecast.as_deref(), Some("2027-01-15"));
+        draft.expected_return = Some(amount("101"));
+        assert!(vault.update_goal(&id, draft).is_err());
+    }
+
+    #[test]
+    fn hand_entered_month_stands_in_for_a_short_history() {
+        let (_dir, mut vault, savings) = setup_savings();
+        let now = secs("2026-04-10T00:00:00Z");
+        assert_eq!(vault.free_surplus_avg(now, "UTC"), None);
+        vault.doc.settings.manual_income = Some(amount("3000"));
+        vault.doc.settings.manual_expenses = Some(amount("2200"));
+        assert_eq!(vault.free_surplus_avg(now, "UTC"), Some(amount("800")));
+        assert_eq!(vault.income_basis(3, now, "UTC").unwrap().months, 0);
+        // Three finished months of flows: the history wins.
+        for ts in [
+            "2026-01-05T00:00:00Z",
+            "2026-02-05T00:00:00Z",
+            "2026-03-05T00:00:00Z",
+        ] {
+            deposit(&mut vault, &savings, "500", ts);
+        }
+        assert_eq!(vault.free_surplus_avg(now, "UTC"), Some(amount("500")));
+        assert_eq!(vault.income_basis(3, now, "UTC").unwrap().months, 3);
     }
 
     #[test]

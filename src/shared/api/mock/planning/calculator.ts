@@ -63,6 +63,7 @@ function prefill(source: ScenarioSource, ctx: PlanningMockContext): ScenarioPref
     monthly_contribution: money((income * Number(source.income_pct)) / 100),
     income_avg: money(income),
     income_months_used: source.income_months,
+    income_manual: false,
     prefilled_at: iso(now()),
   }
 }
@@ -85,6 +86,7 @@ function goalFrom(id: string): GoalInput {
     monthly_commitment: first ? money(Number(first.amount) * PER_MONTH[first.freq]) : null,
     scope: scenario.source?.scope ?? { store_ids: [], include_children: false },
     scenario_id: scenario.id,
+    expected_return: Number(scenario.input.rate_pct) > 0 ? scenario.input.rate_pct : null,
   }
 }
 

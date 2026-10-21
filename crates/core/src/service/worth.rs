@@ -376,6 +376,7 @@ mod tests {
             scope: StoreScope::store(&piggy, true),
             created_at: "2026-01-01T00:00:00Z".into(),
             scenario_id: None,
+            expected_return: None,
         });
         let store_ref = |id: &str| AccountRef::Store(id.to_string());
         let with_category = |mut tx: Transaction, key: &str| {

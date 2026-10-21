@@ -411,6 +411,15 @@ impl UnlockedVault {
         &mut self,
         input: crate::ipc_contract::UpdateSettingsInput,
     ) -> Result<Settings> {
+        if [input.manual_income, input.manual_expenses]
+            .iter()
+            .flatten()
+            .any(|value| value.is_negative())
+        {
+            return Err(Error::InvalidInput(
+                "the monthly income and spending cannot be negative".into(),
+            ));
+        }
         if let Some(rate) = input.savings_rate
             && (rate.is_negative() || rate > Amount::new(rust_decimal::Decimal::ONE))
         {
@@ -451,6 +460,12 @@ impl UnlockedVault {
         }
         if let Some(rate) = input.savings_rate {
             settings.savings_rate = rate;
+        }
+        if let Some(income) = input.manual_income {
+            settings.manual_income = income.is_positive().then_some(income);
+        }
+        if let Some(expenses) = input.manual_expenses {
+            settings.manual_expenses = expenses.is_positive().then_some(expenses);
         }
         if let Some(mode) = input.daily_budget_mode {
             settings.daily_budget_mode = mode;
@@ -4787,6 +4802,8 @@ mod persist_tests {
                 crate::model::inflation::InflationMode::Manual,
             )]
             .into(),
+            manual_income: Some(Amount::parse("1500").unwrap()),
+            manual_expenses: Some(Amount::parse("1100").unwrap()),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
@@ -4812,6 +4829,20 @@ mod persist_tests {
             .unwrap();
         // The default 10 % saved on purpose still counts.
         assert!(settings.budget_configured);
+    }
+
+    #[test]
+    fn manual_income_is_cleared_by_zero_and_never_negative() {
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        let set = |income: &str| crate::ipc_contract::UpdateSettingsInput {
+            manual_income: Some(Amount::parse(income).unwrap()),
+            ..Default::default()
+        };
+        let settings = vault.update_settings(set("2000")).unwrap();
+        assert_eq!(settings.manual_income, Some(Amount::parse("2000").unwrap()));
+        assert!(vault.update_settings(set("-1")).is_err());
+        let settings = vault.update_settings(set("0")).unwrap();
+        assert_eq!(settings.manual_income, None);
     }
 
     #[test]

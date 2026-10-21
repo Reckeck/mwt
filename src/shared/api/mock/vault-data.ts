@@ -37,6 +37,8 @@ export const mockSettings: Settings = {
   budget_currency: '',
   budget_configured: false,
   onboarding_skipped: [],
+  manual_income: null,
+  manual_expenses: null,
 }
 
 /** Mirrors what `app_settings.json` would hold. */

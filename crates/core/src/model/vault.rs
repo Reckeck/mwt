@@ -89,6 +89,13 @@ pub struct Settings {
     /// reads as [`crate::service::inflation`] decides.
     #[serde(default)]
     pub inflation_mode: std::collections::BTreeMap<String, crate::model::inflation::InflationMode>,
+    /// The user's usual monthly income in the budget currency, used until
+    /// three months of history exist (plan B).
+    #[serde(default)]
+    pub manual_income: Option<Amount>,
+    /// The user's usual monthly spending, same rule.
+    #[serde(default)]
+    pub manual_expenses: Option<Amount>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -130,6 +137,8 @@ impl Default for Settings {
             budget_configured: false,
             onboarding_skipped: Vec::new(),
             inflation_mode: std::collections::BTreeMap::new(),
+            manual_income: None,
+            manual_expenses: None,
         }
     }
 }

@@ -75,6 +75,7 @@ impl From<GoalV1> for Goal {
             scope: old.scope,
             created_at: old.created_at,
             scenario_id: None,
+            expected_return: None,
         }
     }
 }
@@ -237,6 +238,8 @@ impl From<VaultDocV1> for VaultDocV2 {
                 budget_configured: false,
                 onboarding_skipped: Vec::new(),
                 inflation_mode: std::collections::BTreeMap::new(),
+                manual_income: None,
+                manual_expenses: None,
             },
             stores: old.stores,
             holdings: old.holdings,

@@ -12,7 +12,8 @@ import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
+import { firstError, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
+import { parseDecimal } from '@/shared/lib/decimal'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -41,6 +42,7 @@ const startsAt = ref('')
 const deadline = ref('')
 const priority = ref(3)
 const commitment = ref('')
+const expectedReturn = ref('')
 const storeIds = ref<string[]>([])
 const active = ref(true)
 const scenarioId = ref<string | null>(null)
@@ -56,6 +58,7 @@ watch(open, (isOpen) => {
   deadline.value = isoToDateInput(goal?.deadline)
   priority.value = goal?.priority ?? 3
   commitment.value = goal?.monthly_commitment ?? ''
+  expectedReturn.value = goal?.expected_return ?? ''
   storeIds.value = goal?.scope.store_ids.length ? [...goal.scope.store_ids] : props.storeId ? [props.storeId] : []
   active.value = goal?.active ?? true
   scenarioId.value = goal?.scenario_id ?? null
@@ -84,6 +87,11 @@ const form = useFormValidation(
     startsAt: required(startsAt.value),
     deadline: deadline.value && startsAt.value && deadline.value < startsAt.value ? t('validation.dateOrder') : null,
     commitment: nonNegativeAmount(commitment.value),
+    // The core takes 0..100 % a year; the form says so before it does.
+    expectedReturn: firstError(
+      nonNegativeAmount(expectedReturn.value),
+      Number(parseDecimal(expectedReturn.value) ?? 0) > 100 ? t('validation.range', { min: 0, max: 100 }) : null,
+    ),
     stores: storeIds.value.length ? null : t('validation.stores'),
   }),
   { resetOn: open },
@@ -102,6 +110,7 @@ const save = useMutation({
       monthly_commitment: commitment.value.trim() || null,
       scope: { store_ids: storeIds.value, include_children: true },
       scenario_id: scenarioId.value,
+      expected_return: expectedReturn.value.trim() || null,
     }
     return props.goal
       ? call<Goal>('update_goal', { input: { id: props.goal.id, goal: input } })
@@ -151,6 +160,15 @@ const save = useMutation({
           <AmountInput id="goal-commitment" v-model="commitment" :placeholder="t('goal.optional')" />
         </FormField>
       </div>
+
+      <FormField
+        for="goal-return"
+        :label="t('goal.expectedReturn')"
+        :hint="t('goal.expectedReturnHint')"
+        :error="form.error('expectedReturn')"
+      >
+        <AmountInput id="goal-return" v-model="expectedReturn" :decimals="2" class="w-32" :placeholder="t('goal.optional')" />
+      </FormField>
 
       <div class="grid gap-1.5">
         <Label>{{ t('goal.priority') }}</Label>

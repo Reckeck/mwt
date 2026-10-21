@@ -24,6 +24,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'goalReturn',
+    date: '2026-10-21',
+    points: [
+      { key: 'return', route: 'planning-goals' },
+      { key: 'manual', route: 'settings:money' },
+    ],
+  },
+  {
     id: 'inflationAuto',
     date: '2026-10-21',
     points: [

@@ -87,6 +87,8 @@ pub struct MonthAvg {
 
 /// How far back [`UnlockedVault::avg_month`] looks for months with flows.
 const AVG_LOOKBACK_MONTHS: usize = 24;
+/// Finished months of history before hand-entered income stops counting (plan B).
+pub const MIN_HISTORY_MONTHS: u32 = 3;
 
 /// The daily budget for today (plan §7.3, D18).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -535,6 +537,32 @@ impl UnlockedVault {
             .max_by(|left, right| left.quantity.abs().cmp(&right.quantity.abs()))
             .map(|holding| holding.asset.symbol.to_lowercase())
             .unwrap_or_else(|| self.base_and_fx().0)
+    }
+
+    /// The user's own month from the settings (plan B): income and spending,
+    /// `months = 0`. `None` without a hand-entered income.
+    pub fn manual_month(&self) -> Option<MonthAvg> {
+        let settings = &self.doc.settings;
+        let income = settings.manual_income.filter(|value| value.is_positive())?;
+        Some(MonthAvg {
+            income,
+            fixed: settings.manual_expenses.unwrap_or(Amount::ZERO),
+            daily: Amount::ZERO,
+            months: 0,
+            currency: self.budget_currency(),
+        })
+    }
+
+    /// [`Self::avg_month`], or the hand-entered month while fewer than
+    /// [`MIN_HISTORY_MONTHS`] finished months have flows.
+    pub fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
+        let average = self.avg_month(months, now, zone);
+        if average.as_ref().map_or(0, |avg| avg.months) < MIN_HISTORY_MONTHS
+            && let Some(manual) = self.manual_month()
+        {
+            return Some(manual);
+        }
+        average
     }
 
     /// Averages of the last `months` finished calendar months that had any
