@@ -243,6 +243,8 @@ pub fn run() {
             workflows::delete_workflow_var,
             workflows::export_workflow,
             workflows::import_workflow,
+            workflows::workflow_templates,
+            workflows::workflow_from_template,
             workflows::save_workflow_test,
             workflows::delete_workflow_test,
             workflows::run_workflow_tests,

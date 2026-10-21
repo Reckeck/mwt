@@ -1786,6 +1786,14 @@ pub struct SaveWorkflowInput {
     pub workflow: crate::service::WorkflowDraft,
 }
 
+/// A workflow from a gallery template: the form's fields by key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct WorkflowFromTemplateInput {
+    pub template_id: String,
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetWorkflowActiveInput {
     pub id: String,

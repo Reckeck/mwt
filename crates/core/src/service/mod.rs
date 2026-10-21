@@ -62,6 +62,7 @@ pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
 mod rates;
+mod recurring;
 mod relations;
 mod reports;
 mod store_change;
@@ -71,6 +72,7 @@ mod test_support;
 mod utilities;
 mod validate;
 mod valuation;
+mod workflow_templates;
 mod workflows;
 mod worth;
 
@@ -120,6 +122,7 @@ pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use price_info::{PriceInfo, PriceOrigin};
 pub use rates::RateBook;
+pub use recurring::RecurringCheck;
 pub use relations::{
     EntityCard, EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem,
     RelationKind,

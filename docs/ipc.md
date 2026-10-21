@@ -390,6 +390,8 @@ JSON без шифрования — там нет ничего секретно
 | `delete_workflow_var` | `DeleteWorkflowVarInput { scope, name }` | `()` |
 | `export_workflow` | `id` | `string` — файл `{ format: "trade-app-workflow", version, name, description, graph }` |
 | `import_workflow` | `json` | `SavedWorkflow` — новая схема, выключена |
+| `workflow_templates` | — | `Vec<WorkflowTemplateInfo { id, fields: Vec<TemplateField { key, kind (store/category/number/currency/budget/weekday/day), required, default }>, moves_money }>` — галерея шаблонов, умолчания из vault (доля накоплений, валюта бюджета) |
+| `workflow_from_template` | `WorkflowFromTemplateInput { template_id, params: { ключ поля: значение } }` | `SavedWorkflow` — готовая схема, включена; переводы денег только после «Спросить» |
 | `save_workflow_test` | `SaveWorkflowTestInput { workflow_id, test: WorkflowTest { id (пусто — новая), name, trigger_node?, at?, expect: TestExpect { outcome, transactions?, queued?, notices? } } }` | `Workflow` |
 | `delete_workflow_test` | `DeleteWorkflowTestInput { workflow_id, test_id }` | `Workflow` |
 | `run_workflow_tests` | `id` | `Vec<WorkflowTestResult { test_id, name, passed, problems_ru, problems_en, report }>` — каждая проверка эмуляцией на копии vault в момент `at` (или сейчас); ничего не пишется |

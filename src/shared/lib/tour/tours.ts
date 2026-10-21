@@ -187,6 +187,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'automation-unconfirmed', key: 'planningAutomations.unconfirmed', side: 'bottom' },
     { target: 'automation-confirm-amount', key: 'planningAutomations.confirmAmount', side: 'left' },
     { target: 'automation-open-workflow', key: 'planningAutomations.openWorkflow', side: 'left' },
+    { target: 'workflow-template-gallery', key: 'planningAutomations.templates', side: 'top' },
   ]),
   'planning-sources': planning([
     { target: 'section-content', key: 'planningSources.content', side: 'top' },

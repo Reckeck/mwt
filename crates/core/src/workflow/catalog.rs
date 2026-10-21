@@ -726,6 +726,11 @@ fn build() -> Vec<NodeDef> {
         outputs: vec![
             port("remaining", Ty::Money, txt("Осталось", "Left")),
             port("used", Ty::Number, txt("Израсходовано, %", "Used, %")),
+            port(
+                "elapsed",
+                Ty::Number,
+                txt("Прошло периода, %", "Period passed, %"),
+            ),
         ],
         params: vec![param(
             "budget",
@@ -1834,6 +1839,7 @@ fn build() -> Vec<NodeDef> {
     });
 
     super::catalog_more::more_nodes(&mut out);
+    super::catalog_capital::capital_nodes(&mut out);
     with_error_ways(&mut out);
     out
 }

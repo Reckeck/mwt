@@ -10,10 +10,11 @@ use trade_core::ipc_contract::{
     AnswerWorkflowWaitInput, DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput,
     ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowDraftInput,
     SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput, SetWorkflowVarInput,
-    ValidateWorkflowInput,
+    ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{SavedWorkflow, UnlockedVault, WorkflowTestResult};
+use trade_core::workflow::templates::WorkflowTemplateInfo;
 use trade_core::workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
     WorkflowWait, catalog, graph::Graph, validate,
@@ -261,6 +262,31 @@ pub async fn import_workflow(
     state: State<'_, AppState>,
 ) -> Result<SavedWorkflow, String> {
     with_vault_mut(&state, |vault| vault.import_workflow(&json, now_secs()))
+}
+
+/// The gallery of ready-made workflows with defaults from the vault.
+#[tauri::command]
+pub async fn workflow_templates(
+    state: State<'_, AppState>,
+) -> Result<Vec<WorkflowTemplateInfo>, String> {
+    with_vault(&state, |vault| Ok(vault.workflow_templates()))
+}
+
+/// Build a template's workflow from its form and save it switched on.
+#[tauri::command]
+pub async fn workflow_from_template(
+    input: WorkflowFromTemplateInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<SavedWorkflow, String> {
+    let locale = if crate::scheduler::russian(&app) {
+        "ru"
+    } else {
+        "en"
+    };
+    with_vault_mut(&state, |vault| {
+        vault.workflow_from_template(&input.template_id, &input.params, locale, now_secs())
+    })
 }
 
 #[tauri::command]
