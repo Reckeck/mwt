@@ -19,6 +19,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/shared/ui/sidebar'
 import { useSettingsStore } from '@/shared/store/settings'
+import { withoutLoyalty } from '@/shared/lib/store-tree'
 
 import { canAddOfKind, groupTotal } from './lib/totals'
 import { useExpandedStores } from './model/use-expanded-stores'
@@ -35,7 +36,7 @@ const settings = useSettingsStore()
 // Totals come rolled up from the backend: the sidebar and the wallet page
 // read the same numbers instead of each summing on its own.
 const tree = useStoreTree()
-const roots = computed(() => tree.data.value ?? [])
+const roots = computed(() => withoutLoyalty(tree.data.value ?? []))
 
 
 const activeId = computed(() => (route.name === 'wallet' ? String(route.params.id ?? '') : ''))

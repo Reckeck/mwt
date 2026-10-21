@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -13,7 +13,6 @@ import { StoreCreateDialog } from '@/features/store-create'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
-import { LoyaltySummary } from '@/widgets/loyalty-summary'
 import { StoreChart, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -42,6 +41,15 @@ const { includeChildren, scopeValue } = useWalletScope(storeId)
 const { overview, pnl, base, store, isArchived, children, hasChildren, positions, ancestors, parentPath, canAddChild, ownShare } =
   useStoreOverview(storeId, includeChildren)
 const decimals = computed(() => settingsStore.displayDecimals)
+
+// A bonus programme is not a wallet: old links land on its tab (plan G1).
+watch(
+  () => store.value?.kind,
+  (kind) => {
+    if (kind === 'loyalty') void router.replace({ name: 'transactions-bonuses', query: { program: storeId.value } })
+  },
+  { immediate: true },
+)
 
 /* --- exchanges: the terminal and the import extend the page --- */
 const isExchangeNode = computed(() => store.value?.kind === 'exchange' && !store.value.parent_id)
@@ -149,7 +157,6 @@ function openWallet(created: Store) {
           @add="subWalletOpen = true"
         />
 
-        <LoyaltySummary v-if="store.kind === 'loyalty'" :store="store" />
         <DepositSummary
           v-if="store.sub_type === 'savings' || store.sub_type === 'deposit' || store.sub_type === 'pds'"
           :store-id="store.id"

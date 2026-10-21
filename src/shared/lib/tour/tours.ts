@@ -170,6 +170,12 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
     { target: 'contact-transactions', key: 'directory.transactions', side: 'bottom' },
   ],
+  'transactions-bonuses': [
+    { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
+    { target: 'bonuses-add', key: 'bonuses.add', side: 'left' },
+    { target: 'bonuses-list', key: 'bonuses.list', side: 'top' },
+    { target: 'bonuses-cashback', key: 'bonuses.cashback', side: 'top' },
+  ],
   'planning-automations': planning([
     { target: 'section-content', key: 'planningAutomations.content', side: 'top' },
     { target: 'automation-simulate', key: 'planningAutomations.simulate', side: 'bottom' },

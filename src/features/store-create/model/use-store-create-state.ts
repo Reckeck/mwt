@@ -26,7 +26,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const step = ref<'pick' | 'details'>('pick')
   const kind = ref<StoreKind>('bank')
   const subType = ref<SubType | null>(null)
-  const creatableKinds = computed(() => (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable))
+  const creatableKinds = computed(() =>
+    (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable && info.kind !== 'loyalty'),
+  )
   const subTypes = computed(() =>
     props.parent ? (kindInfo(catalog.data.value, props.parent.kind)?.sub_types ?? []) : [],
   )

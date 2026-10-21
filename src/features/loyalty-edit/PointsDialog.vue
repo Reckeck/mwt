@@ -27,14 +27,34 @@ const comment = ref('')
 const source = ref('')
 
 const form = useFormValidation(() => ({ amount: positiveAmount(amount.value) }), { resetOn: open })
-watch(open, () => {
-  amount.value = ''
-  comment.value = ''
-})
 
 const tree = useStoreTree()
 const cards = computed(() =>
   flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived && node.store.kind === 'bank'),
+)
+
+/**
+ * The card that usually earns the points: the first one the programme lists,
+ * else the bank account the programme sits under (plan, review item 12).
+ */
+function defaultSource(): string {
+  const listed = props.store.loyalty?.source_store_ids ?? []
+  // Before the tree loads every id counts as known; the select then shows it once it does.
+  const known = (id: string | null | undefined) =>
+    !!id && (!tree.data.value || cards.value.some((node) => node.store.id === id))
+  const first = listed.find(known)
+  if (first) return first
+  return known(props.store.parent_id) ? (props.store.parent_id ?? '') : ''
+}
+
+watch(
+  open,
+  () => {
+    amount.value = ''
+    comment.value = ''
+    source.value = defaultSource()
+  },
+  { immediate: true },
 )
 
 const save = useMutation({

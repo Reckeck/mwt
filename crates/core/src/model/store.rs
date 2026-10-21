@@ -310,6 +310,12 @@ pub struct LoyaltyInfo {
     pub expires_at: Option<String>,
     #[serde(default)]
     pub expiring_points: Option<crate::Amount>,
+    /// What the programme knows the user by: a phone, a card number, an account.
+    #[serde(default)]
+    pub login: Option<String>,
+    /// Cards whose purchases earn the points; the first is the default source.
+    #[serde(default)]
+    pub source_store_ids: Vec<String>,
 }
 
 impl LoyaltyInfo {

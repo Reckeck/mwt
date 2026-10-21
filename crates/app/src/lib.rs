@@ -287,6 +287,7 @@ pub fn run() {
             planning::delete_price_alert,
             planning::get_upcoming,
             planning::set_loyalty_info,
+            planning::create_loyalty_program,
             planning::adjust_points,
             planning::get_cashback_report,
             planning::set_deposit_terms,

@@ -51,7 +51,7 @@ pub struct CashbackReport {
 impl UnlockedVault {
     /// Set a programme's points and price of a point. The price becomes the
     /// points' hand-set price, so the wallet counts in net worth.
-    pub fn set_loyalty_info(&mut self, store_id: &str, mut info: LoyaltyInfo) -> Result<Store> {
+    pub fn set_loyalty_info(&mut self, store_id: &str, info: LoyaltyInfo) -> Result<Store> {
         let store = self
             .find_store(store_id)
             .cloned()
@@ -59,38 +59,7 @@ impl UnlockedVault {
         if store.kind != StoreKind::Loyalty {
             return Err(Error::InvalidInput("not a bonus programme".into()));
         }
-        info.points_symbol = info.points_symbol.trim().to_uppercase();
-        info.currency = info.currency.trim().to_lowercase();
-        if info.points_symbol.is_empty() || info.currency.is_empty() {
-            return Err(Error::InvalidInput(
-                "name the points and the currency of a point".into(),
-            ));
-        }
-        if info.point_value.is_negative() {
-            return Err(Error::InvalidInput(
-                "a point cannot be worth less than nothing".into(),
-            ));
-        }
-        let taken = self.doc.stores.iter().any(|other| {
-            other.id != store_id
-                && other
-                    .loyalty
-                    .as_ref()
-                    .is_some_and(|known| known.points_symbol == info.points_symbol)
-        });
-        if taken {
-            return Err(Error::InvalidInput(format!(
-                "{} already names another programme's points",
-                info.points_symbol
-            )));
-        }
-        if let Some(expires) = info.expires_at.as_deref().filter(|raw| !raw.is_empty())
-            && chrono::NaiveDate::parse_from_str(expires, "%Y-%m-%d").is_err()
-        {
-            return Err(Error::InvalidInput(format!(
-                "burns on {expires}: expected YYYY-MM-DD"
-            )));
-        }
+        let info = self.checked_loyalty_info(Some(store_id), info)?;
         let key = info.asset(&store.name).key();
         self.doc
             .manual_prices
@@ -113,6 +82,87 @@ impl UnlockedVault {
         let saved = stored.clone();
         self.persist()?;
         Ok(saved)
+    }
+
+    /// Create a bonus programme and set its points in one action, so a
+    /// programme never exists without them.
+    pub fn create_loyalty_program(
+        &mut self,
+        name: &str,
+        color: &str,
+        contact_id: Option<String>,
+        info: LoyaltyInfo,
+    ) -> Result<Store> {
+        // Checked before the wallet exists: a refusal leaves nothing behind.
+        let info = self.checked_loyalty_info(None, info)?;
+        let extras = super::StoreExtras {
+            contact_id: contact_id.filter(|id| !id.is_empty()),
+            ..super::StoreExtras::default()
+        };
+        let store = self.create_store_with(name, StoreKind::Loyalty, color, "", None, extras)?;
+        self.set_loyalty_info(&store.id, info)
+    }
+
+    /// Normalize and check a programme's settings; `store_id` is the programme
+    /// itself, `None` while it is being created.
+    fn checked_loyalty_info(
+        &self,
+        store_id: Option<&str>,
+        mut info: LoyaltyInfo,
+    ) -> Result<LoyaltyInfo> {
+        info.points_symbol = info.points_symbol.trim().to_uppercase();
+        info.currency = info.currency.trim().to_lowercase();
+        if info.points_symbol.is_empty() || info.currency.is_empty() {
+            return Err(Error::InvalidInput(
+                "name the points and the currency of a point".into(),
+            ));
+        }
+        if info.point_value.is_negative() {
+            return Err(Error::InvalidInput(
+                "a point cannot be worth less than nothing".into(),
+            ));
+        }
+        let taken = self.doc.stores.iter().any(|other| {
+            Some(other.id.as_str()) != store_id
+                && other
+                    .loyalty
+                    .as_ref()
+                    .is_some_and(|known| known.points_symbol == info.points_symbol)
+        });
+        if taken {
+            return Err(Error::InvalidInput(format!(
+                "{} already names another programme's points",
+                info.points_symbol
+            )));
+        }
+        if let Some(expires) = info.expires_at.as_deref().filter(|raw| !raw.is_empty())
+            && chrono::NaiveDate::parse_from_str(expires, "%Y-%m-%d").is_err()
+        {
+            return Err(Error::InvalidInput(format!(
+                "burns on {expires}: expected YYYY-MM-DD"
+            )));
+        }
+        info.login = info
+            .login
+            .map(|login| login.trim().to_string())
+            .filter(|login| !login.is_empty());
+        let mut cards: Vec<String> = Vec::new();
+        for id in info.source_store_ids {
+            let card = self
+                .find_store(&id)
+                .ok_or_else(|| Error::Missing(format!("store {id}")))?;
+            if matches!(card.kind, StoreKind::Loyalty | StoreKind::Property) {
+                return Err(Error::InvalidInput(format!(
+                    "{} cannot earn points",
+                    card.name
+                )));
+            }
+            if !cards.contains(&id) {
+                cards.push(id);
+            }
+        }
+        info.source_store_ids = cards;
+        Ok(info)
     }
 
     /// Credit (`delta` > 0) or spend points of a programme, optionally tied
@@ -296,6 +346,8 @@ mod tests {
             currency: "rub".into(),
             expires_at: None,
             expiring_points: None,
+            login: None,
+            source_store_ids: Vec::new(),
         }
     }
 
@@ -350,5 +402,46 @@ mod tests {
         assert!(vault.set_loyalty_info(&second, info("pts")).is_err());
         let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
         assert!(vault.set_loyalty_info(&bank, info("X")).is_err());
+    }
+
+    #[test]
+    fn a_programme_is_created_with_its_points_or_not_at_all() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let mut settings = info("миля");
+        settings.login = Some("  +7 900 000-00-00 ".into());
+        settings.source_store_ids = vec![card.clone(), card.clone()];
+        let created = vault
+            .create_loyalty_program("Аэрофлот", "#db2777", None, settings)
+            .unwrap();
+        assert_eq!(created.kind, StoreKind::Loyalty);
+        let saved = created.loyalty.unwrap();
+        assert_eq!(saved.points_symbol, "МИЛЯ");
+        assert_eq!(saved.login.as_deref(), Some("+7 900 000-00-00"));
+        assert_eq!(saved.source_store_ids, vec![card]);
+
+        let before = vault.doc.stores.len();
+        let taken = vault.create_loyalty_program("Другая", "#db2777", None, info("МИЛЯ"));
+        assert!(taken.is_err());
+        let mut bad_card = info("БАЛЛ");
+        bad_card.source_store_ids = vec![created.id.clone()];
+        assert!(
+            vault
+                .create_loyalty_program("Третья", "#db2777", None, bad_card)
+                .is_err()
+        );
+        assert_eq!(
+            vault.doc.stores.len(),
+            before,
+            "a refusal leaves no wallet behind"
+        );
+    }
+
+    #[test]
+    fn programmes_saved_before_the_login_field_still_open() {
+        let raw = r#"{"points_symbol":"СПАСИБО","point_value":"1","currency":"rub"}"#;
+        let old: LoyaltyInfo = serde_json::from_str(raw).unwrap();
+        assert_eq!(old.login, None);
+        assert!(old.source_store_ids.is_empty());
     }
 }

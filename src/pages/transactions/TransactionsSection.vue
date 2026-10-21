@@ -12,6 +12,7 @@ const tabs = computed(() => [
   { name: 'transactions', label: t('transactions.tab.list') },
   { name: 'transactions-calendar', label: t('transactions.tab.calendar') },
   { name: 'transactions-contacts', label: t('transactions.tab.contacts') },
+  { name: 'transactions-bonuses', label: t('transactions.tab.bonuses') },
 ])
 </script>
 

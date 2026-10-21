@@ -66,6 +66,12 @@ export const router = createRouter({
               component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
               meta: { i18n: 'nav.transactions' },
             },
+            {
+              path: 'bonuses',
+              name: 'transactions-bonuses',
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsBonuses),
+              meta: { i18n: 'transactions.tab.bonuses' },
+            },
           ],
         },
         { path: 'charts', redirect: { name: 'analytics-investments' } },
