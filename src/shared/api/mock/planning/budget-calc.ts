@@ -1,10 +1,20 @@
 /** Month totals, the daily budget, goal progress and the agenda. */
 
+import { isEssential } from '@/shared/lib/categories'
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { estimateOf } from './automation-workflow'
 import { plannedNow } from './calculator'
 import { automations, goals, isRejected, iso, now, plannedDates, reminders, runs } from './state'
 import type { PlanningMockContext } from './state'
+
+/** Like core: the first known category decides. */
+function essentialSpending(tx: Transaction, ctx: PlanningMockContext): boolean {
+  for (const key of txMeta(tx).categories) {
+    const category = ctx.categories.find((entry) => entry.key === key)
+    if (category) return isEssential(category)
+  }
+  return false
+}
 
 function groupOf(tx: Transaction, ctx: PlanningMockContext): CategoryGroup | null {
   for (const key of txMeta(tx).categories) {
@@ -29,7 +39,7 @@ function flowValue(tx: Transaction, ctx: PlanningMockContext, incoming: boolean)
 }
 
 export function monthTotals(ctx: PlanningMockContext, month: string) {
-  const totals = { income: 0, fixed: 0, daily: 0, perDay: new Map<string, number>() }
+  const totals = { income: 0, fixed: 0, daily: 0, essentialDaily: 0, perDay: new Map<string, number>() }
   for (const tx of ctx.transactions) {
     const stamp = txMeta(tx).timestamp
     if (!stamp.startsWith(month)) continue
@@ -39,6 +49,7 @@ export function monthTotals(ctx: PlanningMockContext, month: string) {
     if ('payment' in tx && group !== 'fixed' && group !== 'service' && group !== 'income') {
       const spent = flowValue(tx, ctx, false)
       totals.daily += spent
+      if (essentialSpending(tx, ctx)) totals.essentialDaily += spent
       const day = stamp.slice(0, 10)
       totals.perDay.set(day, (totals.perDay.get(day) ?? 0) + spent)
     }
@@ -59,6 +70,7 @@ export function monthSummary(ctx: PlanningMockContext, month: string, savingsRat
     income: money(totals.income),
     fixed: money(totals.fixed),
     daily: money(totals.daily),
+    essential_daily: money(totals.essentialDaily),
     savings_plan: money(plan),
     savings_fact: money(fact),
     deviation: money(fact - plan),

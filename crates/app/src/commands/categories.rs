@@ -36,7 +36,12 @@ pub async fn update_category(
     guard
         .as_mut()
         .unwrap()
-        .update_category(&input.key, input.name.as_deref(), input.group)
+        .update_category(
+            &input.key,
+            input.name.as_deref(),
+            input.group,
+            input.essential,
+        )
         .map_err(err_to_string)
 }
 

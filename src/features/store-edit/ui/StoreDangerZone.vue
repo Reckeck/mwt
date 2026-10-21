@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
 
+import { useEmergencyFund } from '../model/use-emergency-fund'
 import { STORE_STALE_KEYS } from '../model/use-store-update'
 import type { StoreDangerZoneProps } from '../store-edit.types'
 
@@ -20,6 +21,7 @@ const queryClient = useQueryClient()
 
 const isCash = computed(() => props.store.kind === 'cash' && !props.store.parent_id)
 const changeOpen = ref(false)
+const { inFund } = useEmergencyFund(() => props.store.id)
 
 /** Why delete is unavailable: the backend refuses a wallet with history or sub-accounts. */
 const deleteBlocker = computed(() => {
@@ -72,6 +74,7 @@ const destroy = useMutation({
         <p class="text-xs text-muted-foreground">
           {{ isCash ? t('errors.CASH_LOCKED') : props.childCount ? t('stores.archiveCascade') : t('wallet.archivedHint') }}
         </p>
+        <p v-if="inFund && !props.store.archived" class="text-xs text-warning">{{ t('emergency.leavesOnArchive') }}</p>
       </div>
       <Button
         variant="outline"

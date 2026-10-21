@@ -121,6 +121,7 @@ pub static COLLECTIONS: &[Collection] = &[
         age: Some("ts"),
     },
     single("exchanges", &[]),
+    single("emergency_fund", &[]),
     records("pending_imports", &["exec_id"]),
     records("contacts", ID),
     records("budgets", ID),

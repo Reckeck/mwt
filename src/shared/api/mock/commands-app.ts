@@ -163,7 +163,7 @@ export const appSettingsOutsideCommands: MockCommands = {
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_') || `cat_${Date.now()}`
-    const category: Category = { key, name: input.name.trim(), group: input.group, archived: false }
+    const category: Category = { key, name: input.name.trim(), group: input.group, archived: false, essential: null }
     mockCategories.push(category)
     return resolve(category)
   },
@@ -172,6 +172,7 @@ export const appSettingsOutsideCommands: MockCommands = {
     const category = mockCategories.find((entry) => entry.key === input.key)
     if (!category) throw { code: 'MISSING', message: 'category' }
     Object.assign(category, { name: input.name?.trim() || null, group: input.group })
+    if (input.essential !== null && input.essential !== undefined) category.essential = input.essential
     return resolve(category)
   },
   archive_category: ({ args }) => {

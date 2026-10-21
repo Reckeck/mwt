@@ -3,6 +3,7 @@
 import { mockCategories, mockContacts, mockRules } from './ledger'
 import { mockDebtTerms, mockEnvelopes } from './catalog'
 import { mockStores, mockTransactions } from './demo'
+import { fund } from './planning/emergency'
 
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
 export const mockStatus: { value: VaultStatus } = {
@@ -117,5 +118,6 @@ export function mockVaultDoc(): VaultDoc {
     discarded_imports: [],
     calc_scenarios: [],
     inflation_points: [],
+    emergency_fund: fund,
   }
 }

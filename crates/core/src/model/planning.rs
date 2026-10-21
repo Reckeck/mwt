@@ -290,6 +290,39 @@ pub struct CalcScenario {
     pub updated_at: String,
 }
 
+/// The emergency fund (plan C1): savings accounts set aside for bad times,
+/// measured in months of mandatory spending. No stores = no fund.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(default)]
+pub struct EmergencyFund {
+    /// An explicit list of `Purpose::Savings` stores, `include_children`
+    /// off: an empty `StoreScope` would mean every store.
+    pub scope: StoreScope,
+    /// How many months of mandatory spending the fund should cover.
+    pub target_months: u8,
+    /// Finished months mandatory spending is averaged over.
+    pub avg_months: u8,
+}
+
+impl Default for EmergencyFund {
+    fn default() -> Self {
+        Self {
+            scope: StoreScope {
+                store_ids: Vec::new(),
+                include_children: false,
+            },
+            target_months: 6,
+            avg_months: 6,
+        }
+    }
+}
+
+impl EmergencyFund {
+    pub fn is_set(&self) -> bool {
+        !self.scope.store_ids.is_empty()
+    }
+}
+
 /// Unit of a reminder's repeat interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]

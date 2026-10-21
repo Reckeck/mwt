@@ -28,6 +28,11 @@ pub struct Category {
     pub group: CategoryGroup,
     /// Hidden from pickers; existing transactions keep it.
     pub archived: bool,
+    /// Whether everyday spending here is a must (plan C1). `None` takes the
+    /// default by key ([`DEFAULT_ESSENTIAL`]); only `Daily` reads it, `Fixed`
+    /// is always essential.
+    #[serde(default)]
+    pub essential: Option<bool>,
 }
 
 impl Category {
@@ -37,9 +42,38 @@ impl Category {
             name: None,
             group,
             archived: false,
+            essential: None,
+        }
+    }
+
+    /// Mandatory spending: every `Fixed` category, and `Daily` ones flagged
+    /// by the user or, without a flag, by [`DEFAULT_ESSENTIAL`].
+    pub fn is_essential(&self) -> bool {
+        match self.group {
+            CategoryGroup::Fixed => true,
+            CategoryGroup::Daily => self
+                .essential
+                .unwrap_or_else(|| DEFAULT_ESSENTIAL.contains(&self.key.as_str())),
+            _ => false,
         }
     }
 }
+
+/// Everyday categories that count as mandatory until the user says otherwise
+/// (plan decision 18).
+pub const DEFAULT_ESSENTIAL: &[&str] = &[
+    "groceries",
+    "transport",
+    "fuel",
+    "medicine",
+    "pharmacy",
+    "household_chemicals",
+    "pets",
+    "therapy",
+    "education",
+    "repair",
+    "family_help",
+];
 
 /// Marks every operation brought in from an exchange, so they can be found
 /// and told apart from the ones entered by hand.

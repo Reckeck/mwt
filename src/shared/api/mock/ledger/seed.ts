@@ -62,7 +62,7 @@ const GROUPS: Array<[CategoryGroup, string[]]> = [
 
 /** Same defaults as `default_categories()` in Rust. */
 export const mockCategories: Category[] = GROUPS.flatMap(([group, keys]) =>
-  keys.map((key) => ({ key, name: null, group, archived: false })),
+  keys.map((key) => ({ key, name: null, group, archived: false, essential: null })),
 )
 
 export const mockContacts: Contact[] = [

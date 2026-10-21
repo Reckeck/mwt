@@ -857,6 +857,9 @@ pub struct UpdateCategoryInput {
     /// Empty = the built-in label.
     pub name: Option<String>,
     pub group: CategoryGroup,
+    /// Mandatory spending flag for `Daily`; `None` keeps it.
+    #[serde(default)]
+    pub essential: Option<bool>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

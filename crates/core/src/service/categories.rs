@@ -65,6 +65,7 @@ impl UnlockedVault {
             name: Some(name.to_string()),
             group,
             archived: false,
+            essential: None,
         };
         self.doc.categories.push(category.clone());
         self.persist()?;
@@ -72,14 +73,19 @@ impl UnlockedVault {
     }
 
     /// Rename or regroup. Transactions store the key, so they follow along.
-    /// An empty name restores the built-in label.
+    /// An empty name restores the built-in label; `essential: None` keeps
+    /// the flag as it is.
     pub fn update_category(
         &mut self,
         key: &str,
         name: Option<&str>,
         group: CategoryGroup,
+        essential: Option<bool>,
     ) -> Result<Category> {
         let category = self.find_category_mut(key)?;
+        if essential.is_some() {
+            category.essential = essential;
+        }
         category.name = name
             .map(str::trim)
             .filter(|name| !name.is_empty())
@@ -297,7 +303,7 @@ mod vault_tests {
         tx.meta_mut().categories = vec!["coffee".into()];
         vault.add_transaction(tx).unwrap();
         vault
-            .update_category("coffee", Some("Кофе"), CategoryGroup::Fixed)
+            .update_category("coffee", Some("Кофе"), CategoryGroup::Fixed, None)
             .unwrap();
         assert_eq!(vault.doc.transactions[0].meta().categories, vec!["coffee"]);
 
@@ -305,7 +311,7 @@ mod vault_tests {
         vault.delete_category("coffee_2").unwrap();
         // an empty name returns to the built-in label
         let reset = vault
-            .update_category("taxi", Some("  "), CategoryGroup::Daily)
+            .update_category("taxi", Some("  "), CategoryGroup::Daily, None)
             .unwrap();
         assert_eq!(reset.name, None);
     }

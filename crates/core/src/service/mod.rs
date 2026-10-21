@@ -34,6 +34,7 @@ mod automations;
 mod budget;
 mod categories;
 mod contacts;
+mod emergency;
 mod enrichment;
 mod envelopes;
 mod exchange_sync;
@@ -76,6 +77,7 @@ pub use automations::{
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
+pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
 pub use inflation::{
@@ -969,6 +971,7 @@ impl UnlockedVault {
             store.secured_by = extras.secured_by;
             store.clone()
         };
+        self.prune_emergency_fund();
         self.persist()?;
         Ok(out)
     }
@@ -1043,6 +1046,7 @@ impl UnlockedVault {
                 store.archived = archived;
             }
         }
+        self.prune_emergency_fund();
         self.persist()
     }
 
@@ -1070,6 +1074,7 @@ impl UnlockedVault {
             return Err(Error::Missing("store".into()));
         }
         self.recompute_holdings();
+        self.prune_emergency_fund();
         self.persist()?;
         Ok(())
     }

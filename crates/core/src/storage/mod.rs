@@ -587,6 +587,7 @@ mod tests {
         let root = json.as_object_mut().unwrap();
         root.remove("notification_log");
         root.remove("sync");
+        root.remove("emergency_fund");
         // v1 had neither workflows nor automations as workflows.
         root.remove("workflows");
         root.remove("workflow_runs");
@@ -632,6 +633,7 @@ mod tests {
         expected.workflow_runs.clear();
         expected.notification_log.clear();
         expected.sync = crate::sync::SyncState::default();
+        expected.emergency_fund = Default::default();
         expected.settings.notifications = crate::model::notify::NotificationSettings::default();
         for contact in &mut expected.contacts {
             contact.group.clear();

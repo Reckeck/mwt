@@ -13,6 +13,7 @@ import { cn } from '@/shared/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
+import StoreEmergencySwitch from './StoreEmergencySwitch.vue'
 import type { StoreFormProps } from '../store-edit.types'
 import { useContacts } from '@/shared/api/queries'
 
@@ -103,6 +104,8 @@ function submit() {
         </label>
       </RadioGroup>
     </fieldset>
+
+    <StoreEmergencySwitch v-if="purposeEditable && store.purpose === 'savings'" :store="store" :purpose="purpose" />
 
     <div v-if="isRoot" class="grid gap-1.5">
       <Label for="store-contact">{{ t('stores.contact') }}</Label>
