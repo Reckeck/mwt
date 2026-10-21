@@ -1,7 +1,7 @@
 /** Commands: developer tools, reports, losses, links and enrichment. */
 
 import { txId, txMeta } from '@/shared/lib/transactions'
-import { mockCalendar, mockOverview, mockReport } from './analytics'
+import { mockCalendar, mockOverview, mockReport, mockSpendingOverview } from './analytics'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
@@ -9,7 +9,7 @@ import { mockScratchJson } from './exchange-data'
 import { analyticsContext, mockCandles, mockFlows, mockFxTable, mockLossOf } from './market'
 import { mockEntityCard } from './relations'
 import { mockPinned, mockSearchIndex, mockSearchTransactions, mockSetPinned } from './search'
-import { mockVaultDoc } from './vault-data'
+import { mockSettings, mockVaultDoc } from './vault-data'
 
 /** Commands: developer tools, reports, losses, links and enrichment. */
 export const devReportCommands: MockCommands = {
@@ -50,6 +50,10 @@ export const devReportCommands: MockCommands = {
   },
   get_calendar: ({ args }) => {
     return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))
+  },
+  get_spending_overview: ({ args }) => {
+    const period = (args?.period as DashPeriod | undefined) ?? mockSettings.dashboard_period
+    return resolve(mockSpendingOverview(period, analyticsContext()))
   },
   get_entity_card: ({ args }) => {
     return resolve(mockEntityCard(args?.target as EntityRef))

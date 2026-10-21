@@ -81,6 +81,7 @@ export const TOURS: Record<string, TourStep[]> = {
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
+    { target: 'dashboard-period', key: 'dashboard.period', side: 'bottom' },
     // Only on a phone.
     { target: 'bottom-nav', key: 'dashboard.bottomNav', side: 'top' },
     { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },

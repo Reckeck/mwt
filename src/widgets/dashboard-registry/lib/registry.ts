@@ -22,7 +22,7 @@ export function packWidgets(ids: string[]): DashboardWidgetCfg[] {
       row += rowHeight
       rowHeight = 0
     }
-    out.push({ id, col: column, row, width: def.w, height: def.h, pinned: false, store_id: null })
+    out.push({ id, col: column, row, width: def.w, height: def.h, pinned: false, store_id: null, period: null })
     column += def.w
     rowHeight = Math.max(rowHeight, def.h)
   }

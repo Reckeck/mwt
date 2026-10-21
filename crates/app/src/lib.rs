@@ -218,6 +218,7 @@ pub fn run() {
             analytics::health_settings_set,
             analytics::export_report_csv,
             analytics::get_calendar,
+            analytics::get_spending_overview,
             analytics::get_entity_card,
             analytics::get_search_index,
             analytics::search_transactions,

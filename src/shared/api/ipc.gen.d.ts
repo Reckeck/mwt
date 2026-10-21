@@ -434,6 +434,12 @@ workday_shift: WorkdayShift,
 property_id: string | null, };
 
 /**
+ * What a dashboard number is measured against (plan H1, decision 57): the
+ * plan where there is one, else the previous period up to the same date.
+ */
+type BaseKind = "plan" | "prev_period";
+
+/**
  * What a sub-account is locked to. A top-level wallet is always `Any`.
  */
 type Binding = "any" | { "asset": AssetRef } | { "pair": { base: AssetRef, quote: AssetRef, } } | { "market": MarketKind };
@@ -895,6 +901,11 @@ type CompareRow = { kind: CompareKind, final_nominal: Amount,
 gain: Amount, };
 
 /**
+ * A number with its base; `base` is `None` when there is nothing to compare.
+ */
+type Comparison = { value: Amount, base: Amount | null, base_kind: BaseKind, };
+
+/**
  * The real amount of an operation booked approximately.
  */
 type ConfirmEstimatedInput = { tx_id: string, 
@@ -1154,6 +1165,11 @@ manual_limit: Amount | null, };
 type DailyBudgetMode = "month" | "until_income";
 
 /**
+ * The window a dashboard widget measures (plan H1, decision 54).
+ */
+type DashPeriod = "month" | "quarter" | "year";
+
+/**
  * One widget on the dashboard grid (12 columns). A widget not in the list is
  * not on the dashboard; the grid compacts upwards, so `y` is only an order.
  */
@@ -1181,7 +1197,11 @@ pinned: boolean,
 /**
  * A widget about one wallet (an exchange's chart) remembers which.
  */
-store_id: string | null, };
+store_id: string | null, 
+/**
+ * Own period; `None` follows the dashboard's (plan H1).
+ */
+period: DashPeriod | null, };
 
 /**
  * A source the user set up.
@@ -3857,7 +3877,11 @@ freedom_rate: Amount | null,
 /**
  * The sidebar's «Pinned» block, in its order (plan J2).
  */
-pinned: Array<Pinned>, };
+pinned: Array<Pinned>, 
+/**
+ * The period every dashboard widget measures unless it has its own.
+ */
+dashboard_period: DashPeriod, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -3956,6 +3980,52 @@ type SourceValue = {
  * RFC3339: when it was fetched.
  */
 at: string, number: Amount | null, text: string | null, series: Array<SeriesPoint>, };
+
+/**
+ * One day of the «Траты» week strip.
+ */
+type SpendingDay = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, 
+/**
+ * Everyday spending of the day.
+ */
+daily: Amount, over: boolean, };
+
+/**
+ * The «Траты» widget: the period, the week and a series for the sparkline.
+ */
+type SpendingOverview = { currency: string, period: DashPeriod, 
+/**
+ * First day of the period, `YYYY-MM-DD`.
+ */
+start: string, 
+/**
+ * Mandatory and everyday spending so far against the previous period to the same date.
+ */
+spent: Comparison, 
+/**
+ * Everyday spending alone, the same way.
+ */
+daily: Comparison, 
+/**
+ * Spending per step of the period: days of a month, weeks of a quarter, months of a year.
+ */
+series: Array<Amount>, 
+/**
+ * The last seven days, oldest first.
+ */
+week: Array<SpendingDay>, 
+/**
+ * The last seven days against the seven before them.
+ */
+week_total: Comparison, 
+/**
+ * Everyday allowance of a day, when the budget has one.
+ */
+allowance: Amount | null, };
 
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
@@ -5092,7 +5162,7 @@ manual_income: Amount | null,
 /**
  * Usual monthly spending while there is no history; zero clears it.
  */
-manual_expenses: Amount | null, };
+manual_expenses: Amount | null, dashboard_period: DashPeriod | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

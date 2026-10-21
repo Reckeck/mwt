@@ -51,6 +51,12 @@ const weekdays = computed(() =>
   ),
 )
 
+/** How many days the shown month has: placeholders hold the grid's height while it loads. */
+const monthDays = computed(() => {
+  const [year, number] = month.value.split('-').map(Number)
+  return new Date(year, number, 0).getDate()
+})
+
 /** Blank cells before the 1st, so the 1st sits under its weekday. */
 const lead = computed(() => (new Date(`${month.value}-01T12:00`).getDay() + 6) % 7)
 
@@ -98,6 +104,11 @@ const latest = computed(
               </Button>
             </div>
           </div>
+          <!-- While the month loads its two summary lines keep their place, so the grid below does not drop. -->
+          <template v-if="calendar.isPending.value">
+            <p class="invisible text-xs" aria-hidden="true">&nbsp;</p>
+            <p class="invisible text-xs" aria-hidden="true">&nbsp;</p>
+          </template>
           <p v-if="calendar.data.value?.allowance" class="text-xs text-muted-foreground">
             {{ t('calendar.allowance', { amount: formatMoney(calendar.data.value.allowance, { decimals: 0, currency }) }) }}
           </p>
@@ -129,6 +140,7 @@ const latest = computed(
             :compact="isPhone"
             @pick="selected = selected === day.date ? null : day.date"
           />
+          <div v-for="index in calendar.isPending.value ? monthDays : 0" :key="`wait-${index}`" class="min-h-16 rounded-md border bg-muted/40" />
         </div>
         <div class="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span v-for="status in ['under', 'near', 'over'] as const" :key="status" class="flex items-center gap-1.5">

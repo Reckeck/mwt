@@ -139,6 +139,7 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
   return {
     display_decimals: patch.display_decimals ?? null,
     dashboard_widgets: patch.dashboard_widgets ?? null,
+    dashboard_period: patch.dashboard_period ?? null,
     fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
     minimize_to_tray: patch.minimize_to_tray ?? null,
     savings_rate: patch.savings_rate ?? null,

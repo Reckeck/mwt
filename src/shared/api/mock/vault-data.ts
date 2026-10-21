@@ -30,6 +30,7 @@ export const mockInfo: VaultInfo = {
 export const mockSettings: Settings = {
   display_decimals: 8,
   dashboard_widgets: [],
+  dashboard_period: 'month',
   inflation_mode: {},
   inflation_source: {},
   fx_refresh_interval_sec: 300,

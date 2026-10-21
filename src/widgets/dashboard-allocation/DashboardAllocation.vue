@@ -1,64 +1,116 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { Money } from '@/entities/currency'
 
+import { assetClassName } from '@/entities/asset-class'
 import { Card } from '@/shared/ui/card'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { TOPUP_ADVICE_KEY } from '@/shared/api/queries'
 import { SectionState } from '@/shared/ui/section-state'
 import { formatPct } from '@/shared/lib/format'
 import { call } from '@/shared/api/ipc'
 
-import type { DashboardAllocationProps } from './dashboard-allocation.types'
+import { ALLOCATION_AXES, type AllocationAxis, type DashboardAllocationProps } from './dashboard-allocation.types'
 import { AllocationPie } from '@/widgets/allocation-pie'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
-const props = defineProps<DashboardAllocationProps>()
+/**
+ * «Распределение» (plan H2: «по сетям» and «по кошелькам» in one): wallets,
+ * chains or asset classes against their target shares (plan F).
+ */
+const props = withDefaults(defineProps<DashboardAllocationProps>(), { by: 'store' })
 
 const { t } = useI18n()
+const axis = ref<AllocationAxis>(props.by)
+function chooseAxis(value: unknown) {
+  // A single toggle group hands back `undefined` when the pressed item is clicked again.
+  if (typeof value === 'string') axis.value = value as AllocationAxis
+}
 
 const summary = useQuery({
   queryKey: ['summary'],
   queryFn: () => call<PortfolioSummary>('get_summary'),
 })
+/** The classes come with the top-up advice: its rows hold each basket's value and share now. */
+const advice = useQuery({
+  queryKey: [...TOPUP_ADVICE_KEY, null],
+  queryFn: () => call<TopupAdvice>('topup_advice', { amount: null }),
+  enabled: computed(() => axis.value === 'class'),
+})
+const active = computed(() => (axis.value === 'class' ? advice : summary))
 
-/** One shape for both axes; only a store row links somewhere. */
-const rows = computed(() => {
+interface AllocationRow {
+  key: string
+  label: string
+  value: Amount
+  pct: number | null
+  /** The basket's target share; classes only. */
+  target: Amount | null
+  storeId: string | null
+}
+
+/** One shape for every axis; only a store row links somewhere. */
+const rows = computed<AllocationRow[]>(() => {
+  if (axis.value === 'class')
+    return (advice.data.value?.rows ?? []).map((row) => ({
+      key: row.class.id,
+      label: assetClassName(row.class, t),
+      value: row.value,
+      pct: row.pct_before === null ? null : Number(row.pct_before),
+      target: row.class.target_pct,
+      storeId: null,
+    }))
   const data = summary.data.value
   if (!data) return []
-  return props.by === 'chain'
-    ? data.by_chain.map((row) => ({ key: row.label, label: row.label, value: row.value_base, pct: row.pct, storeId: null }))
+  return axis.value === 'chain'
+    ? data.by_chain.map((row) => ({ key: row.label, label: row.label, value: row.value_base, pct: Number(row.pct), target: null, storeId: null }))
     : data.by_store.map((row) => ({
         key: row.store_id,
         label: row.name,
         value: row.value_base,
-        pct: row.pct,
+        pct: Number(row.pct),
+        target: null,
         storeId: row.store_id,
       }))
 })
+const currency = computed(() =>
+  axis.value === 'class' ? advice.data.value?.currency : summary.data.value?.base_currency,
+)
 
 </script>
 
 <template>
   <Card size="sm">
-    <template #header>
-      <p data-widget-title class="font-medium">{{ t(props.by === 'chain' ? 'store.byChain' : 'store.byStore') }}</p>
-    </template>
+    <ToggleGroup
+      :model-value="axis"
+      type="single"
+      variant="outline"
+      size="sm"
+      class="mb-2"
+      :aria-label="t('dashboard.allocation.axis')"
+      @update:model-value="chooseAxis"
+    >
+      <ToggleGroupItem v-for="item in ALLOCATION_AXES" :key="item" :value="item" class="px-2 text-xs">
+        {{ t(`dashboard.allocation.${item}`) }}
+      </ToggleGroupItem>
+    </ToggleGroup>
     <SectionState
-      :loading="summary.isPending.value"
-      :error="summary.error.value"
+      :loading="active.isPending.value"
+      :error="active.error.value"
       :empty="!rows.length"
-      :empty-title="t('store.empty')"
+      :empty-title="t(axis === 'class' ? 'dashboard.allocation.noClasses' : 'store.empty')"
       compact
-      @retry="summary.refetch()"
+      @retry="active.refetch()"
     >
       <!-- A widget is placed and sized by the user: the ring only shows when it has a few slices to compare. -->
       <AllocationPie
         v-if="rows.length > 1"
         bare
         :slices="rows.map((row) => ({ label: row.label, value: row.value }))"
-        :currency="summary.data.value?.base_currency"
+        :currency="currency"
       />
       <div class="flex flex-col gap-1">
         <component
@@ -72,7 +124,8 @@ const rows = computed(() => {
           <div class="flex items-center justify-between text-sm">
             <span class="truncate">{{ row.label }}</span>
             <span class="shrink-0 text-muted-foreground">
-              <Money :amount="row.value" :currency="summary.data.value?.base_currency" /> · {{ formatPct(row.pct) }}
+              <Money :amount="row.value" :currency="currency" /> · {{ formatPct(row.pct) }}
+              <template v-if="row.target !== null"> / {{ formatPct(row.target, { decimals: 0 }) }}</template>
             </span>
           </div>
           <ProgressBar :value="Number(row.pct ?? 0)" />

@@ -35,6 +35,7 @@ mod automations;
 mod budget;
 mod categories;
 mod contacts;
+mod dashboard;
 mod datasources;
 mod debts;
 mod emergency;
@@ -92,6 +93,7 @@ pub use automations::{
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
+pub use dashboard::{SpendingDay, SpendingOverview};
 pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
 pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
@@ -480,6 +482,9 @@ impl UnlockedVault {
         }
         if let Some(widgets) = input.dashboard_widgets {
             settings.dashboard_widgets = widgets;
+        }
+        if let Some(period) = input.dashboard_period {
+            settings.dashboard_period = period;
         }
         if let Some(interval) = input.fx_refresh_interval_sec {
             settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
@@ -4860,6 +4865,7 @@ mod persist_tests {
                 height: 5,
                 pinned: true,
                 store_id: None,
+                period: Some(crate::model::vault::DashPeriod::Quarter),
             }],
             fx_refresh_interval_sec: 900,
             minimize_to_tray: false,
@@ -4882,6 +4888,7 @@ mod persist_tests {
             pinned: vec![crate::model::entity_ref::Pinned::Entity {
                 target: EntityRef::new(EntityKind::Goal, "g1"),
             }],
+            dashboard_period: crate::model::vault::DashPeriod::Year,
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
