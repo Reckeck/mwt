@@ -241,6 +241,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 manual_income: None,
                 manual_expenses: None,
                 categories_rev: 0,
+                freedom_rate: None,
             },
             stores: old.stores,
             holdings: old.holdings,
@@ -308,6 +309,7 @@ impl From<VaultDocV1> for VaultDocV2 {
             calc_scenarios: Vec::new(),
             inflation_points: Vec::new(),
             emergency_fund: Default::default(),
+            health_last: None,
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

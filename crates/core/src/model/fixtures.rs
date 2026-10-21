@@ -530,6 +530,11 @@ pub fn full_doc() -> VaultDoc {
         target_months: 3,
         avg_months: 12,
     };
+    doc.health_last = Some(crate::model::planning::HealthSnapshot {
+        month: "2026-03".into(),
+        color: crate::model::planning::HealthColor::Yellow,
+        reasons: vec![crate::model::planning::HealthReasonCode::FundBelowThree],
+    });
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).
     let stamp = crate::sync::Stamp::new(1_700_000_000_000, 2, "devaaaaa");

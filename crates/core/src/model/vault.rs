@@ -101,6 +101,10 @@ pub struct Settings {
     /// once, so a category the user deleted does not come back.
     #[serde(default)]
     pub categories_rev: u32,
+    /// Yearly return the freedom index potential assumes, percent; `None`
+    /// takes the key rate (plan C3).
+    #[serde(default)]
+    pub freedom_rate: Option<Amount>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -145,6 +149,7 @@ impl Default for Settings {
             manual_income: None,
             manual_expenses: None,
             categories_rev: crate::model::category::CATEGORIES_REV,
+            freedom_rate: None,
         }
     }
 }
@@ -574,6 +579,9 @@ pub struct VaultDoc {
     /// The emergency fund; an empty store list means none (plan C1).
     #[serde(default)]
     pub emergency_fund: crate::model::planning::EmergencyFund,
+    /// The last monthly checkup notice, so the next one comes only on a change.
+    #[serde(default)]
+    pub health_last: Option<crate::model::planning::HealthSnapshot>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -634,6 +642,7 @@ impl Default for VaultDoc {
             calc_scenarios: Vec::new(),
             inflation_points: Vec::new(),
             emergency_fund: Default::default(),
+            health_last: None,
             sync: crate::sync::SyncState::default(),
         }
     }

@@ -4,13 +4,15 @@
 
 use tauri::{AppHandle, State};
 
+use trade_core::Amount;
 use trade_core::calendar::{Calendar, month_key, now_secs};
 use trade_core::service::{
-    CalendarMonth, EntityCard, EntityRef, Report, ReportFilter, ReportKind, ReportOverview,
-    report_csv,
+    CalendarMonth, EntityCard, EntityRef, HealthReport, Report, ReportFilter, ReportKind,
+    ReportOverview, report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
+use crate::commands::planning::with_vault_mut;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 fn build_report(
@@ -55,6 +57,32 @@ pub async fn get_report_overview(
         .unwrap()
         .report_overview(&filter, now_secs(), &zone, &inflation)
         .map_err(err_to_string)
+}
+
+/// The capital checkup (plan C4): the light, the fund, loans and DTI, the
+/// savings rate, passive income and the freedom index.
+#[tauri::command]
+pub async fn capital_health(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<HealthReport, String> {
+    let zone = current_zone(&app);
+    let inflation = current_settings(&app).inflation;
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .capital_health(now_secs(), &zone, &inflation)
+        .map_err(err_to_string)
+}
+
+/// The yearly return the freedom potential assumes; `None` = the key rate.
+#[tauri::command]
+pub async fn health_settings_set(
+    expected_return: Option<Amount>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| vault.set_freedom_rate(expected_return))
 }
 
 /// Save a report as CSV through the native save dialog. `None` when the

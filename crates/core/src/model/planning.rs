@@ -290,6 +290,76 @@ pub struct CalcScenario {
     pub updated_at: String,
 }
 
+/// The capital checkup's light (plan C4), worst first in `Ord` terms last.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthColor {
+    /// Too little history to judge: no finished month and no hand-entered month.
+    NoData,
+    Green,
+    Yellow,
+    Red,
+}
+
+/// Why the checkup shows its colour; each comes with a first step.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    ts_rs::TS,
+    JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthReasonCode {
+    /// No finished month of history and no hand-entered month.
+    NoHistory,
+    /// A loan above the key rate, or a credit card with a debt.
+    CostlyLoan,
+    /// A loan with no rate: it cannot be classed.
+    LoanWithoutRate,
+    /// Payments take more than half of income.
+    DtiHigh,
+    /// Payments take 30–50 % of income.
+    DtiElevated,
+    /// No emergency fund chosen yet.
+    FundNotSet,
+    /// The fund covers less than a month.
+    FundBelowOne,
+    /// The fund covers less than three months.
+    FundBelowThree,
+    /// The last three months kept less than the savings plan.
+    SavingsBelowPlan,
+    /// Spending grew as fast as income or faster.
+    LifestyleCreep,
+}
+
+/// What the last monthly checkup notice said (plan C4, decision 28).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct HealthSnapshot {
+    /// `YYYY-MM` of the check.
+    pub month: String,
+    pub color: HealthColor,
+    pub reasons: Vec<HealthReasonCode>,
+}
+
 /// The emergency fund (plan C1): savings accounts set aside for bad times,
 /// measured in months of mandatory spending. No stores = no fund.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

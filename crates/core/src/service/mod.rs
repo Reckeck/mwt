@@ -42,6 +42,7 @@ mod exchange_sync;
 mod passive;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
+mod health;
 mod inflation;
 mod insights;
 mod interest;
@@ -83,6 +84,10 @@ pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use health::{
+    DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, HealthReport,
+    SAVINGS_BENCHMARK_PCT, SavingsMonth,
+};
 pub use inflation::{
     FetchedRates, INFLATION_CHART_MONTHS, InflationCurrency, InflationNews, inflation_notice,
     key_rate_notice,
@@ -4816,6 +4821,7 @@ mod persist_tests {
             manual_income: Some(Amount::parse("1500").unwrap()),
             manual_expenses: Some(Amount::parse("1100").unwrap()),
             categories_rev: 7,
+            freedom_rate: Some(Amount::parse("12").unwrap()),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

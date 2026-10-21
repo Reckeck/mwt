@@ -27,13 +27,15 @@ pub enum NoticeCategory {
     Tax,
     /// A new inflation figure or a key-rate decision (fetched daily).
     Rates,
+    /// The monthly capital checkup changed its colour or reasons.
+    Health,
     /// Something about the vault itself: it was handed to another device.
     /// Always shown; there is no switch for it.
     Security,
 }
 
 impl NoticeCategory {
-    pub const ALL: [NoticeCategory; 15] = [
+    pub const ALL: [NoticeCategory; 16] = [
         Self::Reminder,
         Self::PriceAlert,
         Self::Automation,
@@ -49,6 +51,7 @@ impl NoticeCategory {
         Self::Shortfall,
         Self::Tax,
         Self::Rates,
+        Self::Health,
     ];
 
     /// Days ahead a notice of this kind comes by default.

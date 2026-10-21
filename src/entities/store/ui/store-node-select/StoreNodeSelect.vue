@@ -22,10 +22,12 @@ const ids = defineModel<string[]>('ids', { default: () => [] })
 
 // Native <SelectItem> cannot hold markup: the path says where a node sits.
 const options = computed(() =>
-  (props.flat ? props.nodes : flattenStoreTree(props.nodes)).map((node) => ({
-    id: node.store.id,
-    label: node.path.join(' › '),
-  })),
+  (props.flat ? props.nodes : flattenStoreTree(props.nodes))
+    .filter((node) => !props.purpose || node.store.purpose === props.purpose)
+    .map((node) => ({
+      id: node.store.id,
+      label: node.path.join(' › '),
+    })),
 )
 </script>
 

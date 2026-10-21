@@ -56,6 +56,8 @@ pub fn notice_title(category: NoticeCategory, ru: bool) -> &'static str {
         (Tax, false) => "Taxes",
         (Rates, true) => "Инфляция и ставка",
         (Rates, false) => "Inflation and rates",
+        (Health, true) => "Чекап капитала",
+        (Health, false) => "Capital checkup",
         (Security, true) => "Безопасность",
         (Security, false) => "Security",
     }
@@ -239,6 +241,8 @@ impl UnlockedVault {
                 calendar::iso(now),
             ));
         }
+
+        out.extend(self.health_notice(now, zone, ru)?);
         self.log_notices(out)
     }
 

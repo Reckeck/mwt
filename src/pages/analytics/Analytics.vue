@@ -14,6 +14,7 @@ import {
   GROUP_ROUTE,
   MONTH_GROUPS,
   flowViewOf,
+  UNFILTERED_GROUPS,
 } from './model/analytics-groups'
 import { useReportFilter } from './model/use-report-filter'
 
@@ -29,6 +30,7 @@ const TAB_LABEL: Record<AnalyticsGroup, string> = {
   wealth: 'analytics.groupShort.wealth',
   investments: 'analytics.group.investments',
   saldo: 'analytics.group.saldo',
+  health: 'analytics.group.health',
 }
 const tabs = computed(() =>
   (Object.keys(GROUP_ROUTE) as AnalyticsGroup[]).map((entry) => ({ name: GROUP_ROUTE[entry], label: t(TAB_LABEL[entry]) })),
@@ -56,7 +58,7 @@ const { filter, effective, month, realTerms, narrowed, reset } = useReportFilter
         <ReportExportButton :kinds="exportKinds" :filter="effective" />
       </div>
     </div>
-    <div data-tour="report-filter">
+    <div v-if="!UNFILTERED_GROUPS.includes(group)" data-tour="report-filter">
       <ReportFilterBar
         v-model="filter"
         v-model:month="month"

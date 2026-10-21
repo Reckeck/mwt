@@ -148,6 +148,15 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'section-content', key: 'analytics.saldo', side: 'top' },
     { target: 'saldo-pool', key: 'analytics.saldoPool', side: 'top' },
   ]),
+  // The checkup takes no filter and exports nothing: only the tabs, then its own cards.
+  'analytics-health': [
+    { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
+    { target: 'health-light', key: 'health.light', side: 'bottom' },
+    { target: 'health-fund', key: 'health.fund', side: 'top' },
+    { target: 'health-debts', key: 'health.debts', side: 'top' },
+    { target: 'health-savings', key: 'health.savings', side: 'top' },
+    { target: 'health-freedom', key: 'health.freedom', side: 'top' },
+  ],
   'transactions-contacts': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'contact-quick-create', key: 'directory.create', side: 'right' },
