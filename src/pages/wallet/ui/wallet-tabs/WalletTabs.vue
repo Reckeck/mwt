@@ -84,7 +84,7 @@ function openPosition(position: StorePosition) {
         @open="openPosition"
       >
         <template v-if="props.store.kind === 'property'" #actions="{ position }">
-          <AssetRevalueButton :asset="position.asset" />
+          <AssetRevalueButton :asset="position.asset" :store-id="props.store.id" />
         </template>
       </StorePositions>
       <AllocationPie
@@ -109,6 +109,7 @@ function openPosition(position: StorePosition) {
         :store-id="props.storeId"
         :base-currency="props.base"
         :decimals="props.decimals"
+        :revaluable="props.store.kind === 'property'"
       />
     </template>
     <template #history>

@@ -412,6 +412,54 @@ pub struct PropertyInfo {
     #[serde(default)]
     #[ts(optional)]
     pub car: Option<CarInfo>,
+    /// How the value moves after the last valuation (plan G3); none = it stays.
+    #[serde(default)]
+    #[ts(optional)]
+    pub revalue: Option<RevalueRule>,
+}
+
+/// Automatic revaluation from the last valuation onwards, month by month.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct RevalueRule {
+    /// Percent a year; none = the inflation of the valuation's currency.
+    #[serde(default)]
+    pub pct_per_year: Option<crate::Amount>,
+    /// The value the rule stops at; required when the percent is negative.
+    #[serde(default)]
+    pub floor: Option<RevalueFloor>,
+}
+
+/// Where depreciation stops.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RevalueFloor {
+    /// A unit price in the property's currency.
+    Amount { amount: crate::Amount },
+    /// Percent of the purchase price.
+    PctOfPurchase { pct: crate::Amount },
+}
+
+impl RevalueRule {
+    /// The rule a new object of a type starts with (decision 45): a car loses
+    /// 10% a year down to a fifth of its price, a home and land follow
+    /// inflation, anything else keeps its value.
+    pub fn default_for(category: PropertyCategory) -> Option<Self> {
+        match category {
+            PropertyCategory::Car => Some(Self {
+                pct_per_year: Some(crate::Amount::new(rust_decimal::Decimal::from(-10))),
+                floor: Some(RevalueFloor::PctOfPurchase {
+                    pct: crate::Amount::new(rust_decimal::Decimal::from(20)),
+                }),
+            }),
+            PropertyCategory::Flat | PropertyCategory::House | PropertyCategory::Land => {
+                Some(Self {
+                    pct_per_year: None,
+                    floor: None,
+                })
+            }
+            PropertyCategory::Other => None,
+        }
+    }
 }
 
 #[derive(

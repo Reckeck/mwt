@@ -173,7 +173,7 @@ impl UnlockedVault {
     }
 
     /// The last price a transaction recorded for the asset, with its moment.
-    fn last_stamp(&self, asset_key: &str) -> Option<(String, Amount)> {
+    pub(crate) fn last_stamp(&self, asset_key: &str) -> Option<(String, Amount)> {
         self.doc
             .transactions
             .iter()

@@ -108,7 +108,7 @@ const analyticsLink = computed(() => ({ name: 'analytics-investments', query: { 
           </dl>
 
           <div class="flex flex-wrap gap-2">
-            <AssetRevalueButton :asset="asset" />
+            <AssetRevalueButton v-if="props.revaluable" :asset="asset" :store-id="props.storeId" />
             <RouterLink :to="txLink" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
               {{ t('assetDetails.history') }}
             </RouterLink>

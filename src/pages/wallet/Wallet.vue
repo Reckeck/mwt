@@ -13,6 +13,7 @@ import { StoreCreateDialog } from '@/features/store-create'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
+import { PropertyValueCard } from '@/widgets/property-value'
 import { VehicleCard } from '@/widgets/vehicle-card'
 import { isHome, StoreChart, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
@@ -165,6 +166,7 @@ function openWallet(created: Store) {
           :store-id="store.id"
         />
 
+        <PropertyValueCard v-if="isPropertyRoot" :store="store" />
         <VehicleCard v-if="isPropertyRoot && store.property?.category === 'car'" :store="store" />
 
         <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />

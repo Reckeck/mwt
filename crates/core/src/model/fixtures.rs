@@ -545,6 +545,14 @@ pub fn full_doc() -> VaultDoc {
         asset_key: "fiat:usd".into(),
         class_id: "local".into(),
     }];
+    doc.valuations = vec![crate::model::vault::Valuation {
+        id: "val1".into(),
+        store_id: "flat".into(),
+        asset_key: "asset:FLAT".into(),
+        date: "2025-06-01".into(),
+        unit_price: Amount::new(rust_decimal::Decimal::from(9_000_000)),
+        currency: "rub".into(),
+    }];
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).
     let stamp = crate::sync::Stamp::new(1_700_000_000_000, 2, "devaaaaa");
