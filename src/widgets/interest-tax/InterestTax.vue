@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
@@ -11,25 +11,12 @@ import { ProgressBar } from '@/shared/ui/progress-bar'
 
 /**
  * НДФЛ on deposit interest: how much of this year's tax-free limit
- * (1 000 000 ₽ × the highest key rate) is used, and the tax above it.
+ * (1 000 000 ₽ × the highest key rate) is used, and the tax above it. The
+ * key rate arrives with the background rates refresh (`rates-updated`).
  */
 const { t } = useI18n()
-const queryClient = useQueryClient()
 
 const tax = useQuery({ queryKey: ['interest-tax'], queryFn: () => call<InterestTaxReport>('get_interest_tax', { year: null }) })
-const refresh = useMutation({
-  mutationFn: () => call<number>('refresh_key_rates'),
-  onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['interest-tax'] }),
-  meta: { success: 'interestTax.refreshed', error: 'interestTax.keyRateFailed' },
-})
-// Without the key rate there is no limit: fetch it once, quietly.
-watch(
-  () => tax.data.value,
-  (data) => {
-    if (data && data.max_key_rate === null && !refresh.isPending.value && !refresh.isError.value) refresh.mutate()
-  },
-)
-
 const used = computed(() => {
   const data = tax.data.value
   if (!data?.limit || !Number(data.limit)) return 0
@@ -67,7 +54,7 @@ const used = computed(() => {
         </div>
       </template>
       <p v-else class="text-xs text-muted-foreground">
-        {{ refresh.isError.value ? t('interestTax.keyRateFailed') : t('interestTax.keyRateLoading') }}
+        {{ t('interestTax.keyRateMissing') }}
       </p>
     </div>
   </Card>

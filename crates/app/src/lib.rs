@@ -20,8 +20,8 @@ mod vault_writer;
 
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
-    losses, mobile, notifications, planning, portfolio, pricing, settings, stores, transactions,
-    vault_link, vault_recents, workflows,
+    losses, mobile, notifications, planning, portfolio, pricing, rates, settings, stores,
+    transactions, vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -283,7 +283,9 @@ pub fn run() {
             planning::set_deposit_terms,
             planning::get_deposit_report,
             planning::get_interest_tax,
-            planning::refresh_key_rates,
+            rates::refresh_rates,
+            rates::get_inflation_overview,
+            rates::set_inflation_mode,
             planning::list_utility_items,
             planning::create_utility_item,
             planning::update_utility_item,

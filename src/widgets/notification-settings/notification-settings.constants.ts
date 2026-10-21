@@ -11,6 +11,7 @@ export const NOTICE_CATEGORIES: NoticeCategory[] = [
   'tax',
   'shortfall',
   'budget',
+  'rates',
   'price_alert',
   'automation',
   'bybit_import',

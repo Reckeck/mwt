@@ -236,6 +236,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 notifications: NotificationSettings::default(),
                 budget_configured: false,
                 onboarding_skipped: Vec::new(),
+                inflation_mode: std::collections::BTreeMap::new(),
             },
             stores: old.stores,
             holdings: old.holdings,
@@ -301,6 +302,7 @@ impl From<VaultDocV1> for VaultDocV2 {
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
             calc_scenarios: Vec::new(),
+            inflation_points: Vec::new(),
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

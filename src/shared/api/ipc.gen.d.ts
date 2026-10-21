@@ -1792,17 +1792,73 @@ type IndicatorCfg = {
  */
 kind: string, period: number, };
 
+/**
+ * One currency on the inflation settings screen.
+ */
+type InflationCurrency = { currency: string, mode: InflationMode, 
+/**
+ * The mode was chosen by the user rather than inferred.
+ */
+chosen: boolean, 
+/**
+ * The built-in source, if the currency has one.
+ */
+source: InflationSource | null, latest: InflationReading | null, 
+/**
+ * The reading of the month before `latest`.
+ */
+previous: Amount | null, 
+/**
+ * The user's flat rate, percent.
+ */
+manual: Amount | null, 
+/**
+ * What reports and the calculator use now.
+ */
+effective: Amount | null, 
+/**
+ * The last [`INFLATION_CHART_MONTHS`] readings, oldest first.
+ */
+series: Array<InflationReading>, };
+
+/**
+ * Where a currency's inflation comes from.
+ */
+type InflationMode = "auto" | "manual";
+
 type InflationPoint = { month: string, 
 /**
  * What one unit of that month is worth in today's money.
  */
 coefficient: Amount, nominal_net: Amount, real_net: Amount, };
 
+/**
+ * One month of one currency's inflation.
+ */
+type InflationReading = { 
+/**
+ * Lowercase currency code (`rub`).
+ */
+currency: string, 
+/**
+ * `YYYY-MM`.
+ */
+month: string, 
+/**
+ * Prices against the same month a year before, percent.
+ */
+yoy_pct: Amount, source: InflationSource, };
+
 type InflationReport = { meta: ReportMeta, points: Array<InflationPoint>, 
 /**
  * Change of net worth over the period, nominal and real, percent.
  */
 nominal_change_pct: Amount | null, real_change_pct: Amount | null, };
+
+/**
+ * Who published a reading.
+ */
+type InflationSource = "cbr" | "bls" | "eurostat";
 
 /**
  * One fact a report states; which fields are set depends on the code.
@@ -2242,7 +2298,7 @@ type NodeGroup = "trigger" | "data" | "logic" | "variable" | "action" | "list" |
 /**
  * A kind of notice. Each one can be turned off and told ahead of time.
  */
-type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "security";
+type NoticeCategory = "reminder" | "price_alert" | "automation" | "bybit_import" | "loan" | "rent" | "utilities" | "debt" | "deposit" | "loyalty" | "goal" | "budget" | "shortfall" | "tax" | "rates" | "security";
 
 /**
  * One category's switches.
@@ -3101,7 +3157,12 @@ budget_configured: boolean,
 /**
  * Checklist steps the user said they do not need.
  */
-onboarding_skipped: Array<string>, };
+onboarding_skipped: Array<string>, 
+/**
+ * Where each currency's inflation comes from; a currency missing here
+ * reads as [`crate::service::inflation`] decides.
+ */
+inflation_mode: { [key: string]: InflationMode }, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -4450,7 +4511,11 @@ discarded_imports: Array<string>,
 /**
  * Saved investment calculator scenarios (plan A).
  */
-calc_scenarios: Array<CalcScenario>, };
+calc_scenarios: Array<CalcScenario>, 
+/**
+ * Inflation by currency and month, fetched in the background (plan I1).
+ */
+inflation_points: Array<InflationReading>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

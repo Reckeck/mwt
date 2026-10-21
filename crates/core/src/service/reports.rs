@@ -384,6 +384,9 @@ pub(crate) struct Ctx {
     pub(crate) today: NaiveDate,
     pub(crate) now: i64,
     pub(crate) rate: Option<Amount>,
+    /// Today's-money coefficient per month from the monthly inflation
+    /// series; empty when the currency has none and the flat `rate` applies.
+    pub(crate) coefficients: BTreeMap<NaiveDate, Amount>,
     pub(crate) real: bool,
     pub(crate) scope: Option<HashSet<String>>,
 }
@@ -419,6 +422,9 @@ impl Ctx {
 
     /// What one unit of `month` is worth in today's money.
     fn coefficient(&self, month: NaiveDate) -> Amount {
+        if let Some(coefficient) = self.coefficients.get(&first_of_month(month)) {
+            return *coefficient;
+        }
         let Some(rate) = self.rate else {
             return one();
         };
@@ -528,9 +534,16 @@ impl UnlockedVault {
             .filter(|code| !code.is_empty())
             .unwrap_or_else(|| self.budget_currency());
         let scope = (!filter.scope.store_ids.is_empty()).then(|| self.resolve_scope(&filter.scope));
+        let rate = self.inflation_on(&currency, &calendar::month_key(today), inflation);
+        // The inflation report reads coefficients even in nominal terms.
+        let coefficients = months
+            .first()
+            .and_then(|first| self.real_coefficients(&currency, inflation, *first, today))
+            .unwrap_or_default();
         Ok(Ctx {
             cal,
-            rate: inflation.get(&currency).copied(),
+            rate,
+            coefficients,
             currency,
             months,
             today,
@@ -1220,6 +1233,7 @@ impl UnlockedVault {
             scope: ctx.scope.clone(),
             months: ctx.months.clone(),
             currency: ctx.currency.clone(),
+            coefficients: BTreeMap::new(),
             ..*ctx
         };
         let points: Vec<InflationPoint> = self

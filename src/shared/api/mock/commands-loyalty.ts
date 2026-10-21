@@ -131,7 +131,4 @@ export const loyaltyDepositCommands: MockCommands = {
       remaining_free: '161749.5',
     } satisfies InterestTaxReport)
   },
-  refresh_key_rates: (_call) => {
-    return resolve(3)
-  },
 }

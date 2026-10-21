@@ -2,6 +2,7 @@ import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
+import { useInflationOverview } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import {
   firstError,
@@ -35,14 +36,15 @@ const MAX_RATE = 200
 export function useInvestCalc() {
   const { t } = useI18n()
   const settings = useSettingsStore()
-  const inflationOf = (code: string) => settings.app?.inflation?.[code.toLowerCase()] ?? '0'
+  // The fetched series where the currency follows it, else the flat rate.
+  const { effectiveOf: inflationOf } = useInflationOverview()
   const form = reactive<CalcForm>(defaultForm(settings.baseCurrency, inflationOf(settings.baseCurrency)))
 
-  // A new currency brings its own inflation, unless the user typed one.
+  // A new currency, or the series arriving, brings its own inflation, unless the user typed one.
   watch(
-    () => form.currency,
-    (code, previous) => {
-      if (previous && form.inflation === inflationOf(previous)) form.inflation = inflationOf(code)
+    () => [form.currency, inflationOf(form.currency)] as const,
+    ([, fresh], previous) => {
+      if (previous && form.inflation === previous[1]) form.inflation = fresh
     },
   )
 

@@ -85,6 +85,10 @@ pub struct Settings {
     /// Checklist steps the user said they do not need.
     #[serde(default)]
     pub onboarding_skipped: Vec<String>,
+    /// Where each currency's inflation comes from; a currency missing here
+    /// reads as [`crate::service::inflation`] decides.
+    #[serde(default)]
+    pub inflation_mode: std::collections::BTreeMap<String, crate::model::inflation::InflationMode>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -125,6 +129,7 @@ impl Default for Settings {
             notifications: crate::model::notify::NotificationSettings::default(),
             budget_configured: false,
             onboarding_skipped: Vec::new(),
+            inflation_mode: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -548,6 +553,9 @@ pub struct VaultDoc {
     /// Saved investment calculator scenarios (plan A).
     #[serde(default)]
     pub calc_scenarios: Vec<crate::model::planning::CalcScenario>,
+    /// Inflation by currency and month, fetched in the background (plan I1).
+    #[serde(default)]
+    pub inflation_points: Vec<crate::model::inflation::InflationReading>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -606,6 +614,7 @@ impl Default for VaultDoc {
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
             calc_scenarios: Vec::new(),
+            inflation_points: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }
