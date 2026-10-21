@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { TransactionFilterBar } from '@/features/transaction-filter'
+import { SaveFilterButton, TransactionFilterBar } from '@/features/transaction-filter'
 import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { Card } from '@/shared/ui/card'
@@ -46,7 +46,9 @@ const rowMenu = useTxRowMenu({ duplicate: true })
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
     <div data-tour="tx-filter">
-      <TransactionFilterBar v-model="filter" />
+      <TransactionFilterBar v-model="filter">
+        <template #actions><SaveFilterButton :filter="filter" /></template>
+      </TransactionFilterBar>
     </div>
 
     <Card>

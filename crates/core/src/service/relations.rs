@@ -21,41 +21,7 @@ use crate::workflow::model::Workflow;
 /// Most items one group lists; `RelationGroup::total` counts all of them.
 pub const RELATION_ITEMS_CAP: usize = 20;
 
-/// A kind of thing the app can open a card of.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum EntityKind {
-    Store,
-    Tx,
-    Category,
-    Contact,
-    Goal,
-    Budget,
-    Automation,
-    Workflow,
-    Reminder,
-    Alert,
-    /// `id` is `AssetRef::key()`.
-    Asset,
-    /// A saved calculator scenario.
-    Scenario,
-}
-
-/// The address of one entity: what the `?open=kind:id` link carries.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
-pub struct EntityRef {
-    pub kind: EntityKind,
-    pub id: String,
-}
-
-impl EntityRef {
-    pub fn new(kind: EntityKind, id: impl Into<String>) -> Self {
-        Self {
-            kind,
-            id: id.into(),
-        }
-    }
-}
+pub use crate::model::entity_ref::{EntityKind, EntityRef};
 
 /// What a group of related things is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
@@ -184,6 +150,15 @@ fn newest_first(mut txs: Vec<&Transaction>) -> Vec<RelationItem> {
 impl UnlockedVault {
     /// The card of `target`: its head and every non-empty group of links.
     pub fn entity_card(&self, target: &EntityRef) -> EntityCard {
+        let mut card = self.entity_card_head(target);
+        if !card.missing {
+            card.groups = self.relations(target);
+        }
+        card
+    }
+
+    /// The card without its groups: name, main number, whether it exists.
+    pub(crate) fn entity_card_head(&self, target: &EntityRef) -> EntityCard {
         let mut card = EntityCard {
             target: target.clone(),
             title: String::new(),
@@ -295,9 +270,6 @@ impl UnlockedVault {
             }),
         };
         card.missing = found.is_none();
-        if !card.missing {
-            card.groups = self.relations(target);
-        }
         card
     }
 

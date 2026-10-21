@@ -57,6 +57,7 @@ mod notify_snapshot;
 mod peer_sync;
 mod saving;
 mod scenarios;
+mod search;
 mod vehicle;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
@@ -136,6 +137,7 @@ pub use reports::{
 pub use scenarios::{
     CalcScenarioDeleted, CalcScenarioDraft, INCOME_MONTHS, ScenarioPrefill, planned_balance,
 };
+pub use search::{PINNED_CAP, PinnedView, SEARCH_TX_CAP, SearchEntry};
 pub use store_change::{
     StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
 };
@@ -4877,6 +4879,9 @@ mod persist_tests {
             manual_expenses: Some(Amount::parse("1100").unwrap()),
             categories_rev: 7,
             freedom_rate: Some(Amount::parse("12").unwrap()),
+            pinned: vec![crate::model::entity_ref::Pinned::Entity {
+                target: EntityRef::new(EntityKind::Goal, "g1"),
+            }],
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

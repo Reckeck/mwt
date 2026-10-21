@@ -5,6 +5,7 @@ import { useLatestTx } from '@/widgets/transaction-details'
 import { call } from '@/shared/api/ipc'
 import { type EntityDialogKind, type EntityDialogRequest, entityDialog } from '@/shared/lib/entity-actions'
 import { registerEntityOpener, useEntityNav } from '@/shared/lib/entity-link'
+import { rememberEntity } from '@/shared/lib/recent-entities'
 import { txDetailsTx } from '@/shared/lib/tx-details'
 import { txId } from '@/shared/lib/transactions'
 
@@ -18,6 +19,9 @@ export function useEntityHost() {
   onScopeDispose(registerEntityOpener(nav.open))
 
   const top = nav.top
+  watch(top, (target) => {
+    if (target) rememberEntity(target)
+  })
   const card = useQuery({
     queryKey: computed(() => ['entity-card', top.value?.kind, top.value?.id]),
     queryFn: () => call<EntityCard>('get_entity_card', { target: top.value }),

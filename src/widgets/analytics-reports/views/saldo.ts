@@ -1,5 +1,6 @@
 import type { RouteLocationRaw } from 'vue-router'
 
+import { drillTo } from '@/shared/lib/drill'
 import type { ChartOption } from '@/shared/lib/echarts'
 
 import { categoryChart, num } from './chart'
@@ -15,7 +16,7 @@ export interface SaldoLabels {
 
 /** The transactions of one day, all wallets (the balance counts them all). */
 export function transactionsOfDay(date: string): RouteLocationRaw {
-  return { name: 'transactions', query: { from: date, to: date } }
+  return drillTo({ from: date })
 }
 
 /**

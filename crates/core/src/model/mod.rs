@@ -7,6 +7,7 @@ pub mod contact;
 pub mod datasource;
 pub mod deposit;
 pub mod enrichment;
+pub mod entity_ref;
 #[cfg(test)]
 pub mod fixtures;
 pub mod inflation;

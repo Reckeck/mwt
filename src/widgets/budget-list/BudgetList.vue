@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { Money } from '@/entities/currency'
@@ -14,6 +15,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
+import { drillTo, localDay } from '@/shared/lib/drill'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -40,6 +42,18 @@ const rows = computed(() => {
   const byId = new Map((statuses.data.value ?? []).map((status) => [status.budget.id, status]))
   return (budgets.data.value ?? []).map((budget) => ({ budget, status: byId.get(budget.id) ?? null }))
 })
+/** The operations the spent figure is made of: the budget's period, category or wallets. */
+function spentOf(status: BudgetStatus) {
+  const target = status.budget.target
+  return drillTo({
+    from: localDay(status.period_start),
+    to: localDay(status.period_end, true),
+    kinds: ['payment'],
+    category: typeof target === 'object' && 'category' in target ? target.category : undefined,
+    storeIds: typeof target === 'object' && 'store' in target ? target.store.store_ids : undefined,
+  })
+}
+
 const usedPct = (status: BudgetStatus | null) => Math.min(100, Math.round(Number(status?.used ?? 0) * 100))
 
 const dialogOpen = ref(false)
@@ -83,7 +97,10 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
                 <Badge v-if="!budget.active" variant="outline">{{ t('budget.paused') }}</Badge>
               </div>
               <p class="text-sm tabular-nums text-muted-foreground">
-                <Money :amount="status?.spent ?? '0'" :currency="budget.currency" />
+                <RouterLink v-if="status" :to="spentOf(status)" class="hover:underline" data-tour="budget-spent">
+                  <Money :amount="status.spent" :currency="budget.currency" />
+                </RouterLink>
+                <Money v-else amount="0" :currency="budget.currency" />
                 /
                 <Money :amount="budget.limit" :currency="budget.currency" />
               </p>

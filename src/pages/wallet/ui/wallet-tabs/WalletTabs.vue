@@ -16,6 +16,8 @@ import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { Tabs } from '@/shared/ui/tabs'
 
+import { WalletRelations } from '../wallet-relations'
+
 /** Utilities (a home), positions and history — the wallet's working area. */
 const props = defineProps<{
   store: Store
@@ -114,6 +116,9 @@ function openPosition(position: StorePosition) {
     </template>
     <template #history>
       <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren" />
+    </template>
+    <template #relations>
+      <WalletRelations :store-id="props.storeId" />
     </template>
   </Tabs>
 </template>

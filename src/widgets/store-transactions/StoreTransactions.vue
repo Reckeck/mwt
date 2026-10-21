@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
+import { ListFilter } from 'lucide-vue-next'
 import { useQuery } from '@tanstack/vue-query'
 
 import { TransactionFilterBar } from '@/features/transaction-filter'
 import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
+import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
-import { storeTxFilter } from '@/shared/lib/tx-filter'
+import { storeTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
 
 import { openTxDetails } from '@/shared/lib/tx-details'
 
@@ -43,7 +46,16 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
     <template #header>
       <div class="grid gap-3">
         <p class="font-medium">{{ t('hist.title') }}</p>
-        <TransactionFilterBar v-model="filter" fixed-scope id-prefix="store-hist" />
+        <TransactionFilterBar v-model="filter" fixed-scope id-prefix="store-hist">
+          <template #actions>
+            <Button variant="outline" as-child>
+              <RouterLink :to="{ name: 'transactions', query: txFilterToQuery(filter) }" data-tour="wallet-all-operations">
+                <ListFilter class="size-4" />
+                {{ t('wallet.allOperations') }}
+              </RouterLink>
+            </Button>
+          </template>
+        </TransactionFilterBar>
       </div>
     </template>
     <SectionState

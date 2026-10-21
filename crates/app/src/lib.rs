@@ -219,6 +219,10 @@ pub fn run() {
             analytics::export_report_csv,
             analytics::get_calendar,
             analytics::get_entity_card,
+            analytics::get_search_index,
+            analytics::search_transactions,
+            analytics::get_pinned,
+            analytics::set_pinned,
             // planning
             workflows::workflow_node_catalog,
             workflows::validate_workflow,

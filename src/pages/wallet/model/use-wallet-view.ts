@@ -41,6 +41,7 @@ export function useWalletTabs(isPropertyRoot: Ref<boolean>, hasTerminal: Ref<boo
     ...(isPropertyRoot.value ? [{ value: 'utilities', label: t('walletSettings.utilities') }] : []),
     { value: 'positions', label: t('pos.title') },
     { value: 'history', label: t('hist.title') },
+    { value: 'relations', label: t('wallet.relations') },
   ])
 
   /* --- an exchange page has views: overview, terminal, import --- */

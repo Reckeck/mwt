@@ -108,6 +108,9 @@ pub struct Settings {
     /// takes the key rate (plan C3).
     #[serde(default)]
     pub freedom_rate: Option<Amount>,
+    /// The sidebar's «Pinned» block, in its order (plan J2).
+    #[serde(default)]
+    pub pinned: Vec<crate::model::entity_ref::Pinned>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -179,6 +182,7 @@ impl Default for Settings {
             manual_expenses: None,
             categories_rev: crate::model::category::CATEGORIES_REV,
             freedom_rate: None,
+            pinned: Vec::new(),
         }
     }
 }
