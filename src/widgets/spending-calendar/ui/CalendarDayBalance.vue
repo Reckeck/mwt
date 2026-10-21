@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Bell, BellRing, CalendarClock } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { dateFormat } from '@/shared/lib/format'
+import { noticeRoute } from '@/shared/lib/notice-link'
 
 /**
  * The chosen day's money and messages: spent, the month's rest after it and
@@ -14,6 +15,8 @@ import { dateFormat } from '@/shared/lib/format'
  */
 const props = defineProps<{ day: CalendarDay; currency: string; upcoming: UpcomingItem[] }>()
 const { t } = useI18n()
+const route = useRoute()
+const linkOf = (link: string | null) => noticeRoute(link, route.query)
 
 const time = (iso: string) => dateFormat({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso))
 const hasBalance = computed(() => props.day.left !== null)
@@ -45,7 +48,7 @@ const hasBalance = computed(() => props.day.left !== null)
         <BellRing v-if="notice.category === 'price_alert'" class="size-4 shrink-0 text-warning" />
         <Bell v-else class="size-4 shrink-0 text-muted-foreground" />
         <span class="w-10 shrink-0 text-xs tabular-nums text-muted-foreground">{{ time(notice.at) }}</span>
-        <RouterLink v-if="notice.link" :to="notice.link" class="min-w-0 truncate hover:underline">{{ notice.title }}</RouterLink>
+        <RouterLink v-if="linkOf(notice.link)" :to="linkOf(notice.link) ?? ''" class="min-w-0 truncate hover:underline">{{ notice.title }}</RouterLink>
         <span v-else class="min-w-0 truncate">{{ notice.title }}</span>
       </li>
       <li v-for="item in props.upcoming" :key="`${item.kind}-${item.source_id}-${item.at}`" class="flex min-w-0 items-center gap-2">

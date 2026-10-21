@@ -7,6 +7,7 @@ import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
 import { mockScratchJson } from './exchange-data'
 import { analyticsContext, mockCandles, mockFlows, mockFxTable, mockLossOf } from './market'
+import { mockEntityCard } from './relations'
 import { mockVaultDoc } from './vault-data'
 
 /** Commands: developer tools, reports, losses, links and enrichment. */
@@ -48,6 +49,9 @@ export const devReportCommands: MockCommands = {
   },
   get_calendar: ({ args }) => {
     return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))
+  },
+  get_entity_card: ({ args }) => {
+    return resolve(mockEntityCard(args?.target as EntityRef))
   },
   get_fx_table: (_call) => {
     return resolve(mockFxTable())

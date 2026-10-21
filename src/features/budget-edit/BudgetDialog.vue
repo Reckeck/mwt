@@ -45,7 +45,7 @@ const active = ref(true)
 watch(open, (isOpen) => {
   if (!isOpen) return
   const budget = props.budget
-  const target = budget?.target ?? 'total'
+  const target = budget?.target ?? (props.category ? { category: props.category } : 'total')
   targetKind.value = target === 'total' ? 'total' : 'category' in target ? 'category' : 'store'
   category.value = typeof target === 'object' && 'category' in target ? target.category : ''
   storeId.value = typeof target === 'object' && 'store' in target ? (target.store.store_ids[0] ?? '') : ''

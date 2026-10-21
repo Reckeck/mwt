@@ -271,6 +271,7 @@ fn main() {
         trade_core::service::DailyBudget,
         trade_core::service::MonthSummary,
         trade_core::service::GoalProgress,
+        trade_core::service::EntityCard,
         trade_core::service::RealismIssue,
         trade_core::service::GoalCalendar,
         trade_core::service::GoalCalendarMonth,

@@ -50,7 +50,7 @@ function openSettings() {
 
 function openNotice(record: NoticeRecord) {
   if (!record.read) markRead.mutate([record.key])
-  const target = noticeRoute(record.link)
+  const target = noticeRoute(record.link, router.currentRoute.value.query)
   if (!target) return
   open.value = false
   void router.push(target)

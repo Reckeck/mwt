@@ -197,6 +197,7 @@ pub fn run() {
             analytics::get_report_overview,
             analytics::export_report_csv,
             analytics::get_calendar,
+            analytics::get_entity_card,
             // planning
             workflows::workflow_node_catalog,
             workflows::validate_workflow,

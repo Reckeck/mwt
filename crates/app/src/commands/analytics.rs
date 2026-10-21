@@ -6,7 +6,8 @@ use tauri::{AppHandle, State};
 
 use trade_core::calendar::{Calendar, month_key, now_secs};
 use trade_core::service::{
-    CalendarMonth, Report, ReportFilter, ReportKind, ReportOverview, report_csv,
+    CalendarMonth, EntityCard, EntityRef, Report, ReportFilter, ReportKind, ReportOverview,
+    report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -93,4 +94,14 @@ pub async fn get_calendar(
         .unwrap()
         .calendar_month(&month, now_secs(), &zone)
         .map_err(err_to_string)
+}
+
+/// The card of any entity (plan J1): its head and what links to it.
+#[tauri::command]
+pub async fn get_entity_card(
+    target: EntityRef,
+    state: State<'_, AppState>,
+) -> Result<EntityCard, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().entity_card(&target))
 }

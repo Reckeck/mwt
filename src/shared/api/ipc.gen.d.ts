@@ -1168,6 +1168,37 @@ points: Array<FxPoint>,
 missing: Array<string>, };
 
 /**
+ * The head of an entity's card and what is linked to it.
+ */
+type EntityCard = { target: EntityRef, 
+/**
+ * Empty when the frontend names it (a built-in category, a budget).
+ */
+title: string, 
+/**
+ * The main number: a wallet's value, a goal's target, a limit.
+ */
+value: Amount | null, currency: string | null, archived: boolean, 
+/**
+ * Nothing with this id: deleted, or a link from another vault.
+ */
+missing: boolean, groups: Array<RelationGroup>, 
+/**
+ * The operation itself, for a `tx` card.
+ */
+transaction?: Transaction, };
+
+/**
+ * A kind of thing the app can open a card of.
+ */
+type EntityKind = "store" | "tx" | "category" | "contact" | "goal" | "budget" | "automation" | "workflow" | "reminder" | "alert" | "asset";
+
+/**
+ * The address of one entity: what the `?open=kind:id` link carries.
+ */
+type EntityRef = { kind: EntityKind, id: string, };
+
+/**
  * An envelope: a named, earmarked part of one asset's balance in one store
  * («отпуск», «налоги»). Nothing physically moves — the store still holds the
  * money; envelopes only mark how much of it is spoken for.
@@ -2586,6 +2617,32 @@ type RefreshResult = { prices: number, fx: number,
 restamped: number, updated_at: string, };
 
 type RejectReason = { "insufficient_funds": { store_id: string, asset: AssetRef, required: Amount, available: Amount, } } | { "credit_limit_exceeded": { store_id: string, limit: Amount, required: Amount, } } | { "invalid": { message: string, } };
+
+type RelationGroup = { kind: RelationKind, 
+/**
+ * At most [`RELATION_ITEMS_CAP`].
+ */
+items: Array<RelationItem>, 
+/**
+ * How many there are in all.
+ */
+total: number, };
+
+type RelationItem = { target: EntityRef, 
+/**
+ * The name as stored; empty when the frontend names it itself (a
+ * built-in category, an operation, a budget).
+ */
+label: string, 
+/**
+ * A date (RFC3339) for operations and reminders.
+ */
+when: string | null, value: Amount | null, currency: string | null, archived: boolean, };
+
+/**
+ * What a group of related things is.
+ */
+type RelationKind = "parent" | "children" | "stores" | "assets" | "goals" | "budgets" | "automations" | "workflows" | "reminders" | "alerts" | "rules" | "categories" | "contacts" | "transactions" | "origin" | "flow" | "created";
 
 type Reminder = { id: string, text: string, 
 /**
