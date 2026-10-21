@@ -393,6 +393,27 @@ impl EmergencyFund {
     }
 }
 
+/// A basket of the portfolio with its target share (plan F). The shares of
+/// all baskets sum to 100.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct AssetClass {
+    pub id: String,
+    /// Empty on a preset basket nobody renamed yet: the UI shows its own name.
+    pub name: String,
+    /// Target share, percent.
+    pub target_pct: Amount,
+    /// Above its target the basket gets no top-ups (the risky part).
+    pub cap: bool,
+}
+
+/// An asset placed in a basket by hand; beats the store's basket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct AssetClassLink {
+    /// `AssetRef::key()`.
+    pub asset_key: String,
+    pub class_id: String,
+}
+
 /// Unit of a reminder's repeat interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]

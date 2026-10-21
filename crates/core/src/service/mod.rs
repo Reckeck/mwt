@@ -28,6 +28,7 @@ pub use saving::{FlushJob, Flushed, SaveHook};
 
 mod adjustments;
 mod agenda;
+mod allocation;
 mod asset_holdings;
 mod auto_reminders;
 mod automations;
@@ -71,6 +72,10 @@ mod worth;
 
 pub use adjustments::AdjustmentDraft;
 pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
+pub use allocation::{
+    AssetClassTarget, AssetClassesView, PRESET_GLOBAL, PRESET_LOCAL, PRESET_RISKY, TopupAdvice,
+    TopupRow, preset_classes,
+};
 pub use asset_holdings::{AssetHolding, AssetHoldings};
 pub use auto_reminders::category_of;
 pub(crate) use automations::draft_to_transaction;
@@ -134,7 +139,7 @@ pub use utilities::{
     preview_utility_formula,
 };
 pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
-pub use worth::{FlowClass, LiabilityShare, NetWorth};
+pub use worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an
 /// `Option<Option>`-like field keeps the current value where noted.

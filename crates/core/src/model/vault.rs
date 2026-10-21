@@ -582,6 +582,12 @@ pub struct VaultDoc {
     /// The last monthly checkup notice, so the next one comes only on a change.
     #[serde(default)]
     pub health_last: Option<crate::model::planning::HealthSnapshot>,
+    /// Portfolio baskets with target shares (plan F); empty = the preset.
+    #[serde(default)]
+    pub asset_classes: Vec<crate::model::planning::AssetClass>,
+    /// Assets placed in a basket by hand, by `AssetRef::key()`.
+    #[serde(default)]
+    pub asset_class_of: Vec<crate::model::planning::AssetClassLink>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -643,6 +649,8 @@ impl Default for VaultDoc {
             inflation_points: Vec::new(),
             emergency_fund: Default::default(),
             health_last: None,
+            asset_classes: Vec::new(),
+            asset_class_of: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

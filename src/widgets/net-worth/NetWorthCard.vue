@@ -4,7 +4,9 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { assetClassName } from '@/entities/asset-class'
 import { Money, useMoneyChartTooltip } from '@/entities/currency'
+import { useAssetClasses } from '@/shared/api/queries'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
@@ -45,6 +47,26 @@ const loanKinds = computed(() => {
   return shares.length > 1 ? shares : []
 })
 
+const classes = useAssetClasses()
+
+/** Financial assets by basket, under «Финансовые»; shown once there is more than one, or a fund to set apart. */
+const classShares = computed(() => {
+  const data = worth.data.value
+  if (!data) return []
+  const fund = Number(data.financial_fund)
+  if (data.financial_by_class.length < 2 && fund <= 0) return []
+  const known = classes.data.value?.classes ?? []
+  const rows = data.financial_by_class.map((share) => {
+    const cls = known.find((entry) => entry.id === share.class_id)
+    return {
+      key: share.class_id ?? '',
+      label: cls ? assetClassName(cls, t) : t('assetClass.none'),
+      amount: share.amount,
+    }
+  })
+  return fund > 0 ? [...rows, { key: '#fund', label: t('assetClass.fundRow'), amount: data.financial_fund }] : rows
+})
+
 const moneyTooltip = useMoneyChartTooltip(computed(() => worth.data.value?.base_currency ?? 'usd'))
 
 /** A sparkline: no axes, no grid, just the shape of the last twelve months. */
@@ -80,6 +102,14 @@ const option = computed<ChartOption>(() => ({
               :decimals="0"
             />
           </dd>
+          <template v-if="row.key === 'financial'">
+            <template v-for="share in classShares" :key="share.key">
+              <dt class="truncate pl-3 text-muted-foreground">{{ share.label }}</dt>
+              <dd class="text-right text-muted-foreground">
+                <Money :amount="share.amount" :currency="worth.data.value.base_currency" :decimals="0" />
+              </dd>
+            </template>
+          </template>
           <template v-if="row.key === 'liabilities'">
             <template v-for="share in loanKinds" :key="share.kind">
               <dt class="pl-3 text-muted-foreground">{{ t(`liabilityKind.${share.kind}`) }}</dt>

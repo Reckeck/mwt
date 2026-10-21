@@ -242,6 +242,8 @@ export function mockNetWorth(): NetWorth {
     liabilities_by_kind: [],
     payables: '0',
     net: String(financial + receivables),
+    financial_by_class: [{ class_id: null, amount: String(financial) }],
+    financial_fund: '0',
   }
 }
 

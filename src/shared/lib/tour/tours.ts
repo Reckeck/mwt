@@ -143,7 +143,12 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.wealth', side: 'top' },
   ]),
-  'analytics-investments': analytics([{ target: 'section-content', key: 'analytics.investments', side: 'top' }]),
+  'analytics-investments': analytics([
+    { target: 'section-content', key: 'analytics.investments', side: 'top' },
+    { target: 'topup-advisor', key: 'assetClass.advisor', side: 'top' },
+    { target: 'asset-classes', key: 'assetClass.classes', side: 'bottom' },
+    { target: 'asset-baskets', key: 'assetClass.assets', side: 'top' },
+  ]),
   'analytics-saldo': analytics([
     { target: 'section-content', key: 'analytics.saldo', side: 'top' },
     { target: 'saldo-pool', key: 'analytics.saldoPool', side: 'top' },

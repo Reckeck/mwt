@@ -16,6 +16,7 @@ const SECTION_GROUP: Record<string, SettingsGroup> = {
   loyalty: 'general',
   deposit: 'general',
   terms: 'general',
+  basket: 'general',
   import: 'exchange',
   syncs: 'exchange',
   imported: 'exchange',

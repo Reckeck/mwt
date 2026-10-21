@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { AnalyticsReportView } from '@/widgets/analytics-reports'
 import { FlowList } from '@/widgets/flow-list'
+import { TopupAdvisor } from '@/widgets/topup-advisor'
 import { defaultRange } from '@/widgets/report-filter'
 
 const props = defineProps<{ filter: ReportFilter }>()
@@ -22,6 +23,10 @@ const period = computed(() => {
     <section class="grid gap-3">
       <h2 class="heading-section">{{ t('analytics.section.allocation') }}</h2>
       <AnalyticsReportView kind="portfolio" :filter="props.filter" />
+    </section>
+    <section class="grid gap-3">
+      <h2 class="heading-section">{{ t('analytics.section.topup') }}</h2>
+      <TopupAdvisor />
     </section>
     <section class="grid gap-3">
       <h2 class="heading-section">{{ t('analytics.section.result') }}</h2>

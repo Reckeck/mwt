@@ -195,7 +195,11 @@ Frontend парсит код и показывает локализованно�
 
 ### portfolio
 | `get_summary` | — | `PortfolioSummary { base_currency, fx_per_usd, total_usd, total_base, assets, by_chain, by_store, assets_base, liabilities_base, net_worth_base, prices_as_of? }` (деривативы не входят; `prices_as_of` — время самой свежей цены/курса в кэше) |
-| `get_net_worth` | — | `NetWorth { base_currency, financial, non_financial, receivables, liabilities, liabilities_by_kind: [{ kind, amount }], payables, net }` — `liabilities_by_kind` раскладывает `liabilities` по видам кредитов, по убыванию |
+| `get_net_worth` | — | `NetWorth { base_currency, financial, non_financial, receivables, liabilities, liabilities_by_kind: [{ kind, amount }], payables, net, financial_by_class: [{ class_id?, amount }], financial_fund }` — `liabilities_by_kind` раскладывает `liabilities` по видам кредитов, по убыванию; `financial_by_class` раскладывает финансовые активы по корзинам портфеля (`class_id: null` — без корзины), подушка отдельно в `financial_fund` |
+| `asset_classes_get` | — | `AssetClassesView { classes, preset, links }` — корзины портфеля с целевыми долями; пока пользователь ничего не сохранил, `preset: true` и отдаётся 40/40/20 (имя пустое — UI показывает своё) |
+| `asset_classes_set` | `classes: AssetClass[]` | `AssetClassesView` — заменить корзины; доли 0..100, сумма = 100 (иначе `INVALID_INPUT`), пустой список возвращает пресет; привязки к удалённым корзинам снимаются |
+| `asset_class_assign` | `target: { kind: 'asset', asset_key } \| { kind: 'store', store_id }, class_id?` | `AssetClassesView` — корзина актива (важнее корзины счёта) или счёта; `null` снимает; счёт подушки в корзину не ставится; на пресете первое назначение сохраняет пресет |
+| `topup_advice` | `amount?` | `TopupAdvice { currency, amount, from_savings, savings_month?, rows: [{ class, value, pct_before?, add, pct_after?, capped }], unclassified, emergency, preset }` — как разделить сумму (по умолчанию накопления прошлого месяца) по корзинам, чтобы доли шли к целевым; корзина с `cap` выше цели не получает ничего. Операций не создаёт |
 | `set_manual_price` | `SetManualPriceInput { asset_key, unit_price, currency }` | `ManualPrice` — оценка имущества в узле `asset`, на всю историю |
 | `clear_manual_price` | `asset_key` | `()` — назад к цене покупки |
 | `get_history` | `base_currency?` | `Vec<HistoryPoint { ts, ts_ms, value_usd, value_base }>` |

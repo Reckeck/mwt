@@ -122,5 +122,7 @@ export function mockVaultDoc(): VaultDoc {
     inflation_points: [],
     emergency_fund: fund,
     health_last: null,
+    asset_classes: [],
+    asset_class_of: [],
   }
 }

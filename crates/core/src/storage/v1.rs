@@ -310,6 +310,8 @@ impl From<VaultDocV1> for VaultDocV2 {
             inflation_points: Vec::new(),
             emergency_fund: Default::default(),
             health_last: None,
+            asset_classes: Vec::new(),
+            asset_class_of: Vec::new(),
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

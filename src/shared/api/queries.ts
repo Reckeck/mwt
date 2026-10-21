@@ -32,3 +32,16 @@ export const CAPITAL_HEALTH_KEY = ['capital-health']
 /** The fund status, shared by the wallet switch and the checkup. */
 export const useEmergencyStatus = () =>
   useQuery({ queryKey: EMERGENCY_FUND_KEY, queryFn: () => call<EmergencyStatus>('emergency_fund_get') })
+
+/** The baskets and hand-placed assets (`asset_classes_get`). */
+export const ASSET_CLASSES_KEY = ['asset-classes']
+/** Where the month's free money goes (`topup_advice`); the amount is appended to the key. */
+export const TOPUP_ADVICE_KEY = ['topup-advice']
+
+/** The baskets, shared by the editor, the store field and the top-up helper. */
+export const useAssetClasses = (enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({
+    queryKey: ASSET_CLASSES_KEY,
+    queryFn: () => call<AssetClassesView>('asset_classes_get'),
+    enabled: toRef(enabled),
+  })
