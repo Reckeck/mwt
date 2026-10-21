@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::category::CategoryGroup;
-use crate::model::store::StoreKind;
+use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::model::vault::{ManualPrice, now_iso};
 
@@ -26,9 +26,18 @@ pub struct NetWorth {
     pub receivables: Amount,
     /// Loans, mortgages, credit cards.
     pub liabilities: Amount,
+    /// `liabilities` by loan kind, largest first (plan E); sums to it.
+    pub liabilities_by_kind: Vec<LiabilityShare>,
     /// What I owe people.
     pub payables: Amount,
     pub net: Amount,
+}
+
+/// The part of the debts that is one kind of loan.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct LiabilityShare {
+    pub kind: LiabilityKind,
+    pub amount: Amount,
 }
 
 /// Where a transaction lands in the budget (plan §7.3).
@@ -130,6 +139,18 @@ impl UnlockedVault {
             .iter()
             .map(|store| (store.id.as_str(), store.kind))
             .collect();
+        let loan_kinds: HashMap<&str, LiabilityKind> = self
+            .doc
+            .stores
+            .iter()
+            .map(|store| {
+                let kind = store
+                    .liability
+                    .as_ref()
+                    .map_or(LiabilityKind::Other, |terms| terms.kind);
+                (store.id.as_str(), kind)
+            })
+            .collect();
         let mut out = NetWorth {
             base_currency: base,
             ..NetWorth::default()
@@ -150,9 +171,21 @@ impl UnlockedVault {
                 _ => out.financial += value,
             }
         }
-        for value in loans.into_values() {
+        let mut by_kind: Vec<LiabilityShare> = Vec::new();
+        for (store_id, value) in loans {
             if value.is_negative() {
                 out.liabilities += value.abs();
+                let kind = loan_kinds
+                    .get(store_id)
+                    .copied()
+                    .unwrap_or(LiabilityKind::Other);
+                match by_kind.iter_mut().find(|share| share.kind == kind) {
+                    Some(share) => share.amount += value.abs(),
+                    None => by_kind.push(LiabilityShare {
+                        kind,
+                        amount: value.abs(),
+                    }),
+                }
             } else {
                 out.financial += value;
             }
@@ -162,6 +195,10 @@ impl UnlockedVault {
             out.receivables += balance.receivable.max(Amount::ZERO) * price;
             out.payables += balance.payable.max(Amount::ZERO) * price;
         }
+        by_kind.sort_by(|left, right| {
+            (right.amount.cmp(&left.amount)).then((left.kind as u8).cmp(&(right.kind as u8)))
+        });
+        out.liabilities_by_kind = by_kind;
         out.net =
             out.financial + out.non_financial + out.receivables - out.liabilities - out.payables;
         out
@@ -331,6 +368,13 @@ mod tests {
         let worth = vault.net_worth();
         assert_eq!(worth.financial, amount("200"));
         assert_eq!(worth.liabilities, amount("410"));
+        assert_eq!(
+            worth.liabilities_by_kind,
+            vec![LiabilityShare {
+                kind: LiabilityKind::CreditCard,
+                amount: amount("410"),
+            }]
+        );
         assert_eq!(worth.net, amount("-210"));
         let summary = vault.portfolio_summary();
         assert_eq!(summary.liabilities_base, amount("410"));

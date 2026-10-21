@@ -553,7 +553,7 @@ impl UnlockedVault {
 
     /// The currency a store mostly holds, for terms entered without one:
     /// its largest fiat holding, else the base currency.
-    fn store_currency(&self, store_id: &str) -> String {
+    pub(crate) fn store_currency(&self, store_id: &str) -> String {
         self.doc
             .holdings
             .iter()

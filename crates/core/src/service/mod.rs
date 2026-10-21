@@ -34,6 +34,7 @@ mod automations;
 mod budget;
 mod categories;
 mod contacts;
+mod debts;
 mod emergency;
 mod enrichment;
 mod envelopes;
@@ -77,6 +78,7 @@ pub use automations::{
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
+pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
 pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
@@ -125,7 +127,7 @@ pub use utilities::{
     preview_utility_formula,
 };
 pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
-pub use worth::{FlowClass, NetWorth};
+pub use worth::{FlowClass, LiabilityShare, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an
 /// `Option<Option>`-like field keeps the current value where noted.

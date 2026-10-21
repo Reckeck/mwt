@@ -1065,6 +1065,27 @@ type DayStatus = "none" | "under" | "near" | "over" | "future";
 type DebtEffect = "lend" | "borrow" | "repay" | "collect";
 
 /**
+ * Loans and the share of income they take (plan C2).
+ */
+type DebtLoad = { 
+/**
+ * The budget currency every amount here is in.
+ */
+currency: string, loans: Array<LoanStatus>, owed: Amount, payments: Amount, 
+/**
+ * Average monthly income; `None` without history or a hand-entered month.
+ */
+income: Amount | null, 
+/**
+ * Finished months behind `income`; 0 when it is the hand-entered month.
+ */
+income_months: number, 
+/**
+ * `payments / income`, percent.
+ */
+dti_pct: Amount | null, key_rate: Amount | null, };
+
+/**
  * When and why a debt with a contact is due. The amount is never stored: it
  * is what the debt operations with the contact add up to (`DebtEffect`).
  */
@@ -2142,6 +2163,11 @@ type LegRole = "principal" | "fee" | "pnl" | "adjustment";
 type LiabilityKind = "mortgage" | "loan" | "credit_card" | "installment" | "other";
 
 /**
+ * The part of the debts that is one kind of loan.
+ */
+type LiabilityShare = { kind: LiabilityKind, amount: Amount, };
+
+/**
  * Terms of a `liability` store or a credit card. Informational, except
  * `limit`, which caps what an automation may charge to a credit card.
  */
@@ -2190,6 +2216,41 @@ type ListWorkflowRunsInput = { workflow_id: string | null,
  * Newest first, 100 by default.
  */
 limit: number | null, };
+
+/**
+ * How a loan's rate compares with money's price (decision 16).
+ */
+type LoanClass = "costly" | "normal" | "cheap" | "unknown";
+
+/**
+ * One loan or credit card that owes money or has a payment.
+ */
+type LoanStatus = { store_id: string, kind: LiabilityKind, 
+/**
+ * The currency the loan is kept in.
+ */
+own_currency: string, 
+/**
+ * What is owed, positive, in the budget currency.
+ */
+owed: Amount, 
+/**
+ * Annual rate, percent.
+ */
+rate: Amount | null, 
+/**
+ * What the rate was compared with: the key rate, or inflation plus a
+ * margin; `None` when neither is known.
+ */
+benchmark: Amount | null, inflation: Amount | null, class: LoanClass, 
+/**
+ * Monthly payment in the budget currency.
+ */
+payment: Amount, 
+/**
+ * The payment is the average repayment of recent months, not the terms.
+ */
+payment_from_fact: boolean, };
 
 type Locale = "auto" | "en" | "ru";
 
@@ -2358,6 +2419,10 @@ receivables: Amount,
  * Loans, mortgages, credit cards.
  */
 liabilities: Amount, 
+/**
+ * `liabilities` by loan kind, largest first (plan E); sums to it.
+ */
+liabilities_by_kind: Array<LiabilityShare>, 
 /**
  * What I owe people.
  */

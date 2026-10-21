@@ -239,6 +239,7 @@ export function mockNetWorth(): NetWorth {
     non_financial: '0',
     receivables: String(receivables),
     liabilities: '0',
+    liabilities_by_kind: [],
     payables: '0',
     net: String(financial + receivables),
   }
