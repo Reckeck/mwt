@@ -41,6 +41,7 @@ mod enrichment;
 mod envelopes;
 mod exchange_sync;
 mod passive;
+mod property_links;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
 mod health;
@@ -1173,7 +1174,17 @@ impl UnlockedVault {
 
     /// Validate and append a transaction of any variant (plan §4.5, §8.1):
     /// categories are normalized and auto-filled, then every rule is checked.
-    pub fn add_transaction(&mut self, mut tx: Transaction) -> Result<Transaction> {
+    pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction> {
+        self.add_transaction_for(tx, None)
+    }
+
+    /// [`Self::add_transaction`], linked to a property (plan G4).
+    pub fn add_transaction_for(
+        &mut self,
+        mut tx: Transaction,
+        property_id: Option<&str>,
+    ) -> Result<Transaction> {
+        self.check_property_link(property_id)?;
         self.prepare_transaction(&mut tx)?;
         if tx.meta().id.trim().is_empty()
             || self
@@ -1185,6 +1196,7 @@ impl UnlockedVault {
             tx.meta_mut().id = uuid::Uuid::new_v4().to_string();
         }
         self.doc.transactions.push(tx.clone());
+        self.set_property_link(&tx.meta().id, property_id);
         self.recompute_holdings();
         self.persist()?;
         Ok(tx)
@@ -1235,7 +1247,20 @@ impl UnlockedVault {
 
     /// Replace a transaction entirely. Its id and origin are kept: an edit
     /// changes what happened, not where the record came from.
-    pub fn update_transaction(&mut self, id: &str, mut tx: Transaction) -> Result<Transaction> {
+    pub fn update_transaction(&mut self, id: &str, tx: Transaction) -> Result<Transaction> {
+        let property = self.property_of_tx(id).map(str::to_string);
+        self.update_transaction_for(id, tx, property.as_deref())
+    }
+
+    /// [`Self::update_transaction`] that also sets the operation's property;
+    /// `None` unlinks it.
+    pub fn update_transaction_for(
+        &mut self,
+        id: &str,
+        mut tx: Transaction,
+        property_id: Option<&str>,
+    ) -> Result<Transaction> {
+        self.check_property_link(property_id)?;
         let index = self
             .doc
             .transactions
@@ -1255,6 +1280,7 @@ impl UnlockedVault {
         tx.meta_mut().origin = origin;
         self.prepare_transaction(&mut tx)?;
         self.doc.transactions[index] = tx.clone();
+        self.set_property_link(id, property_id);
         self.recompute_holdings();
         self.persist()?;
         Ok(tx)
@@ -1266,6 +1292,7 @@ impl UnlockedVault {
         if self.doc.transactions.len() == before {
             return Err(Error::Missing("transaction".into()));
         }
+        self.set_property_link(id, None);
         self.recompute_holdings();
         self.persist()?;
         Ok(())

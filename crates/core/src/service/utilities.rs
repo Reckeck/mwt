@@ -344,6 +344,21 @@ pub struct PropertySummary {
     pub loan_month_base: Amount,
     pub monthly_cost_base: Amount,
     pub utility_count: u32,
+    /// Rent received over the last 12 months (operations linked to it).
+    #[serde(default)]
+    pub rent_12m_base: Amount,
+    /// Linked operations, utility bills and loan payments over 12 months.
+    #[serde(default)]
+    pub expenses_12m_base: Amount,
+    /// Rent over 12 months to the current value, %; `None` without a value.
+    #[serde(default)]
+    pub rent_yield_pct: Option<Amount>,
+    /// A car: expenses and the loss of value over the year, a month.
+    #[serde(default)]
+    pub ownership_month_base: Option<Amount>,
+    /// The value lost over the year (a car's wear); zero when it grew.
+    #[serde(default)]
+    pub wear_12m_base: Amount,
 }
 
 /// One line of a month's utility bill.
@@ -490,7 +505,20 @@ impl UnlockedVault {
         });
         let value_base = value_usd * fx;
         let debt_base = debt_usd * fx;
+        let year = self.property_year(store_id, now);
+        let twelve = Amount::new(rust_decimal::Decimal::from(12));
+        let is_car = store
+            .property
+            .as_ref()
+            .is_some_and(|info| info.category == crate::model::store::PropertyCategory::Car);
         Ok(PropertySummary {
+            rent_12m_base: year.rent.round(2),
+            expenses_12m_base: year.expenses.round(2),
+            rent_yield_pct: (value_base.is_positive() && year.rent.is_positive()).then(|| {
+                (year.rent / value_base * Amount::new(rust_decimal::Decimal::from(100))).round(2)
+            }),
+            ownership_month_base: is_car.then(|| ((year.expenses + year.wear) / twelve).round(2)),
+            wear_12m_base: year.wear.round(2),
             store_id: store.id.clone(),
             base_currency: base,
             value_base,
@@ -938,7 +966,7 @@ impl UnlockedVault {
 
     /// Payments made for an item: linked to it, or — from before the link —
     /// with its name as the comment, its category and its store.
-    fn item_payments<'doc>(
+    pub(crate) fn item_payments<'doc>(
         &'doc self,
         item: &'doc UtilityItem,
     ) -> impl Iterator<Item = &'doc PaymentTx> + 'doc {

@@ -264,6 +264,10 @@ pub struct TxCommonInput {
     #[serde(default)]
     #[ts(skip)]
     pub price_base: Option<Amount>,
+    /// The property the operation belongs to (plan G4); empty — none.
+    #[serde(default)]
+    #[ts(optional)]
+    pub property_id: Option<String>,
 }
 
 impl TxCommonInput {
@@ -452,6 +456,25 @@ fn text(raw: &Option<String>) -> Option<String> {
 impl TransactionInput {
     /// Build the domain transaction. Rules are checked by the service, not here.
     /// The fields every kind shares.
+    pub fn common(&self) -> &TxCommonInput {
+        match self {
+            Self::Topup { common, .. }
+            | Self::Payment { common, .. }
+            | Self::Transfer { common, .. }
+            | Self::Convert { common, .. }
+            | Self::TradeSpot { common, .. }
+            | Self::TradeFutures { common, .. }
+            | Self::Defi { common, .. }
+            | Self::AssetSell { common, .. }
+            | Self::Adjustment { common, .. } => common,
+        }
+    }
+
+    /// The property the operation belongs to, trimmed; `None` — none.
+    pub fn property_id(&self) -> Option<String> {
+        text(&self.common().property_id)
+    }
+
     pub fn common_mut(&mut self) -> &mut TxCommonInput {
         match self {
             Self::Topup { common, .. }
@@ -1142,6 +1165,7 @@ impl AutomationInput {
             template,
             amount_mode: self.amount_mode,
             workday_shift: self.workday_shift,
+            property_id: self.template.property_id(),
         })
     }
 }

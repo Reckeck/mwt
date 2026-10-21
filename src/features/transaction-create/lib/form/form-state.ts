@@ -87,6 +87,8 @@ export interface TransactionFormState {
   /** Code `price` is typed in; `''` means the base currency. */
   priceCurrency: string
   flowId: string
+  /** The property the operation belongs to (rent, fuel, repair); `''` — none. */
+  propertyId: string
 }
 
 export const USDT: AssetRef = {
@@ -153,5 +155,6 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     price: '',
     priceCurrency: '',
     flowId: '',
+    propertyId: '',
   }
 }

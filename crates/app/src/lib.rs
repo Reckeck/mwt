@@ -99,6 +99,7 @@ pub fn run() {
             transactions::add_linked_transactions,
             transactions::preview_transaction,
             transactions::update_transaction,
+            transactions::tx_property_links,
             transactions::delete_transaction,
             transactions::get_adjustment_draft,
             // categories and rules

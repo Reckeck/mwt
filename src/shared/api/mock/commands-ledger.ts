@@ -9,6 +9,7 @@ import type { MockCommands } from './core'
 import { mockBalanceOf, mockPush, mockTransactions, priceOf } from './demo'
 import { mockCachedPrice, mockCalc, mockNetWorth, mockSearch } from './market'
 import { mockPreview } from './tree'
+import { mockLinkProperty, mockPropertyLinks } from './property-links'
 
 /** Commands: contacts. */
 export const contactsCommands: MockCommands = {
@@ -126,8 +127,12 @@ export const transactionsCommands: MockCommands = {
     return resolve(built.map(mockPush))
   },
   add_transaction: ({ args }) => {
-    return resolve(mockPush(mockTransactionFrom(args?.input as TransactionInput, priceOf, undefined, mockBalanceOf)))
+    const input = args?.input as TransactionInput
+    const tx = mockPush(mockTransactionFrom(input, priceOf, undefined, mockBalanceOf))
+    mockLinkProperty(txId(tx), input.common.property_id)
+    return resolve(tx)
   },
+  tx_property_links: () => resolve([...mockPropertyLinks]),
   get_adjustment_draft: ({ body }) => {
     const input = body as AdjustmentDraftInput
     const totals = new Map<string, { asset: AssetRef; total: number }>()
@@ -165,11 +170,13 @@ export const transactionsCommands: MockCommands = {
     mockTransactions[index] = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
       mockBalanceOf(storeId, symbol, input.id),
     )
+    mockLinkProperty(input.id, input.transaction.common.property_id)
     return resolve(mockTransactions[index])
   },
   delete_transaction: ({ args }) => {
     const idx = mockTransactions.findIndex((tx) => txId(tx) === String(args?.id))
     if (idx >= 0) mockTransactions.splice(idx, 1)
+    mockLinkProperty(String(args?.id), null)
     return resolve({})
   },
   search_assets: ({ body }) => {

@@ -95,6 +95,7 @@ export function syncWorkflow(automation: Automation) {
     template: automation.template,
     amount_mode: automation.amount_mode,
     workday_shift: automation.workday_shift,
+    property_id: automation.property_id,
   }
   const workflow: Workflow = {
     id: automation.id,

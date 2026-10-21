@@ -1,6 +1,8 @@
 /** Commands: utility items, meter readings, bills and payments. */
 
 import { money } from './budget-calc'
+import { mockStore } from '../tree'
+import { mockPropertyYear } from '../property-links'
 import { fail, iso, now, readings, remove, replace, utilities, uuid } from './state'
 import type { PlanningMockContext } from './state'
 import { paymentsOf, utilityTrend } from './utility-calc'
@@ -185,6 +187,8 @@ export function planUtilities(
       const storeId = String(args?.storeId ?? '')
       const own = utilities.filter((item) => item.active && item.property_id === storeId)
       const monthly = own.reduce((sum, item) => sum + Number(utilityTrend(item).monthly), 0)
+      const year = mockPropertyYear(storeId)
+      const car = mockStore(storeId)?.property?.category === 'car'
       const summary: PropertySummary = {
         store_id: storeId,
         base_currency: 'usd',
@@ -195,6 +199,11 @@ export function planUtilities(
         loan_month_base: '0',
         monthly_cost_base: String(monthly),
         utility_count: own.length,
+        rent_12m_base: money(year.rent),
+        expenses_12m_base: money(year.expenses + monthly * 12),
+        rent_yield_pct: null,
+        ownership_month_base: car ? money((year.expenses + monthly * 12) / 12) : null,
+        wear_12m_base: '0',
       }
       return summary
     }

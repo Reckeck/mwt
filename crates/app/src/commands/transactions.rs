@@ -6,6 +6,7 @@ use trade_core::ipc_contract::{
 };
 use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
+use trade_core::model::vault::TxProperty;
 
 use trade_core::service::{AdjustmentDraft, TxFilter, TxGraph, TxPage, TxPreview};
 
@@ -85,7 +86,7 @@ pub async fn add_transaction(
             .resolve_input_price(&mut input)
             .map_err(err_to_string)?;
         vault
-            .add_transaction(input.to_transaction())
+            .add_transaction_for(input.to_transaction(), input.property_id().as_deref())
             .map_err(err_to_string)?
     };
     enrich_in_background(&app, saved.meta().id.clone());
@@ -124,7 +125,11 @@ pub async fn update_transaction(
             .resolve_input_price(&mut draft)
             .map_err(err_to_string)?;
         vault
-            .update_transaction(&input.id, draft.to_transaction())
+            .update_transaction_for(
+                &input.id,
+                draft.to_transaction(),
+                draft.property_id().as_deref(),
+            )
             .map_err(err_to_string)?
     };
     enrich_in_background(&app, saved.meta().id.clone());
@@ -172,6 +177,13 @@ pub async fn get_adjustment_draft(
         .unwrap()
         .adjustment_draft(&input)
         .map_err(err_to_string)
+}
+
+/// Which operation belongs to which property (plan G4).
+#[tauri::command]
+pub async fn tx_property_links(state: State<'_, AppState>) -> Result<Vec<TxProperty>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().tx_property_links())
 }
 
 #[tauri::command]

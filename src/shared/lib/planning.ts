@@ -30,6 +30,8 @@ export const LEDGER_KEYS = [
   ['net-worth'],
   ['report'],
   ['calendar'],
+  ['tx-property-links'],
+  ['property-summary'],
   // A correction's «ledger» column is the balance at its moment: any change of history moves it.
   ['adjustment-draft'],
 ]

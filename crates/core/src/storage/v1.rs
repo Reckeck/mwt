@@ -313,6 +313,7 @@ impl From<VaultDocV1> for VaultDocV2 {
             asset_classes: Vec::new(),
             asset_class_of: Vec::new(),
             valuations: Vec::new(),
+            tx_properties: Vec::new(),
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

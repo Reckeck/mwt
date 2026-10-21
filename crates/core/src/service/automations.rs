@@ -45,6 +45,7 @@ pub struct AutomationDraft {
     pub template: TransactionDraft,
     pub amount_mode: AmountMode,
     pub workday_shift: WorkdayShift,
+    pub property_id: Option<String>,
 }
 
 impl AutomationDraft {
@@ -56,6 +57,7 @@ impl AutomationDraft {
             template: self.template.clone(),
             amount_mode: self.amount_mode,
             workday_shift: self.workday_shift,
+            property_id: self.property_id.clone(),
         }
     }
 }
@@ -68,6 +70,7 @@ fn spec_of(automation: &Automation) -> AutomationSpec {
         template: automation.template.clone(),
         amount_mode: automation.amount_mode,
         workday_shift: automation.workday_shift,
+        property_id: automation.property_id.clone(),
     }
 }
 
@@ -251,6 +254,7 @@ impl UnlockedVault {
             amount_mode: spec.amount_mode,
             workday_shift: spec.workday_shift,
             estimate,
+            property_id: spec.property_id.clone(),
         })
     }
 
@@ -344,6 +348,7 @@ impl UnlockedVault {
                     .into(),
             ));
         }
+        self.check_property_link(draft.property_id.as_deref())?;
         let Some(starts) = unix_secs(&draft.starts_at) else {
             return Err(Error::InvalidInput("choose a start date".into()));
         };
@@ -893,6 +898,7 @@ mod tests {
                 template,
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap()
     }
@@ -953,6 +959,7 @@ mod tests {
                 template: salary_draft(&card, "100"),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap();
 
@@ -1053,6 +1060,7 @@ mod tests {
                 template: rent_draft(&card, "1"),
                 amount_mode: AmountMode::Fixed,
                 workday_shift: WorkdayShift::None,
+                property_id: None,
             })
             .unwrap();
         let dates: Vec<String> = vault
@@ -1139,6 +1147,7 @@ mod tests {
                 template: salary_draft(&card, "1"),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap();
         let pass = vault
@@ -1310,6 +1319,7 @@ mod tests {
                 template: TransactionDraft::Payment(bill),
                 amount_mode: Default::default(),
                 workday_shift: Default::default(),
+                property_id: None,
             })
             .unwrap_err();
         assert_eq!(err.code(), "INVALID_INPUT");
@@ -1326,6 +1336,7 @@ mod tests {
                 template: salary_draft(card, "1000"),
                 amount_mode: AmountMode::Varies,
                 workday_shift: WorkdayShift::Back,
+                property_id: None,
             })
             .unwrap()
     }
@@ -1440,6 +1451,7 @@ mod tests {
             template: salary_draft(&card, "1000"),
             amount_mode: AmountMode::Fixed,
             workday_shift: WorkdayShift::Forward,
+            property_id: None,
         };
         vault
             .update_automation(&salary.id, changed.clone())
@@ -1481,6 +1493,7 @@ mod tests {
                 template: TransactionDraft::Convert(inner),
                 amount_mode: AmountMode::Varies,
                 workday_shift: WorkdayShift::None,
+                property_id: None,
             })
             .unwrap_err();
         assert_eq!(err.code(), "INVALID_INPUT");

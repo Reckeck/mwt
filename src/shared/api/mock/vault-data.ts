@@ -4,6 +4,7 @@ import { mockCategories, mockContacts, mockRules } from './ledger'
 import { mockDebtTerms, mockEnvelopes } from './catalog'
 import { mockStores, mockTransactions } from './demo'
 import { fund } from './planning/emergency'
+import { mockPropertyLinks } from './property-links'
 
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
 export const mockStatus: { value: VaultStatus } = {
@@ -125,5 +126,6 @@ export function mockVaultDoc(): VaultDoc {
     asset_classes: [],
     asset_class_of: [],
     valuations: [],
+    tx_properties: [...mockPropertyLinks],
   }
 }

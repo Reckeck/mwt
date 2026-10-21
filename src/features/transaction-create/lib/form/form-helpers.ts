@@ -65,6 +65,7 @@ export function common(form: TransactionFormState): TxCommonInput {
     fx_override: null,
     price: text(form.price),
     price_currency: text(form.priceCurrency),
+    property_id: text(form.propertyId) ?? undefined,
   }
 }
 
