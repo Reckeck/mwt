@@ -147,6 +147,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.planning' },
             },
             {
+              path: 'calculator',
+              name: 'planning-calculator',
+              component: () => import('@/pages/planning').then((page) => page.PlanningCalculator),
+              meta: { i18n: 'nav.planning' },
+            },
+            {
               path: 'reminders',
               name: 'planning-reminders',
               component: () => import('@/pages/planning').then((page) => page.PlanningReminders),

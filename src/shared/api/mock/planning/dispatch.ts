@@ -3,6 +3,7 @@
 import { planAutomationAmounts } from './automation-workflow'
 import { planAutomations } from './automations'
 import { upcoming } from './budget-calc'
+import { planCalculator } from './calculator'
 import { planReminders } from './reminders'
 import { mockContext } from './state'
 import type { PlanningMockContext } from './state'
@@ -24,6 +25,7 @@ export function mockPlanning(
     planAutomations(cmd, args, ctx, settings) ??
     planAutomationAmounts(cmd, args, ctx) ??
     planReminders(cmd, args, ctx, settings) ??
-    planUtilities(cmd, args, ctx, settings)
+    planUtilities(cmd, args, ctx, settings) ??
+    planCalculator(cmd, args, ctx)
   )
 }

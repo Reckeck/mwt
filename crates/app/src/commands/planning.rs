@@ -28,7 +28,7 @@ use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 /// Run `read` against the open vault.
-fn with_vault<T>(
+pub(crate) fn with_vault<T>(
     state: &State<'_, AppState>,
     read: impl FnOnce(&UnlockedVault) -> trade_core::Result<T>,
 ) -> Result<T, String> {
@@ -37,7 +37,7 @@ fn with_vault<T>(
 }
 
 /// Run `write` against the open vault.
-fn with_vault_mut<T>(
+pub(crate) fn with_vault_mut<T>(
     state: &State<'_, AppState>,
     write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
 ) -> Result<T, String> {
@@ -248,6 +248,20 @@ pub async fn get_goal_progress(
 ) -> Result<Vec<GoalProgress>, String> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| Ok(vault.goal_progress(now_secs(), &zone)))
+}
+
+/// A goal draft that reaches what a calculator scenario ends with; the goal
+/// form opens with it.
+#[tauri::command]
+pub async fn goal_from_scenario(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<GoalInput, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| {
+        vault.goal_from_scenario(&id, now_secs(), &zone)
+    })
 }
 
 #[tauri::command]

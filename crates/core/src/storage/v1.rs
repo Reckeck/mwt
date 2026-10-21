@@ -43,6 +43,42 @@ pub struct SettingsV1 {
     pub budget_currency: String,
 }
 
+/// A goal before it could follow a calculator scenario.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub struct GoalV1 {
+    pub id: String,
+    pub name: String,
+    pub active: bool,
+    pub target_amount: Amount,
+    pub currency: String,
+    pub starts_at: String,
+    pub deadline: Option<String>,
+    pub priority: u8,
+    pub monthly_commitment: Option<Amount>,
+    pub scope: crate::model::store::StoreScope,
+    pub created_at: String,
+}
+
+impl From<GoalV1> for Goal {
+    fn from(old: GoalV1) -> Self {
+        Self {
+            id: old.id,
+            name: old.name,
+            active: old.active,
+            target_amount: old.target_amount,
+            currency: old.currency,
+            starts_at: old.starts_at,
+            deadline: old.deadline,
+            priority: old.priority,
+            monthly_commitment: old.monthly_commitment,
+            scope: old.scope,
+            created_at: old.created_at,
+            scenario_id: None,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(serde::Serialize))]
 pub struct ReminderV1 {
@@ -163,7 +199,7 @@ pub struct VaultDocV1 {
     pub automations: Vec<AutomationV2>,
     pub automation_runs: Vec<AutomationRunV2>,
     pub budgets: Vec<Budget>,
-    pub goals: Vec<Goal>,
+    pub goals: Vec<GoalV1>,
     pub reminders: Vec<ReminderV1>,
     pub price_alerts: Vec<PriceAlert>,
     pub categorization_rules: Vec<CategorizationRule>,
@@ -224,7 +260,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 })
                 .collect(),
             budgets: old.budgets,
-            goals: old.goals,
+            goals: old.goals.into_iter().map(Into::into).collect(),
             reminders: old
                 .reminders
                 .into_iter()
@@ -264,6 +300,7 @@ impl From<VaultDocV1> for VaultDocV2 {
             workflow_waits: Vec::new(),
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
+            calc_scenarios: Vec::new(),
             sync: crate::sync::SyncState::default(),
         };
         VaultDocV2 {

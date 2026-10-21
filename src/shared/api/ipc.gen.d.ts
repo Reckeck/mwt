@@ -515,6 +515,26 @@ risk: Amount,
  */
 risk_pct: Amount, };
 
+/**
+ * A saved investment calculation, comparable with others and followed by
+ * goals made from it.
+ */
+type CalcScenario = { id: string, name: string, input: InvestInput, source: ScenarioSource | null, 
+/**
+ * RFC3339 of the last «Обновить из данных»: the numbers are a snapshot.
+ */
+prefilled_at: string | null, created_at: string, updated_at: string, };
+
+/**
+ * A deleted scenario and the goals it was unlinked from: enough to undo.
+ */
+type CalcScenarioDeleted = { scenario: CalcScenario, goal_ids: Array<string>, };
+
+/**
+ * What the user saves: `id = None` makes a new scenario.
+ */
+type CalcScenarioDraft = { id: string | null, name: string, input: InvestInput, source: ScenarioSource | null, prefilled_at: string | null, };
+
 type CalendarDay = { 
 /**
  * `YYYY-MM-DD`.
@@ -610,6 +630,11 @@ savings: Amount, };
  * Single OHLCV candle point for charting.
  */
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
+
+/**
+ * How often earned interest joins the balance.
+ */
+type CapFreq = "daily" | "monthly" | "quarterly" | "yearly" | "at_end";
 
 /**
  * When earned interest joins the balance.
@@ -735,6 +760,14 @@ type CollectionChanges = { collection: string, added: number, updated: number, d
  */
 items: Array<ChangeItem>, };
 
+type CompareKind = "base" | "more_rate" | "more_contribution";
+
+type CompareRow = { kind: CompareKind, final_nominal: Amount, 
+/**
+ * Against [`CompareKind::Base`].
+ */
+gain: Amount, };
+
 /**
  * The real amount of an operation booked approximately.
  */
@@ -814,6 +847,15 @@ type ContactTurnover = { contact_id: string, account_id: string | null, base_cur
 sent_base: Amount, received_base: Amount, tx_count: number, };
 
 type ContactTurnoverInput = { contact_id: string, account_id: string | null, };
+
+/**
+ * A contribution plan from `from_month` until the next stage starts.
+ */
+type ContributionStage = { 
+/**
+ * 1-based month the stage starts in.
+ */
+from_month: number, amount: Amount, freq: Freq, timing: Timing, };
 
 /**
  * Convert an amount between two currency codes at a moment (plan D20).
@@ -1191,7 +1233,7 @@ transaction?: Transaction, };
 /**
  * A kind of thing the app can open a card of.
  */
-type EntityKind = "store" | "tx" | "category" | "contact" | "goal" | "budget" | "automation" | "workflow" | "reminder" | "alert" | "asset";
+type EntityKind = "store" | "tx" | "category" | "contact" | "goal" | "budget" | "automation" | "workflow" | "reminder" | "alert" | "asset" | "scenario";
 
 /**
  * The address of one entity: what the `?open=kind:id` link carries.
@@ -1363,6 +1405,11 @@ type FormulaZoneReading = {
 zone: string | null, previous: Amount, current: Amount, };
 
 /**
+ * How often a contribution or a withdrawal repeats, counted from its start month.
+ */
+type Freq = "monthly" | "quarterly" | "yearly";
+
+/**
  * `amount > 0` earmarks from the free balance, `< 0` releases.
  */
 type FundEnvelopeInput = { id: string, amount: Amount, };
@@ -1421,7 +1468,11 @@ priority: number,
 /**
  * What the user is ready to put aside per month.
  */
-monthly_commitment: Amount | null, scope: StoreScope, created_at: string, };
+monthly_commitment: Amount | null, scope: StoreScope, created_at: string, 
+/**
+ * The calculator scenario the goal follows: «по плану к сегодня».
+ */
+scenario_id: string | null, };
 
 type GoalCalendar = { year: number, currency: string, months: Array<GoalCalendarMonth>, };
 
@@ -1443,7 +1494,11 @@ type GoalInput = { name: string, active: boolean, target_amount: Amount, currenc
 /**
  * Importance, 1–5.
  */
-priority: number, monthly_commitment: Amount | null, scope: StoreScope, };
+priority: number, monthly_commitment: Amount | null, scope: StoreScope, 
+/**
+ * The calculator scenario the goal follows.
+ */
+scenario_id: string | null, };
 
 type GoalProgress = { goal: Goal, 
 /**
@@ -1481,7 +1536,12 @@ forecast: string | null,
 /**
  * Whether the recent trend grows at all.
  */
-accumulating: boolean, };
+accumulating: boolean, 
+/**
+ * What the linked calculator scenario plans to have by now, in the goal
+ * currency.
+ */
+planned_now: Amount | null, };
 
 type GraphEdge = { 
 /**
@@ -1799,6 +1859,99 @@ income: Amount, taxable: Amount, tax: Amount,
  * Interest that can still be earned tax-free.
  */
 remaining_free: Amount | null, };
+
+/**
+ * «Что выгоднее?»: a higher rate against higher contributions.
+ */
+type InvestCompare = { rows: Array<CompareRow>, 
+/**
+ * Larger contributions beat the higher rate: the calmer way wins.
+ */
+contribution_wins: boolean, };
+
+type InvestInput = { 
+/**
+ * Display only: the currency every amount is in.
+ */
+currency: string, 
+/**
+ * `YYYY-MM` of month 1: daily compounding counts its real days.
+ */
+start: string, initial: Amount, 
+/**
+ * Interest per year, percent.
+ */
+rate_pct: Amount, term_months: number, capitalization: CapFreq, 
+/**
+ * Sorted by the engine; empty means no contributions.
+ */
+stages: Array<ContributionStage>, 
+/**
+ * Growth of a stage's contribution per full year inside the stage, percent.
+ */
+indexation_pct: Amount, 
+/**
+ * Inflation per year, percent: the real result and indexed withdrawals.
+ */
+inflation_pct: Amount, tax: TaxRule, withdrawal: Withdrawal | null, };
+
+type InvestMonth = { 
+/**
+ * 1-based.
+ */
+month: number, 
+/**
+ * `YYYY-MM`.
+ */
+date: string, contributed: Amount, 
+/**
+ * Interest capitalized this month.
+ */
+interest: Amount, tax: Amount, withdrawn: Amount, 
+/**
+ * After every event of the month; interest not yet capitalized is not in it.
+ */
+balance: Amount, };
+
+type InvestResult = { final_nominal: Amount, 
+/**
+ * `final_nominal` in money of month 1.
+ */
+final_real: Amount, 
+/**
+ * Contributions only; `initial` is not in it.
+ */
+contributed: Amount, 
+/**
+ * `initial + contributed`.
+ */
+invested: Amount, interest: Amount, tax: Amount, withdrawn: Amount, 
+/**
+ * The yearly rate the capitalization turns `rate_pct` into, percent.
+ */
+effective_rate_pct: Amount, 
+/**
+ * The first year whose interest exceeds its contributions.
+ */
+crossover_year: number | null, 
+/**
+ * The month a withdrawal emptied the balance.
+ */
+depleted_at: number | null, years: Array<InvestYear>, };
+
+type InvestYear = { 
+/**
+ * 1-based; the last year may be partial.
+ */
+year: number, contributed: Amount, interest: Amount, tax: Amount, withdrawn: Amount, 
+/**
+ * `initial` plus every contribution so far.
+ */
+invested: Amount, balance: Amount, 
+/**
+ * `balance` in money of month 1.
+ */
+real_balance: Amount, months: Array<InvestMonth>, };
 
 type IssueLevel = "error" | "warning";
 
@@ -2642,7 +2795,7 @@ when: string | null, value: Amount | null, currency: string | null, archived: bo
 /**
  * What a group of related things is.
  */
-type RelationKind = "parent" | "children" | "stores" | "assets" | "goals" | "budgets" | "automations" | "workflows" | "reminders" | "alerts" | "rules" | "categories" | "contacts" | "transactions" | "origin" | "flow" | "created";
+type RelationKind = "parent" | "children" | "stores" | "assets" | "goals" | "budgets" | "automations" | "workflows" | "reminders" | "alerts" | "rules" | "categories" | "contacts" | "transactions" | "origin" | "flow" | "created" | "scenarios";
 
 type Reminder = { id: string, text: string, 
 /**
@@ -2823,6 +2976,54 @@ type SaveWorkflowTestInput = { workflow_id: string, test: WorkflowTest, };
  */
 type SavedWorkflow = { workflow: Workflow, issues: Array<GraphIssue>, };
 
+/**
+ * Numbers «Из данных» puts into the calculator, with where they came from.
+ */
+type ScenarioPrefill = { 
+/**
+ * Value of the source wallets in the scenario currency.
+ */
+initial: Amount, 
+/**
+ * The deposit rate of the largest source wallet that has one.
+ */
+rate_pct: Amount | null, capitalization: CapFreq | null, 
+/**
+ * That deposit pays interest out instead of compounding it.
+ */
+pays_out: boolean, rate_store_id: string | null, 
+/**
+ * `income × income_pct / 100` in the scenario currency.
+ */
+monthly_contribution: Amount | null, 
+/**
+ * Average monthly income in the scenario currency.
+ */
+income_avg: Amount | null, 
+/**
+ * Finished months the average really took; fewer than asked when the
+ * history is short.
+ */
+income_months_used: number, prefilled_at: string, };
+
+/**
+ * Where a calculator scenario takes its numbers from (plan A, «Из данных»).
+ */
+type ScenarioSource = { 
+/**
+ * The wallets whose value is the start amount and whose deposit terms
+ * give the rate.
+ */
+scope: StoreScope, 
+/**
+ * Finished months the average income is taken over: 3, 6 or 12.
+ */
+income_months: number, 
+/**
+ * Share of that income contributed each month, percent.
+ */
+income_pct: Amount, };
+
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
 /**
@@ -2939,6 +3140,21 @@ transaction: Transaction | null, };
  * Put a reminder off until a moment (RFC3339).
  */
 type SnoozeReminderInput = { id: string, until: string, };
+
+/**
+ * The answer of [`solve`]. When the target cannot be reached, `value` and
+ * `result` describe the best the unknown can do, and the UI says so in text.
+ */
+type SolveResult = { reachable: boolean, value: Amount, 
+/**
+ * The input with the unknown filled in.
+ */
+input: InvestInput, result: InvestResult, };
+
+/**
+ * What [`solve`] looks for.
+ */
+type SolveUnknown = "contribution" | "term" | "rate";
 
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
@@ -3432,6 +3648,13 @@ network: SyncNetworkView, };
 
 type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, };
 
+type TaxMode = "yearly" | "at_end";
+
+/**
+ * Tax on interest; `pct = 0` means no tax.
+ */
+type TaxRule = { pct: Amount, mode: TaxMode, };
+
 /**
  * Terminal panels' layout, as the UI left it.
  */
@@ -3466,6 +3689,11 @@ type TestExpect = {
 outcome: string, transactions: number | null, queued: number | null, notices: number | null, };
 
 type Theme = "auto" | "light" | "dark";
+
+/**
+ * Whether a contribution arrives before the month's interest or after it.
+ */
+type Timing = "start" | "end";
 
 /**
  * «Пополнить»: money comes into a store from outside (salary, cashback, buying an asset).
@@ -4218,7 +4446,11 @@ import_runs: Array<ImportRun>,
 /**
  * Exchange ids the user discarded: a later sync does not stage them again.
  */
-discarded_imports: Array<string>, };
+discarded_imports: Array<string>, 
+/**
+ * Saved investment calculator scenarios (plan A).
+ */
+calc_scenarios: Array<CalcScenario>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 
@@ -4272,6 +4504,19 @@ type WfValue = { "type": "null" } | { "type": "number", "value": Amount } | { "t
  * Lowercase code: `rub`, `usdt`.
  */
 currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key: string]: WfValue } };
+
+/**
+ * Regular withdrawals; they stop once the balance runs out.
+ */
+type Withdrawal = { amount: Amount, freq: Freq, 
+/**
+ * 1-based month of the first withdrawal.
+ */
+from_month: number, 
+/**
+ * Grow the amount with [`InvestInput::inflation_pct`] every full year.
+ */
+index_to_inflation: boolean, };
 
 /**
  * Where a planned date that falls on a day off goes.

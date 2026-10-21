@@ -74,6 +74,20 @@ pub struct MonthSummary {
     pub complete: bool,
 }
 
+/// Monthly averages over finished calendar months, in the budget currency.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct MonthAvg {
+    pub income: Amount,
+    pub fixed: Amount,
+    pub daily: Amount,
+    /// How many months went into the average.
+    pub months: u32,
+    pub currency: String,
+}
+
+/// How far back [`UnlockedVault::avg_month`] looks for months with flows.
+const AVG_LOOKBACK_MONTHS: usize = 24;
+
 /// The daily budget for today (plan §7.3, D18).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct DailyBudget {
@@ -523,6 +537,42 @@ impl UnlockedVault {
             .unwrap_or_else(|| self.base_and_fx().0)
     }
 
+    /// Averages of the last `months` finished calendar months that had any
+    /// flow, before the month of `now`; `None` without such months.
+    pub fn avg_month(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
+        let cal = Calendar::new(zone);
+        let mut month = first_of_month(cal.date_of(now));
+        let mut found: Vec<MonthSummary> = Vec::new();
+        for _ in 0..AVG_LOOKBACK_MONTHS {
+            if found.len() >= months {
+                break;
+            }
+            month = first_of_month(month - Duration::days(1));
+            let summary = self.month_summary(&calendar::month_key(month), zone).ok()?;
+            if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
+                continue;
+            }
+            found.push(summary);
+        }
+        if found.is_empty() {
+            return None;
+        }
+        let count = Amount::from(found.len() as u32);
+        let average = |pick: fn(&MonthSummary) -> Amount| {
+            found
+                .iter()
+                .fold(Amount::ZERO, |sum, summary| sum + pick(summary))
+                / count
+        };
+        Some(MonthAvg {
+            income: average(|summary| summary.income),
+            fixed: average(|summary| summary.fixed),
+            daily: average(|summary| summary.daily),
+            months: found.len() as u32,
+            currency: self.budget_currency(),
+        })
+    }
+
     // -- the daily budget ---------------------------------------------------
 
     /// How much can be spent today (plan §7.3), in the budget currency.
@@ -881,6 +931,36 @@ mod tests {
         assert_eq!(summary.savings_fact, amount("500"));
         assert_eq!(summary.deviation, amount("400"));
         assert_eq!(summary.saved_pct, amount("50"));
+    }
+
+    #[test]
+    fn avg_month_takes_finished_months_with_flows_only() {
+        let (_dir, mut vault, card) = budget_vault();
+        let now = secs("2026-05-15T10:00:00Z");
+        assert_eq!(vault.avg_month(3, now, "UTC"), None);
+        for (sum, ts) in [
+            ("900", "2026-01-10T10:00:00Z"),
+            ("1000", "2026-02-10T10:00:00Z"),
+            ("1200", "2026-04-10T10:00:00Z"),
+            // The current month is not finished yet.
+            ("5000", "2026-05-01T10:00:00Z"),
+        ] {
+            vault.add_transaction(earn(&card, sum, ts)).unwrap();
+        }
+        vault
+            .add_transaction(spend(&card, "300", "2026-04-11T10:00:00Z"))
+            .unwrap();
+
+        // March had no flows and is skipped: April, February.
+        let two = vault.avg_month(2, now, "UTC").unwrap();
+        assert_eq!(two.months, 2);
+        assert_eq!(two.income, amount("1100"));
+        assert_eq!(two.daily, amount("150"));
+        assert_eq!(two.currency, "usd");
+        // Fewer months than asked: what there is.
+        let all = vault.avg_month(12, now, "UTC").unwrap();
+        assert_eq!(all.months, 3);
+        assert_eq!(all.income, amount("1033.3333333333333333333333333"));
     }
 
     #[test]

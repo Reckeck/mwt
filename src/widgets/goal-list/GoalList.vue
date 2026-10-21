@@ -17,12 +17,15 @@ import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 import GoalCalendarTable from './GoalCalendarTable.vue'
 import { ProgressBar } from '@/shared/ui/progress-bar'
+import { EntityLink } from '@/shared/ui/entity-link'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_goals') })
 const progress = useQuery({ queryKey: ['goal-progress'], queryFn: () => call<GoalProgress[]>('get_goal_progress') })
+const scenarios = useQuery({ queryKey: ['calc-scenarios'], queryFn: () => call<CalcScenario[]>('calc_scenarios_list') })
+const scenarioName = (id: string) => scenarios.data.value?.find((entry) => entry.id === id)?.name ?? ''
 
 /** Each goal with its progress, matched once (the card reads it a dozen times). */
 const rows = computed(() => {
@@ -133,6 +136,17 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
               <dd class="text-right">
                 {{ entry?.forecast ? formatDate(entry?.forecast) : t('goal.notAccumulating') }}
               </dd>
+              <template v-if="goal.scenario_id && entry?.planned_now">
+                <dt class="text-muted-foreground">{{ t('goal.plannedNow') }}</dt>
+                <dd class="text-right tabular-nums">
+                  <Money :amount="entry.planned_now" :currency="goal.currency" />
+                  · {{ t('goal.actualNow') }} <Money :amount="entry.saved" :currency="goal.currency" />
+                </dd>
+                <dt class="text-muted-foreground">{{ t('goal.scenario') }}</dt>
+                <dd class="justify-self-end">
+                  <EntityLink :target="{ kind: 'scenario', id: goal.scenario_id }" :label="scenarioName(goal.scenario_id)" />
+                </dd>
+              </template>
             </dl>
             <p
               v-if="entry?.realistic"

@@ -33,6 +33,7 @@ pub struct GoalDraft {
     pub priority: u8,
     pub monthly_commitment: Option<Amount>,
     pub scope: StoreScope,
+    pub scenario_id: Option<String>,
 }
 
 /// Why a goal is marked «Пересмотреть».
@@ -73,6 +74,9 @@ pub struct GoalProgress {
     pub forecast: Option<String>,
     /// Whether the recent trend grows at all.
     pub accumulating: bool,
+    /// What the linked calculator scenario plans to have by now, in the goal
+    /// currency.
+    pub planned_now: Option<Amount>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -180,6 +184,11 @@ impl UnlockedVault {
                 "choose the wallets that hold the savings".into(),
             ));
         }
+        if let Some(id) = &draft.scenario_id
+            && self.find_calc_scenario(id).is_none()
+        {
+            return Err(Error::Missing(format!("scenario {id}")));
+        }
         match draft
             .scope
             .store_ids
@@ -205,6 +214,7 @@ impl UnlockedVault {
             monthly_commitment: draft.monthly_commitment,
             scope: draft.scope,
             created_at: now_iso(),
+            scenario_id: draft.scenario_id,
         };
         self.doc.goals.push(goal.clone());
         self.persist()?;
@@ -228,6 +238,7 @@ impl UnlockedVault {
         goal.priority = draft.priority;
         goal.monthly_commitment = draft.monthly_commitment;
         goal.scope = draft.scope;
+        goal.scenario_id = draft.scenario_id;
         let out = goal.clone();
         self.persist()?;
         Ok(out)
@@ -245,7 +256,7 @@ impl UnlockedVault {
     // -- shares of shared stores ----------------------------------------------
 
     /// Current USD value of each store.
-    fn store_values_usd(&self) -> HashMap<String, Amount> {
+    pub(crate) fn store_values_usd(&self) -> HashMap<String, Amount> {
         let mut out: HashMap<String, Amount> = HashMap::new();
         for holding in &self.doc.holdings {
             if holding.asset.is_derivative() {
@@ -437,6 +448,22 @@ impl UnlockedVault {
     }
 
     /// Progress of every active goal (plan §7.4, D23).
+    /// The scenario's balance for the months passed since the goal started.
+    fn planned_now(
+        &self,
+        goal: &Goal,
+        start: NaiveDate,
+        today: NaiveDate,
+        now: i64,
+    ) -> Option<Amount> {
+        let scenario = self.find_calc_scenario(goal.scenario_id.as_deref()?)?;
+        let elapsed = months_between(start, today).saturating_sub(1);
+        let planned = super::planned_balance(&scenario.input, elapsed).ok()?;
+        self.rate_book()
+            .convert(planned, &scenario.input.currency, &goal.currency, now)
+            .map(|value| value.round(2))
+    }
+
     pub fn goal_progress(&self, now: i64, zone: &str) -> Vec<GoalProgress> {
         let cal = Calendar::new(zone);
         let book = self.rate_book();
@@ -495,6 +522,7 @@ impl UnlockedVault {
                 {
                     issues.push(RealismIssue::OverCommitment { need, commitment });
                 }
+                let planned_now = self.planned_now(&goal, start, today, now);
                 GoalProgress {
                     goal,
                     saved,
@@ -508,6 +536,7 @@ impl UnlockedVault {
                     issues,
                     forecast: forecast.map(|date| date.format("%Y-%m-%d").to_string()),
                     accumulating,
+                    planned_now,
                 }
             })
             .collect();
@@ -623,6 +652,7 @@ mod tests {
                 store_ids: stores.iter().map(|id| id.to_string()).collect(),
                 include_children: true,
             },
+            scenario_id: None,
         }
     }
 

@@ -204,6 +204,14 @@ Frontend парсит код и показывает локализованно�
 
 ### calc
 | `calc_preview` | `CalcInput { mode, amount, price_in, price_out, target_price?, stop_price?, fee_pct? }` | `CalcResult { gross_in, fee, spent, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct }` |
+| `calc_invest_simulate` | `input: InvestInput { currency, start, initial, rate_pct, term_months, capitalization, stages[], indexation_pct, inflation_pct, tax, withdrawal? }` | `InvestResult { final_nominal, final_real, contributed, invested, interest, tax, withdrawn, effective_rate_pct, crossover_year?, depleted_at?, years[{ …, months[] }] }` |
+| `calc_invest_solve` | `input, target, unknown: contribution\|term\|rate` | `SolveResult { reachable, value, input, result }` — при `reachable = false` лучший достижимый вариант |
+| `calc_invest_compare` | `input` | `InvestCompare { rows[{ kind: base\|more_rate\|more_contribution, final_nominal, gain }], contribution_wins }` |
+| `calc_scenarios_list` | — | `CalcScenario[]`, последний изменённый первым |
+| `calc_scenario_save` | `draft: CalcScenarioDraft { id?, name, input, source?, prefilled_at? }` | `CalcScenario`; `id = null` создаёт новый |
+| `calc_scenario_delete` | `id` | `CalcScenarioDeleted { scenario, goal_ids }` — цели остаются, связь снимается |
+| `calc_scenario_restore` | `deleted: CalcScenarioDeleted` | `CalcScenario` — отмена удаления, связи с целями возвращаются |
+| `calc_scenario_prefill` | `source: ScenarioSource { scope, income_months: 3\|6\|12, income_pct }, currency` | `ScenarioPrefill { initial, rate_pct?, capitalization?, pays_out, rate_store_id?, monthly_contribution?, income_avg?, income_months_used, prefilled_at }` — ничего не сохраняет |
 
 ### app settings (вне vault, в конфигах приложения)
 | `app_platform` | — | `string` — ОС приложения (`linux`, `windows`, `macos`, `android`, `ios`): трей и автозапуск показываются только на ПК; мок читает `?platform=` из адреса |
@@ -286,9 +294,10 @@ JSON без шифрования — там нет ничего секретно
 | `get_budget_status` | — | `Vec<BudgetStatus { budget, spent, remaining, used, period_start, period_end }>` — активные лимиты, траты групп «обязательные» и «ежедневные» в валюте лимита |
 | `get_daily_budget` | — | `DailyBudget { mode, currency, date, per_day, carry, available, spent_today, left_today, income, fixed, savings_plan, free, days, next_income?, manual_limit? }` |
 | `get_month_summary` | `month?` (`YYYY-MM`, по умолчанию текущий) | `MonthSummary { income, fixed, daily, savings_plan, savings_fact, deviation, saved_pct, savings_moved, budget_in, budget_out, not_executed, complete }` |
-| `list_goals` / `create_goal` / `update_goal` / `delete_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
-| `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating }>` |
+| `list_goals` / `create_goal` / `update_goal` / `delete_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope, scenario_id? }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
+| `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating, planned_now? }>` |
 | `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
+| `goal_from_scenario` | `id` | `GoalInput` — черновик цели на итог сценария (срок, взнос в месяц, кошельки, `scenario_id`); сохраняет форма цели |
 | `list_reminders` / `create_reminder` / `update_reminder` / `delete_reminder` (`list_reminders` сначала синхронизирует авто-напоминания) | `ReminderInput { text, due_at (RFC3339: дата и время), repeat?: { every, unit: day\|week\|month\|year } }` / `UpdateReminderInput { id, reminder }` / `id` | `Reminder { …, repeat?, source?, muted, user_edited, snoozed_until? }`; правка снимает откладывание, у авто-напоминания ставит `user_edited` |
 | `set_reminder_done` | `id, done` | `Reminder` — у повторяющегося «выполнено» не закрывает, а переносит `due_at` на первую дату серии после «сейчас» (отсчёт от исходной даты: 31-е остаётся 31-м, в коротком месяце — последний день) |
 | `finish_reminder_series` | `id` | `Reminder` — завершить серию: `repeat = None`, `done`; авто-напоминание ещё и `muted`, чтобы синхронизация его не вернула |

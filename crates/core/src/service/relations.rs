@@ -37,6 +37,8 @@ pub enum EntityKind {
     Alert,
     /// `id` is `AssetRef::key()`.
     Asset,
+    /// A saved calculator scenario.
+    Scenario,
 }
 
 /// The address of one entity: what the `?open=kind:id` link carries.
@@ -83,6 +85,8 @@ pub enum RelationKind {
     Flow,
     /// Operations an automation or a workflow made.
     Created,
+    /// Calculator scenarios: the one a goal follows.
+    Scenarios,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -282,6 +286,13 @@ impl UnlockedVault {
                 .chain(self.doc.price_alerts.iter().map(|alert| &alert.asset))
                 .find(|asset| asset.key() == id)
                 .map(|asset| card.title = asset.symbol.clone()),
+            EntityKind::Scenario => self.find_calc_scenario(id).map(|scenario| {
+                card.title = scenario.name.clone();
+                card.value = crate::calc::invest::simulate(&scenario.input)
+                    .ok()
+                    .map(|result| result.final_nominal);
+                card.currency = Some(scenario.input.currency.clone());
+            }),
         };
         card.missing = found.is_none();
         if !card.missing {
@@ -304,6 +315,7 @@ impl UnlockedVault {
             EntityKind::Reminder => self.reminder_relations(id),
             EntityKind::Alert => self.alert_relations(id),
             EntityKind::Asset => self.asset_relations(id),
+            EntityKind::Scenario => self.scenario_relations(id),
         };
         groups.into_iter().flatten().collect()
     }
@@ -628,7 +640,45 @@ impl UnlockedVault {
             .iter()
             .filter_map(|store| self.store_item(store))
             .collect();
-        vec![group(RelationKind::Stores, stores), self.reminders_of(id)]
+        let scenario = goal
+            .scenario_id
+            .as_deref()
+            .and_then(|scenario| self.find_calc_scenario(scenario))
+            .map(|scenario| {
+                RelationItem::named(EntityKind::Scenario, &scenario.id, &scenario.name)
+            });
+        vec![
+            group(RelationKind::Stores, stores),
+            group(RelationKind::Scenarios, scenario.into_iter().collect()),
+            self.reminders_of(id),
+        ]
+    }
+
+    fn scenario_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+        let Some(scenario) = self.find_calc_scenario(id) else {
+            return Vec::new();
+        };
+        let goals = self
+            .doc
+            .goals
+            .iter()
+            .filter(|goal| goal.scenario_id.as_deref() == Some(id))
+            .map(|goal| {
+                let mut item = RelationItem::named(EntityKind::Goal, &goal.id, &goal.name);
+                item.archived = !goal.active;
+                item
+            })
+            .collect();
+        let stores = scenario
+            .source
+            .iter()
+            .flat_map(|source| &source.scope.store_ids)
+            .filter_map(|store| self.store_item(store))
+            .collect();
+        vec![
+            group(RelationKind::Goals, goals),
+            group(RelationKind::Stores, stores),
+        ]
     }
 
     fn budget_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
@@ -802,6 +852,7 @@ mod tests {
                 include_children: true,
             },
             created_at: "2026-01-01T00:00:00Z".into(),
+            scenario_id: None,
         }
     }
 

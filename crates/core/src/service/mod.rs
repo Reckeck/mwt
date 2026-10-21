@@ -48,6 +48,7 @@ mod notifications;
 mod notify_snapshot;
 mod peer_sync;
 mod saving;
+mod scenarios;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
@@ -102,6 +103,9 @@ pub use reports::{
     CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
     PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
     ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
+};
+pub use scenarios::{
+    CalcScenarioDeleted, CalcScenarioDraft, INCOME_MONTHS, ScenarioPrefill, planned_balance,
 };
 pub use store_change::{
     StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,

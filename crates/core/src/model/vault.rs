@@ -545,6 +545,9 @@ pub struct VaultDoc {
     /// Exchange ids the user discarded: a later sync does not stage them again.
     #[serde(default)]
     pub discarded_imports: Vec<String>,
+    /// Saved investment calculator scenarios (plan A).
+    #[serde(default)]
+    pub calc_scenarios: Vec<crate::model::planning::CalcScenario>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
@@ -602,6 +605,7 @@ impl Default for VaultDoc {
             workflow_waits: Vec::new(),
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
+            calc_scenarios: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }
