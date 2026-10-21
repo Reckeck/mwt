@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::amount::Amount;
 
+pub mod invest;
+
 /// Percent scaling constant (`fee_pct` / `roi_pct` are percentages).
 const HUNDRED: Amount = Amount(Decimal::ONE_HUNDRED);
 

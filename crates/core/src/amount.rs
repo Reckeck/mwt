@@ -68,6 +68,70 @@ impl Amount {
     pub fn into_inner(self) -> Decimal {
         self.0
     }
+
+    /// `self^exp` by squaring; `None` on overflow. The `maths` feature of
+    /// `rust_decimal` is off, so powers are built from multiplication.
+    pub fn checked_pow_int(self, exp: u32) -> Option<Self> {
+        let mut base = self.0;
+        let mut acc = Decimal::ONE;
+        let mut rest = exp;
+        while rest > 0 {
+            if rest & 1 == 1 {
+                acc = acc.checked_mul(base)?;
+            }
+            rest >>= 1;
+            if rest > 0 {
+                base = base.checked_mul(base)?;
+            }
+        }
+        Some(Amount(acc))
+    }
+
+    /// `self^exp`, saturating at the largest decimal on overflow.
+    pub fn pow_int(self, exp: u32) -> Self {
+        self.checked_pow_int(exp)
+            .unwrap_or(Amount(if self.is_negative() && exp % 2 == 1 {
+                Decimal::MIN
+            } else {
+                Decimal::MAX
+            }))
+    }
+
+    /// The positive `root`-th root by Newton's method; zero for a non-positive
+    /// value or `root == 0`. Exact to the 28 digits a decimal holds for the
+    /// growth factors it is used on (`1.07^(1/12)` and the like).
+    pub fn root_n(self, root: u32) -> Self {
+        if !self.is_positive() || root == 0 {
+            return Amount::ZERO;
+        }
+        if root == 1 {
+            return self;
+        }
+        let degree = Decimal::from(root);
+        let lower = Decimal::from(root - 1);
+        // Near one (the usual case) a first-order guess converges in a few steps.
+        let mut guess = if self.0 < Decimal::TWO {
+            Decimal::ONE + (self.0 - Decimal::ONE) / degree
+        } else {
+            self.0 / degree + Decimal::ONE
+        };
+        for _ in 0..50 {
+            let Some(power) = Amount(guess).checked_pow_int(root - 1) else {
+                guess /= Decimal::TWO;
+                continue;
+            };
+            if power.is_zero() {
+                break;
+            }
+            let next = (lower * guess + self.0 / power.0) / degree;
+            let done = (next - guess).abs() < Decimal::new(1, 26);
+            guess = next;
+            if done {
+                break;
+            }
+        }
+        Amount(guess)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +182,12 @@ impl Div for Amount {
     type Output = Amount;
     fn div(self, rhs: Amount) -> Amount {
         Amount(self.0 / rhs.0)
+    }
+}
+
+impl From<u32> for Amount {
+    fn from(value: u32) -> Self {
+        Amount(Decimal::from(value))
     }
 }
 
@@ -222,6 +292,55 @@ mod tests {
     fn negative_detection() {
         assert!(Amount::parse("-1.5").unwrap().is_negative());
         assert!(!Amount::parse("1.5").unwrap().is_negative());
+    }
+
+    #[test]
+    fn integer_powers() {
+        let base = Amount::parse("1.02").unwrap();
+        assert_eq!(base.pow_int(0), Amount::parse("1").unwrap());
+        assert_eq!(base.pow_int(1), base);
+        assert_eq!(
+            base.pow_int(8).round(10),
+            Amount::parse("1.1716593810").unwrap()
+        );
+        assert_eq!(
+            Amount::parse("2").unwrap().pow_int(10),
+            Amount::parse("1024").unwrap()
+        );
+        assert!(Amount::parse("10").unwrap().checked_pow_int(40).is_none());
+        assert_eq!(
+            Amount::parse("10").unwrap().pow_int(40),
+            Amount(Decimal::MAX)
+        );
+    }
+
+    #[test]
+    fn nth_roots() {
+        let monthly = Amount::parse("1.1").unwrap().root_n(12);
+        assert_eq!(
+            monthly.round(20),
+            Amount::parse("1.00797414042890374107").unwrap()
+        );
+        assert_eq!(monthly.pow_int(12).round(18), Amount::parse("1.1").unwrap());
+        assert_eq!(
+            Amount::parse("1024").unwrap().root_n(10).round(18),
+            Amount::parse("2").unwrap()
+        );
+        assert_eq!(
+            Amount::parse("1.5")
+                .unwrap()
+                .root_n(1200)
+                .pow_int(1200)
+                .round(12),
+            Amount::parse("1.5").unwrap()
+        );
+        assert_eq!(
+            Amount::parse("0.81").unwrap().root_n(2).round(18),
+            Amount::parse("0.9").unwrap()
+        );
+        assert_eq!(Amount::ZERO.root_n(12), Amount::ZERO);
+        assert_eq!(Amount::parse("-4").unwrap().root_n(2), Amount::ZERO);
+        assert_eq!(Amount::parse("4").unwrap().root_n(0), Amount::ZERO);
     }
 
     #[test]
