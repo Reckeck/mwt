@@ -8,7 +8,7 @@ import { ArrowLeftRight, Lock, Plus, RefreshCw, Search, Settings, Sparkles } fro
 import { walletRow } from '@/entities/store'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { Button } from '@/shared/ui/button'
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandSeparator } from '@/shared/ui/command'
+import { Command, CommandGroup, CommandItem, CommandList, CommandSeparator } from '@/shared/ui/command'
 import { openConverter } from '@/shared/lib/converter'
 import { useIsPhone } from '@/shared/lib/phone'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -16,6 +16,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 import { NAV_GROUPS } from '../../app-shell.constants'
 import PaletteInput from './PaletteInput.vue'
+import PaletteSearch, { type PaletteTarget } from './PaletteSearch.vue'
 import { usePaletteIndex } from './use-palette-index'
 import { useStoreTree } from '@/shared/api/queries'
 import { pushBackLayer } from '@/shared/lib/back-stack'
@@ -54,17 +55,14 @@ function openField() {
   open.value = true
   void nextTick(() => input.value?.focus())
 }
-const index = usePaletteIndex(
-  open,
-  computed(() => screens.value.map((item) => item.name)),
-)
-/** Settings, sub-tabs, workflows and contacts: a heading and its entries each. */
+const index = usePaletteIndex(computed(() => screens.value.map((item) => item.name)))
+/** Settings and sub-tabs: a heading and its entries each; the vault's entities are in `PaletteSearch`. */
 const groups = computed(() => [
   { key: 'settings', heading: t('palette.settings'), items: index.settings.value },
   { key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value },
-  { key: 'workflows', heading: t('palette.workflows'), items: index.workflows.value },
-  { key: 'contacts', heading: t('palette.contacts'), items: index.contacts.value },
 ])
+/** The entity whose actions are listed (→ on it); the rest of the palette waits. */
+const actionsFor = ref<PaletteTarget | null>(null)
 const root = ref<HTMLElement | null>(null)
 const input = ref<InstanceType<typeof PaletteInput> | null>(null)
 /** The listbox keeps the last pick; cleared so the same row can be picked again. */
@@ -84,6 +82,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
 
 function close() {
   open.value = false
+  actionsFor.value = null
   input.value?.blur()
 }
 
@@ -123,7 +122,8 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
         :class="phone ? 'inset-x-0' : 'right-0 w-[min(26rem,calc(100vw-2rem))]'"
       >
         <CommandList class="max-h-[min(24rem,70dvh)]">
-          <CommandEmpty>{{ t('palette.nothing') }}</CommandEmpty>
+          <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
+          <template v-if="!actionsFor">
           <CommandGroup :heading="t('palette.actions')">
             <CommandItem value="action-quick-add" @select="run(() => emit('quickAdd'))">
               <Plus />
@@ -183,6 +183,7 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
                 </CommandItem>
               </CommandGroup>
             </template>
+          </template>
           </template>
         </CommandList>
       </div>

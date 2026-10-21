@@ -11,6 +11,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 import { Button } from '@/shared/ui/button'
+import { EntityLink } from '@/shared/ui/entity-link'
 
 /** The journal: every run, newest first, with its steps in words. */
 const { t } = useI18n()
@@ -44,7 +45,19 @@ const empty = computed(() => runs.isSuccess.value && !(runs.data.value ?? []).le
         <span class="flex-1" />
         <ChevronDown class="size-4 transition-transform" :class="open === run.id ? 'rotate-180' : ''" />
       </Button>
-      <div v-if="open === run.id" class="mt-3"><RunTrace :steps="run.trace" /></div>
+      <div v-if="open === run.id" class="mt-3 grid gap-3">
+        <!-- What the run made: each operation opens its card, the workflow its page. -->
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <EntityLink :target="{ kind: 'workflow', id: run.workflow_id }" :label="nameOf(run.workflow_id)" />
+          <EntityLink
+            v-for="(txId, at) in run.created"
+            :key="txId"
+            :target="{ kind: 'tx', id: txId }"
+            :label="t('workflow.run.createdOp', { n: at + 1 })"
+          />
+        </div>
+        <RunTrace :steps="run.trace" />
+      </div>
     </Card>
   </div>
 </template>

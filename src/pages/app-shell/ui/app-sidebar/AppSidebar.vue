@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Lock, PanelLeft, Settings } from 'lucide-vue-next'
 
+import { SidebarPinned } from '@/widgets/sidebar-pinned'
 import { SidebarWallets } from '@/widgets/sidebar-wallets'
 import {
   Sidebar,
@@ -127,6 +128,7 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
 
       <SidebarSeparator class="my-1" />
 
+      <SidebarPinned />
       <SidebarWallets />
     </SidebarContent>
 

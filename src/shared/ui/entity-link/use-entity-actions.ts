@@ -1,6 +1,8 @@
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { Pin, PinOff } from 'lucide-vue-next'
 
+import { usePins } from '@/shared/api/pins'
 import { entityActions, requestEntityDialog } from '@/shared/lib/entity-actions'
 import type { UiAction } from '@/shared/ui/context-menu'
 
@@ -8,8 +10,9 @@ import type { UiAction } from '@/shared/ui/context-menu'
 export function useEntityActions() {
   const router = useRouter()
   const { t } = useI18n()
-  return (target: EntityRef, title: string): UiAction[] =>
-    entityActions(target.kind).map((action) => ({
+  const pins = usePins()
+  return (target: EntityRef, title: string): UiAction[] => [
+    ...entityActions(target.kind).map((action) => ({
       id: action.id,
       label: t(action.labelKey),
       icon: action.icon,
@@ -17,5 +20,9 @@ export function useEntityActions() {
         if (action.to) void router.push(action.to(target))
         else if (action.dialog) requestEntityDialog({ dialog: action.dialog, target, title })
       },
-    }))
+    })),
+    pins.isPinned(target)
+      ? { id: 'unpin', label: t('pins.unpin'), icon: PinOff, separated: true, run: () => pins.toggle(target) }
+      : { id: 'pin', label: t('pins.pin'), icon: Pin, separated: true, run: () => pins.toggle(target) },
+  ]
 }

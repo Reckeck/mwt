@@ -87,6 +87,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
     { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },
+    { target: 'sidebar-pinned', key: 'dashboard.pinned', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
     { target: 'notification-bell', key: 'dashboard.bell', side: 'bottom' },
     { target: 'sync-indicator', key: 'dashboard.sync', side: 'bottom' },
@@ -101,6 +102,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'wallet-operation', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
     { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
+    { target: 'wallet-all-operations', key: 'wallet.allOperations', side: 'bottom' },
+    { target: 'wallet-relations', key: 'wallet.relations', side: 'top' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
     { target: 'property-value', key: 'wallet.propertyValue', side: 'bottom' },
     { target: 'vehicle-card', key: 'wallet.vehicle', side: 'bottom' },
@@ -128,6 +131,7 @@ export const TOURS: Record<string, TourStep[]> = {
   transactions: [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'tx-filter', key: 'transactions.filter', side: 'bottom' },
+    { target: 'tx-save-filter', key: 'transactions.saveFilter', side: 'bottom' },
     { target: 'section-content', key: 'transactions.list', side: 'top' },
   ],
   'transactions-calendar': [
@@ -199,7 +203,10 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'source-test', key: 'planningSources.test', side: 'top' },
     { target: 'source-uses', key: 'planningSources.uses', side: 'top' },
   ]),
-  'planning-budgets': planning([{ target: 'section-content', key: 'planningBudgets.content', side: 'top' }]),
+  'planning-budgets': planning([
+    { target: 'section-content', key: 'planningBudgets.content', side: 'top' },
+    { target: 'budget-spent', key: 'planningBudgets.spent', side: 'bottom' },
+  ]),
   'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),
   'planning-calculator': planning([
     { target: 'calc-scenarios', key: 'planningCalculator.scenarios', side: 'bottom' },

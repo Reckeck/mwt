@@ -8,6 +8,7 @@ import { mockTransactions } from './demo'
 import { mockScratchJson } from './exchange-data'
 import { analyticsContext, mockCandles, mockFlows, mockFxTable, mockLossOf } from './market'
 import { mockEntityCard } from './relations'
+import { mockPinned, mockSearchIndex, mockSearchTransactions, mockSetPinned } from './search'
 import { mockVaultDoc } from './vault-data'
 
 /** Commands: developer tools, reports, losses, links and enrichment. */
@@ -52,6 +53,19 @@ export const devReportCommands: MockCommands = {
   },
   get_entity_card: ({ args }) => {
     return resolve(mockEntityCard(args?.target as EntityRef))
+  },
+  get_search_index: (_call) => {
+    return resolve(mockSearchIndex())
+  },
+  search_transactions: ({ args }) => {
+    const categories = (args?.categories as string[] | undefined) ?? []
+    return resolve(mockSearchTransactions(String(args?.query ?? ''), categories, Number(args?.limit ?? 20)))
+  },
+  get_pinned: (_call) => {
+    return resolve(mockPinned())
+  },
+  set_pinned: ({ args }) => {
+    return resolve(mockSetPinned((args?.pins as Pinned[] | undefined) ?? []))
   },
   get_fx_table: (_call) => {
     return resolve(mockFxTable())

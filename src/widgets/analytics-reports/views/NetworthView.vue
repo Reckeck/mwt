@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { Money, PnlText, useMoneyChartTooltip } from '@/entities/currency'
@@ -10,10 +11,13 @@ import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 import { StatCard } from '@/shared/ui/stat-card'
 
+import { transactionsOf } from '../lib/drill-down'
 import { monthLabel } from '../use-report'
 import { categoryChart, num } from './chart'
 
-const props = defineProps<{ report: NetworthReport }>()
+const props = defineProps<{ report: NetworthReport; filter: ReportFilter }>()
+
+const router = useRouter()
 
 const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
@@ -58,6 +62,12 @@ const option = computed<ChartOption>(() => ({
 const last = computed(() => props.report.points[props.report.points.length - 1] ?? null)
 const change = computed(() => (last.value ? num(last.value.net) - num(props.report.points[0].net) : 0))
 const currency = computed(() => props.report.meta.currency)
+
+/** A point opens what moved the money in that month. */
+function openMonth(params: unknown) {
+  const point = props.report.points[(params as { dataIndex: number }).dataIndex]
+  if (point) void router.push(transactionsOf({ from: point.month }, props.filter))
+}
 </script>
 
 <template>
@@ -71,7 +81,7 @@ const currency = computed(() => props.report.meta.currency)
       </StatCard>
     </div>
     <Card>
-      <div class="h-80 w-full"><Chart :option="option" autoresize /></div>
+      <div class="h-80 w-full"><Chart :option="option" autoresize class="cursor-pointer" @click="openMonth" /></div>
     </Card>
     <Card v-if="last">
       <dl class="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-sm tabular-nums @mid:grid-cols-[1fr_auto_1fr_auto_1fr_auto]">

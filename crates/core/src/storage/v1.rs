@@ -243,6 +243,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 manual_expenses: None,
                 categories_rev: 0,
                 freedom_rate: None,
+                pinned: Vec::new(),
             },
             stores: old.stores,
             holdings: old.holdings,

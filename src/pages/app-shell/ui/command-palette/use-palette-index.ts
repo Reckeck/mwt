@@ -1,12 +1,8 @@
 import { type Ref, computed } from 'vue'
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { SETTINGS_TABS } from '@/widgets/settings-shell'
-import { call } from '@/shared/api/ipc'
-import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
-import { useContacts } from '@/shared/api/queries'
 
 export interface PaletteEntry {
   id: string
@@ -18,10 +14,9 @@ export interface PaletteEntry {
 
 /**
  * What the palette finds beyond the screens and wallets: every settings
- * section, every sub-tab, the workflows and the contacts by name. The lists
- * load only once the palette is open.
+ * section and every sub-tab.
  */
-export function usePaletteIndex(open: Ref<boolean>, screenNames: Ref<string[]>) {
+export function usePaletteIndex(screenNames: Ref<string[]>) {
   const { t, te } = useI18n()
   const route = useRoute()
   const router = useRouter()
@@ -60,29 +55,5 @@ export function usePaletteIndex(open: Ref<boolean>, screenNames: Ref<string[]>) 
       })),
   )
 
-  const workflowList = useQuery({
-    queryKey: WORKFLOW_KEYS.list,
-    queryFn: () => call<Workflow[]>('list_workflows'),
-    enabled: open,
-  })
-  const workflows = computed<PaletteEntry[]>(() =>
-    (workflowList.data.value ?? []).map((workflow) => ({
-      id: `workflow-${workflow.id}`,
-      label: workflow.name,
-      keywords: 'workflow',
-      to: { name: 'workflow-edit', params: { id: workflow.id } },
-    })),
-  )
-
-  const contactList = useContacts(open)
-  const contacts = computed<PaletteEntry[]>(() =>
-    (contactList.data.value ?? []).map((contact) => ({
-      id: `contact-${contact.id}`,
-      label: contact.name,
-      keywords: t('palette.contacts'),
-      to: { name: 'transactions', query: { contact: contact.id } },
-    })),
-  )
-
-  return { settings, tabs, workflows, contacts }
+  return { settings, tabs }
 }

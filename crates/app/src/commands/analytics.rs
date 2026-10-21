@@ -6,9 +6,11 @@ use tauri::{AppHandle, State};
 
 use trade_core::Amount;
 use trade_core::calendar::{Calendar, month_key, now_secs};
+use trade_core::model::entity_ref::Pinned;
+use trade_core::model::transaction::Transaction;
 use trade_core::service::{
-    CalendarMonth, EntityCard, EntityRef, HealthReport, Report, ReportFilter, ReportKind,
-    ReportOverview, report_csv,
+    CalendarMonth, EntityCard, EntityRef, HealthReport, PinnedView, Report, ReportFilter,
+    ReportKind, ReportOverview, SearchEntry, report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -132,4 +134,52 @@ pub async fn get_entity_card(
 ) -> Result<EntityCard, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     Ok(guard.as_ref().unwrap().entity_card(&target))
+}
+
+/// Everything the palette can find by name (plan J2); wallets come from the tree.
+#[tauri::command]
+pub async fn get_search_index(state: State<'_, AppState>) -> Result<Vec<SearchEntry>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().search_index())
+}
+
+/// Operations matching a text or an amount, newest first. `categories` are
+/// the built-in category keys whose translated names matched on the frontend.
+#[tauri::command]
+pub async fn search_transactions(
+    query: String,
+    categories: Vec<String>,
+    limit: usize,
+    state: State<'_, AppState>,
+) -> Result<Vec<Transaction>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard
+        .as_ref()
+        .unwrap()
+        .search_transactions(&query, &categories, limit))
+}
+
+/// The sidebar's pinned entities and saved filters with their short values.
+#[tauri::command]
+pub async fn get_pinned(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<PinnedView>, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().pinned(now_secs(), &zone))
+}
+
+/// Replaces the pinned list (order kept) and returns it valued.
+#[tauri::command]
+pub async fn set_pinned(
+    pins: Vec<Pinned>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<PinnedView>, String> {
+    let zone = current_zone(&app);
+    with_vault_mut(&state, |vault| {
+        vault.set_pinned(pins)?;
+        Ok(vault.pinned(now_secs(), &zone))
+    })
 }

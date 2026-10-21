@@ -77,11 +77,11 @@ const meta = computed(() => (data.value ? Object.values(data.value)[0].meta : nu
       <CashflowView v-if="'cashflow' in data" :report="data.cashflow" :filter="props.filter" />
       <YearView v-else-if="'year' in data" :report="data.year" :filter="props.filter" />
       <CategoriesView v-else-if="'categories' in data" :report="data.categories" :filter="props.filter" />
-      <NetworthView v-else-if="'networth' in data" :report="data.networth" />
+      <NetworthView v-else-if="'networth' in data" :report="data.networth" :filter="props.filter" />
       <StoresView v-else-if="'stores' in data" :report="data.stores" />
       <PnlView v-else-if="'pnl' in data" :report="data.pnl" :filter="props.filter" />
       <PortfolioView v-else-if="'portfolio' in data" :report="data.portfolio" />
-      <InflationView v-else-if="'inflation' in data" :report="data.inflation" />
+      <InflationView v-else-if="'inflation' in data" :report="data.inflation" :filter="props.filter" />
       <LossesView v-else-if="'losses' in data" :report="data.losses" :filter="props.filter" />
       <!-- One note for every report: the figures are all in this currency. -->
       <p v-if="meta" class="text-xs text-muted-foreground">

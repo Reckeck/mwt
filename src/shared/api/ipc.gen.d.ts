@@ -3076,6 +3076,32 @@ path: string, display_name: string,
  */
 imported: boolean, };
 
+/**
+ * One line of the sidebar's «Pinned» block.
+ */
+type Pinned = { "type": "entity", target: EntityRef, } | { "type": "filter", id: string, name: string, query: string, };
+
+/**
+ * A pin with what the sidebar shows next to it.
+ */
+type PinnedView = { pin: Pinned, 
+/**
+ * The stored name; empty when the frontend names it.
+ */
+title: string, 
+/**
+ * A wallet's value, a category's spending this month, a limit's spending.
+ */
+value: Amount | null, currency: string | null, 
+/**
+ * A goal's progress or a limit's use, percent.
+ */
+pct: Amount | null, 
+/**
+ * The entity is gone (deleted, or pinned on another vault).
+ */
+missing: boolean, };
+
 type PnlLeg = { ts: string, 
 /**
  * The transaction that closed the position.
@@ -3706,6 +3732,19 @@ income_pct: Amount, };
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
 /**
+ * One entity the palette can find.
+ */
+type SearchEntry = { target: EntityRef, 
+/**
+ * The stored name; empty when the frontend names it (a built-in category).
+ */
+label: string, 
+/**
+ * What a nameless entity is about: a budget's category or wallet.
+ */
+subject: EntityRef | null, archived: boolean, };
+
+/**
  * Input to select or pick a vault file.
  */
 type SelectVaultInput = { path: string, };
@@ -3814,7 +3853,11 @@ categories_rev: number,
  * Yearly return the freedom index potential assumes, percent; `None`
  * takes the key rate (plan C3).
  */
-freedom_rate: Amount | null, };
+freedom_rate: Amount | null, 
+/**
+ * The sidebar's «Pinned» block, in its order (plan J2).
+ */
+pinned: Array<Pinned>, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command

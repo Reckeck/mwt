@@ -43,6 +43,7 @@ export const mockSettings: Settings = {
   manual_income: null,
   manual_expenses: null,
   freedom_rate: null,
+  pinned: [],
   categories_rev: 1,
 }
 
