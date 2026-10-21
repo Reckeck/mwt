@@ -635,6 +635,8 @@ mod tests {
         expected.sync = crate::sync::SyncState::default();
         expected.emergency_fund = Default::default();
         expected.settings.notifications = crate::model::notify::NotificationSettings::default();
+        // A migrated v1 vault has seen no category batch yet, so `open` adds them.
+        expected.settings.categories_rev = 0;
         for contact in &mut expected.contacts {
             contact.group.clear();
         }

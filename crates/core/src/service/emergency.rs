@@ -306,21 +306,33 @@ mod tests {
         assert!(!find(&vault, "salary").is_essential());
 
         vault
-            .update_category("groceries", None, CategoryGroup::Daily, Some(false))
+            .update_category("groceries", None, CategoryGroup::Daily, Some(false), None)
             .unwrap();
         vault
-            .update_category("entertainment", None, CategoryGroup::Daily, Some(true))
+            .update_category(
+                "entertainment",
+                None,
+                CategoryGroup::Daily,
+                Some(true),
+                None,
+            )
             .unwrap();
         assert!(!find(&vault, "groceries").is_essential());
         assert!(find(&vault, "entertainment").is_essential());
         // a rename without the flag keeps the choice
         vault
-            .update_category("entertainment", Some("Fun"), CategoryGroup::Daily, None)
+            .update_category(
+                "entertainment",
+                Some("Fun"),
+                CategoryGroup::Daily,
+                None,
+                None,
+            )
             .unwrap();
         assert!(find(&vault, "entertainment").is_essential());
         // a mandatory category is mandatory whatever the flag says
         vault
-            .update_category("utilities", None, CategoryGroup::Fixed, Some(false))
+            .update_category("utilities", None, CategoryGroup::Fixed, Some(false), None)
             .unwrap();
         assert!(find(&vault, "utilities").is_essential());
     }

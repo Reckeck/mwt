@@ -240,6 +240,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 inflation_mode: std::collections::BTreeMap::new(),
                 manual_income: None,
                 manual_expenses: None,
+                categories_rev: 0,
             },
             stores: old.stores,
             holdings: old.holdings,

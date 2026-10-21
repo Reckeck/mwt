@@ -96,6 +96,11 @@ pub struct Settings {
     /// The user's usual monthly spending, same rule.
     #[serde(default)]
     pub manual_expenses: Option<Amount>,
+    /// The last batch of built-in categories this vault has received
+    /// ([`crate::model::category::CATEGORY_ADDITIONS`]): each batch is added
+    /// once, so a category the user deleted does not come back.
+    #[serde(default)]
+    pub categories_rev: u32,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -139,6 +144,7 @@ impl Default for Settings {
             inflation_mode: std::collections::BTreeMap::new(),
             manual_income: None,
             manual_expenses: None,
+            categories_rev: crate::model::category::CATEGORIES_REV,
         }
     }
 }

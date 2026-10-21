@@ -41,6 +41,7 @@ pub async fn update_category(
             input.name.as_deref(),
             input.group,
             input.essential,
+            input.passive,
         )
         .map_err(err_to_string)
 }

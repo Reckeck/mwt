@@ -709,7 +709,13 @@ archived: boolean,
  * default by key ([`DEFAULT_ESSENTIAL`]); only `Daily` reads it, `Fixed`
  * is always essential.
  */
-essential: boolean | null, };
+essential: boolean | null, 
+/**
+ * Whether income here comes from capital rather than work (plan D).
+ * `None` takes the default by key ([`DEFAULT_PASSIVE`]); only `Income`
+ * reads it.
+ */
+passive: boolean | null, };
 
 type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
 
@@ -2569,6 +2575,58 @@ required: boolean, };
  */
 type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
+type PassiveIncome = { 
+/**
+ * The budget currency every amount is in.
+ */
+currency: string, 
+/**
+ * The last finished months, oldest first.
+ */
+months: Array<PassiveMonth>, total_12m: Amount, 
+/**
+ * The part that came into investment accounts: reinvested, not spent.
+ */
+reinvested_12m: Amount, by_category: Array<PassiveShare>, 
+/**
+ * So far in the current month.
+ */
+this_month: Amount, 
+/**
+ * Mandatory monthly spending the index is measured against.
+ */
+e_mand: Amount | null, 
+/**
+ * Passive income per month as a share of `e_mand`, in percent.
+ */
+freedom_fact_pct: Amount | null, 
+/**
+ * Investment accounts and deposits, emergency fund accounts left out.
+ */
+invested: Amount, 
+/**
+ * The yearly rate the potential assumes.
+ */
+expected_pct: Amount | null, 
+/**
+ * What `invested` would bring at `expected_pct`, as a share of `e_mand`.
+ */
+freedom_potential_pct: Amount | null, };
+
+/**
+ * Passive income booked in one finished month.
+ */
+type PassiveMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, amount: Amount, };
+
+/**
+ * Passive income from one category over the year.
+ */
+type PassiveShare = { category: string, amount: Amount, };
+
 type PayUtilityBillInput = { property_id: string, 
 /**
  * `YYYY-MM`.
@@ -3338,7 +3396,13 @@ manual_income: Amount | null,
 /**
  * The user's usual monthly spending, same rule.
  */
-manual_expenses: Amount | null, };
+manual_expenses: Amount | null, 
+/**
+ * The last batch of built-in categories this vault has received
+ * ([`crate::model::category::CATEGORY_ADDITIONS`]): each batch is added
+ * once, so a category the user deleted does not come back.
+ */
+categories_rev: number, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -4388,7 +4452,11 @@ name: string | null, group: CategoryGroup,
 /**
  * Mandatory spending flag for `Daily`; `None` keeps it.
  */
-essential: boolean | null, };
+essential: boolean | null, 
+/**
+ * Passive income flag for `Income`; `None` keeps it.
+ */
+passive: boolean | null, };
 
 type UpdateContactInput = { id: string, contact: ContactDraft, };
 

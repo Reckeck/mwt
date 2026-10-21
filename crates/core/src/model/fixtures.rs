@@ -520,6 +520,7 @@ pub fn full_doc() -> VaultDoc {
         group: CategoryGroup::Savings,
         archived: true,
         essential: Some(false),
+        passive: Some(true),
     });
     doc.emergency_fund = crate::model::planning::EmergencyFund {
         scope: crate::model::store::StoreScope {

@@ -38,3 +38,19 @@ export function isEssential(category: Pick<Category, 'key' | 'group' | 'essentia
   if (category.group !== 'daily') return false
   return category.essential ?? DEFAULT_ESSENTIAL.includes(category.key)
 }
+
+/** Income from capital until the user says otherwise; mirrors `DEFAULT_PASSIVE` in core. */
+export const DEFAULT_PASSIVE: readonly string[] = [
+  'deposit_interest',
+  'earn',
+  'dividends',
+  'coupons',
+  'staking',
+  'rent_income',
+]
+
+/** Whether income in the category is passive (from capital): income only, by flag or default. */
+export function isPassive(category: Pick<Category, 'key' | 'group' | 'passive'>): boolean {
+  if (category.group !== 'income') return false
+  return category.passive ?? DEFAULT_PASSIVE.includes(category.key)
+}
