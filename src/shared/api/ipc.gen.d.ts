@@ -184,6 +184,51 @@ type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary
 transferred_to: string | null, };
 
 /**
+ * A basket of the portfolio with its target share (plan F). The shares of
+ * all baskets sum to 100.
+ */
+type AssetClass = { id: string, 
+/**
+ * Empty on a preset basket nobody renamed yet: the UI shows its own name.
+ */
+name: string, 
+/**
+ * Target share, percent.
+ */
+target_pct: Amount, 
+/**
+ * Above its target the basket gets no top-ups (the risky part).
+ */
+cap: boolean, };
+
+/**
+ * An asset placed in a basket by hand; beats the store's basket.
+ */
+type AssetClassLink = { 
+/**
+ * `AssetRef::key()`.
+ */
+asset_key: string, class_id: string, };
+
+/**
+ * What a basket is assigned to.
+ */
+type AssetClassTarget = { "kind": "asset", asset_key: string, } | { "kind": "store", store_id: string, };
+
+/**
+ * The baskets as the editor shows them.
+ */
+type AssetClassesView = { classes: Array<AssetClass>, 
+/**
+ * Nothing is saved yet: these are the preset ones.
+ */
+preset: boolean, 
+/**
+ * Assets placed in a basket by hand.
+ */
+links: Array<AssetClassLink>, };
+
+/**
  * The asset on one wallet.
  */
 type AssetHolding = { store_id: string, store_name: string, 
@@ -757,6 +802,12 @@ type ChangeItem = { kind: ChangeKind, label: string, };
 type ChangeKind = "added" | "updated" | "deleted";
 
 type ChangePasswordInput = { current_password: string, new_password: string, };
+
+/**
+ * The part of the financial capital in one basket; `class_id: None` is
+ * what is in no basket.
+ */
+type ClassShare = { class_id: string | null, amount: Amount, };
 
 /**
  * Input to clear a key for a specific store.
@@ -2502,7 +2553,17 @@ liabilities_by_kind: Array<LiabilityShare>,
 /**
  * What I owe people.
  */
-payables: Amount, net: Amount, };
+payables: Amount, net: Amount, 
+/**
+ * `financial` by portfolio basket (plan E/F), largest first; the
+ * emergency fund is apart in `financial_fund`. Sums to `financial`
+ * with it.
+ */
+financial_by_class: Array<ClassShare>, 
+/**
+ * The emergency fund's part of `financial`.
+ */
+financial_fund: Amount, };
 
 type NetworthPoint = { month: string, financial: Amount, non_financial: Amount, receivables: Amount, liabilities: Amount, payables: Amount, net: Amount, };
 
@@ -3608,7 +3669,11 @@ loyalty?: LoyaltyInfo,
 /**
  * Savings accounts, term deposits and ПДС: rate history and terms.
  */
-deposit?: DepositTerms, };
+deposit?: DepositTerms, 
+/**
+ * Portfolio basket of everything held here unless an asset has its own (plan F).
+ */
+asset_class?: string, };
 
 /**
  * What to do with an account.
@@ -4087,6 +4152,52 @@ type Theme = "auto" | "light" | "dark";
  * Whether a contribution arrives before the month's interest or after it.
  */
 type Timing = "start" | "end";
+
+/**
+ * Where the free money of the month should go (plan F).
+ */
+type TopupAdvice = { currency: string, 
+/**
+ * The amount split; last month's savings unless given.
+ */
+amount: Amount, 
+/**
+ * `amount` is last month's savings, not a figure the user typed.
+ */
+from_savings: boolean, 
+/**
+ * The month `amount` was saved in, when it comes from savings.
+ */
+savings_month: string | null, rows: Array<TopupRow>, 
+/**
+ * Holdings in no basket: outside the shares.
+ */
+unclassified: Amount, 
+/**
+ * Emergency fund accounts: outside the baskets altogether (decision 35).
+ */
+emergency: Amount, 
+/**
+ * The baskets are the preset, not saved by the user.
+ */
+preset: boolean, };
+
+/**
+ * One basket in the top-up advice, in the base currency.
+ */
+type TopupRow = { class: AssetClass, value: Amount, 
+/**
+ * Share of the classified part now, percent; `None` while it is empty.
+ */
+pct_before: Amount | null, 
+/**
+ * What to put here out of the amount.
+ */
+add: Amount, pct_after: Amount | null, 
+/**
+ * A capped basket above its target: it gets nothing.
+ */
+capped: boolean, };
 
 /**
  * «Пополнить»: money comes into a store from outside (salary, cashback, buying an asset).
@@ -4871,7 +4982,15 @@ emergency_fund: EmergencyFund,
 /**
  * The last monthly checkup notice, so the next one comes only on a change.
  */
-health_last: HealthSnapshot | null, };
+health_last: HealthSnapshot | null, 
+/**
+ * Portfolio baskets with target shares (plan F); empty = the preset.
+ */
+asset_classes: Array<AssetClass>, 
+/**
+ * Assets placed in a basket by hand, by `AssetRef::key()`.
+ */
+asset_class_of: Array<AssetClassLink>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

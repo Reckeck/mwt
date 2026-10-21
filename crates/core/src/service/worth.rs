@@ -12,6 +12,7 @@ use crate::model::transaction::{AccountRef, Transaction};
 use crate::model::vault::{ManualPrice, now_iso};
 
 use super::UnlockedVault;
+use super::allocation::Slot;
 
 /// Everything the user owns and owes, in the base currency. All parts are
 /// non-negative; `net = financial + non_financial + receivables − liabilities − payables`.
@@ -31,6 +32,20 @@ pub struct NetWorth {
     /// What I owe people.
     pub payables: Amount,
     pub net: Amount,
+    /// `financial` by portfolio basket (plan E/F), largest first; the
+    /// emergency fund is apart in `financial_fund`. Sums to `financial`
+    /// with it.
+    pub financial_by_class: Vec<ClassShare>,
+    /// The emergency fund's part of `financial`.
+    pub financial_fund: Amount,
+}
+
+/// The part of the financial capital in one basket; `class_id: None` is
+/// what is in no basket.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ClassShare {
+    pub class_id: Option<String>,
+    pub amount: Amount,
 }
 
 /// The part of the debts that is one kind of loan.
@@ -156,6 +171,8 @@ impl UnlockedVault {
             ..NetWorth::default()
         };
         let mut loans: HashMap<&str, Amount> = HashMap::new();
+        let slot_of = self.slot_resolver();
+        let mut by_class: HashMap<Option<String>, Amount> = HashMap::new();
         for holding in self
             .doc
             .holdings
@@ -168,7 +185,13 @@ impl UnlockedVault {
                 Some(StoreKind::Liability) => {
                     *loans.entry(holding.store_id.as_str()).or_default() += value
                 }
-                _ => out.financial += value,
+                _ => {
+                    out.financial += value;
+                    match slot_of(holding) {
+                        Slot::Fund => out.financial_fund += value,
+                        Slot::Class(class) => *by_class.entry(class).or_default() += value,
+                    }
+                }
             }
         }
         let mut by_kind: Vec<LiabilityShare> = Vec::new();
@@ -188,6 +211,7 @@ impl UnlockedVault {
                 }
             } else {
                 out.financial += value;
+                *by_class.entry(None).or_default() += value;
             }
         }
         for balance in self.contact_balances() {
@@ -199,6 +223,15 @@ impl UnlockedVault {
             (right.amount.cmp(&left.amount)).then((left.kind as u8).cmp(&(right.kind as u8)))
         });
         out.liabilities_by_kind = by_kind;
+        let mut classes: Vec<ClassShare> = by_class
+            .into_iter()
+            .filter(|(_, amount)| !amount.is_zero())
+            .map(|(class_id, amount)| ClassShare { class_id, amount })
+            .collect();
+        classes.sort_by(|left, right| {
+            (right.amount.cmp(&left.amount)).then(left.class_id.cmp(&right.class_id))
+        });
+        out.financial_by_class = classes;
         out.net =
             out.financial + out.non_financial + out.receivables - out.liabilities - out.payables;
         out

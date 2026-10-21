@@ -535,6 +535,16 @@ pub fn full_doc() -> VaultDoc {
         color: crate::model::planning::HealthColor::Yellow,
         reasons: vec![crate::model::planning::HealthReasonCode::FundBelowThree],
     });
+    doc.asset_classes = vec![crate::model::planning::AssetClass {
+        id: "local".into(),
+        name: "Local".into(),
+        target_pct: amount("100"),
+        cap: false,
+    }];
+    doc.asset_class_of = vec![crate::model::planning::AssetClassLink {
+        asset_key: "fiat:usd".into(),
+        class_id: "local".into(),
+    }];
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).
     let stamp = crate::sync::Stamp::new(1_700_000_000_000, 2, "devaaaaa");

@@ -17,6 +17,7 @@ import {
 } from '@/features/store-edit'
 import { StoreChangeDialog } from '@/features/store-change'
 import { ImportSettingsForm } from '@/features/exchange-import-settings'
+import { StoreAssetClassField } from '@/features/asset-class-edit'
 import { AutomationList } from '@/widgets/automation-list'
 import { ExchangeImported } from '@/widgets/exchange-imported'
 import { ExchangeSyncHistory } from '@/widgets/exchange-sync-history'
@@ -61,6 +62,9 @@ const envelopeAssets = computed<AssetRef[]>(() => {
   const held = (overview.data.value?.positions ?? []).map((position) => position.asset)
   return held.length ? held : [fiatRef(settings.baseCurrency)]
 })
+
+/** Money and investments take a basket; a home, points and loans do not. */
+const hasBasket = computed(() => !!store.value && !['property', 'loyalty', 'liability'].includes(store.value.kind))
 
 /** Ready-made automations this kind of wallet offers. */
 const presets = computed(() => (store.value ? (kindInfo(catalog.data.value, store.value.kind)?.presets ?? []) : []))
@@ -124,6 +128,9 @@ const crumbs = computed<PageCrumb[]>(() =>
               :title="t('walletSettings.deposit')"
             >
               <DepositTermsForm :store="store" />
+            </SettingsSection>
+            <SettingsSection v-if="hasBasket" :id="sectionId('basket')" :title="t('walletSettings.assetClass')">
+              <StoreAssetClassField :store="store" />
             </SettingsSection>
             <SettingsSection
               v-if="store.kind === 'liability' || store.sub_type === 'credit_card'"

@@ -1,5 +1,6 @@
 /** The planning entry point: tries each group of commands. */
 
+import { planAllocation } from './allocation'
 import { planAutomationAmounts } from './automation-workflow'
 import { planAutomations } from './automations'
 import { upcoming } from './budget-calc'
@@ -30,6 +31,7 @@ export function mockPlanning(
     planUtilities(cmd, args, ctx, settings) ??
     planCalculator(cmd, args, ctx) ??
     planEmergency(cmd, args, ctx) ??
-    planHealth(cmd, args, ctx, settings)
+    planHealth(cmd, args, ctx, settings) ??
+    planAllocation(cmd, args, ctx)
   )
 }

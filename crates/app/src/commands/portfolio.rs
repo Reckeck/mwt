@@ -1,11 +1,14 @@
 use tauri::{AppHandle, State};
 
+use trade_core::Amount;
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::SetManualPriceInput;
+use trade_core::model::planning::AssetClass;
 use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
 use trade_core::service::{
-    AssetHoldings, HistoryPoint, NetWorth, PortfolioSummary, RealizedPnl, StoreMonthRow,
+    AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, NetWorth, PortfolioSummary,
+    RealizedPnl, StoreMonthRow, TopupAdvice,
 };
 
 use crate::commands::app_settings::current_zone;
@@ -125,4 +128,55 @@ pub async fn clear_manual_price(
         .unwrap()
         .clear_manual_price(&asset_key)
         .map_err(err_to_string)
+}
+
+/// Portfolio baskets with target shares; the preset until saved (plan F).
+#[tauri::command]
+pub async fn asset_classes_get(state: State<'_, AppState>) -> Result<AssetClassesView, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().asset_classes())
+}
+
+/// Replace the baskets; shares must add up to 100, an empty list = preset.
+#[tauri::command]
+pub async fn asset_classes_set(
+    classes: Vec<AssetClass>,
+    state: State<'_, AppState>,
+) -> Result<AssetClassesView, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .set_asset_classes(classes)
+        .map_err(err_to_string)
+}
+
+/// Put an asset or a store in a basket, or take it out with `None`.
+#[tauri::command]
+pub async fn asset_class_assign(
+    target: AssetClassTarget,
+    class_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<AssetClassesView, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .assign_asset_class(target, class_id)
+        .map_err(err_to_string)
+}
+
+/// Where the free money should go to bring the shares back to target.
+#[tauri::command]
+pub async fn topup_advice(
+    app: AppHandle,
+    amount: Option<Amount>,
+    state: State<'_, AppState>,
+) -> Result<TopupAdvice, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard
+        .as_ref()
+        .unwrap()
+        .topup_advice(amount, now_secs(), &zone))
 }

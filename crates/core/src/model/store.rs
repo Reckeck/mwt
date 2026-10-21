@@ -558,6 +558,10 @@ pub struct Store {
     #[serde(default)]
     #[ts(optional)]
     pub deposit: Option<crate::model::deposit::DepositTerms>,
+    /// Portfolio basket of everything held here unless an asset has its own (plan F).
+    #[serde(default)]
+    #[ts(optional)]
+    pub asset_class: Option<String>,
 }
 
 impl Store {

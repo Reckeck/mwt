@@ -159,6 +159,8 @@ pub static COLLECTIONS: &[Collection] = &[
     records("calc_scenarios", ID),
     // A revised month replaces the old reading instead of piling up.
     records("inflation_points", &["currency", "month"]),
+    records("asset_classes", ID),
+    records("asset_class_of", &["asset_key"]),
     log(
         "import_runs",
         ID,

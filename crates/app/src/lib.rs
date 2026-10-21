@@ -160,6 +160,10 @@ pub fn run() {
             portfolio::get_net_worth,
             portfolio::set_manual_price,
             portfolio::clear_manual_price,
+            portfolio::asset_classes_get,
+            portfolio::asset_classes_set,
+            portfolio::asset_class_assign,
+            portfolio::topup_advice,
             // calculator
             calc::calc_preview,
             calc::calc_invest_simulate,
