@@ -1,15 +1,14 @@
 //! The app used to be TradeApp (`dev.tradeapp.desktop`). On the first start as
 //! Multi Wallet Tracker its directories, the keyring key and the autostart
 //! entry move over once, so the vault, settings and reminders stay where the
-//! user left them.
+//! user left them. Only the dev channel (`dev.mwt.desktop`) inherits them: a
+//! release build under `mwt.desktop` starts fresh.
 
 use std::path::PathBuf;
 
 use tauri::AppHandle;
 use tauri_plugin_autostart::ManagerExt;
 
-/// `identifier` in tauri.conf.json (checked by a test below).
-pub const IDENTIFIER: &str = "dev.mwt.desktop";
 pub const LEGACY_IDENTIFIER: &str = "dev.tradeapp.desktop";
 /// The old `productName`: what the autostart entry was registered under.
 const LEGACY_NAME: &str = "TradeApp";
@@ -18,6 +17,10 @@ const LEGACY_NAME: &str = "TradeApp";
 /// and with it the webview storage in the new directory, before `setup`.
 /// The bases are the ones Tauri's path resolver joins the identifier to.
 pub fn migrate_dirs() {
+    if crate::app_id::get() != crate::app_id::DEV {
+        return;
+    }
+    let identifier = crate::app_id::DEV;
     let bases = [
         dirs::data_dir(),
         dirs::config_dir(),
@@ -26,7 +29,7 @@ pub fn migrate_dirs() {
     ];
     let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
     for base in bases.into_iter().flatten() {
-        let new = base.join(IDENTIFIER);
+        let new = base.join(identifier);
         // On Windows and macOS several bases are the same directory.
         if moves.iter().any(|(_, done)| *done == new) {
             continue;
@@ -39,12 +42,15 @@ pub fn migrate_dirs() {
         }
     }
     if let (false, Some(config)) = (moves.is_empty(), dirs::config_dir()) {
-        crate::commands::vault_recents::rebase_paths(&config.join(IDENTIFIER), &moves);
+        crate::commands::vault_recents::rebase_paths(&config.join(identifier), &moves);
     }
 }
 
 /// Start with the system under the new name if the old one did.
 pub fn migrate_autostart(app: &AppHandle) {
+    if crate::app_id::get() != crate::app_id::DEV {
+        return;
+    }
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
@@ -63,18 +69,5 @@ pub fn migrate_autostart(app: &AppHandle) {
         && let Err(err) = app.autolaunch().enable()
     {
         eprintln!("autostart under the new name: {err}");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn identifier_matches_the_tauri_config() {
-        let config: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
-        assert_eq!(config["identifier"], IDENTIFIER);
-        assert_ne!(IDENTIFIER, LEGACY_IDENTIFIER);
     }
 }

@@ -56,6 +56,9 @@ Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с м
 
 ## Где что лежит на диске
 
+Пути — для dev-приложения (`dev.mwt.desktop`); релиз из `main` хранит всё
+так же, но в каталогах `mwt.desktop` (каналы — `docs/ci.md`).
+
 | Путь (Linux) | Что | Формат |
 |---|---|---|
 | `~/.local/share/dev.mwt.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, MessagePack в release; старый bincode читается) |

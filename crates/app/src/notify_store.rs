@@ -15,8 +15,6 @@ use tauri::{AppHandle, Manager};
 use trade_core::model::notify::NoticeRecord;
 use trade_core::service::NotificationSnapshot;
 
-#[cfg(desktop)]
-const KEYRING_SERVICE: &str = crate::legacy::IDENTIFIER;
 /// Where the key lived while the app was TradeApp; moved on first use.
 #[cfg(desktop)]
 const LEGACY_KEYRING_SERVICE: &str = crate::legacy::LEGACY_IDENTIFIER;
@@ -73,7 +71,7 @@ fn unhex(text: &str) -> Option<[u8; 32]> {
 /// The snapshot key from the keyring, made on first use. `None` without one.
 #[cfg(desktop)]
 fn key() -> Option<[u8; 32]> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()?;
+    let entry = keyring::Entry::new(crate::app_id::get(), KEYRING_USER).ok()?;
     match entry.get_password() {
         Ok(stored) => unhex(&stored),
         Err(keyring::Error::NoEntry) => {
@@ -89,9 +87,13 @@ fn key() -> Option<[u8; 32]> {
     }
 }
 
-/// The key kept under the TradeApp service name, removed once read.
+/// The key kept under the TradeApp service name, removed once read. It
+/// belongs to the dev channel, like the rest of the TradeApp data.
 #[cfg(desktop)]
 fn take_legacy_key() -> Option<String> {
+    if crate::app_id::get() != crate::app_id::DEV {
+        return None;
+    }
     let legacy = keyring::Entry::new(LEGACY_KEYRING_SERVICE, KEYRING_USER).ok()?;
     let stored = legacy.get_password().ok()?;
     legacy.delete_credential().ok();

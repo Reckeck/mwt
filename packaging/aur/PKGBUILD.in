@@ -1,6 +1,6 @@
 # Maintainer: Reckekek
 # Rendered by packaging/aur/render.sh — edit PKGBUILD.in, not the output.
-pkgname=multi-wallet-tracker-bin
+pkgname=@BIN@-bin
 pkgver=@PKGVER@
 # The version as CI built it (a pre-release is X.Y.Z-N, pkgver X.Y.ZpreN).
 _upstream=@VERSION@
@@ -12,8 +12,8 @@ license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'dbus' 'hicolor-icon-theme')
 optdepends=('gnome-keyring: keep reminders of a locked vault across restarts'
             'kwallet: same, on KDE')
-provides=('multi-wallet-tracker')
-conflicts=('multi-wallet-tracker')
+provides=('@BIN@')
+conflicts=('@BIN@')
 options=('!strip' '!debug')
 # Takes the app out of autostart on removal.
 install=multi-wallet-tracker-bin.install
@@ -22,7 +22,7 @@ sha256sums=('@SHA256@')
 
 package() {
   cd "multi-wallet-tracker-${_upstream}-linux-x86_64"
-  install -Dm755 usr/bin/multi-wallet-tracker "$pkgdir/usr/bin/multi-wallet-tracker"
+  install -Dm755 usr/bin/@BIN@ "$pkgdir/usr/bin/@BIN@"
   install -Dm644 usr/share/applications/*.desktop -t "$pkgdir/usr/share/applications/"
   cp -a usr/share/icons "$pkgdir/usr/share/"
 }

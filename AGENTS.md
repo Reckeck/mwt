@@ -261,14 +261,19 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]`
   `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI —
   `mise run check-platforms` (см. «Сборка на всех платформах»).
-- **Идентификаторы не меняются.** `dev.mwt.desktop` (десктоп; от него
-  зависит путь к vault), `dev.mwt.app` (Android, `tauri.android.conf.json`),
-  `dev.mwt.MultiWalletTracker` (Flatpak). Смена = потеря данных у пользователей или
-  невозможность обновиться. Прежнее имя TradeApp (`dev.tradeapp.desktop`)
+- **Идентификаторы не меняются.** Два канала — два приложения рядом
+  (`scripts/ci/channel.sh`, `docs/ci.md` «Каналы»): релиз из `main` —
+  `mwt.desktop` (десктоп; от него зависит путь к vault), `mwt.app` (Android),
+  `mwt.app.MultiWalletTracker` (Flatpak); dev из `development` и локальные —
+  `dev.mwt.desktop`, `dev.mwt.app` (`tauri.conf.json`,
+  `tauri.android.conf.json`), `dev.mwt.MultiWalletTracker`. Идентификатор в
+  Rust — только `app_id::get()`, не константа. Смена = потеря данных у
+  пользователей или невозможность обновиться. Прежнее имя TradeApp (`dev.tradeapp.desktop`)
   переносится один раз при запуске — `crates/app/src/legacy.rs`; не удаляй
   его, пока у кого-то может остаться старая установка.
 - **Имя.** Приложение — Multi Wallet Tracker (MWT): `productName`, бинарник и пакеты
-  `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin`. Rust-крейты `trade-core`/`trade-app`
+  `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin`; dev-канал —
+  «Multi Wallet Tracker Dev», `multi-wallet-tracker-dev`. Rust-крейты `trade-core`/`trade-app`
   остаются внутренними именами. Магические байты vault и формат экспорта
   `trade-app-workflow` не трогать — от них зависит чтение старых файлов.
 - **Выпуск — тег `vX.Y.Z`.** Версия одинакова в `crates/app/tauri.conf.json`,

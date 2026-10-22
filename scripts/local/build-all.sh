@@ -2,8 +2,14 @@
 # Build the app for every platform on this machine, with the scripts and
 # images CI uses (scripts/ci/*), so a local bundle is what CI would ship.
 #
-#   scripts/local/build-all.sh [--version X.Y.Z] [--native] [platform...]
+#   scripts/local/build-all.sh [--channel dev|prod] [--version X.Y.Z] [--native] [platform...]
 #   mise run build:all -- linux android
+#   mise run build:all -- --channel prod
+#
+# Channel (scripts/ci/channel.sh): dev (default) is the app of development,
+# «Multi Wallet Tracker Dev», dev.mwt.*; prod is the release of main,
+# «Multi Wallet Tracker», mwt.desktop / mwt.app / mwt.app.MultiWalletTracker.
+# They install side by side, each with its own data.
 #
 # Platforms (default: all of them):
 #   linux    deb, rpm, AppImage, tarball  ci-linux image
@@ -20,7 +26,7 @@
 # host): podman's default pasta network refuses github.com on some hosts,
 # which breaks the flathub/shared-modules clone. --native builds
 # linux/flatpak on this host with its own toolchain instead. Bundles land in
-# .cache/build-all/builds/; the build directories
+# .cache/build-all/builds/<channel>/; the build directories
 # of each container are volumes (mwt-build-<checkout>-*), so the host .rust-target and
 # node_modules stay untouched. Android signs with the release key when the
 # ANDROID_KEYSTORE_* variables are set (sign-android.sh), else a test key.
@@ -29,11 +35,13 @@ cd "$(dirname "$0")/../.." || exit 1
 root="$PWD"
 
 all=(linux pacman flatpak android windows macos)
+channel=dev
 version=""
 native=""
 platforms=()
 while (($#)); do
   case "$1" in
+    --channel) channel="$2"; shift 2 ;;
     --version) version="$2"; shift 2 ;;
     --native) native=1; shift ;;
     -h | --help) sed -n '2,/^set -uo/{/^set -uo/d;s/^# \{0,1\}//;p}' "$0"; exit 0 ;;
@@ -42,8 +50,10 @@ while (($#)); do
   esac
 done
 ((${#platforms[@]})) || platforms=("${all[@]}")
+[[ "$channel" == dev || "$channel" == prod ]] || { echo "--channel is dev or prod, not '$channel'" >&2; exit 2; }
+export RELEASE_CHANNEL="$channel"
 version="${version:-$(scripts/ci/version.sh)}"
-out=.cache/build-all/builds
+out=".cache/build-all/builds/$channel"
 
 engine="${CONTAINER_ENGINE:-$(command -v podman >/dev/null && echo podman || echo docker)}"
 image_tag="$(sed -n 's/^  CI_IMAGE_TAG: "\(.*\)".*/\1/p' .gitlab-ci.yml)"
@@ -80,7 +90,7 @@ run_ci() {
     -v "mwt-build-$checkout-$volume-target:/src/.rust-target" \
     -v "mwt-build-$checkout-$volume-node:/src/node_modules" \
     -v "mwt-build-$checkout-$volume-home:/root" \
-    -e CI_PROJECT_DIR=/src -e CI=true -e GRADLE_USER_HOME=/src/.cache/gradle \
+    -e CI_PROJECT_DIR=/src -e CI=true -e GRADLE_USER_HOME=/src/.cache/gradle -e RELEASE_CHANNEL \
     -e ANDROID_TARGETS -e ANDROID_KEYSTORE_BASE64 -e ANDROID_KEYSTORE_PASSWORD \
     -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
     "$image" bash -c "set -eo pipefail; source scripts/ci/setup-linux.sh; mkdir -p dist; $command"
@@ -89,7 +99,7 @@ run_ci() {
 run_arch() { # <command> [engine args...]: the command in archlinux:base-devel
   local command="$1"
   shift
-  "$engine" run --rm --init --network="$network" "$@" -v "$root:/src" -w /src "$arch_image" bash -c "set -eo pipefail; $command"
+  "$engine" run --rm --init --network="$network" -e RELEASE_CHANNEL "$@" -v "$root:/src" -w /src "$arch_image" bash -c "set -eo pipefail; $command"
 }
 
 tarball="$out/multi-wallet-tracker-$version-linux-x86_64.tar.gz"
@@ -149,7 +159,7 @@ build_macos() {
   local remote="${MACOS_BUILD_DIR:-mwt-build}"
   rsync -a --delete --exclude-from=<(printf '%s\n' .git .jj .rust-target node_modules .cache release dist \
     crates/app/gen .flatpak-build .flatpak-repo .flatpak-builder) ./ "$MACOS_BUILD_HOST:$remote/" &&
-    ssh "$MACOS_BUILD_HOST" "cd '$remote' && bash -lc \"scripts/ci/build-macos.sh '$version' release\"" &&
+    ssh "$MACOS_BUILD_HOST" "cd '$remote' && RELEASE_CHANNEL=$channel bash -lc \"scripts/ci/build-macos.sh '$version' release\"" &&
     rsync -a "$MACOS_BUILD_HOST:$remote/release/" "$out/" --include='*macos*' --exclude='*'
 }
 
@@ -161,7 +171,7 @@ trap 'rm -rf crates/app/gen/schemas && mkdir -p crates/app/gen && mv "$schemas" 
 
 for platform in "${platforms[@]}"; do
   log="$log_dir/$platform.log"
-  echo "==> $platform ($version), log: ${log#"$root"/}"
+  echo "==> $platform ($channel $version), log: ${log#"$root"/}"
   start=$(date +%s)
   "build_$platform" >"$log" 2>&1
   code=$?
@@ -175,7 +185,7 @@ for platform in "${platforms[@]}"; do
 done
 
 echo
-echo "Multi Wallet Tracker $version -> $out/"
+echo "Multi Wallet Tracker $channel $version -> $out/"
 failed=0
 for platform in "${platforms[@]}"; do
   printf '  %-8s %s\n' "$platform" "${result[$platform]}"

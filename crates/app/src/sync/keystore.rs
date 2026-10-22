@@ -53,7 +53,7 @@ fn from_hex(stored: &str) -> Option<DeviceKey> {
 
 #[cfg(desktop)]
 fn load_or_create(_app: &AppHandle) -> Result<(DeviceKey, &'static str)> {
-    if let Ok(entry) = keyring::Entry::new(crate::legacy::IDENTIFIER, KEYRING_USER) {
+    if let Ok(entry) = keyring::Entry::new(crate::app_id::get(), KEYRING_USER) {
         match entry.get_password() {
             Ok(stored) => {
                 if let Some(key) = from_hex(&stored) {

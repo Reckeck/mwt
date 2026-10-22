@@ -19,7 +19,8 @@ fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("multi-wallet-tracker-quick-add.sock")
+        // Per identifier: a dev build and a release each answer their own key.
+        .join(format!("{}-quick-add.sock", crate::app_id::get()))
 }
 
 /// Called before the app starts: with `--quick-add` and an instance

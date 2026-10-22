@@ -1,6 +1,7 @@
 //! Tauri entrypoint for the Multi Wallet Tracker shell. All business logic and
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
+mod app_id;
 #[cfg(desktop)]
 mod autostart;
 mod commands;
@@ -27,11 +28,15 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The channel's identifier (dev.mwt.desktop or mwt.desktop): the keyring
+    // and the quick-add socket follow it, as Tauri's directories do.
+    let context = tauri::generate_context!();
+    app_id::set(&context.config().identifier);
     // `--quick-add` with an instance running: hand it over, start nothing.
     if quick_add_socket::forward_if_running() {
         return;
     }
-    // Once, from the TradeApp name: before any window opens its storage.
+    // Once, from the TradeApp name (dev channel): before any window opens its storage.
     #[cfg(desktop)]
     legacy::migrate_dirs();
     let builder = tauri::Builder::default()
@@ -447,7 +452,7 @@ pub fn run() {
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Multi Wallet Tracker")
         .run(|app, event| match event {
             // Quitting (window closed, tray «Quit», session end) writes the batched

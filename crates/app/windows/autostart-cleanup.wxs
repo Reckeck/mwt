@@ -3,12 +3,14 @@
   MSI uninstall takes the app out of autostart. tauri-plugin-autostart writes
   HKCU\...\Run\<productName>; the NSIS uninstaller already deletes it, the MSI
   template does not. Skipped on an upgrade, so autostart survives updates.
+  The value is the channel's productName (the release or "... Dev"), so
+  removing one leaves the other's autostart alone.
   Referenced from tauri.conf.json (bundle.windows.wix).
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
     <CustomAction Id="MwtRemoveAutostart" Directory="TARGETDIR" Execute="immediate" Impersonate="yes" Return="ignore"
-      ExeCommand="&quot;[SystemFolder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Run&quot; /v &quot;Multi Wallet Tracker&quot; /f" />
+      ExeCommand="&quot;[SystemFolder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Run&quot; /v &quot;[ProductName]&quot; /f" />
     <InstallExecuteSequence>
       <Custom Action="MwtRemoveAutostart" After="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>

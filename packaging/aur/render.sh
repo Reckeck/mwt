@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Render PKGBUILD for multi-wallet-tracker-bin from the release tarball.
+# Render PKGBUILD for multi-wallet-tracker-bin from the release tarball (or
+# multi-wallet-tracker-dev-bin from a dev build's: the binary in it decides).
 #
 #   packaging/aur/render.sh <version> <tarball> [url] > PKGBUILD
 #
@@ -12,6 +13,8 @@ tarball="$2"
 url="${3:-}"
 sha="$(sha256sum "$tarball" | cut -d' ' -f1)"
 name="$(basename "$tarball")"
+bin="$(tar -tzf "$tarball" | sed -n 's|^[^/]*/usr/bin/\([^/]\{1,\}\)$|\1|p' | head -n 1)"
+[[ -n "$bin" ]] || { echo "no usr/bin/<program> in $tarball" >&2; exit 1; }
 source="$name"
 [[ -n "$url" ]] && source="$name::$url"
 
@@ -19,5 +22,5 @@ source="$name"
 # for vercmp (0.2.0pre123 < 0.2.0).
 pkgver="${version/-/pre}"
 
-sed -e "s|@PKGVER@|$pkgver|" -e "s|@VERSION@|$version|" -e "s|@SHA256@|$sha|" -e "s|@SOURCE@|$source|" \
+sed -e "s|@BIN@|$bin|g" -e "s|@PKGVER@|$pkgver|" -e "s|@VERSION@|$version|" -e "s|@SHA256@|$sha|" -e "s|@SOURCE@|$source|" \
   "$(dirname "$0")/PKGBUILD.in"
