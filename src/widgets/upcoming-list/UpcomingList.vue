@@ -9,7 +9,7 @@ import { Money } from '@/entities/currency'
 import { AutomationRunActions } from '@/features/automation-edit'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 
 import type { UpcomingListProps } from './upcoming-list.types'
 import { SectionState } from '@/shared/ui/section-state'
@@ -29,6 +29,18 @@ const runs = useQuery({
 })
 
 const items = computed(() => (upcoming.data.value ?? []).slice(0, props.limit))
+/** The list by day: one date header over its lines instead of a date on every line. */
+const byDay = computed(() => {
+  const groups: { date: string; items: UpcomingItem[] }[] = []
+  for (const item of items.value) {
+    const last = groups.at(-1)
+    if (last?.date === item.date) last.items.push(item)
+    else groups.push({ date: item.date, items: [item] })
+  }
+  return groups
+})
+/** «Will the money last»: the first payment the accounts can't cover, or none. */
+const firstShort = computed(() => (upcoming.data.value ?? []).find((item) => item.shortfall) ?? null)
 /** The run behind an item: a refused run by its id, an approximate one by the operation it made. */
 const runOf = (item: UpcomingItem) =>
   runs.data.value?.find((run) =>
@@ -91,9 +103,24 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
       @retry="upcoming.refetch()"
     />
     <p v-else-if="!items.length" class="text-sm text-muted-foreground">{{ t('upcoming.empty') }}</p>
-    <ul class="grid grid-cols-[minmax(0,1fr)] gap-2">
+    <p
+      v-else
+      class="mb-2 text-xs"
+      :class="firstShort ? 'text-destructive' : 'text-success'"
+      data-tour="dash-upcoming-coverage"
+    >
+      <template v-if="firstShort">
+        {{ t('upcoming.coverShort', { date: formatDate(firstShort.date) }) }}
+        <Money :amount="firstShort.shortfall" :decimals="0" :currency="firstShort.asset?.symbol" />
+      </template>
+      <template v-else>{{ t('upcoming.coverOk') }}</template>
+    </p>
+    <ul class="grid grid-cols-[minmax(0,1fr)] gap-3">
+      <li v-for="day in byDay" :key="day.date" class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
+        <p class="text-xs tabular-nums text-muted-foreground">{{ formatDate(day.date) }}</p>
+        <ul class="grid grid-cols-[minmax(0,1fr)] gap-2">
       <li
-        v-for="item in items"
+        v-for="item in day.items"
         :key="`${item.kind}-${item.source_id}-${item.at}`"
         class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm"
       >
@@ -103,7 +130,6 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
             class="size-4 shrink-0"
             :class="ICON_COLOR[item.kind] ?? 'text-muted-foreground'"
           />
-          <span class="w-20 shrink-0 text-xs tabular-nums text-muted-foreground">{{ formatDate(item.date) }}</span>
           <RouterLink
             v-if="targetOf(item)"
             :to="targetOf(item) as RouteLocationRaw"
@@ -124,11 +150,13 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
           </span>
         </div>
         <p v-if="item.shortfall" class="pl-6 text-xs text-destructive">
-          {{ t('upcoming.short', { amount: formatMoney(item.shortfall, { currency: item.asset?.symbol }) }) }}
+          {{ t('upcoming.shortLabel') }} <Money :amount="item.shortfall" :decimals="0" :currency="item.asset?.symbol" />
         </p>
         <div v-if="(item.kind === 'rejected_run' || item.kind === 'unconfirmed_run') && runOf(item)" class="pl-6">
           <AutomationRunActions :run="runOf(item) as AutomationRun" :name="item.title" />
         </div>
+      </li>
+        </ul>
       </li>
     </ul>
   </Card>

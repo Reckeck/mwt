@@ -219,6 +219,8 @@ pub fn run() {
             analytics::export_report_csv,
             analytics::get_calendar,
             analytics::get_spending_overview,
+            analytics::get_month_pace,
+            analytics::get_net_worth_trend,
             analytics::get_entity_card,
             analytics::get_search_index,
             analytics::search_transactions,

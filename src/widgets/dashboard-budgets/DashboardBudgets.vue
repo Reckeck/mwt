@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
@@ -13,6 +14,8 @@ import { useCategories } from '@/shared/api/queries'
 import { SectionState } from '@/shared/ui/section-state'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
+import { byRisk } from './model/budget-pace'
+
 const { t } = useI18n()
 
 const statuses = useQuery({ queryKey: ['budget-status'], queryFn: () => call<BudgetStatus[]>('get_budget_status') })
@@ -24,6 +27,7 @@ function label(target: BudgetTarget): string {
   return t('budget.targetKind.store')
 }
 const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.used) * 100))
+const paces = computed(() => byRisk(statuses.data.value ?? []))
 </script>
 
 <template>
@@ -34,14 +38,27 @@ const pct = (status: BudgetStatus) => Math.min(100, Math.round(Number(status.use
       </RouterLink>
     </template>
     <ul class="grid gap-3">
-      <li v-for="status in statuses.data.value" :key="status.budget.id" class="grid gap-1">
+      <li v-for="{ status, elapsed, forecast, risk } in paces" :key="status.budget.id" class="grid gap-1">
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="min-w-0 truncate">{{ label(status.budget.target) }} · {{ t(`budget.periodKind.${status.budget.period}`) }}</span>
           <span class="shrink-0 tabular-nums" :class="Number(status.remaining) < 0 ? 'text-destructive' : 'text-muted-foreground'">
             <Money :amount="status.spent" :decimals="0" :currency="status.budget.currency" /> / <Money :amount="status.budget.limit" :decimals="0" :currency="status.budget.currency" />
           </span>
         </div>
-        <ProgressBar :value="pct(status)" size="sm" :tone="Number(status.remaining) < 0 ? 'destructive' : 'primary'" />
+        <ProgressBar
+          :value="pct(status)"
+          size="sm"
+          :tone="Number(status.remaining) < 0 ? 'destructive' : risk > 1 ? 'warning' : 'primary'"
+        />
+        <p class="text-xs tabular-nums" :class="risk > 1 ? 'text-warning' : 'text-muted-foreground'">
+          <template v-if="Number(status.remaining) >= 0 && risk > 1">
+            {{ t('budget.paceOver') }}
+            <Money :amount="forecast - Number(status.budget.limit)" :decimals="0" :currency="status.budget.currency" />
+          </template>
+          <template v-else-if="Number(status.remaining) >= 0">
+            {{ t('budget.paceOk', { pct: Math.round(elapsed * 100) }) }}
+          </template>
+        </p>
       </li>
     </ul>
   </Card>

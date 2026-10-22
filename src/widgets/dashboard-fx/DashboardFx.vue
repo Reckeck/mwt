@@ -10,7 +10,7 @@ import { Money, useFavoriteCurrencies } from '@/entities/currency'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
-import { formatDate } from '@/shared/lib/format'
+import { formatDate, formatPct, signClass } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -41,7 +41,9 @@ const rows = computed(() => {
     const row = data.rows.find((entry) => entry.currency === code)
     if (!row) return []
     const day = row.updated_at.slice(0, 10)
-    return [{ code, inBase: row.in_base, stale: day && day < today ? formatDate(row.updated_at) : '' }]
+    return [
+      { code, inBase: row.in_base, change: row.change_pct, stale: day && day < today ? formatDate(row.updated_at) : '' },
+    ]
   })
 })
 
@@ -86,10 +88,13 @@ const refresh = () => priceRefresh.mutate()
           {{ t('store.fxPickFavorites') }}
         </RouterLink>
       </template>
-      <dl class="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 gap-y-1 text-sm">
+      <dl class="grid grid-cols-[auto_1fr_auto_auto] items-baseline gap-x-3 gap-y-1 text-sm">
         <template v-for="row in rows" :key="row.code">
           <dt class="font-medium uppercase">1 {{ row.code }}</dt>
           <dd class="text-right font-semibold"><Money :amount="row.inBase" :convert="false" :decimals="2" /></dd>
+          <dd class="min-w-12 text-right text-xs tabular-nums" :class="signClass(row.change)" :title="t('store.fxChange')">
+            {{ row.change === null ? '' : formatPct(row.change, { signed: true }) }}
+          </dd>
           <dd class="text-right text-xs text-muted-foreground">{{ row.stale }}</dd>
         </template>
       </dl>

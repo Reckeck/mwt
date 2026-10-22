@@ -54,7 +54,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('dailyBudget', DailyBudget, [4, 5, 3, 4]),
   widget('monthSummary', MonthSummary, [4, 6, 3, 5]),
   widget('upcoming', UpcomingList, [4, 6, 3, 4], { props: { days: 14, limit: 6 } }),
-  widget('netWorth', NetWorthCard, [4, 6, 3, 5], { link: { name: 'analytics-wealth' } }),
+  widget('netWorth', NetWorthCard, [4, 6, 3, 4], { link: { name: 'analytics-wealth' }, periodic: true }),
   widget('fx', DashboardFx, [4, 5, 2, 4]),
   widget('spending', DashboardSpending, [4, 6, 3, 4], { link: { name: 'transactions-calendar' }, periodic: true }),
   widget('assets', DashboardAssets, [4, 7, 3, 4]),

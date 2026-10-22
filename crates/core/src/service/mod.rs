@@ -36,6 +36,7 @@ mod budget;
 mod categories;
 mod contacts;
 mod dashboard;
+mod dashboard_tiles;
 mod datasources;
 mod debts;
 mod emergency;
@@ -94,6 +95,7 @@ pub use automations::{
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use dashboard::{SpendingDay, SpendingOverview};
+pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};
 pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
 pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
@@ -485,6 +487,9 @@ impl UnlockedVault {
         }
         if let Some(period) = input.dashboard_period {
             settings.dashboard_period = period;
+        }
+        if let Some(hidden) = input.onboarding_checklist_hidden {
+            settings.onboarding_checklist_hidden = hidden;
         }
         if let Some(interval) = input.fx_refresh_interval_sec {
             settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
@@ -1838,6 +1843,16 @@ impl UnlockedVault {
             .map(|(_, ts)| ts.to_string())
     }
 
+    /// The latest cached 24-hour change of an asset's price.
+    fn change_24h_of(&self, asset_key: &str) -> Option<Amount> {
+        self.doc
+            .price_cache
+            .iter()
+            .filter(|point| point.asset_key == asset_key)
+            .max_by(|left, right| left.ts.cmp(&right.ts))
+            .and_then(|point| point.change_24h_pct)
+    }
+
     pub fn portfolio_summary(&self) -> PortfolioSummary {
         let (base, fx) = self.base_and_fx();
         let mut total_usd = Amount::ZERO;
@@ -1864,6 +1879,7 @@ impl UnlockedVault {
                     value_usd: Amount::ZERO,
                     price_base: price * fx,
                     value_base: Amount::ZERO,
+                    change_24h_pct: self.change_24h_of(&asset_key),
                 });
             st.quantity += holding.quantity;
             st.price_usd = price;
@@ -2840,6 +2856,9 @@ pub struct AssetStat {
     /// One unit in the base currency at the latest rate.
     pub price_base: Amount,
     pub value_base: Amount,
+    /// Change of the price over the last 24 hours, percent, when the provider said it.
+    #[serde(default)]
+    pub change_24h_pct: Option<Amount>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -4889,6 +4908,7 @@ mod persist_tests {
                 target: EntityRef::new(EntityKind::Goal, "g1"),
             }],
             dashboard_period: crate::model::vault::DashPeriod::Year,
+            onboarding_checklist_hidden: true,
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

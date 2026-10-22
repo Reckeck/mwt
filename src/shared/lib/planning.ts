@@ -10,6 +10,8 @@ export const PLANNING_KEYS = [
   ['budget-status'],
   ['daily-budget'],
   ['month-summary'],
+  ['month-pace'],
+  ['spending-overview'],
   ['goals'],
   ['goal-progress'],
   ['goal-calendar'],

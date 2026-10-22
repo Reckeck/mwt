@@ -245,6 +245,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 freedom_rate: None,
                 pinned: Vec::new(),
                 dashboard_period: Default::default(),
+                onboarding_checklist_hidden: false,
             },
             stores: old.stores,
             holdings: old.holdings,

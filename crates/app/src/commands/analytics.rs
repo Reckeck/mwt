@@ -10,8 +10,8 @@ use trade_core::model::entity_ref::Pinned;
 use trade_core::model::transaction::Transaction;
 use trade_core::model::vault::DashPeriod;
 use trade_core::service::{
-    CalendarMonth, EntityCard, EntityRef, HealthReport, PinnedView, Report, ReportFilter,
-    ReportKind, ReportOverview, SearchEntry, SpendingOverview, report_csv,
+    CalendarMonth, EntityCard, EntityRef, HealthReport, MonthPace, NetWorthTrend, PinnedView,
+    Report, ReportFilter, ReportKind, ReportOverview, SearchEntry, SpendingOverview, report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -140,6 +140,33 @@ pub async fn get_spending_overview(
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
     Ok(vault.spending_overview(period, now_secs(), &zone))
+}
+
+/// «Бюджет дня» and «Итоги месяца» (plan H3): the month so far against the
+/// previous month to the same date, the plan to date and the growing categories.
+#[tauri::command]
+pub async fn get_month_pace(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<MonthPace, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard.as_ref().unwrap().month_pace(now_secs(), &zone))
+}
+
+/// «Чистый капитал» (plan H3): the holdings now against the period's start, and
+/// their series; the dashboard period when omitted.
+#[tauri::command]
+pub async fn get_net_worth_trend(
+    period: Option<DashPeriod>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<NetWorthTrend, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
+    let period = period.unwrap_or(vault.doc.settings.dashboard_period);
+    Ok(vault.net_worth_trend(period, now_secs(), &zone))
 }
 
 /// The card of any entity (plan J1): its head and what links to it.

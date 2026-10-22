@@ -8,7 +8,9 @@ import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
+import { EntityLink } from '@/shared/ui/entity-link'
+import { Money } from '@/entities/currency'
 import { SectionState } from '@/shared/ui/section-state'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
@@ -30,13 +32,25 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="flex min-w-0 items-center gap-1.5 truncate">
             <CircleAlert v-if="!item.realistic" class="size-3.5 shrink-0 text-warning" :aria-label="t('goal.revise')" />
-            {{ item.goal.name }}
+            <EntityLink :target="{ kind: 'goal', id: item.goal.id }" :label="item.goal.name" plain />
           </span>
           <span class="shrink-0 tabular-nums text-muted-foreground">{{ item.pct }}%</span>
         </div>
         <ProgressBar :value="pct(item.pct)" size="sm" />
         <p v-if="item.need_per_month" class="text-xs tabular-nums text-muted-foreground">
-          {{ t('goal.needShort', { amount: formatMoney(item.need_per_month, { decimals: 0, currency: item.goal.currency }) }) }}
+          {{ t('goal.needPerMonth') }}
+          <Money :amount="item.need_per_month" :decimals="0" :currency="item.goal.currency" />
+          <template v-if="item.forecast"> · {{ t('goal.forecastShort', { date: formatDate(item.forecast) }) }}</template>
+        </p>
+        <p v-if="item.planned_now" class="text-xs tabular-nums text-muted-foreground">
+          {{ t('goal.planVsFact') }}
+          <Money :amount="item.planned_now" :decimals="0" :currency="item.goal.currency" /> /
+          <Money
+            :amount="item.saved"
+            :decimals="0"
+            :currency="item.goal.currency"
+            :class="Number(item.saved) < Number(item.planned_now) ? 'text-warning' : 'text-success'"
+          />
         </p>
       </li>
     </ul>
