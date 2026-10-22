@@ -13,6 +13,11 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'vaultSetup',
+    date: '2026-10-22',
+    points: [{ key: 'currency' }, { key: 'direction', route: 'settings:vault' }],
+  },
+  {
     id: 'dashboardNew',
     date: '2026-10-22',
     points: [

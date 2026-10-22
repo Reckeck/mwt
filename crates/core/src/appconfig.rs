@@ -70,6 +70,11 @@ pub struct AppSettings {
     pub locale: Locale,
     /// ISO 4217 code the whole portfolio is valued in (e.g. `usd`, `rub`).
     pub base_currency: String,
+    /// The user has picked the base currency: the first create or open of a
+    /// vault stops asking. A file from before the field reads as `true`, so
+    /// nobody who already uses the app is asked again.
+    #[serde(default = "chosen_before_the_field")]
+    pub base_currency_chosen: bool,
     /// Currencies offered on hover next to any price. Empty = no tooltip.
     #[serde(default)]
     pub favorite_currencies: Vec<String>,
@@ -166,12 +171,17 @@ pub fn default_inflation() -> BTreeMap<String, Amount> {
         .collect()
 }
 
+fn chosen_before_the_field() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: Theme::Auto,
             locale: Locale::Auto,
             base_currency: DEFAULT_BASE_CURRENCY.into(),
+            base_currency_chosen: false,
             favorite_currencies: Vec::new(),
             timezone: None,
             inflation: default_inflation(),
@@ -212,6 +222,10 @@ impl AppSettings {
             && !base.trim().is_empty()
         {
             self.base_currency = base.trim().to_lowercase();
+            self.base_currency_chosen = true;
+        }
+        if let Some(chosen) = patch.base_currency_chosen {
+            self.base_currency_chosen = chosen;
         }
         if let Some(favorites) = &patch.favorite_currencies {
             self.favorite_currencies = normalize_codes(favorites);
@@ -381,6 +395,9 @@ pub struct UpdateAppSettingsInput {
     pub theme: Option<Theme>,
     pub locale: Option<Locale>,
     pub base_currency: Option<String>,
+    /// Marks the base currency as picked without changing it.
+    #[serde(default)]
+    pub base_currency_chosen: Option<bool>,
     pub favorite_currencies: Option<Vec<String>>,
     /// IANA zone; an empty string goes back to the OS zone.
     #[serde(default)]
@@ -701,6 +718,30 @@ mod tests {
     }
 
     #[test]
+    fn base_currency_is_asked_only_on_a_fresh_install() {
+        assert!(!AppSettings::default().base_currency_chosen);
+        let old: AppSettings =
+            serde_json::from_str(r#"{"theme":"auto","locale":"auto","base_currency":"rub"}"#)
+                .expect("settings from before the field");
+        assert!(old.base_currency_chosen);
+    }
+
+    #[test]
+    fn picking_a_base_currency_marks_it_chosen() {
+        let mut settings = AppSettings::default();
+        settings.apply(&UpdateAppSettingsInput {
+            theme: Some(Theme::Dark),
+            ..Default::default()
+        });
+        assert!(!settings.base_currency_chosen);
+        settings.apply(&UpdateAppSettingsInput {
+            base_currency: Some("eur".into()),
+            ..Default::default()
+        });
+        assert!(settings.base_currency_chosen);
+    }
+
+    #[test]
     fn patch_touches_only_given_fields() {
         let mut settings = AppSettings::default();
         settings.apply(&UpdateAppSettingsInput {
@@ -808,6 +849,7 @@ mod tests {
             theme: Theme::Light,
             locale: Locale::Ru,
             base_currency: "eur".into(),
+            base_currency_chosen: true,
             favorite_currencies: vec!["RUB".into()],
             timezone: Some("Asia/Bangkok".into()),
             inflation: default_inflation(),

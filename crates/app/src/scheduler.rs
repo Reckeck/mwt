@@ -401,14 +401,15 @@ fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
 // -- 1. Bybit import -------------------------------------------------------------
 
 /// Poll each exchange on its own interval (`ExchangeProfile.import_interval_sec`,
-/// `0` disables it) and stage any new fills for the user to confirm.
+/// `0` disables it) and stage any new fills for the user to confirm. A vault
+/// that keeps no crypto hides its exchanges, so they are not polled either.
 fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     let due: Vec<(String, String, String)> = {
         let state = app.state::<AppState>();
         let Ok(guard) = state.vault.lock() else {
             return;
         };
-        let Some(vault) = guard.as_ref() else {
+        let Some(vault) = guard.as_ref().filter(|vault| vault.crypto_enabled()) else {
             return;
         };
         vault

@@ -54,7 +54,9 @@ export function useCurrencyOptions(kinds: MaybeRefOrGetter<CurrencyKind[]>, extr
     const fiat = new Set(settings.fiatCurrencies)
     for (const code of toValue(extra)) push(code, fiat.has(code.toLowerCase()) ? 'fiat' : 'crypto')
     if (wanted.has('fiat')) for (const code of settings.fiatCurrencies) push(code, 'fiat')
-    if (wanted.has('crypto')) for (const code of settings.cryptoCurrencies) push(code, 'crypto')
+    // Crypto is offered only while the vault keeps it; a value already chosen stays through `extra`.
+    if (wanted.has('crypto') && settings.cryptoEnabled)
+      for (const code of settings.cryptoCurrencies) push(code, 'crypto')
     // Favourites first, in the user's order (the base leads); the rest keep the catalog order.
     const rank = (row: CurrencyOption) => (row.favorite ? order.indexOf(row.code) : order.length)
     return rows.sort((left, right) => rank(left) - rank(right))

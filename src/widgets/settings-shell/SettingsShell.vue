@@ -17,6 +17,7 @@ import { NotificationSettings } from '@/widgets/notification-settings'
 import { QuickAddSettings } from '@/widgets/quick-add-settings'
 import { SyncDevices, SyncHistory, SyncSettings, SyncTransfer } from '@/widgets/sync-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
+import { VaultDirection } from '@/widgets/vault-direction'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { VaultSettings } from '@/widgets/vault-settings'
 import { Button } from '@/shared/ui/button'
@@ -187,6 +188,7 @@ function focusActiveTab(event: Event) {
                 <TourSettings v-else-if="section.id === 'tours'" />
                 <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
                 <VaultSettings v-else-if="section.id === 'vault'" />
+                <VaultDirection v-else-if="section.id === 'direction'" />
                 <FxRates v-else-if="section.id === 'rates'" />
                 <BudgetSettings v-else-if="section.id === 'budget'" />
                 <CategoryManager v-else-if="section.id === 'categories'" />

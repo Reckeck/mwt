@@ -48,6 +48,8 @@ export const useSettingsStore = defineStore('settings', {
     locale: (state): Locale => state.app?.locale ?? 'auto',
     /** Lowercase ISO code; always non-empty so labels never render blank. */
     baseCurrency: (state): string => state.app?.base_currency || 'usd',
+    /** A fresh install: the first create or open of a vault asks for the base currency. */
+    needsBaseCurrency: (state): boolean => state.app !== null && !state.app.base_currency_chosen,
     favoriteCurrencies: (state): string[] => state.app?.favorite_currencies ?? [],
     /** Every code either picker may show, sorted and deduplicated. */
     allCurrencies: (state): string[] => {
@@ -67,6 +69,8 @@ export const useSettingsStore = defineStore('settings', {
     /** Decimal places used to render balances: a device setting, the vault's old copy until taken over. */
     displayDecimals: (state): number => state.app?.display_decimals ?? state.vault?.display_decimals ?? 8,
     dashboardWidgets: (state): DashboardWidgetCfg[] => state.vault?.dashboard_widgets ?? [],
+    /** The vault keeps crypto: crypto wallets, exchanges and coins are shown. Unknown = yes. */
+    cryptoEnabled: (state): boolean => state.vault?.crypto !== false,
   },
 
   actions: {
@@ -109,6 +113,7 @@ export const useSettingsStore = defineStore('settings', {
           theme: patch.theme ?? null,
           locale: patch.locale ?? null,
           base_currency: patch.base_currency ?? null,
+          base_currency_chosen: patch.base_currency_chosen ?? null,
           favorite_currencies: patch.favorite_currencies ?? null,
           timezone: patch.timezone ?? null,
           inflation: patch.inflation ?? null,
@@ -151,5 +156,6 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     onboarding_checklist_hidden: patch.onboarding_checklist_hidden ?? null,
     manual_income: patch.manual_income ?? null,
     manual_expenses: patch.manual_expenses ?? null,
+    crypto: patch.crypto ?? null,
   }
 }

@@ -47,6 +47,8 @@ export const mockSettings: Settings = {
   freedom_rate: null,
   pinned: [],
   categories_rev: 1,
+  // The demo holds exchanges and crypto wallets; `?crypto=0` previews a vault without them.
+  crypto: new URLSearchParams(globalThis.location?.search ?? '').get('crypto') !== '0',
 }
 
 /** Mirrors what `app_settings.json` would hold. */
@@ -54,6 +56,8 @@ export const mockAppSettings: AppSettings = {
   theme: 'dark',
   locale: 'auto',
   base_currency: 'usd',
+  // A fresh install: the create and open forms ask for the base currency.
+  base_currency_chosen: false,
   favorite_currencies: [],
   timezone: null,
   inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },

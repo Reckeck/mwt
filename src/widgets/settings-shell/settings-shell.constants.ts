@@ -85,6 +85,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
     icon: HardDrive,
     sections: [
       { id: 'vault', titleKey: 'settingsShell.section.vault' },
+      { id: 'direction', titleKey: 'settingsShell.section.direction' },
       { id: 'enrichment', titleKey: 'settingsShell.section.enrichment' },
     ],
   },
@@ -114,6 +115,7 @@ export const SETTINGS_ALIASES: Record<string, { tab: string; section: string }> 
   inflation: { tab: 'money', section: 'inflation' },
   rates: { tab: 'money', section: 'rates' },
   enrichment: { tab: 'vault', section: 'enrichment' },
+  direction: { tab: 'vault', section: 'direction' },
   tours: { tab: 'learning', section: 'tours' },
   'quick-add': { tab: 'device', section: 'quick-add' },
 }

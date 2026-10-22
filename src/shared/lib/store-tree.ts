@@ -39,3 +39,15 @@ export function withoutLoyalty(roots: StoreTreeNode[]): StoreTreeNode[] {
     .filter((node) => node.store.kind !== 'loyalty')
     .map((node) => (node.children.length ? { ...node, children: withoutLoyalty(node.children) } : node))
 }
+
+/** Wallet kinds that exist only for crypto: hidden while the vault's crypto direction is off. */
+export const CRYPTO_KINDS: readonly StoreKind[] = ['crypto', 'exchange']
+
+export function isCryptoKind(kind: StoreKind): boolean {
+  return CRYPTO_KINDS.includes(kind)
+}
+
+/** Roots without crypto wallets when `crypto` is off; their balances still count in totals. */
+export function withCryptoShown(roots: StoreTreeNode[], crypto: boolean): StoreTreeNode[] {
+  return crypto ? roots : roots.filter((node) => !isCryptoKind(node.store.kind))
+}

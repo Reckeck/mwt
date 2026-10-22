@@ -46,6 +46,11 @@ impl StoreKind {
         }
     }
 
+    /// Crypto wallets and exchanges: hidden while the vault keeps no crypto.
+    pub fn is_crypto(self) -> bool {
+        matches!(self, Self::Crypto | Self::Exchange)
+    }
+
     /// Whether the user creates wallets of this kind (cash comes with the vault).
     pub fn user_creatable(self) -> bool {
         !matches!(self, Self::Cash)

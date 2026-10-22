@@ -111,6 +111,12 @@ type AppSettings = { theme: Theme, locale: Locale,
  */
 base_currency: string, 
 /**
+ * The user has picked the base currency: the first create or open of a
+ * vault stops asking. A file from before the field reads as `true`, so
+ * nobody who already uses the app is asked again.
+ */
+base_currency_chosen: boolean, 
+/**
  * Currencies offered on hover next to any price. Empty = no tooltip.
  */
 favorite_currencies: Array<string>, 
@@ -1115,7 +1121,11 @@ type CreateVaultInput = { path: string, password: string,
 /**
  * Name of the cash wallet every vault starts with, in the user's language.
  */
-cash_name: string | null, };
+cash_name: string | null, 
+/**
+ * The vault keeps crypto; `None` = yes (callers from before the question).
+ */
+crypto: boolean | null, };
 
 /**
  * Catalog of currencies the base/favourite pickers may offer.
@@ -4015,7 +4025,13 @@ dashboard_period: DashPeriod,
 /**
  * The user hid the «С чего начать» checklist (plan H3; it lived in localStorage).
  */
-onboarding_checklist_hidden: boolean, };
+onboarding_checklist_hidden: boolean, 
+/**
+ * The vault keeps crypto: crypto wallets, exchanges and coins are shown.
+ * `None` = a vault from before the question; [`crate::UnlockedVault::open`]
+ * answers it from the wallets it already has.
+ */
+crypto: boolean | null, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -5230,7 +5246,11 @@ type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "re
 /**
  * Partial update: only the fields present in the payload are touched.
  */
-type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, favorite_currencies: Array<string> | null, 
+type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, 
+/**
+ * Marks the base currency as picked without changing it.
+ */
+base_currency_chosen: boolean | null, favorite_currencies: Array<string> | null, 
 /**
  * IANA zone; an empty string goes back to the OS zone.
  */
@@ -5322,7 +5342,11 @@ manual_income: Amount | null,
 /**
  * Usual monthly spending while there is no history; zero clears it.
  */
-manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_checklist_hidden: boolean | null, };
+manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_checklist_hidden: boolean | null, 
+/**
+ * Show crypto wallets, exchanges and coins.
+ */
+crypto: boolean | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**
@@ -5708,7 +5732,11 @@ type WalletCatalog = { kinds: Array<WalletKindInfo>, providers: Array<ExchangePr
  */
 property_presets: Array<PropertyPresetsInfo>, };
 
-type WalletKindInfo = { kind: StoreKind, presets: Array<PresetInfo>, max_roots: number | null, user_creatable: boolean, default_purpose: Purpose, sub_types: Array<SubTypeInfo>, };
+type WalletKindInfo = { kind: StoreKind, presets: Array<PresetInfo>, max_roots: number | null, user_creatable: boolean, 
+/**
+ * Hidden while the vault keeps no crypto (`Settings::crypto`).
+ */
+crypto: boolean, default_purpose: Purpose, sub_types: Array<SubTypeInfo>, };
 
 /**
  * A value on a data edge. Money keeps its currency so different currencies

@@ -30,6 +30,7 @@ export const vaultCommands: MockCommands = {
     throw { code: 'SECRET', message: 'Wrong password' }
   },
   create_vault: ({ body }) => {
+    if (typeof body?.crypto === 'boolean') mockSettings.crypto = body.crypto
     mockStatus.value = {
       path: String(body?.path ?? mockStatus.value.path),
       exists: true,
@@ -125,7 +126,12 @@ export const appSettingsOutsideCommands: MockCommands = {
     const input = body as UpdateAppSettingsInput
     if (input.theme) mockAppSettings.theme = input.theme
     if (input.locale) mockAppSettings.locale = input.locale
-    if (input.base_currency) mockAppSettings.base_currency = input.base_currency
+    if (input.base_currency) {
+      mockAppSettings.base_currency = input.base_currency
+      mockAppSettings.base_currency_chosen = true
+    }
+    if (input.base_currency_chosen !== null && input.base_currency_chosen !== undefined)
+      mockAppSettings.base_currency_chosen = input.base_currency_chosen
     if (input.favorite_currencies) mockAppSettings.favorite_currencies = normalizeCodes(input.favorite_currencies)
     if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
     if (input.inflation) mockAppSettings.inflation = input.inflation

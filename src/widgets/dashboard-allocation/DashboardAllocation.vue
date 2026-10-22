@@ -12,6 +12,7 @@ import { TOPUP_ADVICE_KEY } from '@/shared/api/queries'
 import { SectionState } from '@/shared/ui/section-state'
 import { formatPct } from '@/shared/lib/format'
 import { call } from '@/shared/api/ipc'
+import { useSettingsStore } from '@/shared/store/settings'
 
 import { ALLOCATION_AXES, type AllocationAxis, type DashboardAllocationProps } from './dashboard-allocation.types'
 import { AllocationPie } from '@/widgets/allocation-pie'
@@ -24,10 +25,14 @@ import { ProgressBar } from '@/shared/ui/progress-bar'
 const props = withDefaults(defineProps<DashboardAllocationProps>(), { by: 'store' })
 
 const { t } = useI18n()
-const axis = ref<AllocationAxis>(props.by)
+const settings = useSettingsStore()
+/** «По сетям» is about crypto: without it the widget offers wallets and classes. */
+const axes = computed(() => ALLOCATION_AXES.filter((item) => settings.cryptoEnabled || item !== 'chain'))
+const chosenAxis = ref<AllocationAxis>(props.by)
+const axis = computed(() => (axes.value.includes(chosenAxis.value) ? chosenAxis.value : 'store'))
 function chooseAxis(value: unknown) {
   // A single toggle group hands back `undefined` when the pressed item is clicked again.
-  if (typeof value === 'string') axis.value = value as AllocationAxis
+  if (typeof value === 'string') chosenAxis.value = value as AllocationAxis
 }
 
 const summary = useQuery({
@@ -93,7 +98,7 @@ const currency = computed(() =>
       :aria-label="t('dashboard.allocation.axis')"
       @update:model-value="chooseAxis"
     >
-      <ToggleGroupItem v-for="item in ALLOCATION_AXES" :key="item" :value="item" class="px-2 text-xs">
+      <ToggleGroupItem v-for="item in axes" :key="item" :value="item" class="px-2 text-xs">
         {{ t(`dashboard.allocation.${item}`) }}
       </ToggleGroupItem>
     </ToggleGroup>

@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { useBaseCurrencyChoice } from '@/features/base-currency-choice'
 import { parseError } from '@/shared/api/ipc'
 import { vaultErrorMessage } from '@/shared/lib/vault-error'
 import { useVaultStore } from '@/shared/store/vault'
@@ -13,6 +14,8 @@ export function useUnlockVault() {
   const vault = useVaultStore()
 
   const password = ref('')
+  /** A fresh install opening its first vault (an import) asks for the base currency too. */
+  const baseCurrency = useBaseCurrencyChoice()
   const error = ref<string | null>(null)
   const busy = ref(false)
   /** `true` when the vault came from the recents list and the path is fixed. */
@@ -32,6 +35,7 @@ export function useUnlockVault() {
     password.value = ''
     error.value = null
     conflict.value = false
+    baseCurrency.reset()
   }
 
   async function browse() {
@@ -57,6 +61,7 @@ export function useUnlockVault() {
     conflict.value = false
     try {
       await vault.unlock(path.value, password.value)
+      await baseCurrency.save()
       await router.replace({ name: 'dashboard' })
     } catch (err) {
       conflict.value = parseError(err).code === 'SYNC_CONFLICT'
@@ -83,6 +88,7 @@ export function useUnlockVault() {
 
   return {
     password,
+    baseCurrency,
     error,
     busy,
     pathFixed,

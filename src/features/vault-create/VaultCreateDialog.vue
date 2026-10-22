@@ -8,7 +8,10 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 
+import { BaseCurrencyField } from '@/features/base-currency-choice'
+
 import { MIN_VAULT_PASSWORD, useCreateVault } from './useCreateVault'
+import VaultCryptoChoice from './VaultCryptoChoice.vue'
 import { useVaultStore } from '@/shared/store/vault'
 import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
 
@@ -16,7 +19,9 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const vault = useVaultStore()
-const { path, password, passwordRepeat, passwordMatch, error, busy, reset, browse, submit } = useCreateVault()
+const { path, password, passwordRepeat, passwordMatch, crypto, baseCurrency, error, busy, reset, browse, submit } =
+  useCreateVault()
+const { currency, asked } = baseCurrency
 
 /** Shown as typed: a new password is easy to mistype twice the same way. */
 const reveal = ref(false)
@@ -33,6 +38,7 @@ const form = useFormValidation(
     path: required(path.value),
     password: firstError(required(password.value), minLength(password.value, MIN_VAULT_PASSWORD)),
     repeat: required(passwordRepeat.value) ?? (password.value === passwordRepeat.value ? null : t('auth.passwordMismatch')),
+    currency: asked.value ? required(currency.value) : null,
   }),
   { resetOn: open },
 )
@@ -92,6 +98,9 @@ const form = useFormValidation(
       </FormField>
 
       <p class="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm">{{ t('auth.passwordNoRecovery') }}</p>
+
+      <BaseCurrencyField v-if="asked" v-model="currency" :error="form.error('currency')" />
+      <VaultCryptoChoice v-model="crypto" />
 
       <p
         v-if="error"

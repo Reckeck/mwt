@@ -27,7 +27,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const kind = ref<StoreKind>('bank')
   const subType = ref<SubType | null>(null)
   const creatableKinds = computed(() =>
-    (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable && info.kind !== 'loyalty'),
+    (catalog.data.value?.kinds ?? []).filter(
+      (info) => info.user_creatable && info.kind !== 'loyalty' && (settings.cryptoEnabled || !info.crypto),
+    ),
   )
   const subTypes = computed(() =>
     props.parent ? (kindInfo(catalog.data.value, props.parent.kind)?.sub_types ?? []) : [],

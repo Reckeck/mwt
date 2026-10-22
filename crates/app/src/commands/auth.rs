@@ -92,6 +92,14 @@ pub async fn create_vault(
             .update_store(&cash, name, "#16a34a", "", Default::default())
             .map_err(crate::commands::err_to_string)?;
     }
+    if let Some(crypto) = input.crypto {
+        vault
+            .update_settings(trade_core::ipc_contract::UpdateSettingsInput {
+                crypto: Some(crypto),
+                ..Default::default()
+            })
+            .map_err(crate::commands::err_to_string)?;
+    }
     store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the new vault
     // before reading the info back out.
