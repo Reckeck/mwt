@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { CalendarCheck, ChartArea, LayoutDashboard, ScrollText, WalletCards, Workflow } from 'lucide-vue-next'
+import { ChartArea, LayoutDashboard, ScrollText, WalletCards, Workflow } from 'lucide-vue-next'
 
 export interface NavItem {
   /** Route the item opens. */
@@ -11,28 +11,13 @@ export interface NavItem {
   prefix?: string
 }
 
-export interface NavGroup {
-  /** i18n key of the group's label; the first group has none. */
-  key: string | null
-  items: NavItem[]
-}
-
-/** The app's sections, grouped by what one goes there for. */
-export const NAV_GROUPS: NavGroup[] = [
-  { key: null, items: [{ name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' }] },
-  {
-    key: 'nav.group.money',
-    items: [
-      { name: 'stores', icon: WalletCards, key: 'nav.stores', prefix: '/stores' },
-      { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
-      { name: 'analytics', icon: ChartArea, key: 'nav.analytics', prefix: '/analytics' },
-    ],
-  },
-  {
-    key: 'nav.group.plans',
-    items: [
-      { name: 'planning-automations', icon: CalendarCheck, key: 'nav.planning', prefix: '/planning' },
-      { name: 'workflows', icon: Workflow, key: 'nav.workflows', prefix: '/workflows' },
-    ],
-  },
+/** The five sections (Shell · 7): the sidebar, the phone's bar and «More», the palette. */
+export const NAV_ITEMS: NavItem[] = [
+  { name: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
+  { name: 'transactions', icon: ScrollText, key: 'nav.transactions', prefix: '/transactions' },
+  { name: 'stores', icon: WalletCards, key: 'nav.stores', prefix: '/stores' },
+  { name: 'money', icon: ChartArea, key: 'nav.money', prefix: '/money' },
+  { name: 'automations', icon: Workflow, key: 'nav.automations', prefix: '/automations' },
 ]
+
+export const navItem = (name: string) => NAV_ITEMS.find((item) => item.name === name) as NavItem

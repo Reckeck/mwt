@@ -66,7 +66,7 @@ const rows = computed(() => {
             :delta-pct="tile.pct"
             :good-when="tile.good"
             :base-label="index === 0 ? t('dashboard.base.prev_month') : undefined"
-            :action="index === 0 ? { label: t('monthSummary.open'), to: { name: 'analytics-flow' } } : undefined"
+            :action="index === 0 ? { label: t('monthSummary.open'), to: { name: 'money-where' } } : undefined"
             size="s"
           >
             <Money :amount="tile.cmp.value" :currency="pace.data.value?.currency" :decimals="0" />

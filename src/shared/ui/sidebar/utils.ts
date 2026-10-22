@@ -22,13 +22,16 @@ export function writeSidebarOpen(open: boolean): void {
 export const SIDEBAR_WIDTH = '16rem'
 export const SIDEBAR_WIDTH_MOBILE = '18rem'
 export const SIDEBAR_WIDTH_ICON = '3rem'
-export const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
+/** Below this width the sidebar folds to icons by itself (Shell · 7). */
+export const NARROW_QUERY = '(max-width: 1099px)'
 
 export const [useSidebar, provideSidebarContext] = createContext<{
   state: ComputedRef<'expanded' | 'collapsed'>
   open: Ref<boolean>
   setOpen: (value: boolean) => void
   isMobile: Ref<boolean>
+  /** The window is below NARROW_QUERY: the open sidebar lies over the page. */
+  narrow: Ref<boolean>
   openMobile: Ref<boolean>
   setOpenMobile: (value: boolean) => void
   toggleSidebar: () => void

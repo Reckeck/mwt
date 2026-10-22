@@ -62,7 +62,7 @@ const empty = computed(() => !advice.data.value || Number(advice.data.value.amou
           </li>
         </ul>
         <Button v-if="size !== 's'" variant="link" size="sm" class="h-auto self-start p-0" as-child>
-          <RouterLink :to="{ name: 'analytics-investments' }">
+          <RouterLink :to="{ name: 'money-investments' }">
             {{ t('dashboard.topup.open') }}
             <ArrowRight class="size-3.5" />
           </RouterLink>

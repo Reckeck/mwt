@@ -10,9 +10,9 @@ use trade_core::model::entity_ref::Pinned;
 use trade_core::model::transaction::Transaction;
 use trade_core::model::vault::DashPeriod;
 use trade_core::service::{
-    CalendarMonth, DashboardToday, EntityCard, EntityRef, HealthReport, MonthPace, NetWorthTrend,
-    PinnedView, Report, ReportFilter, ReportKind, ReportOverview, ScenarioStatus, SearchEntry,
-    SpendingOverview, report_csv,
+    CalendarMonth, DashboardToday, EntityCard, EntityRef, HealthReport, MonthBalance, MonthPace,
+    NetWorthTrend, PinnedView, Report, ReportFilter, ReportKind, ReportOverview, ScenarioStatus,
+    SearchEntry, SpendingOverview, report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -109,6 +109,32 @@ pub async fn export_report_csv(
     );
     crate::platform_fs::save_bytes_dialog(&app, &name, "CSV", &["csv"], csv.as_bytes())
         .map_err(err_to_string)
+}
+
+/// What each month of the filter's period left and what carried over.
+#[tauri::command]
+pub async fn get_month_balance(
+    filter: ReportFilter,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<MonthBalance, String> {
+    let zone = current_zone(&app);
+    let inflation = current_settings(&app).inflation;
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .month_balance(&filter, now_secs(), &zone, &inflation)
+        .map_err(err_to_string)
+}
+
+/// Carry the unspent money over from `month` (`YYYY-MM`); `None` stops it.
+#[tauri::command]
+pub async fn set_carry_over(
+    month: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| vault.set_carry_over(month.as_deref()))
 }
 
 /// Spending by day of a `YYYY-MM` month; the current month when omitted.

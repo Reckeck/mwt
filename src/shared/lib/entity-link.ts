@@ -66,7 +66,7 @@ export function withOpenStack(query: LocationQuery, stack: EntityRef[]): Locatio
 export function entityPage(target: EntityRef): RouteLocationRaw | null {
   if (target.kind === 'store') return { name: 'wallet', params: { id: target.id } }
   if (target.kind === 'workflow') return { name: 'workflow-edit', params: { id: target.id } }
-  if (target.kind === 'scenario') return { name: 'planning-calculator', query: { scenario: target.id } }
+  if (target.kind === 'scenario') return { name: 'money-calculator', query: { scenario: target.id } }
   return null
 }
 

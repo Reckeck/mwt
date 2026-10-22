@@ -84,7 +84,7 @@ async function reset() {
         </li>
       </ul>
       <!-- The lessons live with the workflows; here only the way there. -->
-      <Button variant="link" class="h-auto w-fit p-0" @click="router.push({ name: 'workflows' })">
+      <Button variant="link" class="h-auto w-fit p-0" @click="router.push({ name: 'automations-workflows' })">
         {{ t('tour.lessonsLink') }}
       </Button>
     </div>

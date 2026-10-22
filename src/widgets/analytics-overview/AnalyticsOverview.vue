@@ -50,7 +50,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
       <OverviewCard
         :title="t('analytics.group.flow')"
         :period="t('analytics.overview.periodMonth', { month })"
-        :to="linkTo('analytics-flow')"
+        :to="linkTo('money-where')"
         :has-data="data.flow.has_data"
         :insights="data.flow.insights"
         :currency="data.currency"
@@ -83,7 +83,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
       <OverviewCard
         :title="t('analytics.group.wealth')"
         :period="t('analytics.overview.periodMonth', { month })"
-        :to="linkTo('analytics-wealth')"
+        :to="linkTo('money-wealth')"
         :has-data="data.wealth.has_data"
         :insights="data.wealth.insights"
         :currency="data.currency"
@@ -104,7 +104,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
       <OverviewCard
         :title="t('analytics.group.investments')"
         :period="t('analytics.overview.periodYear', { year: data.year })"
-        :to="linkTo('analytics-investments')"
+        :to="linkTo('money-investments')"
         :has-data="data.investments.has_data"
         :insights="data.investments.insights"
         :currency="data.currency"
@@ -128,7 +128,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
       <OverviewCard
         :title="t('analytics.view.year')"
         :period="t('analytics.overview.periodYear', { year: data.year })"
-        :to="linkTo('analytics-flow', 'year')"
+        :to="linkTo('money-where', 'year')"
         :has-data="data.savings.has_data"
         :insights="data.savings.insights"
         :currency="data.currency"

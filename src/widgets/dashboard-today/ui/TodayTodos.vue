@@ -11,9 +11,9 @@ const { t } = useI18n()
 
 const WHERE: Record<TodayTodoKind, (todo: TodayTodo) => RouteLocationRaw> = {
   shortfall: () => ({ name: 'transactions-calendar' }),
-  rejected_run: () => ({ name: 'workflows-journal' }),
-  unconfirmed_run: () => ({ name: 'workflows-journal' }),
-  queued_workflow: () => ({ name: 'workflows-journal' }),
+  rejected_run: () => ({ name: 'automations-journal' }),
+  unconfirmed_run: () => ({ name: 'automations-journal' }),
+  queued_workflow: () => ({ name: 'automations-journal' }),
   pending_import: (todo) => ({ name: 'wallet', params: { id: todo.source_id } }),
   points_expire: () => ({ name: 'transactions-bonuses' }),
   insurance_ends: (todo) => ({ name: 'wallet', params: { id: todo.source_id } }),

@@ -243,6 +243,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 manual_expenses: None,
                 categories_rev: 0,
                 freedom_rate: None,
+                carry_since: None,
                 pinned: Vec::new(),
                 dashboard_period: Default::default(),
                 onboarding_checklist_hidden: false,

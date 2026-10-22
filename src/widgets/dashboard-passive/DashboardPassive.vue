@@ -57,7 +57,7 @@ const insight = computed(() => {
           :base-label="t('dashboard.passive.base')"
           :series="passive.months.map((month) => month.amount)"
           :insight="insight"
-          :action="{ label: t('dashboard.health.open'), to: { name: 'analytics-health' } }"
+          :action="{ label: t('dashboard.health.open'), to: { name: 'money-health' } }"
         >
           <Money :amount="passive.this_month" :currency="passive.currency" :decimals="0" :convert="false" />
         </MetricTile>

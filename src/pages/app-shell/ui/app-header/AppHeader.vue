@@ -8,6 +8,8 @@ import { Money } from '@/entities/currency'
 import { NotificationBell } from '@/widgets/notification-bell'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { Kbd } from '@/shared/ui/kbd'
+import { hotkeyLabel } from '@/shared/lib/hotkeys'
 
 /** The top bar: where you are, whether the app is online, the net worth, and the global actions. */
 const props = defineProps<{
@@ -35,21 +37,22 @@ const { t } = useI18n()
     <!-- Net worth, the same figure as the dashboard and the «What I have» report it opens. -->
     <RouterLink
       v-if="props.summary"
-      :to="{ name: 'analytics-wealth' }"
+      :to="{ name: 'money-wealth' }"
       class="hidden rounded-md px-1 text-sm font-medium hover:bg-accent sm:inline"
       :aria-label="t('header.netWorthHint')"
     >
       <Money :amount="props.summary.net_worth_base" :currency="props.summary.base_currency" :decimals="2" />
     </RouterLink>
 
+    <SyncIndicator />
+    <NotificationBell />
     <slot name="search" />
     <Button size="sm" class="shrink-0 max-md:hidden" :title="t('quickAdd.title')" data-tour="quick-add" @click="emit('quickAdd')">
       <Plus class="size-4" />
       <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
+      <Kbd class="hidden border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground xl:inline-flex">{{ hotkeyLabel('quickAdd') }}</Kbd>
     </Button>
 
-    <SyncIndicator />
-    <NotificationBell />
     <Button
       v-if="props.hasTour"
       variant="ghost"

@@ -3,23 +3,26 @@ import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, useEventListener } from '@vueuse/core'
-import { ArrowLeftRight, Lock, Plus, RefreshCw, Search, Settings, Sparkles } from 'lucide-vue-next'
+import { ArrowLeftRight, History, Lock, Plus, RefreshCw, Search, Settings, Sparkles } from 'lucide-vue-next'
 
 import { walletRow } from '@/entities/store'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { Button } from '@/shared/ui/button'
-import { Command, CommandGroup, CommandItem, CommandList, CommandSeparator } from '@/shared/ui/command'
+import { Command, CommandGroup, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/shared/ui/command'
 import { openConverter } from '@/shared/lib/converter'
 import { useIsPhone } from '@/shared/lib/phone'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { NAV_GROUPS } from '../../app-shell.constants'
+import { NAV_ITEMS } from '../../app-shell.constants'
 import PaletteInput from './PaletteInput.vue'
 import PaletteSearch, { type PaletteTarget } from './PaletteSearch.vue'
 import { usePaletteIndex } from './use-palette-index'
 import { useStoreTree } from '@/shared/api/queries'
 import { pushBackLayer } from '@/shared/lib/back-stack'
+import { hotkeyLabel, useHotkey } from '@/shared/lib/hotkeys'
+
+import { useRecentPlaces } from '../../model/use-recent-places'
 
 /**
  * The search in the header: type a few letters to go to any screen or wallet,
@@ -40,7 +43,10 @@ const wallets = computed(() =>
     .filter((node) => !node.store.archived)
     .map((node) => walletRow(node, t, settings.baseCurrency)),
 )
-const screens = computed(() => NAV_GROUPS.flatMap((group) => group.items))
+const screens = computed(() => NAV_ITEMS)
+const recentPlaces = useRecentPlaces()
+/** Where one was last, but here (Shell · 4). */
+const recent = computed(() => recentPlaces.value.filter((place) => place.path !== route.path))
 
 const open = ref(false)
 /** A phone shows a magnifier; the field opens over the top bar while in use. */
@@ -72,12 +78,9 @@ onClickOutside(root, () => (open.value = false))
 useEventListener(root, 'keydown', (event: KeyboardEvent) => {
   if (event.key === 'Escape') close()
 })
-useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if ((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {
-    event.preventDefault()
-    open.value = true
-    void nextTick(() => input.value?.focus())
-  }
+useHotkey('palette', () => {
+  open.value = true
+  void nextTick(() => input.value?.focus())
 })
 
 function close() {
@@ -124,10 +127,20 @@ const go = (to: RouteLocationRaw) => run(() => void router.push(to))
         <CommandList class="max-h-[min(24rem,70dvh)]">
           <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
           <template v-if="!actionsFor">
+          <template v-if="recent.length">
+            <CommandGroup :heading="t('palette.recent')">
+              <CommandItem v-for="place in recent" :key="place.path" :value="`recent-${place.path}`" @select="go(place.path)">
+                <History />
+                {{ place.title }}
+              </CommandItem>
+            </CommandGroup>
+            <CommandSeparator />
+          </template>
           <CommandGroup :heading="t('palette.actions')">
             <CommandItem value="action-quick-add" @select="run(() => emit('quickAdd'))">
               <Plus />
               {{ t('quickAdd.title') }}
+              <CommandShortcut>{{ hotkeyLabel('quickAdd') }}</CommandShortcut>
             </CommandItem>
             <CommandItem value="action-refresh" @select="run(() => priceRefresh.mutate())">
               <RefreshCw />

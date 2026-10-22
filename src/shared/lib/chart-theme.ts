@@ -28,6 +28,8 @@ export interface ChartColors {
   popoverText: string
   border: string
   muted: string
+  /** `--primary`: the one series a chart is about. */
+  primary: string
   palette: string[]
 }
 
@@ -46,6 +48,7 @@ export function chartColors(): ChartColors {
     popoverText: tokenColor('--popover-foreground'),
     border: tokenColor('--border'),
     muted: tokenColor('--muted-foreground'),
+    primary: tokenColor('--primary'),
     palette: [1, 2, 3, 4, 5].map((index) => tokenColor(`--chart-${index}`)),
   }
 }

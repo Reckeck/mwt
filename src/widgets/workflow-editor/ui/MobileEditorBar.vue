@@ -63,7 +63,7 @@ const renameOpen = ref(false)
 
 function back() {
   if (window.history.length > 1) router.back()
-  else void router.push({ name: 'workflows' })
+  else void router.push({ name: 'automations-workflows' })
 }
 </script>
 

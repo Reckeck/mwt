@@ -66,14 +66,14 @@ export const WORKFLOW_EDITOR_EMPTY: TourStep[] = [
  * `check-onboarding` gate says so (see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
-  workflows: workflows([
+  'automations-workflows': workflows([
     { target: 'workflow-lessons', key: 'workflows.lessons', side: 'bottom' },
     { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
     { target: 'workflow-new', key: 'workflows.new', side: 'left' },
     { target: 'workflow-card', key: 'workflows.card', side: 'top' },
     { target: 'workflow-vars-open', key: 'workflows.vars', side: 'left' },
   ]),
-  'workflows-journal': workflows([
+  'automations-journal': workflows([
     { target: 'workflow-questions', key: 'workflows.questions', side: 'top' },
     { target: 'workflow-queue', key: 'workflows.queue', side: 'top' },
     { target: 'workflow-runs', key: 'workflows.runs', side: 'top' },
@@ -92,7 +92,6 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'dash-reset', key: 'dashboard.reset', side: 'bottom' },
     { target: 'dash-health', key: 'dashboard.healthWidget', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
-    { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
     { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },
     { target: 'sidebar-pinned', key: 'dashboard.pinned', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
@@ -146,31 +145,36 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'section-content', key: 'transactionsCalendar.content', side: 'top' },
     { target: 'calendar-balance', key: 'transactionsCalendar.balance', side: 'bottom' },
   ],
-  analytics: analytics([
-    { target: 'overview-cards', key: 'analytics.overview', side: 'top' },
-    { target: 'overview-insights', key: 'analytics.overviewInsights', side: 'bottom' },
+  money: analytics([
+    { target: 'spending-answer', key: 'money.answer', side: 'bottom' },
+    { target: 'period-picker', key: 'money.period', side: 'bottom' },
+    { target: 'spending-months', key: 'money.months', side: 'top' },
+    { target: 'spending-categories', key: 'money.categories', side: 'top' },
+    { target: 'route-tabs-more', key: 'money.more', side: 'bottom' },
   ]),
-  'analytics-flow': analytics([
+  'money-where': analytics([
     { target: 'report-view', key: 'analytics.flowView', side: 'bottom' },
     { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.flow', side: 'top' },
   ]),
-  'analytics-wealth': analytics([
+  'money-wealth': analytics([
     { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.wealth', side: 'top' },
   ]),
-  'analytics-investments': analytics([
+  'money-investments': analytics([
     { target: 'section-content', key: 'analytics.investments', side: 'top' },
     { target: 'topup-advisor', key: 'assetClass.advisor', side: 'top' },
     { target: 'asset-classes', key: 'assetClass.classes', side: 'bottom' },
     { target: 'asset-baskets', key: 'assetClass.assets', side: 'top' },
   ]),
-  'analytics-saldo': analytics([
+  'money-month': analytics([
     { target: 'section-content', key: 'analytics.saldo', side: 'top' },
     { target: 'saldo-pool', key: 'analytics.saldoPool', side: 'top' },
+    { target: 'balance-months', key: 'money.balanceMonths', side: 'top' },
+    { target: 'carry-over', key: 'money.carryOver', side: 'left' },
   ]),
   // The checkup takes no filter and exports nothing: only the tabs, then its own cards.
-  'analytics-health': [
+  'money-health': [
     { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
     { target: 'health-light', key: 'health.light', side: 'bottom' },
     { target: 'health-fund', key: 'health.fund', side: 'top' },
@@ -192,7 +196,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'bonuses-list', key: 'bonuses.list', side: 'top' },
     { target: 'bonuses-cashback', key: 'bonuses.cashback', side: 'top' },
   ],
-  'planning-automations': planning([
+  automations: planning([
     { target: 'section-content', key: 'planningAutomations.content', side: 'top' },
     { target: 'automation-simulate', key: 'planningAutomations.simulate', side: 'bottom' },
     { target: 'automation-unconfirmed', key: 'planningAutomations.unconfirmed', side: 'bottom' },
@@ -200,7 +204,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'automation-open-workflow', key: 'planningAutomations.openWorkflow', side: 'left' },
     { target: 'workflow-template-gallery', key: 'planningAutomations.templates', side: 'top' },
   ]),
-  'planning-sources': planning([
+  'automations-sources': planning([
     { target: 'section-content', key: 'planningSources.content', side: 'top' },
     { target: 'sources-add', key: 'planningSources.add', side: 'bottom' },
     { target: 'sources-list', key: 'planningSources.list', side: 'top' },
@@ -210,12 +214,12 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'source-test', key: 'planningSources.test', side: 'top' },
     { target: 'source-uses', key: 'planningSources.uses', side: 'top' },
   ]),
-  'planning-budgets': planning([
-    { target: 'section-content', key: 'planningBudgets.content', side: 'top' },
+  'money-plan': planning([
+    { target: 'plan-limits', key: 'planningBudgets.content', side: 'top' },
     { target: 'budget-spent', key: 'planningBudgets.spent', side: 'bottom' },
+    { target: 'plan-goals', key: 'planningGoals.content', side: 'top' },
   ]),
-  'planning-goals': planning([{ target: 'section-content', key: 'planningGoals.content', side: 'top' }]),
-  'planning-calculator': planning([
+  'money-calculator': planning([
     { target: 'calc-scenarios', key: 'planningCalculator.scenarios', side: 'bottom' },
     { target: 'calc-mode', key: 'planningCalculator.mode', side: 'bottom' },
     { target: 'calc-stages', key: 'planningCalculator.stages', side: 'top' },
@@ -225,11 +229,11 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'calc-overlay', key: 'planningCalculator.overlay', side: 'top' },
     { target: 'calc-table', key: 'planningCalculator.table', side: 'top' },
   ]),
-  'planning-reminders': planning([
+  'automations-reminders': planning([
     { target: 'section-content', key: 'planningReminders.content', side: 'top' },
     { target: 'reminder-filter', key: 'planningReminders.filter', side: 'bottom' },
   ]),
-  'planning-alerts': planning([{ target: 'section-content', key: 'planningAlerts.content', side: 'top' }]),
+  'automations-alerts': planning([{ target: 'section-content', key: 'planningAlerts.content', side: 'top' }]),
 }
 
 /** Routes with no tour, and why (the `check-onboarding` gate reads this). */

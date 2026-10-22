@@ -77,7 +77,7 @@ function switchOff() {
     <p class="text-sm text-muted-foreground">{{ t('utilityReminders.what') }}</p>
     <div class="flex flex-wrap items-center gap-2">
       <Button variant="link" class="h-auto p-0" as-child>
-        <RouterLink :to="{ name: 'planning-reminders' }" @click="open = false">{{ t('utilityReminders.openList') }}</RouterLink>
+        <RouterLink :to="{ name: 'automations-reminders' }" @click="open = false">{{ t('utilityReminders.openList') }}</RouterLink>
       </Button>
       <Button
         v-if="current"

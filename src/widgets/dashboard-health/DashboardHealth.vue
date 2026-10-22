@@ -73,7 +73,7 @@ const figures = computed(() => {
       <div v-if="report.data.value" class="grid gap-2" data-tour="dash-health">
         <p class="truncate text-xs text-muted-foreground">{{ t('dashboard.widget.health') }}</p>
         <RouterLink
-          :to="{ name: 'analytics-health' }"
+          :to="{ name: 'money-health' }"
           class="flex min-w-0 items-center gap-2 rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           <span :class="cn('size-3 shrink-0 rounded-full', HEALTH_DOT[report.data.value.color])" aria-hidden="true" />
@@ -93,7 +93,7 @@ const figures = computed(() => {
           </div>
         </dl>
         <Button v-if="size !== 's'" variant="link" size="sm" class="h-auto self-start p-0" as-child>
-          <RouterLink :to="{ name: 'analytics-health' }">
+          <RouterLink :to="{ name: 'money-health' }">
             {{ t('dashboard.health.open') }}
             <ArrowRight class="size-3.5" />
           </RouterLink>

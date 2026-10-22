@@ -47,7 +47,7 @@ function alertAt(price: string, condition: 'above' | 'below') {
 }
 
 const txLink = computed(() => ({ name: 'transactions', query: { store: props.storeId, q: symbol.value } }))
-const analyticsLink = computed(() => ({ name: 'analytics-investments', query: { store: props.storeId } }))
+const analyticsLink = computed(() => ({ name: 'money-investments', query: { store: props.storeId } }))
 </script>
 
 <template>

@@ -13,6 +13,17 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'newShell',
+    date: '2026-10-23',
+    points: [
+      { key: 'sections', route: 'dashboard' },
+      { key: 'fold', route: 'dashboard' },
+      { key: 'spending', route: 'money' },
+      { key: 'month', route: 'money-month' },
+      { key: 'automations', route: 'automations' },
+    ],
+  },
+  {
     id: 'vaultSetup',
     date: '2026-10-22',
     points: [{ key: 'currency' }, { key: 'direction', route: 'settings:vault' }],
@@ -53,26 +64,26 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'palette', route: 'dashboard' },
       { key: 'pinned', route: 'transactions' },
       { key: 'wallet', route: 'stores' },
-      { key: 'drill', route: 'analytics' },
+      { key: 'drill', route: 'money' },
     ],
   },
   {
     id: 'workflowTemplates',
     date: '2026-10-22',
     points: [
-      { key: 'gallery', route: 'planning-automations' },
-      { key: 'confirm', route: 'planning-automations' },
-      { key: 'nodes', route: 'workflows' },
+      { key: 'gallery', route: 'automations' },
+      { key: 'confirm', route: 'automations' },
+      { key: 'nodes', route: 'automations-workflows' },
     ],
   },
   {
     id: 'dataSources',
     date: '2026-10-22',
     points: [
-      { key: 'pick', route: 'planning-sources' },
-      { key: 'uses', route: 'planning-sources' },
-      { key: 'guard', route: 'planning-sources' },
-      { key: 'workflows', route: 'planning-automations' },
+      { key: 'pick', route: 'automations-sources' },
+      { key: 'uses', route: 'automations-sources' },
+      { key: 'guard', route: 'automations-sources' },
+      { key: 'workflows', route: 'automations' },
     ],
   },
   {
@@ -80,7 +91,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: '2026-10-22',
     points: [
       { key: 'field', route: 'transactions' },
-      { key: 'rent', route: 'planning-automations' },
+      { key: 'rent', route: 'automations' },
       { key: 'summary', route: 'stores' },
     ],
   },
@@ -99,7 +110,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [
       { key: 'types', route: 'wallet-settings' },
       { key: 'car', route: 'wallet-settings' },
-      { key: 'taxes', route: 'planning-reminders' },
+      { key: 'taxes', route: 'automations-reminders' },
     ],
   },
   {
@@ -114,12 +125,12 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'assetClasses',
     date: '2026-10-21',
     points: [
-      { key: 'advisor', route: 'analytics-investments' },
+      { key: 'advisor', route: 'money-investments' },
       { key: 'wallet', route: 'wallet-settings' },
       { key: 'networth', route: 'dashboard' },
     ],
   },
-  { id: 'health', date: '2026-10-21', points: [{ key: 'light', route: 'analytics-health' }] },
+  { id: 'health', date: '2026-10-21', points: [{ key: 'light', route: 'money-health' }] },
   {
     id: 'passive',
     date: '2026-10-21',
@@ -141,7 +152,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'goalReturn',
     date: '2026-10-21',
     points: [
-      { key: 'return', route: 'planning-goals' },
+      { key: 'return', route: 'money-plan' },
       { key: 'manual', route: 'settings:money' },
     ],
   },
@@ -158,11 +169,11 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'calculator',
     date: '2026-10-21',
     points: [
-      { key: 'calc', route: 'planning-calculator' },
-      { key: 'reverse', route: 'planning-calculator' },
-      { key: 'prefill', route: 'planning-calculator' },
-      { key: 'scenarios', route: 'planning-calculator' },
-      { key: 'goal', route: 'planning-goals' },
+      { key: 'calc', route: 'money-calculator' },
+      { key: 'reverse', route: 'money-calculator' },
+      { key: 'prefill', route: 'money-calculator' },
+      { key: 'scenarios', route: 'money-calculator' },
+      { key: 'goal', route: 'money-plan' },
     ],
   },
   {
@@ -174,10 +185,10 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'salary',
     date: '2026-10-20',
     points: [
-      { key: 'varies', route: 'planning-automations' },
-      { key: 'workday', route: 'planning-automations' },
-      { key: 'confirm', route: 'planning-automations' },
-      { key: 'workflows', route: 'workflows' },
+      { key: 'varies', route: 'automations' },
+      { key: 'workday', route: 'automations' },
+      { key: 'confirm', route: 'automations' },
+      { key: 'workflows', route: 'automations-workflows' },
     ],
   },
   ...WHATS_NEW_ARCHIVE,

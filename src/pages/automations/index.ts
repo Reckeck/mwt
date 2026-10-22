@@ -1,0 +1,8 @@
+export { default as AutomationsSection } from './AutomationsSection.vue'
+export { default as AutomationsMine } from './AutomationsMine.vue'
+export { default as AutomationsJournal } from './AutomationsJournal.vue'
+export { default as AutomationsWorkflows } from './AutomationsWorkflows.vue'
+export { default as AutomationsReminders } from './AutomationsReminders.vue'
+export { default as AutomationsAlerts } from './AutomationsAlerts.vue'
+export { default as AutomationsSources } from './AutomationsSources.vue'
+export { default as WorkflowEdit } from './WorkflowEdit.vue'

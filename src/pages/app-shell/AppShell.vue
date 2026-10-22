@@ -14,6 +14,7 @@ import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -21,6 +22,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { useBackButton } from './model/use-back-button'
 import { useBackendNotices } from './model/use-backend-notices'
 import { useCacheEvents } from './model/use-cache-events'
+import { useRecordPlaces } from './model/use-recent-places'
 import {
   useConnectivity,
   useNativeMenuBlock,
@@ -60,6 +62,8 @@ const walletName = computed(() => {
   return flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === route.params.id)?.store.name ?? null
 })
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
+useRecordPlaces(pageTitle)
+useHotkey('quickAdd', () => (quickAddOpen.value = true))
 
 /** The shell's child page and its params: a section's own sub-routes do not change it. */
 const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)
@@ -113,7 +117,7 @@ const pageClass = computed(() => {
           <RouterView :key="pageKey" />
         </div>
       </div>
-      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" />
+      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" @lock="lock" @open-settings="openSettings()" />
     </SidebarInset>
 
     <SettingsShell />

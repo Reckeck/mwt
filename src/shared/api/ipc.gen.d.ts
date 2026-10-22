@@ -2686,6 +2686,83 @@ day: number | null,
 zone: string | null, };
 
 /**
+ * The months of a period with what each left and what carried over.
+ */
+type MonthBalance = { currency: string, 
+/**
+ * `YYYY-MM` the unspent money is carried from; `None` = not carried.
+ */
+carry_since: string | null, 
+/**
+ * Oldest first.
+ */
+rows: Array<MonthBalanceRow>, 
+/**
+ * Average `spent` of the finished months among `rows`.
+ */
+average_spent: Amount, 
+/**
+ * The whole period: income, spent and left summed over `rows`; `carried_in`
+ * and `total` are those of its last month (what is there now).
+ */
+total: MonthBalanceRow, 
+/**
+ * The last month day by day, ending at its `total`.
+ */
+days: Array<MonthBalanceDay>, 
+/**
+ * The day's allowance the forecast spends (the calendar's); `None` without one.
+ */
+per_day: Amount | null, };
+
+/**
+ * One day of the period's last month: what was there at its end.
+ */
+type MonthBalanceDay = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, 
+/**
+ * The month's balance at the end of the day; `None` for days ahead.
+ */
+balance: Amount | null, 
+/**
+ * Where the balance goes spending the day's allowance; from today on.
+ */
+forecast: Amount | null, };
+
+/**
+ * One month of the balance.
+ */
+type MonthBalanceRow = { 
+/**
+ * `YYYY-MM`.
+ */
+month: string, income: Amount, 
+/**
+ * Fixed and daily spending together.
+ */
+spent: Amount, 
+/**
+ * `income − spent`; negative when the month went into the red.
+ */
+left: Amount, 
+/**
+ * What the months before brought in: the sum of their `left` since
+ * `carry_since`; zero when nothing is carried.
+ */
+carried_in: Amount, 
+/**
+ * `left + carried_in`.
+ */
+total: Amount, 
+/**
+ * The month is not over yet.
+ */
+current: boolean, };
+
+/**
  * The month so far against the previous month to the same date.
  */
 type MonthPace = { currency: string, 
@@ -4014,6 +4091,11 @@ categories_rev: number,
  * takes the key rate (plan C3).
  */
 freedom_rate: Amount | null, 
+/**
+ * `YYYY-MM` the unspent money of each month is carried from into the
+ * next; `None` = every month stands alone (redesign «month's balance»).
+ */
+carry_since: string | null, 
 /**
  * The sidebar's «Pinned» block, in its order (plan J2).
  */

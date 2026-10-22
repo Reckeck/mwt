@@ -3,6 +3,10 @@ import { type RouteLocationNormalized, createRouter, createWebHistory } from 'vu
 
 import { i18n } from '@/shared/config/i18n'
 
+import { automationsRoutes } from './automations.routes'
+import { legacyRoutes } from './legacy.routes'
+import { moneyRoutes } from './money.routes'
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -50,8 +54,8 @@ export const router = createRouter({
               component: () => import('@/pages/transactions').then((page) => page.Transactions),
               meta: { i18n: 'nav.transactions' },
             },
-            // Losses live in Analytics now; old links and tours land there.
-            { path: 'losses', redirect: { name: 'analytics-investments' } },
+            // Losses live in Money now; old links and tours land there.
+            { path: 'losses', redirect: { name: 'money-investments' } },
             // The money graph was dropped (2026-10): old links open the list.
             { path: 'graph', redirect: (to) => ({ name: 'transactions', query: to.query }) },
             {
@@ -74,150 +78,9 @@ export const router = createRouter({
             },
           ],
         },
-        { path: 'charts', redirect: { name: 'analytics-investments' } },
-        {
-          path: 'analytics',
-          component: () => import('@/pages/analytics').then((page) => page.Analytics),
-          children: [
-            {
-              path: '',
-              name: 'analytics',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsOverview),
-              meta: { i18n: 'nav.analytics', group: 'overview' },
-            },
-            {
-              path: 'flow',
-              name: 'analytics-flow',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsFlow),
-              meta: { i18n: 'nav.analytics', group: 'flow' },
-            },
-            {
-              path: 'wealth',
-              name: 'analytics-wealth',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsWealth),
-              meta: { i18n: 'nav.analytics', group: 'wealth' },
-            },
-            {
-              path: 'investments',
-              name: 'analytics-investments',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsInvestments),
-              meta: { i18n: 'nav.analytics', group: 'investments' },
-            },
-            {
-              path: 'saldo',
-              name: 'analytics-saldo',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsSaldo),
-              meta: { i18n: 'nav.analytics', group: 'saldo' },
-            },
-            {
-              path: 'health',
-              name: 'analytics-health',
-              component: () => import('@/pages/analytics').then((page) => page.AnalyticsHealth),
-              meta: { i18n: 'nav.analytics', group: 'health' },
-            },
-            // The nine reports of before, folded into the sections; old links keep working.
-            { path: 'cashflow', redirect: (to) => ({ name: 'analytics-flow', query: to.query }) },
-            { path: 'year', redirect: (to) => ({ name: 'analytics-flow', query: { ...to.query, view: 'year' } }) },
-            {
-              path: 'categories',
-              redirect: (to) => ({ name: 'analytics-flow', query: { ...to.query, view: 'categories' } }),
-            },
-            { path: 'networth', redirect: (to) => ({ name: 'analytics-wealth', query: to.query }) },
-            { path: 'stores', redirect: (to) => ({ name: 'analytics-wealth', query: to.query }) },
-            { path: 'inflation', redirect: (to) => ({ name: 'analytics-wealth', query: { ...to.query, real: '1' } }) },
-            { path: 'pnl', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
-            { path: 'portfolio', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
-            { path: 'losses', redirect: (to) => ({ name: 'analytics-investments', query: to.query }) },
-          ],
-        },
-        // Contacts live under Transactions now; old links land there.
-        { path: 'directory', redirect: { name: 'transactions-contacts' } },
-        { path: 'directory/contacts', redirect: { name: 'transactions-contacts' } },
-        // Rates moved to Settings → Money; the contacts stay under the window open over them.
-        { path: 'directory/rates', redirect: { name: 'transactions-contacts', query: { settings: 'rates' } } },
-        {
-          path: 'planning',
-          component: () => import('@/pages/planning').then((page) => page.Planning),
-          children: [
-            { path: '', redirect: { name: 'planning-automations' } },
-            {
-              path: 'automations',
-              name: 'planning-automations',
-              component: () => import('@/pages/planning').then((page) => page.PlanningAutomations),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'budgets',
-              name: 'planning-budgets',
-              component: () => import('@/pages/planning').then((page) => page.PlanningBudgets),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'goals',
-              name: 'planning-goals',
-              component: () => import('@/pages/planning').then((page) => page.PlanningGoals),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'sources',
-              name: 'planning-sources',
-              component: () => import('@/pages/planning').then((page) => page.PlanningSources),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'calculator',
-              name: 'planning-calculator',
-              component: () => import('@/pages/planning').then((page) => page.PlanningCalculator),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'reminders',
-              name: 'planning-reminders',
-              component: () => import('@/pages/planning').then((page) => page.PlanningReminders),
-              meta: { i18n: 'nav.planning' },
-            },
-            {
-              path: 'alerts',
-              name: 'planning-alerts',
-              component: () => import('@/pages/planning').then((page) => page.PlanningAlerts),
-              meta: { i18n: 'nav.planning' },
-            },
-          ],
-        },
-        {
-          path: 'workflows',
-          component: () => import('@/pages/workflows').then((page) => page.Workflows),
-          children: [
-            {
-              path: '',
-              name: 'workflows',
-              component: () => import('@/pages/workflows').then((page) => page.WorkflowsList),
-              meta: { i18n: 'nav.workflows' },
-            },
-            {
-              path: 'journal',
-              name: 'workflows-journal',
-              component: () => import('@/pages/workflows').then((page) => page.WorkflowsJournal),
-              meta: { i18n: 'nav.workflows' },
-            },
-            // The queue and the runs are one journal now; variables open as a panel.
-            { path: 'queue', redirect: { name: 'workflows-journal' } },
-            { path: 'runs', redirect: { name: 'workflows-journal' } },
-            { path: 'vars', redirect: { name: 'workflows', query: { vars: '1' } } },
-          ],
-        },
-        {
-          path: 'workflows/new',
-          name: 'workflow-new',
-          component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
-          meta: { i18n: 'nav.workflows', fullscreen: true },
-        },
-        {
-          path: 'workflows/:id',
-          name: 'workflow-edit',
-          component: () => import('@/pages/workflows').then((page) => page.WorkflowEdit),
-          meta: { i18n: 'nav.workflows', fullscreen: true },
-        },
+        moneyRoutes,
+        ...automationsRoutes,
+        ...legacyRoutes,
         {
           // The settings window opens over any page; old links land on the dashboard with it open.
           path: 'settings',
