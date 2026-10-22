@@ -13,6 +13,7 @@ import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { formatMoney } from '@/shared/lib/format'
@@ -152,6 +153,8 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
       </Button>
     </div>
 
+    <!-- While the list loads: about the height of the empty block or a couple of cards. -->
+    <Skeleton v-if="automations.isPending.value" class="h-50 rounded-xl" />
     <EmptyState v-if="empty" compact :title="t('automation.empty')" :description="t('automation.intro')">
       <Button v-if="!props.readonly" @click="openNew()"><Plus class="size-4" />{{ t('automation.new') }}</Button>
     </EmptyState>

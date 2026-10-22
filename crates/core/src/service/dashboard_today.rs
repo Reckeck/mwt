@@ -10,7 +10,7 @@ use super::UnlockedVault;
 use super::agenda::UpcomingKind;
 use crate::Amount;
 use crate::calc::invest;
-use crate::calendar::Calendar;
+use crate::calendar::{Calendar, clamp_day, first_of_month, month_key};
 use crate::error::{Error, Result};
 use crate::ipc_contract::Comparison;
 use crate::model::planning::HealthColor;
@@ -40,6 +40,10 @@ pub enum TodayTodoKind {
     PointsExpire,
     /// A car's insurance that ends soon.
     InsuranceEnds,
+    /// A property's utilities not paid this month, past its pay day.
+    UtilityOverdue,
+    /// A reminder due today or already past.
+    Reminder,
 }
 
 /// One thing to do, with what it is about.
@@ -71,6 +75,9 @@ pub struct DashboardToday {
     pub budget_currency: String,
     /// Up to three, the earliest first.
     pub todos: Vec<TodayTodo>,
+    /// How many things there are in all, `todos` being the first of them.
+    #[serde(default)]
+    pub todos_total: u32,
 }
 
 /// A calculator scenario against what really happened (plan H4, decision 12).
@@ -151,8 +158,8 @@ impl UnlockedVault {
         })
     }
 
-    /// Things waiting for the user, the earliest first, at most [`TODAY_TODOS`].
-    fn today_todos(&self, now: i64, zone: &str) -> Vec<TodayTodo> {
+    /// Everything waiting for the user, the earliest first; utility sums in `currency`.
+    fn all_today_todos(&self, now: i64, zone: &str, currency: Option<&str>) -> Vec<TodayTodo> {
         let today = Calendar::new(zone).date_of(now);
         let horizon = today + Duration::days(i64::from(TODAY_HORIZON_DAYS));
         let within = |date: &str| {
@@ -164,6 +171,9 @@ impl UnlockedVault {
             let kind = match item.kind {
                 UpcomingKind::RejectedRun => TodayTodoKind::RejectedRun,
                 UpcomingKind::UnconfirmedRun => TodayTodoKind::UnconfirmedRun,
+                UpcomingKind::Reminder if item.date <= today.format("%Y-%m-%d").to_string() => {
+                    TodayTodoKind::Reminder
+                }
                 _ if item.shortfall.is_some() => TodayTodoKind::Shortfall,
                 _ => continue,
             };
@@ -238,10 +248,56 @@ impl UnlockedVault {
                 });
             }
         }
+        todos.extend(self.overdue_utilities(now, zone, currency));
         // Undated things are due already; the sort is stable, so the order
         // above breaks ties.
         todos.sort_by(|left, right| left.date.cmp(&right.date));
-        todos.truncate(TODAY_TODOS);
+        todos
+    }
+
+    /// Properties whose pay day has passed this month with nothing paid for some
+    /// utility: the unpaid sum, in `currency` when every item converts to it.
+    fn overdue_utilities(&self, now: i64, zone: &str, currency: Option<&str>) -> Vec<TodayTodo> {
+        let today = Calendar::new(zone).date_of(now);
+        let rates = self.rate_book();
+        let mut todos = Vec::new();
+        for store in self.doc.stores.iter().filter(|store| !store.archived) {
+            let Some(day) = store
+                .property
+                .as_ref()
+                .and_then(|info| info.utilities_pay_day)
+            else {
+                continue;
+            };
+            let due = clamp_day(first_of_month(today), day);
+            if due >= today {
+                continue;
+            }
+            let Ok(bill) = self.utility_bill(&store.id, &month_key(today), zone) else {
+                continue;
+            };
+            let unpaid: Vec<_> = bill
+                .lines
+                .iter()
+                .filter(|line| line.paid.is_zero())
+                .collect();
+            if unpaid.is_empty() {
+                continue;
+            }
+            let amount = currency.and_then(|to| {
+                unpaid.iter().try_fold(Amount::ZERO, |sum, line| {
+                    let value = line.amount?;
+                    Some(sum + rates.convert(value, &line.item.currency, to, now)?)
+                })
+            });
+            todos.push(TodayTodo {
+                kind: TodayTodoKind::UtilityOverdue,
+                date: Some(due.format("%Y-%m-%d").to_string()),
+                title: store.name.clone(),
+                source_id: store.id.clone(),
+                amount: amount.map(|value| value.round(2)),
+            });
+        }
         todos
     }
 
@@ -255,6 +311,7 @@ impl UnlockedVault {
     ) -> DashboardToday {
         let trend = self.net_worth_trend(period, now, zone);
         let budget = self.daily_budget(now, zone);
+        let todos = self.all_today_todos(now, zone, Some(&budget.currency));
         DashboardToday {
             period,
             currency: trend.currency,
@@ -264,8 +321,9 @@ impl UnlockedVault {
                 .ok()
                 .map(|report| report.color),
             left_today: budget.left_today,
+            todos_total: u32::try_from(todos.len()).unwrap_or(u32::MAX),
+            todos: todos.into_iter().take(TODAY_TODOS).collect(),
             budget_currency: budget.currency,
-            todos: self.today_todos(now, zone),
         }
     }
 }
@@ -275,10 +333,11 @@ mod tests {
     use super::*;
     use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput, TaxRule, Timing};
     use crate::model::planning::ScenarioSource;
-    use crate::model::store::{LoyaltyInfo, StoreKind};
+    use crate::model::planning::UtilityKind;
+    use crate::model::store::{LoyaltyInfo, PropertyInfo, StoreKind};
     use crate::pricing::history::unix_secs;
-    use crate::service::CalcScenarioDraft;
     use crate::service::test_support::*;
+    use crate::service::{CalcScenarioDraft, StoreExtras, UtilityDraft};
 
     #[test]
     fn months_since_counts_whole_months_from_the_start() {
@@ -364,7 +423,7 @@ mod tests {
                 source_store_ids: Vec::new(),
             });
         }
-        let todos = vault.today_todos(now, "UTC");
+        let todos = vault.all_today_todos(now, "UTC", None);
         let titles: Vec<_> = todos.iter().map(|todo| todo.title.as_str()).collect();
         assert_eq!(titles, ["Soon", "Mid", "Late"]);
         assert!(
@@ -375,5 +434,62 @@ mod tests {
 
         let today = vault.dashboard_today(DashPeriod::Month, now, "UTC", &BTreeMap::new());
         assert_eq!(today.todos.len(), TODAY_TODOS);
+        assert_eq!(today.todos_total, 3);
+    }
+
+    #[test]
+    fn unpaid_utilities_past_the_pay_day_and_todays_reminder_are_things_to_do() {
+        let (_dir, mut vault) = empty_vault();
+        let now = unix_secs("2026-04-10T10:00:00Z").unwrap();
+        let flat = vault
+            .create_store_with(
+                "Квартира",
+                StoreKind::Property,
+                "#555",
+                "",
+                None,
+                StoreExtras {
+                    property: Some(PropertyInfo {
+                        utilities_pay_day: Some(5),
+                        ..PropertyInfo::default()
+                    }),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap();
+        vault
+            .create_utility_item(UtilityDraft {
+                name: "ЖКХ".into(),
+                active: true,
+                kind: UtilityKind::Static {
+                    amount: amount("120"),
+                },
+                currency: "usd".into(),
+                property_id: flat.id.clone(),
+                store_id: None,
+                category: "utilities".into(),
+            })
+            .unwrap();
+        vault
+            .create_reminder("Зарплата", "2026-04-10T08:00:00Z", None)
+            .unwrap();
+        vault
+            .create_reminder("Потом", "2026-04-12T08:00:00Z", None)
+            .unwrap();
+
+        let todos = vault.all_today_todos(now, "UTC", Some("usd"));
+        let kinds: Vec<_> = todos
+            .iter()
+            .map(|todo| (todo.kind, todo.title.as_str()))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                (TodayTodoKind::UtilityOverdue, "Квартира"),
+                (TodayTodoKind::Reminder, "Зарплата"),
+            ]
+        );
+        assert_eq!(todos[0].date.as_deref(), Some("2026-04-05"));
+        assert_eq!(todos[0].amount, Some(amount("120")));
     }
 }

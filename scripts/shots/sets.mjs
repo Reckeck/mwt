@@ -42,4 +42,12 @@ const stage1 = [
   EXPAND,
 ]
 
-export const SETS = { before, stage1 }
+/** Stage 2a: Home — three figures, things to do, what changed, the widget catalog, first steps. */
+const CATALOG = [{ click: '[data-tour="dashboard-add"]' }]
+const stage2 = [
+  { name: 'home', route: '/', scenarios: ALL, canvas: { board: 'Home', frame: '1.' } },
+  { name: 'home-first', route: '/', scenarios: ['empty'], canvas: { board: 'Home', frame: '5.' } },
+  { name: 'home-catalog', route: '/', steps: CATALOG, canvas: { board: 'Home', frame: '4.' } },
+]
+
+export const SETS = { before, stage1, stage2 }

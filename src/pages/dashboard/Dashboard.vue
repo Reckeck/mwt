@@ -3,18 +3,24 @@ import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
 import { GridItem, GridLayout } from 'grid-layout-plus'
+import { Plus } from 'lucide-vue-next'
 
-import { type DashboardCatalogExchange, DashboardCatalog } from '@/widgets/dashboard-catalog'
+import { type DashboardCatalogExchange, DashboardCatalog } from './ui/dashboard-catalog'
 import { DASHBOARD_COLS, DASHBOARD_ROW_HEIGHT, DASHBOARD_WIDGETS } from '@/widgets/dashboard-registry'
-import { DashboardToday } from '@/widgets/dashboard-today'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { WIDGET_DRAG_HANDLE } from '@/shared/ui/widget-frame'
+import { Button } from '@/shared/ui/button'
 
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { useDashboardLayout } from './model/use-dashboard-layout'
 import { useWidgetActions } from './model/use-widget-actions'
-import { DashboardToolbar } from './ui/dashboard-toolbar'
+import { useHomeToday } from './model/use-home-today'
+import { useLastVisit } from './model/use-last-visit'
+import { HomeChanges } from './ui/home-changes'
+import { HomeFigures } from './ui/home-figures'
+import { HomeFirstSteps } from './ui/home-first-steps'
+import { HomeTasks } from './ui/home-tasks'
 import { DashboardWidgetSlot } from './ui/dashboard-widget-slot'
 import { useCalcScenarios, useStoreTree } from '@/shared/api/queries'
 
@@ -34,14 +40,12 @@ const {
   hydrated,
   layout,
   pinnedIds,
-  dashboardPeriod,
   ownPeriod,
   saveLayout,
   setPinned,
   setPeriod,
   ownScenario,
   setScenario,
-  resetLayout,
   remove,
   resize,
   move,
@@ -77,6 +81,10 @@ function onLayoutReady() {
 }
 /** The stack keeps the grid's reading order: top to bottom, then left to right. */
 const stackOrder = computed(() => [...layout.value].sort((left, right) => left.y - right.y || left.x - right.x))
+
+/* --- the top of Home: three figures, the things to do, what changed (Home 1, 5) --- */
+const home = useHomeToday()
+const since = useLastVisit()
 
 /* --- catalog: widgets not yet on the dashboard --- */
 const catalogOpen = ref(false)
@@ -122,14 +130,19 @@ const actionsById = useWidgetActions({
 </script>
 
 <template>
-  <div ref="container" class="relative min-h-full pb-6" data-tour="dashboard-grid">
-    <DashboardToday class="mb-3" :period="dashboardPeriod" />
-    <DashboardToolbar
-      :period="dashboardPeriod"
-      :has-more="hasMore"
-      @reset="resetLayout"
-      @catalog="catalogOpen = true"
-    />
+  <div class="grid gap-3 pb-6 md:gap-4">
+    <HomeFigures :home="home" />
+    <HomeFirstSteps v-if="home.fresh.value" />
+    <template v-else>
+      <HomeTasks
+        v-if="home.today.data.value"
+        :todos="home.today.data.value.todos"
+        :total="home.today.data.value.todos_total"
+        :currency="home.today.data.value.budget_currency"
+      />
+      <HomeChanges :since="since" />
+    </template>
+  <div ref="container" class="relative" data-tour="dashboard-grid">
     <div v-if="!hydrated || !containerWidth" class="grid grid-cols-1 gap-4 md:grid-cols-12">
       <Skeleton class="h-40 md:col-span-6" />
       <Skeleton class="h-40 md:col-span-6" />
@@ -183,11 +196,18 @@ const actionsById = useWidgetActions({
       </GridItem>
     </GridLayout>
 
-    <div v-if="hydrated && !layout.length" class="py-16 text-center text-sm text-muted-foreground">
-      {{ t('dashboard.emptyGrid') }}
-    </div>
-
-    <DashboardCatalog v-model:open="catalogOpen" :placed="placed" :exchanges="exchanges" @add="add" />
+    <DashboardCatalog v-model:open="catalogOpen" :placed="placed" :exchanges="exchanges" @add="add" @remove="remove" />
+  </div>
+    <Button
+      v-if="!home.fresh.value"
+      variant="ghost"
+      data-tour="dashboard-add"
+      class="h-auto min-h-10 justify-start gap-3 rounded-xl border border-dashed border-border px-4 py-2.5 font-normal whitespace-normal text-muted-foreground"
+      @click="catalogOpen = true"
+    >
+      <Plus class="size-4 shrink-0" aria-hidden="true" />
+      {{ layout.length ? t('home.widgets.edit') : t('home.widgets.offer') }}
+    </Button>
   </div>
 </template>
 

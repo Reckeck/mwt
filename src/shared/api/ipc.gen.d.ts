@@ -1219,7 +1219,11 @@ left_today: Amount, budget_currency: string,
 /**
  * Up to three, the earliest first.
  */
-todos: Array<TodayTodo>, };
+todos: Array<TodayTodo>, 
+/**
+ * How many things there are in all, `todos` being the first of them.
+ */
+todos_total: number, };
 
 /**
  * One widget on the dashboard grid (12 columns). A widget not in the list is
@@ -4843,7 +4847,7 @@ amount: Amount | null, };
 /**
  * What the strip asks the user to do.
  */
-type TodayTodoKind = "shortfall" | "rejected_run" | "unconfirmed_run" | "queued_workflow" | "pending_import" | "points_expire" | "insurance_ends";
+type TodayTodoKind = "shortfall" | "rejected_run" | "unconfirmed_run" | "queued_workflow" | "pending_import" | "points_expire" | "insurance_ends" | "utility_overdue" | "reminder";
 
 /**
  * Where the free money of the month should go (plan F).

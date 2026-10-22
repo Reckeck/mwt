@@ -24,6 +24,8 @@ export interface DashboardWidgetDef {
   periodic?: boolean
   /** Follows a calculator scenario: gets `scenarioId` and offers «Сценарий» in its menu (plan H4). */
   scenario?: boolean
+  /** One of the few Home offers first (Home 4); the rest repeat «Деньги» and wait under «Ещё». */
+  home?: boolean
 }
 
 /** What a stored widget carries besides its place: its wallet, its own period and its scenario. */

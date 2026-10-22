@@ -3,6 +3,7 @@
 import { txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockCategories, mockContactBalances } from './ledger'
 import { mockStores, mockTransactions, priceOf } from './demo'
+import { MOCK_PER_USD } from './fx-rates'
 import { mockAppSettings, mockSettings } from './vault-data'
 
 /** Rough losses in the mock: the fee only, at the mock prices. */
@@ -51,7 +52,7 @@ export function mockFlows(): FlowSummary[] {
 
 export function mockFxTable(): FxTable {
   const base = mockAppSettings.base_currency
-  const perUsd: Record<string, number> = { usd: 1, rub: 95, eur: 0.92, thb: 36 }
+  const perUsd = MOCK_PER_USD
   const baseRate = perUsd[base] ?? 1
   const favorites = mockAppSettings.favorite_currencies.map((code) => code.toLowerCase())
   const fiat = Object.entries(perUsd)
