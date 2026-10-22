@@ -38,6 +38,9 @@ Windows, macOS, Android и iOS. Модуль состоит из двух пол
 | Lock живого процесса | `/proc/<pid>` | lock не проверяется (перехватывается) | так же | `/proc/<pid>` | lock не проверяется |
 | Экспорт CSV/JSON | путь | путь | путь | `ACTION_CREATE_DOCUMENT` → запись в URI | URL из диалога |
 
+В таблице — dev-приложение; у релиза из `main` вместо `dev.mwt.desktop` /
+`dev.mwt.app` — `mwt.desktop` / `mwt.app` (`docs/ci.md`, «Каналы»).
+
 ## Поток данных
 
 ```

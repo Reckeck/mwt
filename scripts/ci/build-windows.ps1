@@ -88,10 +88,19 @@ $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
 # The version goes in as a config file: inline JSON loses its quotes on the
 # way to a native command in Windows PowerShell 5.1.
 $tauriConfig = Join-Path $cache 'tauri-ci.json'
-$overlay = '{"version":"' + $version + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
+# The channel's names, as scripts/ci/channel.sh has them.
+if ($env:RELEASE_CHANNEL -eq 'prod') {
+  $appId = 'mwt.desktop'; $appName = 'Multi Wallet Tracker'; $appBin = 'multi-wallet-tracker'
+} else {
+  $appId = 'dev.mwt.desktop'; $appName = 'Multi Wallet Tracker Dev'; $appBin = 'multi-wallet-tracker-dev'
+}
+$overlay = '{"version":"' + $version + '","identifier":"' + $appId + '","productName":"' + $appName + '","mainBinaryName":"' + $appBin + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
 [System.IO.File]::WriteAllText($tauriConfig, $overlay)
 # Quoted: a bare a,b in a PowerShell command line is an array, and tauri
 # would get 'nsis msi'.
+# Bundles of an earlier build (the other channel names them differently)
+# would be collected as well.
+Remove-Item -Recurse -Force (Join-Path $env:CARGO_TARGET_DIR 'release\bundle') -ErrorAction SilentlyContinue
 Invoke-Pnpm tauri build --ci --bundles 'nsis,msi' --config $tauriConfig
 
 # Collect under stable names
@@ -110,7 +119,7 @@ foreach ($msi in $msis) {
 # Portable: the bare exe (needs the WebView2 runtime, built into Windows 10/11)
 $portable = Join-Path $cache "multi-wallet-tracker-$version-windows-x64-portable"
 New-Item -ItemType Directory -Force $portable | Out-Null
-Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\multi-wallet-tracker.exe') "$portable\multi-wallet-tracker.exe"
+Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release\$appBin.exe") "$portable\$appBin.exe"
 Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\multi-wallet-tracker-$version-windows-x64-portable.zip"
 
 Get-ChildItem $OutDir | Format-Table Name, Length

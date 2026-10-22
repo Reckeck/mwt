@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>dev.mwt.MultiWalletTracker</id>
-  <name>Multi Wallet Tracker</name>
+  <name>Multi Wallet Tracker Dev</name>
   <summary>Encrypted finance &amp; crypto portfolio manager</summary>
   <summary xml:lang="ru">Зашифрованный менеджер финансов и крипто-портфеля</summary>
   <metadata_license>CC0-1.0</metadata_license>

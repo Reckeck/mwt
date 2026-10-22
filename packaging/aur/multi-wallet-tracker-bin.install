@@ -3,8 +3,10 @@
 post_remove() {
   for entry in /home/*/.config/autostart/*.desktop /root/.config/autostart/*.desktop; do
     [ -f "$entry" ] || continue
-    if grep -q '^Exec=/usr/bin/multi-wallet-tracker\( \|$\)' "$entry"; then
-      rm -f "$entry"
-    fi
+    program="$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$entry" | head -n 1)"
+    case "$program" in
+      /usr/bin/multi-wallet-tracker | /usr/bin/multi-wallet-tracker-dev)
+        [ -e "$program" ] || rm -f "$entry" ;;
+    esac
   done
 }

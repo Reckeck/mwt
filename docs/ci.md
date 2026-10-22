@@ -96,6 +96,32 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 (`scripts/ci/tauri-config.sh`), вместе с Android `versionCode` = номер
 пайплайна.
 
+### Каналы: релиз и dev-приложение
+
+Сборки `main` (`RELEASE_CHANNEL=prod`) и `development` (`dev`) — два разных
+приложения: ставятся рядом, данные у каждого свои. Имена задаёт
+`scripts/ci/channel.sh`, в сборку их кладёт оверлей `tauri-config.sh`
+(`build-windows.ps1` повторяет их, `mise run check-ci` сверяет):
+
+| | prod (`main`, релиз) | dev (`development`, ручные, локальные) |
+|---|---|---|
+| Имя (`productName`) | Multi Wallet Tracker | Multi Wallet Tracker Dev |
+| Бинарник, пакеты | `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin` | `multi-wallet-tracker-dev`, pacman `multi-wallet-tracker-dev-bin` |
+| Десктоп (путь к vault) | `mwt.desktop` | `dev.mwt.desktop` |
+| Android | `mwt.app` | `dev.mwt.app` |
+| Flatpak | `mwt.app.MultiWalletTracker` | `dev.mwt.MultiWalletTracker` |
+
+- `tauri.conf.json` / `tauri.android.conf.json` держат значения dev: так
+  собираются `mise run dev`, `mise run build` и сборки без канала (`none`).
+- Ключ keyring и сокет быстрого добавления привязаны к идентификатору сборки
+  (`crates/app/src/app_id.rs`), автозапуск — к `productName`, поэтому
+  удаление одного приложения не трогает другое (`packaging/linux/postrm.sh`,
+  `crates/app/windows/autostart-cleanup.wxs`).
+- Перенос данных TradeApp (`legacy.rs`) делает только dev: релиз под
+  `mwt.desktop` начинает с чистого каталога.
+- Манифест Flatpak в репозитории — dev; релизный `build-flatpak.sh`
+  рендерит из него под своим ID.
+
 ## Раннеры
 
 - Linux-job'ы — любые docker-раннеры. `package:flatpak` нужен
@@ -143,8 +169,9 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
 
 - **Android.** Gradle-проект (`crates/app/gen/android`) генерируется в CI
   (`tauri android init`) и не коммитится; иконки — `tauri icon`.
-  Идентификатор — `dev.mwt.app` (`crates/app/tauri.android.conf.json`),
-  десктопный — `dev.mwt.desktop` (от него зависит путь к vault).
+  Идентификатор — `mwt.app` в релизе, `dev.mwt.app` в dev
+  (`crates/app/tauri.android.conf.json`), десктопный — `mwt.desktop` /
+  `dev.mwt.desktop` (от него зависит путь к vault); см. «Каналы».
   Трей, автозапуск, глобальный хоткей, сохранение геометрии окна и системный
   keyring — только десктоп (`cfg(desktop)`): на Android автозапуск всегда
   выключен, задать хоткей нельзя (`UNSUPPORTED`), напоминания заблокированного
@@ -152,8 +179,9 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
   пока не скрыты на телефоне — их переключение там вернёт ошибку.
   Локально: `pnpm tauri android init` → `pnpm tauri android dev`
   (нужны Android SDK, NDK и JDK 17, переменные `ANDROID_HOME`, `NDK_HOME`).
-- **Flatpak.** ID `dev.mwt.MultiWalletTracker` (ID на `.desktop` Flatpak не любит).
-  Данные — в `~/.var/app/dev.mwt.MultiWalletTracker/`. Автозапуск из sandbox не
+- **Flatpak.** ID `mwt.app.MultiWalletTracker` в релизе, `dev.mwt.MultiWalletTracker`
+  в dev (ID на `.desktop` Flatpak не любит, нужно ≥ 3 частей).
+  Данные — в `~/.var/app/<ID>/`. Автозапуск из sandbox не
   работает. Для Flathub нужен отдельный PR в flathub с этим манифестом.
 - **AUR / pacman.** Пакет `multi-wallet-tracker-bin` ставит готовый бинарник из
   Package Registry, поэтому проект (или хотя бы его пакеты) должен быть
@@ -204,13 +232,16 @@ mise run check-platforms -- windows android # выборочно
 
 `scripts/local/build-all.sh` собирает бандлы тем же кодом, что CI
 (`scripts/ci/build-*.sh`), в тех же образах — на машине нужен только podman
-(или docker: `CONTAINER_ENGINE=docker`). Результат — в `.cache/build-all/builds/`, логи — в
+(или docker: `CONTAINER_ENGINE=docker`). Канал — `--channel dev` (по
+умолчанию) или `prod` (см. «Каналы»). Результат — в
+`.cache/build-all/builds/<канал>/`, логи — в
 `.cache/build-all/<платформа>.log`, в конце — таблица OK/SKIP/FAIL.
 
 ```bash
 mise run build:all                         # всё
 mise run build:all -- linux android        # выборочно
 mise run build:all -- --version 0.2.0-1 windows
+mise run build:all -- --channel prod       # релизное приложение (mwt.*)
 ```
 
 | Платформа | Где собирается | Что получится |

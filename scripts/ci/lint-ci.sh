@@ -7,7 +7,9 @@
 #   - every shell script must parse (bash -n), be executable (CI runs it
 #     directly), and pass shellcheck if present;
 #   - every COPY source of scripts/ci/ci.Dockerfile must be let through by
-#     .dockerignore (a `*` plus an allow-list), or the image build finds nothing.
+#     .dockerignore (a `*` plus an allow-list), or the image build finds nothing;
+#   - the channel names of channel.sh: the dev ones are what the Tauri configs
+#     hold, and build-windows.ps1 repeats both channels' exactly.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -40,6 +42,23 @@ for source in $(awk '/^COPY / && !/--from=/ {print $2}' scripts/ci/ci.Dockerfile
     echo "scripts/ci/ci.Dockerfile copies $source, but .dockerignore filters it out — add !$source" >&2
     failed=1
   fi
+done
+# shellcheck source=scripts/ci/channel.sh
+for channel in dev prod; do
+  (
+    RELEASE_CHANNEL="$channel" source scripts/ci/channel.sh
+    for value in "'$app_id'" "'$app_name'" "'$app_bin'"; do
+      grep -qF "$value" scripts/ci/build-windows.ps1 ||
+        { echo "scripts/ci/build-windows.ps1 lacks $value of channel $channel (channel.sh)" >&2; exit 1; }
+    done
+    [[ "$channel" == dev ]] || exit 0
+    for pair in "identifier:$app_id" "productName:$app_name" "mainBinaryName:$app_bin"; do
+      grep -qF "\"${pair%%:*}\": \"${pair#*:}\"" crates/app/tauri.conf.json ||
+        { echo "crates/app/tauri.conf.json: ${pair%%:*} is not the dev channel's ${pair#*:} (channel.sh)" >&2; exit 1; }
+    done
+    grep -qF "\"identifier\": \"$app_android_id\"" crates/app/tauri.android.conf.json ||
+      { echo "crates/app/tauri.android.conf.json: identifier is not $app_android_id (channel.sh)" >&2; exit 1; }
+  ) || failed=1
 done
 if command -v shellcheck >/dev/null; then
   shellcheck -S warning -x scripts/ci/*.sh packaging/aur/render.sh || failed=1

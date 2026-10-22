@@ -34,6 +34,8 @@ release/
 crates/app/gen/android/
 packaging/flatpak/shared-modules/
 packaging/flatpak/*.tar.gz
+# The release manifest, rendered from the dev one by build-flatpak.sh.
+packaging/flatpak/mwt.app.*
 .flatpak-build/
 .flatpak-repo/
 .flatpak-builder/
