@@ -11,21 +11,28 @@
 //   node scripts/check-fsd.mjs            # gate
 //   node scripts/check-fsd.mjs --update   # shrink the baseline (never grows it, but on first run)
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const root = new URL('..', import.meta.url).pathname
 const baselinePath = join(root, 'scripts/check-fsd.baseline.json')
 const update = process.argv.includes('--update')
 
+// Into a file, not a pipe: Steiger exits before a pipe drains, and a report over
+// 64 KiB came back cut off. Writes to a file are synchronous, so it arrives whole.
+const reportDir = join(root, '.cache')
+mkdirSync(reportDir, { recursive: true })
+const reportPath = join(reportDir, 'steiger.json')
+const out = openSync(reportPath, 'w')
 const run = spawnSync('pnpm', ['exec', 'steiger', './src', '--reporter', 'json'], {
   cwd: root,
   encoding: 'utf8',
-  maxBuffer: 64 * 1024 * 1024,
+  stdio: ['ignore', out, 'pipe'],
 })
+closeSync(out)
 let diagnostics
 try {
-  diagnostics = JSON.parse(run.stdout)
+  diagnostics = JSON.parse(readFileSync(reportPath, 'utf8'))
 } catch {
   console.error(`check-fsd: steiger gave no report\n${run.stderr}`)
   process.exit(1)

@@ -57,18 +57,18 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('onboarding', OnboardingChecklist, [12, 5, 6, 4]),
   widget('dailyBudget', DailyBudget, [4, 5, 3, 4]),
   widget('monthSummary', MonthSummary, [4, 6, 3, 5]),
-  widget('upcoming', UpcomingList, [4, 6, 3, 4], { props: { days: 14, limit: 6 } }),
+  widget('upcoming', UpcomingList, [4, 6, 3, 4], { props: { days: 7, limit: 6 }, home: true }),
   widget('netWorth', NetWorthCard, [4, 6, 3, 4], { link: { name: 'money-wealth' }, periodic: true }),
-  widget('fx', DashboardFx, [4, 5, 2, 4]),
+  widget('fx', DashboardFx, [4, 5, 2, 4], { home: true }),
   widget('spending', DashboardSpending, [4, 6, 3, 4], { link: { name: 'transactions-calendar' }, periodic: true }),
-  widget('assets', DashboardAssets, [4, 7, 3, 4]),
+  widget('assets', DashboardAssets, [4, 7, 3, 4], { home: true }),
   widget('health', DashboardHealth, [4, 5, 3, 3], { link: { name: 'money-health' } }),
   widget('passiveIncome', DashboardPassive, [4, 5, 3, 3], { link: { name: 'money-health' } }),
   widget('topupAdvisor', DashboardTopup, [4, 6, 3, 4], { link: { name: 'money-investments' } }),
   widget('scenario', DashboardScenario, [4, 5, 3, 3], { link: { name: 'money-calculator' }, scenario: true }),
   widget('goals', DashboardGoals, [6, 5, 3, 4], { link: { name: 'money-plan' } }),
   widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'money-plan' } }),
-  widget('utilities', DashboardUtilities, [6, 6, 3, 5]),
+  widget('utilities', DashboardUtilities, [6, 6, 3, 5], { home: true }),
   widget('allocation', DashboardAllocation, [6, 9, 4, 7]),
   widget('cashback', CashbackBonuses, [4, 6, 3, 4], { link: { name: 'transactions-bonuses' } }),
   widget('interestTax', InterestTax, [4, 4, 3, 3]),
@@ -76,13 +76,8 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('bybitSync', DashboardBybitSync, [8, 5, 6, 4], { requires: 'exchange' }),
 ]
 
-/** Widgets a fresh vault starts with. */
-export const DEFAULT_DASHBOARD = [
-  'onboarding',
-  'dailyBudget',
-  'monthSummary',
-  'upcoming',
-  'netWorth',
-  'spending',
-  'health',
-]
+/**
+ * Widgets a fresh vault starts with: none. Home shows its three figures, the things
+ * to do and what changed; widgets are the user's choice (Home 5).
+ */
+export const DEFAULT_DASHBOARD: string[] = []

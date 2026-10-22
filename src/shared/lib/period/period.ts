@@ -24,6 +24,11 @@ export function currentMonth(now = new Date()): string {
   return monthKey(now.getFullYear(), now.getMonth())
 }
 
+/** The local day of `date` as `YYYY-MM-DD`, the form dates take in DTOs. */
+export function dayKey(date = new Date()): string {
+  return `${currentMonth(date)}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 /** `key` moved by `delta` months. */
 export function shiftMonth(key: string, delta: number): string {
   const [year, month] = key.split('-').map(Number)
