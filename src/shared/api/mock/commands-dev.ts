@@ -3,6 +3,7 @@
 import { txId, txMeta } from '@/shared/lib/transactions'
 import {
   mockCalendar,
+  mockMonthBalance,
   mockMonthPace,
   mockNetWorthTrend,
   mockOverview,
@@ -57,6 +58,13 @@ export const devReportCommands: MockCommands = {
   },
   get_calendar: ({ args }) => {
     return resolve(mockCalendar(String(args?.month ?? new Date().toISOString().slice(0, 7)), analyticsContext()))
+  },
+  get_month_balance: ({ args }) => {
+    return resolve(mockMonthBalance(analyticsContext(), args?.filter as ReportFilter, mockSettings.carry_since))
+  },
+  set_carry_over: ({ args }) => {
+    mockSettings.carry_since = (args?.month as string | null | undefined) ?? null
+    return resolve(null)
   },
   get_spending_overview: ({ args }) => {
     const period = (args?.period as DashPeriod | undefined) ?? mockSettings.dashboard_period

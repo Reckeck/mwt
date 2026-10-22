@@ -37,7 +37,7 @@ const detach = useMutation({
     data-tour="workflow-automation"
   >
     <span class="min-w-0 flex-1">{{ t('automation.detach.banner') }}</span>
-    <Button size="sm" variant="outline" @click="router.push({ name: 'planning-automations', query: { edit: props.workflowId } })">
+    <Button size="sm" variant="outline" @click="router.push({ name: 'automations', query: { edit: props.workflowId } })">
       {{ t('automation.detach.form') }}
     </Button>
     <Button size="sm" variant="ghost" :disabled="detach.isPending.value" @click="detach.mutate()">

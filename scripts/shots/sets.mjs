@@ -26,4 +26,20 @@ const before = [
   { name: 'settings', route: 'settings:general' },
 ]
 
-export const SETS = { before }
+/** Stage 1: the shell, Money › Spending, the month balance, the period. */
+const MORE = [{ phone: [{ click: '[data-bottom-more]' }] }]
+const PERIOD = [{ click: '[data-period-trigger]' }]
+const stage1 = [
+  { name: 'home', route: '/', scenarios: ['year', 'empty'] },
+  { name: 'spending', route: '/money', scenarios: ALL, canvas: { board: 'Money-1', frame: '1.' } },
+  { name: 'period', route: '/money', steps: PERIOD, canvas: { board: 'Period', frame: '1.' } },
+  { name: 'month', route: '/money/month', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-3', frame: '15.' } },
+  { name: 'money-more', route: '/money', steps: [{ click: '[data-tour="route-tabs-more"]' }] },
+  { name: 'automations', route: '/automations', scenarios: ['year', 'empty'] },
+  { name: 'palette', route: '/money', steps: PALETTE, canvas: { board: 'Shell', frame: '4.' } },
+  { name: 'more-sheet', route: '/', steps: MORE, desktop: false, canvas: { board: 'Shell', frame: '6.' } },
+  { name: 'sidebar-collapsed', route: '/money', steps: COLLAPSE, phone: false, canvas: { board: 'Shell', frame: '7.' } },
+  EXPAND,
+]
+
+export const SETS = { before, stage1 }

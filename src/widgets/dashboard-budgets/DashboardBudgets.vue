@@ -33,7 +33,7 @@ const paces = computed(() => byRisk(statuses.data.value ?? []))
 <template>
   <Card size="sm" v-if="statuses.data.value?.length">
     <template #header>
-      <RouterLink data-widget-title :to="{ name: 'planning-budgets' }" class="text-sm text-muted-foreground hover:text-foreground">
+      <RouterLink data-widget-title :to="{ name: 'money-plan' }" class="text-sm text-muted-foreground hover:text-foreground">
         {{ t('budget.dashboardTitle') }}
       </RouterLink>
     </template>
@@ -70,7 +70,7 @@ const paces = computed(() => byRisk(statuses.data.value ?? []))
   <Card size="sm" v-else>
     <div class="flex flex-col items-start gap-2">
       <p class="text-sm text-muted-foreground">{{ t('dashboard.widgetEmpty') }}</p>
-      <RouterLink :to="{ name: 'planning-budgets' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
+      <RouterLink :to="{ name: 'money-plan' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
         {{ t('budget.new') }}
       </RouterLink>
     </div>

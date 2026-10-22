@@ -45,6 +45,7 @@ export const mockSettings: Settings = {
   manual_income: null,
   manual_expenses: null,
   freedom_rate: null,
+  carry_since: null,
   pinned: [],
   categories_rev: 1,
   // The demo holds exchanges and crypto wallets; `?crypto=0` previews a vault without them.

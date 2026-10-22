@@ -75,9 +75,9 @@ const ICONS = {
 function targetOf(item: UpcomingItem): RouteLocationRaw | null {
   switch (item.kind) {
     case 'automation':
-      return { name: 'planning-automations' }
+      return { name: 'automations' }
     case 'reminder':
-      return { name: 'planning-reminders' }
+      return { name: 'automations-reminders' }
     case 'loan_payment':
       return { name: 'wallet', params: { id: item.source_id } }
     case 'debt':

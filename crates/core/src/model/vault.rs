@@ -128,6 +128,10 @@ pub struct Settings {
     /// takes the key rate (plan C3).
     #[serde(default)]
     pub freedom_rate: Option<Amount>,
+    /// `YYYY-MM` the unspent money of each month is carried from into the
+    /// next; `None` = every month stands alone (redesign «month's balance»).
+    #[serde(default)]
+    pub carry_since: Option<String>,
     /// The sidebar's «Pinned» block, in its order (plan J2).
     #[serde(default)]
     pub pinned: Vec<crate::model::entity_ref::Pinned>,
@@ -213,6 +217,7 @@ impl Default for Settings {
             manual_expenses: None,
             categories_rev: crate::model::category::CATEGORIES_REV,
             freedom_rate: None,
+            carry_since: None,
             pinned: Vec::new(),
             dashboard_period: DashPeriod::Month,
             onboarding_checklist_hidden: false,

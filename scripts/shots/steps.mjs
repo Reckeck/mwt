@@ -91,8 +91,9 @@ export async function runSteps(page, shot, touch) {
 }
 
 /** Let data land and animations end; close tours that popped up. */
-export async function settle(page) {
-  await page.sleep(600)
+export async function settle(page, scenario) {
+  // A failed query retries three times (1 + 2 + 4 s) before the error shows.
+  await page.sleep(scenario === 'error' ? 7600 : 600)
   await page.eval(`document.querySelector('.driver-popover-close-btn')?.click(); return true`)
   await page.sleep(150)
 }

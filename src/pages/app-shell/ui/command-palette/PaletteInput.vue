@@ -5,6 +5,7 @@ import { Search } from 'lucide-vue-next'
 
 import { Kbd } from '@/shared/ui/kbd'
 import { useCommand } from '@/shared/ui/command'
+import { hotkeyLabel } from '@/shared/lib/hotkeys'
 
 /**
  * The search field in the header. Unlike `CommandInput` it does not grab the
@@ -36,6 +37,6 @@ defineExpose({
       @focus="emit('focus')"
       @click="emit('focus')"
     />
-    <Kbd class="hidden shrink-0 lg:inline-flex">Ctrl K</Kbd>
+    <Kbd class="hidden shrink-0 lg:inline-flex">{{ hotkeyLabel('palette') }}</Kbd>
   </div>
 </template>

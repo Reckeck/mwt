@@ -111,7 +111,7 @@ const rows = computed<MonthTableRow[]>(() =>
     @retry="calendar.refetch()"
   >
     <template #empty>
-      <RouterLink :to="{ name: 'planning-budgets' }" :class="buttonVariants()">{{ t('saldo.empty.action') }}</RouterLink>
+      <RouterLink :to="{ name: 'money-plan' }" :class="buttonVariants()">{{ t('saldo.empty.action') }}</RouterLink>
     </template>
     <div v-if="data && data.budget !== null" class="grid grid-cols-1 gap-4">
       <div class="grid grid-cols-2 gap-3 @wide:grid-cols-4 @wide:gap-4">

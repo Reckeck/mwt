@@ -223,6 +223,8 @@ pub fn run() {
             analytics::health_settings_set,
             analytics::export_report_csv,
             analytics::get_calendar,
+            analytics::get_month_balance,
+            analytics::set_carry_over,
             analytics::get_spending_overview,
             analytics::get_month_pace,
             analytics::get_net_worth_trend,

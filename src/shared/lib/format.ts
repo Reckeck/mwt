@@ -194,6 +194,14 @@ export function formatDay(iso: string | null | undefined): string {
   return dateFormat({ weekday: 'short', day: 'numeric', month: 'short' }).format(date)
 }
 
+/** A day with its month spelled out: «31 октября». */
+export function formatDayMonth(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return dateFormat({ day: 'numeric', month: 'long' }).format(date)
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)

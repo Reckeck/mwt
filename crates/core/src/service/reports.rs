@@ -588,7 +588,7 @@ impl UnlockedVault {
     }
 
     /// Classified flows of the report range (or `[from, to)`), in scope.
-    fn report_flows(&self, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
+    pub(crate) fn report_flows(&self, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
         self.flows_between(&ctx.cal, &ctx.currency, from, to)
             .into_iter()
             .filter(|flow| {

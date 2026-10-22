@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<SidebarProps>(), {
   collapsible: "offcanvas",
 })
 
-const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+const { isMobile, state, openMobile, setOpenMobile, narrow } = useSidebar()
 </script>
 
 <template>
@@ -67,6 +67,8 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
         'relative w-(--sidebar-width) bg-transparent',
         'group-data-[collapsible=offcanvas]:w-0',
         'group-data-[side=right]:rotate-180',
+        // A narrow window keeps the room of the icons: the open sidebar lies over the page.
+        narrow && 'w-(--sidebar-width-icon)',
         variant === 'floating' || variant === 'inset'
           ? 'group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]'
           : 'group-data-[collapsible=icon]:w-(--sidebar-width-icon)',
@@ -75,6 +77,7 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
     <div
       :class="cn(
         'fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) md:flex',
+        narrow && state === 'expanded' && 'z-30 shadow-xl',
         side === 'left'
           ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
           : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',

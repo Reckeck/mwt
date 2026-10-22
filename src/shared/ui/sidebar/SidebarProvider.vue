@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { HTMLAttributes, Ref } from "vue"
 import { useEventListener, useMediaQuery, useVModel } from "@vueuse/core"
+import { matchesHotkey } from '@/shared/lib/hotkeys'
 import { PHONE_QUERY } from '@/shared/lib/phone'
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import { cn } from '@/shared/lib/utils'
-import { provideSidebarContext, readSidebarOpen, SIDEBAR_KEYBOARD_SHORTCUT, SIDEBAR_WIDTH, SIDEBAR_WIDTH_ICON, writeSidebarOpen } from "./utils"
+import { provideSidebarContext, readSidebarOpen, NARROW_QUERY, SIDEBAR_WIDTH, SIDEBAR_WIDTH_ICON, writeSidebarOpen } from "./utils"
 
 const props = withDefaults(defineProps<{
   defaultOpen?: boolean
@@ -31,7 +32,7 @@ function setOpen(value: boolean) {
   open.value = value // emits('update:open', value)
 
   // A desktop webview has no use for a cookie; remember the state locally.
-  writeSidebarOpen(open.value)
+  if (!narrow.value) writeSidebarOpen(open.value)
 }
 
 function setOpenMobile(value: boolean) {
@@ -44,11 +45,18 @@ function toggleSidebar() {
 }
 
 useEventListener("keydown", (event: KeyboardEvent) => {
-  if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+  if (matchesHotkey(event, 'sidebar')) {
     event.preventDefault()
     toggleSidebar()
   }
 })
+
+// A narrow window folds the sidebar to icons by itself; widening it again brings back
+// what the user chose. The fold is not remembered, only the user's own Ctrl B.
+const narrow = useMediaQuery(NARROW_QUERY)
+watch(narrow, (isNarrow) => {
+  open.value = isNarrow ? false : readSidebarOpen()
+}, { immediate: true })
 
 // We add a state so that we can do data-state="expanded" or "collapsed".
 // This makes it easier to style the sidebar with Tailwind classes.
@@ -59,6 +67,7 @@ provideSidebarContext({
   open,
   setOpen,
   isMobile,
+  narrow,
   openMobile,
   setOpenMobile,
   toggleSidebar,

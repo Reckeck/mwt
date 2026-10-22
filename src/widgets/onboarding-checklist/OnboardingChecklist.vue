@@ -55,9 +55,9 @@ const steps = computed<Step[]>(() => [
   {
     key: 'salary',
     done: (automations.data.value?.length ?? 0) > 0,
-    action: { to: { name: 'planning-automations', query: { new: 'salary' } } },
+    action: { to: { name: 'automations', query: { new: 'salary' } } },
   },
-  { key: 'goal', done: (goals.data.value?.length ?? 0) > 0, action: { to: { name: 'planning-goals' } } },
+  { key: 'goal', done: (goals.data.value?.length ?? 0) > 0, action: { to: { name: 'money-plan' } } },
 ])
 
 /** A wallet is the one step everything else needs: it cannot be skipped. */

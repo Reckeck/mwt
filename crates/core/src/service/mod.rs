@@ -55,6 +55,7 @@ mod interest;
 mod ledger;
 mod losses;
 mod loyalty;
+mod month_balance;
 mod notifications;
 mod notify_snapshot;
 mod peer_sync;
@@ -123,6 +124,7 @@ pub use losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
 };
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
+pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceRow};
 pub use notifications::{notice, notice_title};
 pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
 pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
@@ -4995,6 +4997,7 @@ mod persist_tests {
             manual_expenses: Some(Amount::parse("1100").unwrap()),
             categories_rev: 7,
             freedom_rate: Some(Amount::parse("12").unwrap()),
+            carry_since: None,
             pinned: vec![crate::model::entity_ref::Pinned::Entity {
                 target: EntityRef::new(EntityKind::Goal, "g1"),
             }],

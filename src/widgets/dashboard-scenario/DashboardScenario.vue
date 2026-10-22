@@ -43,7 +43,7 @@ const gapPct = computed(() => {
   const planned = Number(data?.planned_now ?? 0)
   return data?.fact && planned > 0 ? ((Number(data.fact) - planned) / planned) * 100 : null
 })
-const link = computed(() => ({ name: 'planning-calculator', query: chosenId.value ? { scenario: chosenId.value } : {} }))
+const link = computed(() => ({ name: 'money-calculator', query: chosenId.value ? { scenario: chosenId.value } : {} }))
 </script>
 
 <template>
@@ -58,7 +58,7 @@ const link = computed(() => ({ name: 'planning-calculator', query: chosenId.valu
       @retry="chosenId ? status.refetch() : scenarios.refetch()"
     >
       <template #empty>
-        <RouterLink :to="{ name: 'planning-calculator' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
+        <RouterLink :to="{ name: 'money-calculator' }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
           {{ t('dashboard.scenario.create') }}
         </RouterLink>
       </template>

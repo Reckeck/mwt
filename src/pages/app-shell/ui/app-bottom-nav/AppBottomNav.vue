@@ -1,38 +1,46 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Menu, Plus } from 'lucide-vue-next'
+import { ChevronRight, Lock, Menu, Plus, Settings } from 'lucide-vue-next'
 
+import { useStoreTree } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
-import { useSidebar } from '@/shared/ui/sidebar'
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/shared/ui/drawer'
 import { cn } from '@/shared/lib/utils'
 
-import { NAV_GROUPS, type NavItem } from '../../app-shell.constants'
+import { type NavItem, navItem } from '../../app-shell.constants'
 
 /**
- * The phone's main sections under the thumb: Home, Wallets, a new
- * transaction, Transactions and «More» (the side menu with the rest).
+ * The phone's bar (Shell · 6): Home, Transactions, a new transaction, Money and
+ * «More» — a sheet with wallets, automations, settings and the lock.
  */
-const emit = defineEmits<{ quickAdd: [] }>()
+const emit = defineEmits<{ quickAdd: []; lock: []; openSettings: [] }>()
 
 const { t } = useI18n()
 const route = useRoute()
-const { setOpenMobile } = useSidebar()
+const router = useRouter()
+const tree = useStoreTree()
 
-const items = NAV_GROUPS.flatMap((group) => group.items)
-const pick = (name: string) => items.find((item) => item.name === name) as NavItem
-const left = [pick('dashboard'), pick('stores')]
-const right = [pick('transactions')]
-const shown = [...left, ...right]
+const left = [navItem('dashboard'), navItem('transactions')]
+const right = [navItem('money')]
+const rest = [navItem('stores'), navItem('automations')]
 
 function isActive(item: NavItem): boolean {
   return item.prefix ? route.path.startsWith(item.prefix) : route.name === item.name
 }
-/** «More» is lit on a section the bar does not show (analytics, plans, workflows). */
-const elsewhere = computed(() => !shown.some(isActive))
+/** «More» is lit on a section the bar does not show. */
+const elsewhere = computed(() => rest.some(isActive))
+const walletCount = computed(() => tree.data.value?.length ?? 0)
+
+const moreOpen = ref(false)
+function pick(run: () => void) {
+  moreOpen.value = false
+  run()
+}
 
 const ITEM = 'flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-md text-[0.6875rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px-1 text-left text-sm font-normal last:border-0'
 </script>
 
 <template>
@@ -66,9 +74,42 @@ const ITEM = 'flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 
       <component :is="item.icon" class="size-5" />
       {{ t(item.key) }}
     </RouterLink>
-    <Button variant="ghost" :class="cn(ITEM, 'h-auto', elsewhere ? 'text-primary' : 'text-muted-foreground')" @click="setOpenMobile(true)">
+    <Button
+      variant="ghost"
+      :class="cn(ITEM, 'h-auto', elsewhere || moreOpen ? 'text-primary' : 'text-muted-foreground')"
+      data-bottom-more
+      @click="moreOpen = true"
+    >
       <Menu class="size-5" />
       {{ t('nav.more') }}
     </Button>
   </nav>
+
+  <Drawer v-model:open="moreOpen">
+    <DrawerContent data-bottom-more-sheet>
+      <DrawerHeader class="px-4 pb-0 text-left">
+        <DrawerTitle>{{ t('nav.more') }}</DrawerTitle>
+        <DrawerDescription class="sr-only">{{ t('nav.moreHint') }}</DrawerDescription>
+      </DrawerHeader>
+      <div class="grid px-4 pb-[calc(1.5rem+var(--safe-bottom))]">
+        <Button v-for="item in rest" :key="item.name" variant="ghost" :class="ROW" @click="pick(() => router.push({ name: item.name }))">
+          <component :is="item.icon" class="size-5 text-muted-foreground" />
+          <span class="flex-1">{{ t(item.key) }}</span>
+          <span v-if="item.name === 'stores' && walletCount" class="text-muted-foreground">
+            {{ t('nav.walletCount', { count: walletCount }) }}
+          </span>
+          <ChevronRight class="size-4 text-muted-foreground" />
+        </Button>
+        <Button variant="ghost" :class="ROW" @click="pick(() => emit('openSettings'))">
+          <Settings class="size-5 text-muted-foreground" />
+          <span class="flex-1">{{ t('settingsShell.title') }}</span>
+          <ChevronRight class="size-4 text-muted-foreground" />
+        </Button>
+        <Button variant="ghost" :class="ROW" @click="pick(() => emit('lock'))">
+          <Lock class="size-5 text-muted-foreground" />
+          <span class="flex-1">{{ t('auth.lock') }}</span>
+        </Button>
+      </div>
+    </DrawerContent>
+  </Drawer>
 </template>

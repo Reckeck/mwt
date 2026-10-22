@@ -91,7 +91,7 @@ const daysAhead = computed(() =>
       <div class="grid content-start gap-2 text-sm">
         <p v-if="negativePool" class="text-muted-foreground">
           {{ t('saldo.pool.negative') }}
-          <RouterLink :to="{ name: 'planning-automations' }" class="text-foreground underline underline-offset-4">
+          <RouterLink :to="{ name: 'automations' }" class="text-foreground underline underline-offset-4">
             {{ t('saldo.pool.automations') }}
           </RouterLink>
         </p>

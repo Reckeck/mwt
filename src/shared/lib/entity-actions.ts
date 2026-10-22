@@ -66,29 +66,29 @@ const ACTIONS: Record<EntityKind, EntityAction[]> = {
   category: [
     operations((id) => emptyTxFilter({ category: id })),
     { id: 'new-budget', icon: Gauge, labelKey: 'entity.action.newBudget', dialog: 'budget' },
-    page('entity.action.openBudgets', () => ({ name: 'planning-budgets' })),
+    page('entity.action.openBudgets', () => ({ name: 'money-plan' })),
   ],
   contact: [
     operations((id) => emptyTxFilter({ contact_id: id })),
     page('entity.action.openContacts', () => ({ name: 'transactions-contacts' })),
   ],
-  goal: [page('entity.action.openGoals', () => ({ name: 'planning-goals' }))],
+  goal: [page('entity.action.openGoals', () => ({ name: 'money-plan' }))],
   scenario: [
     {
       ...page('entity.action.openCalculator', (target) => ({
-        name: 'planning-calculator',
+        name: 'money-calculator',
         query: { scenario: target.id },
       })),
       icon: Calculator,
     },
   ],
-  budget: [page('entity.action.openBudgets', () => ({ name: 'planning-budgets' }))],
+  budget: [page('entity.action.openBudgets', () => ({ name: 'money-plan' }))],
   automation: [
     {
       id: 'edit',
       icon: Pencil,
       labelKey: 'entity.action.edit',
-      to: (target) => ({ name: 'planning-automations', query: { edit: target.id } }),
+      to: (target) => ({ name: 'automations', query: { edit: target.id } }),
     },
   ],
   workflow: [
@@ -99,11 +99,13 @@ const ACTIONS: Record<EntityKind, EntityAction[]> = {
       to: (target) => ({ name: 'workflow-edit', params: { id: target.id } }),
     },
   ],
-  reminder: [{ ...page('entity.action.openReminders', () => ({ name: 'planning-reminders' })), icon: CalendarClock }],
-  alert: [page('entity.action.openAlerts', () => ({ name: 'planning-alerts' }))],
+  reminder: [
+    { ...page('entity.action.openReminders', () => ({ name: 'automations-reminders' })), icon: CalendarClock },
+  ],
+  alert: [page('entity.action.openAlerts', () => ({ name: 'automations-alerts' }))],
   asset: [
     { id: 'new-alert', icon: Bell, labelKey: 'entity.action.newAlert', dialog: 'alert' },
-    page('entity.action.openAlerts', () => ({ name: 'planning-alerts' })),
+    page('entity.action.openAlerts', () => ({ name: 'automations-alerts' })),
   ],
 }
 

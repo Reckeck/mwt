@@ -41,7 +41,8 @@ const only = option('only')
 const canvasDir = process.env.CANVAS_DIR ?? join(root, '.cache/canvas')
 
 const out = join(root, '.cache/shots', setName)
-rmSync(out, { recursive: true, force: true })
+// A partial run (`--only`, `--width`, `--theme`) keeps the rest of the set.
+if (!only && !widths && !option('theme')) rmSync(out, { recursive: true, force: true })
 mkdirSync(join(out, 'pairs'), { recursive: true })
 
 const binary = findChromium()
@@ -78,7 +79,7 @@ try {
             const file = join(out, `${shot.name}-${scenario}-${theme}-${width}.png`)
             try {
               await runSteps(page, shot, touch)
-              await settle(page)
+              await settle(page, scenario)
               await page.shot(file)
               written.push(file)
             } catch (error) {

@@ -33,7 +33,7 @@ export function sourceLink(source: ReminderSource): RouteLocationRaw | null {
   switch (source.kind) {
     case 'goal_saving':
     case 'goal_deadline':
-      return { name: 'planning-goals' }
+      return { name: 'money-plan' }
     case 'debt':
       return { name: 'transactions-contacts' }
     case 'rent':

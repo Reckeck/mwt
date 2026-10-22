@@ -38,7 +38,7 @@ const change = computed(() => comparisonDelta(trend.data.value?.change))
           good-when="up"
           :base-label="t(`netWorthCard.since_${period}`)"
           :series="trend.data.value?.series.map(Number)"
-          :action="{ label: t('netWorthCard.open'), to: { name: 'analytics-wealth' } }"
+          :action="{ label: t('netWorthCard.open'), to: { name: 'money-wealth' } }"
         >
           <Money :amount="worth.data.value.net" :currency="worth.data.value.base_currency" :decimals="0" />
           <template #delta>
