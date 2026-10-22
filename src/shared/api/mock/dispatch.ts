@@ -19,8 +19,10 @@ import { vaultFilesCommands } from './commands-vault-files'
 import { overviewCommands, walletsCommands } from './commands-wallets'
 import { resolve } from './core'
 import type { MockCommands } from './core'
-import { mockStores, mockTransactions, priceOf, seedMock } from './demo'
+import { mockStores, mockTransactions, priceOf } from './demo'
+import { seedMock } from './scenario-seed'
 import { mockAppSettings, mockSettings } from './vault-data'
+import { mockScenario } from './scenario'
 
 /** Every command the browser mock answers, by name. */
 const MOCK_COMMANDS: MockCommands = {
@@ -46,8 +48,18 @@ const MOCK_COMMANDS: MockCommands = {
   ...devReportCommands,
 }
 
+/** What still answers in the `error` scenario: enough to unlock and reach the screen. */
+const BOOT_COMMANDS = new Set(
+  Object.keys({ ...vaultCommands, ...vaultFilesCommands, ...appSettingsOutsideCommands, ...notificationsCommands }),
+)
+
 export function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> {
   seedMock()
+  if (mockScenario === 'error' && !BOOT_COMMANDS.has(cmd)) {
+    return new Promise((_, fail) =>
+      setTimeout(() => fail({ code: 'MOCK_ERROR', message: `Сценарий error: ${cmd} отказал` }), 30),
+    )
+  }
   // Like Tauri, which sends arguments as JSON: detaches Vue proxies the mock would otherwise store.
   const args = rawArgs ? (JSON.parse(JSON.stringify(rawArgs)) as Record<string, unknown>) : rawArgs
   const body = args?.input as Record<string, unknown> | undefined
