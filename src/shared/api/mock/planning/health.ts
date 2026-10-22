@@ -107,7 +107,7 @@ function reasonsOf(emergency: EmergencyStatus, debts: DebtLoad, savingsAvg: numb
 
 const RANK: Record<HealthColor, number> = { no_data: 0, green: 1, yellow: 2, red: 3 }
 
-function capitalHealth(ctx: PlanningMockContext, settings: Settings): HealthReport {
+export function capitalHealth(ctx: PlanningMockContext, settings: Settings): HealthReport {
   const emergency = emergencyStatus(ctx)
   const savings: SavingsMonth[] = finishedMonths(YEAR).map((month) => {
     const totals = monthTotals(ctx, month)

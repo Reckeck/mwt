@@ -10,6 +10,7 @@ import { planHealth } from './health'
 import { planReminders } from './reminders'
 import { mockContext } from './state'
 import type { PlanningMockContext } from './state'
+import { planToday } from './today'
 import { planUtilities } from './utilities'
 
 /**
@@ -32,6 +33,7 @@ export function mockPlanning(
     planCalculator(cmd, args, ctx) ??
     planEmergency(cmd, args, ctx) ??
     planHealth(cmd, args, ctx, settings) ??
-    planAllocation(cmd, args, ctx)
+    planAllocation(cmd, args, ctx) ??
+    planToday(cmd, args, ctx, settings)
   )
 }

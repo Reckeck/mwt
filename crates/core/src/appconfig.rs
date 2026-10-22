@@ -119,6 +119,9 @@ pub struct AppSettings {
     /// came before it. `None` for installs older than the field.
     #[serde(default)]
     pub installed_at: Option<String>,
+    /// The dashboard's «Сегодня» strip is folded to one line on this screen.
+    #[serde(default)]
+    pub dashboard_today_collapsed: bool,
 }
 
 /// Vault sync preferences of this device. Everything is off until the user
@@ -183,6 +186,7 @@ impl Default for AppSettings {
             fx_refresh_interval_sec: None,
             display_decimals: None,
             installed_at: None,
+            dashboard_today_collapsed: false,
         }
     }
 }
@@ -239,6 +243,9 @@ impl AppSettings {
         }
         if let Some(interval) = patch.fx_refresh_interval_sec {
             self.fx_refresh_interval_sec = Some(interval.clamp(30, 3600));
+        }
+        if let Some(collapsed) = patch.dashboard_today_collapsed {
+            self.dashboard_today_collapsed = collapsed;
         }
         if let Some(decimals) = patch.display_decimals {
             self.display_decimals = Some(decimals.min(18));
@@ -400,6 +407,8 @@ pub struct UpdateAppSettingsInput {
     pub fx_refresh_interval_sec: Option<u32>,
     #[serde(default)]
     pub display_decimals: Option<u32>,
+    #[serde(default)]
+    pub dashboard_today_collapsed: Option<bool>,
 }
 
 /// Longest device name, characters; it is shown in a pairing dialog.
@@ -818,6 +827,7 @@ mod tests {
             fx_refresh_interval_sec: Some(900),
             display_decimals: Some(2),
             installed_at: Some("2026-10-19".into()),
+            dashboard_today_collapsed: true,
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

@@ -221,6 +221,8 @@ pub fn run() {
             analytics::get_spending_overview,
             analytics::get_month_pace,
             analytics::get_net_worth_trend,
+            analytics::get_dashboard_today,
+            analytics::get_scenario_status,
             analytics::get_entity_card,
             analytics::get_search_index,
             analytics::search_transactions,

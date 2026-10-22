@@ -67,6 +67,7 @@ export const mockAppSettings: AppSettings = {
   minimize_to_tray: null,
   fx_refresh_interval_sec: null,
   display_decimals: null,
+  dashboard_today_collapsed: false,
   // An install older than the field: «Что нового» shows every entry, as after an update.
   installed_at: null,
 }

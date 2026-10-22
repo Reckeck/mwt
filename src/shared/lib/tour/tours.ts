@@ -80,6 +80,7 @@ export const TOURS: Record<string, TourStep[]> = {
   ]),
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [
+    { target: 'dash-today', key: 'dashboard.today', side: 'bottom' },
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-period', key: 'dashboard.period', side: 'bottom' },
     { target: 'dash-net-worth', key: 'dashboard.netWorthTile', side: 'bottom' },
@@ -88,6 +89,8 @@ export const TOURS: Record<string, TourStep[]> = {
     // Only on a phone.
     { target: 'bottom-nav', key: 'dashboard.bottomNav', side: 'top' },
     { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },
+    { target: 'dash-reset', key: 'dashboard.reset', side: 'bottom' },
+    { target: 'dash-health', key: 'dashboard.healthWidget', side: 'top' },
     { target: 'dashboard-add', key: 'dashboard.add', side: 'left' },
     { target: 'sidebar-add-wallet', key: 'dashboard.wallets', side: 'right' },
     { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },

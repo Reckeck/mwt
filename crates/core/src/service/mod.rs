@@ -37,6 +37,7 @@ mod categories;
 mod contacts;
 mod dashboard;
 mod dashboard_tiles;
+mod dashboard_today;
 mod datasources;
 mod debts;
 mod emergency;
@@ -96,6 +97,7 @@ pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use dashboard::{SpendingDay, SpendingOverview};
 pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};
+pub use dashboard_today::{DashboardToday, ScenarioStatus, TODAY_TODOS, TodayTodo, TodayTodoKind};
 pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
 pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
@@ -4885,6 +4887,7 @@ mod persist_tests {
                 pinned: true,
                 store_id: None,
                 period: Some(crate::model::vault::DashPeriod::Quarter),
+                scenario_id: Some("scenario".into()),
             }],
             fx_refresh_interval_sec: 900,
             minimize_to_tray: false,

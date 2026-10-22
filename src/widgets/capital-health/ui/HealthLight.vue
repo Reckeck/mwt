@@ -6,18 +6,13 @@ import { Card } from '@/shared/ui/card'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { cn } from '@/shared/lib/utils'
 
+import { HEALTH_DOT } from '../capital-health.constants'
 import { reasonStore, reasonText } from '../lib/reason-text'
 
 /** The traffic light: one colour for the whole checkup, then each reason with its first step. */
 const props = defineProps<{ report: HealthReport; names: Record<string, string> }>()
 const { t } = useI18n()
 
-const DOT: Record<HealthColor, string> = {
-  red: 'bg-destructive',
-  yellow: 'bg-warning',
-  green: 'bg-success',
-  no_data: 'bg-muted-foreground',
-}
 const MARK: Record<HealthColor, string> = {
   red: 'text-destructive',
   yellow: 'text-warning',
@@ -37,7 +32,7 @@ const reasons = computed(() =>
 <template>
   <Card data-tour="health-light">
     <div class="flex items-center gap-3">
-      <span :class="cn('size-4 shrink-0 rounded-full', DOT[props.report.color])" aria-hidden="true" />
+      <span :class="cn('size-4 shrink-0 rounded-full', HEALTH_DOT[props.report.color])" aria-hidden="true" />
       <div class="min-w-0">
         <p class="font-medium">{{ t(`health.color.${props.report.color}`) }}</p>
         <p class="text-sm text-muted-foreground">{{ t(`health.colorHint.${props.report.color}`) }}</p>

@@ -34,6 +34,9 @@ pub struct DashboardWidgetCfg {
     /// Own period; `None` follows the dashboard's (plan H1).
     #[serde(default)]
     pub period: Option<DashPeriod>,
+    /// The calculator scenario a «Сценарий» widget follows (plan H4).
+    #[serde(default)]
+    pub scenario_id: Option<String>,
 }
 
 /// The window a dashboard widget measures (plan H1, decision 54).
@@ -59,6 +62,7 @@ impl Default for DashboardWidgetCfg {
             pinned: false,
             store_id: None,
             period: None,
+            scenario_id: None,
         }
     }
 }

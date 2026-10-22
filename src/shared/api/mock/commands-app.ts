@@ -141,6 +141,8 @@ export const appSettingsOutsideCommands: MockCommands = {
     if (input.fx_refresh_interval_sec) mockAppSettings.fx_refresh_interval_sec = input.fx_refresh_interval_sec
     if (input.display_decimals !== null && input.display_decimals !== undefined)
       mockAppSettings.display_decimals = input.display_decimals
+    if (input.dashboard_today_collapsed !== null && input.dashboard_today_collapsed !== undefined)
+      mockAppSettings.dashboard_today_collapsed = input.dashboard_today_collapsed
     return resolve(mockAppSettings)
   },
   set_quick_add_shortcut: ({ args }) => {
