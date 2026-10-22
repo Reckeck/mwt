@@ -229,6 +229,7 @@ frontend:check:
     - mise run check-onboarding
     - mise run check-forms
     - mise run check-ui
+    - mise run check-fsd
     - mise run check-layout -- --quick
   artifacts:
     when: on_failure

@@ -7,7 +7,7 @@ import { mockImportSettings, mockTerminal } from './catalog'
 import { mockStore } from './tree'
 
 /** Demo history: a salary, a payment, a trade, a debt and a conversion via an exchanger. */
-function demoTransactions(): Transaction[] {
+export function demoTransactions(): Transaction[] {
   const now = Date.now()
   const at = (hours: number) => new Date(now - hours * 3.6e6).toISOString()
   const common = (hours: number, comment: string, categories: string[] = []): TxCommonInput => ({
@@ -277,9 +277,4 @@ export function mockBalanceOf(storeId: string, symbol: string, exclude?: string)
     .flatMap((tx) => txLegs(tx))
     .filter((leg) => leg.store_id === storeId && leg.asset.symbol === symbol)
     .reduce((sum, leg) => sum + Number(leg.amount), 0)
-}
-
-/** Fill the demo history once every helper above is defined. */
-export function seedMock() {
-  if (!mockTransactions.length) mockTransactions.push(...demoTransactions())
 }
