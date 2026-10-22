@@ -3,8 +3,9 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
+import { CALC_SCENARIOS_KEY } from '@/shared/api/queries'
 
-export const SCENARIOS_KEY = ['calc-scenarios']
+export const SCENARIOS_KEY = CALC_SCENARIOS_KEY
 
 /** What is saved: the fields as the engine reads them and where «Из данных» took them from. */
 export interface ScenarioBody {

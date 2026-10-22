@@ -52,3 +52,8 @@ export const useAssetClasses = (enabled: MaybeRefOrGetter<boolean> = true) =>
 /** The month's pace (`get_month_pace`), shared by «Бюджет дня» and «Итоги месяца». */
 export const useMonthPace = () =>
   useQuery({ queryKey: ['month-pace'], queryFn: () => call<MonthPace>('get_month_pace') })
+
+/** Saved calculator scenarios (`calc_scenarios_list`); the calculator's own mutations refresh this key. */
+export const CALC_SCENARIOS_KEY = ['calc-scenarios']
+export const useCalcScenarios = () =>
+  useQuery({ queryKey: CALC_SCENARIOS_KEY, queryFn: () => call<CalcScenario[]>('calc_scenarios_list') })

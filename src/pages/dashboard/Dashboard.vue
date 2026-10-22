@@ -3,21 +3,18 @@ import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
 import { GridItem, GridLayout } from 'grid-layout-plus'
-import { LayoutGrid } from 'lucide-vue-next'
 
 import { type DashboardCatalogExchange, DashboardCatalog } from '@/widgets/dashboard-catalog'
 import { DASHBOARD_COLS, DASHBOARD_ROW_HEIGHT, DASHBOARD_WIDGETS } from '@/widgets/dashboard-registry'
-import { notify } from '@/shared/lib/notify'
-import { useSettingsStore } from '@/shared/store/settings'
-import { Button } from '@/shared/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { DashboardToday } from '@/widgets/dashboard-today'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { WIDGET_DRAG_HANDLE } from '@/shared/ui/widget-frame'
 
 import { useDashboardLayout } from './model/use-dashboard-layout'
 import { useWidgetActions } from './model/use-widget-actions'
+import { DashboardToolbar } from './ui/dashboard-toolbar'
 import { DashboardWidgetSlot } from './ui/dashboard-widget-slot'
-import { useStoreTree } from '@/shared/api/queries'
+import { useCalcScenarios, useStoreTree } from '@/shared/api/queries'
 
 const { t } = useI18n()
 
@@ -40,23 +37,15 @@ const {
   saveLayout,
   setPinned,
   setPeriod,
+  ownScenario,
+  setScenario,
+  resetLayout,
   remove,
   resize,
   move,
   add,
   widgetProps,
 } = useDashboardLayout()
-
-/** One period for every widget that follows it; a widget may keep its own (its menu). */
-const PERIODS: DashPeriod[] = ['month', 'quarter', 'year']
-const settingsStore = useSettingsStore()
-function choosePeriod(value: unknown) {
-  // A single toggle group hands back `undefined` when the pressed item is clicked again.
-  if (typeof value !== 'string' || value === dashboardPeriod.value) return
-  settingsStore
-    .updateVault({ dashboard_period: value as DashPeriod })
-    .catch((err) => notify.error(err, 'settings.saveFailed'))
-}
 
 /** The grid mounts once its container has a real width, so it never lays out at zero. */
 const container = useTemplateRef<HTMLElement>('container')
@@ -103,6 +92,12 @@ const hasMore = computed(() =>
   DASHBOARD_WIDGETS.some((def) => !placed.value.includes(def.id) && (!def.requires || exchanges.value.length)),
 )
 
+/** Saved calculator scenarios, newest first: the «Сценарий» widget's menu offers them. */
+const scenarioList = useCalcScenarios()
+const scenarios = computed(() =>
+  [...(scenarioList.data.value ?? [])].sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
+)
+
 const actionsById = useWidgetActions({
   layout,
   pinnedIds,
@@ -114,6 +109,9 @@ const actionsById = useWidgetActions({
   remove,
   ownPeriod,
   setPeriod,
+  scenarios,
+  ownScenario,
+  setScenario,
   openCatalog: () => {
     catalogOpen.value = true
   },
@@ -122,35 +120,13 @@ const actionsById = useWidgetActions({
 
 <template>
   <div ref="container" class="relative min-h-full pb-6" data-tour="dashboard-grid">
-    <!-- The catalog of widgets not yet on the dashboard; the transaction button lives in the header. -->
-    <!-- The row is always there: the button appearing once the wallets load must not push the grid down. -->
-    <div class="mb-3 flex items-center justify-between gap-2">
-      <ToggleGroup
-        :model-value="dashboardPeriod"
-        type="single"
-        variant="outline"
-        size="sm"
-        :aria-label="t('dashboard.period.label')"
-        data-tour="dashboard-period"
-        @update:model-value="choosePeriod"
-      >
-        <ToggleGroupItem v-for="period in PERIODS" :key="period" :value="period" class="px-2.5 text-xs">
-          {{ t(`dashboard.period.${period}`) }}
-        </ToggleGroupItem>
-      </ToggleGroup>
-      <Button
-        variant="outline"
-        size="sm"
-        data-tour="dashboard-add"
-        :class="!hasMore && 'invisible'"
-        :aria-hidden="!hasMore"
-        :tabindex="hasMore ? undefined : -1"
-        @click="catalogOpen = true"
-      >
-        <LayoutGrid class="size-4" />
-        {{ t('dashboard.catalog.button') }}
-      </Button>
-    </div>
+    <DashboardToday class="mb-3" :period="dashboardPeriod" />
+    <DashboardToolbar
+      :period="dashboardPeriod"
+      :has-more="hasMore"
+      @reset="resetLayout"
+      @catalog="catalogOpen = true"
+    />
     <div v-if="!hydrated || !containerWidth" class="grid grid-cols-1 gap-4 md:grid-cols-12">
       <Skeleton class="h-40 md:col-span-6" />
       <Skeleton class="h-40 md:col-span-6" />

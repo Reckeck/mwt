@@ -10,8 +10,9 @@ use trade_core::model::entity_ref::Pinned;
 use trade_core::model::transaction::Transaction;
 use trade_core::model::vault::DashPeriod;
 use trade_core::service::{
-    CalendarMonth, EntityCard, EntityRef, HealthReport, MonthPace, NetWorthTrend, PinnedView,
-    Report, ReportFilter, ReportKind, ReportOverview, SearchEntry, SpendingOverview, report_csv,
+    CalendarMonth, DashboardToday, EntityCard, EntityRef, HealthReport, MonthPace, NetWorthTrend,
+    PinnedView, Report, ReportFilter, ReportKind, ReportOverview, ScenarioStatus, SearchEntry,
+    SpendingOverview, report_csv,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -167,6 +168,39 @@ pub async fn get_net_worth_trend(
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
     Ok(vault.net_worth_trend(period, now_secs(), &zone))
+}
+
+/// The «Сегодня» strip (plan H5): capital and its change, the light, what
+/// may be spent today and up to three things to do, in one request.
+#[tauri::command]
+pub async fn get_dashboard_today(
+    period: Option<DashPeriod>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DashboardToday, String> {
+    let zone = current_zone(&app);
+    let inflation = current_settings(&app).inflation;
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_ref().unwrap();
+    let period = period.unwrap_or(vault.doc.settings.dashboard_period);
+    Ok(vault.dashboard_today(period, now_secs(), &zone, &inflation))
+}
+
+/// The «Сценарий» widget (plan H4): a calculator scenario's plan to date
+/// against the money its wallets hold.
+#[tauri::command]
+pub async fn get_scenario_status(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ScenarioStatus, String> {
+    let zone = current_zone(&app);
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .scenario_status(&id, now_secs(), &zone)
+        .map_err(err_to_string)
 }
 
 /// The card of any entity (plan J1): its head and what links to it.

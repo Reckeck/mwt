@@ -47,7 +47,10 @@ export function useDashboardLayout() {
   const extras = computed(
     () =>
       new Map<string, DashboardWidgetExtras>(
-        stored.value.map((cfg) => [cfg.id, { store_id: cfg.store_id ?? null, period: cfg.period ?? null }]),
+        stored.value.map((cfg) => [
+          cfg.id,
+          { store_id: cfg.store_id ?? null, period: cfg.period ?? null, scenario_id: cfg.scenario_id ?? null },
+        ]),
       ),
   )
   const cfgsOf = (items: Layout, pinned = pinnedIds.value, kept = extras.value) => toCfgs(items, pinned, kept)
@@ -148,7 +151,7 @@ export function useDashboardLayout() {
   function add(def: DashboardWidgetDef, storeId: string | null) {
     const bottom = layout.value.reduce((max, item) => Math.max(max, item.y + item.h), 0)
     const items: Layout = [...layout.value, { i: def.id, x: 0, y: bottom, w: def.w, h: def.h }]
-    const kept = new Map(extras.value).set(def.id, { store_id: storeId, period: null })
+    const kept = new Map(extras.value).set(def.id, { store_id: storeId, period: null, scenario_id: null })
     void save(cfgsOf(items, pinnedIds.value, kept))
     notify.success('widgetFrame.added', { description: t(def.titleKey) })
   }
@@ -159,14 +162,34 @@ export function useDashboardLayout() {
 
   /** `null` puts the widget back on the dashboard's period. */
   function setPeriod(id: string, period: DashPeriod | null) {
+    setExtras(id, { period })
+  }
+
+  /** The scenario a «Сценарий» widget follows; `null` = the newest one. */
+  const ownScenario = (id: string) => extras.value.get(id)?.scenario_id ?? null
+  function setScenario(id: string, scenarioId: string | null) {
+    setExtras(id, { scenario_id: scenarioId })
+  }
+
+  function setExtras(id: string, patch: Partial<DashboardWidgetExtras>) {
     const kept = new Map(extras.value)
-    kept.set(id, { store_id: kept.get(id)?.store_id ?? null, period })
+    const current = kept.get(id) ?? { store_id: null, period: null, scenario_id: null }
+    kept.set(id, { ...current, ...patch })
     void save(cfgsOf(layout.value, pinnedIds.value, kept))
+  }
+
+  /** «Сбросить раскладку» (plan H6): the default set; the toast's «Отменить» brings the old one back. */
+  function resetLayout() {
+    const before = cfgsOf(layout.value)
+    void save(packWidgets(DEFAULT_DASHBOARD))
+    notify.success('dashboard.resetDone', {
+      action: { label: t('actions.undo'), onClick: () => void save(before) },
+    })
   }
 
   /**
    * A widget bound to a wallet (a trading widget to its exchange) gets it as `storeId`;
-   * one that follows a period gets it as `period`.
+   * one that follows a period gets it as `period`, a scenario widget its `scenarioId`.
    */
   function widgetProps(id: string): Record<string, unknown> {
     const def = widgetDef(id)
@@ -174,6 +197,7 @@ export function useDashboardLayout() {
     return {
       ...def?.props,
       ...(storeId ? { storeId } : {}),
+      ...(def?.scenario ? { scenarioId: ownScenario(id) } : {}),
       ...(def?.periodic ? { period: ownPeriod(id) ?? dashboardPeriod.value } : {}),
     }
   }
@@ -187,6 +211,9 @@ export function useDashboardLayout() {
     saveLayout,
     setPinned,
     setPeriod,
+    ownScenario,
+    setScenario,
+    resetLayout,
     remove,
     resize,
     move,

@@ -22,10 +22,13 @@ export interface DashboardWidgetDef {
   link?: RouteLocationRaw
   /** Shows a period: gets `period` and offers «Период» in its menu (plan H1). */
   periodic?: boolean
+  /** Follows a calculator scenario: gets `scenarioId` and offers «Сценарий» in its menu (plan H4). */
+  scenario?: boolean
 }
 
-/** What a stored widget carries besides its place: the wallet it is bound to and its own period. */
+/** What a stored widget carries besides its place: its wallet, its own period and its scenario. */
 export interface DashboardWidgetExtras {
   store_id: string | null
   period: DashPeriod | null
+  scenario_id: string | null
 }

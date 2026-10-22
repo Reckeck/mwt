@@ -1,7 +1,7 @@
 import { type ComputedRef, type Ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Layout } from 'grid-layout-plus'
-import { ArrowDown, ArrowUp, CalendarRange, LayoutGrid, Lock, Maximize2, PinOff, X } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, CalendarRange, Calculator, LayoutGrid, Lock, Maximize2, PinOff, X } from 'lucide-vue-next'
 
 import { widgetDef } from '@/widgets/dashboard-registry'
 
@@ -20,6 +20,10 @@ interface WidgetActionDeps {
   /** The widget's own period, `null` while it follows the dashboard. */
   ownPeriod: (id: string) => DashPeriod | null
   setPeriod: (id: string, period: DashPeriod | null) => void
+  /** Saved calculator scenarios, newest first, for the «Сценарий» widget. */
+  scenarios: ComputedRef<CalcScenario[]>
+  ownScenario: (id: string) => string | null
+  setScenario: (id: string, scenarioId: string | null) => void
   openCatalog: () => void
 }
 
@@ -74,6 +78,21 @@ export function useWidgetActions(deps: WidgetActionDeps) {
         })),
       },
       {
+        id: 'scenario',
+        label: t('dashboard.scenarioPick'),
+        icon: Calculator,
+        hidden: !widgetDef(id)?.scenario || !deps.scenarios.value.length,
+        children: [null, ...deps.scenarios.value.map((scenario) => scenario.id)].map((scenarioId) => ({
+          id: `scenario-${scenarioId ?? 'latest'}`,
+          label: `${deps.ownScenario(id) === scenarioId ? '✓ ' : ''}${
+            scenarioId
+              ? (deps.scenarios.value.find((scenario) => scenario.id === scenarioId)?.name ?? '')
+              : t('dashboard.scenarioLatest')
+          }`,
+          run: () => deps.setScenario(id, scenarioId),
+        })),
+      },
+      {
         id: 'catalog',
         label: t('dashboard.catalog.open'),
         icon: LayoutGrid,
@@ -95,6 +114,7 @@ export function useWidgetActions(deps: WidgetActionDeps) {
   /** Built once per layout/pin change instead of on every render of every frame. */
   return computed(() => {
     void deps.stacked.value
+    void deps.scenarios.value
     return new Map(deps.layout.value.map((item) => [String(item.i), widgetActions(String(item.i))]))
   })
 }

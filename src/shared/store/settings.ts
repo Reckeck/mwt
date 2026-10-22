@@ -120,6 +120,7 @@ export const useSettingsStore = defineStore('settings', {
           minimize_to_tray: patch.minimize_to_tray ?? null,
           fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
           display_decimals: patch.display_decimals ?? null,
+          dashboard_today_collapsed: patch.dashboard_today_collapsed ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

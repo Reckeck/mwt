@@ -55,6 +55,7 @@ export function repaired(raw: DashboardWidgetCfg[]): DashboardWidgetCfg[] {
     pinned: byId.get(cfg.id)?.pinned ?? false,
     store_id: byId.get(cfg.id)?.store_id ?? null,
     period: byId.get(cfg.id)?.period ?? null,
+    scenario_id: byId.get(cfg.id)?.scenario_id ?? null,
   }))
 }
 
@@ -91,6 +92,7 @@ export function toCfgs(
     pinned: pinned.has(String(item.i)),
     store_id: extras.get(String(item.i))?.store_id ?? null,
     period: extras.get(String(item.i))?.period ?? null,
+    scenario_id: extras.get(String(item.i))?.scenario_id ?? null,
   }))
 }
 
@@ -107,6 +109,7 @@ export function layoutSignature(cfgs: DashboardWidgetCfg[]): string {
         cfg.pinned,
         cfg.store_id ?? null,
         cfg.period ?? null,
+        cfg.scenario_id ?? null,
       ])
       .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
   )

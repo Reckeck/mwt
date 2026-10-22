@@ -10,7 +10,11 @@ import { DashboardBudgets } from '@/widgets/dashboard-budgets'
 import { DashboardBybitSync } from '@/widgets/dashboard-bybit-sync'
 import { DashboardFx } from '@/widgets/dashboard-fx'
 import { DashboardGoals } from '@/widgets/dashboard-goals'
+import { DashboardHealth } from '@/widgets/dashboard-health'
+import { DashboardPassive } from '@/widgets/dashboard-passive'
+import { DashboardScenario } from '@/widgets/dashboard-scenario'
 import { DashboardSpending } from '@/widgets/dashboard-spending'
+import { DashboardTopup } from '@/widgets/dashboard-topup'
 import { DashboardUtilities } from '@/widgets/dashboard-utilities'
 import { ExchangeBalances } from '@/widgets/exchange-balances'
 import { InterestTax } from '@/widgets/interest-tax'
@@ -58,6 +62,10 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('fx', DashboardFx, [4, 5, 2, 4]),
   widget('spending', DashboardSpending, [4, 6, 3, 4], { link: { name: 'transactions-calendar' }, periodic: true }),
   widget('assets', DashboardAssets, [4, 7, 3, 4]),
+  widget('health', DashboardHealth, [4, 5, 3, 3], { link: { name: 'analytics-health' } }),
+  widget('passiveIncome', DashboardPassive, [4, 5, 3, 3], { link: { name: 'analytics-health' } }),
+  widget('topupAdvisor', DashboardTopup, [4, 6, 3, 4], { link: { name: 'analytics-investments' } }),
+  widget('scenario', DashboardScenario, [4, 5, 3, 3], { link: { name: 'planning-calculator' }, scenario: true }),
   widget('goals', DashboardGoals, [6, 5, 3, 4], { link: { name: 'planning-goals' } }),
   widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'planning-budgets' } }),
   widget('utilities', DashboardUtilities, [6, 6, 3, 5]),
@@ -75,7 +83,6 @@ export const DEFAULT_DASHBOARD = [
   'monthSummary',
   'upcoming',
   'netWorth',
-  'assets',
   'spending',
-  'utilities',
+  'health',
 ]

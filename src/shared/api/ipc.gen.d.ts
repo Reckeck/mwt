@@ -172,7 +172,11 @@ display_decimals: number | null,
  * Day this installation first ran (`YYYY-MM-DD`): «Что нового» skips what
  * came before it. `None` for installs older than the field.
  */
-installed_at: string | null, };
+installed_at: string | null, 
+/**
+ * The dashboard's «Сегодня» strip is folded to one line on this screen.
+ */
+dashboard_today_collapsed: boolean, };
 
 /**
  * A batch just applied, as the UI shows it.
@@ -1183,6 +1187,31 @@ type DailyBudgetMode = "month" | "until_income";
 type DashPeriod = "month" | "quarter" | "year";
 
 /**
+ * The strip above the dashboard grid.
+ */
+type DashboardToday = { period: DashPeriod, 
+/**
+ * Base currency of `net_worth`.
+ */
+currency: string, 
+/**
+ * The capital now against the period's first day.
+ */
+net_worth: Comparison, 
+/**
+ * The checkup's light; `None` when the checkup cannot be built.
+ */
+health: HealthColor | null, 
+/**
+ * «Можно тратить сегодня», in `budget_currency`.
+ */
+left_today: Amount, budget_currency: string, 
+/**
+ * Up to three, the earliest first.
+ */
+todos: Array<TodayTodo>, };
+
+/**
  * One widget on the dashboard grid (12 columns). A widget not in the list is
  * not on the dashboard; the grid compacts upwards, so `y` is only an order.
  */
@@ -1214,7 +1243,11 @@ store_id: string | null,
 /**
  * Own period; `None` follows the dashboard's (plan H1).
  */
-period: DashPeriod | null, };
+period: DashPeriod | null, 
+/**
+ * The calculator scenario a «Сценарий» widget follows (plan H4).
+ */
+scenario_id: string | null, };
 
 /**
  * A source the user set up.
@@ -3820,6 +3853,32 @@ income_months: number,
  */
 income_pct: Amount, };
 
+/**
+ * A calculator scenario against what really happened (plan H4, decision 12).
+ */
+type ScenarioStatus = { id: string, name: string, currency: string, term_months: number, 
+/**
+ * Months passed since the scenario's start, at most its term.
+ */
+elapsed_months: number, 
+/**
+ * What the scenario ends with.
+ */
+final_nominal: Amount, 
+/**
+ * What it plans to have by now.
+ */
+planned_now: Amount, 
+/**
+ * What the scenario's wallets hold now; `None` when it has no wallets
+ * and no goal follows it.
+ */
+fact: Amount | null, 
+/**
+ * The goal that follows the scenario, if any.
+ */
+goal_id: string | null, };
+
 type Schedule = { "monthly": { day: number, } } | { "weekly": { weekday: number, } } | { "every_n_days": { days: number, } };
 
 /**
@@ -4663,6 +4722,32 @@ type Theme = "auto" | "light" | "dark";
 type Timing = "start" | "end";
 
 /**
+ * One thing to do, with what it is about.
+ */
+type TodayTodo = { kind: TodayTodoKind, 
+/**
+ * `YYYY-MM-DD` it is due; `None` sorts first: it is due already.
+ */
+date: string | null, 
+/**
+ * Automation, item, store or queue name.
+ */
+title: string, 
+/**
+ * The store, run, operation or queue it is about.
+ */
+source_id: string, 
+/**
+ * Missing money, points or operations count, by kind.
+ */
+amount: Amount | null, };
+
+/**
+ * What the strip asks the user to do.
+ */
+type TodayTodoKind = "shortfall" | "rejected_run" | "unconfirmed_run" | "queued_workflow" | "pending_import" | "points_expire" | "insurance_ends";
+
+/**
  * Where the free money of the month should go (plan F).
  */
 type TopupAdvice = { currency: string, 
@@ -5165,7 +5250,7 @@ seen_whats_new: Array<string> | null,
 /**
  * An empty name goes back to the host name.
  */
-device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, };
+device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, dashboard_today_collapsed: boolean | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 
