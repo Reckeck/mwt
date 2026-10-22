@@ -1,131 +1,58 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { assetClassName } from '@/entities/asset-class'
-import { Money, useMoneyChartTooltip } from '@/entities/currency'
-import { useAssetClasses } from '@/shared/api/queries'
-import { Card } from '@/shared/ui/card'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
-import { Chart, type ChartOption } from '@/shared/lib/echarts'
+import { comparisonDelta } from '@/shared/lib/comparison'
+import { Card } from '@/shared/ui/card'
+import { MetricTile } from '@/shared/ui/metric-tile'
 import { SectionState } from '@/shared/ui/section-state'
+import { useWidgetSize } from '@/shared/ui/widget-frame'
 
+import { useNetWorthTrend } from './model/use-net-worth-trend'
+import type { NetWorthCardProps } from './net-worth.types'
+import NetWorthBreakdown from './ui/NetWorthBreakdown.vue'
+
+/**
+ * «Чистый капитал» (plan H3): S — the figure and its change over the period;
+ * M — the trend too; L — the breakdown by kind, basket and loan.
+ */
+const props = withDefaults(defineProps<NetWorthCardProps>(), { period: 'month' })
 const { t } = useI18n()
+const size = useWidgetSize()
 
 const worth = useQuery({ queryKey: ['net-worth'], queryFn: () => call<NetWorth>('get_net_worth') })
-const history = useQuery({
-  queryKey: ['report', 'networth', 'dashboard'],
-  queryFn: () =>
-    call<AnalyticsReport>('get_report', {
-      kind: 'networth',
-      filter: { scope: { store_ids: [], include_children: true }, from: null, to: null, year: null, currency: null, real_terms: false },
-    }),
-})
-const points = computed(() => {
-  const data = history.data.value
-  return data && 'networth' in data ? data.networth.points : []
-})
-
-const rows = computed(() => {
-  const data = worth.data.value
-  if (!data) return []
-  return [
-    { key: 'financial', value: data.financial, sign: 1 },
-    { key: 'non_financial', value: data.non_financial, sign: 1 },
-    { key: 'receivables', value: data.receivables, sign: 1 },
-    { key: 'liabilities', value: data.liabilities, sign: -1 },
-    { key: 'payables', value: data.payables, sign: -1 },
-  ].filter((row) => Number(row.value) !== 0)
-})
-
-/** Debts by loan kind, under «Кредиты»; one kind would only repeat the total. */
-const loanKinds = computed(() => {
-  const shares = worth.data.value?.liabilities_by_kind ?? []
-  return shares.length > 1 ? shares : []
-})
-
-const classes = useAssetClasses()
-
-/** Financial assets by basket, under «Финансовые»; shown once there is more than one, or a fund to set apart. */
-const classShares = computed(() => {
-  const data = worth.data.value
-  if (!data) return []
-  const fund = Number(data.financial_fund)
-  if (data.financial_by_class.length < 2 && fund <= 0) return []
-  const known = classes.data.value?.classes ?? []
-  const rows = data.financial_by_class.map((share) => {
-    const cls = known.find((entry) => entry.id === share.class_id)
-    return {
-      key: share.class_id ?? '',
-      label: cls ? assetClassName(cls, t) : t('assetClass.none'),
-      amount: share.amount,
-    }
-  })
-  return fund > 0 ? [...rows, { key: '#fund', label: t('assetClass.fundRow'), amount: data.financial_fund }] : rows
-})
-
-const moneyTooltip = useMoneyChartTooltip(computed(() => worth.data.value?.base_currency ?? 'usd'))
-
-/** A sparkline: no axes, no grid, just the shape of the last twelve months. */
-const option = computed<ChartOption>(() => ({
-  backgroundColor: 'transparent',
-  grid: { left: 0, right: 0, top: 4, bottom: 0 },
-  xAxis: { type: 'category', show: false, data: points.value.map((point) => point.month) },
-  yAxis: { type: 'value', show: false, scale: true },
-  tooltip: { trigger: 'axis', formatter: moneyTooltip.value },
-  series: [{ type: 'line', showSymbol: false, smooth: true, areaStyle: { opacity: 0.15 }, data: points.value.map((point) => Number(point.net)) }],
-}))
+const trend = useNetWorthTrend(() => props.period)
+const change = computed(() => comparisonDelta(trend.data.value?.change))
 </script>
 
 <template>
-  <Card size="sm" v-if="worth.data.value">
-    <template #header>
-      <div class="flex items-center justify-between gap-2">
-        <RouterLink data-widget-title :to="{ name: 'analytics-wealth' }" class="text-sm text-muted-foreground hover:text-foreground">
-          {{ t('netWorthCard.title') }}
-        </RouterLink>
-        <Money class="font-semibold" :amount="worth.data.value.net" :currency="worth.data.value.base_currency" />
-      </div>
-    </template>
-    <div class="grid gap-3">
-      <div v-if="points.length > 1" class="h-16 w-full"><Chart :option="option" autoresize /></div>
-      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs tabular-nums">
-        <template v-for="row in rows" :key="row.key">
-          <dt class="text-muted-foreground">{{ t(`report.networth.${row.key}`) }}</dt>
-          <dd class="text-right" :class="row.sign < 0 && 'text-destructive'">
+  <Card size="sm">
+    <SectionState :loading="worth.isPending.value" :error="worth.error.value" skeleton="figure" compact @retry="worth.refetch()">
+      <div v-if="worth.data.value" class="grid gap-3" data-tour="dash-net-worth">
+        <MetricTile
+          :label="t('netWorthCard.title')"
+          :delta-pct="change.pct"
+          good-when="up"
+          :base-label="t(`netWorthCard.since_${period}`)"
+          :series="trend.data.value?.series.map(Number)"
+          :action="{ label: t('netWorthCard.open'), to: { name: 'analytics-wealth' } }"
+        >
+          <Money :amount="worth.data.value.net" :currency="worth.data.value.base_currency" :decimals="0" />
+          <template #delta>
             <Money
-              :amount="row.sign < 0 ? -Number(row.value) : row.value"
-              :currency="worth.data.value.base_currency"
+              :amount="change.delta"
+              :currency="trend.data.value?.currency ?? worth.data.value.base_currency"
               :decimals="0"
+              signed
+              :convert="false"
             />
-          </dd>
-          <template v-if="row.key === 'financial'">
-            <template v-for="share in classShares" :key="share.key">
-              <dt class="truncate pl-3 text-muted-foreground">{{ share.label }}</dt>
-              <dd class="text-right text-muted-foreground">
-                <Money :amount="share.amount" :currency="worth.data.value.base_currency" :decimals="0" />
-              </dd>
-            </template>
           </template>
-          <template v-if="row.key === 'liabilities'">
-            <template v-for="share in loanKinds" :key="share.kind">
-              <dt class="pl-3 text-muted-foreground">{{ t(`liabilityKind.${share.kind}`) }}</dt>
-              <dd class="text-right text-muted-foreground">
-                <Money :amount="-Number(share.amount)" :currency="worth.data.value.base_currency" :decimals="0" />
-              </dd>
-            </template>
-          </template>
-        </template>
-      </dl>
-    </div>
+        </MetricTile>
+        <NetWorthBreakdown v-if="size === 'l'" :worth="worth.data.value" />
+      </div>
+    </SectionState>
   </Card>
-  <!-- Holds the cell while loading, so the widget does not pop in. -->
-  <!-- A failed load says so and offers a retry; it used to stay a skeleton for ever. -->
-  <Card size="sm" v-else-if="worth.error.value">
-    <SectionState :error="worth.error.value" compact @retry="worth.refetch()" />
-  </Card>
-  <Card size="sm" v-else><Skeleton class="h-24 w-full" /></Card>
 </template>

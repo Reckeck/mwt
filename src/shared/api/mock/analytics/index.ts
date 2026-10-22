@@ -8,4 +8,5 @@
 export type { AnalyticsMockContext } from './flows'
 export * from './entry'
 export { mockInsights, mockOverview } from './overview'
+export { mockMonthPace, mockNetWorthTrend } from './dashboard-tiles'
 export { mockSpendingOverview } from './spending'

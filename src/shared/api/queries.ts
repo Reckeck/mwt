@@ -48,3 +48,7 @@ export const useAssetClasses = (enabled: MaybeRefOrGetter<boolean> = true) =>
     queryFn: () => call<AssetClassesView>('asset_classes_get'),
     enabled: toRef(enabled),
   })
+
+/** The month's pace (`get_month_pace`), shared by «Бюджет дня» and «Итоги месяца». */
+export const useMonthPace = () =>
+  useQuery({ queryKey: ['month-pace'], queryFn: () => call<MonthPace>('get_month_pace') })

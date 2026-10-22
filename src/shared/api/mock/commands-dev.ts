@@ -1,12 +1,19 @@
 /** Commands: developer tools, reports, losses, links and enrichment. */
 
 import { txId, txMeta } from '@/shared/lib/transactions'
-import { mockCalendar, mockOverview, mockReport, mockSpendingOverview } from './analytics'
+import {
+  mockCalendar,
+  mockMonthPace,
+  mockNetWorthTrend,
+  mockOverview,
+  mockReport,
+  mockSpendingOverview,
+} from './analytics'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
 import { mockScratchJson } from './exchange-data'
-import { analyticsContext, mockCandles, mockFlows, mockFxTable, mockLossOf } from './market'
+import { analyticsContext, mockCandles, mockFlows, mockFxTable, mockLossOf, mockSummary } from './market'
 import { mockEntityCard } from './relations'
 import { mockPinned, mockSearchIndex, mockSearchTransactions, mockSetPinned } from './search'
 import { mockSettings, mockVaultDoc } from './vault-data'
@@ -54,6 +61,13 @@ export const devReportCommands: MockCommands = {
   get_spending_overview: ({ args }) => {
     const period = (args?.period as DashPeriod | undefined) ?? mockSettings.dashboard_period
     return resolve(mockSpendingOverview(period, analyticsContext()))
+  },
+  get_month_pace: (_call) => {
+    return resolve(mockMonthPace(analyticsContext(), Number(mockSettings.savings_rate)))
+  },
+  get_net_worth_trend: ({ args }) => {
+    const period = (args?.period as DashPeriod | undefined) ?? mockSettings.dashboard_period
+    return resolve(mockNetWorthTrend(period, Number(mockSummary.total_base), analyticsContext().currency))
   },
   get_entity_card: ({ args }) => {
     return resolve(mockEntityCard(args?.target as EntityRef))

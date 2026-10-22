@@ -9,13 +9,19 @@ import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
-import { formatDate, } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
+import { useMonthPace } from '@/shared/api/queries'
 import { SectionState } from '@/shared/ui/section-state'
+import { useWidgetSize } from '@/shared/ui/widget-frame'
+
+import MonthPace from './ui/MonthPace.vue'
 
 const { t } = useI18n()
 
 const budget = useQuery({ queryKey: ['daily-budget'], queryFn: () => call<DailyBudget>('get_daily_budget') })
 const data = computed(() => budget.data.value ?? null)
+const pace = useMonthPace()
+const size = useWidgetSize()
 /** Nothing to spread yet: no income, fact or plan, this month. */
 const unset = computed(
   () => data.value !== null && data.value.mode === 'month' && Number(data.value.income) === 0,
@@ -67,6 +73,7 @@ const unset = computed(
           <dd class="text-right"><Money :amount="data.manual_limit" :decimals="0" :currency="data?.currency" /></dd>
         </template>
       </dl>
+      <MonthPace v-if="size !== 's' && pace.data.value" :pace="pace.data.value" />
     </div>
   </Card>
   <!-- Holds the cell while loading, so the widget does not pop in. -->

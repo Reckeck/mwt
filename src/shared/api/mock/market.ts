@@ -64,6 +64,7 @@ export function mockFxTable(): FxTable {
       tracked: code === 'rub',
       crypto: false,
       favorite: favorites.includes(code),
+      change_pct: code === 'rub' ? '0.8' : '-0.2',
     }))
   // Like the core: a crypto favourite with a known price gets a row from that price.
   const coins = favorites
@@ -76,6 +77,7 @@ export function mockFxTable(): FxTable {
       tracked: false,
       crypto: true,
       favorite: true,
+      change_pct: null,
     }))
   return { base, rows: [...fiat, ...coins] }
 }
@@ -178,6 +180,7 @@ export const mockSummary: PortfolioSummary = {
       value_usd: '27000',
       price_base: '9000',
       value_base: '27000',
+      change_24h_pct: '2.4',
     },
     {
       asset: {
@@ -193,6 +196,7 @@ export const mockSummary: PortfolioSummary = {
       value_usd: '15000',
       price_base: '300',
       value_base: '15000',
+      change_24h_pct: '-1.3',
     },
   ],
   by_chain: [

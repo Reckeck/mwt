@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { type RouteLocationRaw, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery } from '@tanstack/vue-query'
 import { CircleCheck, Circle, CircleMinus } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
@@ -79,24 +79,37 @@ async function skip(step: Step) {
   }
 }
 
-/** Hiding is a per-viewer convenience, so browser storage is enough. */
-const HIDDEN_KEY = 'onboarding-hidden'
-function readHidden(): boolean {
-  try {
-    return localStorage.getItem(HIDDEN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-const hidden = ref(readHidden())
-function hide() {
-  hidden.value = true
-  try {
-    localStorage.setItem(HIDDEN_KEY, '1')
-  } catch {
-    // Storage blocked: it hides for this session only.
-  }
-}
+/** Hidden in the vault, so every device agrees; the old per-browser flag moves there once. */
+const LEGACY_HIDDEN_KEY = 'onboarding-hidden'
+const hidden = computed(() => settings.vault?.onboarding_checklist_hidden === true)
+const hideMutation = useMutation({
+  mutationFn: (value: boolean) => settings.updateVault({ onboarding_checklist_hidden: value }),
+  meta: {
+    success: 'onboarding.hiddenDone',
+    error: 'onboarding.hideFailed',
+    undo: () => settings.updateVault({ onboarding_checklist_hidden: false }),
+  },
+})
+const legacyMove = useMutation({
+  mutationFn: () => settings.updateVault({ onboarding_checklist_hidden: true }),
+  meta: { silent: 'a one-time move of the old browser flag; the widget just stays hidden' },
+})
+const hide = () => hideMutation.mutate(true)
+
+watch(
+  () => settings.vault,
+  (vault) => {
+    if (!vault || vault.onboarding_checklist_hidden) return
+    try {
+      if (localStorage.getItem(LEGACY_HIDDEN_KEY) !== '1') return
+      localStorage.removeItem(LEGACY_HIDDEN_KEY)
+    } catch {
+      return
+    }
+    legacyMove.mutate()
+  },
+  { immediate: true },
+)
 
 const createOpen = ref(false)
 function run(action: StepAction) {

@@ -24,6 +24,9 @@ const balances = useQuery({
   queryFn: () => call<ExchangeAccountBalance[]>('bybit_balances', { storeId: props.storeId }),
   enabled: false,
   retry: false,
+  // The last check stays on screen for the session: the widget never calls the exchange by itself.
+  staleTime: Number.POSITIVE_INFINITY,
+  gcTime: Number.POSITIVE_INFINITY,
 })
 /** Matching rows are calm; more on the exchange is history to book, less is a mistake to find. */
 const tone = (diff: string) =>

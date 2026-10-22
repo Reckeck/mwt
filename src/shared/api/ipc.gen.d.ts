@@ -323,7 +323,11 @@ type AssetStat = { asset: AssetRef, quantity: Amount, price_usd: Amount, value_u
 /**
  * One unit in the base currency at the latest rate.
  */
-price_base: Amount, value_base: Amount, };
+price_base: Amount, value_base: Amount, 
+/**
+ * Change of the price over the last 24 hours, percent, when the provider said it.
+ */
+change_24h_pct: Amount | null, };
 
 /**
  * An automation as the app shows it: a workflow built from an
@@ -838,6 +842,15 @@ type CategoryGroupBlock = { group: CategoryGroup | null, rows: Array<CategoryRow
  * Group total per month.
  */
 totals: Array<Amount>, total: Amount, };
+
+/**
+ * A spending category that grew against the same date of the last month.
+ */
+type CategoryGrowth = { 
+/**
+ * `Category::key`.
+ */
+category: string, value: Amount, base: Amount, };
 
 type CategoryRow = { 
 /**
@@ -1759,7 +1772,11 @@ crypto: boolean,
 /**
  * The user marked this code as a favourite.
  */
-favorite: boolean, };
+favorite: boolean, 
+/**
+ * Change of `in_base` against the rate a day earlier, percent, when the cache has one.
+ */
+change_pct: Amount | null, };
 
 type FxTable = { base: string, rows: Array<FxRow>, };
 
@@ -2626,6 +2643,43 @@ day: number | null,
 zone: string | null, };
 
 /**
+ * The month so far against the previous month to the same date.
+ */
+type MonthPace = { currency: string, 
+/**
+ * `YYYY-MM`.
+ */
+month: string, 
+/**
+ * Today's day of the month and the month's length.
+ */
+day: number, days: number, income: Comparison, 
+/**
+ * Mandatory and everyday spending.
+ */
+spent: Comparison, 
+/**
+ * Income less spending.
+ */
+saved: Comparison, 
+/**
+ * Income times the savings rate.
+ */
+savings_plan: Amount, 
+/**
+ * What the plan lets spend by today: income less the savings plan, spread over the days.
+ */
+spend_plan_to_date: Amount | null, 
+/**
+ * Spending at today's pace by the month's end.
+ */
+forecast_spent: Amount, 
+/**
+ * Up to three categories that grew most, largest growth first.
+ */
+growth: Array<CategoryGrowth>, };
+
+/**
  * Totals of one calendar month in the budget currency.
  */
 type MonthSummary = { 
@@ -2722,6 +2776,23 @@ financial_by_class: Array<ClassShare>,
  * The emergency fund's part of `financial`.
  */
 financial_fund: Amount, };
+
+/**
+ * The capital over a period: now against the period's first day.
+ */
+type NetWorthTrend = { currency: string, period: DashPeriod, 
+/**
+ * `YYYY-MM-DD`.
+ */
+start: string, 
+/**
+ * The value of the holdings today; the base is the value when the period began.
+ */
+change: Comparison, 
+/**
+ * Value per step of the period (days of a month, weeks of a quarter, months of a year).
+ */
+series: Array<Amount>, };
 
 type NetworthPoint = { month: string, financial: Amount, non_financial: Amount, receivables: Amount, liabilities: Amount, payables: Amount, net: Amount, };
 
@@ -3881,7 +3952,11 @@ pinned: Array<Pinned>,
 /**
  * The period every dashboard widget measures unless it has its own.
  */
-dashboard_period: DashPeriod, };
+dashboard_period: DashPeriod, 
+/**
+ * The user hid the «С чего начать» checklist (plan H3; it lived in localStorage).
+ */
+onboarding_checklist_hidden: boolean, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -5162,7 +5237,7 @@ manual_income: Amount | null,
 /**
  * Usual monthly spending while there is no history; zero clears it.
  */
-manual_expenses: Amount | null, dashboard_period: DashPeriod | null, };
+manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_checklist_hidden: boolean | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

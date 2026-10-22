@@ -7,7 +7,9 @@ import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
+import { formatMonthKey } from '@/shared/lib/format'
 import { ProgressBar } from '@/shared/ui/progress-bar'
+import { SectionState } from '@/shared/ui/section-state'
 
 /**
  * НДФЛ on deposit interest: how much of this year's tax-free limit
@@ -22,6 +24,27 @@ const used = computed(() => {
   if (!data?.limit || !Number(data.limit)) return 0
   return Math.min(100, (Number(data.income) / Number(data.limit)) * 100)
 })
+
+/** Linear forecast to the year's end at this year's pace, and the month the limit runs out in. */
+const forecast = computed(() => {
+  const data = tax.data.value
+  const now = new Date()
+  if (!data || data.year !== now.getFullYear()) return null
+  const start = new Date(now.getFullYear(), 0, 1).getTime()
+  const yearDays = (new Date(now.getFullYear() + 1, 0, 1).getTime() - start) / 86_400_000
+  const passed = Math.max(1, Math.ceil((now.getTime() - start) / 86_400_000))
+  const income = Number(data.income)
+  if (!income) return null
+  const total = (income / passed) * yearDays
+  const limit = Number(data.limit ?? 0)
+  const overDay = limit && total > limit && income < limit ? (limit / income) * passed : null
+  const overAt = overDay === null ? null : new Date(start + overDay * 86_400_000)
+  const overMonth =
+    overAt === null
+      ? null
+      : formatMonthKey(`${overAt.getFullYear()}-${String(overAt.getMonth() + 1).padStart(2, '0')}`, { month: 'long' })
+  return { total, overMonth }
+})
 </script>
 
 <template>
@@ -35,6 +58,7 @@ const used = computed(() => {
       </div>
     </template>
     <Skeleton v-if="tax.isPending.value" class="h-16 w-full" />
+    <SectionState v-else-if="tax.error.value" :error="tax.error.value" compact @retry="tax.refetch()" />
     <div v-else-if="tax.data.value" class="grid gap-2 text-sm">
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-muted-foreground">{{ t('interestTax.income') }}</span>
@@ -48,6 +72,12 @@ const used = computed(() => {
             {{ t('interestTax.remaining') }} <Money :amount="tax.data.value.remaining_free" currency="rub" :decimals="0" />
           </span>
         </div>
+        <p v-if="forecast" class="text-xs text-muted-foreground" data-tour="dash-interest-forecast">
+          {{ t('interestTax.forecast') }} <Money :amount="forecast.total" currency="rub" :decimals="0" />
+          <template v-if="forecast.overMonth">
+            · <span class="text-warning">{{ t('interestTax.overIn', { month: forecast.overMonth }) }}</span>
+          </template>
+        </p>
         <div v-if="Number(tax.data.value.tax) > 0" class="flex items-baseline justify-between gap-2">
           <span class="text-destructive">{{ t('interestTax.tax') }}</span>
           <Money :amount="tax.data.value.tax" currency="rub" class="font-semibold text-destructive" />

@@ -119,6 +119,9 @@ pub struct FxRow {
     /// The user marked this code as a favourite.
     #[serde(default)]
     pub favorite: bool,
+    /// Change of `in_base` against the rate a day earlier, percent, when the cache has one.
+    #[serde(default)]
+    pub change_pct: Option<Amount>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -461,6 +464,46 @@ impl UnlockedVault {
 
     /// Every cached currency against the base, latest rates (plan Ф3b, «Курсы»),
     /// plus a row per crypto favourite that has a cached price.
+    /// The rate `ts` minus a day or earlier: the newest such point of `code`.
+    fn fx_rate_before(&self, code: &str, limit: i64) -> Option<Amount> {
+        if code == "usd" {
+            return Some(Amount::new(rust_decimal::Decimal::ONE));
+        }
+        self.doc
+            .fx_cache
+            .iter()
+            .filter(|point| point.currency == code)
+            .filter_map(|point| {
+                let secs = crate::pricing::history::unix_secs(&point.ts)?;
+                (secs <= limit).then_some((secs, point.per_usd))
+            })
+            .max_by_key(|(secs, _)| *secs)
+            .map(|(_, rate)| rate)
+    }
+
+    /// How much one unit of `code` gained in `base` against a day before `ts`.
+    fn fx_change_pct(&self, code: &str, base: &str, ts: &str) -> Option<Amount> {
+        const DAY_SECS: i64 = 20 * 3600;
+        let limit = crate::pricing::history::unix_secs(ts)? - DAY_SECS;
+        let now_code = self.per_usd(code)?;
+        let now_base = self.per_usd(base)?;
+        let then_code = self.fx_rate_before(code, limit)?;
+        let then_base = self.fx_rate_before(base, limit)?;
+        if [now_code, now_base, then_code, then_base]
+            .iter()
+            .any(Amount::is_zero)
+        {
+            return None;
+        }
+        let now_in_base = now_base / now_code;
+        let then_in_base = then_base / then_code;
+        let hundred = Amount::new(rust_decimal::Decimal::ONE_HUNDRED);
+        Some(
+            ((now_in_base / then_in_base - Amount::new(rust_decimal::Decimal::ONE)) * hundred)
+                .round(2),
+        )
+    }
+
     pub fn fx_table(&self, favorites: &[String]) -> FxTable {
         let is_favorite = |code: &str| {
             favorites
@@ -499,6 +542,7 @@ impl UnlockedVault {
                     tracked: tracked.contains(code),
                     crypto: false,
                     favorite: is_favorite(code),
+                    change_pct: self.fx_change_pct(code, &base, ts),
                 })
             })
             .collect();
@@ -546,6 +590,7 @@ impl UnlockedVault {
                 tracked: self.held_coin(&code).is_some(),
                 crypto: true,
                 favorite: true,
+                change_pct: None,
                 currency: code,
             });
         }

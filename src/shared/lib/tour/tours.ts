@@ -82,6 +82,9 @@ export const TOURS: Record<string, TourStep[]> = {
   dashboard: [
     { target: 'dashboard-grid', key: 'dashboard.grid', side: 'top' },
     { target: 'dashboard-period', key: 'dashboard.period', side: 'bottom' },
+    { target: 'dash-net-worth', key: 'dashboard.netWorthTile', side: 'bottom' },
+    { target: 'dash-month-pace', key: 'dashboard.monthPace', side: 'top' },
+    { target: 'dash-upcoming-coverage', key: 'dashboard.coverage', side: 'top' },
     // Only on a phone.
     { target: 'bottom-nav', key: 'dashboard.bottomNav', side: 'top' },
     { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },

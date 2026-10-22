@@ -147,6 +147,7 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     budget_currency: patch.budget_currency ?? null,
     notifications: patch.notifications ?? null,
     onboarding_skipped: patch.onboarding_skipped ?? null,
+    onboarding_checklist_hidden: patch.onboarding_checklist_hidden ?? null,
     manual_income: patch.manual_income ?? null,
     manual_expenses: patch.manual_expenses ?? null,
   }

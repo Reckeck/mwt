@@ -1505,6 +1505,8 @@ pub struct UpdateSettingsInput {
     pub manual_expenses: Option<Amount>,
     #[serde(default)]
     pub dashboard_period: Option<crate::model::vault::DashPeriod>,
+    #[serde(default)]
+    pub onboarding_checklist_hidden: Option<bool>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------
