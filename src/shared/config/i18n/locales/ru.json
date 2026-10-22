@@ -3968,6 +3968,7 @@
   "invest.stages": "Пополнения",
   "invest.stageFrom": "С года",
   "invest.stageStart": "С начала",
+  "invest.stageN": "Этап {n}",
   "invest.stageAmount": "Сумма",
   "invest.freq": "Как часто",
   "invest.freqValue.monthly": "Каждый месяц",

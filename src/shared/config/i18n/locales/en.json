@@ -3968,6 +3968,7 @@
   "invest.stages": "Contributions",
   "invest.stageFrom": "From year",
   "invest.stageStart": "From the start",
+  "invest.stageN": "Stage {n}",
   "invest.stageAmount": "Amount",
   "invest.freq": "How often",
   "invest.freqValue.monthly": "Monthly",

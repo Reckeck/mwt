@@ -30,11 +30,26 @@ function addStage() {
 <template>
   <fieldset class="grid gap-3" data-tour="calc-stages">
     <legend class="mb-1 text-sm font-medium">{{ t('invest.stages') }}</legend>
+    <!-- Two columns until the form is wide enough for the amount next to both selects. -->
     <div
       v-for="(stage, index) in form.stages"
       :key="index"
-      class="grid grid-cols-2 items-end gap-2 @md:grid-cols-[6rem_minmax(0,1fr)_9rem_9rem_2.5rem]"
+      class="grid grid-cols-2 items-end gap-2 @2xl:grid-cols-[5rem_minmax(9rem,1fr)_minmax(7rem,10rem)_minmax(7rem,10rem)_2.5rem]"
     >
+      <div v-if="form.stages.length > 1" class="col-span-2 flex items-center justify-between @2xl:hidden">
+        <span class="text-xs font-medium text-muted-foreground">{{ t('invest.stageN', { n: index + 1 }) }}</span>
+        <Button
+          v-if="index > 0"
+          variant="ghost"
+          size="icon-sm"
+          class="text-muted-foreground"
+          :aria-label="t('invest.removeStage')"
+          :title="t('invest.removeStage')"
+          @click="form.stages.splice(index, 1)"
+        >
+          <X class="size-4" />
+        </Button>
+      </div>
       <FormField :for="`calc-stage-from-${index}`" :label="t('invest.stageFrom')">
         <Input
           v-if="index > 0"
@@ -66,7 +81,7 @@ function addStage() {
       <Button
         variant="ghost"
         size="icon-sm"
-        class="mb-0.5 text-muted-foreground"
+        class="mb-0.5 hidden text-muted-foreground @2xl:inline-flex"
         :class="index === 0 && 'invisible'"
         :disabled="index === 0"
         :aria-label="t('invest.removeStage')"

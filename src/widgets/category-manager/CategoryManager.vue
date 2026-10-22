@@ -132,17 +132,17 @@ const create = useMutation({
         <div
           v-for="category in section.items"
           :key="category.key"
-          class="flex items-center gap-2"
+          class="flex flex-wrap items-center gap-2 md:flex-nowrap"
           :class="category.archived && 'opacity-60'"
         >
           <Input
-            class="h-8 min-w-0 flex-1"
+            class="h-8 w-full min-w-0 md:w-auto md:flex-1"
             :model-value="categoryLabel(category, t)"
             :aria-label="t('categories.manage.name')"
             @change="(event: Event) => rename(category, (event.target as HTMLInputElement).value)"
           />
           <Select
-            class="h-8 w-40"
+            class="h-8 min-w-0 flex-1 md:w-40 md:flex-none"
             :model-value="category.group"
             :aria-label="t('categories.manage.group')"
             @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup, essential: null, passive: null })"
