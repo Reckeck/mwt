@@ -137,6 +137,11 @@ pub struct Settings {
     /// The user hid the «С чего начать» checklist (plan H3; it lived in localStorage).
     #[serde(default)]
     pub onboarding_checklist_hidden: bool,
+    /// The vault keeps crypto: crypto wallets, exchanges and coins are shown.
+    /// `None` = a vault from before the question; [`crate::UnlockedVault::open`]
+    /// answers it from the wallets it already has.
+    #[serde(default)]
+    pub crypto: Option<bool>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -211,6 +216,7 @@ impl Default for Settings {
             pinned: Vec::new(),
             dashboard_period: DashPeriod::Month,
             onboarding_checklist_hidden: false,
+            crypto: None,
         }
     }
 }

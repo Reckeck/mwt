@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { useBaseCurrencyChoice } from '@/features/base-currency-choice'
 import { vaultErrorMessage } from '@/shared/lib/vault-error'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -20,6 +21,9 @@ export function useCreateVault() {
   const path = ref('')
   const password = ref('')
   const passwordRepeat = ref('')
+  /** The vault keeps crypto wallets and exchanges; most people start without them. */
+  const crypto = ref(false)
+  const baseCurrency = useBaseCurrencyChoice()
   const error = ref<string | null>(null)
   const busy = ref(false)
 
@@ -28,6 +32,8 @@ export function useCreateVault() {
   async function reset() {
     password.value = ''
     passwordRepeat.value = ''
+    crypto.value = false
+    baseCurrency.reset()
     error.value = null
     // Pre-fill the default location only while it is still free — suggesting a
     // path that already holds a vault would just fail with ALREADY_EXISTS. In
@@ -67,7 +73,8 @@ export function useCreateVault() {
     busy.value = true
     error.value = null
     try {
-      await vault.createVault(target, password.value)
+      await vault.createVault(target, password.value, crypto.value)
+      await baseCurrency.save()
       await router.replace({ name: 'dashboard' })
     } catch (err) {
       error.value = vaultErrorMessage(err, t)
@@ -76,5 +83,5 @@ export function useCreateVault() {
     }
   }
 
-  return { path, password, passwordRepeat, passwordMatch, error, busy, reset, browse, submit }
+  return { path, password, passwordRepeat, passwordMatch, crypto, baseCurrency, error, busy, reset, browse, submit }
 }

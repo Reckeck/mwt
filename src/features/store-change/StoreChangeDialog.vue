@@ -18,9 +18,10 @@ import { call, parseError } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
+import { useSettingsStore } from '@/shared/store/settings'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
-import { CONVERTIBLE_KINDS } from './store-change.constants'
+import { CONVERTIBLE_KINDS, convertibleKinds } from './store-change.constants'
 import type { StoreChangeAction, StoreChangeDialogProps } from './store-change.types'
 import { useStoreTree } from '@/shared/api/queries'
 
@@ -43,9 +44,12 @@ const isRoot = computed(() => !props.store.parent_id)
 const isCashRoot = computed(() => isRoot.value && props.store.kind === 'cash')
 const hasChildren = computed(() => nodes.value.some((node) => node.store.parent_id === props.store.id))
 
+const settings = useSettingsStore()
+const kinds = computed(() => convertibleKinds(props.store.kind, settings.cryptoEnabled))
+
 const actions = computed<StoreChangeAction[]>(() => {
   const out: StoreChangeAction[] = []
-  if (isRoot.value && CONVERTIBLE_KINDS.includes(props.store.kind)) out.push('change_kind')
+  if (isRoot.value && CONVERTIBLE_KINDS.includes(props.store.kind) && kinds.value.length) out.push('change_kind')
   if (!isCashRoot.value) out.push('move_to')
   if (!isRoot.value && props.store.kind !== 'cash') out.push('detach')
   if (!isCashRoot.value && !hasChildren.value) out.push('merge_into')
@@ -53,7 +57,7 @@ const actions = computed<StoreChangeAction[]>(() => {
 })
 
 const action = ref<StoreChangeAction>('move_to')
-const kind = ref<StoreKind>('crypto')
+const kind = ref<StoreKind>('bank')
 const parentId = ref('')
 const targetId = ref('')
 const confirmName = ref('')
@@ -61,7 +65,7 @@ const confirmName = ref('')
 watch(open, (isOpen) => {
   if (!isOpen) return
   action.value = props.initial && actions.value.includes(props.initial) ? props.initial : (actions.value[0] ?? 'move_to')
-  kind.value = CONVERTIBLE_KINDS.find((entry) => entry !== props.store.kind) ?? 'crypto'
+  kind.value = kinds.value[0] ?? 'bank'
   parentId.value = ''
   targetId.value = ''
   confirmName.value = ''
@@ -171,7 +175,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
       <div v-if="action === 'change_kind'" class="grid gap-1.5 sm:max-w-64">
         <Label for="store-change-kind">{{ t('storeChange.newKind') }}</Label>
         <Select id="store-change-kind" v-model="kind">
-          <SelectItem v-for="entry in CONVERTIBLE_KINDS.filter((value) => value !== props.store.kind)" :key="entry" :value="entry">
+          <SelectItem v-for="entry in kinds" :key="entry" :value="entry">
             {{ t(`stores.kind.${entry}`) }}
           </SelectItem>
         </Select>

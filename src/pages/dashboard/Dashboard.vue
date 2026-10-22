@@ -10,6 +10,8 @@ import { DashboardToday } from '@/widgets/dashboard-today'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { WIDGET_DRAG_HANDLE } from '@/shared/ui/widget-frame'
 
+import { useSettingsStore } from '@/shared/store/settings'
+
 import { useDashboardLayout } from './model/use-dashboard-layout'
 import { useWidgetActions } from './model/use-widget-actions'
 import { DashboardToolbar } from './ui/dashboard-toolbar'
@@ -80,10 +82,11 @@ const stackOrder = computed(() => [...layout.value].sort((left, right) => left.y
 const catalogOpen = ref(false)
 const placed = computed(() => layout.value.map((item) => String(item.i)))
 
-/** Trading widgets are offered only while the vault has an exchange with a provider. */
+/** Trading widgets are offered only while the vault has an exchange with a provider and keeps crypto. */
 const tree = useStoreTree()
+const settings = useSettingsStore()
 const exchanges = computed<DashboardCatalogExchange[]>(() =>
-  (tree.data.value ?? [])
+  (settings.cryptoEnabled ? (tree.data.value ?? []) : [])
     .map((node) => node.store)
     .filter((store) => store.kind === 'exchange' && !store.archived && store.exchange)
     .map((store) => ({ id: store.id, name: store.name })),

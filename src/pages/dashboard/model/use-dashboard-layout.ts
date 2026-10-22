@@ -40,6 +40,15 @@ export function useDashboardLayout() {
   })
   const storedSignature = computed(() => layoutSignature(stored.value))
 
+  /**
+   * Trading widgets while crypto is off: kept in the vault untouched, left off
+   * the grid, and written back with every save so turning crypto on restores them.
+   */
+  const hiddenCfgs = computed(() =>
+    settingsStore.cryptoEnabled ? [] : stored.value.filter((cfg) => widgetDef(cfg.id)?.requires === 'exchange'),
+  )
+  const shownCfgs = computed(() => stored.value.filter((cfg) => !hiddenCfgs.value.includes(cfg)))
+
   const pinnedIds = computed(() => new Set(stored.value.filter((cfg) => cfg.pinned).map((cfg) => cfg.id)))
   /** Pins as the grid currently draws them (static items). */
   const shownPinned = () => new Set(layout.value.filter((item) => item.static).map((item) => String(item.i)))
@@ -53,16 +62,19 @@ export function useDashboardLayout() {
         ]),
       ),
   )
-  const cfgsOf = (items: Layout, pinned = pinnedIds.value, kept = extras.value) => toCfgs(items, pinned, kept)
+  const cfgsOf = (items: Layout, pinned = pinnedIds.value, kept = extras.value) => [
+    ...toCfgs(items, pinned, kept),
+    ...hiddenCfgs.value,
+  ]
 
   watch(
-    storedSignature,
-    (next) => {
+    [storedSignature, hiddenCfgs],
+    ([next]) => {
       // Every vault write hands back a fresh settings object; rebuilding the grid
       // from it re-fires `layout-updated`, which used to save again — a loop.
       // The grid is only rebuilt when the vault says something it does not show yet.
       if (next === layoutSignature(cfgsOf(layout.value, shownPinned()))) return
-      layout.value = toLayout(stored.value)
+      layout.value = toLayout(shownCfgs.value)
     },
     { immediate: true },
   )

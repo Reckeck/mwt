@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderOpen } from 'lucide-vue-next'
 
+import { BaseCurrencyField } from '@/features/base-currency-choice'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -19,11 +20,29 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const vault = useVaultStore()
-const { password, error, busy, pathFixed, targetPath, pickedName, conflict, path, reset, browse, submit, resolveConflict } =
-  useUnlockVault()
+const {
+  password,
+  baseCurrency,
+  error,
+  busy,
+  pathFixed,
+  targetPath,
+  pickedName,
+  conflict,
+  path,
+  reset,
+  browse,
+  submit,
+  resolveConflict,
+} = useUnlockVault()
+const { currency, asked } = baseCurrency
 
 const form = useFormValidation(
-  () => ({ path: pathFixed.value ? null : required(path.value), password: required(password.value) }),
+  () => ({
+    path: pathFixed.value ? null : required(path.value),
+    password: required(password.value),
+    currency: asked.value ? required(currency.value) : null,
+  }),
   { resetOn: open },
 )
 
@@ -65,6 +84,8 @@ watch(open, (isOpen) => {
         <Input id="unlock-password" v-model="password" type="password" autocomplete="current-password" autofocus />
         <p v-if="!vault.appStorage || pathFixed" class="truncate text-xs text-muted-foreground">{{ pickedName ?? path }}</p>
       </FormField>
+
+      <BaseCurrencyField v-if="asked" v-model="currency" :error="form.error('currency')" />
 
       <SyncConflictChoice v-if="conflict" :busy="busy" @keep="resolveConflict" />
 

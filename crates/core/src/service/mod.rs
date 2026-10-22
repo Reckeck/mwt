@@ -317,6 +317,7 @@ impl UnlockedVault {
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
         };
+        vault.answer_crypto();
         vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
@@ -349,6 +350,26 @@ impl UnlockedVault {
     /// Current base currency, never empty.
     pub fn base_currency(&self) -> &str {
         &self.base_currency
+    }
+
+    /// The vault keeps crypto (wallets, exchanges, coins are shown).
+    pub fn crypto_enabled(&self) -> bool {
+        self.doc.settings.crypto.unwrap_or(true)
+    }
+
+    /// A vault from before the crypto question answers it with what it holds:
+    /// a crypto wallet or an exchange in use means yes. Only in memory — the
+    /// next write stores it, and every device works it out the same way.
+    fn answer_crypto(&mut self) {
+        if self.doc.settings.crypto.is_some() {
+            return;
+        }
+        let holds_crypto = self
+            .doc
+            .stores
+            .iter()
+            .any(|store| !store.archived && store.kind.is_crypto());
+        self.doc.settings.crypto = Some(holds_crypto);
     }
 
     /// A copy of the vault in memory for emulation: every operation and rule
@@ -492,6 +513,9 @@ impl UnlockedVault {
         }
         if let Some(hidden) = input.onboarding_checklist_hidden {
             settings.onboarding_checklist_hidden = hidden;
+        }
+        if let Some(crypto) = input.crypto {
+            settings.crypto = Some(crypto);
         }
         if let Some(interval) = input.fx_refresh_interval_sec {
             settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
@@ -4018,6 +4042,70 @@ mod tests {
         );
     }
 
+    // -- crypto direction ----------------------------------------------------
+
+    /// A vault written before the crypto question, reopened.
+    fn reopened_without_answer(with_exchange: bool) -> (tempfile::TempDir, UnlockedVault) {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("crypto.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        if with_exchange {
+            vault
+                .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
+                .unwrap();
+        }
+        vault.doc.settings.crypto = None;
+        vault.persist_now().unwrap();
+        drop(vault);
+        let reopened = UnlockedVault::open(path, "pw").unwrap();
+        (dir, reopened)
+    }
+
+    #[test]
+    fn an_old_vault_with_an_exchange_keeps_crypto() {
+        let (_dir, vault) = reopened_without_answer(true);
+        assert_eq!(vault.doc.settings.crypto, Some(true));
+        assert!(vault.crypto_enabled());
+    }
+
+    #[test]
+    fn an_old_vault_without_crypto_wallets_hides_crypto() {
+        let (_dir, vault) = reopened_without_answer(false);
+        assert_eq!(vault.doc.settings.crypto, Some(false));
+        assert!(!vault.crypto_enabled());
+    }
+
+    #[test]
+    fn the_crypto_direction_is_switched_in_settings() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("crypto.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        assert!(vault.crypto_enabled());
+        let settings = vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                crypto: Some(false),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(settings.crypto, Some(false));
+        vault.persist_now().unwrap();
+        drop(vault);
+        // An answer is kept even when the wallets would say otherwise.
+        let reopened = UnlockedVault::open(path, "pw").unwrap();
+        assert!(!reopened.crypto_enabled());
+    }
+
+    #[test]
+    fn settings_without_the_crypto_field_still_load() {
+        let mut json = serde_json::to_value(Settings::default()).unwrap();
+        json.as_object_mut().unwrap().remove("crypto");
+        let from_json: Settings = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(from_json.crypto, None);
+        let packed = rmp_serde::to_vec_named(&json).unwrap();
+        let from_pack: Settings = rmp_serde::from_slice(&packed).unwrap();
+        assert_eq!(from_pack.crypto, None);
+    }
+
     // -- password ------------------------------------------------------------
 
     #[test]
@@ -4912,6 +5000,7 @@ mod persist_tests {
             }],
             dashboard_period: crate::model::vault::DashPeriod::Year,
             onboarding_checklist_hidden: true,
+            crypto: Some(false),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

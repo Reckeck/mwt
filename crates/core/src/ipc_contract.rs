@@ -35,6 +35,9 @@ pub struct CreateVaultInput {
     /// Name of the cash wallet every vault starts with, in the user's language.
     #[serde(default)]
     pub cash_name: Option<String>,
+    /// The vault keeps crypto; `None` = yes (callers from before the question).
+    #[serde(default)]
+    pub crypto: Option<bool>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -781,6 +784,8 @@ pub struct WalletKindInfo {
     pub presets: Vec<PresetInfo>,
     pub max_roots: Option<u32>,
     pub user_creatable: bool,
+    /// Hidden while the vault keeps no crypto (`Settings::crypto`).
+    pub crypto: bool,
     pub default_purpose: Purpose,
     pub sub_types: Vec<SubTypeInfo>,
 }
@@ -830,6 +835,7 @@ impl WalletCatalog {
                 presets: preset_infos(kind.automation_presets()),
                 max_roots: kind.max_roots().map(|max| max as u32),
                 user_creatable: kind.user_creatable(),
+                crypto: kind.is_crypto(),
                 default_purpose: kind.default_purpose(),
                 sub_types: kind
                     .sub_types()
@@ -1507,6 +1513,9 @@ pub struct UpdateSettingsInput {
     pub dashboard_period: Option<crate::model::vault::DashPeriod>,
     #[serde(default)]
     pub onboarding_checklist_hidden: Option<bool>,
+    /// Show crypto wallets, exchanges and coins.
+    #[serde(default)]
+    pub crypto: Option<bool>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------
