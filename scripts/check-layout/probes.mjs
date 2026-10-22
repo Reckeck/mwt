@@ -136,3 +136,20 @@ export const TOUCH = `
   }
   return [...new Set(out)].slice(0, 12)
 `
+
+/** Fields squeezed by their row: a value cannot be read or typed in a box this narrow. */
+export const NARROW_FIELDS = `
+  ${DESCRIBE}
+  const out = []
+  const fields = 'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="color"]), textarea, [role="combobox"]'
+  for (const el of document.querySelectorAll(fields)) {
+    if (el.closest('[data-layout-ignore], [data-sonner-toaster], .vue-flow, [aria-hidden="true"]')) continue
+    const rect = el.getBoundingClientRect()
+    if (!rect.height) continue
+    const cs = getComputedStyle(el)
+    if (cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue
+    // Below 4rem a sum or a select value is cut down to a couple of characters.
+    if (rect.width < 64) out.push('field only ' + Math.round(rect.width) + 'px wide: ' + (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')?.textContent?.trim() || '') + ' ' + describe(el))
+  }
+  return [...new Set(out)].slice(0, 12)
+`

@@ -113,7 +113,7 @@ const inlineInput =
     <div class="flex flex-wrap items-center gap-2">
       <Input
         v-model="name"
-        :class="[inlineInput, 'h-9 min-w-0 flex-1 text-lg font-semibold']"
+        :class="[inlineInput, 'h-9 min-w-0 flex-[1_1_12rem] text-lg font-semibold']"
         :aria-label="t('contacts.name')"
         @blur="commitName"
         @keydown.enter="($event.target as HTMLInputElement).blur()"

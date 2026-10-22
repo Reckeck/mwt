@@ -55,7 +55,7 @@ function pickTaxMode(value: unknown) {
     </div>
 
     <SwitchRow id="calc-withdrawal-on" v-model="form.withdrawal.on" :label="t('invest.withdrawal')" :hint="t('invest.withdrawalHint')" />
-    <div v-if="form.withdrawal.on" class="grid gap-3 @md:grid-cols-3">
+    <div v-if="form.withdrawal.on" class="grid gap-3 @md:grid-cols-2 @2xl:grid-cols-3">
       <FormField for="calc-withdrawal" :label="t('invest.withdrawalAmount')" required :error="error('withdrawal')">
         <AmountInput id="calc-withdrawal" v-model="form.withdrawal.amount" :decimals="2" placeholder="0" />
       </FormField>
@@ -70,7 +70,7 @@ function pickTaxMode(value: unknown) {
       <SwitchRow
         id="calc-withdrawal-indexed"
         v-model="form.withdrawal.indexed"
-        class="@md:col-span-3"
+        class="@md:col-span-2 @2xl:col-span-3"
         :label="t('invest.withdrawalIndexed')"
       />
     </div>
