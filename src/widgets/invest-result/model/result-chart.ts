@@ -1,10 +1,21 @@
 import type { ChartOption } from '@/shared/lib/echarts'
 import { axisMoney } from '@/shared/lib/chart-theme'
 
-/** A saved scenario drawn over the current run: its balance at the end of each year. */
+import { areaSeries, compareSeries } from './result-series'
+
+/** Another run drawn over the current one: its balance at the end of each year. */
 export interface ScenarioLine {
   name: string
   balances: number[]
+}
+
+export interface ResultChartStyle {
+  axisColor: string
+  primary: string
+  /** Colors for the compared lines, in order; the current run keeps `primary`. */
+  palette: string[]
+  currency: string
+  tooltip: (params: unknown) => string
 }
 
 export interface ResultChartTexts {
@@ -14,21 +25,23 @@ export interface ResultChartTexts {
   real: string
   crossover: string
   depleted: string
+  /** «Этот расчёт»: the current run's name among the compared lines. */
+  current: string
 }
 
-const num = (value: string) => Number(value)
 const MONTHS_IN_YEAR = 12
 
 /**
  * Stacked area «вложено / проценты» per year with the real balance as a
  * line; the year interest first beats the contributions and the year the
- * money runs out are marked on the axis.
+ * money runs out are marked on the axis. With other runs to compare the
+ * chart turns to one balance line per run, each in its own color (Money 4 · 22).
  */
 export function resultChart(
   result: InvestResult,
   lines: ScenarioLine[],
   texts: ResultChartTexts,
-  style: { axisColor: string; primary: string; currency: string; tooltip: (params: unknown) => string },
+  style: ResultChartStyle,
 ): ChartOption {
   const labels = result.years.map((row) => texts.year(row.year))
   const marks: { xAxis: string; name: string }[] = []
@@ -52,48 +65,6 @@ export function resultChart(
       axisLabel: { color: style.axisColor, formatter: (value: number) => axisMoney(value, style.currency) },
       splitLine: { lineStyle: { color: style.axisColor, opacity: 0.15 } },
     },
-    series: [
-      {
-        name: texts.invested,
-        type: 'line',
-        stack: 'balance',
-        color: style.primary,
-        areaStyle: { opacity: 0.35 },
-        showSymbol: false,
-        data: result.years.map((row) => num(row.invested)),
-        markLine: marks.length
-          ? {
-              symbol: 'none',
-              label: { formatter: '{b}', color: style.axisColor },
-              lineStyle: { type: 'dashed' },
-              data: marks,
-            }
-          : undefined,
-      },
-      {
-        name: texts.interest,
-        type: 'line',
-        stack: 'balance',
-        color: style.primary,
-        areaStyle: { opacity: 0.15 },
-        showSymbol: false,
-        data: result.years.map((row) => Math.max(0, num(row.balance) - num(row.invested))),
-      },
-      {
-        name: texts.real,
-        type: 'line',
-        showSymbol: false,
-        color: style.axisColor,
-        lineStyle: { type: 'dashed' },
-        data: result.years.map((row) => num(row.real_balance)),
-      },
-      ...lines.map((line) => ({
-        name: line.name,
-        type: 'line' as const,
-        showSymbol: false,
-        lineStyle: { type: 'dotted' as const },
-        data: labels.map((_label, index) => line.balances[index] ?? null),
-      })),
-    ],
+    series: lines.length ? compareSeries(result, lines, texts, style) : areaSeries(result, marks, texts, style),
   }
 }

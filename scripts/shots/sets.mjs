@@ -83,6 +83,26 @@ const stage2b = [
   },
   { name: 'calc', route: '/money/calculator', steps: [{ wait: 1500 }], canvas: { board: 'Money-3', frame: '18.' } },
   {
+    name: 'calc-compare',
+    route: '/money/calculator',
+    steps: [
+      { wait: 1200 },
+      { click: '[data-calc-compare]' },
+      { click: '[data-calc-compare-menu] label:nth-of-type(1)' },
+      { click: '[data-calc-compare-menu] label:nth-of-type(3)' },
+      { press: 'Escape' },
+      { wait: 1200 },
+      { phone: [{ hover: '[data-calc-compare-list]' }] },
+    ],
+    canvas: { board: 'Money-4', frame: '22.' },
+  },
+  {
+    name: 'calc-compare-menu',
+    route: '/money/calculator',
+    steps: [{ wait: 1200 }, { click: '[data-calc-compare]' }, { click: '[data-calc-compare-menu] label:nth-of-type(1)' }, { wait: 800 }],
+    canvas: { board: 'Money-4', frame: '22.' },
+  },
+  {
     name: 'calc-contribution',
     route: '/money/calculator',
     steps: [{ click: '[data-calc-mode="contribution"]' }, { fill: ['#calc-target', '20000'] }, { wait: 900 }],

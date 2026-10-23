@@ -3,6 +3,7 @@
 import { mockTransactionFrom } from './ledger'
 import { demoTransactions, mockStores, mockTransactions, newStore, priceOf } from './demo'
 import { STRESS_DETAILS, STRESS_NO_RATE, STRESS_STORE_NAME, yearInputs } from './demo-year'
+import { seedScenarios } from './planning/calc-seed'
 import { mockScenario } from './scenario'
 
 let seeded = false
@@ -19,6 +20,7 @@ export function seedMock() {
   const scale = mockScenario === 'stress' ? 40 : 1
   const year = yearInputs(bank.id, new Date(), scale).map((input) => mockTransactionFrom(input, priceOf))
   mockTransactions.push(...year, ...demoTransactions(), seedFlat())
+  seedScenarios()
   if (mockScenario === 'stress') seedStress()
 }
 
