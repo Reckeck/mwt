@@ -98,65 +98,61 @@ export function mockCachedPrice(input: AssetPriceInput): CachedPrice {
   return { price_usd: String(price), ts: input.at || new Date().toISOString() }
 }
 
+const CALC_ZERO: CalcResult = {
+  gross_in: '0',
+  fee: '0',
+  spent: '0',
+  quantity: '0',
+  gross_out: '0',
+  net_out: '0',
+  exit_value: '0',
+  pnl: '0',
+  roi_pct: '0',
+  risk: '0',
+  risk_pct: '0',
+  reward_risk: '0',
+}
+
+/** `calc_preview` in floats: the same formulas as `trade_core::calc::preview`. */
 export function mockCalc(input: CalcInput): CalcResult {
   const num = (value: string | null | undefined) => Number(value ?? 0)
   const amount = num(input.amount)
   const priceIn = num(input.price_in)
   const priceOut = num(input.price_out)
   const feePct = num(input.fee_pct)
-  if (!amount || !priceIn) {
-    return {
-      gross_in: '0',
-      fee: '0',
-      spent: '0',
-      gross_out: '0',
-      net_out: '0',
-      exit_value: '0',
-      pnl: '0',
-      roi_pct: '0',
-      risk: '0',
-      risk_pct: '0',
-    }
-  }
-  const zero = (): CalcResult => ({
-    gross_in: '0',
-    fee: '0',
-    spent: '0',
-    gross_out: '0',
-    net_out: '0',
-    exit_value: '0',
-    pnl: '0',
-    roi_pct: '0',
-    risk: '0',
-    risk_pct: '0',
-  })
-  const gross_in = amount * priceIn
-  const fee = (gross_in * feePct) / 100
-  const spent = gross_in + fee
+  if (!amount || !priceIn) return { ...CALC_ZERO }
   if (input.mode === 'converter') {
-    if (!priceOut) return { ...zero(), gross_in: String(gross_in), fee: String(fee), spent: String(spent) }
+    const gross_in = amount * priceIn
+    const fee = (gross_in * feePct) / 100
+    const base = { ...CALC_ZERO, gross_in: String(gross_in), fee: String(fee), spent: String(gross_in + fee) }
+    if (!priceOut) return base
     const gross_out = amount * priceOut
-    return {
-      ...zero(),
-      gross_in: String(gross_in),
-      fee: String(fee),
-      spent: String(spent),
-      gross_out: String(gross_out),
-      net_out: String(gross_out - fee),
-    }
+    return { ...base, gross_out: String(gross_out), net_out: String(gross_out - fee) }
   }
-  const out: CalcResult = { ...zero(), gross_in: String(gross_in), fee: String(fee), spent: String(spent) }
-  if (input.target_price) {
-    const exit = amount * Number(input.target_price)
-    const pnl = exit - spent
+  const fee = (amount * feePct) / 100
+  const quantity = Math.max(amount - fee, 0) / priceIn
+  const out: CalcResult = {
+    ...CALC_ZERO,
+    gross_in: String(amount - fee),
+    fee: String(fee),
+    spent: String(amount),
+    quantity: String(quantity),
+  }
+  let pnl = 0
+  let risk = 0
+  if (num(input.target_price) > 0) {
+    const exit = quantity * num(input.target_price)
+    pnl = exit - amount
     out.exit_value = String(exit)
     out.pnl = String(pnl)
-    out.roi_pct = String((pnl / spent) * 100)
+    out.roi_pct = String((pnl / amount) * 100)
   }
-  if (input.stop_price) {
-    out.risk = String(amount * Math.max(priceIn - Number(input.stop_price), 0))
-    out.risk_pct = String((Number(out.risk) / spent) * 100)
+  if (num(input.stop_price) > 0) {
+    risk = Math.max(amount - quantity * num(input.stop_price), 0)
+    out.risk = String(risk)
+    out.risk_pct = String((risk / amount) * 100)
   }
+  if (risk > 0 && pnl > 0) out.reward_risk = (pnl / risk).toFixed(2)
   return out
 }
 

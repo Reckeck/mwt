@@ -2,17 +2,16 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { AssetInput } from '@/entities/asset'
-import { AmountInput } from '@/shared/ui/amount-input'
-import { FormField } from '@/shared/ui/form-field'
-import { Label } from '@/shared/ui/label'
-import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { USDT } from '@/entities/asset'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
+import { Tabs } from '@/shared/ui/tabs'
 
 import { type ResultRow, resultRows } from './lib/result-rows'
 import { useCalcPreview } from './model/use-calc-preview'
 import type { CalculatorPlan, PlanCalculatorProps } from './plan-calculator.types'
+import ConverterFields from './ui/ConverterFields.vue'
+import PositionFields from './ui/PositionFields.vue'
 
 const props = defineProps<PlanCalculatorProps>()
 
@@ -23,8 +22,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const { mode, from, to, amount, priceIn, priceOut, targetPrice, stopPrice, feePct, result, error, impliedRate } =
-  useCalcPreview()
+const calc = useCalcPreview()
+const { mode, from, to, asset, amount, priceIn, result, error } = calc
 
 const rows = computed<ResultRow[]>(() =>
   result.value ? resultRows(result.value, mode.value, props.baseCurrency, to.value?.symbol, t) : [],
@@ -32,9 +31,12 @@ const rows = computed<ResultRow[]>(() =>
 
 const form = useFormValidation(() => ({ amount: positiveAmount(amount.value), priceIn: positiveAmount(priceIn.value) }))
 
-const CALC_MODES: CalcMode[] = ['converter', 'position']
+/** «Позиция» first: the deal question the frame opens with. */
+const tabs = computed(() =>
+  (['position', 'converter'] as const).map((value) => ({ value, label: t(`calc.mode.${value}`) })),
+)
 
-function pickMode(value: unknown) {
+function pickMode(value: string) {
   if (value === 'converter' || value === 'position') mode.value = value
 }
 
@@ -44,13 +46,20 @@ function apply(event?: Event) {
 }
 
 function emitPlan() {
-  emit('apply', {
-    mode: mode.value,
-    from: from.value,
-    to: to.value,
-    amount: amount.value.trim(),
-    price: priceIn.value.trim(),
-  })
+  if (mode.value === 'position') {
+    // «Спот» on the exchange: USDT given, the coin bought — the same sums as the calculation.
+    emit('apply', {
+      mode: 'position',
+      from: { ...USDT },
+      to: asset.value,
+      amount: amount.value.trim(),
+      quantity: result.value?.quantity,
+      entryPrice: priceIn.value.trim(),
+      price: '',
+    })
+    return
+  }
+  emit('apply', { mode: 'converter', from: from.value, to: to.value, amount: amount.value.trim(), price: priceIn.value.trim() })
 }
 
 /** The dialog owns the "apply" button, so it reads these. */
@@ -58,73 +67,22 @@ defineExpose({ apply })
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <ToggleGroup
-      type="single"
-      variant="outline"
-      size="sm"
-      :model-value="mode"
-      :aria-label="t('calc.title')"
-      @update:model-value="pickMode"
-    >
-      <ToggleGroupItem v-for="tab in CALC_MODES" :key="tab" :value="tab">
-        {{ t(`calc.mode.${tab}`) }}
-      </ToggleGroupItem>
-    </ToggleGroup>
+  <div class="flex flex-col gap-3.5" data-trade-calc>
+    <Tabs :model-value="mode" :tabs="tabs" @update:model-value="pickMode">
+      <template #position>
+        <PositionFields :calc="calc" :amount-error="form.error('amount')" :price-error="form.error('priceIn')" />
+      </template>
+      <template #converter>
+        <ConverterFields :calc="calc" :amount-error="form.error('amount')" :price-error="form.error('priceIn')" />
+      </template>
+    </Tabs>
 
-    <div class="grid gap-3 @xl:grid-cols-2">
-      <AssetInput v-model="from" :label="t('calc.from')" :placeholder="t('asset.searchPlaceholder')" />
-      <AssetInput v-if="mode === 'converter'" v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />
-      <div v-else class="grid gap-1.5">
-        <Label>{{ t('calc.targetPrice') }}</Label>
-        <AmountInput v-model="targetPrice" :placeholder="t('calc.targetPriceHint')" />
-      </div>
-    </div>
-
-    <div class="grid gap-3 @xl:grid-cols-3">
-      <FormField
-        for="calc-amount"
-        :label="t(mode === 'converter' ? 'calc.amount' : 'calc.quantity')"
-        required
-        :error="form.error('amount')"
-      >
-        <AmountInput id="calc-amount" v-model="amount" :placeholder="t('calc.amountHint')" />
-      </FormField>
-      <FormField
-        for="calc-price-in"
-        :label="t(mode === 'converter' ? 'calc.priceIn' : 'calc.entryPrice')"
-        required
-        :error="form.error('priceIn')"
-      >
-        <AmountInput id="calc-price-in" v-model="priceIn" placeholder="0" />
-      </FormField>
-      <div class="grid gap-1.5">
-        <Label>{{ t(mode === 'converter' ? 'calc.priceOut' : 'calc.stopPrice') }}</Label>
-        <AmountInput v-if="mode === 'converter'" v-model="priceOut" placeholder="0" />
-        <AmountInput v-else v-model="stopPrice" :placeholder="t('calc.stopPriceHint')" />
-      </div>
-    </div>
-
-    <div class="grid gap-1.5">
-      <Label>{{ t('calc.feePct') }}</Label>
-      <AmountInput v-model="feePct" placeholder="0.1" class="max-w-28" />
-    </div>
-
-    <p v-if="impliedRate && mode === 'converter'" class="text-xs text-muted-foreground">
-      {{ t('calc.rate') }}: 1 {{ from?.symbol.toUpperCase() || '—' }} ≈ {{ impliedRate }}
-      {{ to?.symbol.toUpperCase() || '' }}
-    </p>
-
-    <div v-if="rows.length" class="flex flex-col gap-1.5 rounded-md border border-border bg-muted/40 p-3">
+    <div v-if="rows.length" class="flex flex-col gap-1.5 rounded-lg bg-muted p-3" data-trade-calc-result>
       <div v-for="row in rows" :key="row.key" class="flex items-baseline justify-between gap-3 text-sm">
         <span class="text-muted-foreground">{{ row.label }}</span>
         <span
-          class="truncate font-medium tabular-nums"
-          :class="cn(
-            row.emphasis && 'text-base',
-            row.tone === 'positive' && 'text-success',
-            row.tone === 'negative' && 'text-destructive',
-          )"
+          class="truncate font-semibold tabular-nums"
+          :class="cn(row.tone === 'positive' && 'text-success', row.tone === 'negative' && 'text-destructive')"
         >
           {{ row.value }}
         </span>

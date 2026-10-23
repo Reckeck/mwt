@@ -107,8 +107,10 @@ function close(symbol: string) {
 }
 
 function pick(hit: AssetSearchHit) {
-  asset.value = hitToRef(hit)
-  close(asset.value.symbol)
+  // Under a parent v-model the model reads the old value until the parent re-renders.
+  const picked = hitToRef(hit)
+  asset.value = picked
+  close(picked.symbol)
 }
 
 /** A favourite coin is only a ticker in the settings: find the listed asset behind it. */

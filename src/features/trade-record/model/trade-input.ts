@@ -2,6 +2,13 @@ import { parseDecimal } from '@/shared/lib/decimal'
 
 export type TradeSide = 'buy' | 'sell'
 
+/** A buy worked out elsewhere (the deal calculator) that the dialog opens filled with. */
+export interface TradeDraft {
+  asset: AssetRef | null
+  qty: string
+  price: string
+}
+
 /** The coin the price is in; an exchange spot pair is quoted in it. */
 export const TRADE_QUOTE: AssetIdent = {
   symbol: 'USDT',

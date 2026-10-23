@@ -151,6 +151,24 @@ const stage2b = [
     ],
     phone: false,
   },
+  {
+    name: 'trade-calc',
+    route: '/money/investments',
+    steps: [
+      { click: '[data-invest-calc]' },
+      { wait: 400 },
+      { type: ['[data-calc-asset] input', 'btc'] },
+      { wait: 1200 },
+      { click: '[data-slot="combobox-item"]' },
+      { wait: 600 },
+      { fill: ['#calc-amount', '1000'] },
+      { fill: ['#calc-target', '100000'] },
+      { fill: ['#calc-stop', '85000'] },
+      { wait: 900 },
+    ],
+    canvas: { board: 'Money-4', frame: '23.' },
+  },
+  { name: 'trade-calc-empty', route: '/money/investments', steps: [{ click: '[data-invest-calc]' }, { wait: 400 }], phone: false },
   { name: 'goal-2-errors', route: '/money/where', steps: [...GOAL_NEXT, { click: '[data-wizard-save]' }], canvas: { board: 'Money-2', frame: '8.' } },
 ]
 

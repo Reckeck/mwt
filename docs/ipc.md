@@ -218,7 +218,7 @@ Frontend парсит код и показывает локализованно�
 | `get_store_pnl` | `store_id, include_children?` | `RealizedPnl { total_base, fees_base, legs[] }` — по той же области; комиссии отдельно |
 
 ### calc
-| `calc_preview` | `CalcInput { mode, amount, price_in, price_out, target_price?, stop_price?, fee_pct? }` | `CalcResult { gross_in, fee, spent, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct }` |
+| `calc_preview` | `CalcInput { mode, amount, price_in, price_out, target_price?, stop_price?, fee_pct? }` | `CalcResult { gross_in, fee, spent, quantity, gross_out, net_out, exit_value, pnl, roi_pct, risk, risk_pct, reward_risk }` — в `position` `amount` — отданная котировка с комиссией, `quantity` — купленные единицы |
 | `calc_invest_simulate` | `input: InvestInput { currency, start, initial, rate_pct, term_months, capitalization, stages[], indexation_pct, inflation_pct, tax, withdrawal? }` | `InvestResult { final_nominal, final_real, contributed, invested, interest, tax, withdrawn, effective_rate_pct, crossover_year?, depleted_at?, years[{ …, months[] }] }` |
 | `calc_invest_solve` | `input, target, unknown: contribution\|term\|rate` | `SolveResult { reachable, value, input, result }` — при `reachable = false` лучший достижимый вариант |
 | `calc_invest_compare` | `input` | `InvestCompare { rows[{ kind: base\|more_rate\|more_contribution, final_nominal, gain }], contribution_wins }` |

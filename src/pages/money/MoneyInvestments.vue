@@ -6,8 +6,11 @@ import { ChevronDown } from 'lucide-vue-next'
 import { AnalyticsReportView, useReport } from '@/widgets/analytics-reports'
 import { FlowList } from '@/widgets/flow-list'
 import { TopupAdvisor } from '@/widgets/topup-advisor'
-import { TradeRecordDialog } from '@/features/trade-record'
+import { type CalculatorPlan, PlanCalculatorDialog } from '@/features/plan-calculator'
+import { type TradeDraft, TradeRecordDialog } from '@/features/trade-record'
+import { useStoreTree } from '@/shared/api/queries'
 import { defaultRange } from '@/shared/lib/period'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -33,6 +36,26 @@ const period = computed(() => {
 })
 const details = ref(false)
 const recording = ref(false)
+
+/** «Посчитать сделку» (Money 4 · 23): its buy opens «Записать сделку» with the same sums. */
+const calculating = ref(false)
+const draft = ref<TradeDraft | null>(null)
+const tree = useStoreTree()
+/** «· Bybit» in the title when there is one exchange to trade on. */
+const exchange = computed(() => {
+  const roots = flattenStoreTree(tree.data.value ?? []).filter(
+    (node) => node.store.kind === 'exchange' && !node.store.parent_id && !node.store.archived,
+  )
+  return roots.length === 1 ? roots[0].store.name : null
+})
+function record(next: TradeDraft | null) {
+  draft.value = next
+  recording.value = true
+}
+function recordPlan(plan: CalculatorPlan) {
+  calculating.value = false
+  record({ asset: plan.to, qty: plan.quantity ?? '', price: plan.entryPrice ?? '' })
+}
 </script>
 
 <template>
@@ -44,12 +67,13 @@ const recording = ref(false)
           :fees="fees"
           :invested="investments.data.value.invested"
           :currency="investments.data.value.base_currency"
-          @record="recording = true"
+          @record="record(null)"
+          @calc="calculating = true"
         />
         <InvestTable :rows="investments.data.value.rows" :currency="investments.data.value.base_currency" />
       </template>
       <EmptyState v-else-if="investments.data.value" :title="t('money.invest.empty')" :description="t('money.invest.emptyHint')">
-        <Button data-invest-record @click="recording = true">{{ t('money.invest.record') }}</Button>
+        <Button data-invest-record @click="record(null)">{{ t('money.invest.record') }}</Button>
       </EmptyState>
     </SectionState>
     <Collapsible v-model:open="details" class="grid gap-3">
@@ -81,6 +105,12 @@ const recording = ref(false)
         </template>
       </CollapsibleContent>
     </Collapsible>
-    <TradeRecordDialog v-model:open="recording" />
+    <TradeRecordDialog v-model:open="recording" :draft="draft" />
+    <PlanCalculatorDialog
+      v-model:open="calculating"
+      :base-currency="investments.data.value?.base_currency ?? 'usd'"
+      :exchange="exchange"
+      @apply="recordPlan"
+    />
   </div>
 </template>

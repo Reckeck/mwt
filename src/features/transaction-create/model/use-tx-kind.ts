@@ -104,18 +104,22 @@ export function useTxKind(state: TxFormState) {
     ([plan, data]) => {
       if (!plan || !data || plan === appliedPlan || editing.value) return
       appliedPlan = plan
-      if (plan.mode === 'converter' && plan.from && plan.to && offered.value.includes('trade_spot')) {
+      if (plan.from && plan.to && offered.value.includes('trade_spot')) {
+        // A position is a spot buy: the amount given, and the units it bought.
         form.kind = 'trade_spot'
         form.soldAsset = plan.from
         form.boughtAsset = plan.to
         form.soldQty = plan.amount
+        if (plan.mode === 'position' && plan.quantity) form.boughtQty = plan.quantity
       } else if (plan.from) {
         form.kind = offered.value.includes('topup') ? 'topup' : form.kind
         form.asset = plan.from
         form.amount = plan.amount
       }
-      form.price = plan.price
-      form.priceCurrency = 'usd'
+      if (plan.price) {
+        form.price = plan.price
+        form.priceCurrency = 'usd'
+      }
     },
     { immediate: true },
   )

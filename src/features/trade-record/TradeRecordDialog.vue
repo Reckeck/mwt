@@ -15,13 +15,15 @@ import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
-import { TRADE_QUOTE, type TradeSide, tradeInput } from './model/trade-input'
+import { TRADE_QUOTE, type TradeDraft, type TradeSide, tradeInput } from './model/trade-input'
 
 /**
  * «Записать сделку» from Investments (Money 2 · 14): asset, exchange, side,
  * quantity and price; it writes the same spot trade as the wallet's «Спот» form.
  */
 const open = defineModel<boolean>('open', { required: true })
+/** Opens filled with a calculated buy. */
+const props = defineProps<{ draft?: TradeDraft | null }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -39,11 +41,11 @@ const qty = ref('')
 const price = ref('')
 watch(open, (now) => {
   if (!now) return
-  asset.value = null
+  asset.value = props.draft?.asset ?? null
   storeId.value = nodes.value[0]?.store.id ?? ''
   side.value = 'buy'
-  qty.value = ''
-  price.value = ''
+  qty.value = props.draft?.qty ?? ''
+  price.value = props.draft?.price ?? ''
 })
 
 type TradeField = 'asset' | 'store' | 'qty' | 'price'
