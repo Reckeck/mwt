@@ -74,7 +74,7 @@ export const router = createRouter({
               path: 'bonuses',
               name: 'transactions-bonuses',
               component: () => import('@/pages/transactions').then((page) => page.TransactionsBonuses),
-              meta: { i18n: 'transactions.tab.bonuses' },
+              meta: { i18n: 'nav.transactions' },
             },
           ],
         },

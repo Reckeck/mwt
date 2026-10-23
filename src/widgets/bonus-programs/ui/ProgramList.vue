@@ -1,0 +1,69 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Gift, Minus, Plus, Settings2 } from 'lucide-vue-next'
+
+import { ActionSheet } from '@/shared/ui/action-menu'
+import { Button } from '@/shared/ui/button'
+import type { UiAction } from '@/shared/ui/context-menu'
+import { cn } from '@/shared/lib/utils'
+
+import type { PointsMode, ProgramRow } from '../bonus-programs.types'
+
+/** The programmes on a phone (Ops-2 · 12): a list of records; a tap brings up what can be done. */
+const props = defineProps<{ rows: ProgramRow[]; highlighted: string }>()
+const emit = defineEmits<{ points: [store: Store, mode: PointsMode]; settings: [store: Store] }>()
+const { t } = useI18n()
+
+const picked = ref<ProgramRow | null>(null)
+const sheetOpen = computed({
+  get: () => picked.value !== null,
+  set: (value: boolean) => {
+    if (!value) picked.value = null
+  },
+})
+const actions = computed<UiAction[]>(() => {
+  const store = picked.value?.store
+  if (!store) return []
+  return [
+    { id: 'credit', label: t('loyalty.credit'), icon: Plus, disabled: !store.loyalty, run: () => emit('points', store, 'credit') },
+    { id: 'spend', label: t('loyalty.spend'), icon: Minus, disabled: !store.loyalty, run: () => emit('points', store, 'spend') },
+    { id: 'settings', label: t('bonuses.settings'), icon: Settings2, run: () => emit('settings', store) },
+  ]
+})
+</script>
+
+<template>
+  <div class="divide-y rounded-xl border border-border bg-card px-3 shadow-sm">
+    <Button
+      v-for="row in props.rows"
+      :key="row.store.id"
+      variant="ghost"
+      :class="
+        cn(
+          'h-auto min-h-14 w-full justify-start gap-3 rounded-none px-0 py-2.5 text-left font-normal hover:bg-transparent',
+          row.store.id === props.highlighted && 'bg-primary/5',
+        )
+      "
+      :data-program="row.store.id"
+      @click="picked = row"
+    >
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+        <Gift class="size-4" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-sm font-medium">{{ row.store.name }}</span>
+        <span :class="cn('truncate text-xs', row.soon ? 'text-warning' : 'text-muted-foreground')">
+          {{ row.soon ? row.expiring : row.subtitle }}
+        </span>
+      </span>
+      <span class="shrink-0 text-sm font-semibold tabular-nums">{{ row.points }}</span>
+    </Button>
+  </div>
+  <ActionSheet
+    v-model:open="sheetOpen"
+    :actions="actions"
+    :title="picked?.store.name ?? ''"
+    :description="picked ? `${picked.points} · ${picked.subtitle}` : ''"
+  />
+</template>

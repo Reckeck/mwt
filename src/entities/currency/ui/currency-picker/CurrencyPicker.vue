@@ -35,6 +35,7 @@ const props = withDefaults(defineProps<CurrencyPickerProps>(), {
   allowEmpty: false,
   extra: () => [],
   compact: false,
+  chip: false,
   id: '',
   required: false,
   error: undefined,
@@ -135,11 +136,14 @@ function retryCatalog() {
             :aria-expanded="open"
             :aria-invalid="props.error ? true : undefined"
             class="w-full min-w-0 justify-between gap-2 px-3 font-normal data-[state=open]:border-primary"
-            :class="props.error && 'border-destructive'"
+            :class="[
+              props.error && 'border-destructive',
+              props.chip && 'h-7 gap-1 border-0 bg-secondary px-2 text-xs shadow-none hover:bg-secondary/80',
+            ]"
           >
             <span v-if="selected" class="flex min-w-0 items-baseline gap-1.5">
               <span class="font-medium uppercase">{{ selected }}</span>
-              <span v-if="selectedName && !props.compact" class="truncate text-xs text-muted-foreground">{{ selectedName }}</span>
+              <span v-if="selectedName && !props.compact && !props.chip" class="truncate text-xs text-muted-foreground">{{ selectedName }}</span>
             </span>
             <span v-else class="truncate text-muted-foreground">
               {{ props.placeholder || t('settings.currencySearchPlaceholder') }}

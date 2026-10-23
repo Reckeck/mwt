@@ -348,6 +348,7 @@ mod tests {
             expiring_points: None,
             login: None,
             source_store_ids: Vec::new(),
+            unit: Default::default(),
         }
     }
 

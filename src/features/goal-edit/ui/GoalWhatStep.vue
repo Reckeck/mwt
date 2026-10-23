@@ -29,7 +29,7 @@ const { t } = useI18n()
     <FormField for="goal-target" :label="t('goal.howMuch')" required :error="props.form.error('target') ?? props.form.error('currency')">
       <AmountInput id="goal-target" v-model="target">
         <template #suffix>
-          <CurrencyPicker id="goal-currency" v-model="currency" label="" compact class="h-7 w-20" />
+          <CurrencyPicker id="goal-currency" v-model="currency" label="" chip />
         </template>
       </AmountInput>
     </FormField>

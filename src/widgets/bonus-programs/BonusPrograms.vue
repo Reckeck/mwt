@@ -2,44 +2,38 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { Gift, Plus } from 'lucide-vue-next'
 
 import { PointsDialog, ProgramCreateDialog } from '@/features/loyalty-edit'
+import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
-import { call } from '@/shared/api/ipc'
-import { useContacts, useStoreTree } from '@/shared/api/queries'
-import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useIsPhone } from '@/shared/lib/phone'
 
-import ProgramCard from './ui/ProgramCard.vue'
+import type { PointsMode } from './bonus-programs.types'
+import { useProgramRows } from './model/use-program-rows'
+import ProgramList from './ui/ProgramList.vue'
+import ProgramTable from './ui/ProgramTable.vue'
 
-/** Bonus programmes (plan G1): not wallets, but points with a worth, a login and the cards that earn them. */
+/**
+ * Bonuses (Ops-2 · 12): what they come to in the base currency, then the
+ * programmes — a table on a desktop, a list on a phone. «+ Программа» sits on
+ * the tabs' row when the page gives a place for it (`addTo`).
+ */
+const props = defineProps<{ addTo?: string }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const phone = useIsPhone()
 
-const tree = useStoreTree()
-const contacts = useContacts()
-const report = useQuery({
-  queryKey: ['cashback', 'year'],
-  placeholderData: keepPreviousData,
-  queryFn: () => call<CashbackReport>('get_cashback_report', { period: 'year' }),
-})
+const { tree, rows, total, baseCurrency } = useProgramRows()
 
-const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
-const programs = computed(() =>
-  nodes.value.filter((node) => node.store.kind === 'loyalty' && !node.store.archived).map((node) => node.store),
-)
-const names = computed(() => new Map(nodes.value.map((node) => [node.store.id, node.store.name])))
-const contactNames = computed(() => new Map((contacts.data.value ?? []).map((contact) => [contact.id, contact.name])))
-const balanceOf = (id: string) => report.data.value?.programmes.find((row) => row.store_id === id) ?? null
-
-/** `?program=<id>`: an old wallet link to a programme; its card is marked and scrolled to. */
+/** `?program=<id>`: an old wallet link to a programme; its row is marked and scrolled to. */
 const highlighted = computed(() => (typeof route.query.program === 'string' ? route.query.program : ''))
 watch(
-  [highlighted, () => programs.value.length],
+  [highlighted, () => rows.value.length],
   async ([id]) => {
     if (!id) return
     await nextTick()
@@ -49,7 +43,7 @@ watch(
 )
 
 const createOpen = ref(false)
-const points = ref<{ store: Store; mode: 'credit' | 'spend' } | null>(null)
+const points = ref<{ store: Store; mode: PointsMode } | null>(null)
 const pointsOpen = computed({
   get: () => points.value !== null,
   set: (value: boolean) => {
@@ -62,41 +56,45 @@ function openSettings(store: Store) {
 </script>
 
 <template>
-  <section class="grid gap-3">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <div class="grid gap-0.5">
-        <h2 class="font-medium">{{ t('bonuses.title') }}</h2>
-        <p class="text-sm text-muted-foreground">{{ t('bonuses.hint') }}</p>
-      </div>
-      <Button size="sm" data-tour="bonuses-add" @click="createOpen = true">
-        <Plus class="size-4" />{{ t('bonuses.add') }}
-      </Button>
-    </div>
-    <SectionState
-      :loading="tree.isPending.value"
-      :error="tree.error.value"
-      skeleton="list"
-      :rows="2"
-      @retry="tree.refetch()"
-    >
-      <EmptyState v-if="!programs.length" :icon="Gift" :title="t('bonuses.emptyTitle')" :description="t('bonuses.emptyHint')">
-        <Button size="sm" @click="createOpen = true"><Plus class="size-4" />{{ t('bonuses.add') }}</Button>
+  <Teleport v-if="props.addTo && !phone" defer :to="props.addTo">
+    <Button variant="outline" data-tour="bonuses-add" @click="createOpen = true">
+      <Plus class="size-4" />{{ t('bonuses.addShort') }}
+    </Button>
+  </Teleport>
+
+  <section class="grid grid-cols-1 gap-4">
+    <SectionState :loading="tree.isPending.value" :error="tree.error.value" skeleton="list" :rows="2" @retry="tree.refetch()">
+      <EmptyState v-if="!rows.length" :icon="Gift" :title="t('bonuses.emptyTitle')" :description="t('bonuses.emptyHint')">
+        <Button size="sm" @click="createOpen = true"><Plus class="size-4" />{{ t('bonuses.addShort') }}</Button>
       </EmptyState>
-      <div v-else class="grid gap-3 md:grid-cols-2" data-tour="bonuses-list">
-        <ProgramCard
-          v-for="store in programs"
-          :key="store.id"
-          :store="store"
-          :balance="balanceOf(store.id)"
-          :base-currency="report.data.value?.base_currency ?? 'usd'"
-          :names="names"
-          :contact-name="store.contact_id ? (contactNames.get(store.contact_id) ?? null) : null"
-          :highlighted="store.id === highlighted"
-          @points="(mode) => (points = { store, mode })"
-          @settings="openSettings(store)"
+      <div v-else class="grid grid-cols-1 gap-4" data-tour="bonuses-list">
+        <Card v-if="!phone" data-tour="bonuses-total">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-muted-foreground">{{ t('bonuses.total') }}</span>
+            <span class="text-2xl font-bold tabular-nums">≈ <Money :amount="total" :currency="baseCurrency" :decimals="0" /></span>
+            <span class="text-xs text-muted-foreground">{{ t('bonuses.totalHint') }}</span>
+          </div>
+        </Card>
+        <ProgramList
+          v-if="phone"
+          :rows="rows"
+          :highlighted="highlighted"
+          @points="(store, mode) => (points = { store, mode })"
+          @settings="openSettings"
+        />
+        <ProgramTable
+          v-else
+          :rows="rows"
+          :base-currency="baseCurrency"
+          :highlighted="highlighted"
+          @points="(store, mode) => (points = { store, mode })"
+          @settings="openSettings"
         />
       </div>
     </SectionState>
+    <Button v-if="phone && rows.length" variant="outline" class="h-12 w-full" data-tour="bonuses-add" @click="createOpen = true">
+      <Plus class="size-4" />{{ t('bonuses.addShort') }}
+    </Button>
     <ProgramCreateDialog v-model:open="createOpen" />
     <PointsDialog v-if="points" v-model:open="pointsOpen" :store="points.store" :mode="points.mode" />
   </section>

@@ -361,6 +361,18 @@ impl CarInfo {
     }
 }
 
+/// What a programme's points are called on screen: «1 240 баллов», «2 купона».
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum LoyaltyUnit {
+    #[default]
+    Points,
+    Miles,
+    Coupons,
+}
+
 /// A bonus programme: its points and what one point is worth.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct LoyaltyInfo {
@@ -380,6 +392,9 @@ pub struct LoyaltyInfo {
     /// Cards whose purchases earn the points; the first is the default source.
     #[serde(default)]
     pub source_store_ids: Vec<String>,
+    /// How the points are named; older programmes read as points.
+    #[serde(default)]
+    pub unit: LoyaltyUnit,
 }
 
 impl LoyaltyInfo {

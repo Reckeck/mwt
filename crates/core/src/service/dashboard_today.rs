@@ -421,6 +421,7 @@ mod tests {
                 expiring_points: Some(amount("10")),
                 login: None,
                 source_store_ids: Vec::new(),
+                unit: Default::default(),
             });
         }
         let todos = vault.all_today_todos(now, "UTC", None);
