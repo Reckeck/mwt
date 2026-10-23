@@ -37,7 +37,9 @@ export interface TransactionPlan {
   from: AssetRef | null
   to: AssetRef | null
   amount: string
-  /** USD price of `from`. */
+  /** `position`: units of `to` the amount bought. */
+  quantity?: string
+  /** USD price of `from`; empty leaves the price to the form. */
   price: string
 }
 

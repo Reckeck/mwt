@@ -4,6 +4,7 @@
 // A step is one of:
 //   { click: 'css' }  or  { click: { text: 'Сохранить', within?: 'css' } }
 //   { hover: 'css' }   { fill: ['css', 'text'] }   { press: 'ctrl+k' | 'Escape' | … }
+//   { type: ['css', 'text'] } — real key input, for a combobox that keeps its own search term
 //   { wait: ms }       { eval: 'page code, returns anything' }
 // `desktop` / `phone` steps run only there (`{ desktop: [...] }`, `{ phone: [...] }`).
 import { pathToFileURL } from 'node:url'
@@ -54,6 +55,14 @@ async function step(page, item, touch) {
   if (item.press) {
     await page.eval(`(document.activeElement ?? document).dispatchEvent(new KeyboardEvent('keydown', ${keyEvent(item.press)})); return true`)
     return page.sleep(350)
+  }
+  if (item.type) {
+    const [what, text] = item.type
+    await page.eval(`${FIND}
+      find(${JSON.stringify(what)}).focus()
+      return true`)
+    await page.send('Input.insertText', { text })
+    return page.sleep(200)
   }
   if (item.fill) {
     const [what, text] = item.fill

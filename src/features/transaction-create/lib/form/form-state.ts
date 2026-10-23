@@ -1,5 +1,7 @@
 /** What the form holds, and a blank one for a wallet and a kind. */
 
+import { USDT } from '@/entities/asset'
+
 import type { ConvertMode, SplitRow } from '../../transaction-form.types'
 
 /**
@@ -89,15 +91,6 @@ export interface TransactionFormState {
   flowId: string
   /** The property the operation belongs to (rent, fuel, repair); `''` — none. */
   propertyId: string
-}
-
-export const USDT: AssetRef = {
-  symbol: 'USDT',
-  name: 'Tether',
-  coingecko_id: 'tether',
-  chain: null,
-  contract: null,
-  quote: 'USDT',
 }
 
 export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {

@@ -189,7 +189,7 @@ function openWallet(created: Store) {
 
       <TransactionCreateDialog v-model:open="transactionOpen" :store-id="storeId" :disabled="isArchived" :plan="plan" />
       <AdjustmentDialog v-model:open="adjustOpen" :store-id="storeId" />
-      <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" @apply="onApplyPlan" />
+      <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" :exchange="isExchangeNode ? store?.name : null" @apply="onApplyPlan" />
       <GoalDialog v-model:open="goalOpen" :store-id="storeId" />
       <AutomationDialog v-model:open="automationOpen" :store-id="storeId" />
       <StoreCreateDialog v-model:open="subWalletOpen" :parent="store" :parent-path="parentPath" @created="openWallet" />

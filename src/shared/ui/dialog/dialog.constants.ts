@@ -1,6 +1,8 @@
 /** Tailwind max-width class applied to the dialog panel per size. */
 export const dialogWidths = {
   sm: 'max-w-md',
+  /** 560px: the deal calculator (Money 4 · 23). */
+  form: 'max-w-[35rem]',
   md: 'max-w-2xl',
   lg: 'max-w-3xl',
   xl: 'max-w-4xl',

@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Plus } from 'lucide-vue-next'
+import { Calculator, Plus } from 'lucide-vue-next'
 
 import { signClass } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 
 import { investMoney } from '../../lib/invest-view'
 
-/** «Прибыль · Комиссии · Вложено» and «Записать сделку» (Money 2 · 13). */
+/** «Прибыль · Комиссии · Вложено», «Посчитать сделку» (Money 4 · 23) and «Записать сделку» (Money 2 · 13). */
 const props = defineProps<{ profit: string; fees: string; invested: string; currency: string }>()
-const emit = defineEmits<{ record: [] }>()
+const emit = defineEmits<{ record: []; calc: [] }>()
 
 const { t } = useI18n()
 </script>
@@ -30,8 +30,9 @@ const { t } = useI18n()
         <b class="text-xl tabular-nums">{{ investMoney(props.invested, props.currency) }}</b>
       </section>
     </div>
-    <Button variant="outline" class="justify-self-end max-md:w-full" data-invest-record @click="emit('record')">
-      <Plus />{{ t('money.invest.record') }}
-    </Button>
+    <div class="flex justify-end gap-2 max-md:grid max-md:grid-cols-2">
+      <Button variant="ghost" data-invest-calc @click="emit('calc')"><Calculator />{{ t('calc.title') }}</Button>
+      <Button variant="outline" data-invest-record @click="emit('record')"><Plus />{{ t('money.invest.record') }}</Button>
+    </div>
   </div>
 </template>

@@ -534,12 +534,13 @@ from_symbol: string,
  */
 to_symbol: string, 
 /**
- * `Converter`: amount to convert. `Position`: position size.
+ * `Converter`: amount to convert. `Position`: the quote given for the
+ * position («Отдаёте 1 000 USDT»), commission included.
  */
 amount: Amount, 
 /**
  * Price of one unit of the source asset. In `Position` mode this is the
- * entry price of the position.
+ * entry price of the bought asset, in the quote.
  */
 price_in: Amount, 
 /**
@@ -570,17 +571,22 @@ type CalcMode = "converter" | "position";
  */
 type CalcResult = { 
 /**
- * `amount × price_in` — the notional put in.
+ * `Converter`: `amount × price_in` — the notional put in.
+ * `Position`: `amount − fee` — the part that buys units.
  */
 gross_in: Amount, 
 /**
- * `gross_in × fee_pct / 100`.
+ * `Converter`: `gross_in × fee_pct / 100`. `Position`: `amount × fee_pct / 100`.
  */
 fee: Amount, 
 /**
- * `gross_in + fee` — what the position really costs.
+ * What the deal really costs: `gross_in + fee` (`Position`: `amount`).
  */
 spent: Amount, 
+/**
+ * `Position`: units bought, `gross_in / price_in`.
+ */
+quantity: Amount, 
 /**
  * `Converter`: `amount × price_out` before fees.
  */
@@ -590,7 +596,7 @@ gross_out: Amount,
  */
 net_out: Amount, 
 /**
- * `Position`: `amount × target_price`.
+ * `Position`: `quantity × target_price`.
  */
 exit_value: Amount, 
 /**
@@ -602,13 +608,18 @@ pnl: Amount,
  */
 roi_pct: Amount, 
 /**
- * `Position`: `amount × (price_in − stop_price)`, floored at zero.
+ * `Position`: `spent − quantity × stop_price`, floored at zero.
  */
 risk: Amount, 
 /**
  * `Position`: `risk / spent × 100`.
  */
-risk_pct: Amount, };
+risk_pct: Amount, 
+/**
+ * `Position`: `pnl / risk` — «1 : 2,2» reads as `2.2`. Zero without a
+ * risk or a profit.
+ */
+reward_risk: Amount, };
 
 /**
  * A saved investment calculation, comparable with others and followed by

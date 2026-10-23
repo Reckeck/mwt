@@ -4,10 +4,19 @@ export interface CalculatorPlan {
   from: AssetRef | null
   to: AssetRef | null
   amount: string
-  /** USD price of `from`. */
+  /** `position`: units of `to` the amount buys. */
+  quantity?: string
+  /** `position`: the entry price, in USDT. */
+  entryPrice?: string
+  /** USD price of `from`; empty when the form should price it itself. */
   price: string
 }
 
 export interface PlanCalculatorProps {
   baseCurrency: string
+}
+
+export interface PlanCalculatorDialogProps extends PlanCalculatorProps {
+  /** The exchange the deal is for: «Посчитать сделку · Bybit». */
+  exchange?: string | null
 }

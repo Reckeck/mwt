@@ -1,12 +1,16 @@
+import { USDT } from '@/entities/asset'
+import { formatMoney, formatPct, formatQuantity } from '@/shared/lib/format'
+
 export interface ResultRow {
   key: string
   label: string
   value: string
-  emphasis?: boolean
   tone?: 'positive' | 'negative'
 }
 
-/** The lines under the calculator: what goes in and out, or the position's outcome. */
+const isZero = (value: string) => Number(value) === 0
+
+/** The lines under the calculator: what goes in and out, or the position's outcome in one block. */
 export function resultRows(
   calc: CalcResult,
   mode: CalcMode,
@@ -14,31 +18,39 @@ export function resultRows(
   toSymbol: string | undefined,
   t: (key: string) => string,
 ): ResultRow[] {
-  const money = (value: string) => `${value} ${baseCurrency.toUpperCase()}`
   if (mode === 'converter') {
+    const money = (value: string) => formatMoney(value, { currency: baseCurrency })
     return [
       { key: 'gross_in', label: t('calc.grossIn'), value: money(calc.gross_in) },
       { key: 'fee', label: t('calc.fee'), value: money(calc.fee) },
       { key: 'gross_out', label: t('calc.grossOut'), value: money(calc.gross_out) },
-      {
-        key: 'net_out',
-        label: t('calc.netOut'),
-        value: `${calc.net_out} ${toSymbol?.toUpperCase() ?? ''}`.trim(),
-        emphasis: true,
-      },
+      { key: 'net_out', label: t('calc.netOut'), value: formatMoney(calc.net_out, { currency: toSymbol }) },
     ]
   }
-  const tone = Number(calc.pnl) < 0 ? 'negative' : 'positive'
-  return [
-    { key: 'spent', label: t('calc.spent'), value: money(calc.spent) },
-    { key: 'exit_value', label: t('calc.exitValue'), value: calc.exit_value === '0' ? '—' : money(calc.exit_value) },
-    { key: 'pnl', label: t('calc.pnl'), value: money(calc.pnl), tone },
-    { key: 'roi_pct', label: t('calc.roi'), value: calc.roi_pct === '0' ? '—' : `${calc.roi_pct}%`, tone },
-    {
+  // «Выход по цели · Профит · Риск до стопа · Риск / прибыль» (Money 4 · 23), all in the quote.
+  const quote = (value: string, signed = false) => formatMoney(value, { currency: USDT.symbol, decimals: 2, signed })
+  const pct = (value: string) => formatPct(value, { signed: true, decimals: 1 })
+  const rows: ResultRow[] = []
+  if (!isZero(calc.exit_value)) {
+    rows.push({ key: 'exit_value', label: t('calc.exitValue'), value: quote(calc.exit_value) })
+    rows.push({
+      key: 'pnl',
+      label: t('calc.pnl'),
+      value: `${quote(calc.pnl, true)} · ${pct(calc.roi_pct)}`,
+      tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
+    })
+  }
+  if (!isZero(calc.risk)) {
+    rows.push({
       key: 'risk',
       label: t('calc.risk'),
-      value: calc.risk === '0' ? '—' : `${money(calc.risk)} (${calc.risk_pct}%)`,
+      // A loss up to the stop, so the true minus sign («−52,03 USDT · −5,2 %»).
+      value: `\u2212${quote(calc.risk)} · \u2212${formatPct(calc.risk_pct, { decimals: 1 })}`,
       tone: 'negative',
-    },
-  ]
+    })
+  }
+  if (!isZero(calc.reward_risk)) {
+    rows.push({ key: 'reward_risk', label: t('calc.rewardRisk'), value: `1 : ${formatQuantity(calc.reward_risk, 1)}` })
+  }
+  return rows
 }
