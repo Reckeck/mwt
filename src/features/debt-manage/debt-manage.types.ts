@@ -1,5 +1,5 @@
-export interface DebtPanelProps {
-  contact: Contact
-  /** The contact's open debts per asset (`get_contact_balances`). */
-  balances: ContactBalance[]
+export interface DebtTermsPopoverProps {
+  contactId: string
+  /** The asset symbol the term is kept for (`USDT`, `rub`). */
+  asset: string
 }
