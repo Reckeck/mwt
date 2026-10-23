@@ -38,6 +38,10 @@ export function useTxFormState(props: TransactionFormProps) {
   // Continuing a chain: the new operation joins it.
   if (props.flowId && !props.transaction) form.flowId = props.flowId
   if (props.propertyId) form.propertyId = props.propertyId
+  if (props.initial && !props.transaction) {
+    if (props.initial.amount) form.amount = props.initial.amount
+    if (props.initial.comment) form.comment = props.initial.comment
+  }
 
   /** What this wallet holds: property to sell, and the asset a new operation starts with. */
   const overview = useQuery({

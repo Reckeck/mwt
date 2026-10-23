@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
@@ -46,7 +46,14 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
     onSuccess: (tx) => {
       for (const queryKey of STALE_KEYS) void queryClient.invalidateQueries({ queryKey })
       if (!editing.value)
-        Object.assign(form, emptyForm(props.storeId, form.kind), { kind: form.kind, asset: form.asset })
+        Object.assign(form, emptyForm(props.storeId, form.kind), {
+          kind: form.kind,
+          // A copy: the saved asset is the user's now, so a wallet whose largest position
+          // changed after this save does not swap it (autofill replaces only its own value).
+          asset: form.asset && { ...toRaw(form.asset) },
+          // The short form runs in series (Ctrl Enter): the date stays for the next one.
+          ...(props.compact ? { timestamp: form.timestamp } : {}),
+        })
       lookup.reset()
       // The first operation with a hash asks once whether it may be looked up.
       if (txChainAndHash(tx).hash && settings.app && settings.app.enrichment_opt_in === null) {
@@ -57,12 +64,15 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
     meta: {
       error: 'form.saveFailed',
       // Read before `onSuccess` resets the form: the cache's handler runs first.
+      // The short form's dialog says it itself, with «Открыть» or «Отменить» (OpForm-1 · 4).
       success: () =>
-        editing.value
-          ? t('tx.updated')
-          : linked.value
-            ? t('tx.split.saved', { count: form.extra.length + 1 })
-            : t('form.saved'),
+        props.compact && !editing.value
+          ? ''
+          : editing.value
+            ? t('tx.updated')
+            : linked.value
+              ? t('tx.split.saved', { count: form.extra.length + 1 })
+              : t('form.saved'),
     },
   })
 

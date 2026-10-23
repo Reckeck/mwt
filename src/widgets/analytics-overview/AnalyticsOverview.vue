@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 
-import { QuickAddDialog } from '@/features/quick-add'
+import { openQuickAdd } from '@/shared/lib/quick-add'
 import { Money, PnlText } from '@/entities/currency'
 import { monthName } from '@/entities/report'
 import { Button, buttonVariants } from '@/shared/ui/button'
@@ -25,7 +25,6 @@ const { t } = useI18n()
 const route = useRoute()
 const overview = useOverview(() => props.filter)
 const data = computed(() => overview.data.value ?? null)
-const adding = ref(false)
 
 /** The same filter rides along to the report a card opens; the overview's month becomes its period. */
 function linkTo(name: string, view?: string) {
@@ -76,7 +75,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
           {{ context.categoryName(data.flow.top_category) }}
         </OverviewFigure>
         <template #action>
-          <Button size="sm" @click="adding = true"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>
+          <Button size="sm" @click="openQuickAdd()"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>
         </template>
       </OverviewCard>
 
@@ -121,7 +120,7 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
           <Money :amount="data.investments.losses" :currency="data.currency" :decimals="0" />
         </OverviewFigure>
         <template #action>
-          <Button size="sm" variant="outline" @click="adding = true"><Plus class="size-4" />{{ t('analytics.overview.addTrade') }}</Button>
+          <Button size="sm" variant="outline" @click="openQuickAdd()"><Plus class="size-4" />{{ t('analytics.overview.addTrade') }}</Button>
         </template>
       </OverviewCard>
 
@@ -142,10 +141,9 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
           {{ formatPct(data.savings.saved_pct, { decimals: 0 }) }}
         </OverviewFigure>
         <template #action>
-          <Button size="sm" @click="adding = true"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>
+          <Button size="sm" @click="openQuickAdd()"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>
         </template>
       </OverviewCard>
     </div>
   </SectionState>
-  <QuickAddDialog v-model:open="adding" />
 </template>

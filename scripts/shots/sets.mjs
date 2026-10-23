@@ -16,6 +16,15 @@ const SEED_RECENT = `
   if (wallet) { await gp.$router.push(wallet); await wait() }
   await gp.$router.push('/'); await wait(); return true`
 
+/** The Bybit wallet's own page: «Сделка · Bybit» opens from its header (OpForm-2 · 9–11). */
+const TO_BYBIT = `
+  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
+  const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('Bybit'))
+  if (link) await gp.$router.push(link.getAttribute('href'))
+  await new Promise((done) => setTimeout(done, 900)); return true`
+const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
+
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
 
 /** The interface as it is before the redesign: what the new one is compared with. */
@@ -284,6 +293,73 @@ const stage3 = [
     canvas: { board: 'Ops-2', frame: '13.' },
   },
   { name: 'opform-pay', route: '/', steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }], canvas: { board: 'OpForm-1', frame: '1.' } },
+  {
+    name: 'opform-more',
+    route: '/',
+    steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }, { click: '[data-tour="tx-more"] > button' }, { wait: 400 }],
+    canvas: { board: 'OpForm-1', frame: '5.' },
+  },
+  {
+    name: 'opform-errors',
+    route: '/',
+    steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }, { click: '[data-quick-add-submit]' }, { wait: 400 }],
+    canvas: { board: 'OpForm-1', frame: '3.' },
+  },
+  {
+    name: 'opform-series',
+    route: '/',
+    steps: [
+      { wait: 600 },
+      { press: 'ctrl+n' },
+      { wait: 700 },
+      { wait: 800 },
+      { fill: ['#tx-amount', '340'] },
+      { click: '[data-frequent-category]' },
+      { press: 'ctrl+enter' },
+      { wait: 600 },
+      { fill: ['#tx-amount', '120'] },
+      { click: '[data-frequent-category]' },
+      { press: 'ctrl+enter' },
+      { wait: 800 },
+    ],
+    canvas: { board: 'OpForm-1', frame: '4.' },
+  },
+  {
+    name: 'opform-convert',
+    route: '/',
+    steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }, { click: '[data-kind-tab="convert"]' }, { wait: 600 }, { fill: ['#tx-amount', '45000'] }, { fill: ['#tx-to-amount', '480'] }, { wait: 300 }],
+    canvas: { board: 'OpForm-1', frame: '6.' },
+  },
+  {
+    name: 'opform-transfer',
+    route: '/',
+    steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }, { click: '[data-kind-tab="transfer"]' }, { wait: 600 }, { fill: ['#tx-amount', '5000'] }, { wait: 300 }],
+    canvas: { board: 'OpForm-1', frame: '7.' },
+  },
+  {
+    name: 'opform-topup',
+    route: '/',
+    steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }, { click: '[data-kind-tab="topup"]' }, { wait: 600 }],
+    canvas: { board: 'OpForm-2', frame: '8.' },
+  },
+  {
+    name: 'deal-spot',
+    route: '/',
+    steps: deal('trade_spot', [['#tx-pair', 'BTCUSDT'], ['#tx-amount', '0.0143'], ['#tx-spot-price', '89900'], ['#tx-fee', '1.29']]),
+    canvas: { board: 'OpForm-2', frame: '9.' },
+  },
+  {
+    name: 'deal-futures',
+    route: '/',
+    steps: deal('trade_futures', [['#tx-symbol', 'BTCUSDT'], ['#tx-amount', '400'], ['#tx-fill', '89552']]),
+    canvas: { board: 'OpForm-2', frame: '10.' },
+  },
+  {
+    name: 'deal-defi',
+    route: '/',
+    steps: deal('defi', [['#tx-protocol', 'Bybit Earn'], ['#tx-amount', '200']]),
+    canvas: { board: 'OpForm-2', frame: '11.' },
+  },
 ]
 
 export const SETS = { before, stage1, stage2, stage2b, paths, stage3 }

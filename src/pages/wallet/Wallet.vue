@@ -10,6 +10,7 @@ import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calcu
 import { usePriceRefresh } from '@/features/price-refresh'
 import { AdjustmentDialog } from '@/features/store-adjust'
 import { StoreCreateDialog } from '@/features/store-create'
+import { QuickAddDialog } from '@/widgets/quick-add'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
@@ -74,6 +75,14 @@ const plan = ref<CalculatorPlan | null>(null)
 const subWalletOpen = ref(false)
 const goalOpen = ref(false)
 const automationOpen = ref(false)
+/** «Сделка · <биржа>» opened on the kind of the header button. */
+const dealOpen = ref(false)
+const dealKind = ref<TxKind>('trade_spot')
+const deal = computed(() => (store.value && isExchangeNode.value ? { store: store.value, kind: dealKind.value } : null))
+function openDeal(kind: TxKind) {
+  dealKind.value = kind
+  dealOpen.value = true
+}
 
 function openTransaction() {
   plan.value = null
@@ -112,7 +121,9 @@ function openWallet(created: Store) {
         :can-add-child="canAddChild"
         :has-children="hasChildren"
         :refreshing="priceRefresh.isPending.value"
+        :exchange="isExchangeNode"
         @operation="openTransaction"
+        @deal="openDeal"
         @adjust="adjustOpen = true"
         @calculator="calculatorOpen = true"
         @sub-account="subWalletOpen = true"
@@ -187,6 +198,7 @@ function openWallet(created: Store) {
         />
       </template>
 
+      <QuickAddDialog v-if="deal" v-model:open="dealOpen" :deal="deal" />
       <TransactionCreateDialog v-model:open="transactionOpen" :store-id="storeId" :disabled="isArchived" :plan="plan" />
       <AdjustmentDialog v-model:open="adjustOpen" :store-id="storeId" />
       <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" :exchange="isExchangeNode ? store?.name : null" @apply="onApplyPlan" />

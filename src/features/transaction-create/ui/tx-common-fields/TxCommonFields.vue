@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { CategorySelect } from '@/features/category-select'
+import { TxCategorySelect } from '../tx-category-select'
 import { StoreNodeSelect } from '@/entities/store'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -58,7 +58,7 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
     :error="check.error('categories')"
     :hint="needsCategory ? t('tx.field.categoryHint') : undefined"
   >
-    <CategorySelect id="tx-categories" v-model="form.categories" multiple :groups="categoryGroupsFor(form.kind)" />
+    <TxCategorySelect id="tx-categories" v-model="form.categories" multiple :groups="categoryGroupsFor(form.kind)" />
   </FormField>
 
   <!-- Cashback: which card's purchases earned it, for the cashback-by-card report. -->

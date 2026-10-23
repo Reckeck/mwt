@@ -8,7 +8,7 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockBalanceOf, mockPush, mockTransactions, priceOf } from './demo'
 import { mockCachedPrice, mockCalc, mockNetWorth, mockSearch } from './market'
-import { mockPreview } from './tree'
+import { mockPreview } from './preview'
 import { mockLinkProperty, mockPropertyLinks } from './property-links'
 
 /** Commands: contacts. */

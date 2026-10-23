@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::Amount;
 use crate::model::store::{AssetRef, StoreKind};
-use crate::model::transaction::Transaction;
+use crate::model::transaction::{FuturesAction, FuturesDirection, Transaction};
 use crate::service::UnlockedVault;
 use crate::service::worth::FlowClass;
 
@@ -46,6 +46,32 @@ pub struct TxPreview {
     /// Validation failure as `"CODE: message"`, the same string saving would
     /// return; `None` when the draft would be accepted.
     pub error: Option<String>,
+    /// An opened futures position: the price near which it is liquidated, in
+    /// the settle asset; `None` for anything else or without leverage.
+    #[serde(default)]
+    pub liquidation_price: Option<Amount>,
+}
+
+/// Maintenance margin rate assumed for the estimate (Bybit's first tier, 0.5 %).
+const MAINTENANCE_MARGIN: &str = "0.005";
+
+/// Isolated-margin estimate: a long is liquidated when the price falls by
+/// `1/leverage − maintenance`, a short when it rises by the same share.
+pub fn liquidation_price(tx: &Transaction) -> Option<Amount> {
+    let Transaction::TradeFutures(trade) = tx else {
+        return None;
+    };
+    let leverage = trade.leverage.filter(|value| value.is_positive())?;
+    if trade.action != FuturesAction::Open || !trade.fill_price.is_positive() {
+        return None;
+    }
+    let maintenance = Amount::parse(MAINTENANCE_MARGIN).ok()?;
+    let share = Amount::from(1) / leverage - maintenance;
+    let factor = match trade.direction {
+        FuturesDirection::Long => Amount::from(1) - share,
+        FuturesDirection::Short => Amount::from(1) + share,
+    };
+    Some((trade.fill_price * factor).max(Amount::ZERO).round(8))
 }
 
 impl UnlockedVault {
@@ -138,6 +164,7 @@ impl UnlockedVault {
             flow: self.classify_flow(&tx),
             warnings,
             error,
+            liquidation_price: liquidation_price(&tx),
         }
     }
 
@@ -173,6 +200,35 @@ mod tests {
         assert!(preview.warnings.is_empty());
         assert_eq!(preview.flow, FlowClass::Daily);
         assert_eq!(vault.doc.transactions.len(), count);
+    }
+
+    #[test]
+    fn estimates_liquidation_of_an_opened_position() {
+        let mut tx = crate::model::fixtures::every_transaction()
+            .into_iter()
+            .find(|tx| matches!(tx, Transaction::TradeFutures(_)))
+            .unwrap();
+        let Transaction::TradeFutures(trade) = &mut tx else {
+            unreachable!()
+        };
+        trade.action = FuturesAction::Open;
+        let Transaction::TradeFutures(trade) = &mut tx else {
+            unreachable!()
+        };
+        trade.fill_price = amount("89552");
+        trade.leverage = Some(amount("5"));
+        trade.direction = FuturesDirection::Long;
+        assert_eq!(liquidation_price(&tx), Some(amount("72089.36")));
+        let Transaction::TradeFutures(trade) = &mut tx else {
+            unreachable!()
+        };
+        trade.direction = FuturesDirection::Short;
+        assert_eq!(liquidation_price(&tx), Some(amount("107014.64")));
+        let Transaction::TradeFutures(trade) = &mut tx else {
+            unreachable!()
+        };
+        trade.leverage = None;
+        assert_eq!(liquidation_price(&tx), None);
     }
 
     #[test]

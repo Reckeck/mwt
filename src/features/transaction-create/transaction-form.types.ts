@@ -24,11 +24,22 @@ export interface TransactionFormProps {
   initial?: TransactionInitial | null
   /** The property the operation starts linked to (an automation's link, a preset opened on a property). */
   propertyId?: string | null
+  /**
+   * The short form of Ctrl N (OpForm-1): four tabs, the amount with its
+   * currency chip, the wallet (`#store`) next to the category, the rest under
+   * «Ещё»; no balance preview.
+   */
+  compact?: boolean
+  /** With `compact`: the tab groups of «Сделка · <биржа>» instead of the four quick kinds. */
+  kindGroups?: TxKind[][] | null
 }
 
 export interface TransactionInitial {
   kind: TxKind
   categories: string[]
+  /** What was typed before the wallet changed: the short form keys itself by the wallet and carries these over. */
+  amount?: string
+  comment?: string
 }
 
 /** A calculator result handed to the form. */

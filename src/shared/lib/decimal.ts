@@ -40,3 +40,23 @@ export function decimalSub(left: string, right: string): string | null {
   const digits = Math.max(places(minuend), places(subtrahend))
   return unscaled(scaled(minuend, digits) - scaled(subtrahend, digits), digits)
 }
+
+/** `left + right`, exactly; `null` when either side is not a number. */
+export function decimalAdd(left: string, right: string): string | null {
+  const negated = parseDecimal(right)
+  if (negated === null) return null
+  return decimalSub(left, negated.startsWith('-') ? negated.slice(1) : `-${negated}`)
+}
+
+/** `left × right`, exactly; `null` when either side is not a number. */
+export function decimalMul(left: string, right: string): string | null {
+  const lhs = parseDecimal(left)
+  const rhs = parseDecimal(right)
+  if (lhs === null || rhs === null) return null
+  return unscaled(scaled(lhs, places(lhs)) * scaled(rhs, places(rhs)), places(lhs) + places(rhs))
+}
+
+/** A computed number for an input: at most `digits` places, no trailing zeros; `''` when it is not a positive finite number. */
+export function decimalInput(value: number, digits: number): string {
+  return Number.isFinite(value) && value > 0 ? String(+value.toFixed(digits)) : ''
+}
