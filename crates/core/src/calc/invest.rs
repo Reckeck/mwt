@@ -335,6 +335,42 @@ pub fn compare(input: &InvestInput) -> Result<InvestCompare> {
     })
 }
 
+/// The largest withdrawal, in whole units, that the plan pays to the end of the
+/// term; `None` when the input withdraws nothing or never runs out.
+pub fn safe_withdrawal(input: &InvestInput) -> Result<Option<Amount>> {
+    let start = validate(input)?;
+    let Some(withdrawal) = &input.withdrawal else {
+        return Ok(None);
+    };
+    let with_amount = |amount: Decimal| {
+        let mut out = input.clone();
+        if let Some(rule) = &mut out.withdrawal {
+            rule.amount = Amount(amount);
+        }
+        out
+    };
+    let lasts = |amount: Decimal| {
+        Run::new(&with_amount(amount), start, input.term_months)
+            .is_none_or(|run| run.depleted_at.is_none())
+    };
+    if lasts(withdrawal.amount.0) {
+        return Ok(None);
+    }
+    let (mut low, mut high) = (Decimal::ZERO, withdrawal.amount.0);
+    for _ in 0..BISECTION_STEPS {
+        if high - low < Decimal::ONE {
+            break;
+        }
+        let middle = ((low + high) / Decimal::TWO).floor();
+        if lasts(middle) {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    Ok(Some(Amount(low)))
+}
+
 fn too_large() -> Error {
     Error::InvalidInput("the result is too large to compute".into())
 }
@@ -984,6 +1020,32 @@ mod tests {
         let res = simulate(&indexed).unwrap();
         assert_amt(res.withdrawn, "210");
         assert_eq!(res.depleted_at, None);
+    }
+
+    #[test]
+    fn safe_withdrawal_lasts_the_term() {
+        let rule = |amount: &str| Withdrawal {
+            amount: amt(amount),
+            from_month: 1,
+            ..Withdrawal::default()
+        };
+        let input = InvestInput {
+            withdrawal: Some(rule("300")),
+            ..base("1200", "0", 12)
+        };
+        let safe = safe_withdrawal(&input).unwrap().unwrap();
+        // 100 × 12 empties the plan in its last month, which counts as running out.
+        assert_amt(safe, "99");
+        let fits = InvestInput {
+            withdrawal: Some(rule("99")),
+            ..input.clone()
+        };
+        assert_eq!(safe_withdrawal(&fits).unwrap(), None);
+        let none = InvestInput {
+            withdrawal: None,
+            ..input
+        };
+        assert_eq!(safe_withdrawal(&none).unwrap(), None);
     }
 
     #[test]

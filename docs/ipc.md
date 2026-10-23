@@ -222,6 +222,7 @@ Frontend парсит код и показывает локализованно�
 | `calc_invest_simulate` | `input: InvestInput { currency, start, initial, rate_pct, term_months, capitalization, stages[], indexation_pct, inflation_pct, tax, withdrawal? }` | `InvestResult { final_nominal, final_real, contributed, invested, interest, tax, withdrawn, effective_rate_pct, crossover_year?, depleted_at?, years[{ …, months[] }] }` |
 | `calc_invest_solve` | `input, target, unknown: contribution\|term\|rate` | `SolveResult { reachable, value, input, result }` — при `reachable = false` лучший достижимый вариант |
 | `calc_invest_compare` | `input` | `InvestCompare { rows[{ kind: base\|more_rate\|more_contribution, final_nominal, gain }], contribution_wins }` |
+| `calc_invest_safe_withdrawal` | `input` | `Amount \| null`: the largest withdrawal (whole units) that lasts the term; `null` when nothing is withdrawn or it already lasts |
 | `calc_scenarios_list` | — | `CalcScenario[]`, последний изменённый первым |
 | `calc_scenario_save` | `draft: CalcScenarioDraft { id?, name, input, source?, prefilled_at? }` | `CalcScenario`; `id = null` создаёт новый |
 | `calc_scenario_delete` | `id` | `CalcScenarioDeleted { scenario, goal_ids }` — цели остаются, связь снимается |

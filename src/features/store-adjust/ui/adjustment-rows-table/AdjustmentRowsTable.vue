@@ -23,8 +23,8 @@ const { t } = useI18n()
 const GRID =
   'grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-x-2 gap-y-1 @xl:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem_2rem]'
 /** The asset spans the first line on a phone; the last cell sits at its end. */
-const ASSET = 'max-@xl:col-span-2'
-const LAST = 'max-@xl:col-start-3 max-@xl:row-start-1 justify-self-end'
+const ASSET = '@max-xl:col-span-2'
+const LAST = '@max-xl:col-start-3 @max-xl:row-start-1 justify-self-end'
 
 function removeRow(index: number) {
   rows.value.splice(index, 1)

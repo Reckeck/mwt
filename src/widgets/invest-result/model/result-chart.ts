@@ -28,7 +28,7 @@ export function resultChart(
   result: InvestResult,
   lines: ScenarioLine[],
   texts: ResultChartTexts,
-  style: { axisColor: string; currency: string; tooltip: (params: unknown) => string },
+  style: { axisColor: string; primary: string; currency: string; tooltip: (params: unknown) => string },
 ): ChartOption {
   const labels = result.years.map((row) => texts.year(row.year))
   const marks: { xAxis: string; name: string }[] = []
@@ -39,8 +39,8 @@ export function resultChart(
   return {
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis', formatter: style.tooltip },
-    legend: { bottom: 0, textStyle: { color: style.axisColor } },
-    grid: { left: 16, right: 16, top: 24, bottom: 40, containLabel: true },
+    legend: { top: 0, left: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { color: style.axisColor } },
+    grid: { left: 8, right: 16, top: 36, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category',
       data: labels,
@@ -57,7 +57,8 @@ export function resultChart(
         name: texts.invested,
         type: 'line',
         stack: 'balance',
-        areaStyle: {},
+        color: style.primary,
+        areaStyle: { opacity: 0.35 },
         showSymbol: false,
         data: result.years.map((row) => num(row.invested)),
         markLine: marks.length
@@ -73,11 +74,19 @@ export function resultChart(
         name: texts.interest,
         type: 'line',
         stack: 'balance',
-        areaStyle: {},
+        color: style.primary,
+        areaStyle: { opacity: 0.15 },
         showSymbol: false,
         data: result.years.map((row) => Math.max(0, num(row.balance) - num(row.invested))),
       },
-      { name: texts.real, type: 'line', showSymbol: false, data: result.years.map((row) => num(row.real_balance)) },
+      {
+        name: texts.real,
+        type: 'line',
+        showSymbol: false,
+        color: style.axisColor,
+        lineStyle: { type: 'dashed' },
+        data: result.years.map((row) => num(row.real_balance)),
+      },
       ...lines.map((line) => ({
         name: line.name,
         type: 'line' as const,

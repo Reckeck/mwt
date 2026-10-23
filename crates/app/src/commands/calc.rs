@@ -46,6 +46,12 @@ pub async fn calc_invest_compare(input: InvestInput) -> Result<InvestCompare, St
     invest::compare(&input).map_err(err_to_string)
 }
 
+/// The largest withdrawal the plan pays to the end of its term, when the asked one runs out.
+#[tauri::command]
+pub async fn calc_invest_safe_withdrawal(input: InvestInput) -> Result<Option<Amount>, String> {
+    invest::safe_withdrawal(&input).map_err(err_to_string)
+}
+
 #[tauri::command]
 pub async fn calc_scenarios_list(state: State<'_, AppState>) -> Result<Vec<CalcScenario>, String> {
     with_vault(&state, |vault| Ok(vault.calc_scenarios()))

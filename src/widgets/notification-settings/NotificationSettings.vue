@@ -161,7 +161,7 @@ const test = useMutation({
       <div
         v-for="name in NOTICE_CATEGORIES"
         :key="name"
-        class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-4 py-1.5 max-@xl:border-b max-@xl:border-border max-@xl:py-3 max-@xl:last:border-b-0 @xl:grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem]"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-4 py-1.5 @max-xl:border-b @max-xl:border-border @max-xl:py-3 @max-xl:last:border-b-0 @xl:grid-cols-[minmax(0,1fr)_4.5rem_6rem_6rem]"
       >
         <span class="grid min-w-0">
           <span class="truncate text-sm">{{ t(`notices.cat.${name}`) }}</span>
@@ -175,8 +175,8 @@ const test = useMutation({
           />
         </span>
         <span
-          class="flex items-center justify-between gap-2 max-@xl:col-span-2 @xl:justify-center"
-          :class="!LEAD_CATEGORIES.includes(name) && 'max-@xl:hidden'"
+          class="flex items-center justify-between gap-2 @max-xl:col-span-2 @xl:justify-center"
+          :class="!LEAD_CATEGORIES.includes(name) && '@max-xl:hidden'"
         >
           <span class="text-xs text-muted-foreground @xl:hidden">{{ t('notices.leadDays') }}</span>
           <Input
@@ -191,8 +191,8 @@ const test = useMutation({
           />
         </span>
         <span
-          class="flex items-center justify-between gap-2 max-@xl:col-span-2 @xl:justify-center"
-          :class="!AUTO_REMINDER_CATEGORIES.includes(name) && 'max-@xl:hidden'"
+          class="flex items-center justify-between gap-2 @max-xl:col-span-2 @xl:justify-center"
+          :class="!AUTO_REMINDER_CATEGORIES.includes(name) && '@max-xl:hidden'"
         >
           <span class="text-xs text-muted-foreground @xl:hidden">{{ t('notices.autoReminders') }}</span>
           <Switch

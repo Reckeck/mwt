@@ -7,6 +7,15 @@ export interface GoalDialogProps {
   storeId?: string
   /** What is left of a month, offered to go straight into the new goal («Куда ушли»). */
   remainder?: GoalRemainder | null
+  /** The goal comes from a calculator run: one page instead of two steps (Money 3 · 20). */
+  fromCalc?: GoalFromCalc | null
+}
+
+export interface GoalFromCalc {
+  /** The scenario's name, for «Заполнено из расчёта «…»». */
+  scenario: string
+  /** The run's starting sum: what the goal already has. */
+  initial: string
 }
 
 export interface GoalRemainder {

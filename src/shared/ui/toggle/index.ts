@@ -10,6 +10,9 @@ export const toggleVariants = cva(
       variant: {
         default: 'bg-transparent',
         outline: 'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
+        /** Inside a muted track (`ToggleGroup` with `spacing` ≥ 1): the picked one is a raised chip. */
+        segmented:
+          'bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
       },
       size: {
         default: 'h-9 px-2 min-w-9',

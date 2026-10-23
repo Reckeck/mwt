@@ -74,6 +74,38 @@ const stage2b = [
   },
   { name: 'more-menu', route: '/money', steps: [{ click: '[data-route-tabs-more]' }], canvas: { board: 'Money-2', frame: '11.' } },
   { name: 'wealth', route: '/money/wealth', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-2', frame: '12.' } },
+  { name: 'health', route: '/money/health', scenarios: ['year', 'empty'], canvas: { board: 'Money-3', frame: '16.' } },
+  {
+    name: 'fund-setup',
+    route: '/money/health',
+    steps: [{ click: '[data-health-fund-setup]' }, { wait: 400 }],
+    canvas: { board: 'Money-3', frame: '17.' },
+  },
+  { name: 'calc', route: '/money/calculator', steps: [{ wait: 1500 }], canvas: { board: 'Money-3', frame: '18.' } },
+  {
+    name: 'calc-contribution',
+    route: '/money/calculator',
+    steps: [{ click: '[data-calc-mode="contribution"]' }, { fill: ['#calc-target', '20000'] }, { wait: 900 }],
+    canvas: { board: 'Money-3', frame: '19.' },
+  },
+  {
+    name: 'calc-prefill',
+    route: '/money/calculator',
+    steps: [{ click: '[data-calc-prefill] button' }, { wait: 300 }],
+    phone: false,
+  },
+  {
+    name: 'calc-withdrawal',
+    route: '/money/calculator',
+    steps: [
+      { click: '[data-calc-advanced] button' },
+      { click: '#calc-withdrawal-on' },
+      { fill: ['#calc-withdrawal', '30000'] },
+      { wait: 1200 },
+    ],
+    canvas: { board: 'Money-3', frame: '21.' },
+  },
+  { name: 'calc-goal', route: '/money/calculator', steps: [{ click: '[data-calc-goal]' }, { wait: 400 }], phone: false },
   { name: 'investments', route: '/money/investments', scenarios: ['year', 'empty'], canvas: { board: 'Money-2', frame: '13.' } },
   {
     name: 'trade-record',

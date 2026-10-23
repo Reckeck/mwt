@@ -1,24 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ChevronRight } from 'lucide-vue-next'
 
-import { Money, useMoneyChartTooltip } from '@/entities/currency'
+import { useMoneyChartTooltip } from '@/entities/currency'
 import type { InvestCalc } from '@/features/invest-calculator'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
+import { chartColors } from '@/shared/lib/chart-theme'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
 import { useTheme } from '@/shared/lib/theme'
-import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { SectionState } from '@/shared/ui/section-state'
-import { StatCard } from '@/shared/ui/stat-card'
 import { Toggle } from '@/shared/ui/toggle'
 
 import { resultChart } from './model/result-chart'
+import { useAnswerExtras } from './model/use-answer-extras'
 import { MAX_COMPARED, useScenarioLines } from './model/use-scenario-lines'
 import InvestCompare from './ui/InvestCompare.vue'
 import InvestYearTable from './ui/InvestYearTable.vue'
+import ResultAnswer from './ui/ResultAnswer.vue'
+import ResultHint from './ui/ResultHint.vue'
+import ResultStats from './ui/ResultStats.vue'
 
-/** What the plan grows into: the figures, the chart, «что выгоднее» and the table. */
+/** The answer first, then how it adds up: the figures, the chart, «что выгоднее» and the years. */
 const props = defineProps<{ calc: InvestCalc; scenarioId: string | null }>()
+const emit = defineEmits<{ goal: [] }>()
 
 const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
@@ -26,6 +33,8 @@ const outcome = computed(() => props.calc.outcome.data.value)
 const currency = computed(() => outcome.value?.input.currency ?? props.calc.form.currency)
 const tooltip = useMoneyChartTooltip(currency)
 const overlay = useScenarioLines(() => props.scenarioId)
+const extras = useAnswerExtras(outcome, () => props.calc.form.target)
+const yearsOpen = ref(false)
 
 const option = computed<ChartOption | null>(() => {
   const data = outcome.value
@@ -41,88 +50,72 @@ const option = computed<ChartOption | null>(() => {
       crossover: t('invest.chart.crossover'),
       depleted: t('invest.chart.depleted'),
     },
-    { axisColor: axisColor.value, currency: currency.value, tooltip: tooltip.value },
+    { axisColor: axisColor.value, primary: chartColors().primary, currency: currency.value, tooltip: tooltip.value },
   )
 })
 
-const solved = computed(() => outcome.value?.solved ?? null)
-const hasTax = computed(() => Number(outcome.value?.result.tax ?? 0) > 0)
-const hasWithdrawal = computed(() => Number(outcome.value?.result.withdrawn ?? 0) > 0)
+/** «Что выгоднее» answers «сколько будет»: it has nothing to add to a found value or to running out. */
+const comparing = computed(() => !outcome.value?.solved && Number(outcome.value?.result.withdrawn ?? 0) === 0)
 </script>
 
 <template>
-  <SectionState
-    :loading="props.calc.outcome.isPending.value && props.calc.outcome.fetchStatus.value !== 'idle'"
-    :error="props.calc.outcome.error.value"
-    :empty="!outcome"
-    :empty-title="t('invest.resultEmpty')"
-    skeleton="report"
-  >
-    <div v-if="outcome" class="@container grid gap-4" data-tour="calc-result">
-      <div v-if="solved" class="grid gap-2 rounded-md border p-3" :class="!solved.reachable && 'border-warning'">
-        <p class="text-sm">
-          <template v-if="solved.unknown === 'contribution'">
-            {{ t(solved.reachable ? 'invest.solved.contribution' : 'invest.unreachable.contribution') }}
-            <Money :amount="solved.value" :currency="currency" class="font-semibold" />
-          </template>
-          <template v-else-if="solved.unknown === 'term'">
-            {{ t(solved.reachable ? 'invest.solved.term' : 'invest.unreachable.term') }}
-            <b>{{ t('invest.termValue', { years: Math.floor(Number(solved.value) / 12), months: Number(solved.value) % 12 }) }}</b>
-          </template>
-          <template v-else>
-            {{ t(solved.reachable ? 'invest.solved.rate' : 'invest.unreachable.rate') }}
-            <b>{{ t('invest.pct', { value: solved.value }) }}</b>
-          </template>
+  <Card>
+    <SectionState
+      :loading="props.calc.outcome.isPending.value && props.calc.outcome.fetchStatus.value !== 'idle'"
+      :error="props.calc.outcome.error.value"
+      :empty="!outcome"
+      :empty-title="t('invest.resultEmpty')"
+      skeleton="report"
+    >
+      <div v-if="outcome" class="@container grid gap-4" data-tour="calc-result" data-calc-result>
+        <ResultAnswer
+          :outcome="outcome"
+          :currency="currency"
+          :target="props.calc.form.target"
+          :prefilled="props.calc.prefilled.value"
+          :safe-withdrawal="extras.safeWithdrawal.value"
+          @accept="props.calc.acceptSolved"
+          @goal="emit('goal')"
+          @withdraw="props.calc.applyWithdrawal"
+        />
+        <ResultStats :outcome="outcome" :currency="currency" />
+        <ResultHint v-if="outcome.solved" :solved="outcome.solved" :currency="currency" :alternatives="extras.alternatives.value" />
+
+        <div v-if="option" class="h-64 w-full min-w-0"><Chart :option="option" autoresize /></div>
+        <p v-if="outcome.result.crossover_year !== null && comparing" class="flex gap-2 text-sm text-muted-foreground">
+          <span class="text-primary">●</span>{{ t('invest.insight.crossover', { year: outcome.result.crossover_year }) }}
         </p>
-        <Button v-if="solved.reachable" variant="outline" size="sm" class="w-fit" @click="props.calc.acceptSolved">
-          {{ t('invest.solved.apply') }}
-        </Button>
-      </div>
+        <div v-if="overlay.others.value.length" class="flex flex-wrap items-center gap-2" data-tour="calc-overlay">
+          <span class="text-sm text-muted-foreground">{{ t('invest.overlay', { max: MAX_COMPARED }) }}</span>
+          <Toggle
+            v-for="scenario in overlay.others.value"
+            :key="scenario.id"
+            variant="outline"
+            size="sm"
+            :model-value="overlay.picked.value.includes(scenario.id)"
+            @update:model-value="overlay.toggle(scenario.id)"
+          >
+            {{ scenario.name }}
+          </Toggle>
+        </div>
 
-      <div class="grid gap-3 @md:grid-cols-2 @3xl:grid-cols-4">
-        <StatCard :label="t('invest.stat.final')" :hint="t('invest.stat.effective', { value: outcome.result.effective_rate_pct })">
-          <Money :amount="outcome.result.final_nominal" :currency="currency" :decimals="0" />
-        </StatCard>
-        <StatCard :label="t('invest.stat.real')" :hint="t('invest.stat.realHint', { value: outcome.input.inflation_pct })">
-          <Money :amount="outcome.result.final_real" :currency="currency" :decimals="0" />
-        </StatCard>
-        <StatCard :label="t('invest.stat.invested')">
-          <Money :amount="outcome.result.invested" :currency="currency" :decimals="0" />
-        </StatCard>
-        <StatCard :label="t('invest.stat.interest')">
-          <Money :amount="outcome.result.interest" :currency="currency" :decimals="0" />
-        </StatCard>
-        <StatCard v-if="hasTax" :label="t('invest.stat.tax')">
-          <Money :amount="outcome.result.tax" :currency="currency" :decimals="0" />
-        </StatCard>
-        <StatCard v-if="hasWithdrawal" :label="t('invest.stat.withdrawn')">
-          <Money :amount="outcome.result.withdrawn" :currency="currency" :decimals="0" />
-        </StatCard>
-      </div>
-      <p v-if="outcome.result.depleted_at !== null" class="text-sm text-destructive">
-        {{ t('invest.depleted', { months: outcome.result.depleted_at }) }}
-      </p>
-      <p v-if="outcome.result.crossover_year !== null" class="text-sm text-muted-foreground">
-        {{ t('invest.crossover', { year: outcome.result.crossover_year }) }}
-      </p>
+        <InvestCompare v-if="comparing" :input="outcome.input" @apply="props.calc.applyCompare" />
 
-      <Chart v-if="option" :option="option" class="h-72" />
-      <div v-if="overlay.others.value.length" class="flex flex-wrap items-center gap-2" data-tour="calc-overlay">
-        <span class="text-sm text-muted-foreground">{{ t('invest.overlay', { max: MAX_COMPARED }) }}</span>
-        <Toggle
-          v-for="scenario in overlay.others.value"
-          :key="scenario.id"
-          variant="outline"
-          size="sm"
-          :model-value="overlay.picked.value.includes(scenario.id)"
-          @update:model-value="overlay.toggle(scenario.id)"
-        >
-          {{ scenario.name }}
-        </Toggle>
+        <Collapsible v-model:open="yearsOpen" class="grid gap-2 border-t pt-3">
+          <CollapsibleTrigger
+            class="touch-hit flex w-full items-center justify-between gap-3 rounded-md text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span class="grid min-w-0 gap-0.5">
+              <span class="text-sm font-medium">{{ t('invest.byYears') }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ t('invest.byYearsHint') }}</span>
+            </span>
+            <ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform" :class="yearsOpen && 'rotate-90'" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <InvestYearTable :years="outcome.result.years" :currency="currency" />
+          </CollapsibleContent>
+        </Collapsible>
       </div>
-
-      <InvestCompare :input="outcome.input" />
-      <InvestYearTable :years="outcome.result.years" :currency="currency" />
-    </div>
-  </SectionState>
+    </SectionState>
+  </Card>
 </template>

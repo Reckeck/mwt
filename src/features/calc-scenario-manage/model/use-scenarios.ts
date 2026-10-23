@@ -14,6 +14,12 @@ export interface ScenarioBody {
   prefilledAt: string | null
 }
 
+interface ScenarioDraft {
+  id: string | null
+  name: string
+  body: ScenarioBody
+}
+
 /** Saved calculator runs and what the user does with them. */
 export function useScenarios() {
   const { t } = useI18n()
@@ -25,22 +31,31 @@ export function useScenarios() {
     void queryClient.invalidateQueries({ queryKey: ['goal-progress'] })
   }
 
+  const store = (draft: ScenarioDraft) =>
+    call<CalcScenario>('calc_scenario_save', {
+      draft: {
+        id: draft.id,
+        name: draft.name,
+        input: draft.body.input,
+        source: draft.body.source,
+        prefilled_at: draft.body.prefilledAt,
+      },
+    })
+
   const save = useMutation({
-    mutationFn: (draft: { id: string | null; name: string; body: ScenarioBody }) =>
-      call<CalcScenario>('calc_scenario_save', {
-        draft: {
-          id: draft.id,
-          name: draft.name,
-          input: draft.body.input,
-          source: draft.body.source,
-          prefilled_at: draft.body.prefilledAt,
-        },
-      }),
+    mutationFn: store,
     onSuccess: refresh,
     meta: {
       error: 'invest.scenario.saveFailed',
       success: (data) => ({ text: t('invest.scenario.saved'), description: (data as CalcScenario).name }),
     },
+  })
+
+  /** Changes to a saved scenario go in by themselves; the bar says «сохранён» instead of a toast. */
+  const autosave = useMutation({
+    mutationFn: store,
+    onSuccess: refresh,
+    meta: { error: 'invest.scenario.saveFailed', silent: 'the scenario bar shows the saved state' },
   })
 
   const remove = useMutation({
@@ -62,5 +77,5 @@ export function useScenarios() {
   })
 
   const scenarios = computed(() => list.data.value ?? [])
-  return { list, scenarios, byId, save, remove, goalDraft }
+  return { list, scenarios, byId, save, autosave, remove, goalDraft }
 }
