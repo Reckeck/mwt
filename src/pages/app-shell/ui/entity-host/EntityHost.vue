@@ -3,6 +3,7 @@ import { BudgetDialog } from '@/features/budget-edit'
 import { GoalDialog } from '@/features/goal-edit'
 import { PriceAlertDialog } from '@/features/price-alert-edit'
 import { EntityRelations, EntitySheet } from '@/widgets/entity-sheet'
+import { GoalDetailsSheet } from '@/widgets/goal-details'
 import { WalletGlance } from '@/widgets/quick-glance'
 import { TransactionDetailsSheet } from '@/widgets/transaction-details'
 
@@ -10,7 +11,7 @@ import { useEntityHost } from './use-entity-host'
 
 /** Every entity card of the app, drawn from the address (`?open=goal:g1`). */
 const host = useEntityHost()
-const { txOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
+const { txOpen, goalCardOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
 </script>
 
 <template>
@@ -23,6 +24,13 @@ const { txOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
       <EntityRelations v-if="host.current.value?.groups.length" :groups="host.current.value.groups" />
     </template>
   </TransactionDetailsSheet>
+  <GoalDetailsSheet
+    v-model:open="goalCardOpen"
+    :goal-id="host.top.value?.kind === 'goal' ? host.top.value.id : null"
+    :groups="host.current.value?.groups"
+  >
+    <template #wallet="{ storeId, label }"><WalletGlance :store-id="storeId" :name="label" /></template>
+  </GoalDetailsSheet>
   <EntitySheet
     v-model:open="cardOpen"
     :card="host.current.value"

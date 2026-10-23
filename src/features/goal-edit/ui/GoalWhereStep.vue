@@ -31,6 +31,8 @@ const props = defineProps<{
   currency: string
   /** What the goal has from the start — a calculation's starting sum. */
   already?: string | null
+  /** An edited goal's money in its wallet, formatted: a new wallet does not move it. */
+  saved?: string | null
 }>()
 const storeIds = defineModel<string[]>('storeIds', { required: true })
 const fund = defineModel<boolean>('fund', { required: true })
@@ -63,7 +65,7 @@ const advanced = computed(() => Boolean(props.form.error('startsAt') || props.fo
   <div class="grid gap-4">
     <FormField for="goal-stores" data-tour="goal-stores" :label="t('goal.where')" required :error="props.form.error('stores')">
       <StoreNodeSelect id="goal-stores" v-model:ids="storeIds" multiple :nodes="props.nodes" :placeholder="t('goal.wherePick')" :invalid="Boolean(props.form.error('stores'))" />
-      <p class="text-xs text-muted-foreground">{{ t('goal.whereHint') }}</p>
+      <p class="text-xs text-muted-foreground">{{ props.saved ? t('goal.whereSaved', { saved: props.saved }) : t('goal.whereHint') }}</p>
     </FormField>
 
     <template v-if="props.creating">

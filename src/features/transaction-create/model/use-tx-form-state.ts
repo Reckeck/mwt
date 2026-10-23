@@ -1,6 +1,7 @@
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 
+import type { StagedAttachment } from '@/entities/attachment'
 import { call } from '@/shared/api/ipc'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txId } from '@/shared/lib/transactions'
@@ -69,6 +70,9 @@ export function useTxFormState(props: TransactionFormProps) {
     { immediate: true },
   )
 
+  /** Files and links of a new operation (Attach 5): attached once it is saved, dropped with the form. */
+  const attachments = ref<StagedAttachment[]>([])
+
   /** Every live store but the one the money leaves, for AssetSell proceeds. */
   const proceedsStores = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.id !== props.storeId),
@@ -89,6 +93,7 @@ export function useTxFormState(props: TransactionFormProps) {
     heldAssets,
     contacts,
     proceedsStores,
+    attachments,
   }
 }
 

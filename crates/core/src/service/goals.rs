@@ -8,7 +8,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use crate::Amount;
 use crate::calendar::{self, Calendar, first_of_month};
 use crate::error::{Error, Result};
-use crate::model::planning::Goal;
+use crate::model::planning::{Envelope, Goal};
 use crate::model::store::StoreScope;
 use crate::model::transaction::LegRole;
 use crate::model::vault::now_iso;
@@ -93,6 +93,15 @@ pub enum RealismIssue {
     },
 }
 
+/// A deleted goal and what went with it: enough to undo.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct GoalDeleted {
+    pub goal: Goal,
+    pub envelopes: Vec<Envelope>,
+    /// Workflows switched off with it.
+    pub workflow_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct GoalProgress {
     pub goal: Goal,
@@ -119,6 +128,9 @@ pub struct GoalProgress {
     /// What the linked calculator scenario plans to have by now, in the goal
     /// currency.
     pub planned_now: Option<Amount>,
+    /// Operations that put money into the goal's wallets since its start.
+    #[serde(default)]
+    pub deposits: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -295,13 +307,87 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    pub fn delete_goal(&mut self, id: &str) -> Result<()> {
-        let before = self.doc.goals.len();
-        self.doc.goals.retain(|goal| goal.id != id);
-        if self.doc.goals.len() == before {
-            return Err(Error::Missing(format!("goal {id}")));
+    /// Delete a goal (New-Goal 5): the money stays in its wallets, its
+    /// envelopes go back to «можно потратить», the workflows that only put
+    /// money aside into it stop. Its files go with the next open of the vault
+    /// unless [`Self::restore_goal`] brings it back first.
+    pub fn delete_goal(&mut self, id: &str, now: i64) -> Result<GoalDeleted> {
+        let index = self
+            .doc
+            .goals
+            .iter()
+            .position(|goal| goal.id == id)
+            .ok_or_else(|| Error::Missing(format!("goal {id}")))?;
+        let goal = self.doc.goals.remove(index);
+        let (envelopes, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.doc.envelopes)
+            .into_iter()
+            .partition(|envelope| envelope.goal_id.as_deref() == Some(id));
+        self.doc.envelopes = kept;
+        let workflow_ids = self.goal_savers(&goal);
+        for workflow in &workflow_ids {
+            self.set_workflow_active(workflow, false, now)?;
         }
-        self.persist()
+        self.persist()?;
+        Ok(GoalDeleted {
+            goal,
+            envelopes,
+            workflow_ids,
+        })
+    }
+
+    /// Undo [`Self::delete_goal`]: the goal, its envelopes and its workflows.
+    pub fn restore_goal(&mut self, deleted: GoalDeleted, now: i64) -> Result<Goal> {
+        let id = deleted.goal.id.clone();
+        if self.doc.goals.iter().any(|goal| goal.id == id) {
+            return Err(Error::InvalidInput(format!("goal {id} already exists")));
+        }
+        self.doc.goals.push(deleted.goal.clone());
+        self.doc.envelopes.extend(deleted.envelopes);
+        for workflow in &deleted.workflow_ids {
+            // A workflow deleted since then has nothing to switch back on.
+            if self.doc.workflows.iter().any(|each| &each.id == workflow) {
+                self.set_workflow_active(workflow, true, now)?;
+            }
+        }
+        self.persist()?;
+        Ok(deleted.goal)
+    }
+
+    /// Active workflows that move money into the goal's wallet (what
+    /// «Откладывать 10 % каждой зарплаты» makes), unless another goal saves
+    /// there too: a wallet's salary or a shared one keeps working.
+    fn goal_savers(&self, goal: &Goal) -> Vec<String> {
+        let others: HashSet<&String> = self
+            .doc
+            .goals
+            .iter()
+            .filter(|other| other.id != goal.id)
+            .flat_map(|other| &other.scope.store_ids)
+            .collect();
+        let stores: Vec<&String> = goal
+            .scope
+            .store_ids
+            .iter()
+            .filter(|store| !others.contains(store))
+            .collect();
+        self.doc
+            .workflows
+            .iter()
+            .filter(|workflow| workflow.active && workflow.automation.is_none())
+            .filter(|workflow| {
+                crate::workflow::Graph::parse(&workflow.graph).is_ok_and(|graph| {
+                    graph.nodes.iter().any(|node| {
+                        node.kind == "action.transaction"
+                            && node
+                                .params
+                                .get("to")
+                                .and_then(|to| to.as_str())
+                                .is_some_and(|to| stores.iter().any(|store| store.as_str() == to))
+                    })
+                })
+            })
+            .map(|workflow| workflow.id.clone())
+            .collect()
     }
 
     // -- shares of shared stores ----------------------------------------------
@@ -454,6 +540,24 @@ impl UnlockedVault {
         total
     }
 
+    /// Operations from `from` on with money coming into `scope`.
+    fn deposits(&self, scope: &HashSet<String>, from: i64) -> u32 {
+        let count = self
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| secs_or_now(&tx.meta().timestamp) >= from)
+            .filter(|tx| {
+                tx.legs().iter().any(|leg| {
+                    leg.role == LegRole::Principal
+                        && leg.amount.is_positive()
+                        && scope.contains(&leg.store_id)
+                })
+            })
+            .count();
+        u32::try_from(count).unwrap_or(u32::MAX)
+    }
+
     /// Average of `income − fixed − daily` over the last non-empty months
     /// before the current one, in the budget currency; `None` without any.
     pub fn free_surplus_avg(&self, now: i64, zone: &str) -> Option<Amount> {
@@ -597,6 +701,7 @@ impl UnlockedVault {
                     issues.push(RealismIssue::OverCommitment { need, commitment });
                 }
                 let planned_now = self.planned_now(&goal, start, today, now);
+                let deposits = self.deposits(&scope, secs_or_now(&goal.starts_at));
                 GoalProgress {
                     goal,
                     saved,
@@ -611,6 +716,7 @@ impl UnlockedVault {
                     forecast: forecast.map(|date| date.format("%Y-%m-%d").to_string()),
                     accumulating,
                     planned_now,
+                    deposits,
                 }
             })
             .collect();
@@ -894,6 +1000,87 @@ mod tests {
         }
         assert_eq!(vault.free_surplus_avg(now, "UTC"), Some(amount("500")));
         assert_eq!(vault.income_basis(3, now, "UTC").unwrap().months, 3);
+    }
+
+    #[test]
+    fn deposits_count_incoming_operations_since_the_start() {
+        let (_dir, mut vault, savings) = setup_savings();
+        deposit(&mut vault, &savings, "500", "2025-06-01T00:00:00Z");
+        deposit(&mut vault, &savings, "100", "2026-02-01T00:00:00Z");
+        deposit(&mut vault, &savings, "100", "2026-03-01T00:00:00Z");
+        vault
+            .create_goal(goal("Trip", "1000", &[&savings], 3))
+            .unwrap();
+        let progress = vault.goal_progress(secs("2026-04-01T00:00:00Z"), "UTC");
+        assert_eq!(progress[0].deposits, 2);
+    }
+
+    #[test]
+    fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
+        let (_dir, mut vault, savings) = setup_savings();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        deposit(&mut vault, &savings, "500", "2026-01-01T00:00:00Z");
+        let trip = vault
+            .create_goal(goal("Trip", "1000", &[&savings], 3))
+            .unwrap();
+        vault.fund_goal(&trip.id, &savings, amount("200")).unwrap();
+        let params = |pairs: &[(&str, &str)]| -> std::collections::BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect()
+        };
+        let saver = vault
+            .workflow_from_template(
+                "pay_yourself_first",
+                &params(&[("category", "salary"), ("pct", "10"), ("target", &savings)]),
+                "en",
+                secs("2026-01-02T00:00:00Z"),
+            )
+            .unwrap()
+            .workflow;
+        let other = vault
+            .workflow_from_template(
+                "round_up",
+                &params(&[
+                    ("from", &savings),
+                    ("to", &card),
+                    ("step", "100"),
+                    ("weekday", "6"),
+                ]),
+                "en",
+                secs("2026-01-02T00:00:00Z"),
+            )
+            .unwrap()
+            .workflow;
+        let active = |vault: &UnlockedVault, id: &str| {
+            vault
+                .doc
+                .workflows
+                .iter()
+                .find(|each| each.id == id)
+                .unwrap()
+                .active
+        };
+
+        let deleted = vault
+            .delete_goal(&trip.id, secs("2026-02-01T00:00:00Z"))
+            .unwrap();
+        assert!(vault.goals().is_empty());
+        assert!(vault.doc.envelopes.is_empty());
+        assert_eq!(deleted.workflow_ids, vec![saver.id.clone()]);
+        assert!(!active(&vault, &saver.id));
+        assert!(
+            active(&vault, &other.id),
+            "money out of the wallet is not the goal's"
+        );
+
+        vault
+            .restore_goal(deleted, secs("2026-02-01T00:00:01Z"))
+            .unwrap();
+        assert_eq!(vault.goals().len(), 1);
+        assert_eq!(vault.doc.envelopes.len(), 1);
+        assert!(active(&vault, &saver.id));
     }
 
     #[test]

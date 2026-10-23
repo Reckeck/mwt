@@ -4,6 +4,8 @@ import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockStores, mockTransactions } from './demo'
 import { mockCategories, mockContacts } from './ledger/seed'
 import { mockOverview, mockStore } from './tree'
+import { goals } from './planning/state'
+import { workflows } from './workflows/state'
 
 const CAP = 20
 
@@ -68,6 +70,18 @@ function relations(target: EntityRef): RelationGroup[] {
       return group('transactions', txItems(mockTransactions.filter((tx) => txMeta(tx).categories.includes(id))))
     case 'contact':
       return group('transactions', txItems(mockTransactions.filter((tx) => txContactIds(tx).includes(id))))
+    case 'goal': {
+      const stores = goals.find((goal) => goal.id === id)?.scope.store_ids ?? []
+      // Like the core: workflows quoting one of the goal's wallets fill it.
+      const filling = workflows.filter((flow) => stores.some((store) => flow.graph.includes(`"${store}"`)))
+      return [
+        ...group('stores', stores.flatMap(storeItem)),
+        ...group(
+          'workflows',
+          filling.map((flow) => item('workflow', flow.id, flow.name, { archived: !flow.active })),
+        ),
+      ]
+    }
     default:
       return []
   }
@@ -102,6 +116,10 @@ export function mockEntityCard(target: EntityRef): EntityCard {
     const category = mockCategories.find((entry) => entry.key === id)
     if (!category) return { ...card, missing: true }
     Object.assign(card, { title: category.name ?? '', archived: category.archived })
+  } else if (target.kind === 'goal') {
+    const goal = goals.find((entry) => entry.id === id)
+    if (!goal) return { ...card, missing: true }
+    Object.assign(card, { title: goal.name, value: goal.target_amount, currency: goal.currency })
   } else if (target.kind === 'contact') {
     const contact = mockContacts.find((entry) => entry.id === id)
     if (!contact) return { ...card, missing: true }

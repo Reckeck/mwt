@@ -184,9 +184,61 @@ pub fn open_bytes_keyed(
     Ok((pt, fmt, key))
 }
 
+/// A fresh random key for one blob (an attachment's file).
+pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    rand::thread_rng().fill_bytes(&mut *key);
+    key
+}
+
+/// Seal a blob: `nonce ‖ ciphertext`, bound to `aad` (the blob's id), so a
+/// file cannot be swapped for another one sealed with the same key.
+pub fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
+    let mut nonce = [0u8; NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let ct = cipher
+        .encrypt(
+            XNonce::from_slice(&nonce),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .map_err(|_| Error::Crypto("encryption failed".into()))?;
+    let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// Open what [`seal_blob`] wrote; a changed byte or another id is an error.
+pub fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
+    if sealed.len() < NONCE_LEN + TAG_LEN {
+        return Err(Error::Crypto("sealed file is cut short".into()));
+    }
+    let (nonce, ct) = sealed.split_at(NONCE_LEN);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    cipher
+        .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad })
+        .map_err(|_| Error::Crypto("sealed file does not open".into()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_blob_opens_only_with_its_key_and_id() {
+        let key = random_blob_key();
+        let sealed = seal_blob(&key, b"a1", b"receipt").unwrap();
+        assert_eq!(open_blob(&key, b"a1", &sealed).unwrap(), b"receipt");
+        assert!(open_blob(&key, b"a2", &sealed).is_err());
+        assert!(open_blob(&random_blob_key(), b"a1", &sealed).is_err());
+        let mut broken = sealed.clone();
+        *broken.last_mut().unwrap() ^= 1;
+        assert!(open_blob(&key, b"a1", &broken).is_err());
+    }
 
     #[test]
     fn roundtrip_encrypt_decrypt() {

@@ -30,6 +30,7 @@ mod adjustments;
 mod agenda;
 mod allocation;
 mod asset_holdings;
+mod attachments;
 mod auto_reminders;
 mod automations;
 mod budget;
@@ -91,6 +92,7 @@ pub use allocation::{
     TopupRow, preset_classes,
 };
 pub use asset_holdings::{AssetHolding, AssetHoldings};
+pub use attachments::NewFile;
 pub use auto_reminders::category_of;
 pub(crate) use automations::draft_to_transaction;
 pub use automations::{
@@ -107,7 +109,9 @@ pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as sour
 pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
-pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDraft, GoalProgress, RealismIssue};
+pub use goals::{
+    GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft, GoalProgress, RealismIssue,
+};
 pub use health::{
     DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, HealthReport,
     SAVINGS_BENCHMARK_PCT, SavingsMonth,
@@ -334,7 +338,15 @@ impl UnlockedVault {
         let graphs_migrated = vault.migrate_workflow_graphs();
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
-        if migrated || categories_added || graphs_migrated || incomplete || fmt != vault.fmt {
+        // Files removed last session (their «Отменить» is long gone) go now.
+        let attachments_pruned = vault.prune_attachments();
+        if migrated
+            || categories_added
+            || graphs_migrated
+            || incomplete
+            || attachments_pruned
+            || fmt != vault.fmt
+        {
             vault.persist()?;
         }
         Ok(vault)

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { CopyPlus } from 'lucide-vue-next'
 
+import { AttachmentsBlock } from '@/features/attachment-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
@@ -11,9 +12,11 @@ import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
+import { formatDayMonthShort } from '@/shared/lib/format'
 import { txId, txMeta, txStoreId } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
+import { txTitle } from './lib/tx-card'
 import { useSimilarTxs } from './model/use-similar-txs'
 import { useTxNeighbors } from './model/use-tx-neighbors'
 import type { TransactionDetailsSheetProps } from './transaction-details.types'
@@ -49,12 +52,21 @@ const similar = useSimilarTxs(() => props.tx, open)
 
 const meta = computed(() => (props.tx ? txMeta(props.tx) : null))
 const duplicateOpen = ref(false)
+
+/** The whole card is where a dragged file lands; «к операции RUB → USDT · 21 окт» says which one. */
+const cardBody = ref<HTMLElement | null>(null)
+const owner = computed<EntityRef>(() => ({ kind: 'tx', id: props.tx ? txId(props.tx) : '' }))
+const ownerLabel = computed(() =>
+  props.tx && meta.value
+    ? t('attachments.dropOwner', { title: txTitle(props.tx, context.categoryName), date: formatDayMonthShort(meta.value.timestamp) })
+    : '',
+)
 </script>
 
 <template>
   <Sheet v-model:open="open">
     <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-tx-card>
-      <template v-if="props.tx && meta">
+      <div v-if="props.tx && meta" ref="cardBody" class="relative flex min-h-0 flex-1 flex-col">
         <div class="grid flex-1 content-start gap-5 overflow-y-auto pt-2 pb-6">
           <TxCardHead
             :tx="props.tx"
@@ -81,6 +93,8 @@ const duplicateOpen = ref(false)
               <p v-if="meta.comment" class="text-muted-foreground">{{ meta.comment }}</p>
             </div>
 
+            <AttachmentsBlock :owner="owner" :owner-label="ownerLabel" :drop-target="cardBody" :active="open" />
+
             <TxSimilar v-if="similar.filter.value" :tx="props.tx" :items="similar.items.value" :filter="similar.filter.value" />
 
             <TxMore :tx="props.tx" :open="open">
@@ -104,7 +118,7 @@ const duplicateOpen = ref(false)
           :store-id="txStoreId(props.tx)"
           :prefill="props.tx"
         />
-      </template>
+      </div>
     </SheetContent>
   </Sheet>
 </template>

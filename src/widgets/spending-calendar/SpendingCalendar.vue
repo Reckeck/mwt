@@ -97,7 +97,7 @@ const totals = computed(() => {
 </script>
 
 <template>
-  <div class="grid gap-3">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-3">
     <Teleport v-if="props.headerTo && !isPhone" defer :to="props.headerTo">
       <CalendarMonthHeader
         :title="title"
@@ -166,7 +166,7 @@ const totals = computed(() => {
     />
 
     <!-- The chosen day: its sum and its operations, with the list's filters. -->
-    <section v-if="selected" class="grid gap-2">
+    <section v-if="selected" class="grid grid-cols-[minmax(0,1fr)] gap-2">
       <p class="text-sm text-muted-foreground">
         {{ dayLabel(selected) }}
         <template v-if="selectedDay && Number(selectedDay.spent) > 0">

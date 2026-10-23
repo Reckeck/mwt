@@ -9,6 +9,7 @@ use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::category::CategoryGroup;
 use crate::model::chain::Chain;
+use crate::model::entity_ref::EntityRef;
 use crate::model::planning::{
     AlertCondition, BudgetPeriod, BudgetTarget, Schedule, TransactionDraft,
 };
@@ -906,6 +907,43 @@ pub struct UpdateContactInput {
 pub struct ContactTurnoverInput {
     pub contact_id: String,
     pub account_id: Option<String>,
+}
+
+// -- attachments (Full-New-Attach) ------------------------------------------------
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ListAttachmentsInput {
+    /// One operation or goal; `None` lists every attachment.
+    pub owner: Option<EntityRef>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AddAttachmentLinkInput {
+    pub owner: EntityRef,
+    pub url: String,
+    /// The caption; empty shows the address.
+    #[serde(default)]
+    pub title: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AddAttachmentFileInput {
+    pub owner: EntityRef,
+    pub name: String,
+    pub mime: Option<String>,
+    /// The file's bytes, base64.
+    pub data_base64: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AttachmentIdInput {
+    pub id: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct RenameAttachmentInput {
+    pub id: String,
+    pub title: String,
 }
 
 // -- categories and rules --------------------------------------------------------

@@ -4,7 +4,8 @@
  * user's zone, with values from the stamped USD price.
  */
 
-import { txContactIds, txKind, txLegs, txMeta, txSearchText, txSides } from '@/shared/lib/transactions'
+import { liveAttachments, mockAttachedTxIds } from './attachments'
+import { txContactIds, txId, txKind, txLegs, txMeta, txSearchText, txSides } from '@/shared/lib/transactions'
 
 export interface ExploreMockContext {
   transactions: Transaction[]
@@ -65,12 +66,14 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     : null
   const needle = filter.text?.trim().toLowerCase() ?? ''
   const nameOf = (id: string) => flatten(ctx.tree).find((node) => node.store.id === id)?.store.name ?? ''
+  const attached = filter.with_attachments ? mockAttachedTxIds() : new Set<string>()
   return ctx.transactions.filter((tx) => {
     if (ids && !storesOf(tx).some((id) => ids.has(id))) return false
     if (filter.kinds.length && !filter.kinds.includes(txKind(tx))) return false
     if (filter.contact_id && !txContactIds(tx).includes(filter.contact_id)) return false
     if (filter.flow_id && txMeta(tx).flow_id !== filter.flow_id) return false
     if (filter.with_fee && !txLegs(tx).some((leg) => leg.role === 'fee')) return false
+    if (filter.with_attachments && !attached.has(txId(tx))) return false
     // The mock keeps no cost basis: «closed a position» is a spot sale or an asset sale.
     if (filter.realized && !['trade_spot', 'asset_sell'].includes(txKind(tx))) return false
     const origin = txMeta(tx).origin
@@ -87,7 +90,11 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     if (filter.hide_internal && isInternal(tx, ctx.tree)) return false
     if (filter.category !== null && (txMeta(tx).categories[0] ?? '') !== filter.category) return false
     if (!needle) return true
+    const files = liveAttachments()
+      .filter((item) => item.owner.kind === 'tx' && item.owner.id === txId(tx))
+      .flatMap((item) => [item.title, item.url ?? ''])
     const names = [
+      ...files,
       ...storesOf(tx).map(nameOf),
       ...txContactIds(tx).map((id) => ctx.contacts.find((contact) => contact.id === id)?.name ?? ''),
     ]

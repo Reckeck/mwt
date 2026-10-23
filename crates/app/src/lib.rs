@@ -20,9 +20,9 @@ mod tray;
 mod vault_writer;
 
 use commands::{
-    AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
-    losses, mobile, notifications, planning, portfolio, pricing, rates, settings, sources, stores,
-    transactions, transactions_bulk, vault_link, vault_recents, workflows,
+    AppState, analytics, app_settings, attachments, auth, calc, categories, contacts, enrichment,
+    exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, settings,
+    sources, stores, transactions, transactions_bulk, vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -125,6 +125,14 @@ pub fn run() {
             categories::delete_categorization_rule,
             categories::reorder_categorization_rules,
             // contacts
+            attachments::list_attachments,
+            attachments::add_attachment_link,
+            attachments::add_attachment_file,
+            attachments::open_attachment,
+            attachments::remove_attachment,
+            attachments::restore_attachment,
+            attachments::rename_attachment,
+            attachments::save_attachment_as,
             contacts::list_contacts,
             contacts::create_contact,
             contacts::update_contact,
@@ -294,6 +302,7 @@ pub fn run() {
             planning::create_goal,
             planning::update_goal,
             planning::delete_goal,
+            planning::restore_goal,
             planning::get_goal_progress,
             planning::get_goal_calendar,
             planning::goal_from_scenario,

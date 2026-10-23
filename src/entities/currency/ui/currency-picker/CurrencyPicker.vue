@@ -16,6 +16,7 @@ import {
 } from '@/shared/ui/combobox'
 import { Label } from '@/shared/ui/label'
 import { useSettingsStore } from '@/shared/store/settings'
+import { currencySymbol } from '@/shared/lib/format'
 
 import { CURRENCY_ROW_HEIGHT } from './currency-picker.constants'
 import type { CurrencyKind, CurrencyOption, CurrencyPickerProps } from './currency-picker.types'
@@ -138,11 +139,12 @@ function retryCatalog() {
             class="w-full min-w-0 justify-between gap-2 px-3 font-normal data-[state=open]:border-primary"
             :class="[
               props.error && 'border-destructive',
-              props.chip && 'h-7 gap-1 border-0 bg-secondary px-2 text-xs shadow-none hover:bg-secondary/80',
+              props.chip && 'h-7 gap-1 rounded-none border-0 border-l bg-transparent pl-2 pr-1 text-foreground shadow-none hover:bg-transparent dark:bg-transparent',
             ]"
           >
             <span v-if="selected" class="flex min-w-0 items-baseline gap-1.5">
-              <span class="font-medium uppercase">{{ selected }}</span>
+              <span v-if="props.chip && currencySymbol(selected) !== selected.toUpperCase()">{{ currencySymbol(selected) }}</span>
+              <span :class="props.chip ? 'uppercase' : 'font-medium uppercase'">{{ selected }}</span>
               <span v-if="selectedName && !props.compact && !props.chip" class="truncate text-xs text-muted-foreground">{{ selectedName }}</span>
             </span>
             <span v-else class="truncate text-muted-foreground">

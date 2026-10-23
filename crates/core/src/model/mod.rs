@@ -1,6 +1,7 @@
 //! Domain model stored inside the encrypted vault (`VaultDoc`).
 //! All monetary/quantity values use [`crate::amount::Amount`].
 
+pub mod attachment;
 pub mod category;
 pub mod chain;
 pub mod contact;

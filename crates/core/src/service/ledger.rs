@@ -77,6 +77,9 @@ pub struct TxFilter {
     /// Only transfers that opened or settled a personal debt.
     #[serde(default)]
     pub debt_only: bool,
+    /// Only operations with a file or a link (Full-New-Attach 6).
+    #[serde(default)]
+    pub with_attachments: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -366,6 +369,12 @@ impl UnlockedVault {
                 .collect()
         });
 
+        let attached: HashSet<String> = if filter.with_attachments {
+            self.transactions_with_attachments().into_iter().collect()
+        } else {
+            HashSet::new()
+        };
+
         // Converting every operation only when the filter asks for a value.
         let priced = (filter.amount_min.is_some() || filter.amount_max.is_some())
             .then(|| (self.rate_book(), self.base_and_fx().0));
@@ -390,6 +399,7 @@ impl UnlockedVault {
             })
             .filter(|tx| !filter.hide_internal || !tx.is_internal(|id| self.root_of(id)))
             .filter(|tx| !filter.with_fee || tx.legs().iter().any(|leg| leg.role == LegRole::Fee))
+            .filter(|tx| !filter.with_attachments || attached.contains(&tx.meta().id))
             .filter(|tx| {
                 realized
                     .as_ref()
@@ -449,6 +459,15 @@ impl UnlockedVault {
         }
         for (_, hash) in tx.on_chain_refs() {
             parts.extend(hash.map(str::to_string));
+        }
+        // File names and link captions: «где был чек skycapital?».
+        for item in self.doc.attachments.iter().filter(|item| {
+            item.removed_at.is_none()
+                && item.owner.kind == crate::model::entity_ref::EntityKind::Tx
+                && item.owner.id == meta.id
+        }) {
+            parts.push(item.title.clone());
+            parts.extend(item.url.clone());
         }
         parts.join(" ").to_lowercase()
     }

@@ -3,6 +3,7 @@
 
 pub mod analytics;
 pub mod app_settings;
+pub mod attachments;
 pub mod auth;
 pub mod calc;
 pub mod categories;

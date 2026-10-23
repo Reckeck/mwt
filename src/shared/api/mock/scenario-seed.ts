@@ -4,6 +4,7 @@ import { mockTransactionFrom } from './ledger'
 import { demoTransactions, mockStores, mockTransactions, newStore, priceOf } from './demo'
 import { STRESS_DETAILS, STRESS_NO_RATE, STRESS_STORE_NAME, yearInputs } from './demo-year'
 import { seedScenarios } from './planning/calc-seed'
+import { seedGoal } from './planning/goal-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
@@ -24,6 +25,7 @@ export function seedMock() {
   mockTransactions.push(...year, ...demoTransactions(), seedFlat())
   seedScenarios()
   seedSalaryAutomation(mockTransactions)
+  seedGoal()
   seedLoyalty()
   if (mockScenario === 'stress') seedStress()
 }

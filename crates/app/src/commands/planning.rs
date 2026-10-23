@@ -20,7 +20,7 @@ use trade_core::model::planning::{
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
     AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
-    EmergencyStatus, GoalCalendar, GoalProgress, InterestTaxReport, MonthSummary,
+    EmergencyStatus, GoalCalendar, GoalDeleted, GoalProgress, InterestTaxReport, MonthSummary,
     PayUtilityBillInput, PropertySummary, UnlockedVault, UpcomingItem, UtilityBill,
     UtilityPaymentDraft, UtilityTrend,
 };
@@ -239,8 +239,17 @@ pub async fn update_goal(
 }
 
 #[tauri::command]
-pub async fn delete_goal(id: String, state: State<'_, AppState>) -> Result<(), String> {
-    with_vault_mut(&state, |vault| vault.delete_goal(&id))
+pub async fn delete_goal(id: String, state: State<'_, AppState>) -> Result<GoalDeleted, String> {
+    with_vault_mut(&state, |vault| vault.delete_goal(&id, now_secs()))
+}
+
+/// Undo of [`delete_goal`].
+#[tauri::command]
+pub async fn restore_goal(
+    deleted: GoalDeleted,
+    state: State<'_, AppState>,
+) -> Result<Goal, String> {
+    with_vault_mut(&state, |vault| vault.restore_goal(deleted, now_secs()))
 }
 
 #[tauri::command]
