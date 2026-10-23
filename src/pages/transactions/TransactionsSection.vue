@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { RouteTabs } from '@/shared/ui/route-tabs'
+import { useIsPhone } from '@/shared/lib/phone'
 
 const { t } = useI18n()
+const route = useRoute()
+const phone = useIsPhone()
+/** A contact on a phone is a screen of its own, with «‹» instead of the tabs. */
+const inContact = computed(() => phone.value && route.name === 'transactions-contacts' && Boolean(route.query.contact))
 
 /** Each tab is a child route, so a tab has its own address. */
 const tabs = computed(() => [
@@ -21,7 +26,7 @@ const more = computed(() => [
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="flex min-w-0 flex-wrap items-center gap-2">
+    <div v-if="!inContact" class="flex min-w-0 flex-wrap items-center gap-2">
       <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
       <!-- A tab's own controls on the tabs' row (the calendar's month), teleported in. -->
       <div id="tx-section-end" class="ml-auto flex min-w-0 items-center" />

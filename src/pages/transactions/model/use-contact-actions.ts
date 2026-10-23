@@ -3,15 +3,15 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Archive, ArchiveRestore, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Copy } from 'lucide-vue-next'
 
+import { maskDetail } from '@/entities/contact'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { call } from '@/shared/api/ipc'
 import { copyText } from '@/shared/lib/clipboard'
 
 /** Right-click a contact in the list: the common operations without selecting it first. */
 export function useContactActions(
-  selectedId: Ref<string>,
   transferStore: Ref<string>,
-  openTransfer: (effect: DebtEffect | null) => void,
+  openTransfer: (contact: Contact, effect: DebtEffect | null) => void,
 ) {
   const { t } = useI18n()
   const queryClient = useQueryClient()
@@ -28,10 +28,7 @@ export function useContactActions(
   })
 
   return function contactActions(contact: Contact): UiAction[] {
-    const run = (effect: DebtEffect | null) => () => {
-      selectedId.value = contact.id
-      openTransfer(effect)
-    }
+    const run = (effect: DebtEffect | null) => () => openTransfer(contact, effect)
     const blocked = contact.archived
       ? t('contacts.archivedHint')
       : !transferStore.value
@@ -49,7 +46,7 @@ export function useContactActions(
         hidden: !contact.accounts.length,
         children: contact.accounts.map((account, index) => ({
           id: `copy-${account.id || index}`,
-          label: `${account.label || t(`detailKind.${account.kind}`)} · ${account.value}`,
+          label: `${account.label || t(`detailKind.${account.kind}`)} · ${maskDetail(account.kind, account.value)}`,
           run: () => void copyText(account.value),
         })),
       },

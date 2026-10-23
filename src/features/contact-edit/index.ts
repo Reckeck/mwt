@@ -1,5 +1,5 @@
-export { default as ContactEditor } from './ui/ContactEditor.vue'
-export { default as ContactQuickCreate } from './ui/ContactQuickCreate.vue'
+export { default as ContactAccounts } from './ui/ContactAccounts.vue'
 export { default as ContactArchive } from './ui/ContactArchive.vue'
+export { default as ContactEditDialog } from './ui/ContactEditDialog.vue'
 export * from './contact-edit.constants'
 export * from './contact-edit.types'
