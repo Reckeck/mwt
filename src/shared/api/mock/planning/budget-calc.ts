@@ -128,6 +128,12 @@ export function goalProgress(ctx: PlanningMockContext): GoalProgress[] {
             .flatMap((tx) => txLegs(tx))
             .filter((leg) => leg.role === 'principal' && ids.has(leg.store_id))
             .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
+      const start = new Date(goal.starts_at).getTime()
+      const deposits = ctx.transactions.filter(
+        (tx) =>
+          new Date(txMeta(tx).timestamp).getTime() >= start &&
+          txLegs(tx).some((leg) => leg.role === 'principal' && ids.has(leg.store_id) && Number(leg.amount) > 0),
+      ).length
       const target = Number(goal.target_amount)
       const deadline = goal.deadline ? new Date(goal.deadline) : null
       const monthsLeft = deadline
@@ -149,9 +155,11 @@ export function goalProgress(ctx: PlanningMockContext): GoalProgress[] {
         need_per_month: need === null ? null : money(need),
         realistic: issues.length === 0,
         issues,
-        forecast: null,
-        accumulating: false,
+        // The mock has no trend: on time when the plan holds.
+        forecast: goal.deadline && issues.length === 0 ? goal.deadline.slice(0, 10) : null,
+        accumulating: deposits > 0,
         planned_now: plannedNow(goal),
+        deposits,
       }
     })
 }

@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
 
-import { Check, ExternalLink } from 'lucide-vue-next'
+import { Check, ExternalLink, Paperclip } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -17,6 +17,7 @@ import {
   txExplorerUrl,
   txFee,
   txHasNoPrice,
+  txId,
   txIsInternal,
   txKind,
   txLegForStore,
@@ -55,6 +56,7 @@ const phone = useIsPhone()
 const kind = computed(() => txKind(props.tx))
 const meta = computed(() => txMeta(props.tx))
 const legs = computed(() => txPrincipalLegs(props.tx))
+const attached = computed(() => context.attachmentCount(txId(props.tx)))
 const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 const debt = computed(() => txDebt(props.tx))
 const automation = computed(() => txAutomation(props.tx))
@@ -150,6 +152,15 @@ const phoneLine = computed(() => {
       />
       <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
+        <span
+          v-if="attached"
+          class="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"
+          :aria-label="t('attachments.count', { count: attached })"
+          :title="t('attachments.count', { count: attached })"
+          data-tx-attachments
+        >
+          <Paperclip class="size-3" aria-hidden="true" />{{ attached }}
+        </span>
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
           {{ context.categoryName(key) }}
         </Badge>

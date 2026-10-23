@@ -12,8 +12,8 @@ import { txId, txMeta } from '@/shared/lib/transactions'
 
 /**
  * The cards open at `?open=`: the top one is drawn, «Назад» or closing it
- * shows the one under it. An operation keeps its own sheet; every other kind
- * shares the generic card.
+ * shows the one under it. An operation and a goal keep their own sheets;
+ * every other kind shares the generic card.
  */
 export function useEntityHost() {
   const nav = useEntityNav()
@@ -52,9 +52,15 @@ export function useEntityHost() {
       rememberEntity(top.value, `${meta.comment} · ${formatDayMonthShort(meta.timestamp)}`)
   })
 
-  const sheetOpen = (kind: 'tx' | 'other') =>
+  /** An operation and a goal have their own sheets; the rest share the generic card. */
+  const shownSheet = computed(() => {
+    const kind = top.value?.kind
+    if (!kind) return null
+    return kind === 'tx' || kind === 'goal' ? kind : 'other'
+  })
+  const sheetOpen = (kind: 'tx' | 'goal' | 'other') =>
     computed({
-      get: () => top.value !== null && (kind === 'tx') === isTx.value,
+      get: () => shownSheet.value === kind,
       set: (value: boolean) => {
         if (!value) nav.back()
       },
@@ -82,10 +88,12 @@ export function useEntityHost() {
     })
 
   return {
+    top,
     card,
     current,
     tx,
     txOpen: sheetOpen('tx'),
+    goalCardOpen: sheetOpen('goal'),
     cardOpen: sheetOpen('other'),
     canGoBack: computed(() => nav.stack.value.length > 1),
     back: nav.back,

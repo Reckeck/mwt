@@ -57,3 +57,11 @@ export const useMonthPace = () =>
 export const CALC_SCENARIOS_KEY = ['calc-scenarios']
 export const useCalcScenarios = () =>
   useQuery({ queryKey: CALC_SCENARIOS_KEY, queryFn: () => call<CalcScenario[]>('calc_scenarios_list') })
+
+/** Every file and link (`list_attachments` without an owner): the paperclips in the lists; any change under `attachments` refreshes it. */
+export const useAllAttachments = (enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({
+    queryKey: ['attachments', 'all'],
+    queryFn: () => call<Attachment[]>('list_attachments', { input: { owner: null } }),
+    enabled: toRef(enabled),
+  })

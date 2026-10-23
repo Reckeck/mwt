@@ -3,6 +3,7 @@
 import { txMeta } from '@/shared/lib/transactions'
 import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTotals } from './budget-calc'
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
+import { deleteGoal, restoreGoal } from './goal-delete'
 import {
   automations,
   budgets,
@@ -162,8 +163,9 @@ export function planAutomations(
       return replace(goals, input.id, { ...current, ...input.goal })
     }
     case 'delete_goal':
-      remove(goals, String(args?.id))
-      return {}
+      return deleteGoal(String(args?.id)) ?? fail('not found', 'MISSING')
+    case 'restore_goal':
+      return restoreGoal(args?.deleted as GoalDeleted)
     case 'get_goal_progress':
       return goalProgress(ctx)
     case 'get_goal_calendar': {

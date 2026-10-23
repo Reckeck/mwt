@@ -13,7 +13,6 @@
   "long-line src/features/vault-transfer/ui/SendVaultDialog/SendVaultPick.vue": 1,
   "long-line src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
   "long-line src/shared/ui/action-menu/ActionMenu.vue": 1,
-  "long-line src/shared/ui/advanced-fields/AdvancedFields.vue": 1,
   "long-line src/shared/ui/alert/index.ts": 1,
   "long-line src/shared/ui/amount-input/AmountInput.vue": 1,
   "long-line src/shared/ui/button/button.variants.ts": 1,

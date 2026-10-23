@@ -167,6 +167,9 @@ pub static COLLECTIONS: &[Collection] = &[
     records("data_sources", ID),
     records("asset_price_sources", &["asset_key"]),
     records("deposit_rate_sources", &["store_id"]),
+    // The records and their keys; the sealed bytes stay on each device.
+    records("attachments", ID),
+    records("attachment_keys", ID),
     log(
         "import_runs",
         ID,

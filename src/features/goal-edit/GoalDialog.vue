@@ -12,6 +12,7 @@ import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { matchesHotkey } from '@/shared/lib/hotkeys'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { GOAL_INCOME_CATEGORY, GOAL_SAVE_PCT } from './goal-edit.constants'
@@ -30,9 +31,12 @@ const props = withDefaults(defineProps<GoalDialogProps>(), {
   storeId: '',
   remainder: null,
   fromCalc: null,
+  saved: null,
 })
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [goal: Goal] }>()
+/** An edited goal's own rows (what fills it, its files) and actions («Удалить цель») come from the card. */
+defineSlots<{ extras?(): unknown; actions?(): unknown }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -77,13 +81,13 @@ watch(open, (isOpen) => {
 })
 
 const creating = computed(() => !props.goal)
-/** From a calculation everything is filled in already: one page, both steps' fields. */
-const onePage = computed(() => creating.value && props.fromCalc !== null)
+/** From a calculation everything is filled in already, and an edit changes a goal in place: one page, both steps' fields. */
+const onePage = computed(() => !creating.value || props.fromCalc !== null)
 
 /** Each step checks its own fields: «Далее» the first, «Создать» the second. */
 const whatRules = () => ({
-  name: required(name.value),
-  target: positiveAmount(target.value),
+  name: name.value.trim() ? null : t('goal.nameRequired'),
+  target: positiveAmount(target.value) ? t('goal.targetPositive') : null,
   currency: required(currency.value, 'pick'),
   deadline: deadline.value && startsAt.value && deadline.value < startsAt.value ? t('validation.dateOrder') : null,
 })
@@ -149,6 +153,10 @@ const save = useMutation({
   },
 })
 
+function onKeydown(event: KeyboardEvent) {
+  if (matchesHotkey(event, 'saveAndNext')) submit(event)
+}
+
 function submit(event: Event) {
   if (step.value === 1 && !onePage.value) form.submit(() => (step.value = 2), event)
   else form.submit(() => save.mutate(), event)
@@ -156,10 +164,11 @@ function submit(event: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title">
+  <Dialog v-model:open="open" :title="title" size="form">
+    <fieldset class="grid min-w-0 gap-4" @keydown="onKeydown">
     <form id="goal-form" class="grid gap-4" @submit.prevent="submit">
-      <p v-if="onePage && props.fromCalc" class="text-sm text-muted-foreground">{{ t('goal.fromCalcNote', { name: props.fromCalc.scenario }) }}</p>
-      <WizardSteps v-else :step="step" :titles="steps" />
+      <p v-if="creating && props.fromCalc" class="text-sm text-muted-foreground">{{ t('goal.fromCalcNote', { name: props.fromCalc.scenario }) }}</p>
+      <WizardSteps v-else-if="creating" :step="step" :titles="steps" />
       <GoalWhatStep v-if="step === 1 || onePage" v-model:name="name" v-model:target="target" v-model:currency="currency" v-model:deadline="deadline" :form="form" />
       <GoalWhereStep
         v-if="step === 2 || onePage"
@@ -178,10 +187,16 @@ function submit(event: Event) {
         :target="target"
         :currency="currency"
         :already="onePage ? (props.fromCalc?.initial ?? null) : null"
+        :saved="props.saved"
       />
     </form>
+    <!-- Outside the form: the files block has a form of its own. -->
+    <slot name="extras" />
+    </fieldset>
 
     <template #footer>
+      <slot name="actions" />
+      <span v-if="$slots.actions" class="flex-1" />
       <Button variant="outline" class="max-md:h-11" @click="step === 1 || onePage ? (open = false) : (step = 1)">
         {{ step === 1 || onePage ? t('actions.cancel') : t('actions.back') }}
       </Button>

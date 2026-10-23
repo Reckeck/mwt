@@ -9,6 +9,8 @@ export interface GoalDialogProps {
   remainder?: GoalRemainder | null
   /** The goal comes from a calculator run: one page instead of two steps (Money 3 · 20). */
   fromCalc?: GoalFromCalc | null
+  /** What an edited goal already holds, formatted: «Уже лежит 1 539 $» under its wallet (New-Goal 4). */
+  saved?: string | null
 }
 
 export interface GoalFromCalc {

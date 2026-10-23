@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 
 /// A kind of thing the app can open a card of.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum EntityKind {
+    #[default]
     Store,
     Tx,
     Category,
@@ -27,7 +28,9 @@ pub enum EntityKind {
 }
 
 /// The address of one entity: what the `?open=kind:id` link carries.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
+)]
 pub struct EntityRef {
     pub kind: EntityKind,
     pub id: String,

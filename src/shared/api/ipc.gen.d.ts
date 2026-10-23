@@ -7,6 +7,18 @@ type Amount = string; // rust_decimal money — always a decimal string
  */
 type AccountRef = { "store": string } | { "contact": { contact_id: string, account_id: string | null, } } | { "raw": string };
 
+type AddAttachmentFileInput = { owner: EntityRef, name: string, mime: string | null, 
+/**
+ * The file's bytes, base64.
+ */
+data_base64: string, };
+
+type AddAttachmentLinkInput = { owner: EntityRef, url: string, 
+/**
+ * The caption; empty shows the address.
+ */
+title: string, };
+
 /**
  * Several operations saved as one chain: all or none.
  */
@@ -338,6 +350,44 @@ price_base: Amount, value_base: Amount,
  * Change of the price over the last 24 hours, percent, when the provider said it.
  */
 change_24h_pct: Amount | null, };
+
+/**
+ * One file or link of an entity.
+ */
+type Attachment = { id: string, 
+/**
+ * The operation or goal it belongs to.
+ */
+owner: EntityRef, kind: AttachmentKind, 
+/**
+ * The file name, or the link's caption (the address when none was given).
+ */
+title: string, 
+/**
+ * The link's address; `None` for a file.
+ */
+url: string | null, 
+/**
+ * A file's media type, as the system named it.
+ */
+mime: string | null, 
+/**
+ * A file's size in bytes, before sealing.
+ */
+size: number, 
+/**
+ * SHA-256 of the file, hex: the same check is added once.
+ */
+sha256: string | null, created_at: string, 
+/**
+ * Removed, waiting for «Отменить»: hidden from every list, its file kept
+ * until the vault is opened next.
+ */
+removed_at: string | null, };
+
+type AttachmentIdInput = { id: string, };
+
+type AttachmentKind = "file" | "link";
 
 /**
  * An automation as the app shows it: a workflow built from an
@@ -1903,6 +1953,15 @@ need: Amount,
  */
 saved: Amount, shortfall: Amount, done: boolean, };
 
+/**
+ * A deleted goal and what went with it: enough to undo.
+ */
+type GoalDeleted = { goal: Goal, envelopes: Array<Envelope>, 
+/**
+ * Workflows switched off with it.
+ */
+workflow_ids: Array<string>, };
+
 type GoalInput = { name: string, active: boolean, target_amount: Amount, currency: string, starts_at: string, deadline: string | null, 
 /**
  * Importance, 1–5.
@@ -1958,7 +2017,11 @@ accumulating: boolean,
  * What the linked calculator scenario plans to have by now, in the goal
  * currency.
  */
-planned_now: Amount | null, };
+planned_now: Amount | null, 
+/**
+ * Operations that put money into the goal's wallets since its start.
+ */
+deposits: number, };
 
 type GraphEdge = { 
 /**
@@ -2615,6 +2678,12 @@ type LinkVaultInput = {
 existing: boolean, };
 
 type Liquidity = "maker" | "taker";
+
+type ListAttachmentsInput = { 
+/**
+ * One operation or goal; `None` lists every attachment.
+ */
+owner: EntityRef | null, };
 
 type ListImportedTransactionsInput = { store_id: string, 
 /**
@@ -3819,6 +3888,8 @@ type ReminderSource = { kind: ReminderSourceKind, id: string, };
  * the store, utility item, contact debt or goal it follows.
  */
 type ReminderSourceKind = "loan_payment" | "credit_card_payment" | "rent" | "utilities" | "meter_readings" | "deposit_end" | "pds_contribution" | "loyalty_expiry" | "debt" | "goal_saving" | "goal_deadline" | "property_tax" | "interest_tax" | "vehicle_insurance" | "vehicle_service";
+
+type RenameAttachmentInput = { id: string, title: string, };
 
 /**
  * Unit of a reminder's repeat interval.
@@ -5265,7 +5336,11 @@ auto_only: boolean,
 /**
  * Only transfers that opened or settled a personal debt.
  */
-debt_only: boolean, };
+debt_only: boolean, 
+/**
+ * Only operations with a file or a link (Full-New-Attach 6).
+ */
+with_attachments: boolean, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
@@ -5878,7 +5953,11 @@ asset_price_sources: Array<AssetPriceSource>,
 /**
  * Deposits whose rate a data source follows.
  */
-deposit_rate_sources: Array<DepositRateSource>, };
+deposit_rate_sources: Array<DepositRateSource>, 
+/**
+ * Files and links of operations and goals (Full-New-Attach).
+ */
+attachments: Array<Attachment>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
 

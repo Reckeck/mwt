@@ -682,6 +682,13 @@ pub struct VaultDoc {
     #[ts(skip)]
     #[schemars(with = "serde_json::Value")]
     pub sync: crate::sync::SyncState,
+    /// Files and links of operations and goals (Full-New-Attach).
+    #[serde(default)]
+    pub attachments: Vec<crate::model::attachment::Attachment>,
+    /// The keys the attachments' files are sealed with.
+    #[serde(default)]
+    #[ts(skip)]
+    pub attachment_keys: Vec<crate::model::attachment::AttachmentKey>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -743,6 +750,8 @@ impl Default for VaultDoc {
             data_sources: Vec::new(),
             asset_price_sources: Vec::new(),
             deposit_rate_sources: Vec::new(),
+            attachments: Vec::new(),
+            attachment_keys: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

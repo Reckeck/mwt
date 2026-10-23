@@ -20,7 +20,7 @@ const filter = defineModel<TxFilter>({ required: true })
 const { t } = useI18n()
 const phone = useIsPhone()
 
-const flag = (name: 'auto_only' | 'debt_only' | 'hide_internal') =>
+const flag = (name: 'auto_only' | 'debt_only' | 'hide_internal' | 'with_attachments') =>
   computed({
     get: () => filter.value[name],
     set: (value: boolean) => {
@@ -30,6 +30,7 @@ const flag = (name: 'auto_only' | 'debt_only' | 'hide_internal') =>
 const rows = [
   { key: 'auto', label: 'filter.autoOnly', model: flag('auto_only') },
   { key: 'debt', label: 'filter.debtOnly', model: flag('debt_only') },
+  { key: 'files', label: 'filter.withAttachments', model: flag('with_attachments') },
   { key: 'internal', label: 'filter.hideInternal', model: flag('hide_internal') },
 ]
 </script>

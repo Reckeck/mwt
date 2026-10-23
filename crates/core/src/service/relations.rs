@@ -619,8 +619,17 @@ impl UnlockedVault {
             .map(|scenario| {
                 RelationItem::named(EntityKind::Scenario, &scenario.id, &scenario.name)
             });
+        // What fills the goal: automations sending money to its wallets.
+        let [automations, workflows] = self.workflows_where(|workflow| {
+            goal.scope
+                .store_ids
+                .iter()
+                .any(|store| quoted_in(workflow, store))
+        });
         vec![
             group(RelationKind::Stores, stores),
+            automations,
+            workflows,
             group(RelationKind::Scenarios, scenario.into_iter().collect()),
             self.reminders_of(id),
         ]

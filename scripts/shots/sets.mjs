@@ -251,6 +251,21 @@ const PICK_TWO = [
   { wait: 300 },
 ]
 
+/** Opens the first operation that already has files (the mock puts them on the two latest payments). */
+const OPEN_ATTACHED = {
+  eval: `for (const row of document.querySelectorAll('[data-tx-open]')) {
+    row.click()
+    await new Promise((done) => setTimeout(done, 500))
+    if (document.querySelector('[data-attachments] [data-attachment-row]')) return true
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await new Promise((done) => setTimeout(done, 300))
+  }
+  return false`,
+}
+/** Opens an operation without files: the oldest one on screen. */
+const OPEN_BARE = { eval: `[...document.querySelectorAll('[data-tx-open]')].at(-1).click(); return true` }
+const ATTACH = (frame) => ({ board: 'New-Attach', frame })
+
 const stage3 = [
   { name: 'ops', route: '/transactions', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Ops-1', frame: '1.' } },
   { name: 'ops-more', route: '/transactions', steps: [{ wait: 600 }, { click: '[data-filter-more]' }, { wait: 500 }], canvas: { board: 'Ops-1', frame: '2.' } },
@@ -360,6 +375,65 @@ const stage3 = [
     steps: deal('defi', [['#tx-protocol', 'Bybit Earn'], ['#tx-amount', '200']]),
     canvas: { board: 'OpForm-2', frame: '11.' },
   },
+  { name: 'attach-card', route: '/transactions', steps: [{ wait: 800 }, OPEN_ATTACHED, { wait: 600 }, { eval: `document.querySelector('[data-attachments]').scrollIntoView({ block: 'center' }); return true` }, { wait: 300 }], canvas: ATTACH('1.') },
+  { name: 'attach-empty', route: '/transactions', steps: [{ wait: 800 }, OPEN_BARE, { wait: 900 }, { eval: `document.querySelector('[data-attachments]').scrollIntoView({ block: 'center' }); return true` }, { wait: 300 }], canvas: ATTACH('2.') },
+  { name: 'attach-add', route: '/transactions', steps: [{ wait: 800 }, OPEN_BARE, { wait: 900 }, { click: '[data-attachment-add]' }, { wait: 500 }], canvas: ATTACH('2.') },
+  {
+    name: 'attach-link',
+    route: '/transactions',
+    steps: [{ wait: 800 }, OPEN_ATTACHED, { wait: 600 }, { click: '[data-attachment-add]' }, { wait: 400 }, { click: '[data-attachment-pick="link"]' }, { wait: 500 }, { fill: ['#attachment-link-url', 't.me/c/1848/2231'] }, { wait: 200 }],
+    canvas: ATTACH('4.'),
+  },
+  { name: 'attach-list', route: '/transactions', steps: [{ wait: 600 }, { click: '[data-filter-more]' }, { wait: 500 }, { eval: `document.querySelector('[id$="-files"]')?.click(); return true` }, { wait: 700 }], canvas: ATTACH('6.') },
+  { name: 'attach-filtered', route: '/transactions?files=1', steps: [{ wait: 900 }], canvas: ATTACH('6.') },
+  {
+    name: 'attach-form',
+    route: '/',
+    steps: [
+      { wait: 600 },
+      { press: 'ctrl+n' },
+      { wait: 700 },
+      { click: '[data-tour="tx-more"] > button' },
+      { wait: 400 },
+      { click: '[data-attachments-field] [data-attachment-add]' },
+      { wait: 400 },
+      { click: '[data-attachment-pick="link"]' },
+      { wait: 500 },
+      { fill: ['#attachment-link-url', 'https://ofd.ru/check/8841'] },
+      { fill: ['#attachment-link-title', 'Чек.jpg'] },
+      { click: '[data-attachment-link-form] [type="submit"]' },
+      { wait: 500 },
+    ],
+    canvas: ATTACH('5.'),
+  },
+  {
+    name: 'attach-remove',
+    route: '/transactions',
+    steps: [
+      { wait: 600 },
+      OPEN_ATTACHED,
+      {
+        eval: `const dt = new DataTransfer()
+    dt.items.add(new File([new Uint8Array(31 * 1024 * 1024)], 'Договор обмена.pdf', { type: 'application/pdf' }))
+    document.querySelector('[data-attachments]').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }))
+    return true`,
+      },
+      { wait: 400 },
+      { click: '[data-attachments] [data-attachment-row] button[aria-label="Ещё"]' },
+      { wait: 400 },
+      {
+        eval: `const item = [...document.querySelectorAll('[role="menuitem"], [data-attachment-sheet] button, [role="dialog"] button')].findLast((el) => el.textContent.trim() === 'Удалить')
+    item?.click()
+    return Boolean(item)`,
+      },
+      { wait: 800 },
+    ],
+    canvas: ATTACH('7.'),
+  },
+  { name: 'goal-new-errors', route: '/money/plan', steps: [{ click: '[data-plan-goal]' }, { wait: 300 }, { fill: ['#goal-target', '0'] }, { click: '[data-wizard-next]' }, { wait: 300 }], canvas: { board: 'New-Goal', frame: '2.' } },
+  { name: 'goal-card', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '3.' } },
+  { name: 'goal-delete', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-delete]' }, { wait: 400 }], canvas: { board: 'New-Goal', frame: '5.' } },
+  { name: 'goal-edit', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-edit]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '4.' } },
 ]
 
 export const SETS = { before, stage1, stage2, stage2b, paths, stage3 }

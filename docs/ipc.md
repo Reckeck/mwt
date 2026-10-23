@@ -145,7 +145,7 @@ Frontend парсит код и показывает локализованно�
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `list_transactions` | `filter?: TxFilter { scope: StoreScope, kinds[], contact_id?, flow_id?, from?, to?, hide_internal, text?, category?, with_fee, realized, amount_min?, amount_max?, auto_only, debt_only }` | `Vec<Transaction>` — новые сверху. `from`/`to` — `YYYY-MM-DD` включительно, по часовому поясу из настроек; `hide_internal` убирает переводы и обмены внутри одного кошелька верхнего уровня; `text` ищет по комментарию, категориям, активам, кошелькам, контактам и хешу; `amount_min`/`amount_max` — сумма в базовой валюте по большей стороне (основные ноги); `auto_only` — только записанное автоматизацией или схемой; `debt_only` — только переводы с долгом. Без `filter` — все операции |
+| `list_transactions` | `filter?: TxFilter { scope: StoreScope, kinds[], contact_id?, flow_id?, from?, to?, hide_internal, text?, category?, with_fee, realized, amount_min?, amount_max?, auto_only, debt_only, with_attachments }` | `Vec<Transaction>` — новые сверху. `from`/`to` — `YYYY-MM-DD` включительно, по часовому поясу из настроек; `hide_internal` убирает переводы и обмены внутри одного кошелька верхнего уровня; `text` ищет по комментарию, категориям, активам, кошелькам, контактам и хешу; `amount_min`/`amount_max` — сумма в базовой валюте по большей стороне (основные ноги); `auto_only` — только записанное автоматизацией или схемой; `debt_only` — только переводы с долгом; `with_attachments` — только с файлами или ссылками; `text` ищет и по именам файлов и подписям ссылок. Без `filter` — все операции |
 | `list_transactions_page` | `filter?: TxFilter`, `offset: u32`, `limit: u32` | `TxPage { items: Vec<Transaction>, total }` — страница списка операций (новые сверху) и сколько всего подходит под фильтр; экран «Операции» грузит по 100 |
 | `export_transactions_csv` | `filter?: TxFilter` | `Option<String>` — путь файла; `None`, если диалог закрыли. Операции по фильтру, старые сверху, строка на ногу: `timestamp;id;kind;store;asset;amount;role;category;comment`; UTF-8 с BOM, `;`, CRLF |
 | `get_tx_graph` | `filter?: TxFilter, collapsed?: string[]` | `TxGraph { currency, lanes[], nodes[], edges[], columns }`. Дорожка — кошелёк в порядке дерева; узел — операция на дорожке (`column` — порядковый номер по времени, `lane` — индекс дорожки, `value` — сумма в базовой валюте на момент операции); рёбра `seq` / `transfer` / `convert` / `flow` всегда идут вперёд по времени. `collapsed` — кошельки, чьи субсчета сворачиваются в их дорожку. Больше 2000 узлов → `TOO_LARGE` |
@@ -182,6 +182,20 @@ Frontend парсит код и показывает локализованно�
 | `update_categorization_rule` | `UpdateRuleInput { id, pattern, category, active }` | `CategorizationRule` |
 | `delete_categorization_rule` | `id` | `()` |
 | `reorder_categorization_rules` | `ids: Vec<String>` | `()` |
+
+### attachments — файлы и ссылки (`crates/app/src/commands/attachments.rs`)
+Файл шифруется своим случайным ключом (XChaCha20-Poly1305, AAD — id вложения) и лежит в `<vault>.files/<id>`; ключ хранится в `doc.attachment_keys` внутри зашифрованного vault и наружу не отдаётся. Синхронизация переносит записи и ключи, байты файлов остаются на своём устройстве. Лимит — 25 МБ на файл; в песочнице файлы не принимаются. Удалённое прячется (`removed_at`) и стирается вместе с файлом при следующем открытии хранилища; тогда же уходят вложения удалённых операций и целей.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `list_attachments` | `input: ListAttachmentsInput { owner?: EntityRef }` | `Vec<Attachment>` — без удалённых; без `owner` — все |
+| `add_attachment_link` | `input: AddAttachmentLinkInput { owner, url, title }` | `Attachment` — `example.com/x` → `https://example.com/x`; только http(s) и mailto; пустая подпись — адрес |
+| `add_attachment_file` | `input: AddAttachmentFileInput { owner, name, mime?, data_base64 }` | `Attachment` — тот же файл у той же сущности возвращает уже прикреплённый; `TOO_LARGE` больше 25 МБ |
+| `open_attachment` | `input: AttachmentIdInput { id }` | `()` — ссылка в браузере; файл расшифровывается в кэш приложения (`opened/`, прошлые копии стираются) и открывается системной программой |
+| `save_attachment_as` | `input: AttachmentIdInput { id }` | `Option<String>` — диалог сохранения, затем расшифрованный файл туда; `None`, если диалог закрыли, иначе куда сохранено |
+| `rename_attachment` | `input: RenameAttachmentInput { id, title }` | `Attachment` |
+| `remove_attachment` | `input: AttachmentIdInput { id }` | `Attachment` — спрятано до следующего открытия, для «Отменить» |
+| `restore_attachment` | `input: AttachmentIdInput { id }` | `Attachment` |
 
 ### contacts
 | Команда | Вход | Выход |
@@ -328,7 +342,9 @@ JSON без шифрования — там нет ничего секретно
 | `get_dashboard_today` | `period?: DashPeriod` | `DashboardToday { period, currency, net_worth, health?, left_today, budget_currency, todos }` — полоса «Сегодня»: капитал к началу периода (`Comparison`), цвет чекапа, «можно тратить сегодня» и до трёх дел на 14 дней (нехватка к платежу, отклонённый или ждущий подтверждения запуск, очередь сценария, неразобранный импорт, сгорание баллов, конец полиса), ближайшие первыми |
 | `get_scenario_status` | `id` | `ScenarioStatus { id, name, currency, term_months, elapsed_months, final_nominal, planned_now, fact?, goal_id? }` — виджет «Сценарий»: план сценария к текущему месяцу и сколько лежит на его счетах (или на счетах цели, которая за ним следует) |
 | `get_month_summary` | `month?` (`YYYY-MM`, по умолчанию текущий) | `MonthSummary { income, fixed, daily, savings_plan, savings_fact, deviation, saved_pct, savings_moved, budget_in, budget_out, not_executed, complete }` |
-| `list_goals` / `create_goal` / `update_goal` / `delete_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope, scenario_id? }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
+| `list_goals` / `create_goal` / `update_goal` | `GoalInput { name, active, target_amount, currency, starts_at, deadline?, priority, monthly_commitment?, scope, scenario_id? }` / `UpdateGoalInput { id, goal }` / `id` | `Goal`; список — по важности, затем по дедлайну |
+| `delete_goal` | `id` | `GoalDeleted { goal, envelopes, workflow_ids }` — деньги остаются в кошельках, конверты цели снимаются, схемы, которые откладывали только в её кошелёк, выключаются; файлы цели удаляются при следующем открытии хранилища |
+| `restore_goal` | `deleted: GoalDeleted` | `Goal` — отмена удаления: цель, конверты и схемы возвращаются |
 | `get_goal_progress` | — | `Vec<GoalProgress { goal, saved, contributed, fx_gain, pct, months_total?, months_left?, need_per_month?, realistic, issues, forecast?, accumulating, planned_now? }>` |
 | `get_goal_calendar` | `year` | `GoalCalendar { year, currency, months[{ month, need, saved, shortfall, done }] }` |
 | `goal_from_scenario` | `id` | `GoalInput` — черновик цели на итог сценария (срок, взнос в месяц, кошельки, `scenario_id`); сохраняет форма цели |

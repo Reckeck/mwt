@@ -2,7 +2,7 @@ import { type InjectionKey, computed, inject, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
-import { useCategories, useContacts, useStoreTree } from '@/shared/api/queries'
+import { useAllAttachments, useCategories, useContacts, useStoreTree } from '@/shared/api/queries'
 
 export type TxContext = ReturnType<typeof buildTxContext>
 
@@ -33,6 +33,7 @@ function buildTxContext() {
   const tree = useStoreTree()
   const contacts = useContacts()
   const categories = useCategories()
+  const attachments = useAllAttachments()
 
   const nodes = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node])))
 
@@ -67,5 +68,13 @@ function buildTxContext() {
 
   const categoryName = (key: string) => categoryKeyLabel(key, categories.data.value, t)
 
-  return { storeName, rootOf, contactName, sideLabel, categoryName }
+  /** Files and links of each owner, counted once per list. */
+  const attachmentCounts = computed(() => {
+    const out = new Map<string, number>()
+    for (const item of attachments.data.value ?? []) out.set(item.owner.id, (out.get(item.owner.id) ?? 0) + 1)
+    return out
+  })
+  const attachmentCount = (id: string) => attachmentCounts.value.get(id) ?? 0
+
+  return { storeName, rootOf, contactName, sideLabel, categoryName, attachmentCount }
 }

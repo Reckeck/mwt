@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { AttachmentsField } from '@/entities/attachment'
 import { StoreNodeSelect } from '@/entities/store'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -16,11 +17,11 @@ import { AccountRefPicker } from '../account-ref-picker'
 
 /**
  * What the short form folds away (OpForm-1 · 5): date, fee, the other side,
- * the property, the network. The toggle names exactly what is inside, so
+ * the property, the network, files and links (Attach 5). The toggle names exactly what is inside, so
  * nothing hides behind a vague «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, showChain, lookupHint, properties, isProperty } = useTxForm()
+const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments } = useTxForm()
 
 const showSide = computed(() => form.kind === 'payment' || form.kind === 'topup')
 const showProperty = computed(
@@ -35,13 +36,21 @@ const parts = computed(() =>
     showSide.value && t(form.kind === 'topup' ? 'tx.more.fromWhom' : 'tx.more.toWhom'),
     showProperty.value && t('tx.more.property'),
     showChain.value && t('tx.more.network'),
+    !editing.value && t('tx.more.files'),
   ]
     .filter(Boolean)
     .join(', '),
 )
 /** Opens by itself when a folded field already holds something or a save pointed at it. */
 const hasValue = computed(() =>
-  Boolean(form.timestamp || (showFee.value && Number(form.feeAmount)) || form.counterpart || form.txHash || check.error('feeAmount')),
+  Boolean(
+    form.timestamp ||
+      (showFee.value && Number(form.feeAmount)) ||
+      form.counterpart ||
+      form.txHash ||
+      attachments.value.length ||
+      check.error('feeAmount'),
+  ),
 )
 const feeSuffix = computed(() => {
   const asset = form.kind === 'convert' ? form.fromAsset : form.kind === 'trade_futures' ? form.settle : form.asset
@@ -92,5 +101,6 @@ const feeSuffix = computed(() => {
         <Input id="tx-hash" v-model="form.txHash" spellcheck="false" placeholder="0x…" />
       </FormField>
     </div>
+    <AttachmentsField v-if="!editing" v-model="attachments" />
   </AdvancedFields>
 </template>

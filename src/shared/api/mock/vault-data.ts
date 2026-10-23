@@ -140,5 +140,6 @@ export function mockVaultDoc(): VaultDoc {
     data_sources: [],
     asset_price_sources: [],
     deposit_rate_sources: [],
+    attachments: [],
   }
 }

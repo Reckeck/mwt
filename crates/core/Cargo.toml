@@ -17,6 +17,7 @@ rmp-serde.workspace = true
 thiserror.workspace = true
 rust_decimal.workspace = true
 uuid.workspace = true
+base64 = "0.22"
 time.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
