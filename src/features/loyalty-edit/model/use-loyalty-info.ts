@@ -18,12 +18,15 @@ export function useLoyaltyInfo() {
   const expiring = ref('')
   const login = ref('')
   const sources = ref<string[]>([])
+  const unit = ref<LoyaltyUnit>('points')
   /** The programme being edited: its own symbol is not taken. */
   const ownId = ref<string | null>(null)
 
   const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
-  /** Cards whose purchases earn the points: bank accounts, as the core allows. */
-  const cards = computed(() => nodes.value.filter((node) => !node.store.archived && node.store.kind === 'bank'))
+  /** Wallets whose purchases earn the points: any but programmes and property, as the core allows. */
+  const cards = computed(() =>
+    nodes.value.filter((node) => !node.store.archived && !['loyalty', 'property'].includes(node.store.kind)),
+  )
   const takenSymbols = computed(
     () =>
       new Set(
@@ -43,6 +46,19 @@ export function useLoyaltyInfo() {
     expiring.value = info?.expiring_points ?? ''
     login.value = info?.login ?? ''
     sources.value = [...(info?.source_store_ids ?? [])]
+    unit.value = info?.unit ?? 'points'
+  }
+
+  /** «Тинькофф кешбэк» → «ТИНЬКОФФ», then «ТИНЬКОФФ2» if another programme has it. */
+  function symbolFrom(name: string): string {
+    const word = (name.trim().split(/\s+/)[0] ?? '')
+      .replace(/[^\p{L}\p{N}]/gu, '')
+      .toUpperCase()
+      .slice(0, 12)
+    const base = word || 'POINTS'
+    let candidate = base
+    for (let at = 2; takenSymbols.value.has(candidate); at += 1) candidate = `${base.slice(0, 11)}${at}`
+    return candidate
   }
 
   const rules = () => ({
@@ -63,10 +79,11 @@ export function useLoyaltyInfo() {
       expiring_points: expiring.value || null,
       login: login.value.trim() || null,
       source_store_ids: sources.value,
+      unit: unit.value,
     }
   }
 
-  return { symbol, value, currency, expiresAt, expiring, login, sources, cards, load, rules, toInfo }
+  return { symbol, value, currency, expiresAt, expiring, login, sources, unit, cards, load, rules, symbolFrom, toInfo }
 }
 
 export type LoyaltyInfoState = ReturnType<typeof useLoyaltyInfo>

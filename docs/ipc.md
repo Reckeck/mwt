@@ -364,7 +364,7 @@ JSON без шифрования — там нет ничего секретно
 | `datasource_delete` | `id` | `()` — удалить; инфляция, читавшая его, возвращается к режиму по умолчанию |
 | `datasource_refresh` | `id` | `DataSourceView` — забрать сейчас. Ошибка не меняет значение, 3 подряд — `broken` и уведомление; скачок больше 10 раз — `pending` до `datasource_confirm`. То же делает планировщик по интервалу источника |
 | `datasource_confirm` | `id`, `accept` | `()` — принять или отбросить значение, ждущее подтверждения после скачка |
-| `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов |
+| `set_loyalty_info` | `SetLoyaltyInfoInput { store_id, info: LoyaltyInfo }` | `Store` — программа бонусов; цена балла становится ручной ценой актива баллов; `info.unit` — `points` / `miles` / `coupons` (по умолчанию `points`), только для подписей |
 | `create_loyalty_program` | `CreateLoyaltyProgramInput { name, color, contact_id?, info: LoyaltyInfo }` | `Store` — программа бонусов создаётся сразу с баллами (`login`, `source_store_ids`); отказ проверки не оставляет кошелька |
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
 | `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |

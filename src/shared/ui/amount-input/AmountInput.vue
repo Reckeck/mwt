@@ -18,7 +18,8 @@ import type { AmountInputProps } from './amount-input.types'
  * The model is always a plain decimal string (`12345.67`) that `Amount` parses
  * as is; the grouped text exists only inside the field. Both `,` and `.` are
  * accepted as the decimal mark, and pasted amounts like `1,234.50 ₽` are read
- * correctly. The `suffix` slot sits inside the field's border (a currency).
+ * correctly. The `suffix` slot sits inside the field's border (a currency);
+ * `prefix` does the same on the left («1 балл =»).
  */
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<AmountInputProps>(), {
@@ -98,6 +99,7 @@ function onKeydown(event: KeyboardEvent) {
       )
     "
   >
+    <span v-if="$slots.prefix" class="shrink-0 pl-3 text-sm whitespace-nowrap"><slot name="prefix" /></span>
     <input
       :id="props.id"
       :value="display"
@@ -110,6 +112,7 @@ function onKeydown(event: KeyboardEvent) {
       :class="
         cn(
           'h-full w-0 min-w-0 flex-1 bg-transparent px-3 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground',
+          $slots.prefix && 'pl-1.5',
           props.size === 'lg' && 'text-xl font-semibold',
         )
       "

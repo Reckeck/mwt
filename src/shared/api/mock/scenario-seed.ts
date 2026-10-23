@@ -6,6 +6,7 @@ import { STRESS_DETAILS, STRESS_NO_RATE, STRESS_STORE_NAME, yearInputs } from '.
 import { seedScenarios } from './planning/calc-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
+import { seedLoyalty } from './loyalty-seed'
 
 let seeded = false
 
@@ -23,6 +24,7 @@ export function seedMock() {
   mockTransactions.push(...year, ...demoTransactions(), seedFlat())
   seedScenarios()
   seedSalaryAutomation(mockTransactions)
+  seedLoyalty()
   if (mockScenario === 'stress') seedStress()
 }
 

@@ -8,6 +8,9 @@ import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { Select, SelectItem } from '@/shared/ui/select'
+
+import { LOYALTY_UNITS } from '../loyalty-edit.constants'
 
 import type { LoyaltyField, LoyaltyInfoState } from '../model/use-loyalty-info'
 
@@ -61,6 +64,11 @@ const { t } = useI18n()
       </div>
       <FormField for="loyalty-expiring" :label="t('loyalty.expiringPoints')" :error="props.error('expiring')">
         <AmountInput id="loyalty-expiring" v-model="props.state.expiring.value" />
+      </FormField>
+      <FormField for="loyalty-unit" :label="t('bonuses.unit')">
+        <Select id="loyalty-unit" v-model="props.state.unit.value" :aria-label="t('bonuses.unit')">
+          <SelectItem v-for="unit in LOYALTY_UNITS" :key="unit" :value="unit">{{ t(`loyaltyUnit.${unit}`) }}</SelectItem>
+        </Select>
       </FormField>
     </div>
   </div>

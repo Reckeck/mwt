@@ -262,7 +262,27 @@ const stage3 = [
     route: '/transactions/contacts?contact=mock-contact-mom',
     steps: [{ click: '[data-contact-copy]' }, { wait: 300 }],
     canvas: { board: 'Ops-2', frame: '9.' } },
-  { name: 'ops-bonus-new', route: '/transactions/bonuses', canvas: { board: 'Ops-2', frame: '13.' } },
+  {
+    name: 'ops-bonus-new',
+    route: '/transactions/bonuses',
+    steps: [{ wait: 400 }, { click: '[data-tour="bonuses-add"]' }, { fill: ['#program-name', 'Тинькофф кешбэк'] }, { wait: 300 }],
+    canvas: { board: 'Ops-2', frame: '13.' },
+  },
+  {
+    name: 'ops-bonus-step2',
+    route: '/transactions/bonuses',
+    steps: [
+      { wait: 400 },
+      { click: '[data-tour="bonuses-add"]' },
+      { fill: ['#program-name', 'Аэрофлот'] },
+      { click: '#program-wallet' },
+      { wait: 200 },
+      { click: '[role="option"]' },
+      { click: '[data-wizard-next]' },
+      { wait: 300 },
+    ],
+    canvas: { board: 'Ops-2', frame: '13.' },
+  },
   { name: 'opform-pay', route: '/', steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }], canvas: { board: 'OpForm-1', frame: '1.' } },
 ]
 

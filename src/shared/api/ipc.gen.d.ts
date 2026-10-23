@@ -2713,7 +2713,16 @@ login: string | null,
 /**
  * Cards whose purchases earn the points; the first is the default source.
  */
-source_store_ids: Array<string>, };
+source_store_ids: Array<string>, 
+/**
+ * How the points are named; older programmes read as points.
+ */
+unit: LoyaltyUnit, };
+
+/**
+ * What a programme's points are called on screen: «1 240 баллов», «2 купона».
+ */
+type LoyaltyUnit = "points" | "miles" | "coupons";
 
 /**
  * A hand-set value of a non-financial asset; applies to its whole history
