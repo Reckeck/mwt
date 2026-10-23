@@ -18,6 +18,7 @@ const remove = useTransactionDelete()
     :label="t('tx.delete')"
     :confirm-label="t('actions.confirmDelete')"
     :disabled="remove.isPending.value"
+    :show-label="props.labelled"
     @confirm="remove.mutate(props.id)"
   >
     <Trash2 class="size-4" />

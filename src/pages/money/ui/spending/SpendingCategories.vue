@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
 import { BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
 import { useCategories } from '@/shared/api/queries'
@@ -68,6 +69,22 @@ function show(item: (typeof view.value)[number]) {
   opened.value = item
   sheet.value = true
 }
+
+/** `?category=` — «Открыть в Тратах» from Ctrl K (Paths 2 · 8) opens that category once its row is in. */
+const route = useRoute()
+const router = useRouter()
+watch(
+  [() => route.query.category, view],
+  ([asked, items]) => {
+    if (typeof asked !== 'string') return
+    const item = items.find((one) => one.row.key === asked)
+    if (!item) return
+    show(item)
+    const { category: _category, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true },
+)
 
 const dialog = ref(false)
 const editing = ref<{ budget: Budget | null; category: string; spending: BudgetSpending | null }>({ budget: null, category: '', spending: null })

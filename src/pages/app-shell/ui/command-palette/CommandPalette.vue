@@ -1,93 +1,60 @@
 <script setup lang="ts">
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
-import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, useEventListener } from '@vueuse/core'
-import { ArrowLeftRight, History, Lock, Plus, RefreshCw, Search, Settings, Sparkles } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 
-import { walletRow } from '@/entities/store'
-import { usePriceRefresh } from '@/features/price-refresh'
 import { Button } from '@/shared/ui/button'
-import { Command, CommandGroup, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/shared/ui/command'
-import { openConverter } from '@/shared/lib/converter'
-import { useIsPhone } from '@/shared/lib/phone'
-import { flattenStoreTree } from '@/shared/lib/store-tree'
-import { useSettingsStore } from '@/shared/store/settings'
-
-import { NAV_ITEMS } from '../../app-shell.constants'
-import PaletteInput from './PaletteInput.vue'
-import PaletteSearch, { type PaletteTarget } from './PaletteSearch.vue'
-import { usePaletteIndex } from './use-palette-index'
-import { useStoreTree } from '@/shared/api/queries'
+import { Command, CommandList } from '@/shared/ui/command'
+import { Kbd } from '@/shared/ui/kbd'
 import { pushBackLayer } from '@/shared/lib/back-stack'
 import { hotkeyLabel, useHotkey } from '@/shared/lib/hotkeys'
+import { useIsPhone } from '@/shared/lib/phone'
 
-import { useRecentPlaces } from '../../model/use-recent-places'
+import PaletteHints from './PaletteHints.vue'
+import PaletteInput from './PaletteInput.vue'
+import PaletteMore from './PaletteMore.vue'
+import PalettePeek from './PalettePeek.vue'
+import PaletteSearch, { type PaletteTarget } from './PaletteSearch.vue'
+import { usePalettePeek } from './use-palette-peek'
 
 /**
- * The search in the header: type a few letters to go to any screen or wallet,
- * or run a main action. The list drops down under the field — no window over
- * the page. Ctrl+K puts the cursor in it from anywhere, Esc closes it.
+ * Ctrl K (Paths 1 · 7, 2 · 8): a window over the dimmed page — the results
+ * on the left, a glance at the highlighted one on the right, the keys below.
+ * A phone gets the whole screen with «Отмена». The header keeps the trigger.
  */
 const emit = defineEmits<{ quickAdd: []; settings: []; lock: [] }>()
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
-const settings = useSettingsStore()
-const priceRefresh = usePriceRefresh()
-
-const tree = useStoreTree()
-const wallets = computed(() =>
-  flattenStoreTree(tree.data.value ?? [])
-    .filter((node) => !node.store.archived)
-    .map((node) => walletRow(node, t, settings.baseCurrency)),
-)
-const screens = computed(() => NAV_ITEMS)
-const recentPlaces = useRecentPlaces()
-/** Where one was last, but here (Shell · 4). */
-const recent = computed(() => recentPlaces.value.filter((place) => place.path !== route.path))
+const phone = useIsPhone()
 
 const open = ref(false)
-/** A phone shows a magnifier; the field opens over the top bar while in use. */
-const phone = useIsPhone()
-const rootClass = computed(() => {
-  // xl, not lg: at 1024 the wide field left the page title three letters.
-  if (!phone.value) return 'relative w-40 min-w-0 sm:w-56 xl:w-72'
-  return open.value ? 'absolute inset-x-2 bottom-2.5 z-overlay' : 'shrink-0'
-})
-
-function openField() {
-  open.value = true
-  void nextTick(() => input.value?.focus())
-}
-const index = usePaletteIndex(computed(() => screens.value.map((item) => item.name)))
-/** Settings and sub-tabs: a heading and its entries each; the vault's entities are in `PaletteSearch`. */
-const groups = computed(() => [
-  { key: 'settings', heading: t('palette.settings'), items: index.settings.value },
-  { key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value },
-])
+const search = ref('')
 /** The entity whose actions are listed (→ on it); the rest of the palette waits. */
 const actionsFor = ref<PaletteTarget | null>(null)
-const root = ref<HTMLElement | null>(null)
 const input = ref<InstanceType<typeof PaletteInput> | null>(null)
+const list = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
+onClickOutside(panel, () => close(), { ignore: ['[data-command-palette-trigger]'] })
 /** The listbox keeps the last pick; cleared so the same row can be picked again. */
 const picked = ref<string>('')
 
-onClickOutside(root, () => (open.value = false))
-useEventListener(root, 'keydown', (event: KeyboardEvent) => {
-  if (event.key === 'Escape') close()
-})
-useHotkey('palette', () => {
+const peek = usePalettePeek({ open, search, list, phone })
+
+function show() {
   open.value = true
   void nextTick(() => input.value?.focus())
-})
-
+}
 function close() {
   open.value = false
   actionsFor.value = null
-  input.value?.blur()
 }
+useHotkey('palette', show)
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+  if (open.value && event.key === 'Escape') close()
+})
 
 // The system «Back» on a phone closes the open palette first, like any other layer.
 let releaseBack: (() => void) | null = null
@@ -102,104 +69,65 @@ function run(action: () => void) {
   picked.value = ''
   action()
 }
-const go = (to: RouteLocationRaw) => run(() => void router.push(to))
+function openFromPeek(target: EntityRef) {
+  if (target.kind !== 'category') return
+  const month = new Date().toISOString().slice(0, 7)
+  run(() => void router.push({ name: 'money', query: { from: month, to: month, category: target.id } }))
+}
+
+const width = computed(() => (peek.item.value ? 'w-[min(860px,calc(100vw-2rem))]' : 'w-[min(620px,calc(100vw-2rem))]'))
+const TRIGGER_PHONE = { variant: 'ghost', size: 'icon' } as const
+const TRIGGER_WIDE = { variant: 'outline', class: 'w-full justify-start gap-2 px-2 font-normal text-muted-foreground' } as const
 </script>
 
 <template>
-  <div ref="root" :class="rootClass" data-tour="command-palette" data-command-palette :data-open="open">
+  <div :class="phone ? 'shrink-0' : 'w-40 min-w-0 sm:w-56 xl:w-72'" data-tour="command-palette">
     <Button
-      v-if="phone && !open"
-      variant="ghost"
-      size="icon"
+      v-bind="phone ? TRIGGER_PHONE : TRIGGER_WIDE"
+      :aria-label="phone ? t('palette.title') : undefined"
       data-command-palette-trigger
-      :aria-label="t('palette.title')"
-      @click="openField"
+      @click="show"
     >
-      <Search class="size-4" />
+      <Search class="size-4 shrink-0" />
+      <template v-if="!phone">
+        <span class="min-w-0 flex-1 truncate text-left">{{ t('palette.trigger') }}</span>
+        <Kbd class="hidden shrink-0 lg:inline-flex">{{ hotkeyLabel('palette') }}</Kbd>
+      </template>
     </Button>
-    <Command v-show="!phone || open" v-model="picked" class="overflow-visible" :class="phone ? 'bg-background' : 'bg-transparent'">
-      <PaletteInput ref="input" :placeholder="t('palette.placeholder')" :label="t('palette.title')" @focus="open = true" />
-      <div
-        v-show="open"
-        class="absolute top-full z-overlay mt-1 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
-        :class="phone ? 'inset-x-0' : 'right-0 w-[min(26rem,calc(100vw-2rem))]'"
-      >
-        <CommandList class="max-h-[min(24rem,70dvh)]">
-          <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
-          <template v-if="!actionsFor">
-          <template v-if="recent.length">
-            <CommandGroup :heading="t('palette.recent')">
-              <CommandItem v-for="place in recent" :key="place.path" :value="`recent-${place.path}`" @select="go(place.path)">
-                <History />
-                {{ place.title }}
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-          </template>
-          <CommandGroup :heading="t('palette.actions')">
-            <CommandItem value="action-quick-add" @select="run(() => emit('quickAdd'))">
-              <Plus />
-              {{ t('quickAdd.title') }}
-              <CommandShortcut>{{ hotkeyLabel('quickAdd') }}</CommandShortcut>
-            </CommandItem>
-            <CommandItem value="action-refresh" @select="run(() => priceRefresh.mutate())">
-              <RefreshCw />
-              {{ t('store.refresh') }}
-            </CommandItem>
-            <CommandItem value="action-settings" @select="run(() => emit('settings'))">
-              <Settings />
-              {{ t('settingsShell.title') }}
-            </CommandItem>
-            <CommandItem value="action-whats-new" @select="go({ query: { ...route.query, whatsNew: '1' } })">
-              <Sparkles />
-              {{ t('whatsNew.title') }}
-            </CommandItem>
-            <CommandItem value="action-converter" @select="run(() => openConverter())">
-              <ArrowLeftRight />
-              {{ t('palette.converter') }}
-            </CommandItem>
-            <CommandItem value="action-lock" @select="run(() => emit('lock'))">
-              <Lock />
-              {{ t('auth.lock') }}
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup :heading="t('palette.screens')">
-            <CommandItem v-for="item in screens" :key="item.name" :value="`screen-${item.name}`" @select="go({ name: item.name })">
-              <component :is="item.icon" />
-              {{ t(item.key) }}
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup :heading="t('palette.wallets')">
-            <!-- The same two lines as «To» in an operation: the name, then parent or kind · asset · balance. -->
-            <CommandItem
-              v-for="row in wallets"
-              :key="row.id"
-              :value="`wallet-${row.id}`"
-              @select="go({ name: 'wallet', params: { id: row.id } })"
-            >
-              <component :is="row.icon" :style="row.color ? { color: row.color } : undefined" />
-              <span class="grid min-w-0 leading-tight">
-                <span class="truncate font-medium">{{ row.title }}</span>
-                <span class="truncate text-xs text-muted-foreground">{{ row.detail }}</span>
-              </span>
-            </CommandItem>
-          </CommandGroup>
-          <template v-for="group in groups" :key="group.key">
-            <template v-if="group.items.length">
-              <CommandSeparator />
-              <CommandGroup :heading="group.heading">
-                <CommandItem v-for="entry in group.items" :key="entry.id" :value="entry.id" @select="go(entry.to)">
-                  {{ entry.label }}
-                  <span class="sr-only">{{ entry.keywords }}</span>
-                </CommandItem>
-              </CommandGroup>
-            </template>
-          </template>
-          </template>
-        </CommandList>
-      </div>
-    </Command>
   </div>
+
+  <Teleport to="body">
+    <template v-if="open">
+      <div v-if="!phone" class="fixed inset-0 z-overlay bg-black/35" aria-hidden="true" data-command-palette-backdrop />
+      <div
+        ref="panel"
+        role="dialog"
+        :aria-label="t('palette.title')"
+        class="fixed z-overlay flex flex-col overflow-hidden bg-popover text-popover-foreground"
+        :class="phone ? 'inset-0 pt-(--safe-top) pb-(--safe-bottom)' : `left-1/2 top-[90px] max-h-[calc(100dvh-120px)] -translate-x-1/2 rounded-xl border shadow-2xl ${width}`"
+        data-command-palette
+        data-open="true"
+      >
+        <Command v-model="picked" class="min-h-0 flex-1 bg-transparent">
+          <div class="flex h-13 shrink-0 items-center gap-2 border-b px-4">
+            <PaletteInput ref="input" class="flex-1" :placeholder="t('palette.placeholder')" :label="t('palette.title')" @search="search = $event" />
+            <Button v-if="phone" variant="ghost" size="sm" data-command-palette-cancel @click="close">{{ t('actions.cancel') }}</Button>
+            <Kbd v-else class="shrink-0">Esc</Kbd>
+          </div>
+          <div class="flex min-h-0 flex-1" :class="phone && 'flex-col'">
+            <div ref="list" class="min-h-0 min-w-0 flex-1 [&_[data-slot=command-item][data-highlighted]]:bg-primary/10" :class="phone && '[&_[data-slot=command-item]]:min-h-11'">
+              <CommandList class="h-full" :class="phone ? 'max-h-none' : 'max-h-[min(40rem,calc(100dvh-200px))]'">
+                <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
+                <PaletteMore v-if="search && !actionsFor" :run="run" @quick-add="emit('quickAdd')" @settings="emit('settings')" @lock="emit('lock')" />
+              </CommandList>
+            </div>
+            <aside v-if="peek.item.value" class="shrink-0 bg-popover" :class="phone ? 'max-h-[55dvh] border-t' : 'w-[min(300px,40vw)] border-l'">
+              <PalettePeek :item="peek.item.value" @open="openFromPeek" />
+            </aside>
+          </div>
+          <PaletteHints :category="peek.onCategory.value" :phone="phone" />
+        </Command>
+      </div>
+    </template>
+  </Teleport>
 </template>

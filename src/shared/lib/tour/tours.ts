@@ -151,17 +151,24 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'spending-months', key: 'money.months', side: 'top' },
     { target: 'spending-categories', key: 'money.categories', side: 'top' },
     { target: 'route-tabs-more', key: 'money.more', side: 'bottom' },
+    { target: 'category-sheet', key: 'money.categorySheet', side: 'left' },
   ]),
   'money-where': analytics([
+    { target: 'where-answer', key: 'money.whereAnswer', side: 'bottom' },
+    { target: 'where-table', key: 'money.whereTable', side: 'top' },
     { target: 'report-view', key: 'analytics.flowView', side: 'bottom' },
     { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.flow', side: 'top' },
   ]),
   'money-wealth': analytics([
+    { target: 'wealth-head', key: 'money.wealthHead', side: 'bottom' },
+    { target: 'wealth-table', key: 'money.wealthTable', side: 'top' },
     { target: 'real-terms', key: 'analytics.realTerms', side: 'bottom' },
     { target: 'section-content', key: 'analytics.wealth', side: 'top' },
   ]),
   'money-investments': analytics([
+    { target: 'invest-figures', key: 'money.investFigures', side: 'bottom' },
+    { target: 'invest-table', key: 'money.investTable', side: 'top' },
     { target: 'section-content', key: 'analytics.investments', side: 'top' },
     { target: 'topup-advisor', key: 'assetClass.advisor', side: 'top' },
     { target: 'asset-classes', key: 'assetClass.classes', side: 'bottom' },
@@ -170,12 +177,14 @@ export const TOURS: Record<string, TourStep[]> = {
   'money-month': analytics([
     { target: 'section-content', key: 'analytics.saldo', side: 'top' },
     { target: 'saldo-pool', key: 'analytics.saldoPool', side: 'top' },
+    { target: 'balance-days', key: 'money.balanceDays', side: 'top' },
     { target: 'balance-months', key: 'money.balanceMonths', side: 'top' },
     { target: 'carry-over', key: 'money.carryOver', side: 'left' },
   ]),
   // The checkup takes no filter and exports nothing: only the tabs, then its own cards.
   'money-health': [
     { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
+    { target: 'health-figures', key: 'money.healthFigures', side: 'bottom' },
     { target: 'health-light', key: 'health.light', side: 'bottom' },
     { target: 'health-fund', key: 'health.fund', side: 'top' },
     { target: 'health-debts', key: 'health.debts', side: 'top' },
@@ -218,6 +227,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'plan-limits', key: 'planningBudgets.content', side: 'top' },
     { target: 'budget-spent', key: 'planningBudgets.spent', side: 'bottom' },
     { target: 'plan-goals', key: 'planningGoals.content', side: 'top' },
+    { target: 'plan-next', key: 'money.planNext', side: 'top' },
   ]),
   'money-calculator': planning([
     { target: 'calc-scenarios', key: 'planningCalculator.scenarios', side: 'bottom' },

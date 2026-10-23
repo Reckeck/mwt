@@ -6,7 +6,7 @@ import { cn } from '@/shared/lib/utils'
 
 import type { ConfirmButtonProps } from './confirm-button.types'
 
-const props = withDefaults(defineProps<ConfirmButtonProps>(), { disabled: false, timeout: 3000 })
+const props = withDefaults(defineProps<ConfirmButtonProps>(), { disabled: false, timeout: 3000, showLabel: false })
 const emit = defineEmits<{ confirm: [] }>()
 
 /**
@@ -40,13 +40,14 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <Button
-    variant="ghost"
-    size="icon-sm"
+    :variant="props.showLabel ? 'outline' : 'ghost'"
+    :size="props.showLabel ? 'default' : 'icon-sm'"
     data-slot="confirm-button"
     :data-armed="armed || undefined"
     :class="
       cn(
-        'relative shrink-0 text-muted-foreground hover:text-destructive',
+        'relative shrink-0 hover:text-destructive',
+        !props.showLabel && 'text-muted-foreground',
         armed && 'z-10 text-destructive-foreground hover:text-destructive-foreground',
       )
     "
@@ -58,6 +59,7 @@ onBeforeUnmount(() => clearTimeout(timer))
     @keydown.escape="disarm"
   >
     <slot />
+    <span v-if="props.showLabel">{{ props.label }}</span>
     <span
       v-if="armed"
       aria-hidden="true"

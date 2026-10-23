@@ -28,6 +28,7 @@ const item = (part: Partial<WhereItem>): WhereItem => ({
   got_unit: null,
   value: null,
   comment: '',
+  at: '',
   ...part,
 })
 
@@ -55,10 +56,31 @@ export function whereReport(ctx: AnalyticsMockContext, months: string[], filter:
     if (!inPeriod(timestamp)) continue
     if ('transfer' in tx) {
       const body = tx.transfer
-      const base = { qty: body.amount, unit: body.asset.symbol, value: priced(body.amount, body.asset.symbol), comment }
+      const base = {
+        qty: body.amount,
+        unit: body.asset.symbol,
+        value: priced(body.amount, body.asset.symbol),
+        comment,
+        at: timestamp,
+      }
       if (body.debt === 'lend') lent.push(item({ ...base, label: name(body.to), to: name(body.from) }))
       else if (!body.debt && 'store' in body.from && 'store' in body.to)
         moved.push(item({ ...base, label: name(body.from), to: name(body.to) }))
+    } else if ('convert' in tx && 'store' in tx.convert.from.account && 'store' in tx.convert.to.account) {
+      const { from, to } = tx.convert
+      moved.push(
+        item({
+          label: name(from.account),
+          to: name(to.account),
+          qty: from.amount,
+          unit: from.asset.symbol,
+          got_qty: to.amount,
+          got_unit: to.asset.symbol,
+          value: priced(from.amount, from.asset.symbol),
+          comment,
+          at: timestamp,
+        }),
+      )
     } else if ('trade_spot' in tx) {
       const body = tx.trade_spot
       const store = ctx.stores.find((entry) => entry.id === body.store_id)?.name ?? ''
@@ -71,6 +93,7 @@ export function whereReport(ctx: AnalyticsMockContext, months: string[], filter:
           got_unit: body.bought.asset.symbol,
           value: priced(body.sold.qty, body.sold.asset.symbol),
           comment,
+          at: timestamp,
         }),
       )
     }

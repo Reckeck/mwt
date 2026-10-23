@@ -9,11 +9,11 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
-import { cn } from '@/shared/lib/utils'
 import {
   DEFAULT_TX_BADGE,
   TX_KIND_BADGE,
   amountClass,
+  txAutomation,
   txDebt,
   txDetails,
   txExplorerUrl,
@@ -38,7 +38,13 @@ const emit = defineEmits<{ open: [tx: Transaction] }>()
  * Without one, the column holds the explorer link (or stays empty), so every
  * row of a list keeps the same width for its amounts (rule 17).
  */
-const slots = defineSlots<{ actions?(props: { tx: Transaction }): unknown }>()
+const slots = defineSlots<{
+  actions?(props: { tx: Transaction }): unknown
+  /** A side's name in «Тинькофф → Bybit»: the list may make it a wallet's glance (Paths 1 · 4). */
+  side?(props: { side: AccountRef; label: string }): unknown
+  /** «авто» of a booked one: the list may make it the automation's glance (Paths 2 · 10). */
+  origin?(props: { tx: Transaction; automationId: string; runId: string | null }): unknown
+}>()
 
 const { t } = useI18n()
 const context = useTxContext()
@@ -48,6 +54,7 @@ const meta = computed(() => txMeta(props.tx))
 const legs = computed(() => txPrincipalLegs(props.tx))
 const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 const debt = computed(() => txDebt(props.tx))
+const automation = computed(() => txAutomation(props.tx))
 const fee = computed(() => txFee(props.tx))
 /** Brought in from an exchange; a correction has no categories, so it gets the mark here. */
 const imported = computed(() => {
@@ -62,6 +69,15 @@ const route = computed(() => {
   if (from) return `← ${context.sideLabel(from)}`
   if (to) return `→ ${context.sideLabel(to)}`
   return ''
+})
+/** The same route in parts, so each side can be its own link: arrows are strings, sides objects. */
+const routeParts = computed(() => {
+  const { from, to } = txSides(props.tx)
+  const part = (side: AccountRef) => ({ side, label: context.sideLabel(side) })
+  if (from && to) return [part(from), '→', part(to)]
+  if (from) return ['←', part(from)]
+  if (to) return ['→', part(to)]
+  return []
 })
 
 /** In a wallet's history only its own side; in the full list every principal leg. */
@@ -89,40 +105,56 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
       {{ t(`tx.kind.${kind}`) }}
     </Badge>
 
-    <!-- One body for both: an openable row is a button, a plain one a block. -->
-    <component
-      :is="props.openable ? Button : 'div'"
-      v-bind="
-        props.openable
-          ? { variant: 'ghost', size: 'block', title: t('txDetails.open'), onClick: () => emit('open', props.tx) }
-          : {}
-      "
-      :class="cn('min-w-0 flex-1 basis-56', props.openable && 'block rounded-sm p-0 text-left hover:bg-transparent')"
-    >
-      <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+    <!-- An openable row opens from a see-through button over its body; the wallet names sit above it. -->
+    <div class="relative min-w-0 flex-1 basis-56">
+      <Button
+        v-if="props.openable"
+        variant="ghost"
+        size="block"
+        class="absolute inset-0 rounded-sm p-0 hover:bg-transparent"
+        :title="t('txDetails.open')"
+        :aria-label="t('txDetails.open')"
+        data-tx-open
+        @click="emit('open', props.tx)"
+      />
+      <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
           {{ context.categoryName(key) }}
         </Badge>
         <Badge v-if="imported" variant="outline" class="shrink-0">{{ t('tx.imported') }}</Badge>
+        <span v-if="automation" class="pointer-events-auto relative shrink-0" data-tx-auto>
+          <slot name="origin" :tx="props.tx" :automation-id="automation.id" :run-id="automation.runId">
+            <Badge variant="outline">{{ t('glance.auto.badge') }}</Badge>
+          </slot>
+        </span>
         <Badge v-if="internal" variant="secondary" class="shrink-0">{{ t('tx.internal') }}</Badge>
         <Badge v-if="debt" variant="secondary" class="shrink-0">{{ t(`debt.${debt}`) }}</Badge>
         <Badge v-if="txHasNoPrice(props.tx)" variant="outline" class="shrink-0 text-muted-foreground">
           {{ t('tx.noPrice') }}
         </Badge>
       </div>
-      <p class="truncate text-xs text-muted-foreground">
+      <p class="pointer-events-none relative truncate text-xs text-muted-foreground">
         {{ formatDateTime(meta.timestamp) }}
         <!-- A two-sided route already names the wallet. -->
         <template v-if="!route.includes('→') || route.startsWith('→')"> · {{ where }}</template>
-        <template v-if="route"> · {{ route }}</template>
+        <template v-if="route">
+          ·
+          <template v-for="(part, index) in routeParts" :key="index">
+            <template v-if="typeof part === 'string'">{{ part }} </template>
+            <span v-else class="pointer-events-auto relative">
+              <slot name="side" :side="part.side" :label="part.label">{{ part.label }}</slot>
+            </span>
+            {{ ' ' }}
+          </template>
+        </template>
         <template v-if="meta.contact_id"> · {{ context.contactName(meta.contact_id) }}</template>
       </p>
-      <p v-if="txDetails(props.tx).length" class="truncate text-xs text-muted-foreground">
+      <p v-if="txDetails(props.tx).length" class="pointer-events-none relative truncate text-xs text-muted-foreground">
         {{ txDetails(props.tx).map(([key, value]) => `${t(key)}: ${value}`).join(' · ') }}
       </p>
-      <p v-if="meta.comment" class="truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
-    </component>
+      <p v-if="meta.comment" class="pointer-events-none relative truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
+    </div>
 
     <!-- On a narrow screen the amounts and actions wrap under the text instead of squeezing it. -->
     <div class="ml-auto shrink-0 text-right">

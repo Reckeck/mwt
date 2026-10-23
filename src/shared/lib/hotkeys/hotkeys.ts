@@ -5,7 +5,11 @@ import { onScopeDispose } from 'vue'
  * what a hint shows («Ctrl K»). A slice binds its key with `useHotkey`; the
  * list here is only the names and the combos.
  */
-export type HotkeyId = 'palette' | 'quickAdd' | 'sidebar' | 'saveAndNext'
+export type HotkeyId = 'palette' | 'quickAdd' | 'sidebar' | 'saveAndNext' | SectionHotkey
+
+/** Alt 1…5: a main section without the search (Paths 1 · 7). */
+export type SectionHotkey = 'section1' | 'section2' | 'section3' | 'section4' | 'section5'
+export const SECTION_HOTKEYS: SectionHotkey[] = ['section1', 'section2', 'section3', 'section4', 'section5']
 
 export interface Hotkey {
   id: HotkeyId
@@ -20,6 +24,11 @@ export const HOTKEYS: Record<HotkeyId, Hotkey> = {
   quickAdd: { id: 'quickAdd', combo: 'mod+n', key: 'hotkey.quickAdd' },
   sidebar: { id: 'sidebar', combo: 'mod+b', key: 'hotkey.sidebar' },
   saveAndNext: { id: 'saveAndNext', combo: 'mod+enter', key: 'hotkey.saveAndNext' },
+  section1: { id: 'section1', combo: 'alt+1', key: 'hotkey.section1' },
+  section2: { id: 'section2', combo: 'alt+2', key: 'hotkey.section2' },
+  section3: { id: 'section3', combo: 'alt+3', key: 'hotkey.section3' },
+  section4: { id: 'section4', combo: 'alt+4', key: 'hotkey.section4' },
+  section5: { id: 'section5', combo: 'alt+5', key: 'hotkey.section5' },
 }
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -40,11 +49,18 @@ export function matchesHotkey(event: KeyboardEvent, id: HotkeyId): boolean {
   return event.code === codeOf(key) || event.key.toLowerCase() === key
 }
 
+const KEY_LABELS: Record<string, string> = {
+  mod: MAC ? '⌘' : 'Ctrl',
+  alt: MAC ? '⌥' : 'Alt',
+  shift: 'Shift',
+  enter: 'Enter',
+}
+
 /** «Ctrl K» / «⌘ K», for a hint beside a button. */
 export function hotkeyLabel(id: HotkeyId): string {
   return HOTKEYS[id].combo
     .split('+')
-    .map((part) => (part === 'mod' ? (MAC ? '⌘' : 'Ctrl') : part === 'enter' ? 'Enter' : part.toUpperCase()))
+    .map((part) => KEY_LABELS[part] ?? part.toUpperCase())
     .join(' ')
 }
 

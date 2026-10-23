@@ -55,7 +55,7 @@ const view = computed({
     <SectionState :loading="report.isPending.value" :error="report.error.value" skeleton="report" @retry="report.refetch()">
       <template v-if="where">
         <WhereAnswer :report="where" />
-        <WhereTable v-if="where.rows.length" :report="where" />
+        <WhereTable v-if="where.rows.length" :report="where" :filter="props.filter" />
         <div class="flex flex-wrap justify-end gap-2 max-md:grid max-md:justify-stretch">
           <Button variant="outline" class="max-md:hidden" as-child>
             <RouterLink :to="journal">{{ t('money.where.toJournal') }}</RouterLink>

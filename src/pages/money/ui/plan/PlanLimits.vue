@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
 
@@ -71,6 +72,20 @@ function create(key = '') {
   category.value = key
   open.value = true
 }
+
+/** `?new=limit&category=…` from a glance or Ctrl K («Задать лимит на „Продукты“»). */
+const route = useRoute()
+const router = useRouter()
+watch(
+  () => route.query.new,
+  (asked) => {
+    if (asked !== 'limit') return
+    create(typeof route.query.category === 'string' ? route.query.category : '')
+    const { new: _new, category: _category, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

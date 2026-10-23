@@ -1,45 +1,99 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Copy, CopyPlus, ExternalLink, Pencil, Trash2 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { Eye, Pencil, Repeat2, Search, Trash2, User, Wallet } from 'lucide-vue-next'
 
 import type { UiAction } from '@/shared/ui/context-menu'
-import { copyText } from '@/shared/lib/clipboard'
-import { txId } from '@/shared/lib/transactions'
+import { openEntity } from '@/shared/lib/entity-link'
+import { accountContactId, similarFilter, txMeta, txSides, txStoreId } from '@/shared/lib/transactions'
 import { openTxDetails } from '@/shared/lib/tx-details'
+import { useTxContext } from '@/shared/lib/tx-context'
+import { txFilterToQuery } from '@/shared/lib/tx-filter'
 
 import type { TxRowMenu, TxRowMenuOptions } from './transaction-row-menu.types'
 
 /**
- * One menu for every transaction list: the row keeps a single «⋯» in a column
- * of fixed width, so hovering a row moves nothing (rule 17). The dialogs live
- * in `TxRowMenuHost`, mounted once next to the list.
+ * One menu for every transaction list (Paths 2 · 11): the glance and the edit
+ * first, then what the operation leads to — alike ones, its wallet, its
+ * contact — and the delete last, in red, below a line. Right click, «⋯» and a
+ * long press on a phone open the same list. The dialogs live in
+ * `TxRowMenuHost`, mounted once next to the list.
  */
 export function useTxRowMenu(options: TxRowMenuOptions = {}): TxRowMenu {
   const { t } = useI18n()
+  const router = useRouter()
+  const context = useTxContext()
   const editing = ref<Transaction | null>(null)
   const duplicating = ref<Transaction | null>(null)
   const deleting = ref<Transaction | null>(null)
   const storeId = computed(() => options.storeId?.() ?? null)
 
+  function similar(tx: Transaction) {
+    const filter = similarFilter(tx)
+    if (!filter) return
+    const query: Record<string, string> = {}
+    for (const [key, value] of Object.entries(txFilterToQuery(filter))) if (value) query[key] = value
+    void router.push({ name: 'transactions', query })
+  }
+
   function actions(tx: Transaction): UiAction[] {
+    const wallet = context.rootOf(txStoreId(tx))
+    const sides = txSides(tx)
+    const contact = txMeta(tx).contact_id ?? accountContactId(sides.to) ?? accountContactId(sides.from)
     const list: UiAction[] = [
-      { id: 'open', label: t('tx.openDetails'), icon: ExternalLink, run: () => openTxDetails(tx) },
-      { id: 'edit', label: t('tx.edit'), icon: Pencil, run: () => (editing.value = tx) },
+      {
+        id: 'glance',
+        label: t('tx.menu.glance'),
+        icon: Eye,
+        shortcut: t('tx.menu.key.space'),
+        run: () => openTxDetails(tx),
+      },
+      { id: 'edit', label: t('tx.menu.edit'), icon: Pencil, shortcut: 'Enter', run: () => (editing.value = tx) },
     ]
     if (options.duplicate) {
-      list.push({ id: 'duplicate', label: t('tx.duplicate'), icon: CopyPlus, run: () => (duplicating.value = tx) })
+      list.push({
+        id: 'duplicate',
+        label: t('tx.menu.repeat'),
+        icon: Repeat2,
+        shortcut: 'Ctrl D',
+        run: () => (duplicating.value = tx),
+      })
     }
-    list.push(
-      { id: 'copy', label: t('tx.copyId'), icon: Copy, separated: true, run: () => void copyText(txId(tx)) },
+    const related: UiAction[] = [
       {
-        id: 'delete',
-        label: t('tx.deleteMenu'),
-        icon: Trash2,
-        destructive: true,
-        separated: true,
-        run: () => (deleting.value = tx),
+        id: 'similar',
+        label: t('tx.menu.similar'),
+        icon: Search,
+        hidden: !similarFilter(tx),
+        run: () => similar(tx),
       },
-    )
+      {
+        id: 'wallet',
+        label: t('tx.menu.wallet', { name: context.storeName(wallet) }),
+        icon: Wallet,
+        hidden: !wallet || wallet === (storeId.value && context.rootOf(storeId.value)),
+        run: () => openEntity({ kind: 'store', id: wallet }),
+      },
+      {
+        id: 'contact',
+        label: t('tx.menu.contact', { name: contact ? context.contactName(contact) : '' }),
+        icon: User,
+        hidden: !contact,
+        run: () => contact && openEntity({ kind: 'contact', id: contact }),
+      },
+    ]
+    // The line goes above whichever of them this operation has.
+    const first = related.find((action) => !action.hidden)
+    if (first) first.separated = true
+    list.push(...related, {
+      id: 'delete',
+      label: t('tx.menu.delete'),
+      icon: Trash2,
+      shortcut: 'Del',
+      destructive: true,
+      separated: true,
+      run: () => (deleting.value = tx),
+    })
     return list
   }
 

@@ -2,7 +2,7 @@
 // check-ui-ignore router-key: keyed by the page record and its params, not by the path
 import { computed, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
@@ -14,11 +14,12 @@ import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
-import { useHotkey } from '@/shared/lib/hotkeys'
+import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { NAV_ITEMS } from './app-shell.constants'
 import { useBackButton } from './model/use-back-button'
 import { useBackendNotices } from './model/use-backend-notices'
 import { useCacheEvents } from './model/use-cache-events'
@@ -64,6 +65,9 @@ const walletName = computed(() => {
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
 useRecordPlaces(pageTitle)
 useHotkey('quickAdd', () => (quickAddOpen.value = true))
+/** Alt 1…5: a section without the search (Paths 1 · 7). */
+const router = useRouter()
+for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_ITEMS[index]?.name ?? 'dashboard' }))
 
 /** The shell's child page and its params: a section's own sub-routes do not change it. */
 const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)

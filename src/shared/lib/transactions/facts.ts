@@ -1,6 +1,6 @@
 /** Kind-specific facts for the details view: extra fields, the fee, the debt effect. */
 
-import { anyBody, body, txKind } from './access'
+import { anyBody, body, txKind, txMeta } from './access'
 
 /** Kind-specific facts worth showing under a transaction, as `[i18n key, value]`. */
 export function txDetails(tx: Transaction): Array<[string, string]> {
@@ -68,4 +68,17 @@ export function txFee(tx: Transaction): { amount: string; asset: string } | null
 /** Debt effect of a transfer, if it is one. */
 export function txDebt(tx: Transaction): DebtEffect | null {
   return txKind(tx) === 'transfer' ? body(tx, 'transfer').debt : null
+}
+
+/**
+ * The automation or workflow that booked it («авто» in the row, Paths 2 · 10);
+ * `null` for one entered by hand or imported. An automation runs as a workflow
+ * of the same id, so both origins name it the same way.
+ */
+export function txAutomation(tx: Transaction): { id: string; runId: string | null } | null {
+  const origin = txMeta(tx).origin
+  if (typeof origin !== 'object') return null
+  if ('automation' in origin) return { id: origin.automation.automation_id, runId: null }
+  if ('workflow' in origin) return { id: origin.workflow.workflow_id, runId: origin.workflow.run_id }
+  return null
 }

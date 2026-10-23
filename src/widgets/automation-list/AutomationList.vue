@@ -127,6 +127,8 @@ const remove = useMutation({
 })
 
 const empty = computed(() => automations.isSuccess.value && !shown.value.length)
+// The runs arrive after the list: a card drawn before them grows and pushes the gallery below.
+const loading = computed(() => automations.isPending.value || runs.isPending.value || tree.isPending.value)
 </script>
 
 <template>
@@ -137,7 +139,8 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
       :hide-action="empty"
       @action="openNew()"
     >
-      <template v-if="shown.length" #actions>
+      <!-- Held while loading: the button arriving with the list would push everything below. -->
+      <template v-if="loading || shown.length" #actions>
         <Button variant="outline" data-tour="automation-simulate" @click="openSimulation(null)">
           <FlaskConical class="size-4" />
           {{ t('simulation.open') }}
@@ -154,12 +157,13 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
     </div>
 
     <!-- While the list loads: about the height of the empty block or a couple of cards. -->
-    <Skeleton v-if="automations.isPending.value" class="h-50 rounded-xl" />
+    <!-- One card high: the usual list holds one or two, so the gallery below barely moves. -->
+    <Skeleton v-if="loading" class="h-34 rounded-xl" />
     <EmptyState v-if="empty" compact :title="t('automation.empty')" :description="t('automation.intro')">
       <Button v-if="!props.readonly" @click="openNew()"><Plus class="size-4" />{{ t('automation.new') }}</Button>
     </EmptyState>
 
-    <Card v-for="automation in shown" :key="automation.id">
+    <Card v-for="automation in loading ? [] : shown" :key="automation.id">
       <div class="grid gap-3">
         <div class="flex flex-wrap items-start justify-between gap-2">
           <AutomationSummary
@@ -168,7 +172,7 @@ const empty = computed(() => automations.isSuccess.value && !shown.value.length)
             :rejected="pending(automation.id).length"
             :unconfirmed="unconfirmed(automation.id).length"
           />
-          <div class="flex shrink-0 items-center gap-1">
+          <div class="flex shrink-0 items-center gap-1 pointer-coarse:gap-2">
             <Button
               variant="ghost"
               size="icon-sm"

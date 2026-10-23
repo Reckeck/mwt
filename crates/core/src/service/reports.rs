@@ -2123,6 +2123,31 @@ mod tests {
     }
 
     #[test]
+    fn networth_splits_out_what_sits_in_crypto_wallets_and_exchanges() {
+        let (_dir, mut vault, card) = vault_with_card();
+        let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
+        let ledger = store(&mut vault, "Ledger", StoreKind::Crypto, None);
+        vault
+            .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(earn(&exchange, "300", "2026-03-02T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(earn(&ledger, "200", "2026-03-03T10:00:00Z"))
+            .unwrap();
+        let Report::Networth(networth) =
+            run(&vault, ReportKind::Networth, &range("2026-03", "2026-03"))
+        else {
+            panic!()
+        };
+        let point = &networth.points[0];
+        assert_eq!(point.financial, amount("1500"));
+        assert_eq!(point.crypto, amount("500"));
+        assert_eq!(point.net, amount("1500"));
+    }
+
+    #[test]
     fn the_year_report_follows_the_wallet_scope() {
         let (_dir, mut vault, card) = vault_with_card();
         let other = store(&mut vault, "Other", StoreKind::Bank, None);

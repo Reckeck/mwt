@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { SaveFilterButton, TransactionFilterBar } from '@/features/transaction-filter'
@@ -10,13 +13,20 @@ import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { openTxDetails } from '@/shared/lib/tx-details'
+import { backFromQuery } from '@/shared/lib/drill'
+import { activeFilterCount } from '@/shared/lib/tx-filter'
+import { BackChip } from '@/shared/ui/back-chip'
 
 import { useTxFilterInUrl } from './tx-filter.state'
+import { FilterTotal } from './ui/filter-total'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const filter = useTxFilterInUrl()
+const route = useRoute()
+/** Came from a figure elsewhere («Траты · октябрь»): the chip leads back there. */
+const back = computed(() => backFromQuery(route.query))
 
 const { query: txs, rows, total } = useTxPages(filter)
 
@@ -45,6 +55,18 @@ const rowMenu = useTxRowMenu({ duplicate: true })
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
+    <div v-if="back || activeFilterCount(filter)" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <BackChip v-if="back" :to="back.to" :label="back.label" />
+      <FilterTotal
+        v-if="!txs.isPending.value"
+        class="ms-auto"
+        :rows="rows"
+        :total="total"
+        :kinds="filter.kinds"
+        :fx-per-usd="summary.data.value?.fx_per_usd"
+        :base-currency="summary.data.value?.base_currency"
+      />
+    </div>
     <div data-tour="tx-filter">
       <TransactionFilterBar v-model="filter">
         <template #actions><SaveFilterButton :filter="filter" /></template>
@@ -74,7 +96,15 @@ const rowMenu = useTxRowMenu({ duplicate: true })
             :row-actions="rowMenu.actions"
             @open="openDetails"
             @more="txs.fetchNextPage()"
-          />
+          >
+            <template #side="{ side, label }">
+              <WalletGlance v-if="'store' in side" :store-id="side.store" :name="label" />
+              <template v-else>{{ label }}</template>
+            </template>
+            <template #origin="origin">
+              <AutomationGlance v-bind="origin" />
+            </template>
+          </TransactionsList>
         </div>
       </SectionState>
     </Card>
