@@ -105,6 +105,22 @@ export function demoTransactions(): Transaction[] {
     },
     {
       type: 'convert',
+      common: { ...common(768, 'Обмен через skycapital'), contact_id: 'mock-contact-sky' },
+      from: { account: { store: bank.id }, asset: rub, amount: '40000' },
+      to: { account: { store: binance.id }, asset: usdt, amount: '432' },
+      fee: null,
+      rate_override: null,
+    },
+    {
+      type: 'convert',
+      common: { ...common(1488, 'Обмен через skycapital'), contact_id: 'mock-contact-sky' },
+      from: { account: { store: bank.id }, asset: rub, amount: '30000' },
+      to: { account: { store: binance.id }, asset: usdt, amount: '326' },
+      fee: null,
+      rate_override: null,
+    },
+    {
+      type: 'convert',
       common: { ...common(24, 'Обмен через skycapital'), contact_id: 'mock-contact-sky' },
       from: { account: { store: bank.id }, asset: rub, amount: '45000' },
       to: { account: { store: binance.id }, asset: usdt, amount: '480' },

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -66,7 +67,15 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
           :row-actions="rowMenu.actions"
           @open="openTxDetails"
           @more="txs.fetchNextPage()"
-        />
+        >
+          <template #side="{ side, label }">
+            <WalletGlance v-if="'store' in side" :store-id="side.store" :name="label" />
+            <template v-else>{{ label }}</template>
+          </template>
+          <template #origin="origin">
+            <AutomationGlance v-bind="origin" />
+          </template>
+        </TransactionsList>
       </div>
     </SectionState>
     <TxRowMenuHost :menu="rowMenu" />

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
 import { Link } from 'lucide-vue-next'
 
-import { ActionMenu } from '@/shared/ui/action-menu'
+import { ActionMenu, ActionSheet } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Money } from '@/entities/currency'
@@ -17,6 +17,7 @@ import { type TxDay, groupByDay } from '../../lib/group-by-day'
 import TransactionRow from '../transaction-row/TransactionRow.vue'
 
 import type { TransactionsListProps } from './transactions-list.types'
+import { useRowMenu } from './use-row-menu'
 
 const props = withDefaults(defineProps<TransactionsListProps>(), {
   storeId: null,
@@ -29,7 +30,12 @@ const props = withDefaults(defineProps<TransactionsListProps>(), {
   total: null,
   loadingMore: false,
 })
-const emit = defineEmits<{ open: [tx: Transaction]; more: [] }>()
+const emit = defineEmits<{ open: [tx: Transaction, list: Transaction[]]; more: [] }>()
+/** A side's name in a row («Тинькофф → Bybit») and «авто», handed down to each row. */
+const slots = defineSlots<{
+  side?(props: { side: AccountRef; label: string }): unknown
+  origin?(props: { tx: Transaction; automationId: string; runId: string | null }): unknown
+}>()
 
 const { t } = useI18n()
 
@@ -56,13 +62,14 @@ const days = computed<TxDay[]>(() =>
     ? groupByDay(shown.value, Number(props.fxPerUsd ?? 1), context.rootOf, props.storeId)
     : [{ date: '', txs: shown.value, totalBase: 0, partial: false }],
 )
-/** The row's menu: the explorer link (when the operation has one) and the list's own actions. */
+/** The row's menu: the list's own actions, the explorer link (when there is one) just before the delete. */
 function actionsFor(tx: Transaction): UiAction[] {
+  const own = props.rowActions?.(tx) ?? []
   const url = txExplorerUrl(tx)
-  const explorer: UiAction[] = url
-    ? [{ id: 'explorer', label: t('hist.openExplorer'), icon: Link, run: () => void call('open_explorer', { url }) }]
-    : []
-  return [...explorer, ...(props.rowActions?.(tx) ?? [])]
+  if (!url) return own
+  const explorer: UiAction = { id: 'explorer', label: t('hist.openExplorer'), icon: Link, run: () => void call('open_explorer', { url }) }
+  const at = own.findIndex((action) => action.destructive)
+  return at < 0 ? [...own, explorer] : [...own.slice(0, at), explorer, ...own.slice(at)]
 }
 
 const listRoot = ref<HTMLElement | null>(null)
@@ -70,6 +77,11 @@ const menuTx = ref<Transaction | null>(null)
 const menuActions = computed(() => (menuTx.value ? actionsFor(menuTx.value) : []))
 /** Outside a row (a day header, «Показать ещё») there is nothing to act on: no menu. */
 function onContextMenu(event: MouseEvent) {
+  // A finger holds for the sheet instead (useRowMenu); no floating menu under it.
+  if (rowMenu.coarse.value) {
+    event.preventDefault()
+    return
+  }
   const id = (event.target as Element | null)?.closest<HTMLElement>('[data-tx-row]')?.dataset.txRow
   const tx = id ? shown.value.find((entry) => txId(entry) === id) : undefined
   if (!tx) {
@@ -81,6 +93,13 @@ function onContextMenu(event: MouseEvent) {
 }
 // Capture: it runs before the menu's own handler, so the menu opens on the right row.
 useEventListener(listRoot, 'contextmenu', onContextMenu, { capture: true })
+const rowMenu = useRowMenu({
+  root: listRoot,
+  rows: () => shown.value,
+  actions: actionsFor,
+  enabled: () => Boolean(props.rowActions),
+  context,
+})
 const rest = computed(() => (props.total ?? props.transactions.length) - shown.value.length)
 
 function showMore() {
@@ -91,7 +110,7 @@ function showMore() {
 
 <template>
   <!-- One right-click menu for the whole list: the row under the cursor says which operation. -->
-  <ContextMenu lazy :actions="menuActions" :disabled="!props.rowActions">
+  <ContextMenu lazy :actions="menuActions" :disabled="!props.rowActions || rowMenu.coarse.value">
     <div>
     <!-- The menu trigger takes the outer ref: the listener needs one of its own. -->
     <div ref="listRoot" class="contents divide-y divide-border">
@@ -113,11 +132,18 @@ function showMore() {
             :store-id="props.storeId"
             :loss="props.losses?.[txId(tx)] ?? null"
             :openable="props.openable"
-            @open="(row) => emit('open', row)"
+            @open="(row) => emit('open', row, props.transactions)"
           >
             <!-- The same list as the right-click menu, behind «⋯» for a mouse and a finger alike. -->
             <template v-if="props.rowActions" #actions="{ tx: row }">
-              <ActionMenu :actions="actionsFor(row)" :label="t('actions.more')" />
+              <ActionMenu :actions="actionsFor(row)" :label="t('actions.more')" :sheet="rowMenu.sheetHead(row)" />
+            </template>
+            <!-- The clipped second line leaves a wallet name a 16px target on touch: a tap opens the card, a press — the menu with the wallet. -->
+            <template v-if="slots.side && !rowMenu.coarse.value" #side="side">
+              <slot name="side" v-bind="side" />
+            </template>
+            <template v-if="slots.origin" #origin="origin">
+              <slot name="origin" v-bind="origin" />
             </template>
           </TransactionRow>
         </div>
@@ -133,6 +159,12 @@ function showMore() {
         {{ t('tx.empty') }}
       </p>
     </div>
+    <ActionSheet
+      v-if="rowMenu.sheetTx.value"
+      v-model:open="rowMenu.sheetOpen.value"
+      :actions="rowMenu.sheetActions.value"
+      v-bind="rowMenu.sheetHead(rowMenu.sheetTx.value)"
+    />
     </div>
   </ContextMenu>
 </template>

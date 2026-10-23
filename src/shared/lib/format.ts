@@ -202,6 +202,14 @@ export function formatDayMonth(iso: string | null | undefined): string {
   return dateFormat({ day: 'numeric', month: 'long' }).format(date)
 }
 
+/** «20 окт»: a day in a short list, without the dot of the abbreviation. */
+export function formatDayMonthShort(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return dateFormat({ day: 'numeric', month: 'short' }).format(date).replace('.', '')
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)

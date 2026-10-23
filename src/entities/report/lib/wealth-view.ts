@@ -65,3 +65,16 @@ export function wealthChange(points: NetworthPoint[]): WealthChange | null {
     months: points.length - 1,
   }
 }
+
+/** The group that moved capital most over the last month: «Выросло в основном за счёт Крипты». */
+export function wealthDriver(points: NetworthPoint[]): { group: WealthGroup; delta: number } | null {
+  const last = points.at(-1)
+  const before = points.at(-2)
+  if (!last || !before) return null
+  const moves = (['property', 'crypto', 'bank', 'owed', 'debts'] as const).map((group) => ({
+    group,
+    delta: groupValue(last, group) - groupValue(before, group),
+  }))
+  const top = moves.reduce((best, move) => (Math.abs(move.delta) > Math.abs(best.delta) ? move : best))
+  return top.delta === 0 ? null : top
+}

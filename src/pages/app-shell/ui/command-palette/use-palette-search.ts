@@ -3,16 +3,18 @@ import { useI18n } from 'vue-i18n'
 import { refDebounced } from '@vueuse/core'
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
+import { useReport } from '@/entities/report'
 import { call } from '@/shared/api/ipc'
+import { currentMonth } from '@/shared/lib/period'
 import { entityKey, sameEntity } from '@/shared/lib/entity-link'
 import { recentEntities } from '@/shared/lib/recent-entities'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 /** Shown in this order; wallets have their own group in the palette. */
 const KIND_ORDER: EntityKind[] = [
+  'category',
   'goal',
   'budget',
-  'category',
   'contact',
   'asset',
   'automation',
@@ -29,6 +31,10 @@ export interface PaletteHit {
   target: EntityRef
   label: string
   archived: boolean
+}
+
+export interface PaletteRecentHit extends PaletteHit {
+  at?: string
 }
 
 /**
@@ -77,12 +83,11 @@ export function usePaletteSearch(open: Ref<boolean>, search: Ref<string>) {
     ),
   )
 
-  const recent = computed<PaletteHit[]>(() =>
-    recentEntities.value.map((target) => {
+  const recent = computed<PaletteRecentHit[]>(() =>
+    recentEntities.value.map(({ target, at, title }) => {
       const known = hits.value.find((hit) => sameEntity(hit.target, target))
-      return known
-        ? { ...known, id: `recent-${known.id}` }
-        : { id: `recent-${entityKey(target)}`, target, label: t(`entity.kind.${target.kind}`), archived: false }
+      const label = title ?? known?.label ?? t(`entity.kind.${target.kind}`)
+      return { id: `recent-${entityKey(target)}`, target, label, archived: known?.archived ?? false, at }
     }),
   )
 
@@ -106,5 +111,33 @@ export function usePaletteSearch(open: Ref<boolean>, search: Ref<string>) {
   })
   const found = computed(() => (search.value.trim().length >= TX_MIN_CHARS ? (transactions.data.value ?? []) : []))
 
-  return { groups, recent, transactions: found }
+  /** The month's spending per category: «Продукты · 36 $ в окт.» (Paths 2 · 8). */
+  const month = currentMonth()
+  const report = useReport(
+    'categories',
+    {
+      scope: { store_ids: [], include_children: true },
+      from: month,
+      to: month,
+      year: Number(month.slice(0, 4)),
+      currency: null,
+      real_terms: false,
+    },
+    { enabled: () => open.value && Boolean(search.value.trim()) },
+  )
+  const monthTotals = computed(() => {
+    const data = report.data.value
+    const view = data && 'categories' in data ? data.categories : null
+    const totals = new Map<string, string>()
+    for (const row of view?.groups.flatMap((block) => block.rows) ?? []) totals.set(row.key, row.total)
+    return { totals, currency: view?.meta.currency ?? '', month }
+  })
+  /** The first category the query names: its actions follow the results. */
+  const category = computed(() => {
+    const needle = search.value.trim().toLowerCase()
+    if (!needle) return null
+    return hits.value.find((hit) => hit.target.kind === 'category' && hit.label.toLowerCase().includes(needle)) ?? null
+  })
+
+  return { hits, groups, recent, transactions: found, monthTotals, category }
 }

@@ -19,3 +19,20 @@ export function sharedUnit(row: WhereRow): string | null {
   const units = new Set(row.items.map((item) => item.unit.toLowerCase()))
   return units.size === 1 ? row.items[0].unit : null
 }
+
+/** The rows that open on the spot (Paths 2 · 9): their items are operations, not category totals. */
+export const WHERE_OPENS: readonly WhereKind[] = ['lent', 'moved', 'invested']
+
+/** The kinds the operations list filters by to show a row's operations. */
+export const WHERE_TX_KINDS: Partial<Record<WhereKind, TxKind[]>> = {
+  lent: ['transfer'],
+  moved: ['transfer', 'convert'],
+  invested: ['trade_spot'],
+}
+
+/** One operation of an opened row: «21 окт · Тинькофф → Bybit · 45 000 ₽ → 480 USDT». */
+export function whereItemRoute(kind: WhereKind, item: WhereItem): string {
+  if (kind === 'lent') return [item.comment || item.label, item.to].filter(Boolean).join(', ')
+  if (kind === 'invested') return item.label
+  return `${item.label} → ${item.to ?? ''}`
+}

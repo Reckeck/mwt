@@ -11,7 +11,12 @@ import { txId } from './transactions'
  */
 export const txDetailsTx = ref<Transaction | null>(null)
 
-export function openTxDetails(tx: Transaction) {
+/** The rows the card was opened from: its ‹ › step through them. */
+export const txDetailsList = ref<Transaction[]>([])
+
+export function openTxDetails(tx: Transaction, list?: Transaction[]) {
   txDetailsTx.value = tx
+  if (list) txDetailsList.value = list
+  else if (!txDetailsList.value.some((row) => txId(row) === txId(tx))) txDetailsList.value = []
   openEntity({ kind: 'tx', id: txId(tx) })
 }

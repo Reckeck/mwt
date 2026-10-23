@@ -6,3 +6,20 @@ import { ref } from 'vue'
  * open it without reaching up into the shell.
  */
 export const quickAddOpen = ref(false)
+
+/** What a caller asked the dialog to start on: «Перевести» from a wallet's glance. */
+export interface QuickAddRequest {
+  storeId?: string
+  kind?: TxKind
+  /** A payment's category: «Записать оплату в „Продукты“» (Paths 2 · 8). */
+  category?: string
+}
+
+/** The request of the current opening; the dialog clears it on close. */
+export const quickAddRequest = ref<QuickAddRequest | null>(null)
+
+/** Opens «+ Операция» on a wallet and a kind. */
+export function openQuickAdd(request: QuickAddRequest = {}) {
+  quickAddRequest.value = request
+  quickAddOpen.value = true
+}

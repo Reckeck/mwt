@@ -7,7 +7,8 @@ import { type EntityDialogKind, type EntityDialogRequest, entityDialog } from '@
 import { registerEntityOpener, useEntityNav } from '@/shared/lib/entity-link'
 import { rememberEntity } from '@/shared/lib/recent-entities'
 import { txDetailsTx } from '@/shared/lib/tx-details'
-import { txId } from '@/shared/lib/transactions'
+import { formatDayMonthShort } from '@/shared/lib/format'
+import { txId, txMeta } from '@/shared/lib/transactions'
 
 /**
  * The cards open at `?open=`: the top one is drawn, «Назад» or closing it
@@ -44,6 +45,12 @@ export function useEntityHost() {
     return current.value?.transaction ?? null
   })
   const tx = useLatestTx(openedTx)
+  /** Ctrl K lists an operation by its comment and day («Маме до зарплаты · 20 окт»). */
+  watch(tx, (shown) => {
+    const meta = shown ? txMeta(shown) : null
+    if (meta?.comment && top.value?.kind === 'tx')
+      rememberEntity(top.value, `${meta.comment} · ${formatDayMonthShort(meta.timestamp)}`)
+  })
 
   const sheetOpen = (kind: 'tx' | 'other') =>
     computed({

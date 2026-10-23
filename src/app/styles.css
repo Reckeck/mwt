@@ -237,8 +237,11 @@
   --node-text: oklch(0.74 0.06 40);
 }
 
-* {
-  border-color: var(--border);
+/* In the base layer, so a `border-primary/40` utility still wins over it. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 /* Type scale: one class per level, so a page title looks the same on every screen.

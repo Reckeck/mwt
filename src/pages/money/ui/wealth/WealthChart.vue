@@ -7,7 +7,7 @@ import { axisNumber, chartColors } from '@/shared/lib/chart-theme'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { formatMoney, formatMonthKey } from '@/shared/lib/format'
 
-import { STACKED, type WealthGroup, groupValue } from '../../lib/wealth-view'
+import { STACKED, type WealthGroup, groupValue } from '@/entities/report'
 
 /**
  * Capital by month as a stack: property under crypto under bank (Money 2 · 12).

@@ -7,7 +7,7 @@ import { formatMoney, formatPct } from '@/shared/lib/format'
 import { type PeriodPreset, presetOf, presetRange } from '@/shared/lib/period'
 import { Button } from '@/shared/ui/button'
 
-import { wealthChange } from '../../lib/wealth-view'
+import { wealthChange } from '@/entities/report'
 
 /**
  * «Капитал 42 052,50 $» with what the month and the period changed, and the

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { formatMoney } from '@/shared/lib/format'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
-import { wealthRows } from '../../lib/wealth-view'
+import { wealthRows } from '@/entities/report'
 
 /** «Из чего»: each group's value and share now (Money 2 · 12); a card list on a phone. */
 const props = defineProps<{ point: NetworthPoint | undefined; currency: string }>()

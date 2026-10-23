@@ -7,8 +7,12 @@ import { call } from '@/shared/api/ipc'
 export const MONTH_BALANCE_KEY = ['report', 'month-balance'] as const
 
 /** What each month of the filter's period left, and what carried over. */
-export function useMonthBalance(filter: MaybeRefOrGetter<ReportFilter>) {
+export function useMonthBalance(
+  filter: MaybeRefOrGetter<ReportFilter>,
+  options: { enabled?: MaybeRefOrGetter<boolean> } = {},
+) {
   return useQuery({
+    enabled: computed(() => toValue(options.enabled ?? true)),
     queryKey: computed(() => [...MONTH_BALANCE_KEY, JSON.parse(JSON.stringify(toValue(filter)))]),
     placeholderData: keepPreviousData,
     queryFn: () => call<MonthBalance>('get_month_balance', { filter: toValue(filter) }),

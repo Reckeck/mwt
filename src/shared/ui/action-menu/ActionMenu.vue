@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { ChevronRight, MoreHorizontal } from 'lucide-vue-next'
 import {
   DropdownMenuContent,
@@ -19,21 +20,33 @@ import {
   MENU_ITEM_ICON_CLASS,
   visibleActions,
 } from '@/shared/ui/context-menu'
+import { Button } from '@/shared/ui/button'
+import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 
 import type { ActionMenuProps } from './action-menu.types'
+import ActionSheet from './ActionSheet.vue'
 
 const props = defineProps<ActionMenuProps>()
+
+const phone = useIsPhone()
+const sheetOpen = ref(false)
+
+const TRIGGER =
+  'touch-hit-lg flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 </script>
 
 <template>
+  <!-- On a phone the same list comes up as a sheet from below. -->
+  <template v-if="phone">
+    <Button variant="ghost" size="icon" :class="TRIGGER" :aria-label="props.label" @click="sheetOpen = true">
+      <MoreHorizontal class="size-4" />
+    </Button>
+    <ActionSheet v-model:open="sheetOpen" :actions="props.actions" v-bind="props.sheet" />
+  </template>
   <!-- The «⋯» twin of the right-click menu: built from the same action list. -->
-  <DropdownMenuRoot :modal="false">
-    <DropdownMenuTrigger
-      class="touch-hit-lg flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      :aria-label="props.label"
-      :title="props.label"
-    >
+  <DropdownMenuRoot v-else :modal="false">
+    <DropdownMenuTrigger :class="TRIGGER" :aria-label="props.label" :title="props.label">
       <MoreHorizontal class="size-4" />
     </DropdownMenuTrigger>
     <DropdownMenuPortal>

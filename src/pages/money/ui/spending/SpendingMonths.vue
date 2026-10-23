@@ -61,10 +61,9 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
         :is="phone ? 'div' : Button"
         v-for="row in props.balance.rows"
         :key="row.month"
-        v-bind="phone ? {} : { variant: 'ghost' }"
+        v-bind="phone ? {} : { variant: 'ghost', onClick: () => emit('pick', row.month) }"
         :class="cn('group flex h-auto min-w-0 flex-col items-center gap-0 rounded-md px-0 pt-2 pb-1 font-normal', inPeriod(row.month) && 'bg-accent/50')"
         :aria-label="`${formatMonthKey(row.month)}: ${money(row.spent)} / ${money(row.income)}`"
-        v-on="phone ? {} : { click: () => emit('pick', row.month) }"
       >
         <span class="relative flex w-full flex-1 items-end justify-center">
           <span class="absolute bottom-0 w-[70%] max-w-[46px] rounded-[3px] bg-border" :style="{ height: height(row.income) }" />

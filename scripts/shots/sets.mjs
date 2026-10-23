@@ -6,6 +6,16 @@ const COLLAPSE = [{ desktop: [{ press: 'ctrl+b' }] }]
 /** Ctrl B again: the sidebar state is remembered, the next shot starts expanded. */
 const EXPAND = { name: 'sidebar-restore', route: '/', steps: COLLAPSE, phone: false }
 
+/** «Недавние» as on Paths 1 · 7: a wallet, the October spending and an operation card were open a moment ago. */
+const SEED_RECENT = `
+  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  const wait = () => new Promise((done) => setTimeout(done, 600))
+  await gp.$router.push('/money?from=2026-10&to=2026-10'); await wait()
+  await gp.$router.push('/stores'); await wait()
+  const wallet = document.querySelector('a[href^="/stores/"]')?.getAttribute('href')
+  if (wallet) { await gp.$router.push(wallet); await wait() }
+  await gp.$router.push('/'); await wait(); return true`
+
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
 
 /** The interface as it is before the redesign: what the new one is compared with. */
@@ -172,4 +182,50 @@ const stage2b = [
   { name: 'goal-2-errors', route: '/money/where', steps: [...GOAL_NEXT, { click: '[data-wizard-save]' }], canvas: { board: 'Money-2', frame: '8.' } },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b }
+/** Paths 1–2: glances, the way back, the action menu. */
+const paths = [
+  { name: 'glance-spent', route: '/', steps: [{ wait: 600 }, { click: '[data-glance-trigger="spent"]' }, { wait: 900 }], canvas: { board: 'Paths-1', frame: '2.' } },
+  { name: 'glance-wallet', route: '/transactions', steps: [{ wait: 800 }, { click: '[data-glance-trigger="wallet"]' }, { wait: 900 }], canvas: { board: 'Paths-1', frame: '4.' } },
+  {
+    name: 'back-chip',
+    route: '/',
+    steps: [{ wait: 600 }, { click: '[data-glance-trigger="spent"]' }, { wait: 900 }, { click: '[data-glance-category]' }, { wait: 1200 }],
+    canvas: { board: 'Paths-1', frame: '5.' },
+  },
+  { name: 'tx-card', route: '/transactions', steps: [{ wait: 800 }, { eval: `document.querySelector('[data-tx-open]').click(); return true` }, { wait: 900 }], canvas: { board: 'Paths-1', frame: '6.' } },
+  {
+    name: 'tx-card-wallet',
+    route: '/transactions',
+    steps: [{ wait: 800 }, { eval: `document.querySelector('[data-tx-open]').click(); return true` }, { wait: 900 }, { click: '[data-tx-facts] [data-glance-trigger="wallet"]' }, { wait: 700 }],
+    canvas: { board: 'Paths-1', frame: '6.' },
+  },
+  { name: 'palette-empty', route: '/', steps: [{ wait: 600 }, { eval: SEED_RECENT }, ...PALETTE, { wait: 600 }], canvas: { board: 'Paths-1', frame: '7.' } },
+  {
+    name: 'palette-peek',
+    route: '/',
+    steps: [{ wait: 600 }, ...PALETTE, { wait: 300 }, { type: ['[data-command-palette] input', 'прод'] }, { wait: 1200 }],
+    canvas: { board: 'Paths-2', frame: '8.' },
+  },
+  { name: 'palette-shift', route: '/', steps: [{ wait: 600 }, { eval: SEED_RECENT }, ...PALETTE, { wait: 300 }, { press: 'shift+Enter' }, { wait: 900 }], phone: false },
+  {
+    name: 'glance-auto',
+    route: '/transactions',
+    steps: [{ wait: 800 }, { click: '[data-glance-trigger="auto"]' }, { wait: 900 }],
+    canvas: { board: 'Paths-2', frame: '10.' },
+  },
+  {
+    name: 'where-open',
+    route: '/money/where',
+    steps: [{ wait: 900 }, { eval: `document.querySelector('[data-where-row="moved"] button').click(); return true` }, { wait: 600 }],
+    canvas: { board: 'Paths-2', frame: '9.' },
+  },
+  {
+    name: 'row-menu',
+    route: '/transactions',
+    steps: [{ wait: 900 }, { click: 'section:nth-of-type(2) [data-tx-row] button[aria-label="Ещё"]' }, { wait: 700 }],
+    canvas: { board: 'Paths-2', frame: '11.' },
+  },
+  { name: 'glance-capital', route: '/', steps: [{ wait: 600 }, { click: '[data-glance-trigger="capital"]' }, { wait: 900 }], canvas: { board: 'Paths-1', frame: '3.' } },
+]
+
+export const SETS = { before, stage1, stage2, stage2b, paths }

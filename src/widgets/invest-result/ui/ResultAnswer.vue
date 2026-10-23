@@ -37,7 +37,7 @@ const withdrawal = computed(() => input.value.withdrawal)
 /** «это 28 % среднего дохода 1 575 $; сейчас откладываете 157,50 $» — only after «Из данных». */
 const incomeShare = computed(() => {
   const income = Number(props.prefilled?.income_avg ?? 0)
-  if (!solved.value || solved.value.unknown !== 'contribution' || !(income > 0)) return null
+  if (solved.value?.unknown !== 'contribution' || !(income > 0)) return null
   const pct = formatPct((Number(solved.value.value) / income) * 100, { decimals: 0 })
   const now = props.prefilled?.monthly_contribution
   return now

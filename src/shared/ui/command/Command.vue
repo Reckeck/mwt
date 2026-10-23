@@ -69,6 +69,10 @@ function filterItems() {
 watch(() => filterState.search, () => {
   filterItems()
 })
+// Rows that arrive after the query (search results) must be filtered too, or their groups stay hidden.
+watch(allItems, () => {
+  if (filterState.search) filterItems()
+}, { deep: true, flush: 'post' })
 
 provideCommandContext({
   allItems,

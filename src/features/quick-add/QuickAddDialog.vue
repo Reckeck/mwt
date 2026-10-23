@@ -9,6 +9,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Label } from '@/shared/ui/label'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useStoreTree } from '@/shared/api/queries'
+import { quickAddRequest } from '@/shared/lib/quick-add'
 
 /** «+ Операция» from anywhere: the wallet is the first field, not the page's. */
 const open = defineModel<boolean>('open', { required: true })
@@ -32,12 +33,28 @@ const storeId = ref('')
 watch(
   [open, nodes],
   ([isOpen, list]) => {
-    if (!isOpen || (storeId.value && list.some((node) => node.store.id === storeId.value))) return
+    if (!isOpen) {
+      quickAddRequest.value = null
+      return
+    }
+    const asked = quickAddRequest.value?.storeId
+    if (asked && list.some((node) => node.store.id === asked)) {
+      storeId.value = asked
+      return
+    }
+    if (storeId.value && list.some((node) => node.store.id === storeId.value)) return
     const last = remembered()
     storeId.value = list.find((node) => node.store.id === last)?.store.id ?? list[0]?.store.id ?? ''
   },
   { immediate: true },
 )
+
+/** «Перевести» from a glance, «Записать оплату в „Продукты“» from Ctrl K: the form starts on that kind and category. */
+const initial = computed(() => {
+  const asked = quickAddRequest.value
+  if (!asked?.kind) return null
+  return { kind: asked.kind, categories: asked.category ? [asked.category] : [] }
+})
 
 const form = ref<InstanceType<typeof TransactionForm> | null>(null)
 
@@ -61,7 +78,7 @@ function onSaved() {
           <StoreNodeSelect id="quick-add-store" v-model="storeId" :nodes="nodes" class="w-full" />
         </div>
         <!-- Keyed by the wallet: the form fills its fields from it once. -->
-        <TransactionForm v-if="open && storeId" :key="storeId" ref="form" :store-id="storeId" @saved="onSaved" />
+        <TransactionForm v-if="open && storeId" :key="storeId" ref="form" :store-id="storeId" :initial="initial" @saved="onSaved" />
       </template>
     </div>
 

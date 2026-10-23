@@ -42,6 +42,9 @@ pub struct WhereItem {
     /// In the report currency; `None` without a price that day.
     pub value: Option<Amount>,
     pub comment: String,
+    /// The operation's moment, RFC3339; empty for a category's total.
+    #[serde(default)]
+    pub at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -155,6 +158,7 @@ impl UnlockedVault {
                         unit: inner.asset.symbol.clone(),
                         value,
                         comment: inner.meta.comment.clone(),
+                        at: inner.meta.timestamp.clone(),
                         ..WhereItem::default()
                     };
                     match (inner.debt, &inner.from, &inner.to) {
@@ -192,6 +196,7 @@ impl UnlockedVault {
                                 secs,
                             ),
                             comment: inner.meta.comment.clone(),
+                            at: inner.meta.timestamp.clone(),
                         });
                     }
                 }
@@ -209,6 +214,7 @@ impl UnlockedVault {
                         secs,
                     ),
                     comment: inner.meta.comment.clone(),
+                    at: inner.meta.timestamp.clone(),
                     ..WhereItem::default()
                 }),
                 _ => {}

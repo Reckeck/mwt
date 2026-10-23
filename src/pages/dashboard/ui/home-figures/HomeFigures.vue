@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { CapitalGlance, SpentGlance } from '@/widgets/quick-glance'
 import { Money } from '@/entities/currency'
 import { comparisonDelta } from '@/shared/lib/comparison'
 import { formatMoney, formatPct, signClass } from '@/shared/lib/format'
@@ -60,11 +61,10 @@ const limitLine = computed(() => {
       <div class="grid gap-1">
       <p class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capital') }}</p>
       <p :class="cn('value', props.home.fresh.value && 'text-muted-foreground')">
-        <Money
-          :amount="props.home.summary.data.value?.net_worth_base ?? '0'"
-          :currency="props.home.summary.data.value?.base_currency"
-          :convert="false"
-        />
+        <CapitalGlance v-if="!props.home.fresh.value">
+          <Money :amount="props.home.summary.data.value?.net_worth_base ?? '0'" :currency="props.home.summary.data.value?.base_currency" :convert="false" />
+        </CapitalGlance>
+        <Money v-else :amount="'0'" :currency="props.home.summary.data.value?.base_currency" :convert="false" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capitalEmpty') }}</p>
       <p v-else-if="change !== null" :class="cn('text-xs tabular-nums md:text-sm', signClass(change))">
@@ -79,7 +79,10 @@ const limitLine = computed(() => {
         {{ t('home.figures.spent', { when: t(`period.in.${props.home.month.slice(5, 7)}`) }) }}
       </p>
       <p :class="cn('value', props.home.fresh.value && 'text-muted-foreground')">
-        <Money :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
+        <SpentGlance v-if="!props.home.fresh.value" :month="props.home.month" :back-label="t('nav.dashboard')">
+          <Money :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
+        </SpentGlance>
+        <Money v-else :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.spentEmpty') }}</p>
       <p v-else-if="limitLine" class="text-xs text-muted-foreground tabular-nums md:text-sm">{{ limitLine }}</p>

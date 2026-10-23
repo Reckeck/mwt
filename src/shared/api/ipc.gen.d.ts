@@ -5922,7 +5922,11 @@ got_qty: Amount | null, got_unit: string | null,
 /**
  * In the report currency; `None` without a price that day.
  */
-value: Amount | null, comment: string, };
+value: Amount | null, comment: string, 
+/**
+ * The operation's moment, RFC3339; empty for a category's total.
+ */
+at: string, };
 
 type WhereKind = "spending" | "lent" | "moved" | "invested" | "losses";
 
