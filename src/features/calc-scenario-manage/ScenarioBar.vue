@@ -133,12 +133,20 @@ const picked = computed({
     <span class="text-xs text-muted-foreground" aria-live="polite" data-calc-saved>
       {{ !current ? t('invest.scenario.notSaved') : saving ? t('invest.scenario.saving') : t('invest.scenario.autosaved') }}
     </span>
-    <div class="ms-auto flex items-center gap-2">
+    <!-- Three buttons do not fit a phone in a row: two side by side, the goal under them. -->
+    <div class="ms-auto flex items-center gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2">
+      <!-- What the page adds to the run's actions: «Сравнить» lives with the chart it draws on. -->
+      <slot name="actions" />
       <Button v-if="!current" variant="outline" :disabled="save.isPending.value" @click="naming = 'new'">
         {{ t('invest.scenario.save') }}
       </Button>
       <ActionMenu v-if="current" :actions="actions" :label="t('actions.more')" />
-      <Button :disabled="goalDraft.isPending.value || save.isPending.value" data-calc-goal @click="emit('wantGoal')">
+      <Button
+        class="max-sm:col-span-2"
+        :disabled="goalDraft.isPending.value || save.isPending.value"
+        data-calc-goal
+        @click="emit('wantGoal')"
+      >
         <Target class="size-4" />{{ t('invest.scenario.makeGoal') }}
       </Button>
     </div>

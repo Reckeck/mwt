@@ -12,11 +12,11 @@ import { useTheme } from '@/shared/lib/theme'
 import { Card } from '@/shared/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { SectionState } from '@/shared/ui/section-state'
-import { Toggle } from '@/shared/ui/toggle'
 
 import { resultChart } from './model/result-chart'
 import { useAnswerExtras } from './model/use-answer-extras'
-import { MAX_COMPARED, useScenarioLines } from './model/use-scenario-lines'
+import type { CompareLine, CompareLines } from './model/use-compare-lines'
+import CompareList from './ui/CompareList.vue'
 import InvestCompare from './ui/InvestCompare.vue'
 import InvestYearTable from './ui/InvestYearTable.vue'
 import ResultAnswer from './ui/ResultAnswer.vue'
@@ -24,15 +24,14 @@ import ResultHint from './ui/ResultHint.vue'
 import ResultStats from './ui/ResultStats.vue'
 
 /** The answer first, then how it adds up: the figures, the chart, «что выгоднее» and the years. */
-const props = defineProps<{ calc: InvestCalc; scenarioId: string | null }>()
-const emit = defineEmits<{ goal: [] }>()
+const props = defineProps<{ calc: InvestCalc; compare: CompareLines }>()
+const emit = defineEmits<{ goal: []; open: [target: CompareLine['open']] }>()
 
 const { t } = useI18n()
 const axisColor = chartAxisColor(useTheme().resolved)
 const outcome = computed(() => props.calc.outcome.data.value)
 const currency = computed(() => outcome.value?.input.currency ?? props.calc.form.currency)
 const tooltip = useMoneyChartTooltip(currency)
-const overlay = useScenarioLines(() => props.scenarioId)
 const extras = useAnswerExtras(outcome, () => props.calc.form.target)
 const yearsOpen = ref(false)
 
@@ -41,7 +40,7 @@ const option = computed<ChartOption | null>(() => {
   if (!data) return null
   return resultChart(
     data.result,
-    overlay.lines.value,
+    props.compare.lines.value,
     {
       year: (year) => t('invest.yearN', { year }),
       invested: t('invest.chart.invested'),
@@ -49,10 +48,23 @@ const option = computed<ChartOption | null>(() => {
       real: t('invest.chart.real'),
       crossover: t('invest.chart.crossover'),
       depleted: t('invest.chart.depleted'),
+      current: t('invest.compareWith.current'),
     },
-    { axisColor: axisColor.value, primary: chartColors().primary, currency: currency.value, tooltip: tooltip.value },
+    {
+      axisColor: axisColor.value,
+      primary: chartColors().primary,
+      palette: chartColors().palette,
+      currency: currency.value,
+      tooltip: tooltip.value,
+    },
   )
 })
+
+/** A click on a compared line opens that run: its own parameters go into the form. */
+function onChartClick(params: { seriesName?: string }) {
+  const line = props.compare.lines.value.find((entry) => entry.name === params.seriesName)
+  if (line) emit('open', line.open)
+}
 
 /** «Что выгоднее» answers «сколько будет»: it has nothing to add to a found value or to running out. */
 const comparing = computed(() => !outcome.value?.solved && Number(outcome.value?.result.withdrawn ?? 0) === 0)
@@ -81,23 +93,14 @@ const comparing = computed(() => !outcome.value?.solved && Number(outcome.value?
         <ResultStats :outcome="outcome" :currency="currency" />
         <ResultHint v-if="outcome.solved" :solved="outcome.solved" :currency="currency" :alternatives="extras.alternatives.value" />
 
-        <div v-if="option" class="h-64 w-full min-w-0"><Chart :option="option" autoresize /></div>
+        <div v-if="option" class="h-64 w-full min-w-0"><Chart :option="option" autoresize @click="onChartClick" /></div>
         <p v-if="outcome.result.crossover_year !== null && comparing" class="flex gap-2 text-sm text-muted-foreground">
           <span class="text-primary">●</span>{{ t('invest.insight.crossover', { year: outcome.result.crossover_year }) }}
         </p>
-        <div v-if="overlay.others.value.length" class="flex flex-wrap items-center gap-2" data-tour="calc-overlay">
-          <span class="text-sm text-muted-foreground">{{ t('invest.overlay', { max: MAX_COMPARED }) }}</span>
-          <Toggle
-            v-for="scenario in overlay.others.value"
-            :key="scenario.id"
-            variant="outline"
-            size="sm"
-            :model-value="overlay.picked.value.includes(scenario.id)"
-            @update:model-value="overlay.toggle(scenario.id)"
-          >
-            {{ scenario.name }}
-          </Toggle>
-        </div>
+        <template v-if="props.compare.lines.value.length">
+          <p class="text-xs text-muted-foreground" data-calc-compare-note>{{ t('invest.compareWith.note') }}</p>
+          <CompareList :current="outcome.result.final_nominal" :lines="props.compare.lines.value" :currency="currency" @open="emit('open', $event)" />
+        </template>
 
         <InvestCompare v-if="comparing" :input="outcome.input" @apply="props.calc.applyCompare" />
 

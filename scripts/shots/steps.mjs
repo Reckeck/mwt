@@ -32,7 +32,8 @@ async function reset(page, route) {
     await page.sleep(80)
   }
   const target = route.startsWith('settings:') ? `{ path: '/', query: { settings: '${route.slice(9)}' } }` : `'${route}'`
-  await page.eval(`${APP} await gp.$router.push(${target}); return true`)
+  // The same route again would keep the page and whatever the last shot picked on it.
+  await page.eval(`${APP} if (gp.$route.path !== '/') await gp.$router.push('/'); await gp.$router.push(${target}); return true`)
   await page.sleep(500)
   await page.mouse(2, 2)
 }

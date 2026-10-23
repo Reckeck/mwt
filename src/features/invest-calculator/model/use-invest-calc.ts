@@ -14,6 +14,7 @@ import {
 } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { bumpAmount } from '../lib/compare-input'
 import { type CalcForm, defaultForm, fromInput, newStage, termMonths, toInput } from './calc-form'
 
 /** What the result panel shows: the run itself and, in a solving mode, the value found. */
@@ -27,8 +28,6 @@ const DEBOUNCE_MS = 300
 const MAX_YEARS = 100
 const MAX_RATE = 200
 // The same steps as core's «Что выгоднее» rows.
-const COMPARE_RATE_BUMP = 2
-const COMPARE_FACTOR = 1.2
 
 /**
  * The calculator's state: the fields, their checks, and a live result that
@@ -153,12 +152,8 @@ export function useInvestCalc() {
 
   /** «Подставить» in «Что выгоднее»: the same change the row was computed with. */
   function applyCompare(kind: CompareKind) {
-    const bump = (value: string, by: (number: number) => number) =>
-      String(Math.round(by(Number(value.trim().replace(',', '.')) || 0) * 100) / 100)
-    if (kind === 'more_rate') form.rate = bump(form.rate, (rate) => rate + COMPARE_RATE_BUMP)
-    if (kind === 'more_contribution') {
-      for (const stage of form.stages) stage.amount = bump(stage.amount, (amount) => amount * COMPARE_FACTOR)
-    }
+    if (kind === 'more_rate') form.rate = bumpAmount(form.rate, kind)
+    if (kind === 'more_contribution') for (const stage of form.stages) stage.amount = bumpAmount(stage.amount, kind)
   }
 
   /** «Подставить» the withdrawal that lasts the whole term. */
