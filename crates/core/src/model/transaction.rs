@@ -602,6 +602,8 @@ pub fn allowed_kinds(kind: StoreKind) -> &'static [TxKind] {
             Convert,
             TradeSpot,
             TradeFutures,
+            // Staking and pools of the exchange's own Earn (OpForm-2 · 11).
+            Defi,
             Adjustment,
         ],
         StoreKind::Crypto => &[Topup, Payment, Transfer, Convert, Defi, Adjustment],
@@ -1246,6 +1248,7 @@ mod tests {
         assert!(!allowed_kinds(StoreKind::Property).contains(&TxKind::Payment));
         assert!(!allowed_kinds(StoreKind::Liability).contains(&TxKind::Topup));
         assert!(allowed_kinds(StoreKind::Exchange).contains(&TxKind::TradeFutures));
+        assert!(allowed_kinds(StoreKind::Exchange).contains(&TxKind::Defi));
     }
 
     #[test]

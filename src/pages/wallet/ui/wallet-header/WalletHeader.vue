@@ -12,6 +12,8 @@ import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 import { openConverter } from '@/shared/lib/converter'
 import { storeIcon } from '@/shared/lib/store-icons'
 
+import { WalletDealActions } from '../wallet-deal-actions'
+
 /**
  * Where the wallet sits, what it is, and what one does with it: the main
  * action first, matching reality, prices and settings at hand, the rarer
@@ -24,9 +26,12 @@ const props = defineProps<{
   /** The sub-accounts card offers a new one already. */
   hasChildren: boolean
   refreshing: boolean
+  /** An exchange's own wallet: its operations are «Сделка» buttons instead of «+ Операция». */
+  exchange?: boolean
 }>()
 const emit = defineEmits<{
   operation: []
+  deal: [kind: TxKind]
   adjust: []
   calculator: []
   subAccount: []
@@ -87,8 +92,9 @@ const ownCurrency = computed(() => {
       </div>
 
       <template #actions>
+        <WalletDealActions v-if="props.exchange" :disabled="props.store.archived" @deal="(kind) => emit('deal', kind)" />
         <Button
-          v-if="props.store.kind !== 'property'"
+          v-if="props.store.kind !== 'property' && !props.exchange"
           variant="outline"
           size="sm"
           class="max-md:hidden"
@@ -121,7 +127,7 @@ const ownCurrency = computed(() => {
         >
           <Settings2 class="size-4" />
         </RouterLink>
-        <Button size="sm" :disabled="props.store.archived" data-tour="wallet-operation" @click="emit('operation')">
+        <Button v-if="!props.exchange" size="sm" :disabled="props.store.archived" data-tour="wallet-operation" @click="emit('operation')">
           <Plus class="size-4" />
           {{ t('wallet.addOperation') }}
         </Button>
@@ -129,7 +135,7 @@ const ownCurrency = computed(() => {
 
       <template #more>
         <!-- On a phone the header keeps the main action; these move here. -->
-        <DropdownMenuItem v-if="props.store.kind !== 'property'" value="adjust" class="md:hidden" :disabled="props.store.archived" @select="emit('adjust')">
+        <DropdownMenuItem v-if="props.store.kind !== 'property'" value="adjust" :class="!props.exchange && 'md:hidden'" :disabled="props.store.archived" @select="emit('adjust')">
           <Scale class="size-4 shrink-0" />
           {{ t('adjustment.open') }}
         </DropdownMenuItem>

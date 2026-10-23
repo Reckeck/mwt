@@ -163,7 +163,7 @@ export function mockKindsFor(kind: StoreKind): TransactionKinds {
   const verbs: TxKind[] = ['topup', 'payment', 'transfer', 'convert']
   switch (kind) {
     case 'exchange':
-      return { verbs, special: ['trade_spot', 'trade_futures'], default: 'trade_spot' }
+      return { verbs, special: ['trade_spot', 'trade_futures', 'defi'], default: 'trade_spot' }
     case 'crypto':
       return { verbs, special: ['defi'], default: 'transfer' }
     case 'property':

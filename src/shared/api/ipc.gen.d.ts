@@ -5376,7 +5376,12 @@ flow: FlowClass, warnings: Array<PreviewWarning>,
  * Validation failure as `"CODE: message"`, the same string saving would
  * return; `None` when the draft would be accepted.
  */
-error: string | null, };
+error: string | null, 
+/**
+ * An opened futures position: the price near which it is liquidated, in
+ * the settle asset; `None` for anything else or without leverage.
+ */
+liquidation_price: Amount | null, };
 
 /**
  * An operation that belongs to a property (plan G4): rent received for a

@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
-import { QuickAddDialog } from '@/features/quick-add'
+import { QuickAddDialog } from '@/widgets/quick-add'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { WhatsNewDialog } from '@/widgets/whats-new'
