@@ -13,6 +13,10 @@ export function emptyTxFilter(patch: Partial<TxFilter> = {}): TxFilter {
     category: null,
     with_fee: false,
     realized: false,
+    amount_min: null,
+    amount_max: null,
+    auto_only: false,
+    debt_only: false,
     ...patch,
   }
 }
@@ -35,6 +39,9 @@ export function activeFilterCount(filter: TxFilter): number {
     filter.category !== null,
     filter.with_fee,
     filter.realized,
+    Boolean(filter.amount_min || filter.amount_max),
+    filter.auto_only,
+    filter.debt_only,
   ].filter(Boolean).length
 }
 
@@ -56,6 +63,10 @@ export function txFilterToQuery(filter: TxFilter): Record<string, string | undef
     cat: filter.category ?? undefined,
     fee: filter.with_fee ? '1' : undefined,
     realized: filter.realized ? '1' : undefined,
+    min: filter.amount_min || undefined,
+    max: filter.amount_max || undefined,
+    auto: filter.auto_only ? '1' : undefined,
+    debt: filter.debt_only ? '1' : undefined,
   }
 }
 
@@ -73,6 +84,10 @@ export const TX_FILTER_QUERY_KEYS = [
   'cat',
   'fee',
   'realized',
+  'min',
+  'max',
+  'auto',
+  'debt',
 ]
 
 /** Back from the query; `null` when the address carries no filter at all. */
@@ -98,5 +113,9 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
     category,
     with_fee: one('fee') === '1',
     realized: one('realized') === '1',
+    amount_min: one('min'),
+    amount_max: one('max'),
+    auto_only: one('auto') === '1',
+    debt_only: one('debt') === '1',
   })
 }

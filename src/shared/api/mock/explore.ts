@@ -47,6 +47,18 @@ const localDay = (iso: string) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+/** The larger of what left and what arrived, by principal legs, in USD. */
+function usdValueOf(tx: Transaction): number {
+  let gave = 0
+  let got = 0
+  for (const leg of txLegs(tx).filter((leg) => leg.role === 'principal')) {
+    const value = Math.abs(Number(leg.amount)) * (Number(leg.price_usd) || 0)
+    if (Number(leg.amount) < 0) gave += value
+    else got += value
+  }
+  return Math.max(gave, got)
+}
+
 function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
   const ids = filter.scope.store_ids.length
     ? new Set(filter.scope.store_ids.flatMap((id) => ctx.scope(id, filter.scope.include_children)))
@@ -61,6 +73,14 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     if (filter.with_fee && !txLegs(tx).some((leg) => leg.role === 'fee')) return false
     // The mock keeps no cost basis: «closed a position» is a spot sale or an asset sale.
     if (filter.realized && !['trade_spot', 'asset_sell'].includes(txKind(tx))) return false
+    const origin = txMeta(tx).origin
+    if (filter.auto_only && (origin === 'manual' || 'import' in origin)) return false
+    if (filter.debt_only && !('transfer' in tx && tx.transfer.debt)) return false
+    if (filter.amount_min || filter.amount_max) {
+      const value = usdValueOf(tx)
+      if (filter.amount_min && value < Number(filter.amount_min)) return false
+      if (filter.amount_max && value > Number(filter.amount_max)) return false
+    }
     const day = localDay(txMeta(tx).timestamp)
     if (filter.from && day < filter.from) return false
     if (filter.to && day > filter.to) return false

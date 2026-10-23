@@ -2,89 +2,36 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { watchDebounced } from '@vueuse/core'
-import { Link2, X } from 'lucide-vue-next'
+import { Link2, Search, X } from 'lucide-vue-next'
 
-import { CategorySelect } from '@/features/category-select'
-import { StoreNodeSelect } from '@/entities/store'
-import { Button } from '@/shared/ui/button'
-import { FILTER_FIELD_CLASS, FilterBar } from '@/shared/ui/filter-bar'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Select, SelectItem } from '@/shared/ui/select'
-import { flattenStoreTree, storeDescendants } from '@/shared/lib/store-tree'
-import { TX_KINDS } from '@/shared/lib/transactions'
+import { pluralForm } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { Button } from '@/shared/ui/button'
+import { FilterBar } from '@/shared/ui/filter-bar'
+import { Input } from '@/shared/ui/input'
 
+import { useFilterDraft } from './model/use-filter-draft'
+import { FilterSwitches } from './ui/filter-switches'
+import { KindField } from './ui/kind-field'
+import { MoreFields } from './ui/more-fields'
+import { ScopeField } from './ui/scope-field'
 import type { TransactionFilterBarProps } from './transaction-filter.types'
-import { useContacts, useStoreTree } from '@/shared/api/queries'
 
+/**
+ * The operations' filters: search, wallet and kind in the row; period,
+ * category, contact, amount and the switches under «Ещё фильтры», applied by
+ * «Показать N». On a phone everything but the search is in the «Фильтры» screen.
+ */
 const props = withDefaults(defineProps<TransactionFilterBarProps>(), { fixedScope: false, idPrefix: 'tx-filter' })
-/** Things that belong to the row but are not filters (refresh, export). */
-defineSlots<{ actions?(): unknown }>()
+/** Things that belong to the row but are not filters (export), and the count on the right. */
+defineSlots<{ actions?(): unknown; trail?(): unknown }>()
 const filter = defineModel<TxFilter>({ required: true })
 
-const { t } = useI18n()
-const field = (name: string) => `${props.idPrefix}-${name}`
-
-const tree = useStoreTree()
-const contacts = useContacts()
-const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
-
-const storeIds = computed({
-  get: () => filter.value.scope.store_ids,
-  set: (ids: string[]) => {
-    filter.value = { ...filter.value, scope: { store_ids: ids, include_children: filter.value.scope.include_children } }
-  },
-})
-/** Sub-accounts the picked wallets have: the «+N» next to «with sub-accounts». */
-const childCount = computed(() =>
-  nodes.value
-    .filter((entry) => storeIds.value.includes(entry.store.id))
-    .reduce((sum, node) => sum + storeDescendants(node).length, 0),
-)
-const includeChildren = computed({
-  get: () => filter.value.scope.include_children,
-  set: (value: boolean) => {
-    filter.value = { ...filter.value, scope: { ...filter.value.scope, include_children: value } }
-  },
-})
-
-/** One kind at a time in the picker; several (from a report) show as a chip instead. */
-const kind = computed({
-  get: () => (filter.value.kinds.length === 1 ? filter.value.kinds[0] : ''),
-  set: (value: string) => {
-    filter.value = { ...filter.value, kinds: value ? [value as TxKind] : [] }
-  },
-})
-
-/** Text, date and select inputs hold `''` for «not set»; the filter holds `null`. */
-const nullable = (name: 'contact_id' | 'from' | 'to') =>
-  computed({
-    get: () => filter.value[name] ?? '',
-    set: (value: string) => {
-      filter.value = { ...filter.value, [name]: value || null }
-    },
-  })
-const contactId = nullable('contact_id')
-const from = nullable('from')
-const to = nullable('to')
-
-const category = computed({
-  get: () => filter.value.category ?? '',
-  set: (value: string | string[]) => {
-    const key = Array.isArray(value) ? (value[0] ?? '') : value
-    filter.value = { ...filter.value, category: key || null }
-  },
-})
-
-const hideInternal = computed({
-  get: () => filter.value.hide_internal,
-  set: (value: boolean) => {
-    filter.value = { ...filter.value, hide_internal: value }
-  },
-})
+const { t, locale } = useI18n()
+const phone = useIsPhone()
+const open = ref(false)
+const { draft, total, apply } = useFilterDraft(filter, open)
 
 // Typing does not refetch on every key.
 const search = ref(filter.value.text ?? '')
@@ -102,50 +49,65 @@ watch(
   },
 )
 
-const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && storeIds.value.length ? 1 : 0))
+const kept = () => (props.fixedScope ? { scope: filter.value.scope } : {})
+const active = computed(() => activeFilterCount(filter.value) - (props.fixedScope && filter.value.scope.store_ids.length ? 1 : 0))
 /** Set filters among the folded ones. */
-const moreActive = computed(
-  () =>
-    [filter.value.contact_id, filter.value.from || filter.value.to, filter.value.hide_internal, filter.value.category !== null].filter(
-      Boolean,
-    ).length,
+const moreActive = computed(() => {
+  const value = filter.value
+  return [
+    value.from || value.to,
+    value.category !== null,
+    value.contact_id,
+    value.amount_min || value.amount_max,
+    value.auto_only,
+    value.debt_only,
+    value.hide_internal,
+  ].filter(Boolean).length
+})
+
+const applyLabel = computed(() => (total.value === undefined ? t('filter.show') : t('filter.showN', { n: total.value })))
+const applyLabelFull = computed(() =>
+  total.value === undefined
+    ? t('filter.show')
+    : t(`filter.showOps.${pluralForm(total.value, locale.value)}`, { count: total.value }),
 )
+
 function reset() {
-  const kept = props.fixedScope ? { scope: filter.value.scope } : {}
-  filter.value = emptyTxFilter(kept)
+  filter.value = emptyTxFilter(kept())
+}
+/** «Сбросить» in the panel clears the draft, not the list: «Показать» still applies it. */
+function clear() {
+  draft.value = emptyTxFilter({ ...kept(), text: draft.value.text })
 }
 </script>
 
 <template>
-  <FilterBar :active="active" :more-active="moreActive" @reset="reset">
+  <FilterBar
+    v-model:open="open"
+    :active="active"
+    :more-active="moreActive"
+    :apply-label="applyLabel"
+    :apply-label-full="applyLabelFull"
+    @reset="reset"
+    @clear="clear"
+    @apply="apply"
+  >
     <template #lead>
-      <div :class="FILTER_FIELD_CLASS">
-        <Label :for="field('text')">{{ t('filter.search') }}</Label>
-        <Input :id="field('text')" v-model="search" class="w-full @3xl:w-52" :placeholder="t('hist.search')" />
+      <div class="relative min-w-40 flex-[1.4] basis-48 @3xl:max-w-[260px]">
+        <Search class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          :id="`${props.idPrefix}-text`"
+          v-model="search"
+          type="search"
+          class="w-full pl-9"
+          :placeholder="phone ? t('filter.search') : t('filter.searchHint')"
+          :aria-label="t('filter.search')"
+        />
       </div>
     </template>
-    <div v-if="!props.fixedScope" :class="FILTER_FIELD_CLASS">
-      <Label :for="field('scope')">{{ t('filter.scope') }}</Label>
-      <StoreNodeSelect
-        :id="field('scope')"
-        v-model:ids="storeIds"
-        multiple
-        :nodes="nodes"
-        :empty-label="t('tx.allStores')"
-        class="w-full @3xl:w-56"
-      />
-    </div>
-    <label v-if="!props.fixedScope && storeIds.length && childCount" :for="field('children')" class="flex h-9 items-center gap-2 text-sm">
-      <Checkbox :id="field('children')" v-model="includeChildren" />
-      {{ t('filter.withChildren', { count: childCount }) }}
-    </label>
-    <div :class="FILTER_FIELD_CLASS">
-      <Label :for="field('kind')">{{ t('form.kind') }}</Label>
-      <Select :id="field('kind')" v-model="kind" :disabled="filter.kinds.length > 1" class="w-full @3xl:w-40">
-        <SelectItem value="">{{ t('hist.allKinds') }}</SelectItem>
-        <SelectItem v-for="entry in TX_KINDS" :key="entry" :value="entry">{{ t(`tx.kind.${entry}`) }}</SelectItem>
-      </Select>
-    </div>
+
+    <ScopeField v-if="!props.fixedScope" v-model="filter" :id-prefix="props.idPrefix" bare />
+    <KindField v-model="filter" :id-prefix="props.idPrefix" bare />
     <!-- What a report opened the list with: each is a chip that takes itself off. -->
     <Button v-if="filter.kinds.length > 1" variant="secondary" class="shrink-0" @click="filter = { ...filter, kinds: [] }">
       {{ t('filter.kindsCount', { n: filter.kinds.length }) }}
@@ -171,40 +133,19 @@ function reset() {
       <X class="size-3.5" />
     </Button>
 
-    <!-- Used less often: folded under «Ещё фильтры», with a count of what is set. -->
     <template #more>
-      <div v-if="contacts.data.value?.length" class="grid gap-1.5">
-        <Label :for="field('contact')">{{ t('filter.contact') }}</Label>
-        <Select :id="field('contact')" v-model="contactId">
-          <SelectItem value="">{{ t('filter.anyContact') }}</SelectItem>
-          <SelectItem v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</SelectItem>
-        </Select>
-      </div>
-      <div class="grid gap-1.5">
-        <Label :for="field('category')">{{ t('filter.category') }}</Label>
-        <CategorySelect
-          :id="field('category')"
-          v-model="category"
-          :groups="['daily', 'fixed', 'income', 'savings']"
-          :placeholder="t('filter.anyCategory')"
-          no-create
-        />
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div class="grid min-w-0 gap-1.5">
-          <Label :for="field('from')">{{ t('filter.from') }}</Label>
-          <DateTimePicker :id="field('from')" v-model="from" :max="to || undefined" />
-        </div>
-        <div class="grid min-w-0 gap-1.5">
-          <Label :for="field('to')">{{ t('filter.to') }}</Label>
-          <DateTimePicker :id="field('to')" v-model="to" :min="from || undefined" />
-        </div>
-      </div>
-      <label :for="field('internal')" class="flex items-center gap-2 text-sm">
-        <Checkbox :id="field('internal')" v-model="hideInternal" />
-        {{ t('filter.hideInternal') }}
-      </label>
+      <MoreFields v-model="draft" :id-prefix="`${props.idPrefix}-more`">
+        <!-- A phone has no row for them: they follow the period on the «Фильтры» screen. -->
+        <template v-if="phone">
+          <ScopeField v-if="!props.fixedScope" v-model="draft" :id-prefix="`${props.idPrefix}-more`" />
+          <KindField v-model="draft" :id-prefix="`${props.idPrefix}-more`" />
+        </template>
+      </MoreFields>
+    </template>
+    <template #switches>
+      <FilterSwitches v-model="draft" :id-prefix="`${props.idPrefix}-more`" />
     </template>
     <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+    <template v-if="$slots.trail" #trail><slot name="trail" /></template>
   </FilterBar>
 </template>

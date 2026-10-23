@@ -228,4 +228,30 @@ const paths = [
   { name: 'glance-capital', route: '/', steps: [{ wait: 600 }, { click: '[data-glance-trigger="capital"]' }, { wait: 900 }], canvas: { board: 'Paths-1', frame: '3.' } },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths }
+/** Stage 3: operations (canvas Ops-1, 2), the operation forms (OpForm-1, 2), attachments and the goal (New-Attach, New-Goal). */
+/** Two rows picked: checkboxes on a desktop, a hold → «Выбрать» and a tap on a phone. */
+const HOLD_FIRST_ROW = `const row = document.querySelectorAll('[data-tx-open]')[0]
+  const at = { bubbles: true, pointerType: 'touch', isPrimary: true }
+  row.dispatchEvent(new PointerEvent('pointerdown', at))
+  await new Promise((done) => setTimeout(done, 650))
+  row.dispatchEvent(new PointerEvent('pointerup', at))
+  return true`
+const PICK_TWO = [
+  { desktop: [{ eval: `document.querySelectorAll('[data-tx-select]')[0].click(); document.querySelectorAll('[data-tx-select]')[2].click(); return true` }] },
+  { phone: [{ eval: HOLD_FIRST_ROW }, { wait: 400 }, { click: { text: 'Выбрать', within: '[role="dialog"]' } }, { wait: 300 }, { eval: `document.querySelectorAll('[data-tx-open]')[2].click(); return true` }] },
+  { wait: 300 },
+]
+
+const stage3 = [
+  { name: 'ops', route: '/transactions', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Ops-1', frame: '1.' } },
+  { name: 'ops-more', route: '/transactions', steps: [{ wait: 600 }, { click: '[data-filter-more]' }, { wait: 500 }], canvas: { board: 'Ops-1', frame: '2.' } },
+  { name: 'ops-select', route: '/transactions', steps: [{ wait: 600 }, ...PICK_TWO], canvas: { board: 'Ops-1', frame: '4.' } },
+  { name: 'ops-select-category', route: '/transactions', steps: [{ wait: 600 }, ...PICK_TWO, { desktop: [{ click: { text: 'Категория', within: '[data-tx-bulk]' } }] }, { phone: [{ click: '[data-tx-bulk] button[aria-label="Изменить"]' }, { wait: 300 }, { click: { text: 'Категория', within: '[role="dialog"]' } }] }, { wait: 400 }] },
+  { name: 'ops-select-deleted', route: '/transactions', steps: [{ wait: 600 }, ...PICK_TWO, { desktop: [{ click: { text: 'Удалить', within: '[data-tx-bulk]' } }] }, { phone: [{ click: '[data-tx-bulk] button[aria-label="Удалить"]' }] }, { wait: 600 }] },
+  { name: 'ops-calendar', route: '/transactions/calendar', canvas: { board: 'Ops-1', frame: '5.' } },
+  { name: 'ops-contacts', route: '/transactions/contacts', canvas: { board: 'Ops-1', frame: '6.' } },
+  { name: 'ops-bonuses', route: '/transactions/bonuses', canvas: { board: 'Ops-2', frame: '12.' } },
+  { name: 'opform-pay', route: '/', steps: [{ wait: 600 }, { press: 'ctrl+n' }, { wait: 700 }], canvas: { board: 'OpForm-1', frame: '1.' } },
+]
+
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3 }

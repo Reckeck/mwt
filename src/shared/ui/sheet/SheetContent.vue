@@ -17,6 +17,8 @@ import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 interface SheetContentProps extends DialogContentProps {
   class?: HTMLAttributes["class"]
   side?: "top" | "right" | "bottom" | "left"
+  /** The screen draws its own way out («‹» in its header). */
+  hideClose?: boolean
 }
 
 defineOptions({
@@ -28,7 +30,7 @@ const props = withDefaults(defineProps<SheetContentProps>(), {
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "side")
+const delegatedProps = reactiveOmit(props, "class", "side", "hideClose")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const { t } = useI18n()
@@ -57,6 +59,7 @@ const { t } = useI18n()
       <slot />
 
       <DialogClose
+        v-if="!props.hideClose"
         class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-[calc(1rem+var(--safe-top))] right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
       >
         <X class="size-4" />

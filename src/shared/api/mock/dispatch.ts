@@ -6,6 +6,7 @@ import { mockWorkflows } from './workflows'
 import { appSettingsOutsideCommands, notificationsCommands, vaultCommands } from './commands-app'
 import { devReportCommands } from './commands-dev'
 import { bybitImportStagingCommands, exchangeAccountsCommands, exchangeReadOnlyCommands } from './commands-exchange'
+import { bulkCommands } from './commands-bulk'
 import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { ratesCommands } from './commands-rates'
@@ -34,6 +35,7 @@ const MOCK_COMMANDS: MockCommands = {
   ...appSettingsOutsideCommands,
   ...contactsCommands,
   ...transactionsCommands,
+  ...bulkCommands,
   ...exchangeReadOnlyCommands,
   ...bybitImportStagingCommands,
   ...walletsCommands,

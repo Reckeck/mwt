@@ -22,7 +22,7 @@ mod vault_writer;
 use commands::{
     AppState, analytics, app_settings, auth, calc, categories, contacts, enrichment, exchange,
     losses, mobile, notifications, planning, portfolio, pricing, rates, settings, sources, stores,
-    transactions, vault_link, vault_recents, workflows,
+    transactions, transactions_bulk, vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -99,6 +99,7 @@ pub fn run() {
             // transactions
             transactions::list_transactions,
             transactions::list_transactions_page,
+            transactions::export_transactions_csv,
             transactions::get_tx_graph,
             transactions::transaction_kinds_for_store_kind,
             transactions::add_transaction,
@@ -107,6 +108,10 @@ pub fn run() {
             transactions::update_transaction,
             transactions::tx_property_links,
             transactions::delete_transaction,
+            transactions_bulk::delete_transactions,
+            transactions_bulk::restore_transactions,
+            transactions_bulk::set_transaction_categories,
+            transactions_bulk::move_transactions,
             transactions::get_adjustment_draft,
             // categories and rules
             categories::list_categories,

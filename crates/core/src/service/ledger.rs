@@ -14,7 +14,7 @@ use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
-use crate::model::transaction::{LegRole, Transaction, TxKind};
+use crate::model::transaction::{LegRole, Transaction, TxKind, TxOrigin};
 use crate::pricing::history::secs_or_now;
 
 use super::rates::RateBook;
@@ -65,6 +65,18 @@ pub struct TxFilter {
     /// (what the P&L report adds up).
     #[serde(default)]
     pub realized: bool,
+    /// Value in the base currency, by the larger side, at least this much.
+    #[serde(default)]
+    pub amount_min: Option<Amount>,
+    /// Value in the base currency, by the larger side, at most this much.
+    #[serde(default)]
+    pub amount_max: Option<Amount>,
+    /// Only what an automation or a workflow wrote.
+    #[serde(default)]
+    pub auto_only: bool,
+    /// Only transfers that opened or settled a personal debt.
+    #[serde(default)]
+    pub debt_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -137,6 +149,49 @@ impl UnlockedVault {
         let mut out = self.filtered(filter, zone)?;
         out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
         Ok(out.into_iter().cloned().collect())
+    }
+
+    /// The filtered operations as CSV, oldest first, one line per leg: the
+    /// «Экспорт ▾ › Операции по фильтру» of the list.
+    pub fn transactions_csv(&self, filter: &TxFilter, zone: &str) -> Result<String> {
+        let mut txs = self.filtered(filter, zone)?;
+        txs.sort_by(|left, right| left.meta().timestamp.cmp(&right.meta().timestamp));
+        let word = |value: serde_json::Value| value.as_str().unwrap_or_default().to_string();
+        let mut lines = vec![
+            [
+                "timestamp",
+                "id",
+                "kind",
+                "store",
+                "asset",
+                "amount",
+                "role",
+                "category",
+                "comment",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ];
+        for tx in txs {
+            let meta = tx.meta();
+            let kind = word(serde_json::to_value(tx.kind()).unwrap_or_default());
+            for leg in tx.legs() {
+                lines.push(vec![
+                    meta.timestamp.clone(),
+                    meta.id.clone(),
+                    kind.clone(),
+                    self.find_store(&leg.store_id)
+                        .map(|store| store.name.clone())
+                        .unwrap_or_else(|| leg.store_id.clone()),
+                    leg.asset.symbol.clone(),
+                    leg.amount.to_string(),
+                    word(serde_json::to_value(leg.role).unwrap_or_default()),
+                    meta.categories.first().cloned().unwrap_or_default(),
+                    meta.comment.clone(),
+                ]);
+            }
+        }
+        Ok(super::reports::csv_text(lines))
     }
 
     /// `limit` operations from `offset`, newest first: a long journal goes to
@@ -311,6 +366,10 @@ impl UnlockedVault {
                 .collect()
         });
 
+        // Converting every operation only when the filter asks for a value.
+        let priced = (filter.amount_min.is_some() || filter.amount_max.is_some())
+            .then(|| (self.rate_book(), self.base_and_fx().0));
+
         Ok(self
             .doc
             .transactions
@@ -335,6 +394,21 @@ impl UnlockedVault {
                 realized
                     .as_ref()
                     .is_none_or(|set| set.contains(&tx.meta().id))
+            })
+            .filter(|tx| {
+                !filter.auto_only
+                    || !matches!(tx.meta().origin, TxOrigin::Manual | TxOrigin::Import { .. })
+            })
+            .filter(|tx| {
+                !filter.debt_only
+                    || matches!(tx, Transaction::Transfer(transfer) if transfer.debt.is_some())
+            })
+            .filter(|tx| {
+                priced.as_ref().is_none_or(|(book, base)| {
+                    let value = value_in_base(book, tx, base);
+                    filter.amount_min.is_none_or(|min| value >= min)
+                        && filter.amount_max.is_none_or(|max| value <= max)
+                })
             })
             .filter(|tx| {
                 filter.category.as_deref().is_none_or(|key| {
@@ -527,6 +601,60 @@ mod tests {
             ..TxFilter::default()
         };
         assert_eq!(list(by_store_name).len(), 1);
+    }
+
+    #[test]
+    fn csv_has_a_line_per_leg_of_what_the_filter_keeps() {
+        let (_dir, vault, _ids) = ledger();
+        let filter = TxFilter {
+            kinds: vec![TxKind::Payment],
+            ..TxFilter::default()
+        };
+        let csv = vault.transactions_csv(&filter, "UTC").unwrap();
+        let lines: Vec<&str> = csv
+            .trim_start_matches('\u{feff}')
+            .trim_end()
+            .split("\r\n")
+            .collect();
+        assert_eq!(lines.len(), 2, "header and the coffee payment");
+        assert!(lines[0].starts_with("timestamp;id;kind;store"));
+        assert!(lines[1].contains(";payment;Card;USD;-50;principal;"));
+        assert!(lines[1].ends_with(";coffee"));
+    }
+
+    #[test]
+    fn filters_by_value_origin_and_debt() {
+        let (_dir, mut vault, [card, _savings, _exchange]) = ledger();
+        let list = |vault: &UnlockedVault, filter: TxFilter| {
+            vault.list_transactions(&filter, "UTC").unwrap().len()
+        };
+
+        let between = TxFilter {
+            amount_min: Some(amount("100")),
+            amount_max: Some(amount("500")),
+            ..TxFilter::default()
+        };
+        assert_eq!(list(&vault, between), 2, "the 300 and 200 transfers");
+
+        let mut auto = payment(&card, "10", "auto");
+        auto.meta_mut().origin = TxOrigin::Automation {
+            automation_id: "a1".into(),
+            planned_at: "2026-03-05T10:00:00Z".into(),
+        };
+        vault
+            .add_transaction(at(auto, "2026-03-05T10:00:00Z"))
+            .unwrap();
+        let auto_only = TxFilter {
+            auto_only: true,
+            ..TxFilter::default()
+        };
+        assert_eq!(list(&vault, auto_only), 1);
+
+        let debt_only = TxFilter {
+            debt_only: true,
+            ..TxFilter::default()
+        };
+        assert_eq!(list(&vault, debt_only), 0, "no transfer is a debt");
     }
 
     #[test]

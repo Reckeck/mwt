@@ -1736,6 +1736,11 @@ pub fn report_csv(report: &Report) -> String {
             ]);
         }
     }
+    csv_text(lines)
+}
+
+/// Lines joined as a spreadsheet file: a BOM first, `;` fields, CRLF lines.
+pub(crate) fn csv_text(lines: Vec<Vec<String>>) -> String {
     let mut out = String::from("\u{feff}");
     for line in lines {
         out.push_str(&csv_line(&line));
