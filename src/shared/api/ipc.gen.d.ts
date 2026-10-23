@@ -1377,6 +1377,11 @@ type DeleteWorkflowTestInput = { workflow_id: string, test_id: string, };
 type DeleteWorkflowVarInput = { scope: VarScope, name: string, };
 
 /**
+ * A deleted operation and the property it was linked to: enough to put it back.
+ */
+type DeletedTransaction = { transaction: Transaction, property_id: string | null, };
+
+/**
  * A deposit whose rate a source follows: a change is announced, not applied.
  */
 type DepositRateSource = { store_id: string, source_id: string, };
@@ -5145,6 +5150,11 @@ debt: DebtEffect | null, price: PriceStamp, };
 type TurnoverRow = { asset: AssetRef, sent: Amount, received: Amount, };
 
 /**
+ * The categories of one operation: the new ones on the way in, the old ones back.
+ */
+type TxCategories = { id: string, categories: Array<string>, };
+
+/**
  * Fields every transaction input carries.
  */
 type TxCommonInput = { 
@@ -5222,7 +5232,23 @@ with_fee: boolean,
  * Only transactions that closed a position with a profit or a loss
  * (what the P&L report adds up).
  */
-realized: boolean, };
+realized: boolean, 
+/**
+ * Value in the base currency, by the larger side, at least this much.
+ */
+amount_min: Amount | null, 
+/**
+ * Value in the base currency, by the larger side, at most this much.
+ */
+amount_max: Amount | null, 
+/**
+ * Only what an automation or a workflow wrote.
+ */
+auto_only: boolean, 
+/**
+ * Only transfers that opened or settled a personal debt.
+ */
+debt_only: boolean, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
@@ -5345,6 +5371,11 @@ type TxProperty = { tx_id: string,
  * Id of a `StoreKind::Property` store.
  */
 property_id: string, };
+
+/**
+ * The wallet of a one-sided operation (payment, top-up).
+ */
+type TxStore = { id: string, store_id: string, };
 
 /**
  * What an undo did.

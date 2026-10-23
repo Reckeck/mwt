@@ -54,3 +54,21 @@ export function isPassive(category: Pick<Category, 'key' | 'group' | 'passive'>)
   if (category.group !== 'income') return false
   return category.passive ?? DEFAULT_PASSIVE.includes(category.key)
 }
+
+/** Live categories of the given groups as picker options, grouped under the group's name. */
+export function categoryOptions(
+  categories: Category[] | undefined,
+  t: Translate,
+  groups: readonly CategoryGroup[] = ['daily', 'fixed', 'income', 'savings'],
+): { value: string; label: string; group: string; groupLabel: string }[] {
+  return groups.flatMap((group) =>
+    (categories ?? [])
+      .filter((category) => category.group === group && !category.archived)
+      .map((category) => ({
+        value: category.key,
+        label: categoryLabel(category, t),
+        group,
+        groupLabel: t(`categoryGroup.${group}`),
+      })),
+  )
+}

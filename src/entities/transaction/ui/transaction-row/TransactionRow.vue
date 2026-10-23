@@ -3,15 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
 
-import { ExternalLink } from 'lucide-vue-next'
+import { Check, ExternalLink } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import {
-  DEFAULT_TX_BADGE,
-  TX_KIND_BADGE,
   amountClass,
   txAutomation,
   txDebt,
@@ -27,10 +25,14 @@ import {
   txSides,
 } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
+import { useIsPhone } from '@/shared/lib/phone'
+
+import { dayLabel } from '../../lib/day-label'
+import { TX_KIND_ICON } from '../../lib/kind-icon'
 
 import type { TransactionRowProps } from './transaction-row.types'
 
-const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null, loss: null, openable: false })
+const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null, loss: null, openable: false, dated: true, selected: null })
 const emit = defineEmits<{ open: [tx: Transaction] }>()
 
 /**
@@ -48,6 +50,7 @@ const slots = defineSlots<{
 
 const { t } = useI18n()
 const context = useTxContext()
+const phone = useIsPhone()
 
 const kind = computed(() => txKind(props.tx))
 const meta = computed(() => txMeta(props.tx))
@@ -96,17 +99,45 @@ function openExplorer() {
   if (explorer.value) void call('open_explorer', { url: explorer.value })
 }
 
+/** «Курс сделки 93,75 · через skycapital»: the facts and the comment on one line. */
+const notes = computed(() =>
+  [...txDetails(props.tx).map(([key, value]) => `${t(key)} ${value}`), meta.value.comment].filter(Boolean).join(' · '),
+)
+
 const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? ''))
+/** The phone's one line: the comment first, then where; picking, the day instead of where. */
+const phoneLine = computed(() => {
+  const place = route.value || where.value
+  if (props.selected === null) return [meta.value.comment, place]
+  return meta.value.comment ? [meta.value.comment, dayLabel(meta.value.timestamp)] : [dayLabel(meta.value.timestamp), place]
+})
 </script>
 
 <template>
-  <div class="flex flex-wrap items-start gap-x-3 gap-y-1 py-3">
-    <Badge :variant="TX_KIND_BADGE[kind] ?? DEFAULT_TX_BADGE" class="mt-0.5 shrink-0">
-      {{ t(`tx.kind.${kind}`) }}
-    </Badge>
+  <div class="flex gap-x-3 gap-y-1 py-3" :class="phone ? 'items-center' : 'flex-wrap items-start'">
+    <!-- On the phone a square mark instead of the word, so the amount keeps its line. -->
+    <span v-if="phone && props.selected !== null" class="flex size-9 shrink-0 items-center justify-center">
+      <span
+        class="flex size-5 items-center justify-center rounded-full"
+        :class="props.selected ? 'bg-primary text-primary-foreground' : 'border border-muted-foreground'"
+      >
+        <Check v-if="props.selected" class="size-3.5" />
+      </span>
+    </span>
+    <span
+      v-else-if="phone"
+      class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+      :title="t(`tx.kindNoun.${kind}`)"
+    >
+      <component :is="TX_KIND_ICON[kind]" class="size-4" />
+    </span>
+    <!-- One grey mark for every kind: the colour of the amount already tells in from out. -->
+    <div v-else class="w-[66px] shrink-0">
+      <Badge variant="secondary" class="mt-0.5">{{ t(`tx.kindNoun.${kind}`) }}</Badge>
+    </div>
 
     <!-- An openable row opens from a see-through button over its body; the wallet names sit above it. -->
-    <div class="relative min-w-0 flex-1 basis-56">
+    <div class="relative min-w-0 flex-1" :class="!phone && 'basis-56'">
       <Button
         v-if="props.openable"
         variant="ghost"
@@ -134,12 +165,15 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
           {{ t('tx.noPrice') }}
         </Badge>
       </div>
-      <p class="pointer-events-none relative truncate text-xs text-muted-foreground">
-        {{ formatDateTime(meta.timestamp) }}
+      <!-- The phone has one line under the title: the comment first, then where the money went. -->
+      <p v-if="phone" class="pointer-events-none relative truncate text-xs text-muted-foreground">
+        {{ phoneLine.filter(Boolean).join(' · ') }}
+      </p>
+      <p v-else class="pointer-events-none relative truncate text-xs text-muted-foreground">
+        <template v-if="props.dated">{{ formatDateTime(meta.timestamp) }} · </template>
         <!-- A two-sided route already names the wallet. -->
-        <template v-if="!route.includes('→') || route.startsWith('→')"> · {{ where }}</template>
+        <template v-if="!route.includes('→') || route.startsWith('→')">{{ `${where} ` }}</template>
         <template v-if="route">
-          ·
           <template v-for="(part, index) in routeParts" :key="index">
             <template v-if="typeof part === 'string'">{{ part }} </template>
             <span v-else class="pointer-events-auto relative">
@@ -150,10 +184,7 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
         </template>
         <template v-if="meta.contact_id"> · {{ context.contactName(meta.contact_id) }}</template>
       </p>
-      <p v-if="txDetails(props.tx).length" class="pointer-events-none relative truncate text-xs text-muted-foreground">
-        {{ txDetails(props.tx).map(([key, value]) => `${t(key)}: ${value}`).join(' · ') }}
-      </p>
-      <p v-if="meta.comment" class="pointer-events-none relative truncate text-xs text-muted-foreground">{{ meta.comment }}</p>
+      <p v-if="notes && !phone" class="pointer-events-none relative truncate text-xs text-muted-foreground">{{ notes }}</p>
     </div>
 
     <!-- On a narrow screen the amounts and actions wrap under the text instead of squeezing it. -->
@@ -179,7 +210,8 @@ const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? '
     </div>
 
     <!-- One column of fixed width in every row: nothing moves on hover, amounts line up. -->
-    <div class="flex w-8 shrink-0 justify-end">
+    <!-- On the phone the menu is a hold on the row (the list's sheet): the amount takes the room. -->
+    <div v-if="!phone" class="flex w-8 shrink-0 justify-end">
       <slot v-if="slots.actions" name="actions" :tx="props.tx" />
       <Button
         v-else-if="explorer"

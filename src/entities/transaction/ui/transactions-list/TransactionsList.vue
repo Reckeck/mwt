@@ -6,13 +6,15 @@ import { Link } from 'lucide-vue-next'
 
 import { ActionMenu, ActionSheet } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
+import { Checkbox } from '@/shared/ui/checkbox'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { Money } from '@/entities/currency'
-import { formatDay } from '@/shared/lib/format'
 import { call } from '@/shared/api/ipc'
 import { txExplorerUrl, txId } from '@/shared/lib/transactions'
 import { provideTxContext } from '@/shared/lib/tx-context'
+import { useIsPhone } from '@/shared/lib/phone'
 
+import { dayLabel } from '../../lib/day-label'
 import { type TxDay, groupByDay } from '../../lib/group-by-day'
 import TransactionRow from '../transaction-row/TransactionRow.vue'
 
@@ -29,6 +31,7 @@ const props = withDefaults(defineProps<TransactionsListProps>(), {
   baseCurrency: undefined,
   total: null,
   loadingMore: false,
+  selection: null,
 })
 const emit = defineEmits<{ open: [tx: Transaction, list: Transaction[]]; more: [] }>()
 /** A side's name in a row («Тинькофф → Bybit») and «авто», handed down to each row. */
@@ -38,6 +41,7 @@ const slots = defineSlots<{
 }>()
 
 const { t } = useI18n()
+const phone = useIsPhone()
 
 /**
  * A long history renders a page at a time: rows differ in height (badges,
@@ -57,8 +61,11 @@ const paged = computed(() => props.total !== null)
 const shown = computed(() => (paged.value ? props.transactions : props.transactions.slice(0, limit.value)))
 const context = provideTxContext()
 /** Without grouping: one day-less group, so the template has one shape. */
+/** Picking on a phone: one flat list, each row names its day (Ops-1 · 4). */
+const picking = computed(() => phone.value && Boolean(props.selection?.active.value))
+const grouped = computed(() => props.groupByDay && !picking.value)
 const days = computed<TxDay[]>(() =>
-  props.groupByDay
+  grouped.value
     ? groupByDay(shown.value, Number(props.fxPerUsd ?? 1), context.rootOf, props.storeId)
     : [{ date: '', txs: shown.value, totalBase: 0, partial: false }],
 )
@@ -100,6 +107,20 @@ const rowMenu = useRowMenu({
   enabled: () => Boolean(props.rowActions),
   context,
 })
+/** A day's box: all its rows, some of them, none. */
+function dayState(day: TxDay): boolean | 'indeterminate' {
+  const picked = day.txs.filter((tx) => props.selection?.has(txId(tx))).length
+  if (!picked) return false
+  return picked === day.txs.length ? true : 'indeterminate'
+}
+function toggleDay(day: TxDay) {
+  props.selection?.setMany(day.txs.map(txId), dayState(day) !== true)
+}
+/** A tap while picking on a phone picks; otherwise the row opens its card. */
+function onOpen(row: Transaction) {
+  if (picking.value) props.selection?.toggle(txId(row))
+  else emit('open', row, props.transactions)
+}
 const rest = computed(() => (props.total ?? props.transactions.length) - shown.value.length)
 
 function showMore() {
@@ -118,21 +139,49 @@ function showMore() {
         <!-- Opaque, no backdrop-blur: a blur on every day header froze WebKitGTK (the Linux window) for good. -->
         <h3
           v-if="day.date"
-          class="sticky top-0 z-[1] flex items-baseline justify-between gap-2 bg-card py-1.5 text-xs font-medium text-muted-foreground"
+          class="sticky top-0 z-[1] flex items-baseline justify-between gap-2 py-1.5 text-xs text-muted-foreground"
+          :class="phone ? 'bg-card pt-3' : '-mx-4 bg-muted px-4'"
         >
-          <span class="capitalize">{{ formatDay(`${day.date}T12:00:00`) }}</span>
+          <span class="flex items-center gap-3">
+            <span v-if="props.selection && !phone" class="flex w-4 shrink-0">
+              <Checkbox
+                :model-value="dayState(day)"
+                :aria-label="t('bulk.pickDay')"
+                data-tx-select-day
+                @click.stop="toggleDay(day)"
+              />
+            </span>
+            {{ dayLabel(`${day.date}T12:00:00`) }}
+          </span>
           <span class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
             <Money :amount="day.totalBase" :currency="props.baseCurrency" :decimals="2" signed />
             <template v-if="day.partial">*</template>
           </span>
         </h3>
-        <div v-for="tx in day.txs" :key="txId(tx)" :data-tx-row="txId(tx)">
+        <div
+          v-for="tx in day.txs"
+          :key="txId(tx)"
+          :data-tx-row="txId(tx)"
+          class="flex gap-3"
+          :class="props.selection?.has(txId(tx)) && (phone ? '-mx-3 bg-primary/12 px-3' : '-mx-4 bg-primary/12 px-4')"
+        >
+          <span v-if="props.selection && !phone" class="flex w-4 shrink-0 pt-4">
+            <Checkbox
+              :model-value="props.selection.has(txId(tx))"
+              :aria-label="t('bulk.pick')"
+              data-tx-select
+              @click.stop="(event: MouseEvent) => props.selection?.toggle(txId(tx), event.shiftKey)"
+            />
+          </span>
           <TransactionRow
+            class="min-w-0 flex-1"
             :tx="tx"
             :store-id="props.storeId"
             :loss="props.losses?.[txId(tx)] ?? null"
             :openable="props.openable"
-            @open="(row) => emit('open', row, props.transactions)"
+            :dated="!grouped"
+            :selected="picking ? props.selection?.has(txId(tx)) : null"
+            @open="onOpen"
           >
             <!-- The same list as the right-click menu, behind «⋯» for a mouse and a finger alike. -->
             <template v-if="props.rowActions" #actions="{ tx: row }">

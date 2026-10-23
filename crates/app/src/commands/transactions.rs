@@ -30,6 +30,27 @@ pub async fn list_transactions(
         .map_err(err_to_string)
 }
 
+/// The filtered operations as CSV through the native save dialog; `None`
+/// when the user closed it.
+#[tauri::command]
+pub async fn export_transactions_csv(
+    filter: Option<TxFilter>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let zone = current_zone(&app);
+    let csv = {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_ref()
+            .unwrap()
+            .transactions_csv(&filter.unwrap_or_default(), &zone)
+            .map_err(err_to_string)?
+    };
+    crate::platform_fs::save_bytes_dialog(&app, "transactions.csv", "CSV", &["csv"], csv.as_bytes())
+        .map_err(err_to_string)
+}
+
 /// One page of the operations list (newest first) and the total that match.
 #[tauri::command]
 pub async fn list_transactions_page(

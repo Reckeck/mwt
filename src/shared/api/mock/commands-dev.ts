@@ -135,4 +135,5 @@ export const devReportCommands: MockCommands = {
     // No save dialog in the browser.
     return resolve(null)
   },
+  export_transactions_csv: (_call) => resolve(null),
 }

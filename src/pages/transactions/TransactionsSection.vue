@@ -11,6 +11,9 @@ const { t } = useI18n()
 const tabs = computed(() => [
   { name: 'transactions', label: t('transactions.tab.list') },
   { name: 'transactions-calendar', label: t('transactions.tab.calendar') },
+])
+/** Used less often: under «Ещё ▾». */
+const more = computed(() => [
   { name: 'transactions-contacts', label: t('transactions.tab.contacts') },
   { name: 'transactions-bonuses', label: t('transactions.tab.bonuses') },
 ])
@@ -18,7 +21,7 @@ const tabs = computed(() => [
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" /></div>
+    <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
   </div>
 </template>

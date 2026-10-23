@@ -33,6 +33,7 @@ mod asset_holdings;
 mod auto_reminders;
 mod automations;
 mod budget;
+mod bulk;
 mod categories;
 mod contacts;
 mod dashboard;
@@ -97,6 +98,7 @@ pub use automations::{
     describe_reject,
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
+pub use bulk::{DeletedTransaction, TxCategories, TxStore};
 pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
 pub use dashboard::{SpendingDay, SpendingOverview};
 pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};

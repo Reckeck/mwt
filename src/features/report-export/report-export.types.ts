@@ -3,3 +3,8 @@ export interface ReportExportButtonProps {
   kinds: ReportKind[]
   filter: ReportFilter
 }
+
+export interface TransactionsExportButtonProps {
+  /** The list's filter: what «операции по фильтру» writes. */
+  filter: TxFilter
+}
