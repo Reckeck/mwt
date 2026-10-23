@@ -249,6 +249,13 @@ pub struct Budget {
     pub period: BudgetPeriod,
     pub limit: Amount,
     pub currency: String,
+    /// Notify when the period's spending nears the limit. Older vaults: on.
+    #[serde(default = "warn_on")]
+    pub warn: bool,
+}
+
+fn warn_on() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

@@ -16,6 +16,8 @@ export interface SpendingCategory {
   average: string | null
   /** The category's limit, if it has one. */
   budget: Budget | null
+  /** One sum per month of the twelve that end with the period (`monthKeys`). */
+  cells: string[]
 }
 
 /**
@@ -41,7 +43,7 @@ export function useSpending(filter: Ref<ReportFilter>) {
       .flatMap((block) => block.rows) ?? []
 
   const rows = computed<SpendingCategory[]>(() => {
-    const averages = new Map(rowsOf(yearly.data.value).map((row) => [row.key, row.average]))
+    const yearRows = new Map(rowsOf(yearly.data.value).map((row) => [row.key, row]))
     const limits = new Map(
       (budgets.data.value ?? [])
         .filter((budget) => budget.active && typeof budget.target === 'object' && 'category' in budget.target)
@@ -53,11 +55,16 @@ export function useSpending(filter: Ref<ReportFilter>) {
       .map((row) => ({
         key: row.key,
         total: row.total,
-        average: averages.get(row.key) ?? null,
+        average: yearRows.get(row.key)?.average ?? null,
         budget: limits.get(row.key) ?? null,
+        cells: yearRows.get(row.key)?.cells ?? [],
       }))
   })
 
+  /** The months `cells` stand for, oldest first. */
+  const monthKeys = computed(() =>
+    to.value ? Array.from({ length: 12 }, (_, at) => shiftMonth(to.value, at - 11)) : [],
+  )
   const currency = computed(() => balance.data.value?.currency ?? report(categories.data.value)?.meta.currency ?? '')
   const loading = computed(() => [categories, yearly, balance, months].some((query) => query.isPending.value))
   const error = computed(() => categories.error.value ?? balance.error.value)
@@ -68,5 +75,5 @@ export function useSpending(filter: Ref<ReportFilter>) {
     void yearly.refetch()
   }
 
-  return { rows, balance, months, currency, loading, error, refetch }
+  return { rows, balance, months, monthKeys, currency, loading, error, refetch }
 }

@@ -4,6 +4,7 @@ import { isEssential } from '@/shared/lib/categories'
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { estimateOf } from './automation-workflow'
 import { plannedNow } from './calculator'
+import { mockEnvelopes } from '../catalog'
 import { automations, goals, isRejected, iso, now, plannedDates, reminders, runs } from './state'
 import type { PlanningMockContext } from './state'
 
@@ -119,10 +120,14 @@ export function goalProgress(ctx: PlanningMockContext): GoalProgress[] {
     .filter((goal) => goal.active)
     .map((goal) => {
       const ids = new Set(goal.scope.store_ids)
-      const saved = ctx.transactions
-        .flatMap((tx) => txLegs(tx))
-        .filter((leg) => leg.role === 'principal' && ids.has(leg.store_id))
-        .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
+      // Like the core: envelopes linked to the goal are its savings, else its wallets.
+      const linked = mockEnvelopes.filter((entry) => entry.goal_id === goal.id)
+      const saved = linked.length
+        ? linked.reduce((sum, entry) => sum + Number(entry.allocated) * ctx.priceOf(entry.asset.symbol), 0)
+        : ctx.transactions
+            .flatMap((tx) => txLegs(tx))
+            .filter((leg) => leg.role === 'principal' && ids.has(leg.store_id))
+            .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
       const target = Number(goal.target_amount)
       const deadline = goal.deadline ? new Date(goal.deadline) : null
       const monthsLeft = deadline

@@ -142,6 +142,14 @@ pub struct FundEnvelopeInput {
     pub amount: Amount,
 }
 
+/// Put aside `amount` (goal currency) for a goal in one of its wallets.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct FundGoalInput {
+    pub goal_id: String,
+    pub store_id: String,
+    pub amount: Amount,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct MoveEnvelopeInput {
     pub from: String,
@@ -1197,6 +1205,10 @@ pub struct BudgetInput {
     pub period: BudgetPeriod,
     pub limit: Amount,
     pub currency: String,
+    /// Notify near the limit; on when the caller does not say.
+    #[serde(default)]
+    #[ts(optional)]
+    pub warn: Option<bool>,
 }
 
 impl From<BudgetInput> for BudgetDraft {
@@ -1207,6 +1219,7 @@ impl From<BudgetInput> for BudgetDraft {
             period: input.period,
             limit: input.limit,
             currency: input.currency,
+            warn: input.warn.unwrap_or(true),
         }
     }
 }

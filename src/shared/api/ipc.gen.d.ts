@@ -93,7 +93,7 @@ type AlertCondition = "above" | "below";
  */
 type AmountMode = "fixed" | "varies";
 
-type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport };
+type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } | { "categories": CategoriesReport } | { "networth": NetworthReport } | { "stores": StoresReport } | { "pnl": PnlReport } | { "portfolio": PortfolioReport } | { "inflation": InflationReport } | { "losses": LossReport } | { "where": WhereReport };
 
 type AnswerWorkflowWaitInput = { id: string, 
 /**
@@ -463,9 +463,17 @@ type Binding = "any" | { "asset": AssetRef } | { "pair": { base: AssetRef, quote
  */
 type BindingShapeName = "asset" | "pair" | "market";
 
-type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
+type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, 
+/**
+ * Notify when the period's spending nears the limit. Older vaults: on.
+ */
+warn: boolean, };
 
-type BudgetInput = { active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, };
+type BudgetInput = { active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, 
+/**
+ * Notify near the limit; on when the caller does not say.
+ */
+warn?: boolean, };
 
 type BudgetPeriod = "day" | "week" | "month";
 
@@ -1781,6 +1789,11 @@ type Freq = "monthly" | "quarterly" | "yearly";
  */
 type FundEnvelopeInput = { id: string, amount: Amount, };
 
+/**
+ * Put aside `amount` (goal currency) for a goal in one of its wallets.
+ */
+type FundGoalInput = { goal_id: string, store_id: string, amount: Amount, };
+
 type FuturesAction = "open" | "close";
 
 type FuturesCategory = "linear" | "inverse";
@@ -2464,6 +2477,41 @@ invested: Amount, balance: Amount,
  */
 real_balance: Amount, months: Array<InvestMonth>, };
 
+type InvestmentRow = { 
+/**
+ * The ticker of a coin, the name of a futures sub-account.
+ */
+label: string, 
+/**
+ * The coin; `None` for a futures sub-account.
+ */
+asset: AssetRef | null, 
+/**
+ * The futures sub-account.
+ */
+store_id: string | null, quantity: Amount, 
+/**
+ * What `quantity` counts: the ticker, or the margin's currency.
+ */
+unit: string, 
+/**
+ * At cost where the cost is known, else at today's value.
+ */
+invested: Amount, value: Amount, 
+/**
+ * Not sold yet: `value − invested` where the cost is known, else zero.
+ */
+profit: Amount, 
+/**
+ * Every part has a known cost, so `profit` is whole.
+ */
+cost_known: boolean, };
+
+/**
+ * All in the base currency, biggest investment first.
+ */
+type Investments = { base_currency: string, invested: Amount, value: Amount, profit: Amount, rows: Array<InvestmentRow>, };
+
 type IssueLevel = "error" | "warning";
 
 /**
@@ -2918,7 +2966,12 @@ change: Comparison,
  */
 series: Array<Amount>, };
 
-type NetworthPoint = { month: string, financial: Amount, non_financial: Amount, receivables: Amount, liabilities: Amount, payables: Amount, net: Amount, };
+type NetworthPoint = { month: string, financial: Amount, 
+/**
+ * The part of `financial` held in crypto wallets and on exchanges; the
+ * rest is bank and cash.
+ */
+crypto: Amount, non_financial: Amount, receivables: Amount, liabilities: Amount, payables: Amount, net: Amount, };
 
 type NetworthReport = { meta: ReportMeta, 
 /**
@@ -3768,7 +3821,7 @@ currency: string | null,
  */
 real_terms: boolean, };
 
-type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation" | "losses";
+type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation" | "losses" | "where";
 
 /**
  * What a report covers, for its header.
@@ -5833,6 +5886,58 @@ type WfValue = { "type": "null" } | { "type": "number", "value": Amount } | { "t
  * Lowercase code: `rub`, `usdt`.
  */
 currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key: string]: WfValue } };
+
+/**
+ * One thing behind a row: a category, a loan, a move, a buy.
+ */
+type WhereItem = { 
+/**
+ * A category key (spending), a contact (lent), the source wallet (moved,
+ * invested).
+ */
+label: string, 
+/**
+ * The other wallet: the receiving one of a move, the paying one of a loan.
+ */
+to: string | null, 
+/**
+ * What left, in its own units; zero for a category.
+ */
+qty: Amount, unit: string, 
+/**
+ * What came back: a buy, a conversion between wallets.
+ */
+got_qty: Amount | null, got_unit: string | null, 
+/**
+ * In the report currency; `None` without a price that day.
+ */
+value: Amount | null, comment: string, };
+
+type WhereKind = "spending" | "lent" | "moved" | "invested" | "losses";
+
+type WhereReport = { meta: ReportMeta, income: Amount, 
+/**
+ * Only the directions that had anything, in a fixed order.
+ */
+rows: Array<WhereRow>, 
+/**
+ * Income not spent: it stays, or went into the rows below spending.
+ */
+left: Amount, };
+
+type WhereRow = { kind: WhereKind, 
+/**
+ * In the report currency: the priced part when `partial`.
+ */
+value: Amount, count: number, 
+/**
+ * Biggest first, at most [`WHERE_ITEMS`].
+ */
+items: Array<WhereItem>, 
+/**
+ * Some of it had no price.
+ */
+partial: boolean, };
 
 /**
  * Regular withdrawals; they stop once the balance runs out.

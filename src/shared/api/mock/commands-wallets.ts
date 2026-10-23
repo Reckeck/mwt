@@ -8,7 +8,9 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockFilterTxs, mockStores } from './demo'
 import { mockHistory, mockNetWorth, mockSummary } from './market'
+import { mockInvestments } from './investments'
 import { mockAncestors, mockExploreCtx, mockOverview, mockOwnPositions, mockStore } from './tree'
+import { goals } from './planning/state'
 import { mockAppSettings, mockSettings } from './vault-data'
 
 /** Commands: wallets, envelopes and the exchange terminal. */
@@ -56,6 +58,32 @@ export const walletsCommands: MockCommands = {
     if (Number(envelope.allocated) + amount < 0) throw { code: 'INVALID_INPUT', message: 'the envelope holds less' }
     envelope.allocated = String(Number(envelope.allocated) + amount)
     return resolve(envelope)
+  },
+  fund_goal: ({ body }) => {
+    const input = body as FundGoalInput
+    const goal = goals.find((entry) => entry.id === input.goal_id)
+    if (!goal) throw { code: 'MISSING', message: `goal ${input.goal_id}` }
+    const position = mockOwnPositions(input.store_id).find(
+      (entry) => entry.asset.symbol.toLowerCase() === goal.currency.toLowerCase(),
+    )
+    if (!position) throw { code: 'INVALID_INPUT', message: `the wallet holds no ${goal.currency}` }
+    let envelope = mockEnvelopes.find((entry) => entry.store_id === input.store_id && entry.goal_id === goal.id)
+    if (!envelope) {
+      envelope = {
+        id: crypto.randomUUID(),
+        store_id: input.store_id,
+        name: goal.name,
+        asset: position.asset,
+        allocated: '0',
+        target: null,
+        goal_id: goal.id,
+        created_at: new Date().toISOString(),
+      }
+      mockEnvelopes.push(envelope)
+    }
+    const take = Math.max(0, Math.min(Number(input.amount), Number(mockEnvelopeView(envelope).free)))
+    envelope.allocated = String(Number(envelope.allocated) + take)
+    return resolve(String(take))
   },
   move_between_envelopes: ({ body }) => {
     const input = body as MoveEnvelopeInput
@@ -132,6 +160,7 @@ export const overviewCommands: MockCommands = {
   get_store_overview: ({ args }) => {
     return resolve(mockOverview(String(args?.storeId ?? ''), args?.includeChildren !== false))
   },
+  get_investments: ({ args }) => resolve(mockInvestments((args?.storeIds as string[] | undefined) ?? [])),
   // Like `asset_holdings` in Rust, matched by ticker only.
   get_asset_holdings: ({ args }) => {
     const asset = args?.asset as AssetRef

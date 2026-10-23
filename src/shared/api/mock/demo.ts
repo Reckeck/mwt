@@ -219,6 +219,8 @@ export const mockPrices: Record<string, number> = {
   RUB: 0.0105,
   EUR: 1.08,
   THB: 0.028,
+  /** The demo flat, valued as one unit (Money 2 · 12: «Имущество 35 580,70 $»). */
+  FLAT: 35580.7,
 }
 
 export const priceOf = (symbol: string) => mockPrices[symbol.toUpperCase()] ?? 0

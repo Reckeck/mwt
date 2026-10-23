@@ -207,7 +207,9 @@ impl UnlockedVault {
             let percent = (status.used * hundred).round(0);
             let level = if percent >= hundred {
                 100
-            } else if percent >= Amount::new(rust_decimal::Decimal::from(BUDGET_WARN_PERCENT)) {
+            } else if status.budget.warn
+                && percent >= Amount::new(rust_decimal::Decimal::from(BUDGET_WARN_PERCENT))
+            {
                 BUDGET_WARN_PERCENT
             } else {
                 continue;

@@ -44,6 +44,7 @@ mod emergency;
 mod enrichment;
 mod envelopes;
 mod exchange_sync;
+mod investments;
 mod passive;
 mod property_links;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
@@ -63,6 +64,7 @@ mod saving;
 mod scenarios;
 mod search;
 mod vehicle;
+mod where_went;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
@@ -117,6 +119,7 @@ pub use insights::{
     ReportOverview, report_insights,
 };
 pub use interest::{DepositReport, InterestTaxReport, PdsReport};
+pub use investments::{InvestmentRow, Investments};
 pub use ledger::{
     GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph, TxPage,
 };
@@ -157,6 +160,7 @@ pub use utilities::{
     preview_utility_formula,
 };
 pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
+pub use where_went::{WHERE_ITEMS, WhereItem, WhereKind, WhereReport, WhereRow};
 pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
 pub use worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
 

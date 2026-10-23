@@ -365,6 +365,7 @@ pub fn full_doc() -> VaultDoc {
             period,
             limit: amount("1500"),
             currency: "rub".into(),
+            warn: true,
         })
         .collect();
     doc.goals = vec![Goal {

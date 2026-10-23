@@ -119,6 +119,7 @@ Frontend парсит код и показывает локализованно�
 | `create_envelope` | `EnvelopeDraft { store_id, name, asset, target?, goal_id? }` | `Envelope` — актив должен подходить к привязке кошелька |
 | `update_envelope` | `UpdateEnvelopeInput { id, draft }` | `Envelope` |
 | `fund_envelope` | `FundEnvelopeInput { id, amount }` | `Envelope` — `>0` откладывает из свободного остатка (`INSUFFICIENT_FUNDS`, если не хватает), `<0` возвращает |
+| `fund_goal` | `FundGoalInput { goal_id, store_id, amount }` | `Amount` — откладывает для цели в её кошельке до `amount` в валюте цели: конверт цели создаётся при первом взносе, берётся только свободный остаток (может вернуть меньше или `0`); кошелёк без этой валюты — `INVALID_INPUT` |
 | `move_between_envelopes` | `MoveEnvelopeInput { from, to, amount }` | — (один кошелёк и актив) |
 | `delete_envelope` | `id` | — |
 | `move_store` | `MoveStoreInput { id, parent_id? }` | `Store` — перенос субсчёта; `parent_id: null` = «сделать отдельным кошельком»; корень не переносится |
@@ -129,6 +130,7 @@ Frontend парсит код и показывает локализованно�
 | `delete_store` | `id` | `()` — только без операций и без субсчетов |
 | `get_store_overview` | `store_id, include_children?` (по умолчанию `true`) | `StoreOverview` — см. `docs/data-model.md`; `unrealized_base`, `subtree_unrealized_base`, `prices_as_of` (самая старая рыночная цена позиций); у `StorePosition` — `change_24h_pct` и `price_info { origin, source, at }` (откуда цена) |
 | `get_asset_holdings` | `asset: AssetRef` | `AssetHoldings { asset, base_currency, total_quantity, total_value_base, rows: AssetHolding[] }` — тот же актив (`AssetRef::same_as`: один ключ или один тикер на той же сети) во всех кошельках; `peg_valued` — оценён по привязке $1, без цены |
+| `get_investments` | `storeIds?: string[]` | `Investments { base_currency, invested, value, profit, rows: InvestmentRow[] }` — «Вложения»: монеты на крипто- и биржевых кошельках, сведённые по активу (`label`, `asset`, `quantity`, `invested` по себестоимости или по текущей оценке, `value`, `profit`, `cost_known`), и по строке на фьючерсный субсчёт (`store_id`, маржа); фиат и долларовые стейблкоины не входят; `storeIds` — кошельки с вложенными, пусто — все |
 | `get_store_months` | `store_id, include_children?` (`true`), `months?` (6, до 36) | `Vec<StoreMonthRow { month, inflow, outflow, tx_count }>` — приход и расход кошелька по местным месяцам в базовой валюте, старые первыми; переводы внутри кошелька и его субсчетов не считаются |
 
 Ошибки правил дерева приходят со своими кодами (ключи `errors.<CODE>` в локалях):

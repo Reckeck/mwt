@@ -1,9 +1,11 @@
 use tauri::State;
 
+use trade_core::Amount;
 use trade_core::calendar::{Calendar, now_secs};
 use trade_core::ipc_contract::{
-    CreateStoreInput, FundEnvelopeInput, MoveEnvelopeInput, MoveStoreInput, UpdateEnvelopeInput,
-    UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput, WalletCatalog,
+    CreateStoreInput, FundEnvelopeInput, FundGoalInput, MoveEnvelopeInput, MoveStoreInput,
+    UpdateEnvelopeInput, UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput,
+    WalletCatalog,
 };
 use trade_core::model::planning::Envelope;
 use trade_core::model::store::{Store, StoreKind};
@@ -209,6 +211,17 @@ pub async fn fund_envelope(
         .as_mut()
         .unwrap()
         .fund_envelope(&input.id, input.amount)
+        .map_err(err_to_string)
+}
+
+/// Earmark up to `amount` for a goal in a wallet; returns what was taken.
+#[tauri::command]
+pub async fn fund_goal(input: FundGoalInput, state: State<'_, AppState>) -> Result<Amount, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .fund_goal(&input.goal_id, &input.store_id, input.amount)
         .map_err(err_to_string)
 }
 

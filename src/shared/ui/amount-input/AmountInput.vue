@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<AmountInputProps>(), {
   placeholder: '',
   disabled: false,
   id: undefined,
+  size: 'default',
 })
 const model = defineModel<string | number>({ default: '' })
 
@@ -92,6 +93,7 @@ function onKeydown(event: KeyboardEvent) {
     :class="
       cn(
         'flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-transparent shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
+        props.size === 'lg' && 'h-12',
         cls,
       )
     "
@@ -105,7 +107,12 @@ function onKeydown(event: KeyboardEvent) {
       spellcheck="false"
       :placeholder="props.placeholder"
       :disabled="props.disabled"
-      class="h-full w-0 min-w-0 flex-1 bg-transparent px-3 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground"
+      :class="
+        cn(
+          'h-full w-0 min-w-0 flex-1 bg-transparent px-3 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground',
+          props.size === 'lg' && 'text-xl font-semibold',
+        )
+      "
       v-bind="rest"
       @input="onInput"
       @keydown="onKeydown"

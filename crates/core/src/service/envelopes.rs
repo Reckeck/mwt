@@ -204,6 +204,56 @@ impl UnlockedVault {
         self.persist()
     }
 
+    /// Put aside up to `amount` of the goal's currency in `store_id` for the
+    /// goal: its envelope there is made if missing, and only the free balance
+    /// is taken. Returns what was earmarked; the goal counts its envelopes.
+    pub fn fund_goal(&mut self, goal_id: &str, store_id: &str, amount: Amount) -> Result<Amount> {
+        if !amount.is_positive() {
+            return Err(Error::InvalidInput("the amount must be positive".into()));
+        }
+        let goal = self
+            .doc
+            .goals
+            .iter()
+            .find(|goal| goal.id == goal_id)
+            .cloned()
+            .ok_or_else(|| Error::Missing(format!("goal {goal_id}")))?;
+        let asset = self
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| {
+                holding.store_id == store_id
+                    && holding.asset.symbol.eq_ignore_ascii_case(&goal.currency)
+            })
+            .map(|holding| holding.asset.clone())
+            .ok_or_else(|| Error::InvalidInput(format!("the wallet holds no {}", goal.currency)))?;
+        let take = amount.min(self.free_balance(store_id, &asset));
+        if !take.is_positive() {
+            return Ok(Amount::ZERO);
+        }
+        let existing = self.doc.envelopes.iter().find(|envelope| {
+            envelope.store_id == store_id
+                && envelope.asset.key() == asset.key()
+                && envelope.goal_id.as_deref() == Some(goal_id)
+        });
+        let id = match existing {
+            Some(envelope) => envelope.id.clone(),
+            None => {
+                self.create_envelope(EnvelopeDraft {
+                    store_id: store_id.into(),
+                    name: goal.name.clone(),
+                    asset,
+                    target: None,
+                    goal_id: Some(goal_id.into()),
+                })?
+                .id
+            }
+        };
+        self.fund_envelope(&id, take)?;
+        Ok(take)
+    }
+
     /// Value of the envelopes linked to a goal, in `currency` at `now`.
     pub(crate) fn envelope_saved_for_goal(
         &self,
@@ -291,5 +341,47 @@ mod tests {
         eur.asset = AssetRef::fiat("EUR", "Euro");
         assert!(vault.create_envelope(eur).is_err());
         vault.create_envelope(draft(&card, "Usd")).unwrap();
+    }
+
+    #[test]
+    fn funding_a_goal_takes_only_what_is_free() {
+        use crate::model::store::StoreScope;
+        use crate::service::GoalDraft;
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        vault.add_transaction(income(&cash, "100", "pay")).unwrap();
+        let goal = vault
+            .create_goal(GoalDraft {
+                name: "Cushion".into(),
+                active: true,
+                target_amount: amount("500"),
+                currency: "usd".into(),
+                starts_at: "2026-01-01T00:00:00Z".into(),
+                deadline: None,
+                priority: 3,
+                monthly_commitment: None,
+                scope: StoreScope {
+                    store_ids: vec![cash.clone()],
+                    include_children: true,
+                },
+                scenario_id: None,
+                expected_return: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            vault.fund_goal(&goal.id, &cash, amount("60")).unwrap(),
+            amount("60")
+        );
+        assert_eq!(
+            vault.fund_goal(&goal.id, &cash, amount("60")).unwrap(),
+            amount("40")
+        );
+        assert_eq!(vault.envelopes(Some(&cash)).len(), 1);
+        assert_eq!(vault.earmarked(&cash, &usd().key()), amount("100"));
+        assert_eq!(
+            vault.fund_goal(&goal.id, &cash, amount("10")).unwrap(),
+            Amount::ZERO
+        );
     }
 }

@@ -266,3 +266,19 @@ export function useMoney() {
     locale: activeLocale,
   }
 }
+
+const pluralRules = new Map<string, Intl.PluralRules>()
+
+/**
+ * The CLDR form of a count for a locale: `one`, `few`, `many` or `other`.
+ * Messages that agree with a number are keyed `<key>.<form>` — vue-i18n's
+ * «a | b | c» has no Russian rules.
+ */
+export function pluralForm(count: number, locale: string): Intl.LDMLPluralRule {
+  let rule = pluralRules.get(locale)
+  if (!rule) {
+    rule = new Intl.PluralRules(locale)
+    pluralRules.set(locale, rule)
+  }
+  return rule.select(count)
+}

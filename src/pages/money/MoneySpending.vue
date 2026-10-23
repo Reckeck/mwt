@@ -17,7 +17,7 @@ const props = defineProps<{ filter: ReportFilter }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { rows, balance, months, currency, loading, error, refetch } = useSpending(toRef(props, 'filter'))
+const { rows, balance, months, monthKeys, currency, loading, error, refetch } = useSpending(toRef(props, 'filter'))
 
 /** A month's bar opens that month, with the rest of the filter kept. */
 function pick(month: string) {
@@ -43,7 +43,7 @@ function pick(month: string) {
           :to="props.filter.to ?? ''"
           @pick="pick"
         />
-        <SpendingCategories v-if="rows.length" :rows="rows" :currency="currency" />
+        <SpendingCategories v-if="rows.length" :rows="rows" :currency="currency" :filter="props.filter" :months="monthKeys" />
         <EmptyState v-else compact :icon="ReceiptText" :title="t('money.categories.empty')">
           <Button variant="outline" size="sm" @click="router.push({ name: 'transactions' })">{{ t('money.categories.toTransactions') }}</Button>
         </EmptyState>

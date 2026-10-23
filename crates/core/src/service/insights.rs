@@ -142,6 +142,7 @@ pub fn report_insights(report: &Report) -> Vec<Insight> {
         Report::Portfolio(report) => portfolio_insights(report),
         Report::Inflation(report) => inflation_insights(report),
         Report::Losses(report) => loss_insights(report),
+        Report::Where(_) => Vec::new(),
     }
 }
 

@@ -116,13 +116,14 @@ export function planAutomations(
     case 'list_budgets':
       return budgets
     case 'create_budget': {
-      const budget: Budget = { id: uuid(), ...(body as BudgetInput) }
+      const input = body as BudgetInput
+      const budget: Budget = { id: uuid(), ...input, warn: input.warn ?? true }
       budgets.push(budget)
       return budget
     }
     case 'update_budget': {
       const input = body as UpdateBudgetInput
-      return replace(budgets, input.id, input.budget)
+      return replace(budgets, input.id, { ...input.budget, warn: input.budget.warn ?? true })
     }
     case 'delete_budget':
       remove(budgets, String(args?.id))

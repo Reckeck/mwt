@@ -5,4 +5,6 @@ export interface SwitchRowProps {
   /** What turning it on changes, under the label. */
   hint?: string
   disabled?: boolean
+  /** A bare row inside a form step, without the frame. */
+  plain?: boolean
 }
