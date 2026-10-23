@@ -8,6 +8,7 @@ import { RevalueRuleDialog } from '@/features/property-revalue'
 import { formatDate, formatPct, signClass } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Skeleton } from '@/shared/ui/skeleton'
 
 /** What a property is worth now, how far it moved since the purchase, and the rule that moves it on. */
 const props = defineProps<{ store: Store }>()
@@ -51,6 +52,14 @@ const ruleText = computed(() => {
     <p v-if="values.isSuccess.value && !rows.length" class="text-sm text-muted-foreground">
       {{ t('propertyValue.empty') }}
     </p>
+    <!-- The same grid while loading, so the values do not push the page down when they come. -->
+    <div v-if="values.isPending.value" class="grid grid-cols-2 gap-x-4 gap-y-1.5 @mid:grid-cols-4" aria-hidden="true">
+      <div v-for="cell in 4" :key="cell" class="grid content-start gap-1">
+        <Skeleton class="h-3 w-16" />
+        <Skeleton class="h-5 w-20" />
+        <Skeleton class="h-3 w-24" />
+      </div>
+    </div>
     <dl v-for="row in rows" :key="row.asset_key" class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm @mid:grid-cols-4">
       <div class="grid content-start gap-0.5">
         <dt class="text-xs text-muted-foreground">{{ t('propertyValue.now') }}</dt>

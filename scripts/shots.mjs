@@ -2,12 +2,13 @@
 // at desktop and phone widths, in both themes, on the mock scenarios
 // (src/shared/api/mock/scenario.ts). Not a gate — check-layout is the gate.
 //
-//   node scripts/shots.mjs <set> [--width 1280,390] [--theme dark] [--only <shot>]
+//   node scripts/shots.mjs <set> [--width 1280,390] [--theme dark] [--only <shot,…>] [--canvas]
 //   mise run shots -- <set>
 //
 // Sets live in scripts/shots/sets.mjs. A shot with `canvas` is also put side by side
 // with that frame of the design canvas: the rendered Full-*.dc.html.html boards in
 // CANVAS_DIR (default .cache/canvas).
+// `--canvas` renders only the canvas frames: the target, before the screen is built.
 // Out: .cache/shots/<set>/<shot>-<scenario>-<theme>-<width>.png, pairs in .../pairs/.
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,11 +39,12 @@ const widths = option('width')?.split(',').map(Number)
 const pick = (sizes) => sizes.filter(([width]) => !widths || widths.includes(width))
 const themes = option('theme') ? [option('theme')] : ['light', 'dark']
 const only = option('only')
+const canvasOnly = args.includes('--canvas')
 const canvasDir = process.env.CANVAS_DIR ?? join(root, '.cache/canvas')
 
 const out = join(root, '.cache/shots', setName)
 // A partial run (`--only`, `--width`, `--theme`) keeps the rest of the set.
-if (!only && !widths && !option('theme')) rmSync(out, { recursive: true, force: true })
+if (!only && !widths && !option('theme') && !canvasOnly) rmSync(out, { recursive: true, force: true })
 mkdirSync(join(out, 'pairs'), { recursive: true })
 
 const binary = findChromium()
@@ -51,8 +53,8 @@ if (!binary) {
   process.exit(1)
 }
 
-const shots = set.filter((shot) => !only || shot.name === only)
-const scenarios = [...new Set(shots.flatMap((shot) => shot.scenarios ?? ['year']))]
+const shots = set.filter((shot) => !only || only.split(',').includes(shot.name))
+const scenarios = canvasOnly ? [] : [...new Set(shots.flatMap((shot) => shot.scenarios ?? ['year']))]
 const { vite, url } = await startVite(root)
 const page = await launch(binary, await freePort())
 const written = []
@@ -97,11 +99,15 @@ try {
       for (const theme of themes) {
         for (const [kind, width] of [['d', 1280], ['p', 390]]) {
           const app = join(out, `${shot.name}-${(shot.scenarios ?? ['year'])[0]}-${theme}-${width}.png`)
-          if (!existsSync(app)) continue
+          if (!canvasOnly && !existsSync(app)) continue
           const frame = join(out, 'pairs', `${shot.name}-canvas-${theme}-${width}.png`)
           const ok = await canvasShot(page, canvasDir, shot.canvas, theme, kind, frame)
           if (!ok) {
             failed.push(`${shot.name}: canvas frame '${shot.canvas.board} ${shot.canvas.frame}' (${kind}) not found`)
+            continue
+          }
+          if (canvasOnly) {
+            written.push(frame)
             continue
           }
           const pair = join(out, 'pairs', `${shot.name}-${theme}-${width}.png`)

@@ -75,4 +75,4 @@ export function useFormValidation<Field extends string>(
   return { errors, valid, attempted, error, firstMessage, invalidAttr, submit, reset }
 }
 
-export type FormValidation = ReturnType<typeof useFormValidation>
+export type FormValidation<Field extends string = string> = ReturnType<typeof useFormValidation<Field>>

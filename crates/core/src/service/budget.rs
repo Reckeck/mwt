@@ -30,6 +30,7 @@ pub struct BudgetDraft {
     pub period: BudgetPeriod,
     pub limit: Amount,
     pub currency: String,
+    pub warn: bool,
 }
 
 /// A limit and how much of it the current period used.
@@ -314,6 +315,7 @@ impl UnlockedVault {
             period: draft.period,
             limit: draft.limit,
             currency: draft.currency.trim().to_lowercase(),
+            warn: draft.warn,
         };
         self.doc.budgets.push(budget.clone());
         self.persist()?;
@@ -333,6 +335,7 @@ impl UnlockedVault {
         budget.period = draft.period;
         budget.limit = draft.limit;
         budget.currency = draft.currency.trim().to_lowercase();
+        budget.warn = draft.warn;
         let out = budget.clone();
         self.persist()?;
         Ok(out)
@@ -1211,6 +1214,7 @@ mod tests {
                 period: BudgetPeriod::Month,
                 limit: amount("5000"),
                 currency: "rub".into(),
+                warn: true,
             })
             .unwrap();
         let status = vault.budget_status(secs("2026-03-20T00:00:00Z"), "UTC");

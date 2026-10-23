@@ -50,6 +50,8 @@ export const REAL_TERMS_GROUPS: MoneyGroup[] = ['where', 'wealth']
  */
 export const GROUP_DEFAULT: Partial<Record<MoneyGroup, PeriodPreset>> = {
   spending: 'thisMonth',
+  where: 'thisMonth',
+  plan: 'thisMonth',
   month: 'thisMonth',
 }
 

@@ -114,20 +114,35 @@ export function categories(ctx: AnalyticsMockContext, months: string[], filter: 
 }
 
 export function networth(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): NetworthReport {
+  // Like the core: every leg a store holds (fees too), split by the store's kind.
+  const kinds = new Map(ctx.stores.map((store) => [store.id, store.kind]))
+  const scope = filter.scope.store_ids
   const points = months.map((month): NetworthPoint => {
-    const value = ctx.transactions
-      .filter((tx) => txMeta(tx).timestamp.slice(0, 7) <= month)
-      .flatMap((tx) => txLegs(tx))
-      .filter((leg) => leg.role === 'principal')
-      .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
+    const split = { financial: 0, crypto: 0, non_financial: 0, liabilities: 0 }
+    for (const tx of ctx.transactions) {
+      if (txMeta(tx).timestamp.slice(0, 7) > month) continue
+      for (const leg of txLegs(tx)) {
+        if (leg.asset.contract?.startsWith('perp:') || (scope.length && !scope.includes(leg.store_id))) continue
+        const value = Number(leg.amount) * ctx.priceOf(leg.asset.symbol)
+        const kind = kinds.get(leg.store_id)
+        if (kind === 'property' || kind === 'loyalty') split.non_financial += value
+        else if (kind === 'liability') split.liabilities -= value
+        else {
+          split.financial += value
+          if (kind === 'crypto' || kind === 'exchange') split.crypto += value
+        }
+      }
+    }
+    const net = split.financial + split.non_financial - split.liabilities
     return {
       month,
-      financial: money(value),
-      non_financial: '0',
+      financial: money(split.financial),
+      crypto: money(split.crypto),
+      non_financial: money(split.non_financial),
       receivables: '0',
-      liabilities: '0',
+      liabilities: money(Math.max(0, split.liabilities)),
       payables: '0',
-      net: money(value),
+      net: money(net),
     }
   })
   return { meta: meta(ctx, months, filter), points, has_data: points.some((point) => Number(point.net) !== 0) }

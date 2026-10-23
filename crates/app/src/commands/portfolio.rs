@@ -8,8 +8,8 @@ use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
 use trade_core::model::vault::Valuation;
 use trade_core::service::{
-    AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, NetWorth, PortfolioSummary,
-    PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
+    AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, Investments, NetWorth,
+    PortfolioSummary, PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
 };
 
 use crate::commands::app_settings::{current_settings, current_zone};
@@ -40,6 +40,19 @@ pub async fn get_asset_holdings(
 ) -> Result<AssetHoldings, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     Ok(guard.as_ref().unwrap().asset_holdings(&asset))
+}
+
+/// «Вложения»: coins and futures margin, at cost and today (Money 2 · 13).
+#[tauri::command]
+pub async fn get_investments(
+    store_ids: Option<Vec<String>>,
+    state: State<'_, AppState>,
+) -> Result<Investments, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    Ok(guard
+        .as_ref()
+        .unwrap()
+        .investments(&store_ids.unwrap_or_default()))
 }
 
 /// Money in and out of a wallet per local month, the last `months` (default 6).

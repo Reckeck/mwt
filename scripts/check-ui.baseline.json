@@ -66,7 +66,6 @@
   "long-line src/widgets/trading-chart/ui/chart-legend/ChartLegend.vue": 1,
   "long-line src/widgets/transaction-details/TransactionDetailsSheet.vue": 1,
   "long-line src/widgets/workflow-editor/ui/RunPanel.vue": 1,
-  "raw-input src/features/goal-edit/GoalDialog.vue": 1,
   "raw-input src/features/store-create/StoreCreateDialog.vue": 1,
   "raw-input src/features/store-edit/ui/StoreGeneralForm.vue": 1,
   "raw-input src/widgets/workflow-editor/ui/NoteCard.vue": 1,

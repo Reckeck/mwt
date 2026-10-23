@@ -50,4 +50,56 @@ const stage2 = [
   { name: 'home-catalog', route: '/', steps: CATALOG, canvas: { board: 'Home', frame: '4.' } },
 ]
 
-export const SETS = { before, stage1, stage2 }
+/** Stage 2b: the rest of Money (canvas Money-1…4) and the paths (Paths-1, 2). */
+const CATEGORY = [{ click: '[data-category-row]' }]
+const LIMIT = [{ click: '[data-category-limit]' }]
+const LIMIT_NEXT = [...LIMIT, { click: '[data-wizard-next]' }, { fill: ['#budget-limit', '300'] }]
+const GOAL = [{ click: '[data-where-goal]' }]
+const GOAL_NEXT = [...GOAL, { fill: ['#goal-name', 'Подушка безопасности'] }, { fill: ['#goal-target', '5000'] }, { click: '[data-wizard-next]' }]
+const stage2b = [
+  { name: 'category', route: '/money', steps: CATEGORY, scenarios: ['year', 'stress'], canvas: { board: 'Money-1', frame: '2.' } },
+  { name: 'limit-1', route: '/money', steps: LIMIT, canvas: { board: 'Money-1', frame: '3.' } },
+  { name: 'limit-2', route: '/money', steps: LIMIT_NEXT, canvas: { board: 'Money-1', frame: '4.' } },
+  { name: 'limit-saved', route: '/money', steps: [...LIMIT_NEXT, { click: '[data-wizard-save]' }], canvas: { board: 'Money-1', frame: '5.' } },
+  { name: 'where', route: '/money/where', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-1', frame: '6.' } },
+  { name: 'goal-1', route: '/money/where', steps: GOAL, canvas: { board: 'Money-1', frame: '7.' } },
+  { name: 'goal-1-errors', route: '/money/where', steps: [...GOAL, { click: '[data-wizard-next]' }], canvas: { board: 'Money-1', frame: '7.' } },
+  { name: 'goal-2', route: '/money/where', steps: GOAL_NEXT, canvas: { board: 'Money-2', frame: '8.' } },
+  { name: 'plan', route: '/money/plan', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-2', frame: '10.' } },
+  {
+    name: 'plan-full',
+    route: '/money/plan',
+    steps: [{ click: '[data-plan-limit-top]' }, { click: '[data-wizard-next]' }, { fill: ['#budget-limit', '500'] }, { click: '[data-wizard-save]' }],
+    canvas: { board: 'Money-2', frame: '10.' },
+  },
+  { name: 'more-menu', route: '/money', steps: [{ click: '[data-route-tabs-more]' }], canvas: { board: 'Money-2', frame: '11.' } },
+  { name: 'wealth', route: '/money/wealth', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-2', frame: '12.' } },
+  { name: 'investments', route: '/money/investments', scenarios: ['year', 'empty'], canvas: { board: 'Money-2', frame: '13.' } },
+  {
+    name: 'trade-record',
+    route: '/money/investments',
+    steps: [{ click: '[data-invest-record]' }, { wait: 400 }],
+    canvas: { board: 'Money-2', frame: '14.' },
+  },
+  {
+    name: 'trade-record-errors',
+    route: '/money/investments',
+    steps: [{ click: '[data-invest-record]' }, { wait: 400 }, { click: 'button[form="trade-record"]' }, { wait: 200 }],
+    phone: false,
+  },
+  {
+    name: 'trade-record-filled',
+    route: '/money/investments',
+    steps: [
+      { click: '[data-invest-record]' },
+      { wait: 400 },
+      { click: '[data-trade-side="sell"]' },
+      { fill: ['#trade-qty', '0,05'] },
+      { fill: ['#trade-price', '90 000'] },
+    ],
+    phone: false,
+  },
+  { name: 'goal-2-errors', route: '/money/where', steps: [...GOAL_NEXT, { click: '[data-wizard-save]' }], canvas: { board: 'Money-2', frame: '8.' } },
+]
+
+export const SETS = { before, stage1, stage2, stage2b }

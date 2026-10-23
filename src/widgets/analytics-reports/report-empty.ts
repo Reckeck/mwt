@@ -18,6 +18,7 @@ export function reportIsEmpty(report: AnalyticsReport): boolean {
   if ('pnl' in report) return !report.pnl.has_data
   if ('portfolio' in report) return !report.portfolio.has_data
   if ('inflation' in report) return !report.inflation.points.length
+  if ('where' in report) return !report.where.rows.length && isZero(report.where.income)
   return report.losses.rows.every((row) => isZero(row.fee) && isZero(row.slippage))
 }
 
@@ -34,4 +35,5 @@ export const EMPTY_ACTION: Record<ReportKind, EmptyAction> = {
   portfolio: 'trade',
   losses: 'trade',
   inflation: 'inflation',
+  where: 'addTx',
 }

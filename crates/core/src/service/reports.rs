@@ -42,6 +42,7 @@ pub enum ReportKind {
     Portfolio,
     Inflation,
     Losses,
+    Where,
 }
 
 /// What every report is asked for.
@@ -165,6 +166,10 @@ pub struct CategoriesReport {
 pub struct NetworthPoint {
     pub month: String,
     pub financial: Amount,
+    /// The part of `financial` held in crypto wallets and on exchanges; the
+    /// rest is bank and cash.
+    #[serde(default)]
+    pub crypto: Amount,
     pub non_financial: Amount,
     pub receivables: Amount,
     pub liabilities: Amount,
@@ -278,6 +283,7 @@ pub enum Report {
     Portfolio(PortfolioReport),
     Inflation(InflationReport),
     Losses(super::losses::LossReport),
+    Where(super::where_went::WhereReport),
 }
 
 impl Report {
@@ -292,6 +298,7 @@ impl Report {
             Report::Portfolio(report) => &mut report.meta,
             Report::Inflation(report) => &mut report.meta,
             Report::Losses(report) => &mut report.meta,
+            Report::Where(report) => &mut report.meta,
         }
     }
 }
@@ -581,6 +588,7 @@ impl UnlockedVault {
             ReportKind::Portfolio => Report::Portfolio(self.portfolio_report(&ctx)),
             ReportKind::Inflation => Report::Inflation(self.inflation_report(&ctx)),
             ReportKind::Losses => Report::Losses(self.loss_report(&ctx)),
+            ReportKind::Where => Report::Where(self.where_report(&ctx)),
         };
         let insights = super::insights::report_insights(&report);
         report.meta_mut().insights = insights;
@@ -902,6 +910,10 @@ impl UnlockedVault {
                         Some(StoreKind::Liability) => {
                             *loans.entry(store_id.as_str()).or_default() += value;
                         }
+                        Some(StoreKind::Crypto | StoreKind::Exchange) => {
+                            point.financial += value;
+                            point.crypto += value;
+                        }
                         _ => point.financial += value,
                     }
                 }
@@ -925,6 +937,7 @@ impl UnlockedVault {
                     - point.payables;
                 for value in [
                     &mut point.financial,
+                    &mut point.crypto,
                     &mut point.non_financial,
                     &mut point.receivables,
                     &mut point.liabilities,
@@ -1691,6 +1704,37 @@ pub fn report_csv(report: &Report) -> String {
                 ]);
             }
         }
+        Report::Where(data) => {
+            lines.push(
+                ["direction", "value", "count", "currency"]
+                    .map(String::from)
+                    .to_vec(),
+            );
+            lines.push(vec![
+                "income".into(),
+                text(&data.income),
+                String::new(),
+                data.meta.currency.clone(),
+            ]);
+            for row in &data.rows {
+                let kind = serde_json::to_value(row.kind)
+                    .ok()
+                    .and_then(|value| value.as_str().map(String::from))
+                    .unwrap_or_default();
+                lines.push(vec![
+                    kind,
+                    text(&row.value),
+                    row.count.to_string(),
+                    data.meta.currency.clone(),
+                ]);
+            }
+            lines.push(vec![
+                "left".into(),
+                text(&data.left),
+                String::new(),
+                data.meta.currency.clone(),
+            ]);
+        }
     }
     let mut out = String::from("\u{feff}");
     for line in lines {
@@ -1706,6 +1750,7 @@ mod tests {
     use crate::model::store::{LiabilityKind, LiabilityTerms};
     use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
     use crate::pricing::history::unix_secs;
+    use crate::service::WhereKind;
     use crate::service::test_support::*;
     use crate::service::{ContactDraft, StoreExtras};
 
@@ -1762,6 +1807,36 @@ mod tests {
         vault
             .report(kind, filter, secs(NOW), "UTC", &BTreeMap::new())
             .unwrap()
+    }
+
+    #[test]
+    fn where_lists_spending_moves_and_what_is_left() {
+        let (_dir, mut vault, card) = vault_with_card();
+        let other = store(&mut vault, "Exchange", StoreKind::Bank, None);
+        vault
+            .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(spend(&card, "100", "groceries", "2026-03-02T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(usd_move(&card, &other, "300", "2026-03-03T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(spend(&card, "50", "groceries", "2026-04-02T10:00:00Z"))
+            .unwrap();
+        let Report::Where(report) = run(&vault, ReportKind::Where, &range("2026-03", "2026-03"))
+        else {
+            panic!()
+        };
+        assert_eq!(report.income, amount("1000"));
+        assert_eq!(report.left, amount("900"));
+        let kinds: Vec<_> = report.rows.iter().map(|row| row.kind).collect();
+        assert_eq!(kinds, [WhereKind::Spending, WhereKind::Moved]);
+        assert_eq!(report.rows[0].value, amount("100"));
+        assert_eq!(report.rows[0].items[0].label, "groceries");
+        assert_eq!(report.rows[1].count, 1);
+        assert_eq!(report.rows[1].items[0].to.as_deref(), Some("Exchange"));
     }
 
     #[test]

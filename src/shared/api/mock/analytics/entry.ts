@@ -7,6 +7,7 @@ import { flows, meta, money, monthsOf } from './flows'
 import type { AnalyticsMockContext } from './flows'
 import { mockInsights } from './overview'
 import { cashflow, categories, networth, yearReport } from './reports'
+import { whereReport } from './where'
 
 export function mockReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockContext): AnalyticsReport {
   const report = bareReport(kind, filter, ctx)
@@ -83,6 +84,8 @@ function bareReport(kind: ReportKind, filter: ReportFilter, ctx: AnalyticsMockCo
           incomplete: 0,
         },
       }
+    case 'where':
+      return { where: whereReport(ctx, months, filter) }
     case 'inflation': {
       const worth = networth(ctx, months, filter)
       return {
