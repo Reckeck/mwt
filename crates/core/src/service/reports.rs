@@ -340,6 +340,12 @@ pub struct CalendarDay {
     pub forecast: bool,
     /// Notifications shown for this day: reminders, price alerts, payments due.
     pub notices: Vec<CalendarNotice>,
+    /// The category of the day's biggest spending or income, for the cell's label.
+    #[serde(default)]
+    pub lead_category: Option<String>,
+    /// The kind of the day's first transaction: the label when no category leads.
+    #[serde(default)]
+    pub lead_kind: Option<crate::model::transaction::TxKind>,
 }
 
 /// One notification of the log, placed on the day it was due.
@@ -1307,10 +1313,17 @@ impl UnlockedVault {
             _ => false,
         };
         let mut tx_counts: HashMap<NaiveDate, u32> = HashMap::new();
+        let mut first_kinds: HashMap<NaiveDate, (i64, crate::model::transaction::TxKind)> =
+            HashMap::new();
         for tx in &self.doc.transactions {
             let secs = secs_or_now(&tx.meta().timestamp);
             if secs >= from && secs < to {
-                *tx_counts.entry(cal.date_of(secs)).or_default() += 1;
+                let date = cal.date_of(secs);
+                *tx_counts.entry(date).or_default() += 1;
+                let first = first_kinds.entry(date).or_insert((secs, tx.kind()));
+                if secs < first.0 {
+                    *first = (secs, tx.kind());
+                }
             }
         }
         let end = next_month(first);
@@ -1413,6 +1426,11 @@ impl UnlockedVault {
                 }
                 (left, per_day_left)
             };
+            let lead_category = flows
+                .iter()
+                .filter(|flow| flow.date == date && !flow.categories.is_empty())
+                .max_by(|left, right| left.value.cmp(&right.value))
+                .and_then(|flow| flow.categories.first().cloned());
             let mut day_notices = notices.remove(&date).unwrap_or_default();
             day_notices.sort_by(|left, right| left.at.cmp(&right.at));
             days.push(CalendarDay {
@@ -1426,6 +1444,8 @@ impl UnlockedVault {
                 per_day_left,
                 forecast,
                 notices: day_notices,
+                lead_category,
+                lead_kind: first_kinds.get(&date).map(|(_, kind)| *kind),
             });
             date += Duration::days(1);
         }
@@ -2220,6 +2240,14 @@ mod tests {
         assert_eq!(utc.days[2].status, DayStatus::Under);
         assert_eq!(utc.days[25].status, DayStatus::Future);
         assert_eq!(utc.days[0].tx_count, 2);
+        // The cell's label: the earliest operation's kind, the biggest flow's category.
+        assert_eq!(
+            utc.days[0].lead_kind,
+            Some(crate::model::transaction::TxKind::Topup)
+        );
+        assert_eq!(bangkok.days[1].lead_category.as_deref(), Some("groceries"));
+        assert_eq!(utc.days[2].lead_kind, None);
+        assert_eq!(utc.days[2].lead_category, None);
     }
 
     #[test]
