@@ -2,7 +2,7 @@
 
 import { txLegs } from '@/shared/lib/transactions'
 import { money } from './budget-calc'
-import { compare, plannedBalance, simulate, solve } from './invest-calc'
+import { compare, plannedBalance, safeWithdrawal, simulate, solve } from './invest-calc'
 import { fail, goals, iso, now, uuid } from './state'
 import type { PlanningMockContext } from './state'
 
@@ -112,6 +112,8 @@ export function planCalculator(
       return solve(args?.input as InvestInput, Number(args?.target), args?.unknown as SolveUnknown)
     case 'calc_invest_compare':
       return compare(args?.input as InvestInput)
+    case 'calc_invest_safe_withdrawal':
+      return safeWithdrawal(args?.input as InvestInput)
     case 'calc_scenarios_list':
       return [...scenarios].sort((left, right) => right.updated_at.localeCompare(left.updated_at))
     case 'calc_scenario_save':

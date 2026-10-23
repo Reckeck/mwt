@@ -130,7 +130,7 @@ const set = computed(() => props.fund.stores.length > 0)
       </ul>
     </div>
 
-    <EmergencyFundDialog v-model:open="editOpen" :fund="props.fund.fund" />
+    <EmergencyFundDialog v-model:open="editOpen" :fund="props.fund.fund" :status="props.fund" />
     <StoreCreateDialog v-model:open="createOpen" />
   </Card>
 </template>

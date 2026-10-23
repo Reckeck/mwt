@@ -29,6 +29,8 @@ const props = defineProps<{
   creating: boolean
   target: string
   currency: string
+  /** What the goal has from the start — a calculation's starting sum. */
+  already?: string | null
 }>()
 const storeIds = defineModel<string[]>('storeIds', { required: true })
 const fund = defineModel<boolean>('fund', { required: true })
@@ -45,11 +47,12 @@ const money = (value: string | number) => formatMoney(value, { decimals: 0, curr
 const offer = computed(() =>
   props.creating && props.remainder && props.remainder.currency.toLowerCase() === props.currency.toLowerCase() ? props.remainder : null,
 )
-/** «1 539 из 5 000 $ · 31 %» when the remainder goes in. */
+/** «1 539 из 5 000 $ · 31 %» when the remainder goes in, or with what a calculation started from. */
 const after = computed(() => {
   const goal = Number(props.target)
-  if (!offer.value || !fund.value || !(goal > 0)) return null
-  const saved = Math.min(Number(offer.value.amount), goal)
+  const start = offer.value && fund.value ? Number(offer.value.amount) : Number(props.already ?? 0)
+  if (!(start > 0) || !(goal > 0)) return null
+  const saved = Math.min(start, goal)
   const pct = Math.round((saved / goal) * 100)
   return t('goal.afterValue', { saved: money(saved).replace(/\s*\D+$/, ''), target: money(goal), pct })
 })
@@ -68,6 +71,10 @@ const advanced = computed(() => Boolean(props.form.error('startsAt') || props.fo
       <SwitchRow id="goal-autosave" plain v-model="autosave" :label="t('goal.autosave', { pct: GOAL_SAVE_PCT })" :hint="t('goal.autosaveHint')" />
     </template>
 
+    <p v-if="props.already && Number(props.already) > 0" class="text-sm">
+      {{ t('goal.already') }} <b class="tabular-nums">{{ money(props.already) }}</b>
+      <span class="text-xs text-muted-foreground"> · {{ t('goal.alreadyHint') }}</span>
+    </p>
     <div v-if="after" class="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm">
       <span>{{ t('goal.after') }}</span>
       <b class="tabular-nums">{{ after }}</b>

@@ -4,16 +4,15 @@ import { Plus, X } from 'lucide-vue-next'
 
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
-import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
 
 import { FREQS, newStage } from '../model/calc-form'
 import type { InvestCalc } from '../model/use-invest-calc'
 
 /**
- * Contribution stages: the first runs from the start, each next one replaces
- * it from its year — a «step-up» plan (10 000 now, 20 000 from year 3).
+ * Contribution stages, one row each: the first runs from the start, each next
+ * one replaces it from its year — a «step-up» plan (10 000 now, 20 000 from year 3).
+ * In the «Взнос» mode the amount is what the calculator looks for.
  */
 const props = defineProps<{ calc: InvestCalc }>()
 
@@ -28,60 +27,46 @@ function addStage() {
 </script>
 
 <template>
-  <fieldset class="grid gap-3" data-tour="calc-stages">
-    <legend class="mb-1 text-sm font-medium">{{ t('invest.stages') }}</legend>
-    <!-- Two columns until the form is wide enough for the amount next to both selects. -->
+  <fieldset class="grid gap-2" data-tour="calc-stages">
+    <div class="flex items-center justify-between gap-2">
+      <legend class="text-sm font-medium">{{ t('invest.stages') }}</legend>
+      <Button variant="link" size="sm" class="h-auto px-0" @click="addStage">
+        <Plus class="size-3.5" />{{ t('invest.addStageShort') }}
+      </Button>
+    </div>
+    <!-- Four in a row while the card is wide enough, else when and how much over how often. -->
     <div
       v-for="(stage, index) in form.stages"
       :key="index"
-      class="grid grid-cols-2 items-end gap-2 @2xl:grid-cols-[5rem_minmax(9rem,1fr)_minmax(7rem,10rem)_minmax(7rem,10rem)_2.5rem]"
+      class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 @md:grid-cols-[5.5rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+      data-calc-stage
     >
-      <div v-if="form.stages.length > 1" class="col-span-2 flex items-center justify-between @2xl:hidden">
-        <span class="text-xs font-medium text-muted-foreground">{{ t('invest.stageN', { n: index + 1 }) }}</span>
-        <Button
-          v-if="index > 0"
-          variant="ghost"
-          size="icon-sm"
-          class="text-muted-foreground"
-          :aria-label="t('invest.removeStage')"
-          :title="t('invest.removeStage')"
-          @click="form.stages.splice(index, 1)"
-        >
-          <X class="size-4" />
-        </Button>
-      </div>
-      <FormField :for="`calc-stage-from-${index}`" :label="t('invest.stageFrom')">
-        <Input
-          v-if="index > 0"
-          :id="`calc-stage-from-${index}`"
-          v-model="stage.fromYear"
-          inputmode="numeric"
-          :aria-label="t('invest.stageFrom')"
-        />
-        <p v-else class="flex h-9 items-center text-sm text-muted-foreground">{{ t('invest.stageStart') }}</p>
-      </FormField>
-      <FormField
-        :for="`calc-stage-amount-${index}`"
-        :label="t('invest.stageAmount')"
-        :error="index === 0 ? props.calc.validation.error('stages') : undefined"
+      <span v-if="index === 0" class="text-sm text-muted-foreground">{{ t('invest.stageStartShort') }}</span>
+      <AmountInput
+        v-else
+        :id="`calc-stage-from-${index}`"
+        v-model="stage.fromYear"
+        :decimals="0"
+        :aria-label="t('invest.stageFrom')"
       >
-        <AmountInput :id="`calc-stage-amount-${index}`" v-model="stage.amount" :decimals="2" placeholder="0" />
-      </FormField>
-      <FormField :label="t('invest.freq')">
-        <Select v-model="stage.freq">
-          <SelectItem v-for="freq in FREQS" :key="freq" :value="freq">{{ t(`invest.freqValue.${freq}`) }}</SelectItem>
-        </Select>
-      </FormField>
-      <FormField :label="t('invest.timing')">
-        <Select v-model="stage.timing">
-          <SelectItem value="start">{{ t('invest.timingValue.start') }}</SelectItem>
-          <SelectItem value="end">{{ t('invest.timingValue.end') }}</SelectItem>
-        </Select>
-      </FormField>
+        <template #suffix><span class="pr-1 text-xs whitespace-nowrap text-muted-foreground">{{ t('invest.stageFromUnit') }}</span></template>
+      </AmountInput>
+      <p v-if="form.mode === 'contribution'" class="text-sm text-muted-foreground">{{ t('invest.stageSolved') }}</p>
+      <AmountInput
+        v-else
+        :id="`calc-stage-amount-${index}`"
+        v-model="stage.amount"
+        :decimals="2"
+        placeholder="0"
+        :aria-label="t('invest.stageAmount')"
+        :aria-invalid="index === 0 && Boolean(props.calc.validation.error('stages'))"
+      >
+        <template #suffix><span class="px-2 text-xs text-muted-foreground uppercase">{{ form.currency }}</span></template>
+      </AmountInput>
       <Button
         variant="ghost"
         size="icon-sm"
-        class="mb-0.5 hidden text-muted-foreground @2xl:inline-flex"
+        class="text-muted-foreground @md:order-last"
         :class="index === 0 && 'invisible'"
         :disabled="index === 0"
         :aria-label="t('invest.removeStage')"
@@ -90,9 +75,14 @@ function addStage() {
       >
         <X class="size-4" />
       </Button>
+      <Select v-model="stage.freq" :aria-label="t('invest.freq')">
+        <SelectItem v-for="freq in FREQS" :key="freq" :value="freq">{{ t(`invest.freqShort.${freq}`) }}</SelectItem>
+      </Select>
+      <Select v-model="stage.timing" :aria-label="t('invest.timing')">
+        <SelectItem value="start">{{ t('invest.timingShort.start') }}</SelectItem>
+        <SelectItem value="end">{{ t('invest.timingShort.end') }}</SelectItem>
+      </Select>
     </div>
-    <Button variant="outline" size="sm" class="w-fit" @click="addStage">
-      <Plus class="size-4" />{{ t('invest.addStage') }}
-    </Button>
+    <p v-if="props.calc.validation.error('stages')" class="text-xs text-destructive">{{ props.calc.validation.error('stages') }}</p>
   </fieldset>
 </template>

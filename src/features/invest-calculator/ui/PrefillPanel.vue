@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation } from '@tanstack/vue-query'
-import { RefreshCw } from 'lucide-vue-next'
+import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
@@ -11,9 +11,9 @@ import { useStoreTree } from '@/shared/api/queries'
 import { formatDate } from '@/shared/lib/format'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
-import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { FormField } from '@/shared/ui/form-field'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
@@ -34,6 +34,7 @@ const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter(
 const INCOME_MONTHS = [3, 6, 12] as const
 const defaultPct = () => String(Math.round(Number(settings.vault?.savings_rate ?? '0.1') * 100))
 
+const open = ref(props.calc.source.value !== null)
 const storeIds = ref<string[]>([])
 const months = ref<number>(12)
 const pct = ref(defaultPct())
@@ -47,9 +48,17 @@ watch(
     months.value = source?.income_months ?? 12
     pct.value = source?.income_pct ?? defaultPct()
     if (!source) last.value = null
+    else open.value = true
   },
   { immediate: true },
 )
+
+/** «= 157,50 $»: the share of the income the last run found. */
+const share = computed(() => {
+  const income = Number(last.value?.income_avg ?? 0)
+  const percent = Number(pct.value.trim().replace(',', '.'))
+  return income > 0 && percent > 0 ? String(Math.round(income * percent) / 100) : null
+})
 
 const prefill = useMutation({
   mutationFn: (source: ScenarioSource) =>
@@ -75,45 +84,58 @@ function pickMonths(value: unknown) {
 </script>
 
 <template>
-  <AdvancedFields :label="t('invest.prefill')" :default-open="props.calc.source.value !== null">
-    <div class="grid gap-3" data-tour="calc-prefill">
-      <p class="text-sm text-muted-foreground">{{ t('invest.prefillHint') }}</p>
-      <FormField for="calc-prefill-stores" :label="t('invest.prefillStores')" :hint="t('invest.prefillStoresHint')">
-        <StoreNodeSelect
-          id="calc-prefill-stores"
-          v-model:ids="storeIds"
-          multiple
-          flat
-          :nodes="liveNodes"
-          :empty-label="t('invest.prefillNoStores')"
-        />
-      </FormField>
-      <div class="grid gap-3 @md:grid-cols-2">
-        <FormField :label="t('invest.prefillMonths')">
-          <ToggleGroup type="single" variant="outline" size="sm" :model-value="String(months)" @update:model-value="pickMonths">
-            <ToggleGroupItem v-for="count in INCOME_MONTHS" :key="count" :value="String(count)">
-              {{ t('invest.monthsShort', { count }) }}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </FormField>
-        <FormField for="calc-prefill-pct" :label="t('invest.prefillPct')" :hint="t('invest.prefillPctHint')">
-          <AmountInput id="calc-prefill-pct" v-model="pct" :decimals="2" placeholder="10" />
-        </FormField>
-      </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" :disabled="prefill.isPending.value" @click="run">
-          <RefreshCw class="size-4" :class="prefill.isPending.value && 'animate-spin'" />{{ t('invest.prefillRun') }}
+  <Collapsible v-model:open="open" class="grid gap-2" data-calc-prefill>
+    <div class="flex items-start justify-between gap-3">
+      <p class="text-xs text-muted-foreground">{{ t('invest.prefillRow') }}</p>
+      <CollapsibleTrigger as-child>
+        <Button variant="link" size="sm" class="h-auto shrink-0 px-0">
+          {{ t('invest.prefill') }}<ChevronDown class="size-3.5 transition-transform" :class="open && 'rotate-180'" />
         </Button>
+      </CollapsibleTrigger>
+    </div>
+    <CollapsibleContent>
+      <div class="grid gap-3 rounded-lg bg-muted/60 p-3" data-tour="calc-prefill">
         <p v-if="props.calc.prefilledAt.value" class="text-xs text-muted-foreground">
           {{ t('invest.prefilledAt', { date: formatDate(props.calc.prefilledAt.value) }) }}
         </p>
+        <FormField for="calc-prefill-stores" :label="t('invest.prefillStores')" :hint="t('invest.prefillStoresHint')">
+          <StoreNodeSelect
+            id="calc-prefill-stores"
+            v-model:ids="storeIds"
+            multiple
+            flat
+            :nodes="liveNodes"
+            :empty-label="t('invest.prefillNoStores')"
+          />
+        </FormField>
+        <div class="grid gap-3 @md:grid-cols-2">
+          <FormField :label="t('invest.prefillMonths')">
+            <ToggleGroup type="single" variant="outline" size="sm" :model-value="String(months)" @update:model-value="pickMonths">
+              <ToggleGroupItem v-for="count in INCOME_MONTHS" :key="count" :value="String(count)">
+                {{ t('invest.monthsShort', { count }) }}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </FormField>
+          <FormField for="calc-prefill-pct" :label="t('invest.prefillPct')" :hint="t('invest.prefillPctHint')">
+            <AmountInput id="calc-prefill-pct" v-model="pct" :decimals="2" placeholder="10">
+              <template #suffix>
+                <span class="px-2 text-xs whitespace-nowrap text-muted-foreground">
+                  %<template v-if="share"> = <Money :amount="share" :currency="props.calc.form.currency" /></template>
+                </span>
+              </template>
+            </AmountInput>
+          </FormField>
+        </div>
+        <p v-if="last?.income_avg" class="text-xs text-muted-foreground">
+          {{ last.income_manual ? t('invest.prefillIncomeManual') : t('invest.prefillIncome', { months: last.income_months_used }) }}
+          <Money :amount="last.income_avg" :currency="props.calc.form.currency" />
+        </p>
+        <p v-else-if="last" class="text-xs text-muted-foreground">{{ t('invest.prefillNoIncome') }}</p>
+        <p v-if="last?.pays_out" class="text-xs text-warning">{{ t('invest.prefillPaysOut') }}</p>
+        <Button variant="outline" size="sm" class="w-fit" :disabled="prefill.isPending.value" @click="run">
+          <RefreshCw class="size-4" :class="prefill.isPending.value && 'animate-spin'" />{{ t('invest.prefillRun') }}
+        </Button>
       </div>
-      <p v-if="last?.income_avg" class="text-xs text-muted-foreground">
-        {{ last.income_manual ? t('invest.prefillIncomeManual') : t('invest.prefillIncome', { months: last.income_months_used }) }}
-        <Money :amount="last.income_avg" :currency="props.calc.form.currency" />
-      </p>
-      <p v-else-if="last" class="text-xs text-muted-foreground">{{ t('invest.prefillNoIncome') }}</p>
-      <p v-if="last?.pays_out" class="text-xs text-warning">{{ t('invest.prefillPaysOut') }}</p>
-    </div>
-  </AdvancedFields>
+    </CollapsibleContent>
+  </Collapsible>
 </template>

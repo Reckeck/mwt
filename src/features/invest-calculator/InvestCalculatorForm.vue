@@ -3,9 +3,8 @@ import { useI18n } from 'vue-i18n'
 
 import { CurrencyPicker } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
-import { Button } from '@/shared/ui/button'
+import { Card } from '@/shared/ui/card'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
@@ -15,7 +14,10 @@ import CalcAdvanced from './ui/CalcAdvanced.vue'
 import PrefillPanel from './ui/PrefillPanel.vue'
 import StageList from './ui/StageList.vue'
 
-/** The calculator's fields; the result follows them live, the button only shows what is wrong. */
+/**
+ * «Что посчитать»: the fields from the most to the least asked-about. There
+ * is no «Рассчитать» — the result follows the fields as they change.
+ */
 const props = defineProps<{ calc: InvestCalc }>()
 
 const { t } = useI18n()
@@ -28,59 +30,81 @@ function pickMode(value: unknown) {
 </script>
 
 <template>
-  <form class="@container grid gap-4" novalidate @submit.prevent="props.calc.calculate">
-    <FormField :label="t('invest.mode')" :hint="t(`invest.modeHint.${form.mode}`)">
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        class="flex-wrap"
-        data-tour="calc-mode"
-        :model-value="form.mode"
-        @update:model-value="pickMode"
-      >
-        <ToggleGroupItem v-for="mode in GOAL_MODES" :key="mode" :value="mode">{{ t(`invest.modeValue.${mode}`) }}</ToggleGroupItem>
-      </ToggleGroup>
-    </FormField>
+  <Card>
+    <form class="@container grid gap-4" novalidate data-calc-form @submit.prevent="props.calc.calculate">
+      <div class="grid gap-2">
+        <h2 class="text-sm font-medium">{{ t('invest.mode') }}</h2>
+        <ToggleGroup
+          type="single"
+          variant="segmented"
+          size="sm"
+          :spacing="1"
+          class="flex-wrap"
+          data-tour="calc-mode"
+          :aria-label="t('invest.mode')"
+          :model-value="form.mode"
+          @update:model-value="pickMode"
+        >
+          <ToggleGroupItem v-for="mode in GOAL_MODES" :key="mode" :value="mode" :data-calc-mode="mode" :title="t(`invest.modeHint.${mode}`)">
+            {{ t(`invest.modeValue.${mode}`) }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
-    <div class="grid gap-3 @md:grid-cols-2">
+      <PrefillPanel :calc="props.calc" />
+
       <FormField v-if="form.mode !== 'result'" for="calc-target" :label="t('invest.target')" required :error="error('target')">
-        <AmountInput id="calc-target" v-model="form.target" :decimals="2" placeholder="0" />
+        <AmountInput id="calc-target" v-model="form.target" :decimals="2" placeholder="0">
+          <template #suffix><span class="px-2 text-xs text-muted-foreground uppercase">{{ form.currency }}</span></template>
+        </AmountInput>
       </FormField>
-      <FormField for="calc-currency" :label="t('invest.currency')" required :error="error('currency')">
-        <CurrencyPicker id="calc-currency" v-model="form.currency" :error="error('currency')" />
-      </FormField>
-      <FormField for="calc-initial" :label="t('invest.initial')" :error="error('initial')">
-        <AmountInput id="calc-initial" v-model="form.initial" :decimals="2" placeholder="0" />
-      </FormField>
-      <FormField
-        v-if="form.mode !== 'rate'"
-        for="calc-rate"
-        :label="t('invest.rate')"
-        :hint="t('invest.rateHint')"
-        :error="error('rate')"
-      >
-        <AmountInput id="calc-rate" v-model="form.rate" :decimals="4" placeholder="0" />
-      </FormField>
-      <div v-if="form.mode !== 'term'" class="grid grid-cols-2 gap-2">
-        <FormField for="calc-years" :label="t('invest.years')" :error="error('years')">
-          <Input id="calc-years" v-model="form.years" inputmode="numeric" />
+
+      <div class="grid grid-cols-2 gap-3">
+        <FormField for="calc-initial" :label="t('invest.initial')" :error="error('initial') ?? error('currency')">
+          <AmountInput id="calc-initial" v-model="form.initial" :decimals="2" placeholder="0">
+            <template #suffix>
+              <CurrencyPicker
+                id="calc-currency"
+                v-model="form.currency"
+                label=""
+                compact
+                class="w-20 [&_button]:h-7 [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-2 [&_button]:shadow-none"
+                :aria-label="t('invest.currency')"
+                :error="error('currency')"
+              />
+            </template>
+          </AmountInput>
         </FormField>
-        <FormField for="calc-months" :label="t('invest.months')" :error="error('months')">
-          <Input id="calc-months" v-model="form.months" inputmode="numeric" />
+        <FormField v-if="form.mode !== 'rate'" for="calc-rate" :label="t('invest.rateShort')" :error="error('rate')">
+          <AmountInput id="calc-rate" v-model="form.rate" :decimals="4" placeholder="0" :title="t('invest.rateHint')">
+            <template #suffix><span class="px-2 text-xs whitespace-nowrap text-muted-foreground">{{ t('invest.rateUnit') }}</span></template>
+          </AmountInput>
+        </FormField>
+        <FormField
+          v-if="form.mode !== 'term'"
+          for="calc-years"
+          :label="t('invest.term')"
+          :error="error('years') ?? error('months')"
+          class="@max-sm:col-span-2"
+        >
+          <div class="grid grid-cols-2 gap-2">
+            <AmountInput id="calc-years" v-model="form.years" :decimals="0" placeholder="0">
+              <template #suffix><span class="px-2 text-xs text-muted-foreground">{{ t('invest.yearsUnit') }}</span></template>
+            </AmountInput>
+            <AmountInput id="calc-months" v-model="form.months" :decimals="0" placeholder="0" :aria-label="t('invest.months')">
+              <template #suffix><span class="px-2 text-xs text-muted-foreground">{{ t('invest.monthsUnit') }}</span></template>
+            </AmountInput>
+          </div>
+        </FormField>
+        <FormField for="calc-cap" :label="t('invest.capitalization')" :class="form.mode === 'term' && 'col-span-2'">
+          <Select id="calc-cap" v-model="form.capitalization" :title="t('invest.capitalizationHint')">
+            <SelectItem v-for="freq in CAP_FREQS" :key="freq" :value="freq">{{ t(`invest.capValue.${freq}`) }}</SelectItem>
+          </Select>
         </FormField>
       </div>
-      <FormField for="calc-cap" :label="t('invest.capitalization')" :hint="t('invest.capitalizationHint')">
-        <Select id="calc-cap" v-model="form.capitalization">
-          <SelectItem v-for="freq in CAP_FREQS" :key="freq" :value="freq">{{ t(`invest.capValue.${freq}`) }}</SelectItem>
-        </Select>
-      </FormField>
-    </div>
 
-    <StageList :calc="props.calc" />
-    <PrefillPanel :calc="props.calc" />
-    <CalcAdvanced :calc="props.calc" />
-
-    <Button type="submit" class="w-fit">{{ t('invest.calculate') }}</Button>
-  </form>
+      <StageList :calc="props.calc" />
+      <CalcAdvanced :calc="props.calc" />
+    </form>
+  </Card>
 </template>

@@ -26,12 +26,14 @@ export interface CalcOutcome {
 const DEBOUNCE_MS = 300
 const MAX_YEARS = 100
 const MAX_RATE = 200
+// The same steps as core's «Что выгоднее» rows.
+const COMPARE_RATE_BUMP = 2
+const COMPARE_FACTOR = 1.2
 
 /**
  * The calculator's state: the fields, their checks, and a live result that
  * follows them 300 ms after the last change (the previous result stays on
- * screen meanwhile, rule 17). A wrong field stops the run; its message shows
- * once «Рассчитать» or «Сохранить» was pressed.
+ * screen meanwhile, rule 17). A wrong field stops the run and shows its message.
  */
 export function useInvestCalc() {
   const { t } = useI18n()
@@ -72,9 +74,15 @@ export function useInvestCalc() {
     () => JSON.stringify(form),
     () => {
       clearTimeout(timer)
-      timer = setTimeout(() => {
+      const settle = () => {
         if (validation.valid.value) settled.value = { input: toInput(form), mode: form.mode, target: form.target }
-      }, DEBOUNCE_MS)
+        // No button to press: a wrong field shows its message once the typing stops.
+        else validation.attempted.value = true
+      }
+      // The first answer comes at once: the result card sits above the form on a phone,
+      // and an answer landing late pushed the whole form down.
+      if (settled.value === null && validation.valid.value) settle()
+      else timer = setTimeout(settle, DEBOUNCE_MS)
     },
     { immediate: true },
   )
@@ -111,12 +119,15 @@ export function useInvestCalc() {
   /** Where «Из данных» took the numbers from; saved with the scenario. */
   const source = ref<ScenarioSource | null>(null)
   const prefilledAt = ref<string | null>(null)
+  /** The last «Обновить из данных»: the answer compares a contribution with this income. */
+  const prefilled = ref<ScenarioPrefill | null>(null)
 
   /** Put a saved input into the fields, keeping the mode the user is in. */
   function load(input: InvestInput, from: ScenarioSource | null = null, at: string | null = null) {
     Object.assign(form, fromInput(input, { mode: form.mode, target: form.target }))
     source.value = from
     prefilledAt.value = at
+    prefilled.value = null
   }
 
   /** «Обновить из данных»: the balance, the deposit terms and a share of the income go into the fields. */
@@ -130,6 +141,7 @@ export function useInvestCalc() {
     }
     source.value = from
     prefilledAt.value = data.prefilled_at
+    prefilled.value = data
   }
 
   /** The found value written back into the fields, so «Сохранить» keeps what the user sees. */
@@ -139,10 +151,39 @@ export function useInvestCalc() {
     Object.assign(form, fromInput(data.input, { mode: 'result', target: '' }))
   }
 
+  /** «Подставить» in «Что выгоднее»: the same change the row was computed with. */
+  function applyCompare(kind: CompareKind) {
+    const bump = (value: string, by: (number: number) => number) =>
+      String(Math.round(by(Number(value.trim().replace(',', '.')) || 0) * 100) / 100)
+    if (kind === 'more_rate') form.rate = bump(form.rate, (rate) => rate + COMPARE_RATE_BUMP)
+    if (kind === 'more_contribution') {
+      for (const stage of form.stages) stage.amount = bump(stage.amount, (amount) => amount * COMPARE_FACTOR)
+    }
+  }
+
+  /** «Подставить» the withdrawal that lasts the whole term. */
+  function applyWithdrawal(amount: string) {
+    form.withdrawal.amount = amount
+  }
+
   /** What «Сохранить» stores: the fields as the engine reads them and the «Из данных» source. */
   const snapshot = () => ({ input: toInput(form), source: source.value, prefilledAt: prefilledAt.value })
 
-  return { form, validation, outcome, source, prefilledAt, calculate, load, applyPrefill, acceptSolved, snapshot }
+  return {
+    form,
+    validation,
+    outcome,
+    source,
+    prefilledAt,
+    prefilled,
+    calculate,
+    load,
+    applyPrefill,
+    acceptSolved,
+    applyCompare,
+    applyWithdrawal,
+    snapshot,
+  }
 }
 
 export type InvestCalc = ReturnType<typeof useInvestCalc>

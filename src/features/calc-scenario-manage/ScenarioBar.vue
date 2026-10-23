@@ -1,28 +1,37 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Copy, Pencil, Save, Target, Trash2 } from 'lucide-vue-next'
+import { Copy, Pencil, Target, Trash2 } from 'lucide-vue-next'
 
 import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { Select, SelectItem } from '@/shared/ui/select'
 
+import { useAutosave } from './model/use-autosave'
 import { type ScenarioBody, useScenarios } from './model/use-scenarios'
 import ScenarioNameDialog from './ui/ScenarioNameDialog.vue'
 
 /**
- * Saved runs of the calculator: pick one to load it, save the current form
- * over it or as a new one, turn it into a goal. The form itself lives in the
- * page, so the bar reads it through `snapshot` and hands loads back via `load`.
+ * Saved runs of the calculator: pick one to load it, save a new one, turn it
+ * into a goal. A saved one keeps up with the form by itself. The form lives in
+ * the page, so the bar reads it through `snapshot` and hands loads back via `load`.
  */
 const props = defineProps<{ snapshot: () => ScenarioBody }>()
 const scenarioId = defineModel<string | null>('scenarioId', { required: true })
-const emit = defineEmits<{ load: [scenario: CalcScenario]; goal: [draft: GoalInput, scenarioId: string] }>()
+const emit = defineEmits<{
+  load: [scenario: CalcScenario]
+  goal: [draft: GoalInput, scenarioId: string]
+  /** «Создать цель» was pressed: the page settles the form (a found contribution goes in) and calls `createGoal`. */
+  wantGoal: []
+}>()
 
 const { t } = useI18n()
-const { list, scenarios, byId, save, remove, goalDraft } = useScenarios()
+const { list, scenarios, byId, save, autosave, remove, goalDraft } = useScenarios()
 const current = computed(() => byId(scenarioId.value))
+const { saving } = useAutosave(current, props.snapshot, autosave)
+/** «Создать цель» on an unsaved run asks for a name first, then goes on to the goal. */
+const goalAfterSave = ref(false)
 
 // A scenario named in the address loads once the list arrives, and again on each pick.
 const loadedId = ref<string | null>(null)
@@ -58,15 +67,23 @@ function store(id: string | null, name: string, body: ScenarioBody) {
         naming.value = null
         loadedId.value = saved.id
         scenarioId.value = saved.id
+        if (goalAfterSave.value) makeGoal(saved)
+        goalAfterSave.value = false
       },
     },
   )
 }
 
-function saveCurrent() {
-  if (current.value) store(current.value.id, current.value.name, props.snapshot())
-  else naming.value = 'new'
+function createGoal() {
+  if (current.value) return makeGoal(current.value)
+  goalAfterSave.value = true
+  naming.value = 'new'
 }
+defineExpose({ createGoal })
+
+watch(naming, (mode) => {
+  if (mode === null && !save.isPending.value) goalAfterSave.value = false
+})
 
 function named(name: string) {
   const scenario = current.value
@@ -94,7 +111,6 @@ const actions = computed<UiAction[]>(() => {
   return [
     { id: 'rename', label: t('invest.scenario.rename'), icon: Pencil, run: () => (naming.value = 'rename') },
     { id: 'copy', label: t('invest.scenario.saveAsNew'), icon: Copy, run: () => (naming.value = 'copy') },
-    { id: 'goal', label: t('invest.scenario.makeGoal'), icon: Target, run: () => makeGoal(scenario) },
     { id: 'delete', label: t('actions.delete'), icon: Trash2, destructive: true, run: () => drop(scenario) },
   ]
 })
@@ -109,20 +125,23 @@ const picked = computed({
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2" data-tour="calc-scenarios">
-    <Select v-model="picked" class="w-full sm:w-64" :aria-label="t('invest.scenario.pick')">
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-tour="calc-scenarios">
+    <Select v-model="picked" class="w-full sm:w-56" :aria-label="t('invest.scenario.pick')">
       <SelectItem :value="NONE">{{ t('invest.scenario.unsaved') }}</SelectItem>
       <SelectItem v-for="scenario in scenarios" :key="scenario.id" :value="scenario.id">{{ scenario.name }}</SelectItem>
     </Select>
-    <Button variant="outline" :disabled="save.isPending.value" @click="saveCurrent">
-      <Save class="size-4" />
-      {{ current ? t('invest.scenario.update') : t('invest.scenario.save') }}
-    </Button>
-    <ActionMenu v-if="current" :actions="actions" :label="t('actions.more')" />
-    <!-- Always shown: appearing after the list loads would push the calculator down. -->
-    <p class="basis-full text-xs text-muted-foreground">
-      {{ t('invest.scenario.emptyHint') }}
-    </p>
+    <span class="text-xs text-muted-foreground" aria-live="polite" data-calc-saved>
+      {{ !current ? t('invest.scenario.notSaved') : saving ? t('invest.scenario.saving') : t('invest.scenario.autosaved') }}
+    </span>
+    <div class="ms-auto flex items-center gap-2">
+      <Button v-if="!current" variant="outline" :disabled="save.isPending.value" @click="naming = 'new'">
+        {{ t('invest.scenario.save') }}
+      </Button>
+      <ActionMenu v-if="current" :actions="actions" :label="t('actions.more')" />
+      <Button :disabled="goalDraft.isPending.value || save.isPending.value" data-calc-goal @click="emit('wantGoal')">
+        <Target class="size-4" />{{ t('invest.scenario.makeGoal') }}
+      </Button>
+    </div>
 
     <ScenarioNameDialog
       v-model:open="nameOpen"

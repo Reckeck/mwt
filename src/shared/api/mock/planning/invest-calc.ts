@@ -188,3 +188,20 @@ export function plannedBalance(input: InvestInput, elapsed: number): number {
   )
   return Number(months.at(-1)?.balance ?? input.initial)
 }
+
+/** Mirrors core `safe_withdrawal`: the largest whole withdrawal that lasts the term. */
+export function safeWithdrawal(input: InvestInput): string | null {
+  const rule = input.withdrawal
+  if (!rule) return null
+  const lasts = (amount: number) =>
+    simulate({ ...input, withdrawal: { ...rule, amount: String(amount) } }).depleted_at === null
+  if (lasts(Number(rule.amount))) return null
+  let [low, high] = [0, Number(rule.amount)]
+  while (high - low >= 1) {
+    const middle = Math.floor((low + high) / 2)
+    if (middle === low) break
+    if (lasts(middle)) low = middle
+    else high = middle
+  }
+  return String(low)
+}

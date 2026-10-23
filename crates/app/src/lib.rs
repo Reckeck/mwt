@@ -183,6 +183,7 @@ pub fn run() {
             calc::calc_invest_simulate,
             calc::calc_invest_solve,
             calc::calc_invest_compare,
+            calc::calc_invest_safe_withdrawal,
             calc::calc_scenarios_list,
             calc::calc_scenario_save,
             calc::calc_scenario_delete,

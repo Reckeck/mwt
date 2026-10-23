@@ -69,7 +69,7 @@ async function step(page, item, touch) {
   const what = item.click ?? item.hover
   const at = await page.eval(`${FIND}
     const el = find(${JSON.stringify(what)})
-    el.scrollIntoView({ block: 'nearest' })
+    el.scrollIntoView({ block: 'center' })
     const rect = el.getBoundingClientRect()
     return [Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2)]`)
   await page.mouse(at[0], at[1])

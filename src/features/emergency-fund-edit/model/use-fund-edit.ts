@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 import { CAPITAL_HEALTH_KEY, EMERGENCY_FUND_KEY } from '@/shared/api/queries'
 import { textOf } from '@/shared/lib/notify'
+import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 interface FundChange {
   fund: EmergencyFund
@@ -43,5 +44,17 @@ export function useFundAdd() {
       success: () => textOf('emergency.added'),
       undo: (_data, storeId) => call<EmergencyFund>('emergency_fund_toggle', { storeId: storeId as string, on: false }),
     },
+  })
+}
+
+/** «Создать цель «Подушка» в Плане»: a goal over the fund's accounts, sized by the fund. */
+export function useFundGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: GoalInput) => call<Goal>('create_goal', { input }),
+    onSuccess: () => {
+      for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
+    },
+    meta: { error: 'goal.saveFailed', success: () => textOf('emergency.goalCreated') },
   })
 }

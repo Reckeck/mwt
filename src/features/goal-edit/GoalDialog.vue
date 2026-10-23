@@ -24,7 +24,13 @@ import GoalWhereStep from './ui/GoalWhereStep.vue'
  * where. A new goal can take the month's remainder at once and a share of each
  * salary after it; saving says so and can be taken back.
  */
-const props = withDefaults(defineProps<GoalDialogProps>(), { goal: null, draft: null, storeId: '', remainder: null })
+const props = withDefaults(defineProps<GoalDialogProps>(), {
+  goal: null,
+  draft: null,
+  storeId: '',
+  remainder: null,
+  fromCalc: null,
+})
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [goal: Goal] }>()
 
@@ -70,31 +76,39 @@ watch(open, (isOpen) => {
   autosave.value = false
 })
 
+const creating = computed(() => !props.goal)
+/** From a calculation everything is filled in already: one page, both steps' fields. */
+const onePage = computed(() => creating.value && props.fromCalc !== null)
+
 /** Each step checks its own fields: «Далее» the first, «Создать» the second. */
+const whatRules = () => ({
+  name: required(name.value),
+  target: positiveAmount(target.value),
+  currency: required(currency.value, 'pick'),
+  deadline: deadline.value && startsAt.value && deadline.value < startsAt.value ? t('validation.dateOrder') : null,
+})
+const whereRules = () => ({
+  stores: storeIds.value.length ? null : t('validation.stores'),
+  startsAt: required(startsAt.value),
+  commitment: nonNegativeAmount(commitment.value),
+  // The core takes 0..100 % a year; the form says so before it does.
+  expectedReturn: firstError(
+    nonNegativeAmount(expectedReturn.value),
+    Number(parseDecimal(expectedReturn.value) ?? 0) > 100 ? t('validation.range', { min: 0, max: 100 }) : null,
+  ),
+})
 const form = useFormValidation<GoalField>(
-  () =>
-    step.value === 1
-      ? {
-          name: required(name.value),
-          target: positiveAmount(target.value),
-          currency: required(currency.value, 'pick'),
-          deadline: deadline.value && startsAt.value && deadline.value < startsAt.value ? t('validation.dateOrder') : null,
-        }
-      : {
-          stores: storeIds.value.length ? null : t('validation.stores'),
-          startsAt: required(startsAt.value),
-          commitment: nonNegativeAmount(commitment.value),
-          // The core takes 0..100 % a year; the form says so before it does.
-          expectedReturn: firstError(
-            nonNegativeAmount(expectedReturn.value),
-            Number(parseDecimal(expectedReturn.value) ?? 0) > 100 ? t('validation.range', { min: 0, max: 100 }) : null,
-          ),
-        },
+  () => (onePage.value ? { ...whatRules(), ...whereRules() } : step.value === 1 ? whatRules() : whereRules()),
   { resetOn: [open, step] },
 )
 
 const steps = computed(() => [t('goal.step.what'), t('goal.step.where')])
-const creating = computed(() => !props.goal)
+const title = computed(() => (props.goal ? t('goal.edit') : onePage.value ? t('goal.newFromCalc') : t('goal.new')))
+const saveLabel = computed(() => {
+  if (!creating.value) return t('actions.save')
+  if (!onePage.value) return t('actions.create')
+  return autosave.value ? t('goal.createWithAutomation') : t('goal.create')
+})
 
 const save = useMutation({
   mutationFn: async () => {
@@ -136,18 +150,19 @@ const save = useMutation({
 })
 
 function submit(event: Event) {
-  if (step.value === 1) form.submit(() => (step.value = 2), event)
+  if (step.value === 1 && !onePage.value) form.submit(() => (step.value = 2), event)
   else form.submit(() => save.mutate(), event)
 }
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.goal ? t('goal.edit') : t('goal.new')">
+  <Dialog v-model:open="open" :title="title">
     <form id="goal-form" class="grid gap-4" @submit.prevent="submit">
-      <WizardSteps :step="step" :titles="steps" />
-      <GoalWhatStep v-if="step === 1" v-model:name="name" v-model:target="target" v-model:currency="currency" v-model:deadline="deadline" :form="form" />
+      <p v-if="onePage && props.fromCalc" class="text-sm text-muted-foreground">{{ t('goal.fromCalcNote', { name: props.fromCalc.scenario }) }}</p>
+      <WizardSteps v-else :step="step" :titles="steps" />
+      <GoalWhatStep v-if="step === 1 || onePage" v-model:name="name" v-model:target="target" v-model:currency="currency" v-model:deadline="deadline" :form="form" />
       <GoalWhereStep
-        v-else
+        v-if="step === 2 || onePage"
         v-model:store-ids="storeIds"
         v-model:fund="fund"
         v-model:autosave="autosave"
@@ -162,22 +177,23 @@ function submit(event: Event) {
         :creating="creating"
         :target="target"
         :currency="currency"
+        :already="onePage ? (props.fromCalc?.initial ?? null) : null"
       />
     </form>
 
     <template #footer>
-      <Button variant="outline" class="max-md:h-11" @click="step === 1 ? (open = false) : (step = 1)">
-        {{ step === 1 ? t('actions.cancel') : t('actions.back') }}
+      <Button variant="outline" class="max-md:h-11" @click="step === 1 || onePage ? (open = false) : (step = 1)">
+        {{ step === 1 || onePage ? t('actions.cancel') : t('actions.back') }}
       </Button>
       <Button
         form="goal-form"
         type="submit"
         class="max-md:h-11 max-md:flex-1"
         :disabled="save.isPending.value"
-        :data-wizard-next="step === 1 || undefined"
-        :data-wizard-save="step === 2 || undefined"
+        :data-wizard-next="(step === 1 && !onePage) || undefined"
+        :data-wizard-save="step === 2 || onePage || undefined"
       >
-        {{ step === 1 ? t('actions.next') : creating ? t('actions.create') : t('actions.save') }}
+        {{ step === 1 && !onePage ? t('actions.next') : saveLabel }}
       </Button>
     </template>
   </Dialog>
