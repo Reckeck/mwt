@@ -677,7 +677,15 @@ forecast: boolean,
 /**
  * Notifications shown for this day: reminders, price alerts, payments due.
  */
-notices: Array<CalendarNotice>, };
+notices: Array<CalendarNotice>, 
+/**
+ * The category of the day's biggest spending or income, for the cell's label.
+ */
+lead_category: string | null, 
+/**
+ * The kind of the day's first transaction: the label when no category leads.
+ */
+lead_kind: TxKind | null, };
 
 type CalendarMonth = { 
 /**

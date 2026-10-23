@@ -1,81 +1,88 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Bell, BellRing, CalendarClock } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
-import { numberFormat } from '@/shared/lib/format'
+import { useCategories } from '@/shared/api/queries'
+import { categoryKeyLabel } from '@/shared/lib/categories'
+import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
-import { STATUS_CLASSES } from '../spending-calendar.constants'
-
 /**
- * One day of the month: its date and what happened — spent, received, the
- * month's rest after it (a spreadsheet's running balance), and marks for
- * notifications, fired price alerts and payments still to come.
+ * One day of the month: what happened that day (the leading operation's kind
+ * or category and the day's sum) or, ahead of today, what each day may spend.
+ * Today says how much is left to spend today. On a phone only dots.
  */
 const props = defineProps<{
   day: CalendarDay
   currency: string
   today: string
   selected: boolean
-  /** Payments and reminders due that day, from the month's «upcoming». */
-  upcoming: number
-  /** A seventh of a phone is ~45px: sums go compact, the rest is in the day panel. */
+  /** Today's «можно»: the day's allowance plus what earlier days left unspent. */
+  leftToday: string | null
   compact: boolean
 }>()
 const emit = defineEmits<{ pick: [] }>()
 const { t } = useI18n()
+const categories = useCategories()
 
-const alerts = computed(() => props.day.notices.filter((notice) => notice.category === 'price_alert').length)
-const others = computed(() => props.day.notices.length - alerts.value)
-/** A narrow cell: the bare number (`2,8 тыс.`), the currency is in the month's header. */
-const compactLeft = computed(() => {
-  const value = Number(props.day.left ?? 0)
-  return numberFormat({ notation: 'compact', maximumFractionDigits: 1 }).format(Math.abs(value) < 0.005 ? 0 : value)
+const isToday = computed(() => props.day.date === props.today)
+const income = computed(() => Number(props.day.income) > 0)
+const spent = computed(() => Number(props.day.spent) > 0)
+const label = computed(() => {
+  if (props.day.lead_category) return categoryKeyLabel(props.day.lead_category, categories.data.value, t)
+  return props.day.lead_kind ? t(`tx.kindNoun.${props.day.lead_kind}`) : null
 })
 </script>
 
 <template>
   <Button
-    variant="outline"
+    variant="ghost"
     size="block"
-    class="grid h-auto min-h-16 min-w-0 content-start gap-0.5 overflow-hidden rounded-md border p-1.5 text-left text-xs transition-colors"
-    :class="[
-      STATUS_CLASSES[props.day.status],
-      props.selected ? 'ring-2 ring-primary' : props.day.date === props.today ? 'ring-1 ring-primary' : '',
-    ]"
+    :class="
+      cn(
+        'h-auto min-w-0 flex-col items-stretch justify-start gap-0.5 rounded-none bg-card px-2 py-1.5 text-left font-normal hover:bg-muted/60',
+        props.compact ? 'min-h-11 items-center' : 'min-h-[92px]',
+        (isToday && !props.compact) || props.selected ? 'shadow-[inset_0_0_0_2px_var(--color-primary)]' : '',
+      )
+    "
     :aria-pressed="props.selected"
-    :aria-current="props.day.date === props.today ? 'date' : undefined"
+    :aria-current="isToday ? 'date' : undefined"
+    data-calendar-day
     @click="emit('pick')"
   >
-    <span class="flex w-full items-center gap-1">
-      <span class="font-medium">{{ Number(props.day.date.slice(8)) }}</span>
-      <span v-if="props.day.date === props.today" class="sr-only">{{ t('calendar.today') }}</span>
-      <span class="ml-auto flex items-center gap-0.5 text-muted-foreground">
-        <Bell v-if="others" class="size-3" :aria-label="t('calendar.mark.notices', { count: others })" />
-        <BellRing v-if="alerts" class="size-3 text-warning" :aria-label="t('calendar.mark.alerts', { count: alerts })" />
-        <CalendarClock v-if="props.upcoming" class="size-3" :aria-label="t('calendar.mark.upcoming', { count: props.upcoming })" />
+    <span class="flex items-center gap-1 text-sm">
+      {{ Number(props.day.date.slice(8)) }}
+      <span v-if="isToday" class="sr-only">{{ t('calendar.today') }}</span>
+      <span
+        v-if="props.day.status === 'over' && !props.compact"
+        class="ml-auto size-1.5 rounded-full bg-warning"
+        :title="t('calendar.overDay')"
+      />
+    </span>
+    <template v-if="props.compact">
+      <span v-if="income || spent || props.day.tx_count" class="size-1.5 rounded-full" :class="income ? 'bg-success' : 'bg-primary'" />
+    </template>
+    <template v-else>
+      <span
+        v-if="props.day.tx_count && label"
+        class="max-w-full truncate rounded bg-secondary px-1 text-2xs"
+        :class="income && !spent && 'text-success'"
+      >
+        {{ label }}
       </span>
-    </span>
-    <span v-if="Number(props.day.daily)" class="truncate tabular-nums">
-      −<Money :amount="props.day.daily" :decimals="0" :compact="props.compact" :currency="props.currency" />
-    </span>
-    <span v-if="Number(props.day.income)" class="truncate tabular-nums text-success">
-      +<Money :amount="props.day.income" :decimals="0" :compact="props.compact" :currency="props.currency" />
-    </span>
-    <!-- The month's rest after this day; ahead of today the forecast if the plan is kept («≈»). -->
-    <span
-      v-if="props.day.left !== null"
-      class="truncate text-2xs tabular-nums text-muted-foreground"
-      :class="[Number(props.day.left) < 0 && 'text-destructive', props.day.forecast && 'opacity-70']"
-      :title="props.day.forecast ? t('calendar.forecastHint') : t('calendar.leftMonth')"
-    >
-      <template v-if="props.compact">{{ props.day.forecast ? '≈' : '' }}{{ compactLeft }}</template>
-      <template v-else>
-        {{ props.day.forecast ? '≈' : t('calendar.leftShort') }}
-        <Money :amount="props.day.left" :decimals="0" :currency="props.currency" :convert="false" />
-      </template>
-    </span>
+      <span v-if="income" class="truncate text-xs tabular-nums text-success">
+        +<Money :amount="props.day.income" :decimals="0" :currency="props.currency" />
+      </span>
+      <span v-if="spent || (props.day.tx_count && !income)" class="truncate text-xs tabular-nums text-muted-foreground">
+        <template v-if="spent">−</template><Money :amount="props.day.spent" :currency="props.currency" />
+      </span>
+      <span v-if="isToday && props.leftToday !== null" class="truncate text-xs font-medium text-primary">
+        {{ t('calendar.canToday') }} <Money :amount="props.leftToday" :decimals="0" :currency="props.currency" />
+      </span>
+      <span v-else-if="props.day.forecast && props.day.per_day_left" class="truncate text-xs tabular-nums text-muted-foreground/55">
+        <Money :amount="props.day.per_day_left" :decimals="0" :currency="props.currency" />
+      </span>
+    </template>
   </Button>
 </template>

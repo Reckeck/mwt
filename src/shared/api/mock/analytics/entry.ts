@@ -1,6 +1,6 @@
 /** The report by kind, and the calendar of a month. */
 
-import { txLegs, txMeta } from '@/shared/lib/transactions'
+import { txKind, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockNotices } from '../demo'
 import { upcoming } from '../planning/budget-calc'
 import { flows, meta, money, monthsOf } from './flows'
@@ -146,12 +146,18 @@ export function mockCalendar(month: string, ctx: AnalyticsMockContext): Calendar
       perDay = daysAfter > 0 ? Math.max(0, left / daysAfter) : null
       if (date === today && perDay !== null) anchor = { index, rest: left, share: perDay }
     }
+    const ofDayTxs = ctx.transactions
+      .filter((tx) => txMeta(tx).timestamp.slice(0, 10) === date)
+      .sort((left, right) => txMeta(left).timestamp.localeCompare(txMeta(right).timestamp))
+    const lead = ofDay.filter((flow) => flow.key).sort((left, right) => right.value - left.value)[0]
     return {
       date,
+      lead_category: lead?.key ?? null,
+      lead_kind: ofDayTxs[0] ? txKind(ofDayTxs[0]) : null,
       income: money(ofDay.filter((flow) => flow.incoming).reduce((sum, flow) => sum + flow.value, 0)),
       spent: money(spent),
       daily: money(daily),
-      tx_count: ctx.transactions.filter((tx) => txMeta(tx).timestamp.slice(0, 10) === date).length,
+      tx_count: ofDayTxs.length,
       status,
       left: left === null ? null : money(left),
       per_day_left: perDay === null ? null : money(perDay),

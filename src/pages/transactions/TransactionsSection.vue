@@ -21,7 +21,11 @@ const more = computed(() => [
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
+    <div class="flex min-w-0 flex-wrap items-center gap-2">
+      <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
+      <!-- A tab's own controls on the tabs' row (the calendar's month), teleported in. -->
+      <div id="tx-section-end" class="ml-auto flex min-w-0 items-center" />
+    </div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
   </div>
 </template>
