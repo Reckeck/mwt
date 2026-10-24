@@ -59,7 +59,7 @@ function openMonth(params: unknown) {
         </p>
         <p class="text-xs text-muted-foreground">
           {{ t('report.inflation.reference') }}
-          <RouterLink :to="{ query: { ...route.query, settings: 'inflation' } }" class="underline">{{ t('report.inflation.settings') }}</RouterLink>
+          <RouterLink :to="{ query: { ...route.query, settings: 'accounting', section: 'inflation' } }" class="underline">{{ t('report.inflation.settings') }}</RouterLink>
         </p>
       </div>
     </Card>

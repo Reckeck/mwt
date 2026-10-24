@@ -102,7 +102,7 @@ const extras = computed(() => (filter.value.currency ? 1 : 0) + (props.realTerms
           <p class="text-xs text-muted-foreground">{{ t('analytics.realTermsHint') }}</p>
           <RouterLink
             v-if="filter.real_terms"
-            :to="{ query: { ...route.query, settings: 'inflation' } }"
+            :to="{ query: { ...route.query, settings: 'accounting', section: 'inflation' } }"
             class="text-xs text-muted-foreground underline"
           >
             {{ t('analytics.realTermsRate') }}

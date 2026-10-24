@@ -1880,6 +1880,15 @@ pub struct SelectVaultInput {
     pub path: String,
 }
 
+/// Input to put a forgotten vault back into recents.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct RestoreRecentVaultInput {
+    pub path: String,
+    /// Position the row had before it was forgotten.
+    pub index: u32,
+}
+
 /// A vault file chosen in the system dialog.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -1910,6 +1919,36 @@ pub struct VaultLinkStatus {
     pub last_synced_at: Option<String>,
     /// Why the last copy failed; cleared by the next successful one.
     pub last_error: Option<String>,
+}
+
+/// A backup copy of the vault file, next to it.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct VaultBackup {
+    /// File name inside the vault's folder (`vault.wallet.v2.bak`).
+    pub name: String,
+    /// RFC 3339 time the copy was written.
+    pub modified_at: String,
+    #[ts(type = "number")]
+    pub size_bytes: u64,
+}
+
+impl From<crate::vault_io::backups::BackupFile> for VaultBackup {
+    fn from(file: crate::vault_io::backups::BackupFile) -> Self {
+        Self {
+            name: file.name,
+            modified_at: file.modified_at,
+            size_bytes: file.size_bytes,
+        }
+    }
+}
+
+/// Which backup `restore_vault_backup` puts back.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct RestoreVaultBackupInput {
+    /// A name from `list_vault_backups`; anything else is refused.
+    pub name: String,
 }
 
 /// Which copy wins after `SYNC_CONFLICT`.

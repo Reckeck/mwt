@@ -35,9 +35,17 @@ export const useVaultStore = defineStore('vault', {
     async loadRecents() {
       this.recents = await call<RecentVault[]>('recent_vaults')
     },
+    /** Returns the index the row had (for `restoreRecent`), `-1` when it was not listed. */
     async forgetRecent(path: string) {
-      await call('forget_recent_vault', { path })
+      await call('forget_recent_vault', { input: { path } })
+      const index = this.recents.findIndex((recent: RecentVault) => recent.path === path)
       this.recents = this.recents.filter((recent: RecentVault) => recent.path !== path)
+      return index
+    },
+    /** Undo of `forgetRecent`: the row returns to `index`. */
+    async restoreRecent(path: string, index: number) {
+      await call('restore_recent_vault', { input: { path, index: Math.max(index, 0) } })
+      await this.loadRecents()
     },
     /** The chosen vault (on mobile already copied into app storage), or
      *  `null` when the dialog was cancelled. */

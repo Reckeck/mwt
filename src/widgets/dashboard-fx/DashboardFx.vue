@@ -84,7 +84,7 @@ const refresh = () => priceRefresh.mutate()
       @retry="table.refetch()"
     >
       <template #empty>
-        <RouterLink :to="{ query: { ...route.query, settings: 'general' } }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
+        <RouterLink :to="{ query: { ...route.query, settings: 'accounting', section: 'currencies' } }" :class="buttonVariants({ variant: 'outline', size: 'sm' })">
           {{ t('store.fxPickFavorites') }}
         </RouterLink>
       </template>

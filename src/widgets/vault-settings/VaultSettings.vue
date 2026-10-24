@@ -3,31 +3,30 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { KeyRound } from 'lucide-vue-next'
 
+import { VaultBackupsSection } from '@/features/vault-backups'
 import { ChangePasswordDialog } from '@/features/vault-change-password'
 import { VaultLinkSection } from '@/features/vault-external-link'
 import { Button } from '@/shared/ui/button'
-import { Separator } from '@/shared/ui/separator'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
-/** The vault file: its password first, then what it is linked to. Device settings live in «Это устройство». */
+import VaultPlace from './VaultPlace.vue'
+
+/** The vault file as four cards (Settings-1 · 5): where it lies, its password, the outside copy, backups. */
 const { t } = useI18n()
 const passwordOpen = ref(false)
 </script>
 
 <template>
-  <!-- Groups divided by a line, not boxed: a frame in a card in the window ate the width on a phone. -->
-  <SettingsSection :title="t('settings.vaultTitle')" :description="t('settings.vaultScopeHint')">
-    <section class="grid gap-2">
-      <h4 class="text-sm font-medium">{{ t('settings.security') }}</h4>
-      <p class="text-xs text-muted-foreground">{{ t('settings.securityHint') }}</p>
-      <Button variant="outline" size="sm" class="w-fit" @click="passwordOpen = true">
+  <div class="grid grid-cols-1 gap-4">
+    <SettingsSection :title="t('vaultFile.title')"><VaultPlace /></SettingsSection>
+    <SettingsSection :title="t('settings.security')" :description="t('settings.securityHint')">
+      <Button variant="outline" size="sm" class="w-fit gap-2" @click="passwordOpen = true">
         <KeyRound class="size-4" />
         {{ t('vault.password.open') }}
       </Button>
-    </section>
-    <Separator />
-    <VaultLinkSection />
-    <p class="text-xs text-muted-foreground">{{ t('settings.autoSaveHint') }}</p>
+    </SettingsSection>
+    <SettingsSection :title="t('vaultLink.title')" :description="t('vaultLink.hint')"><VaultLinkSection /></SettingsSection>
+    <SettingsSection :title="t('vaultBackups.title')"><VaultBackupsSection /></SettingsSection>
     <ChangePasswordDialog v-model:open="passwordOpen" />
-  </SettingsSection>
+  </div>
 </template>

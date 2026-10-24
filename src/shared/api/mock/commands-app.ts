@@ -51,9 +51,6 @@ export const vaultCommands: MockCommands = {
     mockStatus.value = { ...mockStatus.value, unlocked: false, info: null }
     return resolve({})
   },
-  forget_recent_vault: (_call) => {
-    return resolve({})
-  },
 }
 
 /** Commands: notifications. */

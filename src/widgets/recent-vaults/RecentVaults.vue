@@ -1,21 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FolderOpen, Link2, LockKeyhole, X } from 'lucide-vue-next'
+import { ChevronsUpDown, FolderOpen, LockKeyhole } from 'lucide-vue-next'
 
 import { VaultUnlockDialog } from '@/features/vault-unlock'
+import { useVaultForget } from '@/features/vault-forget'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { notify } from '@/shared/lib/notify'
+import { Drawer, DrawerContent, DrawerTitle } from '@/shared/ui/drawer'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { useIsPhone } from '@/shared/lib/phone'
 import { useVaultStore } from '@/shared/store/vault'
+
+import RecentVaultList from './RecentVaultList.vue'
+import { shortDir } from './lib/short-path'
 
 const { t } = useI18n()
 const vault = useVaultStore()
+const isPhone = useIsPhone()
+const { forget, clear } = useVaultForget()
 
 const unlockOpen = ref(false)
 /** The vault the dialog opens; `null` lets the user pick any file. */
 const unlockPath = ref<string | null>(null)
+/** Open list (popover or sheet). */
+const listOpen = ref(false)
+const picked = ref<string | null>(null)
 
 onMounted(async () => {
   // `status` doubles as "is the default location free?" for the create dialog.
@@ -23,27 +33,48 @@ onMounted(async () => {
   await vault.loadRecents()
 })
 
-/** Only the entry in the list goes; the file itself stays where it is. */
-async function forget(path: string) {
-  const name = displayName(path)
-  try {
-    await vault.forgetRecent(path)
-    notify.success('auth.forgotten', { description: name })
-  } catch (err) {
-    notify.error(err, 'auth.forgetFailed')
-  }
+/** The vault in the field: the one picked, else the last opened whose file is still there. */
+const current = computed(
+  () =>
+    vault.recents.find((recent: RecentVault) => recent.path === picked.value) ??
+    vault.recents.find((recent: RecentVault) => recent.exists) ??
+    null,
+)
+
+function nameOf(recent: RecentVault): string {
+  return recent.display_name || recent.path
 }
 
-function displayName(path: string): string {
-  return vault.recents.find((recent: RecentVault) => recent.path === path)?.display_name || path
+function pick(path: string) {
+  picked.value = path
+  listOpen.value = false
 }
 
-/** The vault opened last, when its file is still there: the one big button. */
-const latest = computed(() => vault.recents.find((recent: RecentVault) => recent.exists) ?? null)
+const listBindings = computed(() => ({ selected: current.value?.path ?? null }))
+const listHandlers = {
+  pick: (path: string) => pick(path),
+  forget: (recent: RecentVault) => forgetRow(recent),
+  clear: () => clearHistory(),
+  other: () => openUnlock(null),
+}
 
 function openUnlock(path: string | null) {
+  listOpen.value = false
   unlockPath.value = path
   unlockOpen.value = true
+}
+
+function forgetRow(recent: RecentVault) {
+  forget.mutate({ path: recent.path, name: nameOf(recent) })
+}
+
+/** Everything but the vault in the field goes; the list stays open. */
+function clearHistory() {
+  const keep = current.value?.path
+  const rest = vault.recents
+    .filter((recent: RecentVault) => recent.path !== keep)
+    .map((recent: RecentVault) => ({ path: recent.path, name: nameOf(recent) }))
+  if (rest.length) clear.mutate(rest)
 }
 </script>
 
@@ -58,47 +89,56 @@ function openUnlock(path: string | null) {
     </template>
 
     <div class="grid gap-3">
-      <Button v-if="latest" size="lg" class="w-full" @click="openUnlock(latest.path)">
-        <LockKeyhole class="size-4" />
-        <span class="truncate">{{ t('auth.openLatest', { name: latest.display_name || latest.path }) }}</span>
-      </Button>
-      <div v-if="vault.recents.length" class="grid max-h-64 gap-1.5 overflow-y-auto">
-        <div v-for="recent in vault.recents" :key="recent.path" class="flex items-center gap-1 rounded-md border border-border">
-          <Button
-            variant="ghost"
-            size="block"
-            class="rounded-r-none flex min-w-0 flex-1 items-center gap-2 rounded-l-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
-            :class="{ 'text-destructive': !recent.exists }"
-            @click="openUnlock(recent.path)"
-          >
-            <div class="min-w-0 flex-1">
-              <p class="flex items-center gap-1.5 truncate text-sm font-medium">
-                <span class="truncate">{{ recent.display_name || recent.path }}</span>
-                <Link2 v-if="recent.linked" class="size-3.5 shrink-0 text-muted-foreground" :aria-label="t('vaultLink.linkedBadge')" />
-              </p>
-              <!-- In app storage the path tells the user nothing. -->
-              <p v-if="!vault.appStorage" class="truncate text-xs text-muted-foreground">{{ recent.path }}</p>
-            </div>
-            <span v-if="!recent.exists" class="shrink-0 text-xs text-destructive">{{ t('auth.missing') }}</span>
-          </Button>
-          <!-- App storage lists every vault on the device: there is no list entry to forget. -->
-          <ConfirmButton
-            v-if="!vault.appStorage"
-            :label="t('auth.forget')"
-            :confirm-label="t('auth.forgetConfirm')"
-            @confirm="forget(recent.path)"
-          >
-            <X class="size-3.5" />
-          </ConfirmButton>
+      <template v-if="vault.recents.length">
+        <div class="grid gap-1.5">
+          <span class="text-sm font-medium">{{ t('vaultForget.field') }}</span>
+          <!-- One list, two holders: a popover under the field, a bottom sheet on a phone. -->
+          <Popover :open="!isPhone && listOpen" @update:open="listOpen = $event">
+            <PopoverTrigger as-child>
+              <Button
+                variant="outline"
+                class="h-auto min-h-11 w-full justify-between gap-2 px-3 py-2 text-left"
+                data-recents-field
+              >
+                <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                  {{ current ? nameOf(current) : t('vaultForget.choose') }}
+                  <span v-if="current && !vault.appStorage" class="font-normal text-muted-foreground">
+                    · {{ shortDir(current.path) }}
+                  </span>
+                </span>
+                <ChevronsUpDown class="size-4 shrink-0 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" class="w-(--reka-popover-trigger-width) p-1">
+              <RecentVaultList v-bind="listBindings" v-on="listHandlers" />
+            </PopoverContent>
+          </Popover>
+          <Drawer :open="isPhone && listOpen" @update:open="listOpen = $event">
+            <DrawerContent class="gap-2 px-3 pt-2 pb-5">
+              <DrawerTitle class="px-2 text-base font-semibold">{{ t('vaultForget.sheetTitle') }}</DrawerTitle>
+              <RecentVaultList v-bind="listBindings" sheet v-on="listHandlers" />
+              <div class="border-t border-border px-1 pt-3">
+                <Button variant="outline" class="h-12 w-full gap-2" data-recents-other @click="openUnlock(null)">
+                  <FolderOpen class="size-4" />
+                  {{ t(vault.appStorage ? 'auth.importFile' : 'vaultForget.otherFile') }}
+                </Button>
+              </div>
+            </DrawerContent>
+          </Drawer>
         </div>
-      </div>
+        <Button v-if="current" size="lg" class="w-full" @click="openUnlock(current.path)">
+          <LockKeyhole class="size-4" />
+          <span class="truncate">{{ t('auth.openLatest', { name: nameOf(current) }) }}</span>
+        </Button>
+      </template>
 
-      <p v-else class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
-
-      <Button variant="outline" class="w-full justify-start gap-2" @click="openUnlock(null)">
-        <FolderOpen class="size-4" />
-        {{ t(vault.appStorage ? 'auth.importFile' : 'auth.openOther') }}
-      </Button>
+      <template v-else>
+        <p class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
+        <Button variant="outline" class="w-full justify-start gap-2" @click="openUnlock(null)">
+          <FolderOpen class="size-4" />
+          {{ t(vault.appStorage ? 'auth.importFile' : 'auth.openOther') }}
+        </Button>
+      </template>
     </div>
   </Card>
 

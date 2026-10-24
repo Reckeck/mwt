@@ -114,7 +114,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     id: 'vaultSetup',
     date: '2026-10-22',
-    points: [{ key: 'currency' }, { key: 'direction', route: 'settings:vault' }],
+    points: [{ key: 'currency' }, { key: 'direction', route: 'settings:accounting:direction' }],
   },
   {
     id: 'dashboardNew',
@@ -223,8 +223,8 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'passive',
     date: '2026-10-21',
     points: [
-      { key: 'categories', route: 'settings:categories' },
-      { key: 'flag', route: 'settings:categories' },
+      { key: 'categories', route: 'settings:accounting:categories' },
+      { key: 'flag', route: 'settings:accounting:categories' },
     ],
   },
   { id: 'loanKinds', date: '2026-10-21', points: [{ key: 'networth', route: 'dashboard' }] },
@@ -232,7 +232,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'emergency',
     date: '2026-10-21',
     points: [
-      { key: 'essential', route: 'settings:categories' },
+      { key: 'essential', route: 'settings:accounting:categories' },
       { key: 'fund', route: 'wallet-settings' },
     ],
   },
@@ -241,15 +241,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: '2026-10-21',
     points: [
       { key: 'return', route: 'money-plan' },
-      { key: 'manual', route: 'settings:money' },
+      { key: 'manual', route: 'settings:accounting' },
     ],
   },
   {
     id: 'inflationAuto',
     date: '2026-10-21',
     points: [
-      { key: 'auto', route: 'settings:money' },
-      { key: 'notices', route: 'settings:notifications' },
+      { key: 'auto', route: 'settings:accounting' },
+      { key: 'notices', route: 'settings:app:notifications' },
       { key: 'keyRate' },
     ],
   },

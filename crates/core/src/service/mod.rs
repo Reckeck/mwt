@@ -34,6 +34,7 @@ mod attachments;
 mod auto_reminders;
 mod automation_card;
 mod automations;
+mod backups;
 mod budget;
 mod bulk;
 mod categories;

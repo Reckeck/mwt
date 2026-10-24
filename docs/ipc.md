@@ -66,6 +66,7 @@ Frontend парсит код и показывает локализованно�
 |---|---|---|
 | `recent_vaults` | — | `Vec<RecentVault { path, last_opened, exists, display_name, linked }>`; в режиме `app` дополняется всеми `*.wallet` каталога приложения |
 | `forget_recent_vault` | `SelectVaultInput { path }` | `()` (убирает из списка, файл не трогает) |
+| `restore_recent_vault` | `RestoreRecentVaultInput { path, index }` | `()` (возвращает путь в историю на место `index`; дубликат не создаёт) |
 | `pick_vault_file` | `save: bool` | `Option<PickedVault { path, display_name, imported }>` (`null`, если диалог закрыт); при `save` к имени без `.wallet` расширение дописывается. На Android/iOS открытие копирует файл в каталог приложения (`imported`), `save` — `UNSUPPORTED` (создание по имени) |
 
 ### копия во внешнем файле (`crates/app/src/commands/vault_link.rs`)
@@ -77,6 +78,10 @@ Frontend парсит код и показывает локализованно�
 | `vault_link_status` | — | `VaultLinkStatus { linked, display_name, last_synced_at, last_error }` открытого vault |
 | `link_vault_external` | `LinkVaultInput { existing }` | `Option<VaultLinkStatus>` (`null` — диалог закрыт); копия пишется сразу; `existing` — выбранный файл заменяется vault |
 | `unlink_vault_external` | — | `()`; файл-копия остаётся на месте, право доступа (Android) отдаётся |
+| `list_vault_backups` | — | `VaultBackup[] { name, modified_at, size_bytes }` — копии `<vault>.….bak` рядом с файлом (`.bak`, `.vN.bak`, `.presync.bak`, ручные `.ГГГГММДД-ЧЧММСС.bak`), новые сверху |
+| `create_vault_backup` | — | `VaultBackup`; сначала пишутся накопленные изменения, затем файл копируется в новое имя `<vault>.<метка>.bak` (существующую копию не затирает) |
+| `restore_vault_backup` | `RestoreVaultBackupInput { name }` | `VaultBackup` — страховочная копия состояния до восстановления. `name` — только имя файла из `list_vault_backups`: путь, `..`, чужой файл, не `.bak` — `INVALID_INPUT` (`vault_io::backups::resolve`), нет файла — `NOT_FOUND`. Копия читается текущим паролем (чужой пароль — `SECRET`, ничего не меняется); документ заменяется как в `dev_apply_vault_json` (id, дата создания и учёт синхронизации остаются свои). Фронт спрашивает подтверждение с последствиями |
+| `reveal_vault_folder` | — | `()`; папка с файлом vault в файловом менеджере (только десктоп, на телефоне `UNSUPPORTED`) |
 | `resolve_vault_conflict` | `ResolveVaultConflictInput { path, keep: local \| remote }` | `()`; `remote`: локальный vault уходит в `.bak`, копия становится vault. Потом снова `unlock_vault` |
 
 ### синхронизация устройств (`crates/app/src/commands/sync.rs`)

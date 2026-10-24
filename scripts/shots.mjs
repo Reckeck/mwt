@@ -14,9 +14,9 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { findChromium, launch } from './check-layout/cdp.mjs'
-import { login, setTheme } from './check-layout/scenario.mjs'
+import { login, mounted, setTheme } from './check-layout/scenario.mjs'
 import { freePort, startVite } from './shots/serve.mjs'
-import { canvasShot, pairShot, runSteps, settle } from './shots/steps.mjs'
+import { canvasShot, ensureReady, freshStart, pairShot, runSteps, settle } from './shots/steps.mjs'
 import { SETS } from './shots/sets.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -66,26 +66,33 @@ try {
     const sizes = pick(touch ? PHONE : DESKTOP)
     if (!sizes.length) continue
     for (const scenario of scenarios) {
-      await page.viewport(...sizes[0], touch)
-      await page.goto(`${url}?mock=${scenario}`)
-      await login(page)
-      for (const theme of themes) {
-        await setTheme(page, theme)
-        for (const [width, height] of sizes) {
-          await page.viewport(width, height, touch)
-          await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
-          for (const shot of shots) {
-            if (!(shot.scenarios ?? ['year']).includes(scenario)) continue
-            if (shot.phone === false && touch) continue
-            if (shot.desktop === false && !touch) continue
-            const file = join(out, `${shot.name}-${scenario}-${theme}-${width}.png`)
-            try {
-              await runSteps(page, shot, touch)
-              await settle(page, scenario)
-              await page.shot(file)
-              written.push(file)
-            } catch (error) {
-              failed.push(`${shot.name} ${scenario} ${theme} ${width}: ${error.message}`)
+      const inScenario = shots.filter((shot) => (shot.scenarios ?? ['year']).includes(scenario))
+      const fits = (shot) => !(shot.phone === false && touch) && !(shot.desktop === false && !touch)
+      // `login: false` shots start from a fresh, locked app (the unlock screen); the rest share one login.
+      for (const fresh of [false, true]) {
+        const list = inScenario.filter((shot) => fits(shot) && (shot.login === false) === fresh)
+        if (!list.length) continue
+        await page.viewport(...sizes[0], touch)
+        await page.goto(`${url}?mock=${scenario}`)
+        if (fresh) await mounted(page)
+        else await login(page)
+        for (const theme of themes) {
+          await setTheme(page, theme)
+          for (const [width, height] of sizes) {
+            await page.viewport(width, height, touch)
+            await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+            for (const shot of list) {
+              const file = join(out, `${shot.name}-${scenario}-${theme}-${width}.png`)
+              try {
+                if (fresh) await freshStart(page, `${url}?mock=${scenario}`, theme, touch)
+                if (!fresh) await ensureReady(page, theme, touch)
+                await runSteps(page, shot, touch)
+                await settle(page, scenario)
+                await page.shot(file)
+                written.push(file)
+              } catch (error) {
+                failed.push(`${shot.name} ${scenario} ${theme} ${width}: ${error.message}`)
+              }
             }
           }
         }

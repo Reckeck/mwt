@@ -17,19 +17,26 @@ export interface Hotkey {
   combo: string
   /** i18n key of what it does. */
   key: string
+  /** Listed in Settings › Keys, in the order of the object below. */
+  listed?: boolean
+  /** Exists only where there is a sidebar (not on a phone). */
+  desktopOnly?: boolean
 }
 
 export const HOTKEYS: Record<HotkeyId, Hotkey> = {
-  palette: { id: 'palette', combo: 'mod+k', key: 'hotkey.palette' },
-  quickAdd: { id: 'quickAdd', combo: 'mod+n', key: 'hotkey.quickAdd' },
-  sidebar: { id: 'sidebar', combo: 'mod+b', key: 'hotkey.sidebar' },
-  saveAndNext: { id: 'saveAndNext', combo: 'mod+enter', key: 'hotkey.saveAndNext' },
+  quickAdd: { id: 'quickAdd', combo: 'mod+n', key: 'hotkey.quickAdd', listed: true },
+  palette: { id: 'palette', combo: 'mod+k', key: 'hotkey.palette', listed: true },
+  saveAndNext: { id: 'saveAndNext', combo: 'mod+enter', key: 'hotkey.saveAndNext', listed: true },
+  sidebar: { id: 'sidebar', combo: 'mod+b', key: 'hotkey.sidebar', listed: true, desktopOnly: true },
   section1: { id: 'section1', combo: 'alt+1', key: 'hotkey.section1' },
   section2: { id: 'section2', combo: 'alt+2', key: 'hotkey.section2' },
   section3: { id: 'section3', combo: 'alt+3', key: 'hotkey.section3' },
   section4: { id: 'section4', combo: 'alt+4', key: 'hotkey.section4' },
   section5: { id: 'section5', combo: 'alt+5', key: 'hotkey.section5' },
 }
+
+/** The keys Settings › Keys lists, in the registry's order. */
+export const LISTED_HOTKEYS: Hotkey[] = Object.values(HOTKEYS).filter((hotkey) => hotkey.listed)
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 

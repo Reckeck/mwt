@@ -75,7 +75,8 @@ export function useShellActions() {
   const router = useRouter()
   const vault = useVaultStore()
 
-  function openSettings(tab = 'general') {
+  // 'list': the phone opens on the list of groups, the desktop on the first group.
+  function openSettings(tab = 'list') {
     void router.push({ query: settingsQuery(route.query, tab) })
   }
   async function lock() {

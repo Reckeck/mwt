@@ -66,7 +66,7 @@ async function copy() {
 
 function allRates() {
   open.value = false
-  void router.push({ query: settingsQuery(route.query, 'money', 'rates') })
+  void router.push({ query: settingsQuery(route.query, 'accounting', 'rates') })
 }
 
 /** The card takes focus itself, not its first button: C and Esc work at once, no ring on «Все курсы». */

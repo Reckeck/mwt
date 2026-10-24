@@ -21,6 +21,13 @@ const cryptoWallets = computed(
   () => (tree.data.value ?? []).filter((node) => !node.store.archived && isCryptoKind(node.store.kind)).length,
 )
 
+/** «Выключено: … Скроется: 2» — one line of the canvas: what the switch does and how many wallets it touches. */
+const hint = computed(() => {
+  const base = t('settings.direction.cryptoHint')
+  if (!cryptoWallets.value) return base
+  return `${base} ${t(crypto.value ? 'settings.direction.willHide' : 'settings.direction.hiddenNow', { count: cryptoWallets.value })}`
+})
+
 const toggle = useMutation({
   mutationFn: (crypto: boolean) => settings.updateVault({ crypto }),
   meta: {
@@ -37,22 +44,13 @@ const crypto = computed({
 
 <template>
   <SettingsSection :title="t('settings.direction.title')" :description="t('settings.direction.description')">
-    <div class="grid gap-2">
-      <SwitchRow
-        id="vault-direction-crypto"
-        v-model="crypto"
-        :label="t('settings.direction.crypto')"
-        :hint="t('settings.direction.cryptoHint')"
-        :disabled="toggle.isPending.value"
-      />
-      <!-- Always rendered: the line reserves its place, so the switch does not move (rule 17). -->
-      <p class="min-h-5 text-xs text-muted-foreground">
-        {{
-          cryptoWallets
-            ? t(crypto ? 'settings.direction.willHide' : 'settings.direction.hiddenNow', { count: cryptoWallets })
-            : ''
-        }}
-      </p>
-    </div>
+    <SwitchRow
+      id="vault-direction-crypto"
+      v-model="crypto"
+      plain
+      :label="t('settings.direction.crypto')"
+      :hint="hint"
+      :disabled="toggle.isPending.value"
+    />
   </SettingsSection>
 </template>

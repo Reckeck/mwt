@@ -19,7 +19,7 @@ export const PHONE = [
 /** Every view in full at these sizes; the rest get the main screens only. */
 const FULL_AT = new Set(['1280x720', '1024x640', '768x800', '560x860', '390x844', '360x740'])
 
-const MAIN_ROUTES = ['/', '/stores', '/transactions', '/analytics/flow', '/planning/reminders', 'settings:general', 'settings:money']
+const MAIN_ROUTES = ['/', '/stores', '/transactions', '/money/where', '/automations/reminders', 'settings:app:app', 'settings:accounting:currencies']
 
 const STATIC_ROUTES = [
   '/',
@@ -28,20 +28,19 @@ const STATIC_ROUTES = [
   '/transactions/contacts',
   '/transactions/calendar',
   '/transactions/bonuses',
-  '/analytics',
-  '/analytics/flow',
-  '/analytics/wealth',
-  '/analytics/investments',
-  '/analytics/saldo',
-  '/analytics/health',
-  '/planning/automations',
-  '/planning/calculator',
-  '/planning/budgets',
-  '/planning/goals',
-  '/planning/reminders',
-  '/planning/alerts',
-  '/workflows',
-  '/workflows/journal',
+  '/money',
+  '/money/where',
+  '/money/wealth',
+  '/money/investments',
+  '/money/month',
+  '/money/health',
+  '/automations',
+  '/money/calculator',
+  '/money/plan',
+  '/automations/reminders',
+  '/automations/alerts',
+  '/automations/workflows',
+  '/automations/journal',
 ]
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
@@ -71,13 +70,18 @@ export async function login(page) {
   }
 }
 
-async function loginOnce(page) {
+/** Wait for the app to mount (a cold Vite start may reload the page meanwhile). */
+export async function mounted(page) {
   await page.eval(`
     for (let tries = 0; tries < 300; tries++) {
       if (document.querySelector('#app')?.__vue_app__) return true
       await new Promise((done) => setTimeout(done, 100))
     }
     throw new Error('the app did not mount in 30 s')`)
+}
+
+async function loginOnce(page) {
+  await mounted(page)
   await page.eval(INSTALL_OBSERVERS)
   await page.eval(`${APP}
     // Tours and What's new pop over the views: mark them all seen first.
@@ -119,8 +123,8 @@ export async function views(page, size) {
     }
     return out`)
   const tabs = await page.eval(`
-    const { SETTINGS_TABS } = await import('/src/widgets/settings-shell/settings-shell.constants.ts')
-    return SETTINGS_TABS.map((tab) => tab.id)`)
+    const { SETTINGS_GROUPS } = await import('/src/widgets/settings-shell/settings-shell.constants.ts')
+    return SETTINGS_GROUPS.flatMap((group) => group.tabs.map((tab) => group.id + ':' + tab.sections[0].id))`)
   const all = [
     ...STATIC_ROUTES,
     ...stores.flatMap((id) => [`/stores/${id}`, `/stores/${id}/settings`]),
@@ -131,7 +135,7 @@ export async function views(page, size) {
 
 async function openOnce(page, view) {
   const target = view.startsWith('settings:')
-    ? `{ path: '/', query: { settings: '${view.slice(9)}' } }`
+    ? `{ path: '/', query: { settings: '${view.split(':')[1]}', section: '${view.split(':')[2]}' } }`
     : `'${view}'`
   // The new route's own first frames are what the click asked for: a browser leaves shifts
   // within 500 ms of input out of CLS. Counted is what moves after that — data landing.
@@ -243,7 +247,7 @@ export async function listenerLeak(page) {
 export async function backCloses(page) {
   const problems = []
   const back = `const { closeTopLayer } = await import('/src/shared/lib/back-stack.ts'); return closeTopLayer()`
-  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'general' } }); return true`)
+  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'app' } }); return true`)
   await page.sleep(600)
   await page.eval(back)
   await page.sleep(400)
@@ -268,7 +272,7 @@ export async function backCloses(page) {
 
 /** Arming a confirm button keeps its width and its focus. */
 export async function confirmStable(page) {
-  await page.eval(`${APP} await gp.$router.push('/planning/reminders'); return true`)
+  await page.eval(`${APP} await gp.$router.push('/automations/reminders'); return true`)
   await page.sleep(700)
   const result = await page.eval(`
     const button = [...document.querySelectorAll('[data-slot="confirm-button"]')].find((el) => el.getBoundingClientRect().width)
@@ -281,7 +285,7 @@ export async function confirmStable(page) {
     const focused = document.activeElement === button
     button.blur()
     return { width, after, focused }`)
-  if (result === 'none') return ['no [data-slot="confirm-button"] on /planning/reminders']
+  if (result === 'none') return ['no [data-slot="confirm-button"] on /automations/reminders']
   const problems = []
   if (Math.abs(result.after - result.width) > 0.5) problems.push(`confirm button changes width ${result.width} → ${result.after}`)
   if (!result.focused) problems.push('confirm button loses focus when armed')
@@ -290,7 +294,7 @@ export async function confirmStable(page) {
 
 /** A toast over an open dialog can be clicked, and the click does not close the dialog. */
 export async function toastOverDialog(page) {
-  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'general' } }); return true`)
+  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'app' } }); return true`)
   await page.sleep(600)
   await page.eval(`
     const { notify } = await import('/src/shared/lib/notify/index.ts')

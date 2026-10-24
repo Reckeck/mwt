@@ -17,6 +17,7 @@ import { valuationCommands } from './commands-valuation'
 import { vehicleCommands } from './commands-vehicle'
 import { syncCommands } from './commands-sync'
 import { transferCommands } from './commands-transfer'
+import { vaultBackupsCommands } from './commands-vault-backups'
 import { vaultFilesCommands } from './commands-vault-files'
 import { overviewCommands, walletsCommands } from './commands-wallets'
 import { resolve } from './core'
@@ -30,6 +31,7 @@ import { mockScenario } from './scenario'
 const MOCK_COMMANDS: MockCommands = {
   ...vaultCommands,
   ...vaultFilesCommands,
+  ...vaultBackupsCommands,
   ...syncCommands,
   ...transferCommands,
   ...notificationsCommands,

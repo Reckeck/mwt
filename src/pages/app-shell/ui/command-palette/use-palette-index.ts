@@ -2,7 +2,7 @@ import { type Ref, computed } from 'vue'
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { SETTINGS_TABS } from '@/widgets/settings-shell'
+import { SETTINGS_GROUPS } from '@/widgets/settings-shell'
 
 export interface PaletteEntry {
   id: string
@@ -23,13 +23,22 @@ export function usePaletteIndex(screenNames: Ref<string[]>) {
   const words = (key: string) => (te(`palette.keywords.${key}`) ? t(`palette.keywords.${key}`) : '')
 
   const settings = computed<PaletteEntry[]>(() =>
-    SETTINGS_TABS.filter((tab) => !tab.devOnly).flatMap((tab) =>
-      tab.sections.map((section) => ({
-        id: `settings-${tab.id}-${section.id}`,
-        label: tab.sections.length > 1 ? `${t(tab.titleKey)} › ${t(section.titleKey)}` : t(tab.titleKey),
-        keywords: `${t('settingsShell.title')} ${words(section.id)}`,
-        to: { query: { ...route.query, settings: tab.id, section: section.id } },
-      })),
+    SETTINGS_GROUPS.filter((group) => !group.devOnly).flatMap((group) =>
+      group.tabs.flatMap((tab) =>
+        tab.sections.map((section) => ({
+          id: `settings-${group.id}-${section.id}`,
+          label: [
+            group.titleKey,
+            group.tabs.length > 1 ? tab.titleKey : '',
+            group.tabs.length === 1 || tab.sections.length > 1 ? section.titleKey : '',
+          ]
+            .filter(Boolean)
+            .map((key) => t(key))
+            .join(' › '),
+          keywords: `${t('settingsShell.title')} ${words(section.id)}`,
+          to: { query: { ...route.query, settings: group.id, section: section.id } },
+        })),
+      ),
     ),
   )
 

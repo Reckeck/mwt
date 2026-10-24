@@ -10,6 +10,9 @@ export const mockConflict = { resolved: false }
 /** Linked copy of the mock vault; `null` while none is linked. */
 const mockLink: { value: VaultLinkStatus | null } = { value: null }
 
+/** Recent vault paths of the mock, newest first. */
+const mockRecents = ['/tmp/mock/vault.wallet', '/tmp/mock/family.wallet', '/tmp/mock/old.wallet']
+
 const nameOf = (path: string) => path.split(/[\\/]/).pop() || path
 
 /** Commands: vault files. */
@@ -22,16 +25,27 @@ export const vaultFilesCommands: MockCommands = {
     return resolve<PickedVault>({ path, display_name: nameOf(path), imported: app })
   },
   recent_vaults: (_call) => {
-    const path = '/tmp/mock/vault.wallet'
-    return resolve<RecentVault[]>([
-      {
+    return resolve<RecentVault[]>(
+      mockRecents.map((path) => ({
         path,
         last_opened: String(Math.floor(Date.now() / 1000)),
         exists: true,
         display_name: nameOf(path),
-        linked: mockLink.value !== null,
-      },
-    ])
+        linked: mockLink.value !== null && path === mockRecents[0],
+      })),
+    )
+  },
+  forget_recent_vault: ({ body }) => {
+    const index = mockRecents.indexOf(String(body?.path))
+    if (index >= 0) mockRecents.splice(index, 1)
+    return resolve(undefined)
+  },
+  restore_recent_vault: ({ body }) => {
+    const path = String(body?.path)
+    if (!mockRecents.includes(path)) {
+      mockRecents.splice(Math.min(Number(body?.index ?? 0), mockRecents.length), 0, path)
+    }
+    return resolve(undefined)
   },
   vault_link_status: (_call) => {
     return resolve<VaultLinkStatus>(

@@ -75,7 +75,7 @@ for (const entry of WHATS_NEW) {
   needKey(`whatsNew.${entry.id}.title`, `whats-new "${entry.id}"`)
   for (const point of entry.points) {
     needKey(`whatsNew.${entry.id}.${point.key}`, `whats-new "${entry.id}"`)
-    // `settings:<tab>` opens a settings tab rather than a screen with a tour.
+    // `settings:<group>[:<section>]` opens a settings group rather than a screen with a tour.
     if (point.route && !point.route.startsWith('settings:') && !(point.route in TOURS)) {
       errors.push(`whats-new "${entry.id}.${point.key}": route "${point.route}" has no tour to show`)
     }

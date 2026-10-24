@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FilePlus2, FolderOpen, Link2, Unlink } from 'lucide-vue-next'
+import { FilePlus2, FolderOpen } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { SectionState } from '@/shared/ui/section-state'
 import { formatDateTime } from '@/shared/lib/format'
 
 import { useVaultLink } from './useVaultLink'
 
+/** The body of the «Копия во внешнем файле» card: whether it is on, where, and the buttons. */
 const { t } = useI18n()
 const { status, link, unlink } = useVaultLink()
 
@@ -18,35 +18,36 @@ const busy = computed(() => link.isPending.value || unlink.isPending.value)
 </script>
 
 <template>
-  <!-- A copy of the vault in a file of the user's choice, rewritten after every save. -->
-  <section class="grid gap-2">
-    <div class="flex items-center gap-2">
-      <Link2 class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <h4 class="text-sm font-medium">{{ t('vaultLink.title') }}</h4>
+  <SectionState
+    :loading="status.isPending.value"
+    :error="status.error.value"
+    skeleton="figure"
+    compact
+    @retry="status.refetch()"
+  >
+    <div class="grid gap-1 text-sm" data-vault-link-status>
+      <p v-if="current?.linked" class="min-w-0 break-words">
+        <span class="font-medium text-success">{{ t('vaultLink.statusOn') }}</span>
+        · {{ current.display_name }}
+        <template v-if="current.last_synced_at && !current.last_error"> · {{ formatDateTime(current.last_synced_at) }}</template>
+      </p>
+      <p v-else class="font-medium text-muted-foreground">{{ t('vaultLink.statusOff') }}</p>
+      <p v-if="current?.last_error" role="alert" class="text-xs text-destructive">
+        {{ t('vaultLink.lastFailed') }}: {{ current.last_error }}
+      </p>
     </div>
-    <p class="text-xs text-muted-foreground">{{ t('vaultLink.hint') }}</p>
 
-    <SectionState
-      :loading="status.isPending.value"
-      :error="status.error.value"
-      skeleton="figure"
-      compact
-      @retry="status.refetch()"
-    >
-      <div v-if="current?.linked" class="grid gap-1 text-sm">
-        <p class="truncate">
-          {{ t('vaultLink.target') }}: <span class="font-medium">{{ current.display_name }}</span>
-        </p>
-        <p v-if="current.last_error" role="alert" class="text-xs text-destructive">
-          {{ t('vaultLink.lastFailed') }}: {{ current.last_error }}
-        </p>
-        <p v-else-if="current.last_synced_at" class="text-xs text-muted-foreground">
-          {{ t('vaultLink.lastSynced') }}: {{ formatDateTime(current.last_synced_at) }}
-        </p>
-      </div>
-
-      <div class="mt-1 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" class="gap-2" :disabled="busy" @click="link.mutate(false)" :loading="link.isPending.value && link.variables.value === false">
+    <div class="flex flex-wrap items-center gap-2">
+      <template v-if="current?.linked">
+        <Button size="sm" variant="outline" :disabled="busy" :loading="link.isPending.value" @click="link.mutate(false)">
+          {{ t('vaultLink.change') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="busy" :loading="unlink.isPending.value" @click="unlink.mutate()">
+          {{ t('vaultLink.turnOff') }}
+        </Button>
+      </template>
+      <template v-else>
+        <Button size="sm" variant="outline" class="gap-2" :disabled="busy" :loading="link.isPending.value && link.variables.value === false" @click="link.mutate(false)">
           <FilePlus2 class="size-4" />
           {{ t('vaultLink.createCopy') }}
         </Button>
@@ -56,22 +57,13 @@ const busy = computed(() => link.isPending.value || unlink.isPending.value)
           class="gap-2"
           :disabled="busy"
           :title="t('vaultLink.pickExistingHint')"
-          @click="link.mutate(true)"
           :loading="link.isPending.value && link.variables.value === true"
+          @click="link.mutate(true)"
         >
           <FolderOpen class="size-4" />
           {{ t('vaultLink.pickExisting') }}
         </Button>
-        <ConfirmButton
-          v-if="current?.linked"
-          :label="t('vaultLink.unlink')"
-          :confirm-label="t('vaultLink.unlinkConfirm')"
-          :disabled="busy"
-          @confirm="unlink.mutate()"
-        >
-          <Unlink class="size-3.5" />
-        </ConfirmButton>
-      </div>
-    </SectionState>
-  </section>
+      </template>
+    </div>
+  </SectionState>
 </template>

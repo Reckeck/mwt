@@ -8,6 +8,7 @@
 //! external mirror the vault is copied to after every save ([`mirror`]).
 //! [`location`] tells a path from such a document. See `docs/storage-platforms.md`.
 
+pub mod backups;
 pub mod import;
 pub mod local;
 pub mod location;

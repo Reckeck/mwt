@@ -1,185 +1,91 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { Archive, ArchiveRestore, Plus, Trash2 } from 'lucide-vue-next'
+import { Plus, Search } from 'lucide-vue-next'
 
-import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { Input } from '@/shared/ui/input'
-import { Select, SelectItem } from '@/shared/ui/select'
-import { Switch } from '@/shared/ui/switch'
-import { call } from '@/shared/api/ipc'
-import { CATEGORY_GROUPS, categoryLabel, isEssential, isPassive } from '@/shared/lib/categories'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { useMonthCategoryTotals } from '@/entities/report'
 import { useCategories } from '@/shared/api/queries'
+import { categoryLabel } from '@/shared/lib/categories'
+import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 
+import { SECTIONS } from './category-manager.constants'
+import { useCategoryActions } from './model/use-category-actions'
+import CategoryAddDialog from './ui/CategoryAddDialog.vue'
+import CategoryEditDialog from './ui/CategoryEditDialog.vue'
+import CategoryRow from './ui/CategoryRow.vue'
+import SystemCategories from './ui/SystemCategories.vue'
+
+/**
+ * Учёт › «Категории» (Settings-1 · 4): search and «+ Категория», then the
+ * categories by block (expenses, income, savings) and the app's own below,
+ * locked. The change itself is the backend's: system categories are refused there.
+ */
 const { t } = useI18n()
-const queryClient = useQueryClient()
-
 const categories = useCategories()
+const actions = useCategoryActions()
+const { month, totals, currency } = useMonthCategoryTotals()
 
-const sections = computed(() =>
-  CATEGORY_GROUPS.map((group) => ({
-    group,
-    items: (categories.data.value ?? []).filter((category) => category.group === group),
-  })),
+const query = ref('')
+const adding = ref(false)
+const editingKey = ref<string | null>(null)
+const editing = computed(() => (categories.data.value ?? []).find((category) => category.key === editingKey.value) ?? null)
+const editorOpen = computed({
+  get: () => editing.value !== null,
+  set: (open) => {
+    if (!open) editingKey.value = null
+  },
+})
+
+const matches = (category: Category) => categoryLabel(category, t).toLowerCase().includes(query.value.trim().toLowerCase())
+const all = computed(() => (categories.data.value ?? []).filter(matches))
+const blocks = computed(() =>
+  SECTIONS.map((section) => ({
+    ...section,
+    items: section.groups.flatMap((group) => all.value.filter((category) => category.group === group)),
+  })).filter((block) => block.items.length),
 )
-
-const refresh = () => void queryClient.invalidateQueries({ queryKey: ['categories'] })
-
-const update = useMutation({
-  mutationFn: (input: UpdateCategoryInput) => call<Category>('update_category', { input }),
-  onSuccess: () => {
-    refresh()
-  },
-  meta: { success: 'categories.manage.renamed', error: 'settings.saveFailed' },
-})
-
-/** The essential and passive switches: the toast names the flag that changed. */
-function flagMessage(input: UpdateCategoryInput): string {
-  if (input.passive !== null) return input.passive ? t('categories.manage.passiveOn') : t('categories.manage.passiveOff')
-  return input.essential ? t('categories.manage.essentialOn') : t('categories.manage.essentialOff')
-}
-
-const flag = useMutation({
-  mutationFn: (input: UpdateCategoryInput) => call<Category>('update_category', { input }),
-  onSuccess: refresh,
-  meta: {
-    error: 'settings.saveFailed',
-    success: (_data, input) => flagMessage(input as UpdateCategoryInput),
-  },
-})
-
-const archive = useMutation({
-  mutationFn: (category: Category) => call('archive_category', { key: category.key, archived: !category.archived }),
-  onSuccess: refresh,
-  meta: {
-    error: 'settings.saveFailed',
-    success: (_data, category) =>
-      (category as Category).archived ? t('categories.manage.restored') : t('categories.manage.archived'),
-  },
-})
-
-const remove = useMutation({
-  mutationFn: (key: string) => call('delete_category', { key }),
-  onSuccess: () => {
-    refresh()
-  },
-  meta: { success: 'categories.manage.deleted', error: 'categories.manage.deleteFailed' },
-})
-
-/** Rename on blur; an empty name returns to the built-in label. */
-function rename(category: Category, raw: string) {
-  const name = raw.trim()
-  if (name === categoryLabel(category, t)) return
-  update.mutate({ key: category.key, name: name || null, group: category.group, essential: null, passive: null })
-}
-
-const newName = ref('')
-const newGroup = ref<CategoryGroup>('daily')
-const adder = useFormValidation(() => ({ name: required(newName.value) }))
-const create = useMutation({
-  mutationFn: () => call<Category>('create_category', { input: { key: null, name: newName.value.trim(), group: newGroup.value } }),
-  onSuccess: () => {
-    newName.value = ''
-    adder.reset()
-    refresh()
-  },
-  meta: { success: 'categories.manage.created', error: 'settings.saveFailed' },
-})
+const system = computed(() => all.value.filter((category) => category.group === 'service'))
+/** The month is named once, beside the first sum on the screen. */
+const firstWithSum = computed(() => blocks.value.flatMap((block) => block.items).find((category) => totals.value.has(category.key))?.key)
 </script>
 
 <template>
-  <Card>
-    <template #header>
-      <h3 class="heading-card">{{ t('categories.manage.title') }}</h3>
+  <div class="flex flex-col" data-category-manager>
+    <div class="flex items-center gap-2">
+      <div class="relative min-w-0 flex-1 md:w-65 md:flex-none">
+        <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input v-model="query" type="search" class="touch-hit pl-8" :placeholder="t('categories.manage.search')" :aria-label="t('categories.manage.search')" />
+      </div>
+      <div class="md:flex-1" />
+      <Button variant="outline" size="sm" class="touch-hit shrink-0" data-category-add @click="adding = true">
+        <Plus class="size-4" />{{ t('categorySummary.add') }}
+      </Button>
+    </div>
+
+    <p v-if="!all.length" class="py-6 text-center text-sm text-muted-foreground">{{ t('categories.manage.noMatch') }}</p>
+
+    <template v-for="block in blocks" :key="block.id">
+      <p class="pt-2.5 pb-0.5 text-xs font-medium text-muted-foreground">{{ t(block.title) }}</p>
+      <CategoryRow
+        v-for="category in block.items"
+        :key="category.key"
+        :category="category"
+        :actions="actions"
+        :total="totals.get(category.key)"
+        :currency="currency"
+        :month="month"
+        :show-month="category.key === firstWithSum"
+        @edit="editingKey = category.key"
+      />
     </template>
 
-    <div class="grid gap-5">
-      <p class="text-xs text-muted-foreground">{{ t('categories.manage.hint') }}</p>
+    <template v-if="system.length">
+      <p class="pt-2.5 pb-0.5 text-xs font-medium text-muted-foreground">{{ t('categories.manage.systemTitle', { n: system.length }) }}</p>
+      <SystemCategories :items="system" />
+    </template>
 
-      <form class="grid gap-1" @submit.prevent="adder.submit(create.mutate, $event)">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="contents" :data-invalid="adder.invalidAttr('name')">
-            <Input
-              v-model="newName"
-              class="h-9 w-full sm:w-56"
-              :placeholder="t('categories.manage.newName')"
-              :aria-label="t('categories.manage.newName')"
-            />
-          </span>
-          <Select v-model="newGroup" class="h-9 w-44" :aria-label="t('categories.manage.group')">
-            <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
-          </Select>
-          <Button type="submit" size="sm" :disabled="create.isPending.value">
-            <Plus class="size-4" />
-            {{ t('categories.manage.add') }}
-          </Button>
-        </div>
-        <p v-if="adder.firstMessage()" class="text-xs text-destructive" role="alert">{{ adder.firstMessage() }}</p>
-      </form>
-
-      <div v-for="section in sections" :key="section.group" class="grid gap-1 pointer-coarse:gap-2">
-        <p class="text-xs font-medium text-muted-foreground">{{ t(`categoryGroup.${section.group}`) }}</p>
-        <p v-if="section.group === 'daily'" class="text-xs text-muted-foreground">
-          {{ t('categories.manage.essentialHint') }}
-        </p>
-        <p v-else-if="section.group === 'income'" class="text-xs text-muted-foreground">
-          {{ t('categories.manage.passiveHint') }}
-        </p>
-        <div
-          v-for="category in section.items"
-          :key="category.key"
-          class="flex flex-wrap items-center gap-2 md:flex-nowrap"
-          :class="category.archived && 'opacity-60'"
-        >
-          <Input
-            class="h-8 w-full min-w-0 md:w-auto md:flex-1"
-            :model-value="categoryLabel(category, t)"
-            :aria-label="t('categories.manage.name')"
-            @change="(event: Event) => rename(category, (event.target as HTMLInputElement).value)"
-          />
-          <Select
-            class="h-8 min-w-0 flex-1 md:w-40 md:flex-none"
-            :model-value="category.group"
-            :aria-label="t('categories.manage.group')"
-            @update:model-value="(group) => update.mutate({ key: category.key, name: category.name, group: group as CategoryGroup, essential: null, passive: null })"
-          >
-            <SelectItem v-for="group in CATEGORY_GROUPS" :key="group" :value="group">{{ t(`categoryGroup.${group}`) }}</SelectItem>
-          </Select>
-          <Switch
-            v-if="category.group === 'daily'"
-            :model-value="isEssential(category)"
-            :title="t('categories.manage.essential')"
-            :aria-label="t('categories.manage.essential')"
-            :disabled="flag.isPending.value"
-            @update:model-value="(on) => flag.mutate({ key: category.key, name: category.name, group: category.group, essential: on, passive: null })"
-          />
-          <Switch
-            v-if="category.group === 'income'"
-            :model-value="isPassive(category)"
-            :title="t('categories.manage.passive')"
-            :aria-label="t('categories.manage.passive')"
-            :disabled="flag.isPending.value"
-            @update:model-value="(on) => flag.mutate({ key: category.key, name: category.name, group: category.group, essential: null, passive: on })"
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="text-muted-foreground"
-            :title="category.archived ? t('stores.unarchive') : t('stores.archive')"
-            :aria-label="category.archived ? t('stores.unarchive') : t('stores.archive')"
-            @click="archive.mutate(category)"
-          >
-            <component :is="category.archived ? ArchiveRestore : Archive" class="size-4" />
-          </Button>
-          <ConfirmButton :label="t('categories.manage.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(category.key)">
-            <Trash2 class="size-4" />
-          </ConfirmButton>
-        </div>
-      </div>
-    </div>
-  </Card>
+    <CategoryAddDialog v-model:open="adding" :pending="actions.create.isPending.value" @create="(input) => actions.create.mutate(input, { onSuccess: () => (adding = false) })" />
+    <CategoryEditDialog v-model:open="editorOpen" :category="editing" :actions="actions" />
+  </div>
 </template>

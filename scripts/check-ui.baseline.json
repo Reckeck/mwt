@@ -58,9 +58,8 @@
   "long-line src/widgets/analytics-overview/ui/overview-card/OverviewCard.vue": 1,
   "long-line src/widgets/dashboard-budgets/DashboardBudgets.vue": 1,
   "long-line src/widgets/flow-list/FlowList.vue": 1,
-  "long-line src/widgets/notification-settings/NotificationSettings.vue": 1,
   "long-line src/widgets/reminder-list/ui/ReminderRow.vue": 1,
-  "long-line src/widgets/settings-shell/SettingsShell.vue": 3,
+  "long-line src/widgets/settings-shell/SettingsShell.vue": 1,
   "long-line src/widgets/trading-chart/ui/chart-legend/ChartLegend.vue": 1,
   "raw-input src/features/store-edit/ui/StoreGeneralForm.vue": 1,
   "raw-input src/widgets/workflow-editor/ui/NoteCard.vue": 1,
@@ -69,7 +68,6 @@
   "row-repeat-call src/features/transaction-link/TransactionLinkDialog.vue": 1,
   "row-repeat-call src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
   "row-repeat-call src/widgets/analytics-reports/ui/month-table/MonthTable.vue": 3,
-  "row-repeat-call src/widgets/notification-settings/NotificationSettings.vue": 1,
   "row-repeat-call src/widgets/onboarding-checklist/OnboardingChecklist.vue": 1,
   "row-repeat-call src/widgets/workflow-editor/ui/WorkflowHistoryPanel.vue": 1,
   "to-fixed src/features/utility-bill/UtilityBillDialog.vue": 1

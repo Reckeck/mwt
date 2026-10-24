@@ -10,4 +10,6 @@ export interface TabsProps {
   more?: TabDef[]
   /** The «More» button's label when none of `more` is open. */
   moreLabel?: string
+  /** The strip spans the whole width and the tabs share it equally. */
+  fill?: boolean
 }

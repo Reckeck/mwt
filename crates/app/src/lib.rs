@@ -22,7 +22,8 @@ mod vault_writer;
 use commands::{
     AppState, analytics, app_settings, attachments, auth, calc, categories, contacts, enrichment,
     exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, settings,
-    sources, stores, transactions, transactions_bulk, vault_link, vault_recents, workflows,
+    sources, stores, transactions, transactions_bulk, vault_backups, vault_link, vault_recents,
+    workflows,
 };
 use tauri::Manager;
 
@@ -368,8 +369,13 @@ pub fn run() {
             // vault recents
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,
+            vault_recents::restore_recent_vault,
             vault_recents::pick_vault_file,
             // external copy of a vault
+            vault_backups::list_vault_backups,
+            vault_backups::create_vault_backup,
+            vault_backups::restore_vault_backup,
+            vault_backups::reveal_vault_folder,
             vault_link::vault_link_status,
             vault_link::link_vault_external,
             vault_link::unlink_vault_external,
