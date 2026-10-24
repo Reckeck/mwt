@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Drawer, DrawerContent, DrawerTitle } from '@/shared/ui/drawer'
@@ -18,6 +18,9 @@ const tab = defineModel<MobileInspectorTab>('tab', { required: true })
 
 const { t } = useI18n()
 const SNAPS = [0.5, 1]
+const snap = ref<number | string | null>(SNAPS[0])
+/** At half height the lower half of the sheet is off screen: the scroll area ends at the screen's edge. */
+const halfRoom = computed(() => (snap.value === SNAPS[0] ? { marginBottom: 'calc(50dvh - var(--safe-top) - 1.5rem)' } : undefined))
 
 const tabs = computed(() => [
   { value: 'inspector', label: props.nodeSelected ? t('workflow.mobile.node') : t('workflow.mobile.settings') },
@@ -27,13 +30,13 @@ const tabs = computed(() => [
 </script>
 
 <template>
-  <Drawer v-model:open="open" :modal="false" :snap-points="SNAPS" :default-snap-point="SNAPS[0]">
+  <Drawer v-model:open="open" :modal="false" :snap-points="SNAPS" v-model:snap-point="snap">
     <DrawerContent :overlay="false" class="h-[calc(100dvh-var(--safe-top)-1.5rem)] shadow-lg">
       <DrawerTitle class="sr-only">{{ tabs.find((entry) => entry.value === tab)?.label }}</DrawerTitle>
       <div class="px-3 pt-2">
         <Tabs :model-value="tab" :tabs="tabs" @update:model-value="(value) => (tab = value as MobileInspectorTab)" />
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" :style="halfRoom">
         <slot v-if="tab === 'inspector'" name="inspector" />
         <slot v-else-if="tab === 'run'" name="run" />
         <slot v-else name="lesson" />

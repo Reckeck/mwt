@@ -173,7 +173,10 @@ pub use utilities::{
 };
 pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
 pub use where_went::{WHERE_ITEMS, WhereItem, WhereKind, WhereReport, WhereRow};
-pub use workflows::{SavedWorkflow, WorkflowDraft, WorkflowPass, WorkflowTestResult};
+pub use workflows::{
+    ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview, WorkflowPass,
+    WorkflowTestResult,
+};
 pub use worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an

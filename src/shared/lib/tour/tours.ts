@@ -32,12 +32,15 @@ function workflows(own: TourStep[]): TourStep[] {
 /** The node editor: new and saved workflows alike. */
 const WORKFLOW_EDITOR: TourStep[] = [
   { target: 'workflow-canvas', key: 'workflowEditor.canvas', side: 'top' },
+  { target: 'workflow-words', key: 'workflowEditor.words', side: 'bottom' },
+  { target: 'workflow-steps', key: 'workflowEditor.steps', side: 'top' },
   // Only on an empty canvas; skipped once there is a node.
   { target: 'workflow-add-first', key: 'workflowEditor.addFirst', side: 'top' },
   // A phone: the «+» on the canvas instead of Ctrl+Space.
   { target: 'workflow-add-touch', key: 'workflowEditor.addTouch', side: 'left' },
   { target: 'workflow-quick-hint', key: 'workflowEditor.quick', side: 'top' },
   { target: 'workflow-settings', key: 'workflowEditor.inspector', side: 'left' },
+  { target: 'workflow-inspector', key: 'workflowEditor.node', side: 'left' },
   { target: 'workflow-node-flows', key: 'workflowEditor.flows', side: 'left' },
   { target: 'workflow-lesson', key: 'workflowEditor.lesson', side: 'left' },
   { target: 'workflow-tests', key: 'workflowEditor.tests', side: 'left' },
@@ -205,13 +208,11 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'bonuses-list', key: 'bonuses.list', side: 'top' },
     { target: 'bonuses-cashback', key: 'bonuses.cashback', side: 'top' },
   ],
-  automations: planning([
-    { target: 'section-content', key: 'planningAutomations.content', side: 'top' },
-    { target: 'automation-simulate', key: 'planningAutomations.simulate', side: 'bottom' },
-    { target: 'automation-unconfirmed', key: 'planningAutomations.unconfirmed', side: 'bottom' },
-    { target: 'automation-confirm-amount', key: 'planningAutomations.confirmAmount', side: 'left' },
-    { target: 'automation-open-workflow', key: 'planningAutomations.openWorkflow', side: 'left' },
-    { target: 'workflow-template-gallery', key: 'planningAutomations.templates', side: 'top' },
+  automations: workflows([
+    { target: 'automations-create', key: 'automationsMine.create', side: 'bottom' },
+    { target: 'automations-starts', key: 'automationsMine.starts', side: 'top' },
+    { target: 'automations-mine', key: 'automationsMine.list', side: 'top' },
+    { target: 'automations-import', key: 'automationsMine.import', side: 'bottom' },
   ]),
   'automations-sources': planning([
     { target: 'section-content', key: 'planningSources.content', side: 'top' },

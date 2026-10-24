@@ -1906,6 +1906,11 @@ type ExchangeProviderInfo = { provider: ExchangeProvider,
 supported: boolean, };
 
 /**
+ * A wallet an exported workflow mentions: its id there and its name.
+ */
+type ExportedStore = { id: string, name: string, };
+
+/**
  * What a method found, before it gets a timestamp.
  */
 type Extracted = { number: Amount | null, text: string | null, series: Array<SeriesPoint>, 
@@ -2459,6 +2464,11 @@ accounts: Array<ImportAccountRoute>, };
  * What started a sync with an exchange.
  */
 type ImportSource = "auto" | "manual";
+
+/**
+ * A workflow file's text and the wallet swaps (file id to this vault's id).
+ */
+type ImportWorkflowInput = { json: string, stores: { [key: string]: string }, };
 
 /**
  * Imported operations of one exchange wallet, newest first, a page at a time.
@@ -6493,6 +6503,19 @@ type WorkflowEdge = { id: string, from: string, from_port: string, to: string, t
 type WorkflowFromTemplateInput = { template_id: string, params: { [key: string]: string }, };
 
 type WorkflowGraph = { version: number, nodes: Array<WorkflowNode>, edges: Array<WorkflowEdge>, comments: Array<WorkflowComment>, };
+
+/**
+ * What a workflow file holds, before it is added.
+ */
+type WorkflowImportPreview = { name: string, 
+/**
+ * Nodes that are not triggers.
+ */
+steps: number, 
+/**
+ * Wallets of the file that this vault does not have.
+ */
+missing: Array<ExportedStore>, };
 
 type WorkflowNode = { id: string, 
 /**

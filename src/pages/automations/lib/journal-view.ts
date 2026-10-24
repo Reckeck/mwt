@@ -1,13 +1,11 @@
 import { type Names, type RunTone, cardSum, runMoney } from '@/widgets/automation-details'
-import { TIME_CYCLE, dateFormat, formatDayMonthShort } from '@/shared/lib/format'
+import { formatDayMonthShort } from '@/shared/lib/format'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
 /** «25 сен, 10:00». */
 export function journalWhen(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return iso
-  return `${formatDayMonthShort(iso)}, ${dateFormat({ hour: '2-digit', minute: '2-digit', hourCycle: TIME_CYCLE }).format(date)}`
+  return formatDayMonthShort(iso, ', ')
 }
 
 /** «+1 575 $ на Тинькофф», «157,50 $ → Наличные», «уведомление». */

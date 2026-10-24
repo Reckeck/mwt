@@ -57,6 +57,10 @@ export async function launch(binary, port) {
       pending.get(msg.id)(msg)
       pending.delete(msg.id)
     }
+    // «Leave the page?» from an unsaved editor would block the next navigation forever.
+    if (msg.method === 'Page.javascriptDialogOpening') {
+      ws.send(JSON.stringify({ id: ++seq, method: 'Page.handleJavaScriptDialog', params: { accept: true } }))
+    }
   })
   const send = (method, params = {}) =>
     new Promise((done) => {

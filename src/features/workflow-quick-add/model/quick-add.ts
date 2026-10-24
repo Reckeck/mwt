@@ -1,12 +1,18 @@
 import { portAccepts } from '@/shared/lib/workflow'
 
+/** The port the search starts from, for its heading: «Добавлена операция → сумма». */
+export interface QuickAddSource {
+  node: LocalizedText | string
+  port: LocalizedText
+}
+
 /** Where the quick-add was opened: a free spot, a port being wired, or a wire. */
 export type QuickAddContext =
   | { mode: 'free' }
   /** Dragged out of a port and dropped on empty canvas. `side` is that port's side. */
-  | { mode: 'port'; nodeId: string; port: string; type: PortType; side: 'out' | 'in' }
+  | { mode: 'port'; nodeId: string; port: string; type: PortType; side: 'out' | 'in'; source?: QuickAddSource }
   /** Insert into a wire: the new node takes the wire's value and passes one on. */
-  | { mode: 'edge'; edgeId: string; fromType: PortType; toType: PortType }
+  | { mode: 'edge'; edgeId: string; fromType: PortType; toType: PortType; source?: QuickAddSource }
 
 /** A node to add and the port that joins it to the context. */
 export interface QuickAddChoice {
@@ -67,7 +73,7 @@ export function quickExpression(raw: string): QuickAddChoice | null {
       params: { op: 'percent', b: number(percent[1]) },
       port: 'a',
       outPort: 'result',
-      hint: `${percent[1]} %`,
+      hint: `× ${percent[1]} %`,
     }
   }
   const compare = /^(>=|<=|==|!=|>|<)\s*(-?[\d\s.,]+)$/.exec(text)

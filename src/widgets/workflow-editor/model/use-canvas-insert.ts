@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 
 import { portAccepts } from '@/shared/lib/workflow'
-import type { QuickAddChoice, QuickAddContext } from '@/features/workflow-quick-add'
+import type { QuickAddChoice, QuickAddContext, QuickAddSource } from '@/features/workflow-quick-add'
 
 import type { EditorGraph } from './use-editor-graph'
 
@@ -22,6 +22,19 @@ export function useCanvasInsert(editor: EditorGraph) {
   const quick = ref<QuickAddState | null>(null)
   const pointer = ref(editor.centerPoint())
 
+  /** The node and port a wire or a search starts from, named for the search's heading. */
+  function sourceOf(
+    nodeId: string,
+    port: string | null | undefined,
+    side: 'out' | 'in' = 'out',
+  ): QuickAddSource | undefined {
+    const node = editor.nodeById(nodeId)
+    const nodeDef = def(node?.data?.kind ?? '')
+    const portDef = (side === 'out' ? nodeDef?.outputs : nodeDef?.inputs)?.find((entry) => entry.name === port)
+    if (!nodeDef || !portDef) return undefined
+    return { node: node?.data?.label || nodeDef.title, port: portDef.label }
+  }
+
   function openQuickAdd(clientX: number, clientY: number, context: QuickAddContext) {
     const left = Math.min(clientX, window.innerWidth - 340)
     const top = Math.min(clientY, window.innerHeight - 420)
@@ -36,7 +49,13 @@ export function useCanvasInsert(editor: EditorGraph) {
       const fromType = outType(edge.source, edge.sourceHandle)
       const toType = inType(edge.target, edge.targetHandle)
       if (fromType && toType) {
-        openQuickAdd(at.x, at.y, { mode: 'edge', edgeId: edge.id, fromType, toType })
+        openQuickAdd(at.x, at.y, {
+          mode: 'edge',
+          edgeId: edge.id,
+          fromType,
+          toType,
+          source: sourceOf(edge.source, edge.sourceHandle),
+        })
         return
       }
     }
@@ -44,7 +63,15 @@ export function useCanvasInsert(editor: EditorGraph) {
     const selectedDef = def(selected?.data?.kind ?? '')
     const output = selectedDef?.outputs.find((port) => port.name === 'out') ?? selectedDef?.outputs[0]
     if (selected && output) {
-      openQuickAdd(at.x, at.y, { mode: 'port', nodeId: selected.id, port: output.name, type: output.type, side: 'out' })
+      const source = sourceOf(selected.id, output.name)
+      openQuickAdd(at.x, at.y, {
+        mode: 'port',
+        nodeId: selected.id,
+        port: output.name,
+        type: output.type,
+        side: 'out',
+        source,
+      })
       return
     }
     openQuickAdd(at.x, at.y, { mode: 'free' })

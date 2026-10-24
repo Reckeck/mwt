@@ -6,13 +6,19 @@ import { iso, now, uuid } from './state'
 
 const SALARY = '1575'
 
-/** What `pay_yourself_first` builds: the income, its share, the question, the transfer. */
+/** What `pay_yourself_first` builds: the income, its share, the question, the transfer — in two rows, as on Auto-2 · 13. */
 function shareGraph(from: string, to: string): WorkflowGraph {
-  const node = (id: string, kind: string, params: Record<string, unknown>, left: number): WorkflowNode => ({
+  const node = (
+    id: string,
+    kind: string,
+    params: Record<string, unknown>,
+    left: number,
+    top: number,
+  ): WorkflowNode => ({
     id,
     kind,
     params,
-    position: { x: left, y: 120 },
+    position: { x: left, y: top },
     disabled: false,
     label: '',
   })
@@ -26,10 +32,10 @@ function shareGraph(from: string, to: string): WorkflowGraph {
   return {
     version: 3,
     nodes: [
-      node('income', 'trigger.transaction', { tx_kind: 'topup', category: 'salary', store: { store: from } }, 0),
-      node('share', 'logic.math', { op: 'percent', b: '10' }, 260),
-      node('ask', 'action.confirm', { question: 'Отложить 10 % зарплаты на «Наличные»?', timeout_hours: 72 }, 520),
-      node('save', 'action.transaction', { tx_kind: 'transfer', to: { store: to } }, 780),
+      node('income', 'trigger.transaction', { tx_kind: 'topup', category: 'salary', store: { store: from } }, 0, 0),
+      node('share', 'logic.math', { op: 'percent', b: '10' }, 240, 170),
+      node('ask', 'action.confirm', { question: 'Отложить 10 % зарплаты на «Наличные»?', timeout_hours: 72 }, 480, 0),
+      node('save', 'action.transaction', { tx_kind: 'transfer', to: { store: to } }, 480, 170),
     ],
     edges: [
       edge('income', 'amount', 'share', 'a'),

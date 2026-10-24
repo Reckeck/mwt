@@ -1981,6 +1981,14 @@ pub struct WorkflowFromTemplateInput {
     pub params: std::collections::BTreeMap<String, String>,
 }
 
+/// A workflow file's text and the wallet swaps (file id to this vault's id).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ImportWorkflowInput {
+    pub json: String,
+    #[serde(default)]
+    pub stores: std::collections::HashMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetWorkflowActiveInput {
     pub id: String,

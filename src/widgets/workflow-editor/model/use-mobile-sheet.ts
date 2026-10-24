@@ -5,7 +5,7 @@ import type { EditorGraph } from './use-editor-graph'
 
 /**
  * When the phone's sheet opens by itself: a tapped node shows its inspector,
- * a finished check shows its report. Closing it is the user's.
+ * «Подробнее» on the run card shows the report. Closing it is the user's.
  */
 /** Time for a new node to be measured and the canvas's first fit to end. */
 const SETTLE_MS = 350
@@ -42,9 +42,9 @@ export function useMobileSheet(editor: EditorGraph, report: Ref<unknown>, phone:
       settle = setTimeout(() => keepInView(id), SETTLE_MS)
     },
   )
+  // A finished check shows as a card under the steps; the sheet's «Запуск» opens from it.
   watch(report, (next) => {
-    if (phone.value && next) show('run')
-    else if (!next && tab.value === 'run') tab.value = 'inspector'
+    if (!next && tab.value === 'run') tab.value = 'inspector'
   })
 
   return { open, tab, show }

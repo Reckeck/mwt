@@ -66,7 +66,7 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
 </script>
 
 <template>
-  <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0" :data-invalid="props.error ? '' : undefined">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-1.5 [&>*]:min-w-0" :data-param="props.param.name" :data-invalid="props.error ? '' : undefined">
     <div v-if="kind === 'bool'" class="flex items-center justify-between gap-2">
       <Label :for="id" class="min-w-0 [overflow-wrap:anywhere]">{{ localized(props.param.label, locale) }}</Label>
       <Switch :id="id" :model-value="Boolean(current)" @update:model-value="(on) => emit('update', on)" />
@@ -95,14 +95,14 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         v-else-if="kind === 'store'"
         :model-value="storeId"
         :nodes="tree.data.value ?? []"
-        :empty-label="t('workflow.field.anyStore')"
+        :empty-label="t(props.param.required ? 'workflow.field.pickStore' : 'workflow.field.anyStore')"
         @update:model-value="(next) => emit('update', next ? { store: next } : null)"
       />
       <AccountRefPicker
         v-else-if="kind === 'account'"
         :id="id"
         :model-value="(current as AccountRef | null) ?? null"
-        :empty-label="t('workflow.field.notSet')"
+        :empty-label="t(props.param.required ? 'workflow.field.pickStore' : 'workflow.field.notSet')"
         @update:model-value="(next) => emit('update', next)"
       />
       <AssetInput

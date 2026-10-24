@@ -26,6 +26,13 @@ export function useRunReport(
     for (const step of report.value?.run.trace ?? []) map.set(step.node_id, step)
     return map
   })
+  /** The run order of the nodes the last emulation went through, 1…: skipped ones have none. */
+  const orderOf = computed(() => {
+    const map = new Map<string, number>()
+    for (const step of report.value?.run.trace ?? [])
+      if (step.status !== 'skipped' && !map.has(step.node_id)) map.set(step.node_id, map.size + 1)
+    return map
+  })
   watch(report, (value) => {
     const labels = value?.edge_values ?? {}
     editor.edges.value = editor.edges.value.map((edge) => ({ ...edge, label: labels[edge.id] ?? undefined }))
@@ -89,5 +96,5 @@ export function useRunReport(
     })
   }
 
-  return { report, answers, stepOf, emulate, answer, runNow, saveAsTest }
+  return { report, answers, stepOf, orderOf, emulate, answer, runNow, saveAsTest }
 }

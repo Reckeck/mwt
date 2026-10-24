@@ -18,7 +18,7 @@ export function useSelection(editor: EditorGraph) {
   })
   const selectedDef = computed(() => def(selectedNode.value?.data?.kind ?? ''))
 
-  /** Input port → «source node · its output», for the inputs that have a wire. */
+  /** Input port → «source node → its output», for the inputs that have a wire. */
   const wiredFrom = computed<Record<string, string>>(() => {
     const node = selectedNode.value
     if (!node) return {}
@@ -29,7 +29,7 @@ export function useSelection(editor: EditorGraph) {
       const title =
         editor.nodeById(edge.source)?.data?.label ||
         (sourceDef ? localized(sourceDef.title, locale.value) : edge.source)
-      out[edge.targetHandle ?? ''] = port ? `${title} · ${localized(port.label, locale.value)}` : title
+      out[edge.targetHandle ?? ''] = port ? `${title} → ${localized(port.label, locale.value).toLowerCase()}` : title
     }
     return out
   })
@@ -74,6 +74,35 @@ export function useSelection(editor: EditorGraph) {
     return runsAfter(edges, (id) => def(editor.kindOf(id)), node.id).map(nodeTitle)
   })
 
+  /**
+   * «Выполнится: после «Ждать подтверждения» → да, когда готова «Сумма»»: the
+   * nodes it runs after (by a flow wire, else by data) and the inputs it waits for.
+   */
+  const runsWhen = computed(() => {
+    const node = selectedNode.value
+    const nodeDef = selectedDef.value
+    if (!node || !nodeDef) return null
+    const flowIn = editor.edges.value.filter(
+      (edge) =>
+        edge.target === node.id &&
+        nodeDef.inputs.some((port) => port.type === 'flow' && port.name === edge.targetHandle),
+    )
+    const after = flowIn.map((edge) => {
+      const outputs = def(editor.kindOf(edge.source))?.outputs.filter((port) => port.type === 'flow') ?? []
+      const port = outputs.length > 1 ? outputs.find((entry) => entry.name === edge.sourceHandle) : undefined
+      return `«${nodeTitle(edge.source)}»${port ? ` → ${localized(port.label, locale.value).toLowerCase()}` : ''}`
+    })
+    const ready = nodeDef.inputs
+      .filter(
+        (port) =>
+          port.type !== 'flow' &&
+          editor.edges.value.some((edge) => edge.target === node.id && edge.targetHandle === port.name),
+      )
+      .map((port) => `«${localized(port.label, locale.value)}»`)
+    const names = after.length ? after : dataAfter.value.map((name) => `«${name}»`)
+    return names.length || ready.length ? { after: names, ready } : null
+  })
+
   function setParam(param: string, value: unknown) {
     const node = selectedNode.value
     if (node) editor.patchNode(node.id, (data) => ({ ...data, params: { ...data.params, [param]: value } }))
@@ -89,5 +118,5 @@ export function useSelection(editor: EditorGraph) {
     if (node) editor.unwire(node.id, port)
   }
 
-  return { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, setLabel, unwire }
+  return { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, runsWhen, setParam, setLabel, unwire }
 }

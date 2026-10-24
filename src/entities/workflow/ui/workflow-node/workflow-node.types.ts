@@ -6,8 +6,14 @@ export interface WorkflowNodeData {
   disabled: boolean
   /** Errors and warnings pinned to this node. */
   issues: GraphIssue[]
-  /** A line about its fields, e.g. «каждый месяц, 10-е, 09:00». */
+  /** Its value in words, e.g. «сумма × 10 %», «Перевод → Наличные». */
   summary: string
+  /** What keeps the scheme off, over the card in red: «заполните «Куда»»; empty when nothing does. */
+  problem: string
+  /** Wired ports, «in:a» / «out:result»: only these show until the node is selected or hovered. */
+  linked: string[]
   /** Last emulation: this node's step. */
   step: TraceStep | null
+  /** Last emulation: this node's place in the run, 1…; `null` when it was skipped or not reached. */
+  order: number | null
 }

@@ -2,7 +2,7 @@
 //! firing their triggers, the confirmation queue, variables, the journal, and
 //! the vault lookups the executor (`workflow::exec`) runs on.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Not;
 
 use chrono::{Datelike, Duration};
@@ -155,6 +155,63 @@ struct ExportedWorkflow {
     #[serde(default)]
     description: String,
     graph: serde_json::Value,
+    /// The wallets the graph mentions, by the id it holds them under.
+    #[serde(default)]
+    stores: Vec<ExportedStore>,
+}
+
+/// A wallet an exported workflow mentions: its id there and its name.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ExportedStore {
+    pub id: String,
+    pub name: String,
+}
+
+/// What a workflow file holds, before it is added.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct WorkflowImportPreview {
+    pub name: String,
+    /// Nodes that are not triggers.
+    pub steps: u32,
+    /// Wallets of the file that this vault does not have.
+    pub missing: Vec<ExportedStore>,
+}
+
+/// Every string in the value, nested ones included, in document order.
+fn collect_strings<'a>(value: &'a serde_json::Value, out: &mut Vec<&'a str>) {
+    match value {
+        serde_json::Value::String(text) => out.push(text),
+        serde_json::Value::Array(items) => items.iter().for_each(|item| collect_strings(item, out)),
+        serde_json::Value::Object(map) => map.values().for_each(|item| collect_strings(item, out)),
+        _ => {}
+    }
+}
+
+/// Swap every string equal to a key of `map` for its value, at any depth.
+fn replace_strings(value: &mut serde_json::Value, map: &HashMap<String, String>) {
+    match value {
+        serde_json::Value::String(text) => {
+            if let Some(new) = map.get(text.as_str()) {
+                *text = new.clone();
+            }
+        }
+        serde_json::Value::Array(items) => {
+            items.iter_mut().for_each(|item| replace_strings(item, map))
+        }
+        serde_json::Value::Object(map_) => map_
+            .values_mut()
+            .for_each(|item| replace_strings(item, map)),
+        _ => {}
+    }
+}
+
+fn parse_export(json: &str) -> Result<ExportedWorkflow> {
+    let exported: ExportedWorkflow = serde_json::from_str(json)
+        .map_err(|err| Error::InvalidInput(format!("not a workflow file: {err}")))?;
+    if exported.format != EXPORT_FORMAT {
+        return Err(Error::InvalidInput("not a workflow file".into()));
+    }
+    Ok(exported)
 }
 
 fn trigger_label(kind: &str, detail: &str) -> String {
@@ -750,23 +807,71 @@ impl UnlockedVault {
     pub fn export_workflow(&self, id: &str) -> Result<String> {
         let workflow = self.workflow(id)?;
         let graph: serde_json::Value = serde_json::from_str(&workflow.graph).unwrap_or_default();
+        let mut strings = Vec::new();
+        collect_strings(&graph, &mut strings);
+        let mut seen = HashSet::new();
+        let stores = strings
+            .into_iter()
+            .filter(|text| seen.insert(*text))
+            .filter_map(|text| self.find_store(text))
+            .map(|store| ExportedStore {
+                id: store.id.clone(),
+                name: store.name.clone(),
+            })
+            .collect();
         serde_json::to_string_pretty(&ExportedWorkflow {
             format: EXPORT_FORMAT.into(),
             version: 1,
             name: workflow.name,
             description: workflow.description,
             graph,
+            stores,
         })
         .map_err(|err| Error::InvalidInput(err.to_string()))
     }
 
+    /// What a workflow file holds: its name, steps and the wallets this vault lacks.
+    pub fn preview_workflow_import(&self, json: &str) -> Result<WorkflowImportPreview> {
+        let exported = parse_export(json)?;
+        let steps = exported
+            .graph
+            .get("nodes")
+            .and_then(|nodes| nodes.as_array())
+            .map_or(0, |nodes| {
+                nodes
+                    .iter()
+                    .filter(|node| {
+                        node.get("kind")
+                            .and_then(|kind| kind.as_str())
+                            .is_none_or(|kind| !kind.starts_with("trigger."))
+                    })
+                    .count()
+            }) as u32;
+        let missing = exported
+            .stores
+            .into_iter()
+            .filter(|store| self.find_store(&store.id).is_none())
+            .collect();
+        Ok(WorkflowImportPreview {
+            name: exported.name,
+            steps,
+            missing,
+        })
+    }
+
     /// Add an exported workflow, switched off: it is checked before it runs.
-    pub fn import_workflow(&mut self, json: &str, now: i64) -> Result<SavedWorkflow> {
-        let exported: ExportedWorkflow = serde_json::from_str(json)
-            .map_err(|err| Error::InvalidInput(format!("not a workflow file: {err}")))?;
-        if exported.format != EXPORT_FORMAT {
-            return Err(Error::InvalidInput("not a workflow file".into()));
+    /// `stores` swaps wallet ids of the file for wallets of this vault.
+    pub fn import_workflow(
+        &mut self,
+        json: &str,
+        stores: &HashMap<String, String>,
+        now: i64,
+    ) -> Result<SavedWorkflow> {
+        let mut exported = parse_export(json)?;
+        if let Some(unknown) = stores.values().find(|id| self.find_store(id).is_none()) {
+            return Err(Error::InvalidInput(format!("unknown wallet {unknown}")));
         }
+        replace_strings(&mut exported.graph, stores);
         let draft = WorkflowDraft {
             name: exported.name,
             description: exported.description,

@@ -49,7 +49,7 @@ watch(
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="max-w-2xl text-sm text-muted-foreground">{{ t('workflow.list.intro') }}</p>
       <div class="flex gap-2">
-        <Button variant="outline" @click="importOpen = true">
+        <Button variant="outline" data-workflow-import @click="importOpen = true">
           <FileInput class="size-4" />
           {{ t('workflow.list.import') }}
         </Button>

@@ -39,19 +39,23 @@ interface Row {
   def: NodeDef
 }
 
+/** An expression is the first row; the nodes that fit follow it, as with no search. */
+const expression = computed(() => quickExpression(query.value))
+const search = computed(() => (expression.value ? '' : query.value))
+
 const rows = computed<Row[]>(() => {
   const out: Row[] = []
-  const expression = quickExpression(query.value)
-  const expressionDef = expression ? def(expression.kind) : undefined
-  if (expression && expressionDef) {
+  const typed = expression.value
+  const expressionDef = typed ? def(typed.kind) : undefined
+  if (typed && expressionDef) {
     // An expression that does not fit here is still added, just not wired.
     const fit = fitFor(expressionDef, props.context)
-    const choice = fit ? { ...expression, port: fit.port ?? expression.port, outPort: fit.outPort ?? expression.outPort } : { ...expression, port: null }
+    const choice = fit ? { ...typed, port: fit.port ?? typed.port, outPort: fit.outPort ?? typed.outPort } : { ...typed, port: null }
     out.push({ choice, def: expressionDef })
   }
   const scored = catalog.value
-    .filter((entry) => !props.simple || !entry.advanced || query.value.trim())
-    .map((entry) => ({ entry, score: matchScore(entry, query.value), fit: fitFor(entry, props.context) }))
+    .filter((entry) => !props.simple || !entry.advanced || search.value.trim())
+    .map((entry) => ({ entry, score: matchScore(entry, search.value), fit: fitFor(entry, props.context) }))
     .filter((item) => item.score > 0 && item.fit)
     .sort(
       (left, right) =>
@@ -64,6 +68,20 @@ const rows = computed<Row[]>(() => {
   return out.slice(0, 40)
 })
 
+/** Groups in the order an insert wants them (Auto-2 · 14); a search is one list, best first. */
+const GROUP_ORDER: NodeGroup[] = ['action', 'logic', 'data', ...NODE_GROUPS.filter((group) => !['action', 'logic', 'data'].includes(group))]
+const sections = computed(() => {
+  const indexed = rows.value.map((row, index) => ({ row, index }))
+  if (search.value.trim()) return [{ group: null as NodeGroup | null, items: indexed }]
+  const found = indexed.filter((item) => item.row.choice.hint)
+  const grouped = GROUP_ORDER.map((group) => ({
+    group: group as NodeGroup | null,
+    items: indexed.filter((item) => !item.row.choice.hint && item.row.def.group === group),
+  }))
+  return [{ group: null, items: found }, ...grouped].filter((section) => section.items.length)
+})
+const flat = computed(() => sections.value.flatMap((section) => section.items.map((item) => item.row)))
+
 watch(query, () => {
   active.value = 0
 })
@@ -74,11 +92,11 @@ function pick(row: Row | undefined) {
 
 function onKey(event: KeyboardEvent) {
   if (event.key === 'ArrowDown') {
-    active.value = Math.min(active.value + 1, rows.value.length - 1)
+    active.value = Math.min(active.value + 1, flat.value.length - 1)
   } else if (event.key === 'ArrowUp') {
     active.value = Math.max(active.value - 1, 0)
   } else if (event.key === 'Enter') {
-    pick(rows.value[active.value])
+    pick(flat.value[active.value])
   } else if (event.key === 'Escape') {
     emit('close')
   } else {
@@ -88,10 +106,15 @@ function onKey(event: KeyboardEvent) {
   void nextTick(() => list.value?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' }))
 }
 
+const text = (value: LocalizedText | string) => (typeof value === 'string' ? value : localized(value, locale.value))
+/** «Вставить в связь «Добавлена операция → сумма»: …» — where the new node will stand. */
 const contextText = computed(() => {
-  if (props.context.mode === 'port') return t(props.context.side === 'out' ? 'workflow.quick.afterPort' : 'workflow.quick.beforePort')
-  if (props.context.mode === 'edge') return t('workflow.quick.intoWire')
-  return t('workflow.quick.free')
+  const ctx = props.context
+  if (ctx.mode === 'free') return t('workflow.quick.free')
+  const wire = ctx.source ? `${text(ctx.source.node)} → ${text(ctx.source.port).toLowerCase()}` : ''
+  if (ctx.mode === 'edge') return wire ? t('workflow.quick.intoWireNamed', { wire }) : t('workflow.quick.intoWire')
+  if (ctx.side === 'out' && wire) return t('workflow.quick.afterPortNamed', { wire })
+  return t(ctx.side === 'out' ? 'workflow.quick.afterPort' : 'workflow.quick.beforePort')
 })
 
 onMounted(() => {
@@ -114,31 +137,36 @@ onMounted(() => {
     :aria-label="contextText"
     @keydown="onKey"
   >
-    <p class="px-1 text-xs text-muted-foreground">{{ contextText }}</p>
     <Input ref="field" v-model="query" :placeholder="t('workflow.quick.placeholder')" :aria-label="t('workflow.quick.placeholder')" />
+    <p v-if="!props.docked" class="px-1 text-xs text-muted-foreground" data-quick-context>{{ contextText }}</p>
     <ul ref="list" :class="props.docked ? 'max-h-[50dvh] overflow-y-auto' : 'max-h-72 overflow-y-auto'">
-      <li v-for="(row, index) in rows" :key="`${row.choice.kind}-${row.choice.hint}`">
-        <Button
-          variant="ghost"
-          size="block"
-          :data-active="index === active"
-          :aria-current="index === active ? 'true' : undefined"
-          :class="cn('flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm', index === active ? 'bg-accent' : 'hover:bg-muted')"
-          @mouseenter="active = index"
-          @click="pick(row)"
-        >
-          <span :class="cn('mt-1.5 size-2 shrink-0 rounded-full', GROUP_COLOR[row.def.group])" />
-          <span class="min-w-0 flex-1">
-            <span class="flex min-w-0 items-center gap-1 font-medium">
-              <Sparkles v-if="row.choice.hint" class="size-3.5 shrink-0 text-primary" />
-              <span class="truncate">
-                {{ row.choice.hint ? `${localized(row.def.title, locale)}: ${row.choice.hint}` : localized(row.def.title, locale) }}
-              </span>
+      <template v-for="section in sections" :key="section.group ?? 'found'">
+        <li v-if="section.group" class="px-2 pt-2 pb-1 text-xs text-muted-foreground">{{ t(`workflow.group.${section.group}`) }}</li>
+        <li v-for="{ row, index } in section.items" :key="`${row.choice.kind}-${row.choice.hint}`">
+          <Button
+            variant="ghost"
+            size="block"
+            :data-active="index === active"
+            :aria-current="index === active ? 'true' : undefined"
+            :title="localized(row.def.description, locale)"
+            :class="
+              cn(
+                'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm max-md:min-h-11',
+                props.docked ? 'py-2.5' : 'py-1.5',
+                index === active ? 'bg-accent' : 'hover:bg-muted',
+              )
+            "
+            @mouseenter="active = index"
+            @click="pick(row)"
+          >
+            <span :class="cn('size-2 shrink-0 rounded-full', GROUP_COLOR[row.def.group])" />
+            <Sparkles v-if="row.choice.hint" class="size-3.5 shrink-0 text-primary" />
+            <span class="min-w-0 flex-1 truncate">
+              {{ row.choice.hint ? `${localized(row.def.title, locale)}: ${row.choice.hint}` : localized(row.def.title, locale) }}
             </span>
-            <span class="block truncate text-xs text-muted-foreground">{{ localized(row.def.description, locale) }}</span>
-          </span>
-        </Button>
-      </li>
+          </Button>
+        </li>
+      </template>
       <li v-if="!rows.length" class="px-2 py-3 text-sm text-muted-foreground">{{ t('workflow.quick.none') }}</li>
     </ul>
     <p v-if="!props.docked" class="px-1 text-xs text-muted-foreground">{{ t('workflow.quick.tips') }}</p>
