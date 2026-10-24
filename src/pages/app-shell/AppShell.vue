@@ -75,7 +75,7 @@ for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void ro
 const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)
 
 const phone = useIsPhone()
-/** A full-screen route (the workflow editor) has the phone to itself. */
+/** A full-screen route (the workflow editor) has the phone to itself; on a desktop it fills the window without scrolling. */
 const fullscreen = computed(() => phone.value && route.meta.fullscreen === true)
 /** Typing: the keyboard is up, the bottom bar would only sit on top of it. */
 const typing = ref(false)
@@ -119,7 +119,7 @@ const pageClass = computed(() => {
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
              (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->
-        <div class="mx-auto w-full" :class="fullscreen ? 'h-full' : 'min-h-full max-w-page'">
+        <div class="mx-auto w-full" :class="route.meta.fullscreen ? 'h-full' : 'min-h-full max-w-page'">
           <RouterView :key="pageKey" />
         </div>
       </div>

@@ -202,12 +202,13 @@ export function formatDayMonth(iso: string | null | undefined): string {
   return dateFormat({ day: 'numeric', month: 'long' }).format(date)
 }
 
-/** «20 окт»: a day in a short list, without the dot of the abbreviation. */
-export function formatDayMonthShort(iso: string | null | undefined): string {
+/** «20 окт»: a day in a short list, without the dot; with `separator` the time follows: «20 окт 10:00». */
+export function formatDayMonthShort(iso: string | null | undefined, separator?: string): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return dateFormat({ day: 'numeric', month: 'short' }).format(date).replace('.', '')
+  const day = dateFormat({ day: 'numeric', month: 'short' }).format(date).replace('.', '')
+  return separator === undefined ? day : `${day}${separator}${clock(date)}`
 }
 
 export function formatDate(iso: string | null | undefined): string {
@@ -239,6 +240,7 @@ export function formatWeekday(date: string | Date, style: 'narrow' | 'short' | '
 
 /** Times read 0–23 in every language: no AM/PM, also in English. */
 export const TIME_CYCLE = 'h23' as const
+const clock = (date: Date) => dateFormat({ hour: '2-digit', minute: '2-digit', hourCycle: TIME_CYCLE }).format(date)
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -260,7 +262,7 @@ export function formatAsOf(iso: string | null | undefined): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
   if (date.toDateString() !== new Date().toDateString()) return formatDateTime(iso)
-  return dateFormat({ hour: '2-digit', minute: '2-digit', hourCycle: TIME_CYCLE }).format(date)
+  return clock(date)
 }
 
 export function useMoney() {

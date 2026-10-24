@@ -59,10 +59,10 @@ const varsOpen = computed({
           <span v-if="!phone">{{ t('workflow.tab.vars') }}</span>
         </Button>
         <template v-if="onMine">
-          <Button v-if="mine.data.value?.length && !phone" variant="outline" size="sm" data-mine-import @click="importOpen = true">
+          <Button v-if="mine.data.value?.length && !phone" variant="outline" size="sm" data-mine-import data-tour="automations-import" @click="importOpen = true">
             {{ t('automations.mine.import') }}
           </Button>
-          <Button size="sm" :aria-label="t('automations.mine.create')" data-mine-create @click="create">
+          <Button size="sm" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
             <Plus class="size-4" />
             <span v-if="!phone">{{ t('automations.mine.create') }}</span>
           </Button>

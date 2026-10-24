@@ -1,9 +1,10 @@
 /** The workflow commands. */
 
-import { emptyGraph, parseGraph } from '@/shared/lib/workflow'
+import { parseGraph } from '@/shared/lib/workflow'
 import { fakeRun, keepQuestion, validate } from './engine'
 import { catalog, find, now, queue, runs, sameScope, save, uuid, vars, waits, workflows } from './state'
 import { fromTemplate, templates } from './templates'
+import { exportWorkflow, importWorkflow, previewImport } from './transfer'
 
 /** Answer a workflow command, or `undefined` when `cmd` is not one. */
 export function mockWorkflows(cmd: string, args: Record<string, unknown> | undefined): unknown {
@@ -103,36 +104,16 @@ export function mockWorkflows(cmd: string, args: Record<string, unknown> | undef
       if (index >= 0) vars.splice(index, 1)
       return null
     }
-    case 'export_workflow': {
-      const workflow = find(String(args?.id))
-      return JSON.stringify(
-        {
-          format: 'trade-app-workflow',
-          version: 1,
-          name: workflow.name,
-          description: workflow.description,
-          graph: JSON.parse(workflow.graph || JSON.stringify(emptyGraph())),
-        },
-        null,
-        2,
-      )
-    }
+    case 'export_workflow':
+      return exportWorkflow(String(args?.id))
     case 'workflow_templates':
       return templates
     case 'workflow_from_template':
       return fromTemplate(input as unknown as WorkflowFromTemplateInput)
-    case 'import_workflow': {
-      const file = JSON.parse(String(args?.json ?? '{}')) as Record<string, unknown>
-      if (file.format !== 'trade-app-workflow') throw { code: 'INVALID_INPUT', message: 'not a workflow file' }
-      return save(null, {
-        name: String(file.name ?? ''),
-        description: String(file.description ?? ''),
-        active: false,
-        graph: JSON.stringify(file.graph ?? emptyGraph()),
-        react_to_workflows: false,
-        max_amount: null,
-      })
-    }
+    case 'preview_workflow_import':
+      return previewImport(args?.json)
+    case 'import_workflow':
+      return importWorkflow(input)
     case 'save_workflow_test': {
       const workflow = find(String(input?.workflow_id))
       const test = { ...(input?.test as WorkflowTest) }

@@ -33,7 +33,7 @@ const props = withDefaults(
 const emit = defineEmits<{ lesson: [id: string] }>()
 const help = defineModel<boolean>('help', { required: true })
 
-const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, setParam, setLabel, unwire } = useSelection(props.editor)
+const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, runsWhen, setParam, setLabel, unwire } = useSelection(props.editor)
 const { lesson, workflow, description, maxAmount, react, dirty } = props.doc
 const { report } = props.run
 
@@ -63,6 +63,7 @@ function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
         :wired-from="wiredFrom"
         :flows="flowLinks"
         :data-after="dataAfter"
+        :runs-when="runsWhen"
         :issues="props.issuesOf(selectedNode.id)"
         @param="setParam"
         @label="setLabel"

@@ -8,12 +8,14 @@ use tauri::{AppHandle, Emitter, State};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
     AnswerWorkflowWaitInput, DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput,
-    ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput, SaveWorkflowDraftInput,
-    SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput, SetWorkflowVarInput,
-    ValidateWorkflowInput, WorkflowFromTemplateInput,
+    ImportWorkflowInput, ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput,
+    SaveWorkflowDraftInput, SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput,
+    SetWorkflowVarInput, ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{SavedWorkflow, UnlockedVault, WorkflowTestResult};
+use trade_core::service::{
+    SavedWorkflow, UnlockedVault, WorkflowImportPreview, WorkflowTestResult,
+};
 use trade_core::workflow::templates::WorkflowTemplateInfo;
 use trade_core::workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
@@ -258,10 +260,21 @@ pub async fn export_workflow(id: String, state: State<'_, AppState>) -> Result<S
 /// Add a workflow from a file's text, switched off.
 #[tauri::command]
 pub async fn import_workflow(
-    json: String,
+    input: ImportWorkflowInput,
     state: State<'_, AppState>,
 ) -> Result<SavedWorkflow, String> {
-    with_vault_mut(&state, |vault| vault.import_workflow(&json, now_secs()))
+    with_vault_mut(&state, |vault| {
+        vault.import_workflow(&input.json, &input.stores, now_secs())
+    })
+}
+
+/// What a workflow file holds and which of its wallets are missing here.
+#[tauri::command]
+pub async fn preview_workflow_import(
+    json: String,
+    state: State<'_, AppState>,
+) -> Result<WorkflowImportPreview, String> {
+    with_vault(&state, |vault| vault.preview_workflow_import(&json))
 }
 
 /// The gallery of ready-made workflows with defaults from the vault.

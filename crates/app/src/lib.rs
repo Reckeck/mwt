@@ -275,6 +275,7 @@ pub fn run() {
             workflows::delete_workflow_var,
             workflows::export_workflow,
             workflows::import_workflow,
+            workflows::preview_workflow_import,
             workflows::workflow_templates,
             workflows::workflow_from_template,
             workflows::save_workflow_test,

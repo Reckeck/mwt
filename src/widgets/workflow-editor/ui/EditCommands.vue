@@ -10,7 +10,8 @@ import type { EditCommandSet } from '../model/edit-commands'
  * Undo, redo, duplicate, copy, paste as buttons: the shortcuts alone left them
  * out of reach of a mouse-only user and of a touch screen (rule 16).
  */
-const props = defineProps<{ commands: EditCommandSet }>()
+/** `compact`: undo and redo only; the rest lives in the toolbar's «⋯». */
+const props = defineProps<{ commands: EditCommandSet; compact?: boolean }>()
 const { t } = useI18n()
 </script>
 
@@ -37,6 +38,7 @@ const { t } = useI18n()
     >
       <Redo2 />
     </Button>
+    <template v-if="!props.compact">
     <Button
       variant="ghost"
       size="icon-sm"
@@ -64,5 +66,6 @@ const { t } = useI18n()
     >
       <ClipboardPaste />
     </Button>
+    </template>
   </fieldset>
 </template>

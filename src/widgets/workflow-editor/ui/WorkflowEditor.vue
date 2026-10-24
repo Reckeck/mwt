@@ -1,18 +1,16 @@
 <script setup lang="ts">
 // check-ui-ignore grid-fixed-track: the canvas + side panel grid is the desktop branch; a phone gets MobileInspector
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocalStorage } from '@vueuse/core'
 
-import { type WorkflowNodeData, useNodeCatalog } from '@/entities/workflow'
+import { useNodeCatalog } from '@/entities/workflow'
 import { useWorkflowActions } from '@/features/workflow-manage'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { nodeSummary } from '../model/fields'
-import type { EditorNode } from '../model/flow'
 import { useCanvasInsert } from '../model/use-canvas-insert'
 import { useEditorGraph } from '../model/use-editor-graph'
 import { useEditorHotkeys } from '../model/use-editor-hotkeys'
@@ -21,9 +19,11 @@ import { useGraphValidation } from '../model/use-graph-validation'
 import { triggerChoices } from '../model/trigger-choices'
 import { useRedundantFlows } from '../model/use-redundant-flows'
 import { useRunReport } from '../model/use-run-report'
+import { useSchemeWords } from '../model/use-scheme-words'
 import { useWorkflowDocument } from '../model/use-workflow-document'
 import type { WorkflowEditorProps } from '../workflow-editor.types'
 import { useMobileSheet } from '../model/use-mobile-sheet'
+import { useNodeDisplay } from '../model/use-node-display'
 import DraftBanner from './DraftBanner.vue'
 import EditorCanvas from './EditorCanvas.vue'
 import EditorSidePanel from './EditorSidePanel.vue'
@@ -32,15 +32,17 @@ import EditorToolbar from './EditorToolbar.vue'
 import HotkeysHelp from './HotkeysHelp.vue'
 import MobileEditorBar from './MobileEditorBar.vue'
 import MobileInspector from './MobileInspector.vue'
+import MobileRunCard from './MobileRunCard.vue'
+import MobileSteps from './MobileSteps.vue'
 import QuickAddHost from './QuickAddHost.vue'
 import RunPanel from './RunPanel.vue'
+import SchemeWords from './SchemeWords.vue'
 
 /**
- * The node editor: the canvas and the inspector on the right. Nodes are
- * added only with Ctrl+Space (or Shift+A): a search of the nodes that fit where
- * the cursor is; the emulation
- * shows the run step by step and the value on every wire. The logic lives in
- * `model/use-*`; this file wires it to the layout.
+ * The node editor: the canvas and the inspector on the right; a phone gets the
+ * steps as a list, the canvas a tap away. Nodes are added with Ctrl+Space (or
+ * Shift+A); the emulation shows the run step by step and the value on every
+ * wire. The logic lives in `model/use-*`; this file wires it to the layout.
  */
 const props = withDefaults(defineProps<WorkflowEditorProps>(), { workflowId: null, template: null, lesson: null, locked: false })
 const emit = defineEmits<{ saved: [id: string]; lesson: [id: string] }>()
@@ -79,6 +81,8 @@ const panel = computed(() => ({
   base: settings.baseCurrency,
 }))
 
+const scheme = useSchemeWords(editor)
+const display = useNodeDisplay(editor, issuesOf, scheme, run)
 const triggers = computed(() => triggerChoices(nodes.value, editor.def, locale.value))
 
 const helpOpen = ref(false)
@@ -95,12 +99,17 @@ const save = () => (props.locked ? undefined : doc.save((id) => emit('saved', id
 /** A phone: one row on top, the canvas on the whole screen, the panels in a sheet. */
 const phone = useIsPhone()
 const sheet = useMobileSheet(editor, report, phone)
+/** The phone shows the steps; «Холст» swaps in the canvas, kept mounted so the selection lives on. */
+const showCanvas = ref(false)
+// Hidden, the nodes had no size: fit once the canvas has been measured.
+watch(showCanvas, (shown) => shown && void nextTick(() => setTimeout(() => flow.fitView({ padding: 0.2 }), 120)))
 const barState = computed(() => ({
   nameError: form.error('name'),
   message: form.firstMessage(),
   canRun: Boolean(props.workflowId),
   canDiscard: dirty.value && !lesson.value,
   dirty: dirty.value,
+  blockers: errors.value.length,
   hasNodes: nodes.value.length > 0,
   emulating: actions.dryRun.isPending.value,
   running: actions.runNow.isPending.value,
@@ -124,19 +133,6 @@ useEditorHotkeys(editorRoot, () => Boolean(quick.value), {
   fit: () => void flow.fitView({ padding: 0.2, duration: 300 }),
   remove: editor.removeSelected,
 })
-
-function display(id: string, data: EditorNode['data']): WorkflowNodeData {
-  const nodeDef = editor.def(data?.kind ?? '')
-  return {
-    def: nodeDef,
-    kind: data?.kind ?? '',
-    label: data?.label ?? '',
-    disabled: data?.disabled ?? false,
-    issues: issuesOf(id),
-    summary: nodeSummary(nodeDef, data?.params ?? {}, locale.value),
-    step: run.stepOf.value.get(id) ?? null,
-  }
-}
 
 /** A lesson is practice: leaving it never asks to save. */
 defineExpose({
@@ -187,6 +183,7 @@ defineExpose({
       @discard="doc.discardEdits"
       @save="(event) => form.submit(save, event)"
     />
+    <SchemeWords v-if="!phone" :parts="scheme.words.value" />
     <DraftBanner
       v-if="doc.storedDraft.value"
       :saved-at="doc.storedDraft.value.saved_at"
@@ -198,7 +195,10 @@ defineExpose({
     <div v-if="hotkeysOpen && !phone" class="rounded-lg border border-border bg-card p-3"><HotkeysHelp /></div>
 
     <template v-if="phone">
-      <EditorCanvas touch :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
+      <MobileSteps v-model:canvas="showCanvas" class="px-4 pt-3" :editor="editor" :scheme="scheme" :issues-of="issuesOf" :order="run.orderOf.value" @add="insert.quickAddCentre">
+        <MobileRunCard v-if="report" :report="report" :answers="run.answers.value" @answer="run.answer" @details="sheet.show('run')" />
+      </MobileSteps>
+      <EditorCanvas v-show="showCanvas" touch :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
       <MobileInspector
         v-model:open="sheet.open.value"
         v-model:tab="sheet.tab.value"
@@ -220,7 +220,7 @@ defineExpose({
         <template #lesson><EditorSidePanel v-model:help="helpOpen" part="lesson" v-bind="panel" @lesson="(id) => emit('lesson', id)" /></template>
       </MobileInspector>
     </template>
-    <div v-else class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_17rem] gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <div v-else class="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_17rem] gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
       <div class="flex min-h-0 flex-col gap-3">
         <EditorCanvas :editor="editor" :insert="insert" :display="display" :empty="doc.loaded.value && !nodes.length" />
         <RunPanel

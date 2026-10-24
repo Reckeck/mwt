@@ -7,8 +7,8 @@ import { WorkflowEditor } from '@/widgets/workflow-editor'
 import { AutomationWorkflowBanner, useAutomationWorkflow } from '@/features/automation-edit'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 
+// «Автоматизации ›» and the name live in the editor's own toolbar (Auto-2 · 13).
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -19,17 +19,6 @@ const lesson = computed(() => (typeof route.query.lesson === 'string' ? route.qu
 const editor = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 const automation = useAutomationWorkflow(() => workflowId.value)
 let leaving = false
-
-/** Back to the list goes through the same «unsaved edits» question as any other way out. */
-const crumbs = computed<PageCrumb[]>(() => [
-  { label: t('nav.workflows'), to: { name: 'automations-workflows' } },
-  // The workflow's own name once it has one, not a generic «Editing».
-  {
-    label:
-      editor.value?.name ||
-      (lesson.value ? t('workflow.crumb.lesson') : workflowId.value ? t('workflow.crumb.edit') : t('workflow.crumb.new')),
-  },
-])
 
 /** A new workflow, once saved, gets its own address. */
 function onSaved(id: string) {
@@ -87,7 +76,6 @@ function throwAway() {
 
 <template>
   <div class="flex h-full min-h-[36rem] flex-col gap-3 @container max-md:min-h-0 max-md:gap-0">
-    <PageHeader class="max-md:hidden" :crumbs="crumbs" />
     <AutomationWorkflowBanner
       v-if="workflowId && automation.isAutomation.value"
       :workflow-id="workflowId"

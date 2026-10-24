@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::{Value, json};
 
 use super::*;
@@ -786,7 +788,10 @@ fn a_workflow_travels_as_a_file() {
         graph(nodes, vec![wire("t", "out", "n", "in")]),
     );
     let file = vault.export_workflow(&workflow.id).unwrap();
-    let imported = vault.import_workflow(&file, now_secs()).unwrap().workflow;
+    let imported = vault
+        .import_workflow(&file, &HashMap::new(), now_secs())
+        .unwrap()
+        .workflow;
     assert_ne!(imported.id, workflow.id);
     assert!(!imported.active);
     assert_eq!(imported.name, "Shared");
@@ -794,7 +799,11 @@ fn a_workflow_travels_as_a_file() {
         Graph::parse(&imported.graph).unwrap(),
         Graph::parse(&workflow.graph).unwrap()
     );
-    assert!(vault.import_workflow("{}", now_secs()).is_err());
+    assert!(
+        vault
+            .import_workflow("{}", &HashMap::new(), now_secs())
+            .is_err()
+    );
 }
 
 #[test]
@@ -2459,4 +2468,99 @@ fn a_refused_run_waits_for_retry_or_skip() {
         }
     );
     assert!(vault.skip_workflow_run(&pass.runs[0].id).is_err());
+}
+
+/// A workflow that pays from `from` and notifies, saved in the vault.
+fn paying_workflow(vault: &mut UnlockedVault, from: &str) -> Workflow {
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node(
+            "n",
+            "action.notify",
+            json!({ "text": "x", "wallets": [from] }),
+        ),
+    ];
+    save(
+        vault,
+        "Pay",
+        graph(nodes, vec![wire("t", "out", "n", "in")]),
+    )
+}
+
+#[test]
+fn an_export_names_the_wallets_the_graph_mentions() {
+    let (_dir, mut vault) = empty_vault();
+    let bank = store(&mut vault, "Sber", StoreKind::Bank, None);
+    let _unused = store(&mut vault, "Other", StoreKind::Crypto, None);
+    let workflow = paying_workflow(&mut vault, &bank);
+    let file: Value = serde_json::from_str(&vault.export_workflow(&workflow.id).unwrap()).unwrap();
+    assert_eq!(file["stores"], json!([{ "id": bank, "name": "Sber" }]));
+}
+
+#[test]
+fn a_preview_finds_the_missing_wallet_and_counts_steps() {
+    let (_dir, mut vault) = empty_vault();
+    let bank = store(&mut vault, "Sber", StoreKind::Bank, None);
+    let workflow = paying_workflow(&mut vault, &bank);
+    let file = vault.export_workflow(&workflow.id).unwrap();
+    let here = vault.preview_workflow_import(&file).unwrap();
+    assert_eq!(here.name, "Pay");
+    assert_eq!(here.steps, 1);
+    assert!(here.missing.is_empty());
+    vault.delete_store(&bank).unwrap();
+    let preview = vault.preview_workflow_import(&file).unwrap();
+    assert_eq!(
+        preview.missing,
+        vec![ExportedStore {
+            id: bank,
+            name: "Sber".into()
+        }]
+    );
+    assert!(vault.preview_workflow_import("{}").is_err());
+}
+
+#[test]
+fn an_import_swaps_a_missing_wallet_for_one_the_user_picks() {
+    let (_dir, mut vault) = empty_vault();
+    let old = store(&mut vault, "Sber", StoreKind::Bank, None);
+    let mine = store(&mut vault, "Mine", StoreKind::Crypto, None);
+    let workflow = paying_workflow(&mut vault, &old);
+    let file = vault.export_workflow(&workflow.id).unwrap();
+    let map = HashMap::from([(old.clone(), mine.clone())]);
+    let imported = vault
+        .import_workflow(&file, &map, now_secs())
+        .unwrap()
+        .workflow;
+    assert!(imported.graph.contains(&mine));
+    assert!(!imported.graph.contains(&old));
+    assert!(!imported.active);
+}
+
+#[test]
+fn an_old_file_without_wallets_still_imports() {
+    let (_dir, mut vault) = empty_vault();
+    let file = json!({
+        "format": EXPORT_FORMAT, "version": 1, "name": "Old",
+        "graph": { "version": 1, "nodes": [node("t", "trigger.manual", json!({}))], "edges": [] },
+    })
+    .to_string();
+    let preview = vault.preview_workflow_import(&file).unwrap();
+    assert!(preview.missing.is_empty());
+    assert_eq!(preview.steps, 0);
+    let imported = vault
+        .import_workflow(&file, &HashMap::new(), now_secs())
+        .unwrap();
+    assert_eq!(imported.workflow.name, "Old");
+}
+
+#[test]
+fn a_swap_for_an_unknown_wallet_is_refused() {
+    let (_dir, mut vault) = empty_vault();
+    let old = store(&mut vault, "Sber", StoreKind::Bank, None);
+    let workflow = paying_workflow(&mut vault, &old);
+    let file = vault.export_workflow(&workflow.id).unwrap();
+    let map = HashMap::from([(old, "nope".to_string())]);
+    let before = vault.doc.workflows.len();
+    assert!(vault.import_workflow(&file, &map, now_secs()).is_err());
+    assert_eq!(vault.doc.workflows.len(), before);
 }

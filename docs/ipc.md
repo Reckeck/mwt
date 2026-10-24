@@ -428,8 +428,9 @@ JSON без шифрования — там нет ничего секретно
 | `list_workflow_vars` | — | `Vec<WorkflowVar { scope, name, value (WfValue JSON), updated_at }>` |
 | `set_workflow_var` | `SetWorkflowVarInput { scope, name, value }` | `()` |
 | `delete_workflow_var` | `DeleteWorkflowVarInput { scope, name }` | `()` |
-| `export_workflow` | `id` | `string` — файл `{ format: "trade-app-workflow", version, name, description, graph }` |
-| `import_workflow` | `json` | `SavedWorkflow` — новая схема, выключена |
+| `export_workflow` | `id` | `string` — файл `{ format: "trade-app-workflow", version, name, description, graph, stores }`, где `stores` — кошельки графа `[{ id, name }]` |
+| `preview_workflow_import` | `json` | `WorkflowImportPreview` — `{ name, steps, missing }`: имя, число шагов (без триггеров) и кошельки файла, которых нет в хранилище |
+| `import_workflow` | `input: ImportWorkflowInput` (`json`, `stores` — замены id файла на id своего кошелька) | `SavedWorkflow` — новая схема, выключена |
 | `workflow_templates` | — | `Vec<WorkflowTemplateInfo { id, fields: Vec<TemplateField { key, kind (store/category/number/currency/budget/weekday/day), required, default }>, moves_money }>` — галерея шаблонов, умолчания из vault (доля накоплений, валюта бюджета) |
 | `workflow_from_template` | `WorkflowFromTemplateInput { template_id, params: { ключ поля: значение } }` | `SavedWorkflow` — готовая схема, включена; переводы денег только после «Спросить» |
 | `save_workflow_test` | `SaveWorkflowTestInput { workflow_id, test: WorkflowTest { id (пусто — новая), name, trigger_node?, at?, expect: TestExpect { outcome, transactions?, queued?, notices? } } }` | `Workflow` |

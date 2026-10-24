@@ -37,8 +37,6 @@ const { t } = useI18n()
 const { flow, nodes, edges } = props.editor
 const spacePan = useSpacePan({ get: flow.getViewport, set: (next) => void flow.setViewport(next) })
 
-/** A small graph is seen whole: the mini-map would only cover part of it. */
-const MINIMAP_FROM_NODES = 6
 
 /** A double or right click on the empty canvas opens the node search right there. */
 function addHere(event: MouseEvent) {
@@ -92,7 +90,7 @@ function onCanvasDblClick(event: MouseEvent) {
       </template>
       <Background :gap="20" />
       <Controls :show-interactive="false" />
-      <MiniMap v-if="!props.touch && nodes.length >= MINIMAP_FROM_NODES" pannable zoomable />
+      <MiniMap v-if="!props.touch && nodes.length" :width="120" :height="64" pannable zoomable />
     </VueFlow>
     <div
       v-if="empty"
@@ -117,7 +115,8 @@ function onCanvasDblClick(event: MouseEvent) {
       v-if="!props.touch"
       data-tour="workflow-quick-hint"
       class="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-md bg-background/80 px-2 py-1 text-xs text-muted-foreground">
-      <Kbd>Ctrl</Kbd>+<Kbd>Space</Kbd>
+      {{ t('workflow.canvas.addHintDouble') }}
+      <Kbd>Ctrl Space</Kbd>
       {{ t('workflow.canvas.addHint') }}
     </p>
   </section>

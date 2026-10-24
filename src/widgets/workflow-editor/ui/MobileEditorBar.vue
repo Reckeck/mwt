@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -24,7 +24,10 @@ import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
+import { pluralForm } from '@/shared/lib/format'
+
 import type { EditCommandSet } from '../model/edit-commands'
+import { activeStatus } from '../model/node-problem'
 
 /**
  * The phone editor's one row: back, the name (a tap renames it and switches
@@ -37,6 +40,8 @@ const props = defineProps<{
   canRun: boolean
   canDiscard: boolean
   dirty: boolean
+  /** Errors that keep the scheme off: the switch is locked until they are fixed. */
+  blockers: number
   hasNodes: boolean
   emulating: boolean
   running: boolean
@@ -57,7 +62,9 @@ const name = defineModel<string>('name', { required: true })
 const active = defineModel<boolean>('active', { required: true })
 const simple = defineModel<boolean>('simple', { required: true })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const status = computed(() => activeStatus(active.value, props.blockers, t, pluralForm(props.blockers, locale.value)))
+const blocked = computed(() => !active.value && props.blockers > 0)
 const router = useRouter()
 const renameOpen = ref(false)
 
@@ -79,7 +86,7 @@ function back() {
       <span class="w-full truncate text-sm font-medium" :class="props.nameError && 'text-destructive'">
         {{ name || t('workflow.name') }}
       </span>
-      <span class="text-xs text-muted-foreground">{{ active ? t('workflow.active') : t('workflow.inactive') }}</span>
+      <span class="text-xs" :class="blocked ? 'text-warning' : 'text-muted-foreground'">{{ status }}</span>
     </Button>
     <Button
       variant="ghost"
@@ -147,8 +154,8 @@ function back() {
         <p v-if="props.nameError" class="text-xs text-destructive">{{ props.nameError }}</p>
       </div>
       <label for="workflow-active-mobile" class="flex items-center justify-between gap-3 text-sm" data-tour="workflow-active">
-        {{ active ? t('workflow.active') : t('workflow.inactive') }}
-        <Switch id="workflow-active-mobile" v-model="active" />
+        <span :class="blocked && 'text-warning'">{{ status }}</span>
+        <Switch id="workflow-active-mobile" v-model="active" :disabled="blocked" />
       </label>
       <label for="workflow-simple-mobile" class="flex items-center justify-between gap-3 text-sm">
         {{ t('workflow.simpleMode') }}

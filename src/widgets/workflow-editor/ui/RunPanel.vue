@@ -1,96 +1,76 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Check, ClipboardCheck, MessageCircleQuestion, X } from 'lucide-vue-next'
+import { ClipboardCheck, X } from 'lucide-vue-next'
 import { computed } from 'vue'
 
-import { OutcomeBadge, RunTrace, explainRun } from '@/entities/workflow'
+import { OutcomeBadge, explainRun } from '@/entities/workflow'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { formatDateTime, formatMoney } from '@/shared/lib/format'
-import { txId, txKind, txLegs } from '@/shared/lib/transactions'
-import { WORKFLOW_KEYS, outcomeQuestion } from '@/shared/lib/workflow'
+import { formatDateTime, formatDayMonthShort } from '@/shared/lib/format'
+import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 import { call } from '@/shared/api/ipc'
 import { useQuery } from '@tanstack/vue-query'
 
-/** The last emulation or run: the steps in words and what it would make. */
+import { useRunSummary } from '../model/use-run-summary'
+
+/**
+ * The last emulation or run under the canvas (Auto-3 · 15): what it asks,
+ * answered right here, what it would make, and that nothing was written.
+ * The run order itself is the numbers on the nodes.
+ */
 const props = defineProps<{ report: RunReport; canSaveTest?: boolean; answers?: Record<string, boolean> }>()
 const emit = defineEmits<{ focus: [nodeId: string]; close: []; saveTest: []; answer: [nodeId: string, yes: boolean] }>()
 
 const { t, locale } = useI18n()
-
-/** An emulation that stopped at «Ждать подтверждения»: answered right here. */
-const question = computed(() => (props.report.run.dry_run ? outcomeQuestion(props.report.run.outcome) : null))
-const answered = computed(() =>
-  Object.values(props.answers ?? {})
-    .map((yes) => t(yes ? 'workflow.runPanel.yes' : 'workflow.runPanel.no'))
-    .join(', '),
+const summary = useRunSummary(
+  () => props.report,
+  () => props.answers,
 )
+const question = summary.question
+const dry = computed(() => props.report.run.dry_run)
+const reply = (yes: boolean) => question.value && emit('answer', question.value.nodeId, yes)
 
 /** The workflows an emulated event would start, by name. */
 const workflows = useQuery({ queryKey: WORKFLOW_KEYS.list, queryFn: () => call<Workflow[]>('list_workflows') })
 const nameOf = (id: string) => (workflows.data.value ?? []).find((entry) => entry.id === id)?.name ?? id
-
-function line(tx: Transaction): string {
-  const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
-  const amount = leg ? formatMoney(String(Math.abs(Number(leg.amount))), { currency: leg.asset.symbol }) : ''
-  return `${t(`tx.kind.${txKind(tx)}`)} · ${amount}`
-}
 </script>
 
 <template>
-  <section class="grid max-h-80 gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3" data-tour="workflow-run-panel">
+  <section class="grid max-h-80 shrink-0 gap-2 overflow-y-auto rounded-lg border border-border bg-card px-4 py-3" data-tour="workflow-run-panel">
     <header class="flex items-center gap-2">
-      <h3 class="text-sm font-semibold">
-        {{ props.report.run.dry_run ? t('workflow.runPanel.dry') : t('workflow.runPanel.live') }}
-      </h3>
-      <OutcomeBadge :outcome="props.report.run.outcome" />
-      <span class="flex-1" />
-      <Button v-if="props.canSaveTest" size="sm" variant="outline" data-tour="workflow-save-test" @click="emit('saveTest')">
-        <ClipboardCheck class="size-4" />
-        {{ t('workflow.tests.saveFromRun') }}
-      </Button>
+      <Badge variant="secondary" class="shrink-0">{{ dry ? t('workflow.runPanel.dry') : t('workflow.runPanel.live') }}</Badge>
+      <h3 v-if="question" class="min-w-0 flex-1 truncate text-sm font-semibold">{{ t('workflow.runPanel.askTitle') }}</h3>
+      <span v-else class="flex-1"><OutcomeBadge :outcome="props.report.run.outcome" /></span>
+      <span class="shrink-0 text-xs text-muted-foreground tabular-nums">{{ formatDayMonthShort(props.report.run.started_at, ' ') }}</span>
       <Button variant="ghost" size="icon" :aria-label="t('actions.close')" @click="emit('close')"><X class="size-4" /></Button>
     </header>
-    <p class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>
-    <div v-if="question" class="grid gap-2 rounded-md border border-primary/40 bg-primary/5 p-3" data-tour="workflow-emulation-question">
-      <div class="flex items-start gap-2">
-        <MessageCircleQuestion class="mt-0.5 size-4 shrink-0 text-primary" />
-        <div class="grid gap-1">
-          <span class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.question') }}</span>
-          <Button variant="link" size="block" class="p-0 font-medium text-foreground text-left font-medium hover:underline" @click="emit('focus', question.nodeId)">{{ question.question || t('workflow.defaultQuestion') }}</Button>
-        </div>
-      </div>
-      <p class="text-xs text-muted-foreground">{{ t('workflow.runPanel.questionHint') }}</p>
-      <div class="flex gap-2">
-        <Button size="sm" @click="question && emit('answer', question.nodeId, true)">
-          <Check class="size-4" />
-          {{ t('workflow.runPanel.yes') }}
-        </Button>
-        <Button size="sm" variant="outline" @click="question && emit('answer', question.nodeId, false)">
-          <X class="size-4" />
-          {{ t('workflow.runPanel.no') }}
-        </Button>
+    <div v-if="question" class="flex flex-wrap items-center gap-3" data-tour="workflow-emulation-question">
+      <Button variant="link" size="block" class="min-w-0 flex-1 p-0 text-left text-sm font-normal text-foreground" @click="emit('focus', question.nodeId)">
+        «{{ question.question || t('workflow.defaultQuestion') }}»
+      </Button>
+      <div class="flex shrink-0 gap-2">
+        <Button size="sm" variant="outline" data-run-answer="no" @click="reply(false)">{{ t('workflow.runPanel.no') }}</Button>
+        <Button size="sm" data-run-answer="yes" @click="reply(true)">{{ t('workflow.runPanel.yes') }}</Button>
       </div>
     </div>
-    <p v-if="props.report.run.dry_run && answered" class="text-xs text-muted-foreground">
-      {{ t('workflow.runPanel.answers', { list: answered }) }}
+    <p v-else class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>
+    <p v-if="summary.made.value || question" class="text-xs text-muted-foreground">
+      {{ summary.made.value }}
+      <template v-if="question">{{ t('workflow.runPanel.questionHint') }}</template>
     </p>
-    <RunTrace :steps="props.report.run.trace" @focus="(id) => emit('focus', id)" />
-    <div v-if="props.report.transactions.length" class="grid gap-1">
-      <h4 class="text-xs font-medium uppercase text-muted-foreground">
-        {{ props.report.run.dry_run ? t('workflow.runPanel.wouldMake') : t('workflow.runPanel.made') }}
-      </h4>
-      <p v-for="tx in props.report.transactions" :key="txId(tx)" class="text-sm">{{ line(tx) }}</p>
-    </div>
+    <p v-if="dry && summary.answered.value" class="text-xs text-muted-foreground">
+      {{ t('workflow.runPanel.answers', { list: summary.answered.value }) }}
+    </p>
     <div v-if="props.report.queued.length" class="grid gap-1">
-      <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.queued') }}</h4>
+      <h4 class="text-xs font-medium text-muted-foreground">{{ t('workflow.runPanel.queued') }}</h4>
       <p v-for="batch in props.report.queued" :key="batch.id" class="text-sm">{{ batch.summary }}</p>
     </div>
     <div v-if="props.report.notices.length" class="grid gap-1">
-      <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.notices') }}</h4>
+      <h4 class="text-xs font-medium text-muted-foreground">{{ t('workflow.runPanel.notices') }}</h4>
       <p v-for="notice in props.report.notices" :key="notice.key" class="text-sm">{{ notice.title }}: {{ notice.body }}</p>
     </div>
     <div v-if="props.report.event_runs.length" class="grid gap-1" data-tour="workflow-event-runs">
-      <h4 class="text-xs font-medium uppercase text-muted-foreground">{{ t('workflow.runPanel.eventRuns') }}</h4>
+      <h4 class="text-xs font-medium text-muted-foreground">{{ t('workflow.runPanel.eventRuns') }}</h4>
       <p v-for="run in props.report.event_runs" :key="run.id" class="flex flex-wrap items-center gap-2 text-sm">
         <span>{{ nameOf(run.workflow_id) }}</span>
         <OutcomeBadge :outcome="run.outcome" />
@@ -98,12 +78,15 @@ function line(tx: Transaction): string {
       </p>
     </div>
     <div v-if="props.report.reminders.length" class="grid gap-1">
-      <h4 class="text-xs font-medium uppercase text-muted-foreground">
-        {{ props.report.run.dry_run ? t('workflow.runPanel.wouldRemind') : t('workflow.runPanel.reminders') }}
-      </h4>
-      <p v-for="reminder in props.report.reminders" :key="reminder.id" class="text-sm">
-        {{ formatDateTime(reminder.due_at) }} · {{ reminder.text }}
-      </p>
+      <h4 class="text-xs font-medium text-muted-foreground">{{ dry ? t('workflow.runPanel.wouldRemind') : t('workflow.runPanel.reminders') }}</h4>
+      <p v-for="reminder in props.report.reminders" :key="reminder.id" class="text-sm">{{ formatDateTime(reminder.due_at) }} · {{ reminder.text }}</p>
     </div>
+    <footer v-if="props.canSaveTest || dry" class="flex flex-wrap items-center gap-3">
+      <Button v-if="props.canSaveTest" size="sm" variant="outline" data-tour="workflow-save-test" @click="emit('saveTest')">
+        <ClipboardCheck class="size-4" />
+        {{ t('workflow.tests.saveFromRun') }}
+      </Button>
+      <span v-if="dry" class="text-xs text-muted-foreground">{{ t('workflow.runPanel.nothingWritten') }}</span>
+    </footer>
   </section>
 </template>

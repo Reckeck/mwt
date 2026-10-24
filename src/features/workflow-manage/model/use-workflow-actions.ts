@@ -32,6 +32,8 @@ export function useWorkflowActions() {
   /** A run's outcome as a toast. */
   function announce(report: RunReport, dry: boolean) {
     const key = outcomeKey(report.run.outcome)
+    // The run panel itself asks (Auto-3 · 15): a toast would repeat it.
+    if (dry && key === 'asking') return
     const detail = outcomeDetail(report.run.outcome)
     const made = report.transactions.length
     const description = [
@@ -117,7 +119,8 @@ export function useWorkflowActions() {
   })
 
   const importFile = useMutation({
-    mutationFn: (json: string) => call<SavedWorkflow>('import_workflow', { json }),
+    mutationFn: (input: { json: string; stores: Record<string, string> }) =>
+      call<SavedWorkflow>('import_workflow', { input }),
     onSuccess: () => {
       refresh()
     },
