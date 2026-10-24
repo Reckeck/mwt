@@ -2,77 +2,72 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
-import { Badge } from '@/shared/ui/badge'
 import { Checkbox } from '@/shared/ui/checkbox'
+import { currencySymbol } from '@/shared/lib/format'
+import { cn } from '@/shared/lib/utils'
 
-import { priceRow, rowConsumption } from './model/price-row'
+import { lineCalc, lineNote, readInCard } from './model/line-note'
+import { priceRow } from './model/price-row'
 import type { BillRow } from './utility-bill.types'
 
-/** One bill line: a meter takes its reading (one per zone) and re-prices itself. */
-const props = defineProps<{ row: BillRow }>()
-
+/**
+ * One line of the bill (Wallets-2 · 13): the tick, the name with what it is
+ * made of, a field per zone for a meter not read yet (the amount follows),
+ * and the amount on the right — editable, though it reads as plain text.
+ */
+const props = defineProps<{ row: BillRow; automation: string | null }>()
 const { t } = useI18n()
 
 const item = computed(() => props.row.line.item)
 const metered = computed(() => ('metered' in item.value.kind ? item.value.kind.metered : null))
-const consumption = computed(() => rowConsumption(props.row))
-const typed = computed(() =>
-  metered.value?.zones.length ? Object.values(props.row.zoneReadings).some(Boolean) : Boolean(props.row.reading),
-)
-const previous = computed(() =>
-  metered.value?.zones.length
-    ? props.row.line.zones.map((zone) => `${zone.zone} ${zone.previous_reading ?? '—'}`).join(' · ')
-    : (props.row.line.previous_reading ?? '—'),
-)
+const fields = computed(() => {
+  if (!metered.value || readInCard(props.row)) return []
+  return metered.value.zones.length
+    ? metered.value.zones.map((zone) => ({ zone, label: zone }))
+    : [{ zone: null, label: t('utilityBill.reading') }]
+})
+const note = computed(() => lineNote(props.row, t, props.automation))
+const calc = computed(() => lineCalc(props.row, t))
+const placeholder = (zone: string | null) =>
+  (zone === null
+    ? props.row.line.previous_reading
+    : props.row.line.zones.find((entry) => entry.zone === zone)?.previous_reading) ?? ''
 
 function onReading(value: string | number, zone: string | null) {
   if (zone === null) props.row.reading = String(value)
   else props.row.zoneReadings[zone] = String(value)
   void priceRow(props.row)
 }
+const FIELD = 'h-8 min-w-0 flex-1 [&_input]:px-2 [&_input]:text-right'
+const AMOUNT =
+  '-mt-1.5 h-8 w-32 shrink-0 max-md:w-24 max-md:[&_input]:ps-0 border-transparent shadow-none hover:border-input focus-within:border-input [&_input]:pe-1 [&_input]:text-right [&_input]:font-medium'
 </script>
 
 <template>
-  <li class="grid items-center gap-2 p-2.5 @xl:grid-cols-[1.5rem_1fr_9rem_9rem]">
-    <Checkbox v-model="props.row.include" :aria-label="t('utilityBill.include', { name: item.name })" />
-    <div class="min-w-0">
-      <p class="flex items-center gap-2 truncate text-sm font-medium">
-        {{ item.name }}
-        <Badge v-if="Number(props.row.line.paid) > 0" variant="secondary">
-          {{ t('utilityBill.alreadyPaid') }} <Money :amount="props.row.line.paid" :currency="item.currency" :convert="false" />
-        </Badge>
-      </p>
-      <p v-if="metered" class="text-xs text-muted-foreground tabular-nums">
-        {{ t('utilityBill.previous', { value: previous, unit: metered.unit }) }}
-        <template v-if="consumption !== null">· {{ t('utilities.consumption') }}: {{ consumption }} {{ metered.unit }}</template>
-      </p>
-      <p v-if="metered && !typed" class="text-xs text-muted-foreground">{{ t('utilityBill.enterReading') }}</p>
-      <p v-else-if="props.row.line.includes_deposit" class="text-xs text-muted-foreground">{{ t('utilities.depositIncluded') }}</p>
+  <li :class="cn('flex items-start gap-3 border-b border-border py-2.5', !props.row.include && 'opacity-55')" data-bill-line>
+    <Checkbox v-model="props.row.include" class="mt-0.5" :aria-label="t('utilityBill.include', { name: item.name })" />
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <span class="text-sm font-medium">{{ item.name }}</span>
+      <span class="text-xs text-muted-foreground tabular-nums">{{ note }}</span>
+      <div v-if="fields.length && props.row.include" class="flex gap-2">
+        <AmountInput
+          v-for="field in fields"
+          :key="field.label"
+          :model-value="field.zone === null ? props.row.reading : (props.row.zoneReadings[field.zone] ?? '')"
+          :class="FIELD"
+          :placeholder="placeholder(field.zone)"
+          :aria-label="`${item.name}: ${field.label}`"
+          @update:model-value="(value) => onReading(value, field.zone)"
+        >
+          <template #prefix><span class="text-xs text-muted-foreground">{{ field.label }}</span></template>
+        </AmountInput>
+      </div>
+      <span v-if="calc && props.row.include" class="text-xs text-muted-foreground tabular-nums" data-bill-calc>{{ calc }}</span>
     </div>
-    <div v-if="metered?.zones.length" class="grid gap-1">
-      <AmountInput
-        v-for="zone in metered.zones"
-        :key="zone"
-        :model-value="props.row.zoneReadings[zone] ?? ''"
-        :placeholder="zone"
-        :aria-label="`${t('utilities.reading')}: ${zone}`"
-        @update:model-value="(value) => onReading(value, zone)"
-      />
-    </div>
-    <AmountInput
-      v-else-if="metered"
-      :model-value="props.row.reading"
-      :placeholder="t('utilities.reading')"
-      :aria-label="t('utilities.reading')"
-      @update:model-value="(value) => onReading(value, null)"
-    />
-    <span v-else class="hidden @xl:block" />
-    <AmountInput v-model="props.row.amount" :decimals="2" :aria-label="t('utilities.amount')">
-      <template #suffix>
-        <span class="px-2 text-xs uppercase text-muted-foreground">{{ item.currency }}</span>
-      </template>
+    <span v-if="!props.row.include" class="w-32 shrink-0 pe-3 max-md:w-24 text-right text-sm font-medium">—</span>
+    <AmountInput v-else v-model="props.row.amount" :decimals="2" :class="AMOUNT" placeholder="—" :aria-label="t('utilityBill.amountOf', { name: item.name })">
+      <template #suffix><span class="pe-2 text-sm font-medium">{{ currencySymbol(item.currency) }}</span></template>
     </AmountInput>
   </li>
 </template>

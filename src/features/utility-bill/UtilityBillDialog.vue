@@ -10,26 +10,30 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
-import { toIsoTimestamp, toLocalInput } from '@/shared/lib/datetime'
+import { toIsoTimestamp } from '@/shared/lib/datetime'
+import { formatMonthKey, pluralForm } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { LEDGER_KEYS, PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import BillLineRow from './BillLineRow.vue'
+import { automated } from './model/line-note'
 import type { BillRow, UtilityBillDialogProps } from './utility-bill.types'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
- * The month's utilities as one bill: meters get their reading typed in place
- * (the amount follows), fixed bills and rent come pre-filled, and one button
- * books every line as its own payment — the way they are actually paid, on
- * one day.
+ * «Счёт за октябрь · Квартира» (Wallets-2 · 13): meters get their reading
+ * typed in place (the amount follows), fixed bills come pre-filled, the rent an
+ * automation pays stays off, and one button books every ticked line as its own
+ * payment — the way they are actually paid, on one day.
  */
 const props = defineProps<UtilityBillDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ paid: [count: number] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const phone = useIsPhone()
 const queryClient = useQueryClient()
 
 const period = ref(props.period ?? localDate(new Date()).slice(0, 7))
@@ -45,8 +49,22 @@ const bill = useQuery({
 })
 
 const tree = useStoreTree()
+const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
+const property = computed(() => nodes.value.find((node) => node.store.id === props.propertyId)?.store.name ?? '')
+const title = computed(() => t('utilityBill.title', { month: formatMonthKey(period.value, { month: 'long' }), name: property.value }))
+const automations = useQuery({
+  queryKey: ['automations'],
+  queryFn: () => call<Automation[]>('list_automations'),
+  enabled: open,
+})
+/** The automation that pays a rent line, by name: «платит автоматизация «Аренда» 10-го». */
+const automationName = (row: BillRow) => {
+  const kind = row.line.item.kind
+  const id = 'housing' in kind ? kind.housing.automation_id : null
+  return automations.data.value?.find((entry) => entry.id === id)?.name ?? null
+}
 const payable = computed(() =>
-  flattenStoreTree(tree.data.value ?? []).filter(
+  nodes.value.filter(
     (node) => !node.store.archived && (node.store.kind === 'bank' || node.store.kind === 'cash'),
   ),
 )
@@ -59,15 +77,19 @@ watch(
   () => bill.data.value,
   (data) => {
     if (!data) return
-    rows.value = data.lines.map((line) => ({
-      line,
-      // Already paid this month: left out unless ticked again.
-      include: Number(line.paid) === 0,
-      reading: line.reading ?? '',
-      zoneReadings: Object.fromEntries(line.zones.map((zone) => [zone.zone, zone.reading ?? ''])),
-      amount: line.amount ?? '',
-    }))
-    when.value = toLocalInput(data.due_at)
+    rows.value = data.lines.map((line) => {
+      const row: BillRow = {
+        line,
+        include: true,
+        reading: line.reading ?? '',
+        zoneReadings: Object.fromEntries(line.zones.map((zone) => [zone.zone, zone.reading ?? ''])),
+        amount: line.amount ? Number(line.amount).toFixed(2) : '',
+      }
+      // Already paid this month, or paid by an automation: left out unless ticked again.
+      row.include = Number(line.paid) === 0 && !automated(row)
+      return row
+    })
+    when.value = localDate(new Date())
     const own = data.lines.map((line) => line.item.store_id).find(Boolean)
     if (!storeId.value) {
       const everyday = payable.value.find((node) => node.store.purpose === 'everyday')
@@ -114,7 +136,7 @@ const pay = useMutation({
         property_id: props.propertyId,
         period: period.value,
         store_id: storeId.value,
-        timestamp: toIsoTimestamp(when.value),
+        timestamp: toIsoTimestamp(`${when.value}T${new Date().toTimeString().slice(0, 5)}`),
         lines: chosen.value.map((row) => ({
           item_id: row.line.item.id,
           amount: row.amount,
@@ -139,16 +161,16 @@ const pay = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('utilityBill.title')" size="lg">
-    <form id="utility-bill-form" class="@container grid gap-4" @submit.prevent="form.submit(pay.mutate, $event)">
-      <div class="grid gap-3 @xl:grid-cols-2">
+  <Dialog v-model:open="open" :title="title" :description="t('utilityBill.intro', { name: property })" size="bill">
+    <form id="utility-bill-form" class="@container flex flex-col gap-4" data-bill-form @submit.prevent="form.submit(pay.mutate, $event)">
+      <div class="grid gap-3 @lg:grid-cols-2">
         <FormField for="bill-date" :label="t('utilityBill.date')" required :error="form.error('when')">
-          <DateTimePicker id="bill-date" v-model="when" mode="datetime" />
+          <DateTimePicker id="bill-date" v-model="when" class="w-full" :invalid="Boolean(form.error('when'))" />
           <p v-if="bill.data.value?.pay_day" class="text-xs text-muted-foreground">
             {{ t('utilityBill.payDay', { day: bill.data.value.pay_day }) }}
           </p>
         </FormField>
-        <FormField for="bill-store" :label="t('utilities.store')" :required="needsStore" :error="form.error('store')">
+        <FormField for="bill-store" :label="t('utilityBill.store')" :required="needsStore" :error="form.error('store')">
           <StoreNodeSelect
             id="bill-store"
             v-model="storeId"
@@ -161,26 +183,22 @@ const pay = useMutation({
       </div>
 
       <p v-if="bill.isSuccess.value && !rows.length" class="text-sm text-muted-foreground">{{ t('utilities.empty') }}</p>
-
       <p v-if="form.error('lines')" class="text-xs text-destructive" role="alert">{{ form.error('lines') }}</p>
-      <ul
-        class="grid divide-y divide-border rounded-lg border"
-        :class="form.error('lines') ? 'border-destructive' : 'border-border'"
-        :data-invalid="form.error('lines') ? '' : undefined"
-      >
-        <BillLineRow v-for="row in rows" :key="row.line.item.id" :row="row" />
+      <ul class="flex flex-col" :data-invalid="form.error('lines') ? '' : undefined">
+        <BillLineRow v-for="row in rows" :key="row.line.item.id" :row="row" :automation="automationName(row)" />
       </ul>
-    </form>
-    <template #footer>
-      <div class="mr-auto flex flex-wrap items-baseline gap-2 text-sm">
-        <span class="text-muted-foreground">{{ t('utilityBill.total') }}</span>
-        <span v-for="[currency, sum] in totals" :key="currency" class="font-semibold">
-          <Money :amount="sum" :currency="currency" />
+      <div class="flex items-baseline gap-2">
+        <span class="text-sm text-muted-foreground">{{ t('utilityBill.total') }}</span>
+        <span class="ms-auto flex flex-wrap justify-end gap-x-3 text-lg font-semibold tabular-nums" data-bill-total>
+          <Money v-for="[currency, sum] in totals" :key="currency" :amount="sum" :currency="currency" />
+          <template v-if="!totals.length">—</template>
         </span>
       </div>
-      <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button type="submit" form="utility-bill-form" :disabled="pay.isPending.value">
-        {{ t('utilityBill.pay', { count: chosen.length }) }}
+    </form>
+    <template #footer>
+      <Button v-if="!phone" variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
+      <Button type="submit" form="utility-bill-form" :class="phone && 'h-11 w-full'" :disabled="pay.isPending.value">
+        {{ t(`utilityBill.pay.${pluralForm(chosen.length, locale)}`, { count: chosen.length }) }}
       </Button>
     </template>
   </Dialog>

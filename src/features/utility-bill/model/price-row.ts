@@ -38,7 +38,7 @@ export async function priceRow(row: BillRow) {
     })
     // A later keystroke already asked again.
     if (row.pricing !== key || !preview.amount) return
-    row.amount = preview.amount
+    row.amount = Number(preview.amount).toFixed(2)
     row.include = true
   } catch {
     // The amount stays as typed; the user can still enter it by hand.

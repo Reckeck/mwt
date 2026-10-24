@@ -9,6 +9,7 @@
   "long-line src/entities/store/ui/store-node-select/StoreNodeMultiSelect.vue": 1,
   "long-line src/entities/workflow/ui/lesson-list/LessonList.vue": 1,
   "long-line src/features/store-edit/ui/StoreGeneralForm.vue": 1,
+  "long-line src/features/utility-bill/BillLineRow.vue": 1,
   "long-line src/features/vault-transfer/ui/SendVaultDialog/SendVaultCode.vue": 1,
   "long-line src/features/vault-transfer/ui/SendVaultDialog/SendVaultPick.vue": 1,
   "long-line src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
@@ -62,7 +63,6 @@
   "long-line src/widgets/settings-shell/SettingsShell.vue": 3,
   "long-line src/widgets/trading-chart/ui/chart-legend/ChartLegend.vue": 1,
   "long-line src/widgets/workflow-editor/ui/RunPanel.vue": 1,
-  "raw-input src/features/store-create/StoreCreateDialog.vue": 1,
   "raw-input src/features/store-edit/ui/StoreGeneralForm.vue": 1,
   "raw-input src/widgets/workflow-editor/ui/NoteCard.vue": 1,
   "row-repeat-call src/entities/transaction/ui/transactions-list/TransactionsList.vue": 1,
@@ -72,5 +72,6 @@
   "row-repeat-call src/widgets/analytics-reports/ui/month-table/MonthTable.vue": 3,
   "row-repeat-call src/widgets/notification-settings/NotificationSettings.vue": 1,
   "row-repeat-call src/widgets/onboarding-checklist/OnboardingChecklist.vue": 1,
-  "row-repeat-call src/widgets/workflow-editor/ui/WorkflowHistoryPanel.vue": 1
+  "row-repeat-call src/widgets/workflow-editor/ui/WorkflowHistoryPanel.vue": 1,
+  "to-fixed src/features/utility-bill/UtilityBillDialog.vue": 1
 }

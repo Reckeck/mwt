@@ -35,6 +35,10 @@ const openLine = (name) => `
   const rows = [...document.querySelectorAll('[data-utility-lines] tr[data-utility-line], [data-utility-lines] li > button')]
   rows.find((row) => row.textContent.includes('${name}'))?.click()
   await new Promise((done) => setTimeout(done, 900)); return true`
+/** «Оплатить счёт» on the home's bill card (Wallets-2 · 13); the visible one of the two layouts. */
+const PAY_BILL = `
+  ;[...document.querySelectorAll('[data-bill-pay]')].find((button) => button.offsetParent)?.click()
+  await new Promise((done) => setTimeout(done, 900)); return true`
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
@@ -468,6 +472,18 @@ const stage4 = [
   { name: 'wallet-property', route: '/stores', steps: [{ eval: toWallet('Квартира') }], canvas: { board: 'Wallets-2', frame: '10.' } },
   { name: 'wallet-utility-zones', route: '/stores', steps: [{ eval: toWallet('Квартира') }, { eval: openLine('Электр') }], canvas: { board: 'Wallets-2', frame: '11.' } },
   { name: 'wallet-utility-formula', route: '/stores', steps: [{ eval: toWallet('Квартира') }, { eval: openLine('Горяч') }], canvas: { board: 'Wallets-2', frame: '12.' } },
+  {
+    name: 'wallet-utility-bill',
+    route: '/stores',
+    steps: [
+      { eval: toWallet('Квартира') },
+      { eval: PAY_BILL },
+      { fill: ['[aria-label="Электричество: день"]', '13520'] },
+      { fill: ['[aria-label="Электричество: ночь"]', '5190'] },
+      { wait: 900 },
+    ],
+    canvas: { board: 'Wallets-2', frame: '13.' },
+  },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },
   { name: 'store-new-kind', route: '/stores', steps: CREATE_STORE, canvas: { board: 'Wallets-1', frame: '2.' } },
