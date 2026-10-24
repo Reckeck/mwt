@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { useIsPhone } from '@/shared/lib/phone'
 
 import type { FormDialogProps } from './form-dialog.types'
 
@@ -20,10 +21,12 @@ const props = withDefaults(defineProps<FormDialogProps>(), {
   size: 'md',
   submitLabel: undefined,
   pending: false,
+  phoneSubmitOnly: false,
 })
 const emit = defineEmits<{ 'update:open': [boolean]; submit: [Event] }>()
 
 const { t } = useI18n()
+const phone = useIsPhone()
 </script>
 
 <template>
@@ -42,8 +45,14 @@ const { t } = useI18n()
       <div class="mr-auto flex items-center gap-2">
         <slot name="footer-start" />
       </div>
-      <Button variant="ghost" type="button" @click="emit('update:open', false)">{{ t('actions.cancel') }}</Button>
-      <Button :form="props.formId" type="submit" :disabled="props.pending" :loading="props.pending">
+      <Button v-if="!(props.phoneSubmitOnly && phone)" variant="ghost" type="button" @click="emit('update:open', false)">{{ t('actions.cancel') }}</Button>
+      <Button
+        :form="props.formId"
+        type="submit"
+        :class="props.phoneSubmitOnly && phone && 'h-11 w-full'"
+        :disabled="props.pending"
+        :loading="props.pending"
+      >
         {{ props.submitLabel ?? t('actions.save') }}
       </Button>
     </template>

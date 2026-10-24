@@ -11,4 +11,6 @@ export interface FormDialogProps {
   submitLabel?: string
   /** A save in flight: the only thing that disables the save button (rule 13). */
   pending?: boolean
+  /** On a phone: no Cancel (the sheet has its ×), one full-width save button (Wallets-2 · 13, Wallets-3 · 20). */
+  phoneSubmitOnly?: boolean
 }

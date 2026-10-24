@@ -16,14 +16,20 @@ let seeded = false
 export function seedMock() {
   if (seeded) return
   seeded = true
-  if (mockScenario === 'empty') {
-    mockStores.length = 0
+  if (mockScenario === 'empty' || mockScenario === 'fresh') {
+    // Cash comes with the vault; `empty` shows the list before even that.
+    mockStores.splice(mockScenario === 'fresh' ? 1 : 0)
     return
   }
   const bank = mockStores[4]
   const scale = mockScenario === 'stress' ? 40 : 1
   const year = yearInputs(bank.id, new Date(), scale).map((input) => mockTransactionFrom(input, priceOf))
-  mockTransactions.push(...year, ...demoTransactions(), seedFlat())
+  mockTransactions.push(
+    ...year,
+    ...demoTransactions(),
+    seedThing('FLAT', 'Квартира', 'Покупка квартиры'),
+    seedThing('CAR', 'Машина', 'Покупка машины'),
+  )
   seedScenarios()
   seedSalaryAutomation(mockTransactions)
   seedGoal()
@@ -57,16 +63,16 @@ function seedExchangeImport() {
   })
 }
 
-/** The flat bought before the year began, so capital has property under it. */
-function seedFlat(): Transaction {
-  const flat = mockStores.find((store) => store.kind === 'property')
+/** The flat and the car bought before the year began, so capital has property under it. */
+function seedThing(symbol: string, name: string, comment: string): Transaction {
+  const owner = mockStores.find((row) => row.kind === 'property' && row.name === name)
   const at = new Date()
   at.setMonth(at.getMonth() - 13)
   const input: TransactionInput = {
     type: 'topup',
-    common: { ...PLAIN_COMMON, timestamp: at.toISOString(), comment: 'Покупка квартиры', categories: ['transfer'] },
-    store_id: flat?.id ?? mockStores[0].id,
-    asset: { symbol: 'FLAT', name: 'Квартира', coingecko_id: null, chain: null, contract: null },
+    common: { ...PLAIN_COMMON, timestamp: at.toISOString(), comment, categories: ['transfer'] },
+    store_id: owner?.id ?? mockStores[0].id,
+    asset: { symbol, name, coingecko_id: null, chain: null, contract: null },
     amount: '1',
     fee: null,
     from: null,

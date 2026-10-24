@@ -30,9 +30,12 @@ const props = defineProps<{
   refreshing: boolean
   /** An exchange's own wallet: its buttons open «Сделка». */
   exchange?: boolean
+  /** Nothing in it yet (Wallets-3 · 18): the first step below replaces the buttons; a phone keeps only the title. */
+  empty?: boolean
 }>()
 const emit = defineEmits<{
   act: [kind: TxKind]
+  settings: []
   operation: []
   adjust: []
   calculator: []
@@ -70,7 +73,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
   <div class="flex flex-col gap-3">
     <PageHeader v-if="props.ancestors.length" :crumbs="crumbs" />
 
-    <div class="flex items-center gap-3">
+    <div v-if="!(props.empty && phone)" class="flex items-center gap-3">
       <span class="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground max-md:hidden">
         <component :is="storeIcon(props.store)" class="size-5" />
       </span>
@@ -90,20 +93,23 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
         </span>
       </div>
       <WalletActions
-        v-if="!phone"
+        v-if="!phone && !props.empty"
         :actions="actions"
         :phone="false"
         :disabled="props.store.archived"
         @act="(kind) => emit('act', kind)"
       />
-      <Button v-if="property && !phone" variant="outline" :disabled="props.store.archived" @click="emit('sell')">{{ t('wallet.sell') }}</Button>
+      <Button v-if="property && !phone" variant="outline" :disabled="props.store.archived" data-wallet-sell @click="emit('sell')">{{ t('wallet.sell') }}</Button>
       <WalletGearMenu
         :store="props.store"
         :can-add-child="props.canAddChild"
         :has-children="props.hasChildren"
         :refreshing="props.refreshing"
         :operation="!actions.length"
+        :sell="property && phone"
+        @settings="emit('settings')"
         @operation="emit('operation')"
+        @sell="emit('sell')"
         @adjust="emit('adjust')"
         @calculator="emit('calculator')"
         @sub-account="emit('subAccount')"
@@ -113,7 +119,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
       />
     </div>
 
-    <WalletActions v-if="phone" :actions="actions" phone :disabled="props.store.archived" @act="(kind) => emit('act', kind)" />
+    <WalletActions v-if="phone && !props.empty" :actions="actions" phone :disabled="props.store.archived" @act="(kind) => emit('act', kind)" />
 
     <p v-if="props.store.archived" class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       {{ t('wallet.archivedHint') }}

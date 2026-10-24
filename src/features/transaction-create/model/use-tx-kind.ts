@@ -49,6 +49,7 @@ export function useTxKind(state: TxFormState) {
       } else if (props.initial && offered.value.includes(props.initial.kind) && !props.transaction) {
         form.kind = props.initial.kind
         if (!form.categories.length) form.categories = [...props.initial.categories]
+        if (props.initial.to && props.initial.to !== props.storeId) form.to = { store: props.initial.to }
       } else if (!offered.value.includes(form.kind)) form.kind = data.default
     },
     { immediate: true },

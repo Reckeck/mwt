@@ -3,15 +3,16 @@
  * `localStorage['mock-scenario']`, so screenshots can show every state of a screen.
  *
  * - `year` (default): twelve months of everyday spending on top of the demo history;
- * - `empty`: a new vault, no wallets and no history;
+ * - `empty`: no wallets and no history;
+ * - `fresh`: a new vault as core makes it — only «Наличные», with nothing in it;
  * - `stress`: the year in millions, long names, a currency without a rate;
  * - `slow`: the year, answering after 2.5 s (loading states);
  * - `error`: every command past unlock fails (error states).
  */
 
-export type MockScenario = 'year' | 'empty' | 'stress' | 'slow' | 'error'
+export type MockScenario = 'year' | 'empty' | 'fresh' | 'stress' | 'slow' | 'error'
 
-const SCENARIOS: readonly MockScenario[] = ['year', 'empty', 'stress', 'slow', 'error']
+const SCENARIOS: readonly MockScenario[] = ['year', 'empty', 'fresh', 'stress', 'slow', 'error']
 
 function readScenario(): MockScenario {
   let wanted: string | null = null

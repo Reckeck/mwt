@@ -5,6 +5,7 @@ import { mockTransactionFrom } from './ledger'
 import { seedUtilityDemo } from './planning'
 import { mockImportSettings, mockTerminal } from './catalog'
 import { mockStore } from './tree'
+import { priceOf } from './prices'
 
 /** Demo history: a salary, a payment, a trade, a debt and a conversion via an exchanger. */
 export function demoTransactions(): Transaction[] {
@@ -227,20 +228,7 @@ mockStores.push({
 
 export const mockTransactions: Transaction[] = []
 
-/** Last known USD prices, mirroring what the Rust `price_cache` would hold. */
-export const mockPrices: Record<string, number> = {
-  BTC: 90000,
-  ETH: 3000,
-  USD: 1,
-  USDT: 1,
-  RUB: 0.0105,
-  EUR: 1.08,
-  THB: 0.028,
-  /** The demo flat, valued as one unit (Money 2 · 12: «Имущество 35 580,70 $»). */
-  FLAT: 35580.7,
-}
-
-export const priceOf = (symbol: string) => mockPrices[symbol.toUpperCase()] ?? 0
+export { mockPrices, priceOf } from './prices'
 
 export const timestampOf = (tx: Transaction) => txMeta(tx).timestamp
 

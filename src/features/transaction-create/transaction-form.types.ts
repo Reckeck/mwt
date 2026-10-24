@@ -40,6 +40,8 @@ export interface TransactionInitial {
   /** What was typed before the wallet changed: the short form keys itself by the wallet and carries these over. */
   amount?: string
   comment?: string
+  /** A transfer's destination wallet. */
+  to?: string
 }
 
 /** A calculator result handed to the form. */

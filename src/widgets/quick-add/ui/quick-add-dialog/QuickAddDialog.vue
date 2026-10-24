@@ -93,7 +93,11 @@ const initial = computed<TransactionInitial | null>(() => {
   if (props.deal) return { kind: props.deal.kind, categories: [] }
   const asked = quickAddRequest.value
   if (!asked?.kind) return null
-  return { kind: asked.kind, categories: asked.category ? [asked.category] : [] }
+  return {
+    kind: asked.kind,
+    categories: asked.category ? [asked.category] : [],
+    ...(asked.toStoreId ? { to: asked.toStoreId } : {}),
+  }
 })
 
 function onSaved(tx: Transaction) {

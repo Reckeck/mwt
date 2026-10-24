@@ -16,6 +16,18 @@ function mockLiquidation(input: TransactionInput): string | null {
   return String(Number((price * (input.direction === 'long' ? 1 - share : 1 + share)).toFixed(8)))
 }
 
+/** Like `sale_preview` in Rust: the sold quantity at today's price against the proceeds. */
+function mockSale(input: TransactionInput): SalePreview | null {
+  if (input.type !== 'asset_sell') return null
+  const usd = priceOf(input.asset.symbol)
+  const perUsd = priceOf(input.currency.symbol)
+  const quantity = Number(input.quantity)
+  if (!(usd > 0 && perUsd > 0 && quantity > 0)) return null
+  const book = Number(((quantity * usd) / perUsd).toFixed(2))
+  const gain = Number((quantity * Number(input.unit_price)).toFixed(2)) - book
+  return { currency: input.currency.symbol.toLowerCase(), book_value: String(book), gain: gain.toFixed(2) }
+}
+
 /** Like `preview_transaction` in Rust: net legs per store and asset, nothing written. */
 export function mockPreview(input: PreviewTransactionInput): TxPreview {
   // Like the backend: a draft that would be refused (no category, no comment)
@@ -46,6 +58,7 @@ export function mockPreview(input: PreviewTransactionInput): TxPreview {
         warnings: [],
         error,
         liquidation_price: null,
+        sale: null,
       }
     }
   }
@@ -88,5 +101,6 @@ export function mockPreview(input: PreviewTransactionInput): TxPreview {
     warnings,
     error,
     liquidation_price: mockLiquidation(input.transaction),
+    sale: mockSale(input.transaction),
   }
 }

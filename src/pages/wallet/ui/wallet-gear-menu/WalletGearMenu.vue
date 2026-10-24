@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   ArrowLeftRight,
   Calculator,
   FolderPlus,
+  HandCoins,
   Goal as GoalIcon,
   Plus,
   RefreshCw,
@@ -32,9 +32,13 @@ const props = defineProps<{
   refreshing: boolean
   /** A property has no kind buttons yet: «+ Операция» waits here. */
   operation: boolean
+  /** A phone has no «Продать» button in the header: it waits here. */
+  sell?: boolean
 }>()
 const emit = defineEmits<{
+  settings: []
   operation: []
+  sell: []
   adjust: []
   calculator: []
   subAccount: []
@@ -44,7 +48,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
 
 /** A wallet bound to one fiat currency starts the converter from it. */
 const ownCurrency = computed(() => {
@@ -64,7 +67,7 @@ const live = computed(() => !props.store.archived)
         <SlidersHorizontal class="size-4" />
       </Button>
     </template>
-    <DropdownMenuItem value="settings" @select="router.push({ name: 'wallet-settings', params: { id: props.store.id } })">
+    <DropdownMenuItem value="settings" data-gear="settings" @select="emit('settings')">
       <Settings2 class="size-4 shrink-0" />
       {{ t('walletSettings.nav') }}
     </DropdownMenuItem>
@@ -72,7 +75,11 @@ const live = computed(() => !props.store.archived)
       <Plus class="size-4 shrink-0" />
       {{ t('wallet.addOperation') }}
     </DropdownMenuItem>
-    <DropdownMenuItem v-if="props.store.kind !== 'property' && live" value="adjust" @select="emit('adjust')">
+    <DropdownMenuItem v-if="props.sell && live" value="sell" data-gear="sell" @select="emit('sell')">
+      <HandCoins class="size-4 shrink-0" />
+      {{ t('wallet.sell') }}
+    </DropdownMenuItem>
+    <DropdownMenuItem v-if="props.store.kind !== 'property' && live" value="adjust" data-gear="adjust" @select="emit('adjust')">
       <Scale class="size-4 shrink-0" />
       {{ t('adjustment.open') }}
     </DropdownMenuItem>
