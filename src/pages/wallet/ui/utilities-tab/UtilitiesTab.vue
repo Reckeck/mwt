@@ -63,7 +63,7 @@ function openItem(line: UtilityBillLine) {
           :active="itemOpen ? picked : null"
           @open="openItem"
         />
-        <Button v-if="phone" variant="outline" class="h-11" @click="emit('newItem')">
+        <Button v-if="phone" variant="outline" class="h-11" data-utility-new @click="emit('newItem')">
           <Plus class="size-4" />{{ t('utilityTab.newItem') }}
         </Button>
       </div>

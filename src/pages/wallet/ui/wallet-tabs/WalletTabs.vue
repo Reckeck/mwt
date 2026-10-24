@@ -47,7 +47,7 @@ const itemOpen = ref(false)
 <template>
   <Tabs v-model="tab" data-tour="wallet-tabs" :tabs="props.tabs" :more="props.more" :more-label="t('wallet.tab.more')">
     <template #end>
-      <Button v-if="tab === 'utilities' && !props.store.archived" variant="outline" class="max-md:hidden" @click="itemOpen = true">
+      <Button v-if="tab === 'utilities' && !props.store.archived" variant="outline" class="max-md:hidden" data-utility-new @click="itemOpen = true">
         <Plus class="size-4" />{{ t('utilityTab.newItem') }}
       </Button>
       <span

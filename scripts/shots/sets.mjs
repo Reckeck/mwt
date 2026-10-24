@@ -39,6 +39,19 @@ const openLine = (name) => `
 const PAY_BILL = `
   ;[...document.querySelectorAll('[data-bill-pay]')].find((button) => button.offsetParent)?.click()
   await new Promise((done) => setTimeout(done, 900)); return true`
+/** «+ Статья» on the property's bill tab (Wallets-3 · 14); the visible one of the two layouts. */
+const NEW_ITEM = `
+  ;[...document.querySelectorAll('[data-utility-new]')].find((button) => button.offsetParent)?.click()
+  await new Promise((done) => setTimeout(done, 700)); return true`
+/** The item wizard on step 2 for a name and a kind card (2 fixed, 3 rent; a meter is picked already). */
+const itemStep2 = (name, card = 0) => [
+  { eval: toWallet('Квартира') },
+  { eval: NEW_ITEM },
+  { fill: ['#utility-name', name] },
+  ...(card ? [{ click: `[data-utility-kinds] button:nth-child(${card})` }] : []),
+  { click: '[data-wizard-next]' },
+  { wait: 500 },
+]
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
@@ -483,6 +496,30 @@ const stage4 = [
       { wait: 900 },
     ],
     canvas: { board: 'Wallets-2', frame: '13.' },
+  },
+  { name: 'utility-new-kind', route: '/stores', steps: [{ eval: toWallet('Квартира') }, { eval: NEW_ITEM }], canvas: { board: 'Wallets-3', frame: '14.' } },
+  {
+    name: 'utility-new-meter',
+    route: '/stores',
+    steps: [...itemStep2('Холодная вода'), { fill: ['#utility-tariff', '49'] }, { wait: 900 }],
+    canvas: { board: 'Wallets-3', frame: '15.' },
+  },
+  {
+    name: 'utility-new-formula',
+    route: '/stores',
+    steps: [
+      ...itemStep2('Холодная вода'),
+      { click: '[data-utility-mode] button:nth-child(2)' },
+      { fill: ['#utility-formula', '(показание - предыдущее) * 3,5 * 10'] },
+      { wait: 1200 },
+    ],
+    canvas: { board: 'Wallets-3', frame: '16.' },
+  },
+  {
+    name: 'utility-new-rent',
+    route: '/stores',
+    steps: [...itemStep2('Аренда', 3), { fill: ['#utility-amount', '35000'] }, { fill: ['#utility-due', '10'] }, { wait: 500 }],
+    canvas: { board: 'Wallets-3', frame: '17.' },
   },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },

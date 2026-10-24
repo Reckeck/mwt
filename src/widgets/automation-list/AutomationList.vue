@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // check-ui-ignore row-repeat-call: runsOf/pending read maps built once per list (computed)
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -29,6 +29,8 @@ import { AutomationRuns } from './ui/automation-runs'
 import { AutomationSummary } from './ui/automation-summary'
 
 const props = withDefaults(defineProps<AutomationListProps>(), { storeId: '', presets: () => [] })
+/** The cards are drawn: what the page puts below can appear without being pushed. */
+const emit = defineEmits<{ ready: [] }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -129,6 +131,8 @@ const remove = useMutation({
 const empty = computed(() => automations.isSuccess.value && !shown.value.length)
 // The runs arrive after the list: a card drawn before them grows and pushes the gallery below.
 const loading = computed(() => automations.isPending.value || runs.isPending.value || tree.isPending.value)
+const skeletons = computed(() => Math.max(1, shown.value.length))
+watch(loading, (now) => !now && emit('ready'), { immediate: true })
 </script>
 
 <template>
@@ -157,8 +161,8 @@ const loading = computed(() => automations.isPending.value || runs.isPending.val
     </div>
 
     <!-- While the list loads: about the height of the empty block or a couple of cards. -->
-    <!-- One card high: the usual list holds one or two, so the gallery below barely moves. -->
-    <Skeleton v-if="loading" class="h-34 rounded-xl" />
+    <!-- A card per automation once the list is known (the runs come later), one before that. -->
+    <template v-if="loading"><Skeleton v-for="n in skeletons" :key="n" class="h-34 rounded-xl" /></template>
     <EmptyState v-if="empty" compact :title="t('automation.empty')" :description="t('automation.intro')">
       <Button v-if="!props.readonly" @click="openNew()"><Plus class="size-4" />{{ t('automation.new') }}</Button>
     </EmptyState>
