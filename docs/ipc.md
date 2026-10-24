@@ -385,6 +385,8 @@ JSON без шифрования — там нет ничего секретно
 | `adjust_points` | `AdjustPointsInput { store_id, delta, comment, source_store_id?, timestamp? }` | `Transaction` — начисление (topup, категория `cashback`) или списание баллов |
 | `get_cashback_report` | `period?` (`month` \| `year`) | `CashbackReport { cashback_base, points_base, by_source[], programmes[] }` |
 | `get_upcoming` | `days?` (30, не больше 366) | `Vec<UpcomingItem { kind, source_id, at, date, title, store_id?, amount?, asset?, shortfall?, estimated }>` — автоматизации с прогнозом «не хватит N» (даты уже перенесены с выходных, у разной суммы — оценка и `estimated`), аренда, платежи по кредитам, напоминания, отклонённые запуски (`rejected_run`) и операции, записанные примерно (`unconfirmed_run`, `source_id` — id операции для `confirm_estimated_amount`) |
+| `list_my_automations` | — | `Vec<MineItem { kind: scheme\|repeat\|reminder\|alert, id, name, active, next_at?, amount?, asset?, from_store?, to_store?, asks, notifies, condition?, currency?, description }>` — «Мои»: всё, что срабатывает само. `next_at` — ближайший запуск по расписанию (до 400 дней), у алерта и схемы без расписания нет; операция повтора — по первому запуску, у схемы — признаки `asks` (есть шаг «да») и `notifies` (только уведомляет). Сначала ближайшие, потом без даты по имени |
+| `set_my_automation_active` | `{ input: { kind, id, active } }` | `()` — переключатель «Вкл.» строки «Мои»: схема и повтор — как `set_workflow_active` (схему с ошибками не включить), напоминание — `muted`, алерт — `active`, включённый снова ждёт цену заново (`triggered_at` сброшен) |
 
 ### workflows — схемы из узлов (`crates/app/src/commands/workflows.rs`)
 

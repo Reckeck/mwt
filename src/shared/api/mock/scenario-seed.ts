@@ -5,6 +5,7 @@ import { demoTransactions, mockStores, mockTransactions, newStore, priceOf } fro
 import { STRESS_DETAILS, STRESS_NO_RATE, STRESS_STORE_NAME, yearInputs } from './demo-year'
 import { seedScenarios } from './planning/calc-seed'
 import { seedGoal } from './planning/goal-seed'
+import { seedMine } from './planning/mine-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
@@ -32,6 +33,9 @@ export function seedMock() {
   )
   seedScenarios()
   seedSalaryAutomation(mockTransactions)
+  const tinkoff = mockStores.find((store) => store.name === 'Тинькофф')
+  const bybit = mockStores.find((store) => store.name === 'Bybit')
+  if (tinkoff && bybit) seedMine(mockTransactionFrom(bybitTransfer(tinkoff.id, bybit.id), priceOf))
   seedGoal()
   seedLoyalty()
   seedExchangeImport()
@@ -128,5 +132,31 @@ function seedStress() {
       details: STRESS_DETAILS,
     }
     mockTransactions.push(mockTransactionFrom(payment, priceOf))
+  }
+}
+
+/** «Перевод на Bybit»: 45 000 ₽ from the card to the exchange, what the repeat in «Мои» copies. */
+function bybitTransfer(from: string, to: string): TransactionInput {
+  return {
+    type: 'transfer',
+    common: {
+      timestamp: new Date().toISOString(),
+      comment: 'Перевод на Bybit',
+      categories: ['transfer'],
+      flow_id: null,
+      contact_id: null,
+      price_usd: null,
+      fx_override: null,
+      price: null,
+      price_currency: null,
+    },
+    from: { store: from },
+    to: { store: to },
+    asset: { symbol: 'RUB', name: 'Рубль', coingecko_id: null, chain: 'fiat', contract: null },
+    amount: '45000',
+    fee: null,
+    network: null,
+    tx_hash: null,
+    debt: null,
   }
 }

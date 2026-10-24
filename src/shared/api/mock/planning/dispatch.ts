@@ -7,6 +7,7 @@ import { upcoming } from './budget-calc'
 import { planCalculator } from './calculator'
 import { planEmergency } from './emergency'
 import { planHealth } from './health'
+import { myAutomations, setMyAutomationActive } from './mine'
 import { planReminders } from './reminders'
 import { mockContext } from './state'
 import type { PlanningMockContext } from './state'
@@ -25,6 +26,8 @@ export function mockPlanning(
 ): unknown {
   mockContext.value = ctx
   if (cmd === 'get_upcoming') return upcoming(Number(args?.days ?? 30))
+  if (cmd === 'list_my_automations') return myAutomations()
+  if (cmd === 'set_my_automation_active') return setMyAutomationActive(args?.input as SetMyAutomationActiveInput)
   return (
     planAutomations(cmd, args, ctx, settings) ??
     planAutomationAmounts(cmd, args, ctx) ??

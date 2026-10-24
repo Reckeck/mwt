@@ -18,6 +18,8 @@ export const PLANNING_KEYS = [
   ['reminders'],
   ['price-alerts'],
   ['upcoming'],
+  // «Мои»: under `workflows`, so a workflow write refreshes it too.
+  ['workflows', 'mine'],
 ]
 
 /** Keys a transaction write makes stale on top of the planning ones. */
