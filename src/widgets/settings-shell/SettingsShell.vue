@@ -9,6 +9,7 @@ import { AppSettingsPanel } from '@/widgets/app-settings'
 import { BudgetSettings } from '@/widgets/budget-settings'
 import { CategorizationRules } from '@/widgets/categorization-rules'
 import { CategoryManager } from '@/widgets/category-manager'
+import { CurrencySettings } from '@/widgets/currency-settings'
 import { DeviceSettings } from '@/widgets/device-settings'
 import { EnrichmentSettings } from '@/widgets/enrichment-settings'
 import { FxRates } from '@/widgets/fx-rates'
@@ -189,6 +190,7 @@ function focusActiveTab(event: Event) {
                 <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
                 <VaultSettings v-else-if="section.id === 'vault'" />
                 <VaultDirection v-else-if="section.id === 'direction'" />
+                <CurrencySettings v-else-if="section.id === 'currencies'" />
                 <FxRates v-else-if="section.id === 'rates'" />
                 <BudgetSettings v-else-if="section.id === 'budget'" />
                 <CategoryManager v-else-if="section.id === 'categories'" />

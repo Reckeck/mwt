@@ -3,7 +3,6 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 
-import { CurrencyPicker } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Label } from '@/shared/ui/label'
@@ -119,18 +118,6 @@ function saveRate() {
           </div>
         </div>
         <p class="text-xs text-muted-foreground">{{ t('settings.manualHint') }}</p>
-      </div>
-
-      <div class="grid gap-1.5">
-        <Label for="budget-currency">{{ t('settings.budgetCurrency') }}</Label>
-        <CurrencyPicker
-          id="budget-currency"
-          allow-empty
-          :placeholder="t('settings.budgetCurrencyBase', { currency: settings.baseCurrency.toUpperCase() })"
-          :model-value="settings.vault?.budget_currency ?? ''"
-          @update:model-value="(value) => persist({ budget_currency: String(value) })"
-        />
-        <p class="text-xs text-muted-foreground">{{ t('settings.budgetCurrencyHint') }}</p>
       </div>
 
       <div class="grid gap-1.5">

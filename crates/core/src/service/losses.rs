@@ -706,6 +706,22 @@ mod tests {
     }
 
     #[test]
+    fn the_preview_of_a_convert_shows_the_overpay_over_the_market() {
+        let (_dir, vault, card, wallet, _) = setup();
+        let draft = convert(
+            (&card, rub(), "10000"),
+            (&wallet, usdt(), "95"),
+            None,
+            "2026-02-01T10:00:00Z",
+        );
+        let preview = vault.convert_preview(&draft).unwrap();
+        assert_eq!(preview.market_price, amount("100"));
+        assert_eq!(preview.overpay, amount("500"));
+        assert_eq!(preview.overpay_base, amount("5"));
+        assert_eq!(preview.overpay_pct, amount("5"));
+    }
+
+    #[test]
     fn an_internal_convert_still_counts_its_spread() {
         let (_dir, mut vault, card, _, _) = setup();
         let saved = vault

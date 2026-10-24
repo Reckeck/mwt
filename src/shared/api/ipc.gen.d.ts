@@ -1109,6 +1109,27 @@ type ConvertAmountInput = { from: string, to: string, amount: Amount,
 at: string | null, };
 
 /**
+ * What an exchange paid over the market, valued like its loss (`TxLoss`).
+ */
+type ConvertPreview = { 
+/**
+ * Market price of one received unit in the given currency.
+ */
+market_price: Amount, 
+/**
+ * Given minus the market value of what was received, in the given currency.
+ */
+overpay: Amount, 
+/**
+ * The same in the base currency.
+ */
+overpay_base: Amount, 
+/**
+ * `overpay` as a share of what was given, percent.
+ */
+overpay_pct: Amount, };
+
+/**
  * One side of a conversion.
  */
 type ConvertSide = { account: AccountRef, asset: AssetRef, amount: Amount, price: PriceStamp, };
@@ -5510,7 +5531,12 @@ liquidation_price: Amount | null,
  * An asset sold for money (Wallets-4 · 21): what it stood at in the
  * books and what the sale made over it; `None` for anything else.
  */
-sale: SalePreview | null, };
+sale: SalePreview | null, 
+/**
+ * An exchange against the market of its moment (Currency-1 · 6); `None`
+ * for anything else or while the received side has no price.
+ */
+convert: ConvertPreview | null, };
 
 /**
  * An operation that belongs to a property (plan G4): rent received for a

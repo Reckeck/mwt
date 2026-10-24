@@ -366,9 +366,14 @@ mod tests {
         let summary = vault.property_summary(&car, "UTC").unwrap();
         assert_eq!(summary.expenses_12m_base, amount("1200"));
         assert!(summary.wear_12m_base.is_positive(), "a car loses value");
-        assert_eq!(
-            summary.ownership_month_base,
-            Some(((amount("1200") + summary.wear_12m_base) / amount("12")).round(2))
+        // wear_12m_base is rounded, the month cost divides the exact wear: a cent apart at most.
+        let month = summary
+            .ownership_month_base
+            .expect("a car has a month cost");
+        let expected = (amount("1200") + summary.wear_12m_base) / amount("12");
+        assert!(
+            (month - expected).abs() <= amount("0.01"),
+            "{month:?} vs {expected:?}"
         );
         assert_eq!(summary.rent_yield_pct, None);
     }

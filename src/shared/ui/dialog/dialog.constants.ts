@@ -1,6 +1,8 @@
 /** Tailwind max-width class applied to the dialog panel per size. */
 export const dialogWidths = {
   sm: 'max-w-md',
+  /** 500px: a question with two lists under it (Currency-2 · 9). */
+  confirm: 'max-w-[31.25rem]',
   /** 560px: the deal calculator (Money 4 · 23). */
   form: 'max-w-[35rem]',
   /** 640px: the month's utility bill and the item wizard (Wallets-2 · 13, Wallets-3 · 14–17). */
