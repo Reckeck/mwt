@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { connectBybit } from '@/features/exchange-key'
 import { call } from '@/shared/api/ipc'
+import { PINNED_KEY, usePins } from '@/shared/api/pins'
 import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
 
@@ -19,9 +20,10 @@ function createInput(state: StoreCreateState, baseCurrency: string): CreateStore
     parent_id: props.parent?.id ?? null,
     sub_type: isSub.value ? state.subType.value : null,
     binding: isSub.value ? state.binding.value : null,
-    purpose: null,
+    // «Учитывать в бюджете» (W3): on = everyday money, off = savings; other kinds keep their default.
+    purpose: state.offersBudget.value ? (state.inBudget.value ? 'everyday' : 'savings') : null,
     liability: kind.value === 'liability' || subInfo.value?.credit ? state.terms.value : null,
-    contact_id: null,
+    contact_id: !isSub.value && kind.value === 'bank' ? state.contactId.value || null : null,
     custody: !isSub.value && kind.value === 'crypto' ? state.custody.value : null,
     property:
       !isSub.value && kind.value === 'property'
@@ -38,9 +40,14 @@ function createInput(state: StoreCreateState, baseCurrency: string): CreateStore
     provider: !isSub.value && kind.value === 'exchange' ? state.provider.value : null,
     opening:
       state.offersOpening.value && state.openingAmountValue.value && state.openingAsset.value
-        ? { asset: state.openingAsset.value, amount: state.openingAmountValue.value }
+        ? {
+            asset: state.openingAsset.value,
+            amount: state.openingAmountValue.value,
+            at: state.openingAt.value ? new Date(`${state.openingAt.value}T12:00:00`).toISOString() : undefined,
+          }
         : null,
-    card: state.withCard.value ? { name: state.cardName.value.trim(), currency: state.cardCurrency.value } : null,
+    // The card's name follows the bank's («Тинькофф RUB»): the backend fills it in.
+    card: state.withCard.value ? { name: '', currency: state.cardCurrency.value } : null,
   }
 }
 
@@ -52,6 +59,15 @@ export function useCreateStore(state: StoreCreateState, onCreated: (store: Store
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const settings = useSettingsStore()
+  const pins = usePins()
+
+  /** «В избранное» (W4): quietly, the «created» toast already speaks for the wallet. */
+  async function pin(store: Store) {
+    const views = await call<PinnedView[]>('set_pinned', {
+      pins: [...pins.pins.value, { type: 'entity', target: { kind: 'store', id: store.id } }],
+    })
+    queryClient.setQueryData(PINNED_KEY, views)
+  }
 
   return useMutation({
     mutationFn: async () => {
@@ -68,6 +84,7 @@ export function useCreateStore(state: StoreCreateState, onCreated: (store: Store
           notify.error(err, 'wallet.bybit.keySaveFailed')
         }
       }
+      if (!state.isSub.value && state.favorite.value) await pin(store).catch(() => undefined)
       return store
     },
     onSuccess: (store) => {

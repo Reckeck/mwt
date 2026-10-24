@@ -23,6 +23,13 @@ const TO_BYBIT = `
   const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('Bybit'))
   if (link) await gp.$router.push(link.getAttribute('href'))
   await new Promise((done) => setTimeout(done, 900)); return true`
+/** A wallet's own page by the name in the wallets list. */
+const toWallet = (name) => `
+  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
+  const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('${name}'))
+  if (link) await gp.$router.push(link.getAttribute('href'))
+  await new Promise((done) => setTimeout(done, 900)); return true`
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
@@ -436,4 +443,39 @@ const stage3 = [
   { name: 'goal-edit', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-edit]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '4.' } },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3 }
+/** Opens «Новый кошелёк» from the wallets header. */
+const CREATE_STORE = [{ wait: 600 }, { click: '[data-tour="stores-create"]' }, { wait: 500 }]
+
+/** Stage 4: wallets and currencies. */
+const stage4 = [
+  { name: 'stores', route: '/stores', scenarios: ['year', 'empty'], canvas: { board: 'Wallets-1', frame: '1.' } },
+  { name: 'stores-currency', route: '/stores', canvas: { board: 'Currency-1', frame: '2.' } },
+  { name: 'wallet-bank', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Wallets-1', frame: '5.' } },
+  { name: 'wallet-crypto', route: '/stores', steps: [{ eval: toWallet('Ledger') }], canvas: { board: 'Wallets-1', frame: '6.' } },
+  { name: 'wallet-exchange', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Wallets-1', frame: '7.' } },
+  { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
+  { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },
+  { name: 'store-new-kind', route: '/stores', steps: CREATE_STORE, canvas: { board: 'Wallets-1', frame: '2.' } },
+  {
+    name: 'store-new-name',
+    route: '/stores',
+    steps: [...CREATE_STORE, { click: '[data-wizard-next]' }, { wait: 400 }, { fill: ['#store-name', 'Тинькофф'] }],
+    canvas: { board: 'Wallets-1', frame: '3.' },
+  },
+  {
+    name: 'store-new-opening',
+    route: '/stores',
+    steps: [
+      ...CREATE_STORE,
+      { click: '[data-wizard-next]' },
+      { wait: 400 },
+      { fill: ['#store-name', 'Тинькофф'] },
+      { click: '[data-wizard-next]' },
+      { wait: 400 },
+      { fill: ['#store-opening-amount', '84320'] },
+    ],
+    canvas: { board: 'Wallets-1', frame: '4.' },
+  },
+]
+
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4 }

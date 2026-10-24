@@ -7,8 +7,10 @@ import { required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { DEFAULT_STORE_COLOR, KIND_COLORS } from '../store-create.constants'
-import type { StoreCreateDialogProps } from '../store-create.types'
+import type { StoreCreateDialogProps, StoreCreateStep } from '../store-create.types'
 import { useStoreTree } from '@/shared/api/queries'
+
+import { useWizardSteps } from './use-wizard-steps'
 
 /**
  * Everything the new-wallet dialog holds: the kind or sub-account type picked
@@ -23,7 +25,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const isSub = computed(() => Boolean(props.parent))
 
   /* --- step 1: what --- */
-  const step = ref<'pick' | 'details'>('pick')
+  const step = ref<StoreCreateStep>('pick')
   const kind = ref<StoreKind>('bank')
   const subType = ref<SubType | null>(null)
   const creatableKinds = computed(() =>
@@ -55,8 +57,12 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const token = ref<AssetRef | null>(null)
   /** A new bank comes with its first card: a card is a bank account. */
   const cardCurrency = ref('')
-  const cardName = ref('')
   const withCard = computed(() => !isSub.value && kind.value === 'bank')
+  /** «Учитывать в бюджете» (W3): spending from it counts in «Можно потратить сегодня». */
+  const inBudget = ref(true)
+  const offersBudget = computed(() => !isSub.value && (kind.value === 'bank' || kind.value === 'cash'))
+  /** The bank behind it, from the contacts: for the icon and statement import. */
+  const contactId = ref('')
   const pairText = ref('')
   const pair = computed(() => parsePairSymbol(pairText.value))
 
@@ -77,6 +83,10 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const openingCurrency = ref('')
   const openingToken = ref<AssetRef | null>(null)
   const openingSide = ref<'base' | 'quote'>('quote')
+  /** «На дату» (W4): the day the balance was there; the opening top-up is booked on it. */
+  const openingAt = ref('')
+  /** «В избранное» (W4): pinned to the sidebar right after it is created. */
+  const favorite = ref(true)
   /** Property is valued by purchase and a loan by its terms: no opening balance there. */
   const offersOpening = computed(() => !['property', 'liability'].includes(kind.value))
   /** Which asset the opening balance is in, from the binding or the picker. */
@@ -121,16 +131,17 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   })
 
   const title = computed(() => {
-    if (!props.parent) return step.value === 'pick' ? t('storeWizard.pickKind') : t('wallet.newStore')
+    if (!props.parent) return t('wallet.newStore')
     const path = props.parentPath?.length ? props.parentPath : [props.parent.name]
     return t('stores.newSubAccount', { parent: path.join(' › ') })
   })
 
+  /** A card on step 1 only picks; «Далее» (or a second click) moves on. */
   function pickKind(value: StoreKind) {
     kind.value = value
     color.value = KIND_COLORS[value] ?? DEFAULT_STORE_COLOR
+    inBudget.value = value === 'bank' || value === 'cash'
     if (value === 'liability') terms.value = { ...emptyLiabilityTerms(), kind: 'loan' }
-    step.value = 'details'
   }
 
   function pickSubType(value: SubType) {
@@ -158,21 +169,27 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     openingAmount.value = ''
     openingCurrency.value = base
     cardCurrency.value = base
-    cardName.value = ''
     openingToken.value = null
     openingSide.value = 'quote'
+    openingAt.value = new Date().toISOString().slice(0, 10)
+    favorite.value = true
+    contactId.value = ''
     if (props.parent) {
       kind.value = props.parent.kind
       color.value = props.parent.color
       step.value = 'pick'
     } else if (props.kind) {
       pickKind(props.kind)
+      step.value = 'details'
     } else {
+      pickKind('bank')
       step.value = 'pick'
     }
   })
 
-  const canGoBack = computed(() => step.value === 'details' && (isSub.value || !props.kind))
+  const { steps, stepNumber, isLast, goBack, goNext, canGoBack } = useWizardSteps(step, isSub, offersOpening, () =>
+    Boolean(props.kind),
+  )
 
   const exchangeRoot = computed(() => !isSub.value && kind.value === 'exchange')
   /** Key and secret go together: one without the other cannot connect. */
@@ -196,7 +213,10 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
       apiKey: keyHalf.value && !apiKey.value.trim() ? t('validation.keyPair') : null,
       apiSecret: keyHalf.value && !apiSecret.value.trim() ? t('validation.keyPair') : null,
       cardCurrency: withCard.value ? required(cardCurrency.value, 'pick') : null,
-      opening: openingValid.value ? null : t('storeWizard.openingInvalid'),
+      opening:
+        (step.value === 'opening' || (isSub.value && step.value === 'details')) && !openingValid.value
+          ? t('storeWizard.openingInvalid')
+          : null,
     }),
     { resetOn: [open, step] },
   )
@@ -226,8 +246,10 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     currency,
     token,
     cardCurrency,
-    cardName,
     withCard,
+    inBudget,
+    offersBudget,
+    contactId,
     pairText,
     pair,
     binding,
@@ -235,6 +257,8 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     openingCurrency,
     openingToken,
     openingSide,
+    openingAt,
+    favorite,
     offersOpening,
     openingAsset,
     openingPicker,
@@ -243,6 +267,11 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     title,
     pickKind,
     pickSubType,
+    steps,
+    stepNumber,
+    isLast,
+    goBack,
+    goNext,
     canGoBack,
     form,
   }

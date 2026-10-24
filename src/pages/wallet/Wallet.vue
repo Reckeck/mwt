@@ -13,26 +13,23 @@ import { StoreCreateDialog } from '@/features/store-create'
 import { QuickAddDialog } from '@/widgets/quick-add'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
-import { ExchangeTerminal } from '@/widgets/exchange-terminal'
 import { PropertyValueCard } from '@/widgets/property-value'
 import { VehicleCard } from '@/widgets/vehicle-card'
-import { isHome, StoreChart, useStoreOverview } from '@/entities/store'
+import { isHome, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
-import { Tabs } from '@/shared/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
+import { openQuickAdd } from '@/shared/lib/quick-add'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { useWalletScope, useWalletTabs } from './model/use-wallet-view'
-import { ExchangeImportView } from './ui/exchange-import-view'
-import { WalletExtras } from './ui/wallet-extras'
+import { walletFigure } from './lib/wallet-figure'
+import { type WalletTabsKind, useWalletScope, useWalletTabs } from './model/use-wallet-view'
 import { SubAccountsCard } from './ui/sub-accounts-card'
 import { WalletHeader } from './ui/wallet-header'
-import { WalletStats } from './ui/wallet-stats'
 import { WalletTabs } from './ui/wallet-tabs'
 
-/** One wallet: header and actions, its numbers and sub-accounts, chart, positions and history. */
+/** One wallet (Wallets-1 · 5–7): its sum and actions on top, then the tabs its kind needs. */
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -41,7 +38,7 @@ const settingsStore = useSettingsStore()
 // The shell keys this page by path, so the id is fixed for its lifetime.
 const storeId = computed(() => String(route.params.id ?? ''))
 const { includeChildren, scopeValue } = useWalletScope(storeId)
-const { overview, pnl, base, store, isArchived, children, hasChildren, positions, ancestors, parentPath, canAddChild, ownShare } =
+const { overview, base, store, isArchived, children, hasChildren, positions, ancestors, parentPath, canAddChild, ownShare } =
   useStoreOverview(storeId, includeChildren)
 const decimals = computed(() => settingsStore.displayDecimals)
 
@@ -62,7 +59,34 @@ const { hasKey: bybitHasKey } = useExchangeKeyStatus(storeId, isExchangeNode)
 const isPropertyRoot = computed(() => store.value?.kind === 'property' && !store.value.parent_id)
 /** Utilities and meters belong to a home only (plan G2). */
 const isHomeRoot = computed(() => isPropertyRoot.value && isHome(store.value?.property?.category))
-const { tab, tabs, view, views } = useWalletTabs(isHomeRoot, hasTerminal)
+const tabsKind = computed<WalletTabsKind>(() => {
+  if (isExchangeNode.value) return 'exchange'
+  if (isHomeRoot.value) return 'home'
+  return store.value?.kind === 'crypto' || store.value?.kind === 'exchange' || store.value?.kind === 'property' ? 'coins' : 'money'
+})
+const { tab, tabs, more } = useWalletTabs(tabsKind, hasTerminal)
+
+/**
+ * The header's sum. An exchange always counts its sub-accounts in it and lists
+ * its own spot by currency below, so it has no scope to choose.
+ */
+const rollUp = computed(() => isExchangeNode.value || (hasChildren.value && includeChildren.value))
+const figure = computed(() => {
+  const data = overview.data.value
+  if (!data) return null
+  return rollUp.value
+    ? walletFigure(data.subtree_positions, data.subtree_base, base.value)
+    : walletFigure(data.positions, data.own_base, base.value)
+})
+const exchange = computed(() => {
+  const data = overview.data.value
+  return isExchangeNode.value && data ? { children: data.children, ownBase: data.own_base, ownPositions: data.positions } : null
+})
+/** The header's buttons: an exchange opens «Сделка», any other wallet the short form on its kind. */
+function act(kind: TxKind) {
+  if (isExchangeNode.value) openDeal(kind)
+  else openQuickAdd({ storeId: storeId.value, kind })
+}
 
 const priceRefresh = usePriceRefresh()
 
@@ -114,16 +138,17 @@ function openWallet(created: Store) {
 
 <template>
   <SectionState :loading="overview.isPending.value" :error="overview.error.value" skeleton="figure" @retry="overview.refetch()">
-    <div v-if="store && overview.data.value" class="flex flex-col gap-4">
+    <div v-if="store && overview.data.value && figure" class="flex flex-col gap-4">
       <WalletHeader
         :store="store"
         :ancestors="ancestors"
+        :figure="figure"
         :can-add-child="canAddChild"
         :has-children="hasChildren"
         :refreshing="priceRefresh.isPending.value"
         :exchange="isExchangeNode"
+        @act="act"
         @operation="openTransaction"
-        @deal="openDeal"
         @adjust="adjustOpen = true"
         @calculator="calculatorOpen = true"
         @sub-account="subWalletOpen = true"
@@ -132,37 +157,21 @@ function openWallet(created: Store) {
         @refresh="priceRefresh.mutate()"
       />
 
-      <!-- An exchange is extended by its terminal and its import: one view at a time, tabs like the rest of the app. -->
-      <div v-if="hasTerminal" class="w-fit max-w-full" :aria-label="t('wallet.view.title')" data-tour="exchange-views">
-        <Tabs v-model="view" :tabs="views" />
-      </div>
-
-      <ExchangeTerminal v-if="view === 'terminal'" :store-id="storeId" />
-      <ExchangeImportView v-else-if="view === 'import'" :store-id="storeId" :has-key="bybitHasKey" />
-
-      <EmptyState v-else-if="isEmpty" :title="t('wallet.empty.title')" :description="t('wallet.empty.description')">
+      <EmptyState v-if="isEmpty" :title="t('wallet.empty.title')" :description="t('wallet.empty.description')">
         <Button :disabled="isArchived" @click="openTransaction">{{ t('wallet.empty.action') }}</Button>
       </EmptyState>
 
       <template v-else>
-        <!-- Only a wallet with sub-accounts has a scope to choose. -->
-        <div v-if="hasChildren" class="flex justify-end">
+        <!-- A wallet with sub-accounts chooses its scope; an exchange lists them as cards instead. -->
+        <div v-if="hasChildren && !isExchangeNode" class="flex justify-end">
           <ToggleGroup v-model="scopeValue" type="single" variant="outline" size="sm" :aria-label="t('stores.scope')">
             <ToggleGroupItem value="all" class="px-2.5">{{ t('stores.withChildren') }}</ToggleGroupItem>
             <ToggleGroupItem value="own" class="px-2.5">{{ t('stores.onlyThis') }}</ToggleGroupItem>
           </ToggleGroup>
         </div>
 
-        <WalletStats
-          :overview="overview.data.value"
-          :pnl="pnl.data.value"
-          :pnl-loading="pnl.isPending.value"
-          :positions="positions"
-          :rolled-up="hasChildren && includeChildren"
-        />
-
         <SubAccountsCard
-          v-if="hasChildren"
+          v-if="hasChildren && !isExchangeNode"
           :store="store"
           :children="children"
           :own-base="overview.data.value.own_base"
@@ -180,21 +189,23 @@ function openWallet(created: Store) {
         <PropertyValueCard v-if="isPropertyRoot" :store="store" />
         <VehicleCard v-if="isPropertyRoot && store.property?.category === 'car'" :store="store" />
 
-        <StoreChart :store-id="storeId" :base-currency="base" :include-children="includeChildren" />
-        <WalletExtras :store="store" :has-key="bybitHasKey" />
-
         <WalletTabs
           v-model:tab="tab"
           :store="store"
           :store-id="storeId"
           :tabs="tabs"
-          :positions="positions"
+          :more="more"
+          :positions="exchange ? exchange.ownPositions : positions"
           :open-positions="overview.data.value.open_positions"
           :base="base"
           :decimals="decimals"
-          :include-children="includeChildren"
+          :include-children="rollUp"
           :prices-as-of="overview.data.value.prices_as_of"
+          :exchange="exchange"
+          :has-key="bybitHasKey"
+          :refreshing="priceRefresh.isPending.value"
           @operation="openTransaction"
+          @refresh="priceRefresh.mutate()"
         />
       </template>
 

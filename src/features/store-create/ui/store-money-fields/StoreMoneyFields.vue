@@ -4,73 +4,47 @@ import { useI18n } from 'vue-i18n'
 import { AssetInput } from '@/entities/asset'
 import { CurrencyPicker } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
-import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
+import { SwitchRow } from '@/shared/ui/switch-row'
 
 import { useStoreCreate } from '../../model/use-store-create-state'
 
-/** The money a new wallet starts with: a bank's first card, and what is already there. */
+/**
+ * What the wallet holds now (Wallets-1 · 4): booked as «Начальный остаток» on
+ * its day, not as income; and whether it goes to the sidebar right away.
+ */
 const { t } = useI18n()
-const {
-  name,
-  withCard,
-  cardCurrency,
-  cardName,
-  offersOpening,
-  openingAmount,
-  openingPicker,
-  openingCurrency,
-  openingToken,
-  openingSide,
-  openingAsset,
-  pair,
-  form,
-} = useStoreCreate()
+const { isSub, openingAmount, openingPicker, openingCurrency, openingToken, openingSide, openingAsset, openingAt, favorite, pair, form } =
+  useStoreCreate()
+const today = new Date().toISOString().slice(0, 10)
 </script>
 
 <template>
-  <!-- A bank always has a card: it is created with the bank. -->
   <FormField
-    v-if="withCard"
-    for="store-card-currency"
-    :label="t('storeWizard.card')"
-    required
-    :error="form.error('cardCurrency')"
-    :hint="t('storeWizard.cardHint')"
-    data-tour="store-bank-card"
-  >
-    <div class="grid grid-cols-[10rem_minmax(0,1fr)] gap-2">
-      <CurrencyPicker id="store-card-currency" v-model="cardCurrency" :kinds="['fiat']" label="" />
-      <Input
-        v-model="cardName"
-        autocomplete="off"
-        :placeholder="t('storeWizard.cardNamePlaceholder', { name: `${name.trim() || t('stores.kind.bank')} ${cardCurrency.toUpperCase()}` })"
-        :aria-label="t('storeWizard.cardName')"
-      />
-    </div>
-  </FormField>
-
-  <!-- Optional: money already there, so the new wallet does not start at zero. -->
-  <FormField
-    v-if="offersOpening"
     for="store-opening-amount"
     :label="t('storeWizard.opening')"
     :error="form.error('opening')"
     :hint="t('storeWizard.openingHint')"
     data-tour="store-opening"
   >
-    <div class="grid grid-cols-[minmax(0,1fr)_10rem] gap-2">
-      <AmountInput id="store-opening-amount" v-model="openingAmount" autocomplete="off" :placeholder="t('storeWizard.openingPlaceholder')" />
-      <CurrencyPicker v-if="openingPicker === 'currency'" v-model="openingCurrency" />
-      <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" />
-      <Select v-else-if="openingPicker === 'side' && pair" v-model="openingSide" :aria-label="t('binding.pair')">
-        <SelectItem value="base">{{ pair.base }}</SelectItem>
-        <SelectItem value="quote">{{ pair.quote }}</SelectItem>
-      </Select>
-      <span v-else-if="openingAsset" class="flex h-9 items-center px-1 text-sm text-muted-foreground">
-        {{ openingAsset.symbol }}
-      </span>
-    </div>
+    <AmountInput id="store-opening-amount" v-model="openingAmount" size="lg" autocomplete="off" placeholder="0">
+      <template #suffix>
+        <CurrencyPicker v-if="openingPicker === 'currency'" v-model="openingCurrency" :kinds="['fiat']" label="" chip />
+        <AssetInput v-else-if="openingPicker === 'asset'" v-model="openingToken" class="w-32" />
+        <Select v-else-if="openingPicker === 'side' && pair" v-model="openingSide" :aria-label="t('binding.pair')">
+          <SelectItem value="base">{{ pair.base }}</SelectItem>
+          <SelectItem value="quote">{{ pair.quote }}</SelectItem>
+        </Select>
+        <span v-else-if="openingAsset" class="px-2 text-sm text-muted-foreground">{{ openingAsset.symbol.toUpperCase() }}</span>
+      </template>
+    </AmountInput>
   </FormField>
+
+  <FormField v-if="!isSub" for="store-opening-at" :label="t('storeWizard.openingAt')">
+    <DateTimePicker id="store-opening-at" v-model="openingAt" required :max="today" />
+  </FormField>
+
+  <SwitchRow v-if="!isSub" id="store-favorite" v-model="favorite" :label="t('storeWizard.favorite')" plain />
 </template>

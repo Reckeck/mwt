@@ -72,6 +72,9 @@
   /* Below text-xs: badges, calendar cells, axis-like captions (was text-[10px] / text-[11px]). */
   --text-2xs: 0.625rem;
   --text-2xs--line-height: 0.875rem;
+  /* 13px: the canvas's `.sm` — subtitles under a sum, phone buttons. */
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.125rem;
   --container-mid: 44rem;
   --container-wide: 52rem;
   /* A page's widest: on a 4K screen rows stretched to 3000px and the eye lost the line. */

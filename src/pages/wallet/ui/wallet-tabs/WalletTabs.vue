@@ -1,28 +1,32 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Receipt } from 'lucide-vue-next'
+import { Receipt, RefreshCw } from 'lucide-vue-next'
 
-import { AssetRevalueButton } from '@/features/asset-revalue'
 import { UtilityBillDialog } from '@/features/utility-bill'
 import { UtilityRemindersButton } from '@/features/utility-reminders'
-import { AllocationPie } from '@/widgets/allocation-pie'
-import { AssetDetailsSheet } from '@/widgets/asset-details'
+import { ExchangeTerminal } from '@/widgets/exchange-terminal'
 import { StoreTransactions } from '@/widgets/store-transactions'
 import { PropertySummaryCard, UtilityList } from '@/widgets/utility-list'
 import { UtilityStats } from '@/widgets/utility-stats'
-import { StorePositions } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
-import { EmptyState } from '@/shared/ui/empty-state'
-import { Tabs } from '@/shared/ui/tabs'
+import { Tabs, type TabDef } from '@/shared/ui/tabs'
+import { formatAsOf } from '@/shared/lib/format'
 
+import { ExchangeImportView } from '../exchange-import-view'
+import { WalletPositions } from '../wallet-positions'
 import { WalletRelations } from '../wallet-relations'
 
-/** Utilities (a home), positions and history — the wallet's working area. */
+/**
+ * The wallet's working area under its header: the tabs its kind needs
+ * (Wallets-1 · 5–7). A coin wallet shows beside them how fresh its prices
+ * are, with «обновить».
+ */
 const props = defineProps<{
   store: Store
   storeId: string
-  tabs: { value: string; label: string }[]
+  tabs: TabDef[]
+  more: TabDef[]
   positions: StorePosition[]
   openPositions: StorePosition[]
   base: string
@@ -30,29 +34,31 @@ const props = defineProps<{
   includeChildren: boolean
   /** The oldest quote behind the prices, for «prices as of». */
   pricesAsOf?: string | null
+  exchange?: { children: StoreChildRow[]; ownBase: string; ownPositions: StorePosition[] } | null
+  hasKey: boolean
+  refreshing: boolean
 }>()
 const tab = defineModel<string>('tab', { required: true })
-const emit = defineEmits<{ operation: [] }>()
+const emit = defineEmits<{ operation: []; refresh: [] }>()
 
 const { t } = useI18n()
 const billOpen = ref(false)
-const detailsOpen = ref(false)
-const picked = ref<StorePosition | null>(null)
-/** A coin wallet or an exchange holds several assets: a ring shows their shares. */
-const slices = computed(() =>
-  ['crypto', 'exchange'].includes(props.store.kind) && props.positions.length > 1
-    ? props.positions.map((position) => ({ label: position.asset.symbol.toUpperCase(), value: position.value_base }))
-    : [],
-)
-function openPosition(position: StorePosition) {
-  picked.value = position
-  detailsOpen.value = true
-}
 </script>
 
 <template>
-  <!-- Always offer both tabs: a wallet with no positions can still have history. -->
-  <Tabs v-model="tab" :tabs="props.tabs">
+  <Tabs v-model="tab" :tabs="props.tabs" :more="props.more" :more-label="t('wallet.tab.more')">
+    <template #end>
+      <span
+        v-if="props.store.kind === 'crypto' && tab === 'positions' && props.pricesAsOf"
+        class="flex items-center gap-1 text-xs text-muted-foreground"
+      >
+        {{ t('wallet.pricesAt', { time: formatAsOf(props.pricesAsOf) }) }} ·
+        <Button variant="link" size="sm" class="h-auto gap-1 p-0 text-xs" :disabled="props.refreshing" @click="emit('refresh')">
+          <RefreshCw class="size-3" :class="props.refreshing && 'animate-spin'" />
+          {{ t('wallet.refreshPrices') }}
+        </Button>
+      </span>
+    </template>
     <template #utilities>
       <div class="flex flex-col gap-4">
         <PropertySummaryCard :property-id="props.store.id" />
@@ -69,53 +75,27 @@ function openPosition(position: StorePosition) {
       </div>
     </template>
     <template #positions>
-      <EmptyState v-if="props.positions.length === 0" :title="t('wallet.empty')" :description="t('wallet.emptyHint')">
-        <Button :disabled="props.store.archived" @click="emit('operation')">
-          <Plus class="size-4" />
-          {{ t('wallet.addOperation') }}
-        </Button>
-      </EmptyState>
-      <StorePositions
-        v-else
-        data-tour="wallet-positions"
-        clickable
+      <WalletPositions
+        :store="props.store"
+        :store-id="props.storeId"
         :positions="props.positions"
-        :base-currency="props.base"
+        :open-positions="props.openPositions"
+        :base="props.base"
         :decimals="props.decimals"
         :prices-as-of="props.pricesAsOf"
-        @open="openPosition"
-      >
-        <template v-if="props.store.kind === 'property'" #actions="{ position }">
-          <AssetRevalueButton :asset="position.asset" :store-id="props.store.id" />
-        </template>
-      </StorePositions>
-      <AllocationPie
-        v-if="slices.length"
-        class="mt-4"
-        :title="t('charts.byAsset')"
-        :slices="slices"
-        :currency="props.base"
-      />
-      <!-- Futures positions: shown, never counted in the totals. -->
-      <StorePositions
-        v-if="props.openPositions.length"
-        class="mt-4"
-        :title="t('wallet.openPositions')"
-        :positions="props.openPositions"
-        :base-currency="props.base"
-        :decimals="props.decimals"
-      />
-      <AssetDetailsSheet
-        v-model:open="detailsOpen"
-        :position="picked"
-        :store-id="props.storeId"
-        :base-currency="props.base"
-        :decimals="props.decimals"
-        :revaluable="props.store.kind === 'property'"
+        :exchange="props.exchange"
+        :has-key="props.hasKey"
+        @operation="emit('operation')"
       />
     </template>
     <template #history>
-      <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren" />
+      <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren" bare />
+    </template>
+    <template #terminal>
+      <ExchangeTerminal :store-id="props.storeId" />
+    </template>
+    <template #import>
+      <ExchangeImportView :store-id="props.storeId" :has-key="props.hasKey" />
     </template>
     <template #relations>
       <WalletRelations :store-id="props.storeId" />

@@ -93,6 +93,36 @@ export function mockOwnPositions(storeId: string): StorePosition[] {
 
 const sumValue = (positions: StorePosition[]) => positions.reduce((acc, row) => acc + Number(row.value_usd), 0)
 
+/** Like `tree_balances` in Rust: property in its own currency, sub-accounts merged by ticker. */
+function mockBalances(store: Store, own: number, children: StoreTreeNode[]): AssetBalance[] {
+  const code = store.property?.currency?.toUpperCase()
+  const rate = code ? priceOf(code) : 0
+  const mine: AssetBalance[] =
+    code && rate
+      ? [{ asset: fiatRef(code), quantity: String(own / rate), value_base: String(own) }]
+      : mockOwnPositions(store.id)
+          .filter((row) => Number(row.quantity) > 0)
+          .map((row) => ({ asset: row.asset, quantity: row.quantity, value_base: row.value_base }))
+  for (const balance of children.flatMap((child) => child.balances)) {
+    const seen = mine.find((row) => row.asset.symbol.toUpperCase() === balance.asset.symbol.toUpperCase())
+    if (!seen) mine.push({ ...balance })
+    else {
+      seen.quantity = String(Number(seen.quantity) + Number(balance.quantity))
+      seen.value_base = String(Number(seen.value_base) + Number(balance.value_base))
+    }
+  }
+  return mine.sort((left, right) => Number(right.value_base) - Number(left.value_base))
+}
+
+const fiatRef = (symbol: string): AssetRef => ({
+  symbol,
+  name: symbol,
+  coingecko_id: null,
+  chain: 'fiat',
+  contract: null,
+  quote: symbol,
+})
+
 export function mockTreeNode(store: Store, depth: number, parentPath: string[]): StoreTreeNode {
   const path = [...parentPath, store.name]
   const children = mockChildren(store.id)
@@ -121,6 +151,7 @@ export function mockTreeNode(store: Store, depth: number, parentPath: string[]):
     ]
       .filter((asset, index, list) => list.findIndex((other) => other.symbol === asset.symbol) === index)
       .slice(0, 3),
+    balances: mockBalances(store, own, children),
     last_tx_at:
       [...mockFilterTxs([store.id]).map(timestampOf), ...children.map((child) => child.last_tx_at ?? '')]
         .filter(Boolean)

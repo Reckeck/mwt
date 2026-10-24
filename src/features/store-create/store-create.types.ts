@@ -9,3 +9,6 @@ export interface StoreCreateDialogProps {
   /** Pre-selected kind for a top-level wallet (the sidebar group's «+»): skips the first step. */
   kind?: StoreKind | null
 }
+
+/** Where the new-wallet wizard is (Wallets-1 · 2–4). */
+export type StoreCreateStep = 'pick' | 'details' | 'opening'
