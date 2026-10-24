@@ -19,6 +19,8 @@ export interface DrillContext {
   withFee?: boolean
   /** Only operations that closed a position (P&L). */
   realized?: boolean
+  /** Only operations without a rate, left out of the sums (Currency-1 · 7). */
+  unpriced?: boolean
   /** Where the click came from: the list shows «← <label>» back to it (Paths 1 · 5). */
   back?: DrillBack
 }
@@ -43,6 +45,7 @@ export function drillTo(context: DrillContext): RouteLocationRaw {
   if (context.kinds?.length) query.kind = context.kinds.join(',')
   if (context.withFee) query.fee = '1'
   if (context.realized) query.realized = '1'
+  if (context.unpriced) query.norate = '1'
   if (context.back) Object.assign(query, backQuery(context.back))
   return { name: 'transactions', query }
 }

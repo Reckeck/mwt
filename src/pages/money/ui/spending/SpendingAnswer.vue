@@ -21,6 +21,8 @@ const props = defineProps<{
   /** The average month of the year that ends with the period. */
   average: string
   rows: SpendingCategory[]
+  /** Some spending has no rate: the sum is a floor, «не меньше» (Currency-1 · 7). */
+  incomplete?: boolean
 }>()
 
 const { t } = useI18n()
@@ -44,7 +46,7 @@ const headline = computed(() => {
   if (!top.value) return t('money.answer.nothing', { when: when.value })
   const category = categoryKeyLabel(top.value.key, categories.data.value, t)
   const key = props.rows.length === 1 ? 'money.answer.all' : 'money.answer.most'
-  return t(key, { when: when.value, spent, category })
+  return t(props.incomplete ? `${key}AtLeast` : key, { when: when.value, spent, category })
 })
 
 /** «Месяц идёт: день 22 из 31» while the period is the running month. */

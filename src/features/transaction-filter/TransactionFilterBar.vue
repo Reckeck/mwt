@@ -63,6 +63,7 @@ const moreActive = computed(() => {
     value.debt_only,
     value.hide_internal,
     value.with_attachments,
+    value.unpriced,
   ].filter(Boolean).length
 })
 

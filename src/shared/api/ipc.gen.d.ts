@@ -882,7 +882,11 @@ type CategoriesReport = { meta: ReportMeta, groups: Array<CategoryGroupBlock>,
 /**
  * The five biggest spending categories of the period.
  */
-top: Array<CategoryRow>, };
+top: Array<CategoryRow>, 
+/**
+ * Spending of the period the totals could not count (Currency-1 · 7).
+ */
+unpriced: UnpricedSpending, };
 
 /**
  * «If the comment or the contact name contains `pattern`, use `category`.»
@@ -961,7 +965,11 @@ share: Amount,
  * Change against the previous period of the same length, percent;
  * `None` when that period had nothing.
  */
-delta_pct: Amount | null, };
+delta_pct: Amount | null, 
+/**
+ * Operations of the period left out of `total`: a side had no rate.
+ */
+unpriced: number, };
 
 /**
  * Supported blockchain networks + a pseudo `Fiat` variant.
@@ -5410,7 +5418,12 @@ debt_only: boolean,
 /**
  * Only operations with a file or a link (Full-New-Attach 6).
  */
-with_attachments: boolean, };
+with_attachments: boolean, 
+/**
+ * Only operations the budget could not value: a side had no rate
+ * (Currency-1 · 7).
+ */
+unpriced: boolean, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
@@ -5564,6 +5577,19 @@ type UndoReport = { restored: number,
 skipped: Array<string>, };
 
 type UnlockInput = { path: string, password: string, };
+
+/**
+ * Spending without a rate: it counts as zero, so the total is a lower bound.
+ */
+type UnpricedSpending = { count: number, 
+/**
+ * `YYYY-MM-DD`, ascending, each once.
+ */
+days: Array<string>, 
+/**
+ * Currencies without a rate, upper case, each once.
+ */
+currencies: Array<string>, };
 
 /**
  * One thing on the agenda.

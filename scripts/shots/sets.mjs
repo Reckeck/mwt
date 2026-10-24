@@ -559,6 +559,52 @@ const stage4 = [
   },
   { name: 'currency-settings', route: 'settings:currencies', steps: [{ wait: 800 }], canvas: { board: 'Currency-1', frame: '1.' } },
   {
+    name: 'money-card',
+    route: '/',
+    steps: [
+      { wait: 1200 },
+      {
+        eval:
+          "const s = [...document.querySelectorAll('main [data-money-currency=rub]')].find((n) => n.getClientRects().length && !n.parentElement.closest('a, button')); const m = document.querySelector('main'); if (m.scrollWidth > m.clientWidth + 1) throw new Error('main overflows: ' + m.scrollWidth + ' > ' + m.clientWidth); s.scrollIntoView({ block: 'center' }); s.click(); return !!s",
+      },
+      { wait: 900 },
+    ],
+    canvas: { board: 'Currency-1', frame: '5.' },
+  },
+  {
+    name: 'convert-overpay',
+    route: '/',
+    steps: [
+      { eval: toWallet('Тинькофф') },
+      { click: { text: 'Обменять', within: 'main' } },
+      { wait: 900 },
+      { fill: ['#tx-amount', '46500'] },
+      { fill: ['#tx-to-amount', '480'] },
+      { eval: "[...document.querySelectorAll('[data-asset-chip]')].filter((n) => n.getClientRects().length)[1].click(); return true" },
+      { wait: 500 },
+      { eval: "[...document.querySelectorAll('[data-slot=combobox-item]')].find((n) => /\\bUSDT\\b/.test(n.textContent)).click(); return true" },
+      { wait: 400 },
+      { click: { text: '— Выберите —', within: '[role=dialog]' } },
+      { wait: 500 },
+      { click: { text: 'Bybit', within: '[role=listbox]' } },
+      { wait: 1200 },
+    ],
+    canvas: { board: 'Currency-1', frame: '6.' },
+  },
+  {
+    name: 'spending-unpriced',
+    route: '/money',
+    scenarios: ['stress'],
+    steps: [{ wait: 1500 }],
+    canvas: { board: 'Currency-1', frame: '7.' },
+  },
+  {
+    name: 'spending-unpriced-show',
+    route: '/money',
+    scenarios: ['stress'],
+    steps: [{ wait: 1500 }, { click: '[data-spending-incomplete-show]' }, { wait: 1500 }],
+  },
+  {
     name: 'base-change',
     route: 'settings:currencies',
     steps: [

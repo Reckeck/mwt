@@ -145,7 +145,15 @@ pub(crate) struct Flow {
     pub value: Amount,
     pub categories: Vec<String>,
     pub stores: Vec<String>,
-    pub priced: bool,
+    pub tx_id: String,
+    /// Currencies (upper case) of the sides that had no rate; empty = priced.
+    pub missing: Vec<String>,
+}
+
+impl Flow {
+    pub fn priced(&self) -> bool {
+        self.missing.is_empty()
+    }
 }
 
 fn one() -> Amount {
@@ -200,17 +208,18 @@ impl UnlockedVault {
 
     /// What a flow is worth to the budget: the money that came in for income
     /// and money entering the budget, the money (and fees) that went out for
-    /// everything else.
+    /// everything else. Also the currencies of the sides without a rate,
+    /// which count as zero.
     fn flow_value(
         book: &RateBook,
         tx: &Transaction,
         class: FlowClass,
         currency: &str,
-    ) -> (Amount, bool) {
+    ) -> (Amount, Vec<String>) {
         let secs = secs_or_now(&tx.meta().timestamp);
         let incoming = matches!(class, FlowClass::Income | FlowClass::BudgetIn);
         let mut total = Amount::ZERO;
-        let mut priced = true;
+        let mut missing: Vec<String> = Vec::new();
         for leg in tx.legs() {
             let counts = match leg.role {
                 LegRole::Principal => leg.amount.is_positive() == incoming,
@@ -223,10 +232,15 @@ impl UnlockedVault {
             }
             match Self::leg_value_in(book, &leg, currency, secs) {
                 Some(value) => total += value,
-                None => priced = false,
+                None => {
+                    let code = leg.asset.symbol.to_uppercase();
+                    if !missing.contains(&code) {
+                        missing.push(code);
+                    }
+                }
             }
         }
-        (total, priced)
+        (total, missing)
     }
 
     /// Classified flows in `[from, to)`, valued in `currency`.
@@ -250,16 +264,28 @@ impl UnlockedVault {
                 if class == FlowClass::Ignored {
                     return None;
                 }
-                let (value, priced) = Self::flow_value(&book, tx, class, currency);
+                let (value, missing) = Self::flow_value(&book, tx, class, currency);
                 Some(Flow {
                     date: cal.date_of(secs),
                     class,
                     value,
                     categories: tx.meta().categories.clone(),
                     stores: tx.legs().into_iter().map(|leg| leg.store_id).collect(),
-                    priced,
+                    tx_id: tx.meta().id.clone(),
+                    missing,
                 })
             })
+            .collect()
+    }
+
+    /// Operations the budget could not value in its currency: a side had no
+    /// rate (Currency-1 · 7, «Показать»).
+    pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String> {
+        let currency = self.budget_currency();
+        self.flows_between(&Calendar::new("UTC"), &currency, i64::MIN, i64::MAX)
+            .into_iter()
+            .filter(|flow| !flow.priced())
+            .map(|flow| flow.tx_id)
             .collect()
     }
 
@@ -435,7 +461,7 @@ impl UnlockedVault {
             ..MonthSummary::default()
         };
         for flow in self.flows_between(&cal, &currency, from, to) {
-            out.complete &= flow.priced;
+            out.complete &= flow.priced();
             match flow.class {
                 FlowClass::Income => out.income += flow.value,
                 FlowClass::Fixed => out.fixed += flow.value,

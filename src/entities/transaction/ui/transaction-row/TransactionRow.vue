@@ -206,7 +206,7 @@ const phoneLine = computed(() => {
         class="whitespace-nowrap font-medium tabular-nums"
         :class="ownMove ? 'text-foreground' : amountClass(leg.amount)"
       >
-        <Money :amount="leg.amount" :currency="leg.asset.symbol" signed />
+        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" signed />
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {{ t('tx.fee') }} <Money :amount="fee.amount" :currency="fee.asset" />

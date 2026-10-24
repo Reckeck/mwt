@@ -9,4 +9,6 @@ export interface MoneyProps {
   compact?: boolean
   /** Show the conversion tooltip on hover; on by default for the base currency, fiat and favourites. */
   convert?: boolean
+  /** The operation's moment (RFC 3339): the card shows the base currency at that day's rate. */
+  at?: string
 }

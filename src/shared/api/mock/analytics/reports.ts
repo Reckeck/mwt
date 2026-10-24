@@ -93,6 +93,7 @@ export function categories(ctx: AnalyticsMockContext, months: string[], filter: 
         average: money(total / months.length),
         share: '0',
         delta_pct: null,
+        unpriced: all.filter((flow) => flow.key === key && flow.unpriced).length,
       }
     })
     const total = rows.reduce((sum, row) => sum + Number(row.total), 0)
@@ -110,7 +111,15 @@ export function categories(ctx: AnalyticsMockContext, months: string[], filter: 
     .flatMap((block) => block.rows)
     .sort((left, right) => Number(right.total) - Number(left.total))
     .slice(0, 5)
-  return { meta: meta(ctx, months, filter), groups, top }
+  const missing = all.filter(
+    (flow) => flow.unpriced && !flow.incoming && (flow.group === 'fixed' || flow.group === 'daily'),
+  )
+  const unpriced: UnpricedSpending = {
+    count: missing.length,
+    days: [...new Set(missing.map((flow) => flow.date))].sort(),
+    currencies: [...new Set(missing.map((flow) => flow.unpriced ?? ''))].sort(),
+  }
+  return { meta: meta(ctx, months, filter), groups, top, unpriced }
 }
 
 export function networth(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): NetworthReport {

@@ -35,6 +35,9 @@ export interface MockFlow {
   key: string
   value: number
   incoming: boolean
+  txId: string
+  /** The currency (upper case) the rates do not know: the flow counts as zero. */
+  unpriced: string | null
 }
 
 export function flows(ctx: AnalyticsMockContext): MockFlow[] {
@@ -45,7 +48,8 @@ export function flows(ctx: AnalyticsMockContext): MockFlow[] {
     if (!('topup' in tx) && !('payment' in tx)) return []
     const leg = txLegs(tx).find((entry) => entry.role === 'principal')
     if (!leg) return []
-    const value = Math.abs(Number(leg.amount)) * (Number(leg.price_usd) || ctx.priceOf(leg.asset.symbol))
+    const price = Number(leg.price_usd) || ctx.priceOf(leg.asset.symbol)
+    const value = Math.abs(Number(leg.amount)) * price
     return [
       {
         month: meta.timestamp.slice(0, 7),
@@ -54,6 +58,8 @@ export function flows(ctx: AnalyticsMockContext): MockFlow[] {
         key,
         value,
         incoming: 'topup' in tx,
+        txId: meta.id,
+        unpriced: price ? null : leg.asset.symbol.toUpperCase(),
       },
     ]
   })

@@ -130,7 +130,7 @@ const actionsById = useWidgetActions({
 </script>
 
 <template>
-  <div class="grid gap-3 pb-6 md:gap-4">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-3 pb-6 md:gap-4">
     <HomeFigures :home="home" />
     <HomeFirstSteps v-if="home.fresh.value" />
     <template v-else>

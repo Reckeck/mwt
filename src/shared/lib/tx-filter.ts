@@ -18,6 +18,7 @@ export function emptyTxFilter(patch: Partial<TxFilter> = {}): TxFilter {
     auto_only: false,
     debt_only: false,
     with_attachments: false,
+    unpriced: false,
     ...patch,
   }
 }
@@ -44,6 +45,7 @@ export function activeFilterCount(filter: TxFilter): number {
     filter.auto_only,
     filter.debt_only,
     filter.with_attachments,
+    filter.unpriced,
   ].filter(Boolean).length
 }
 
@@ -70,6 +72,7 @@ export function txFilterToQuery(filter: TxFilter): Record<string, string | undef
     auto: filter.auto_only ? '1' : undefined,
     debt: filter.debt_only ? '1' : undefined,
     files: filter.with_attachments ? '1' : undefined,
+    norate: filter.unpriced ? '1' : undefined,
   }
 }
 
@@ -92,6 +95,7 @@ export const TX_FILTER_QUERY_KEYS = [
   'auto',
   'debt',
   'files',
+  'norate',
 ]
 
 /** Back from the query; `null` when the address carries no filter at all. */
@@ -122,5 +126,6 @@ export function txFilterFromQuery(query: Query): TxFilter | null {
     auto_only: one('auto') === '1',
     debt_only: one('debt') === '1',
     with_attachments: one('files') === '1',
+    unpriced: one('norate') === '1',
   })
 }

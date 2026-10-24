@@ -80,6 +80,10 @@ pub struct TxFilter {
     /// Only operations with a file or a link (Full-New-Attach 6).
     #[serde(default)]
     pub with_attachments: bool,
+    /// Only operations the budget could not value: a side had no rate
+    /// (Currency-1 · 7).
+    #[serde(default)]
+    pub unpriced: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -375,6 +379,12 @@ impl UnlockedVault {
             HashSet::new()
         };
 
+        let unpriced: HashSet<String> = if filter.unpriced {
+            self.unpriced_tx_ids()
+        } else {
+            HashSet::new()
+        };
+
         // Converting every operation only when the filter asks for a value.
         let priced = (filter.amount_min.is_some() || filter.amount_max.is_some())
             .then(|| (self.rate_book(), self.base_and_fx().0));
@@ -400,6 +410,7 @@ impl UnlockedVault {
             .filter(|tx| !filter.hide_internal || !tx.is_internal(|id| self.root_of(id)))
             .filter(|tx| !filter.with_fee || tx.legs().iter().any(|leg| leg.role == LegRole::Fee))
             .filter(|tx| !filter.with_attachments || attached.contains(&tx.meta().id))
+            .filter(|tx| !filter.unpriced || unpriced.contains(&tx.meta().id))
             .filter(|tx| {
                 realized
                     .as_ref()

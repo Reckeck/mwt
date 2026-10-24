@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
 import { useCategories } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { formatMoney, formatMonthKey, pluralForm } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -22,7 +22,7 @@ import { CategorySheet } from '../category-sheet'
  */
 const props = defineProps<{ rows: SpendingCategory[]; currency: string; filter: ReportFilter; months: string[] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const categories = useCategories()
 const from = computed(() => props.filter.from ?? '')
 const to = computed(() => props.filter.to ?? '')
@@ -51,7 +51,8 @@ const view = computed(() => {
     const bar = row.budget && comparable(row.budget, from.value, to.value, props.currency)
       ? limitBar(row.total, row.budget.limit, to.value)
       : { percent: (Number(row.total) / biggest) * 100, tone: 'primary' as const }
-    return { row, label, bar, total: money(row.total), average: money(row.average), limit: limitOf(row) }
+    const unpriced = row.unpriced ? t(`money.categories.unpriced.${pluralForm(row.unpriced, locale.value)}`, { count: row.unpriced }) : ''
+    return { row, label, bar, total: money(row.total), average: money(row.average), limit: limitOf(row), unpriced }
   })
 })
 
@@ -123,7 +124,10 @@ function edit(row: SpendingCategory) {
               </Button>
             </TableCell>
             <TableCell class="px-3"><ProgressBar :value="item.bar.percent" :tone="item.bar.tone" /></TableCell>
-            <TableCell class="px-3 text-right font-semibold tabular-nums">{{ item.total }}</TableCell>
+            <TableCell class="px-3 text-right font-semibold tabular-nums">
+              {{ item.total }}
+              <span v-if="item.unpriced" class="block text-xs font-normal text-muted-foreground">{{ item.unpriced }}</span>
+            </TableCell>
             <TableCell class="px-3 text-right text-muted-foreground tabular-nums">{{ item.average }}</TableCell>
             <TableCell class="px-3 text-right tabular-nums" :class="!item.row.budget && 'text-muted-foreground'">
               {{ item.limit.text }}
@@ -143,6 +147,7 @@ function edit(row: SpendingCategory) {
         <Button variant="ghost" size="block" class="flex items-baseline gap-2 p-0 text-left hover:bg-transparent" data-category-row @click="show(item)">
           <span class="min-w-0 flex-1 truncate font-medium">{{ item.label }}</span>
           <b class="whitespace-nowrap tabular-nums">{{ item.total }}</b>
+          <span v-if="item.unpriced" class="text-xs whitespace-nowrap text-muted-foreground">{{ item.unpriced }}</span>
         </Button>
         <ProgressBar :value="item.bar.percent" :tone="item.bar.tone" />
         <div class="flex justify-between gap-2 text-xs text-muted-foreground">

@@ -456,6 +456,29 @@ body {
   border-color: var(--destructive);
 }
 
+/* A sum a click opens as a card (Currency-1 · 5): the blue dash of a quick glance on hover and
+   while open. Inside a button or a link the click is taken: there the sum keeps a plain cursor. */
+.money-convertible {
+  cursor: pointer;
+  border-radius: 6px;
+  text-decoration: underline dashed transparent 1.5px;
+  text-underline-offset: 5px;
+}
+.money-convertible:hover,
+.money-convertible[data-money-open] {
+  text-decoration-color: color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.money-convertible[data-money-open] {
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  box-shadow:
+    -4px 0 0 color-mix(in oklch, var(--primary) 14%, transparent),
+    4px 0 0 color-mix(in oklch, var(--primary) 14%, transparent);
+}
+:is(a, button, label, [role='button'], [role='menuitem'], [role='option'], [role='tab']) .money-convertible {
+  cursor: inherit;
+  text-decoration: none;
+}
+
 body {
   margin: 0;
   background-color: var(--background);

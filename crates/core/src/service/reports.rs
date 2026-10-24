@@ -143,6 +143,9 @@ pub struct CategoryRow {
     /// Change against the previous period of the same length, percent;
     /// `None` when that period had nothing.
     pub delta_pct: Option<Amount>,
+    /// Operations of the period left out of `total`: a side had no rate.
+    #[serde(default)]
+    pub unpriced: u32,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -160,6 +163,19 @@ pub struct CategoriesReport {
     pub groups: Vec<CategoryGroupBlock>,
     /// The five biggest spending categories of the period.
     pub top: Vec<CategoryRow>,
+    /// Spending of the period the totals could not count (Currency-1 · 7).
+    #[serde(default)]
+    pub unpriced: UnpricedSpending,
+}
+
+/// Spending without a rate: it counts as zero, so the total is a lower bound.
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct UnpricedSpending {
+    pub count: u32,
+    /// `YYYY-MM-DD`, ascending, each once.
+    pub days: Vec<String>,
+    /// Currencies without a rate, upper case, each once.
+    pub currencies: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -492,7 +508,8 @@ fn pct(part: Amount, whole: Amount) -> Amount {
 }
 
 /// A category's cells per report month, its previous-period total and group.
-type CategoryCells = (Vec<Amount>, Amount, Option<CategoryGroup>);
+/// Cells, the previous period's total, the group, unpriced operations of the period.
+type CategoryCells = (Vec<Amount>, Amount, Option<CategoryGroup>, u32);
 
 /// Positions per (store, asset key) at each cutoff, cutoffs ascending.
 type Positions = HashMap<(String, String), (AssetRef, Amount)>;
@@ -747,6 +764,7 @@ impl UnlockedVault {
         };
         // (group order, key) → (cells, previous total)
         let mut table: BTreeMap<(u8, String), CategoryCells> = BTreeMap::new();
+        let mut unpriced = UnpricedSpending::default();
         let order = |group: CategoryGroup| match group {
             CategoryGroup::Income => 0u8,
             CategoryGroup::Fixed => 1,
@@ -761,16 +779,26 @@ impl UnlockedVault {
             let key = flow.categories.first().cloned().unwrap_or_default();
             let entry = table
                 .entry((order(group), key))
-                .or_insert_with(|| (vec![Amount::ZERO; span], Amount::ZERO, Some(group)));
+                .or_insert_with(|| (vec![Amount::ZERO; span], Amount::ZERO, Some(group), 0));
             match ctx.index_of(flow.date) {
-                Some(index) => entry.0[index] += ctx.shown(flow.value, ctx.months[index]),
+                Some(index) => {
+                    entry.0[index] += ctx.shown(flow.value, ctx.months[index]);
+                    if !flow.priced() {
+                        entry.3 += 1;
+                        if matches!(group, CategoryGroup::Fixed | CategoryGroup::Daily) {
+                            unpriced.count += 1;
+                            unpriced.days.push(flow.date.format("%Y-%m-%d").to_string());
+                            unpriced.currencies.extend(flow.missing.iter().cloned());
+                        }
+                    }
+                }
                 None => entry.1 += flow.value,
             }
         }
         let mut blocks: Vec<CategoryGroupBlock> = Vec::new();
-        for ((_, key), (cells, previous, group)) in table {
+        for ((_, key), (cells, previous, group, missing)) in table {
             let total = cells.iter().fold(Amount::ZERO, |sum, cell| sum + *cell);
-            if total.is_zero() && previous.is_zero() {
+            if total.is_zero() && previous.is_zero() && missing == 0 {
                 continue;
             }
             let row = CategoryRow {
@@ -785,6 +813,7 @@ impl UnlockedVault {
                 delta_pct: (!previous.is_zero())
                     .then(|| ((total - previous) / previous * hundred()).round(1)),
                 cells,
+                unpriced: missing,
             };
             match blocks.iter_mut().find(|block| block.group == group) {
                 Some(block) => block.rows.push(row),
@@ -823,10 +852,15 @@ impl UnlockedVault {
             .collect();
         top.sort_by(|left, right| right.total.cmp(&left.total).then(left.key.cmp(&right.key)));
         top.truncate(5);
+        unpriced.days.sort();
+        unpriced.days.dedup();
+        unpriced.currencies.sort();
+        unpriced.currencies.dedup();
         CategoriesReport {
             meta: ctx.meta(),
             groups: blocks,
             top,
+            unpriced,
         }
     }
 
@@ -1772,12 +1806,14 @@ pub(crate) fn csv_text(lines: Vec<Vec<String>>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::store::AssetRef;
     use crate::model::store::{LiabilityKind, LiabilityTerms};
+    use crate::model::transaction::PriceStamp;
     use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
     use crate::pricing::history::unix_secs;
     use crate::service::WhereKind;
     use crate::service::test_support::*;
-    use crate::service::{ContactDraft, StoreExtras};
+    use crate::service::{ContactDraft, StoreExtras, TxFilter};
 
     fn secs(iso: &str) -> i64 {
         unix_secs(iso).unwrap()
@@ -1931,6 +1967,38 @@ mod tests {
         );
         let top: Vec<&str> = report.top.iter().map(|row| row.key.as_str()).collect();
         assert_eq!(top, vec!["groceries", "beauty", "fuel", "gifts", "pets"]);
+    }
+
+    #[test]
+    fn categories_name_the_spending_left_out_without_a_rate() {
+        let (_dir, mut vault, card) = vault_with_card();
+        vault
+            .add_transaction(spend(&card, "100", "groceries", "2026-10-02T10:00:00Z"))
+            .unwrap();
+        for day in ["2026-10-03", "2026-10-05"] {
+            let mut tx = spend(&card, "500", "groceries", &format!("{day}T10:00:00Z"));
+            if let Transaction::Payment(inner) = &mut tx {
+                inner.asset = AssetRef::fiat("THB", "Thai Baht");
+                inner.price = PriceStamp::default();
+            }
+            vault.add_transaction(tx).unwrap();
+        }
+        let Report::Categories(report) =
+            run(&vault, ReportKind::Categories, &range("2026-10", "2026-10"))
+        else {
+            panic!()
+        };
+        assert_eq!(report.unpriced.count, 2);
+        assert_eq!(report.unpriced.days, vec!["2026-10-03", "2026-10-05"]);
+        assert_eq!(report.unpriced.currencies, vec!["THB"]);
+        let groceries = &report.top[0];
+        assert_eq!((groceries.total, groceries.unpriced), (amount("100"), 2));
+
+        let filter = TxFilter {
+            unpriced: true,
+            ..TxFilter::default()
+        };
+        assert_eq!(vault.list_transactions(&filter, "UTC").unwrap().len(), 2);
     }
 
     #[test]

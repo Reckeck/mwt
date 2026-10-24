@@ -99,7 +99,12 @@ function seedStress() {
   mockStores.push(store)
   const input: TransactionInput = {
     type: 'topup',
-    common: { ...PLAIN_COMMON, timestamp: new Date().toISOString(), comment: 'Остаток в тенге без курса' },
+    common: {
+      ...PLAIN_COMMON,
+      timestamp: new Date().toISOString(),
+      comment: 'Остаток в тенге без курса',
+      categories: ['transfer'],
+    },
     store_id: store.id,
     asset: STRESS_NO_RATE,
     amount: '1250000',
@@ -108,4 +113,20 @@ function seedStress() {
     details: STRESS_DETAILS,
   }
   mockTransactions.push(mockTransactionFrom(input, priceOf))
+  // Two purchases in the same currency: Траты say the total is a lower bound (Currency-1 · 7).
+  const now = new Date()
+  for (const day of [3, 5]) {
+    const at = new Date(now.getFullYear(), now.getMonth(), Math.min(day, now.getDate()), 13)
+    const payment: TransactionInput = {
+      type: 'payment',
+      common: { ...PLAIN_COMMON, timestamp: at.toISOString(), comment: 'Рынок', categories: ['groceries'] },
+      store_id: store.id,
+      asset: STRESS_NO_RATE,
+      amount: '8500',
+      fee: null,
+      to: { raw: 'Рынок' },
+      details: STRESS_DETAILS,
+    }
+    mockTransactions.push(mockTransactionFrom(payment, priceOf))
+  }
 }
