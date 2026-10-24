@@ -262,6 +262,8 @@ mod tests {
         };
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Salary".into(),
                 active: true,
                 preset: None,

@@ -267,6 +267,8 @@ pub fn full_doc() -> VaultDoc {
         .enumerate()
         .map(|(index, ((template, schedule), shift))| {
             let spec = AutomationSpec {
+                time: None,
+                asks: false,
                 preset: (index == 0).then_some(AutomationPreset::Salary),
                 schedule: *schedule,
                 starts_at: "2026-01-01T09:00:00Z".into(),

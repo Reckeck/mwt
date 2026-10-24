@@ -5,7 +5,9 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::model::planning::{AmountMode, AutomationSpec, Schedule, TransactionDraft};
+use crate::model::planning::{
+    AmountMode, AutomationSpec, Schedule, TransactionDraft, WorkdayShift,
+};
 use crate::model::transaction::AccountRef;
 
 use super::graph::{Edge, GRAPH_VERSION, Graph, Node, Position};
@@ -14,6 +16,9 @@ use super::graph::{Edge, GRAPH_VERSION, Graph, Node, Position};
 pub const TRIGGER: &str = "t";
 pub const AVERAGE: &str = "avg";
 pub const ACTION: &str = "tx";
+pub const ASK: &str = "ask";
+/// How long «да» is waited for before the run gives up.
+const ASK_HOURS: u32 = 72;
 /// How many latest corrected amounts make the estimate.
 pub const ESTIMATE_OF: usize = 3;
 
@@ -30,10 +35,44 @@ pub fn start_mark(spec: &AutomationSpec) -> String {
     )
 }
 
+/// «HH:MM» as hours and minutes, or `None` when it is not a time of day.
+pub fn parse_time(time: &str) -> Option<(u32, u32)> {
+    let (hours, minutes) = time.split_once(':')?;
+    let (hours, minutes) = (hours.parse::<u32>().ok()?, minutes.parse::<u32>().ok()?);
+    (hours < 24 && minutes < 60 && time.len() == 5).then_some((hours, minutes))
+}
+
+/// The local time an automation fires, «HH:MM»: 09:00 unless set.
+pub fn fire_time(time: Option<&str>) -> String {
+    time.filter(|time| parse_time(time).is_some()).map_or_else(
+        || format!("{:02}:00", crate::calendar::AUTOMATION_HOUR),
+        str::to_string,
+    )
+}
+
 /// The schedule's parameters, as «По расписанию» reads them.
 pub fn schedule_params(spec: &AutomationSpec) -> Map<String, Value> {
-    let time = format!("{:02}:00", crate::calendar::AUTOMATION_HOUR);
-    let mut params = match spec.schedule {
+    when_params(&When {
+        schedule: spec.schedule,
+        starts_at: &spec.starts_at,
+        workday_shift: spec.workday_shift,
+        time: spec.time.as_deref(),
+    })
+}
+
+/// When an automation fires, without what it does: enough to list its dates.
+pub struct When<'a> {
+    pub schedule: Schedule,
+    /// RFC3339, the first planned date.
+    pub starts_at: &'a str,
+    pub workday_shift: WorkdayShift,
+    pub time: Option<&'a str>,
+}
+
+/// «По расписанию» parameters of a [`When`].
+pub fn when_params(when: &When<'_>) -> Map<String, Value> {
+    let time = fire_time(when.time);
+    let mut params = match when.schedule {
         Schedule::Monthly { day } => json!({ "every": "month", "day": day, "time": time }),
         Schedule::Weekly { weekday } => {
             json!({ "every": "week", "weekday": weekday, "time": time })
@@ -42,16 +81,52 @@ pub fn schedule_params(spec: &AutomationSpec) -> Map<String, Value> {
         Schedule::EveryNDays { days } => json!({
             "every": "day",
             "interval": days.max(1).to_string(),
-            "anchor": spec.starts_at.get(..10).unwrap_or(&spec.starts_at),
+            "anchor": when.starts_at.get(..10).unwrap_or(when.starts_at),
             "time": time,
         }),
     }
     .as_object()
     .cloned()
     .unwrap_or_default();
-    params.insert("workday".into(), json!(spec.workday_shift.param()));
+    params.insert("workday".into(), json!(when.workday_shift.param()));
     params
 }
+
+/// The first `count` dates a schedule fires on after `now`, not before its
+/// start: «Ближайшие: 2 ноя (пн), 1 дек (вт), 31 дек (чт)» under the form.
+pub fn upcoming(
+    when: &When<'_>,
+    cal: &crate::calendar::Calendar,
+    now: i64,
+    count: usize,
+) -> Vec<i64> {
+    let start = crate::pricing::history::unix_secs(when.starts_at).map_or(now, |secs| secs - 1);
+    let after = now.max(start);
+    let params = when_params(when);
+    let mut moments = Vec::new();
+    let mut from = after;
+    // The schedule reader looks back a bounded span: a year at a time.
+    for _ in 0..UPCOMING_YEARS {
+        let until = from + chrono::Duration::days(366).num_seconds();
+        let (found, _) = crate::workflow::nodes::triggers::schedule_moments_limited(
+            &params,
+            cal,
+            from,
+            until,
+            usize::MAX,
+        );
+        moments.extend(found);
+        if moments.len() >= count {
+            break;
+        }
+        from = until;
+    }
+    moments.truncate(count);
+    moments
+}
+
+/// How many years ahead [`upcoming`] looks: three yearly dates fit.
+const UPCOMING_YEARS: usize = 4;
 
 /// The template's main amount: what a top-up, a payment or a transfer moves.
 pub fn template_amount(template: &TransactionDraft) -> crate::Amount {
@@ -173,10 +248,19 @@ pub fn automation_graph(spec: &AutomationSpec) -> Graph {
         node(TRIGGER, "trigger.schedule", schedule_params(spec), 0.0),
         node(ACTION, "action.transaction", action_params(spec), 2.0),
     ];
-    let mut edges = vec![
-        edge(TRIGGER, "out", ACTION, "in"),
-        edge(TRIGGER, "at", ACTION, "date"),
-    ];
+    let mut edges = vec![edge(TRIGGER, "at", ACTION, "date")];
+    if spec.asks {
+        // «Спрашивать «да» перед записью»: the operation waits for the answer.
+        let mut params = Map::new();
+        params.insert("timeout_hours".into(), json!(ASK_HOURS));
+        let mut ask = node(ASK, "action.confirm", params, 1.0);
+        ask.position.top = -160.0;
+        nodes.push(ask);
+        edges.push(edge(TRIGGER, "out", ASK, "in"));
+        edges.push(edge(ASK, "true", ACTION, "in"));
+    } else {
+        edges.push(edge(TRIGGER, "out", ACTION, "in"));
+    }
     if spec.amount_mode == AmountMode::Varies {
         let mut params = Map::new();
         params.insert("count".into(), json!(ESTIMATE_OF.to_string()));

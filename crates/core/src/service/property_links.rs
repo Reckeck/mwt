@@ -299,6 +299,8 @@ mod tests {
         };
         inner.meta.categories = vec!["rent_income".into()];
         let draft = |property_id: Option<String>| AutomationDraft {
+            time: None,
+            asks: false,
             name: "Rent".into(),
             active: true,
             preset: None,

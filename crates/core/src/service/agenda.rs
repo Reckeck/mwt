@@ -690,6 +690,8 @@ mod tests {
         rent.meta.categories = vec!["rent_mortgage".into()];
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Rent".into(),
                 active: true,
                 preset: None,
@@ -706,6 +708,8 @@ mod tests {
         };
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Salary".into(),
                 active: true,
                 preset: None,

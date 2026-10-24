@@ -1196,6 +1196,12 @@ pub struct AutomationInput {
     /// Where a planned date on a weekend or a holiday goes.
     #[serde(default)]
     pub workday_shift: crate::model::planning::WorkdayShift,
+    /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
+    #[serde(default)]
+    pub time: Option<String>,
+    /// It asks «да» before it books the operation.
+    #[serde(default)]
+    pub asks: bool,
 }
 
 impl AutomationInput {
@@ -1221,7 +1227,39 @@ impl AutomationInput {
             amount_mode: self.amount_mode,
             workday_shift: self.workday_shift,
             property_id: self.template.property_id(),
+            time: self.time.clone(),
+            asks: self.asks,
         })
+    }
+}
+
+/// When a new automation would fire: the form asks for its next dates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AutomationDatesInput {
+    pub schedule: Schedule,
+    /// RFC3339, the first planned date.
+    pub starts_at: String,
+    #[serde(default)]
+    pub workday_shift: crate::model::planning::WorkdayShift,
+    /// «HH:MM»; `None` — 09:00.
+    #[serde(default)]
+    pub time: Option<String>,
+}
+
+impl AutomationDatesInput {
+    /// The next three dates, RFC3339.
+    pub fn upcoming(&self, now: i64, zone: &str) -> Vec<String> {
+        let when = crate::workflow::automation::When {
+            schedule: self.schedule,
+            starts_at: &self.starts_at,
+            workday_shift: self.workday_shift,
+            time: self.time.as_deref(),
+        };
+        let cal = crate::calendar::Calendar::new(zone);
+        crate::workflow::automation::upcoming(&when, &cal, now, 3)
+            .into_iter()
+            .map(crate::calendar::iso)
+            .collect()
     }
 }
 

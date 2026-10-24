@@ -68,6 +68,8 @@ impl From<VaultDocV2> for VaultDoc {
         doc.version = 3;
         for automation in old.automations {
             let spec = AutomationSpec {
+                time: None,
+                asks: false,
                 preset: automation.preset,
                 schedule: automation.schedule,
                 starts_at: automation.starts_at.clone(),

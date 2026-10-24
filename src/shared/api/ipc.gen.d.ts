@@ -423,7 +423,15 @@ estimate: Amount | null,
 /**
  * The property its operations belong to (plan G4).
  */
-property_id: string | null, };
+property_id: string | null, 
+/**
+ * The local time it fires, «HH:MM»; `None` — 09:00, as before.
+ */
+time: string | null, 
+/**
+ * It asks «да» before it books the operation.
+ */
+asks: boolean, };
 
 /**
  * The card of a scheme or a repeat.
@@ -444,6 +452,19 @@ follows: string | null, trigger: CardTrigger, actions: Array<CardAction>, asks: 
 next_at: string | null, runs: Array<JournalEntry>, };
 
 /**
+ * When a new automation would fire: the form asks for its next dates.
+ */
+type AutomationDatesInput = { schedule: Schedule, 
+/**
+ * RFC3339, the first planned date.
+ */
+starts_at: string, workday_shift: WorkdayShift, 
+/**
+ * «HH:MM»; `None` — 09:00.
+ */
+time: string | null, };
+
+/**
  * An automation as the form edits it. The template is an ordinary
  * transaction input of one of the four verbs.
  */
@@ -459,7 +480,15 @@ amount_mode: AmountMode,
 /**
  * Where a planned date on a weekend or a holiday goes.
  */
-workday_shift: WorkdayShift, };
+workday_shift: WorkdayShift, 
+/**
+ * The local time it fires, «HH:MM»; `None` — 09:00, as before.
+ */
+time: string | null, 
+/**
+ * It asks «да» before it books the operation.
+ */
+asks: boolean, };
 
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
 
@@ -518,7 +547,15 @@ workday_shift: WorkdayShift,
 /**
  * The property its operations belong to (plan G4).
  */
-property_id: string | null, };
+property_id: string | null, 
+/**
+ * The local time it fires, «HH:MM»; `None` — 09:00, as before.
+ */
+time: string | null, 
+/**
+ * It asks «да» before it books the operation.
+ */
+asks: boolean, };
 
 /**
  * What a dashboard number is measured against (plan H1, decision 57): the

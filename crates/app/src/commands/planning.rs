@@ -472,6 +472,15 @@ pub async fn get_automation_card(
     })
 }
 
+/// The next three dates a repeat would fire on: the form shows them as it is filled.
+#[tauri::command]
+pub async fn preview_automation_dates(
+    input: trade_core::ipc_contract::AutomationDatesInput,
+    app: AppHandle,
+) -> Result<Vec<String>, String> {
+    Ok(input.upcoming(now_secs(), &current_zone(&app)))
+}
+
 /// The journal: every run and every reminder or alert shown, newest first.
 #[tauri::command]
 pub async fn list_automation_journal(
