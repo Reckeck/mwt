@@ -3,6 +3,8 @@ export const dialogWidths = {
   sm: 'max-w-md',
   /** 560px: the deal calculator (Money 4 · 23). */
   form: 'max-w-[35rem]',
+  /** 640px: the month's utility bill (Wallets-2 · 13). */
+  bill: 'max-w-[40rem]',
   md: 'max-w-2xl',
   lg: 'max-w-3xl',
   xl: 'max-w-4xl',

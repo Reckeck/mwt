@@ -13,7 +13,7 @@ import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
 
-import { fillFormula, prettyFormula } from '../../lib/utility-item'
+import { fillFormula, prettyFormula } from '@/shared/lib/utility-formula'
 
 /**
  * «Показание за октябрь» (Wallets-2 · 11–12): a field per tariff zone (or one),

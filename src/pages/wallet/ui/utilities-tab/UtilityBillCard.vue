@@ -57,7 +57,7 @@ const delta = computed(() => (props.bill.delta_pct === null ? null : Number(prop
       <div v-if="!props.phone" class="ml-auto flex items-center gap-2">
         <UtilityRemindersButton :store="props.store" />
         <Button variant="outline" :disabled="props.store.archived" @click="emit('readings')">{{ t('utilityTab.readings') }}</Button>
-        <Button :disabled="props.store.archived" data-tour="utility-pay" @click="emit('pay')">{{ t('utilityBill.open') }}</Button>
+        <Button :disabled="props.store.archived" data-tour="utility-pay" data-bill-pay @click="emit('pay')">{{ t('utilityBill.open') }}</Button>
       </div>
     </div>
     <div v-if="!props.phone" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
@@ -72,7 +72,7 @@ const delta = computed(() => (props.bill.delta_pct === null ? null : Number(prop
     </div>
     <div v-if="props.phone" class="grid grid-cols-2 gap-2">
       <Button variant="outline" class="h-11" :disabled="props.store.archived" @click="emit('readings')">{{ t('utilityTab.readingsShort') }}</Button>
-      <Button class="h-11" :disabled="props.store.archived" @click="emit('pay')">{{ t('utilityBill.open') }}</Button>
+      <Button class="h-11" :disabled="props.store.archived" data-bill-pay @click="emit('pay')">{{ t('utilityBill.open') }}</Button>
     </div>
   </div>
 </template>

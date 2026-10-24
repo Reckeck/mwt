@@ -13,7 +13,9 @@ import { formatMoney, formatMonthKey } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
 
-import { historyRows, itemSubtitle, prettyFormula } from '../../lib/utility-item'
+import { prettyFormula } from '@/shared/lib/utility-formula'
+
+import { historyRows, itemSubtitle } from '../../lib/utility-item'
 import UtilityItemHistory from './UtilityItemHistory.vue'
 import UtilityReadingCard from './UtilityReadingCard.vue'
 
