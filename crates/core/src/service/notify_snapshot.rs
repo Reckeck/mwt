@@ -362,6 +362,7 @@ mod tests {
                 active: true,
                 triggered_at: None,
                 store_id: None,
+                repeats: false,
             });
         let snapshot =
             vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);

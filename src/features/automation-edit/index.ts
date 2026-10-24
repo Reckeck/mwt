@@ -1,6 +1,8 @@
 export { default as AutomationDialog } from './AutomationDialog.vue'
 export { default as AutomationRunActions } from './AutomationRunActions.vue'
 export { AutomationWizard } from './ui/automation-wizard'
+export { SalaryDialog } from './ui/salary-dialog'
+export { SaveShareDialog } from './ui/save-share-dialog'
 export { AutomationAmountDialog } from './ui/automation-amount-dialog'
 export { AutomationWorkflowBanner } from './ui/automation-workflow-banner'
 export { useAutomationWorkflow } from './model/use-automation-workflow'

@@ -1361,6 +1361,10 @@ pub struct ReminderInput {
     /// `None` = once.
     #[serde(default)]
     pub repeat: Option<crate::model::planning::ReminderRepeat>,
+    /// «Оплатить» in the reminder; `None` — no button.
+    #[serde(default)]
+    #[ts(optional)]
+    pub pay: Option<crate::model::planning::ReminderPay>,
 }
 
 /// Emulate the automations ahead: one of them, or all.
@@ -1396,6 +1400,9 @@ pub struct PriceAlertInput {
     #[serde(default)]
     #[ts(optional)]
     pub store_id: Option<String>,
+    /// Fires on every crossing instead of once.
+    #[serde(default)]
+    pub repeats: bool,
 }
 
 impl From<PriceAlertInput> for PriceAlertDraft {
@@ -1407,6 +1414,7 @@ impl From<PriceAlertInput> for PriceAlertDraft {
             currency: input.currency,
             active: input.active,
             store_id: input.store_id,
+            repeats: input.repeats,
         }
     }
 }

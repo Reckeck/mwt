@@ -400,6 +400,7 @@ pub fn full_doc() -> VaultDoc {
         }),
         muted: true,
         user_edited: true,
+        pay: None,
         snoozed_until: Some("2026-03-01T10:00:00Z".into()),
         source_key: "m25|1|09:30".into(),
     }];
@@ -412,6 +413,7 @@ pub fn full_doc() -> VaultDoc {
         active: true,
         triggered_at: None,
         store_id: None,
+        repeats: false,
     }];
     doc.categorization_rules = vec![CategorizationRule {
         id: "rule".into(),

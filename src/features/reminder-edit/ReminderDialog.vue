@@ -14,9 +14,12 @@ import { required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
+import { formatDayMonth, formatWeekday } from '@/shared/lib/format'
 
 import { REPEAT_UNITS } from './reminder-edit.constants'
 import type { ReminderDialogProps } from './reminder-edit.types'
+import { WHEN_PRESETS, type WhenPreset, presetOf, repeatOf } from './lib/when-presets'
+import { ReminderPayField } from './ui/reminder-pay-field'
 
 const props = withDefaults(defineProps<ReminderDialogProps>(), { reminder: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -28,9 +31,11 @@ const text = ref('')
 /** `YYYY-MM-DD` and `HH:MM`, local: two fields read better than one date-time picker. */
 const date = ref('')
 const time = ref('09:00')
-/** `''` = once. */
-const unit = ref<RepeatUnit | ''>('')
+const preset = ref<WhenPreset>('once')
+/** «Другой интервал»: every `every` `unit`s. */
+const unit = ref<RepeatUnit>('month')
 const every = ref('1')
+const pay = ref<ReminderPay | null>(null)
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -41,18 +46,25 @@ watch(open, (isOpen) => {
   const due = reminder ? new Date(reminder.due_at) : new Date(Date.now() + 86_400_000)
   date.value = localDate(due)
   time.value = reminder ? `${pad(due.getHours())}:${pad(due.getMinutes())}` : '09:00'
-  unit.value = reminder?.repeat?.unit ?? ''
+  preset.value = presetOf(reminder?.repeat)
+  unit.value = reminder?.repeat?.unit ?? 'month'
   every.value = String(reminder?.repeat?.every ?? 1)
-})
+  pay.value = reminder?.pay ?? null
+}, { immediate: true })
 
 const dueAt = computed(() => {
   if (!date.value || !time.value) return null
   const parsed = new Date(`${date.value}T${time.value}`)
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 })
-const repeat = computed<ReminderRepeat | null>(() =>
-  unit.value ? { unit: unit.value, every: Math.max(1, Math.round(Number(every.value) || 1)) } : null,
-)
+const repeat = computed(() => repeatOf(preset.value, { unit: unit.value, every: Number(every.value) }))
+
+/** «Каждое 10-е», «Каждую неделю · пт»: the day comes from the date. */
+function presetLabel(entry: WhenPreset) {
+  const day = date.value ? new Date(`${date.value}T12:00`) : null
+  if (!day || Number.isNaN(day.getTime())) return t(`reminder.when.${entry}`, { day: '', date: '' })
+  return t(`reminder.when.${entry}`, { day: day.getDate(), weekday: formatWeekday(day), date: formatDayMonth(date.value) })
+}
 
 const form = useFormValidation(
   () => ({
@@ -65,7 +77,7 @@ const form = useFormValidation(
 
 const save = useMutation({
   mutationFn: () => {
-    const input: ReminderInput = { text: text.value.trim(), due_at: dueAt.value ?? '', repeat: repeat.value }
+    const input: ReminderInput = { text: text.value.trim(), due_at: dueAt.value ?? '', repeat: repeat.value, pay: pay.value ?? undefined }
     return props.reminder
       ? call<Reminder>('update_reminder', { input: { id: props.reminder.id, reminder: input } })
       : call<Reminder>('create_reminder', { input })
@@ -79,40 +91,47 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
+  <Dialog v-model:open="open" size="form" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
     <form id="reminder-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <FormField for="reminder-text" :label="t('reminder.text')" required :error="form.error('text')">
         <Input id="reminder-text" v-model="text" />
       </FormField>
-      <div class="grid grid-cols-[1fr_8rem] gap-3">
-        <FormField for="reminder-date" :label="t('reminder.date')" required :error="form.error('date')">
-          <DateTimePicker id="reminder-date" v-model="date" />
+      <div class="grid gap-4 sm:grid-cols-2" data-tour="reminder-repeat">
+        <FormField for="reminder-when" :label="t('reminder.dueAt')" required>
+          <Select id="reminder-when" v-model="preset">
+            <SelectItem v-for="entry in WHEN_PRESETS" :key="entry" :value="entry">{{ presetLabel(entry) }}</SelectItem>
+          </Select>
         </FormField>
         <FormField for="reminder-time" :label="t('reminder.time')" required :error="form.error('time')">
           <TimeInput id="reminder-time" v-model="time" :invalid="Boolean(form.error('time'))" />
         </FormField>
       </div>
-      <div class="grid gap-1.5" data-tour="reminder-repeat">
-        <Label for="reminder-repeat">{{ t('reminder.repeat') }}</Label>
-        <div class="flex items-center gap-2">
-          <template v-if="unit">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <FormField
+          for="reminder-date"
+          :label="preset === 'once' ? t('reminder.date') : t('reminder.firstDate')"
+          required
+          :error="form.error('date')"
+        >
+          <DateTimePicker id="reminder-date" v-model="date" />
+        </FormField>
+        <div v-if="preset === 'custom'" class="grid gap-1.5">
+          <Label for="reminder-unit">{{ t('reminder.repeat') }}</Label>
+          <div class="flex items-center gap-2">
             <span class="shrink-0 text-sm text-muted-foreground">{{ t('reminder.every') }}</span>
-            <Input v-model="every" type="text" inputmode="numeric" min="1" max="999" class="w-20" :aria-label="t('reminder.everyCount')" />
-          </template>
-          <Select id="reminder-repeat" v-model="unit" class="flex-1">
-            <SelectItem value="">{{ t('reminder.once') }}</SelectItem>
-            <SelectItem v-for="entry in REPEAT_UNITS" :key="entry" :value="entry">
-              {{ t(`reminder.unit.${entry}`, Number(every) || 1) }}
-            </SelectItem>
-          </Select>
+            <Input v-model="every" type="text" inputmode="numeric" class="w-16" :aria-label="t('reminder.everyCount')" />
+            <Select id="reminder-unit" v-model="unit" class="flex-1">
+              <SelectItem v-for="entry in REPEAT_UNITS" :key="entry" :value="entry">{{ t(`reminder.unit.${entry}`, Number(every) || 1) }}</SelectItem>
+            </Select>
+          </div>
         </div>
-        <p class="text-xs text-muted-foreground">{{ unit ? t('reminder.repeatHint') : t('reminder.onceHint') }}</p>
       </div>
+      <ReminderPayField v-model="pay" />
       <p v-if="props.reminder?.source" class="text-xs text-muted-foreground">{{ t('reminder.autoEditHint') }}</p>
     </form>
     <template #footer>
-      <Button variant="ghost" @click="open = false">{{ t('actions.cancel') }}</Button>
-      <Button form="reminder-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button variant="ghost" class="max-md:h-11" @click="open = false">{{ t('actions.cancel') }}</Button>
+      <Button class="max-md:h-11 max-md:flex-1" form="reminder-form" type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
     </template>
   </Dialog>
 </template>

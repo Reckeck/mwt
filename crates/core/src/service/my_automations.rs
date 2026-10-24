@@ -186,7 +186,7 @@ impl UnlockedVault {
                 MineKind::Alert,
                 &alert.id,
                 &name,
-                alert.active && alert.triggered_at.is_none(),
+                alert.active && (alert.repeats || alert.triggered_at.is_none()),
             );
             item.amount = Some(alert.price);
             item.asset = Some(alert.asset.clone());
@@ -286,6 +286,7 @@ mod tests {
                 currency: "usd".into(),
                 active: true,
                 store_id: None,
+                repeats: false,
             })
             .unwrap();
         let graph = json!({

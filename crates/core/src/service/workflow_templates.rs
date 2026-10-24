@@ -125,6 +125,39 @@ mod tests {
     }
 
     #[test]
+    fn pay_yourself_first_listens_only_to_its_source_wallet() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let other = store(&mut vault, "Other", StoreKind::Bank, None);
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        vault
+            .workflow_from_template(
+                "pay_yourself_first",
+                &params(&[
+                    ("category", "salary"),
+                    ("pct", "10"),
+                    ("target", &cash),
+                    ("source", &card),
+                ]),
+                "en",
+                now_secs(),
+            )
+            .unwrap();
+
+        vault
+            .add_transaction(income(&other, "1000", "side"))
+            .unwrap();
+        let pass = vault.run_due_workflows(now_secs() + 5, "UTC").unwrap();
+        assert!(pass.runs.is_empty(), "{:?}", pass.runs);
+
+        vault
+            .add_transaction(income(&card, "1000", "salary"))
+            .unwrap();
+        let pass = vault.run_due_workflows(now_secs() + 10, "UTC").unwrap();
+        assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
+    }
+
+    #[test]
     fn round_up_collects_the_change_of_a_spend() {
         let (_dir, mut vault) = empty_vault();
         let card = store(&mut vault, "Card", StoreKind::Cash, None);

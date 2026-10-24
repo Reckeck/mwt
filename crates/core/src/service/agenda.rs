@@ -11,7 +11,8 @@ use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, first_of_month, next_month};
 use crate::error::{Error, Result};
 use crate::model::planning::{
-    AlertCondition, AutomationOutcome, PriceAlert, Reminder, ReminderRepeat, UtilityKind,
+    AlertCondition, AutomationOutcome, PriceAlert, Reminder, ReminderPay, ReminderRepeat,
+    UtilityKind,
 };
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
@@ -56,6 +57,8 @@ pub struct PriceAlertDraft {
     pub active: bool,
     /// The exchange whose terminal sets the alert.
     pub store_id: Option<String>,
+    /// Fires on every crossing instead of once.
+    pub repeats: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -123,9 +126,21 @@ impl UnlockedVault {
         due_at: &str,
         repeat: Option<ReminderRepeat>,
     ) -> Result<Reminder> {
+        self.create_reminder_paying(text, due_at, repeat, None)
+    }
+
+    /// A reminder with «Оплатить» in it.
+    pub fn create_reminder_paying(
+        &mut self,
+        text: &str,
+        due_at: &str,
+        repeat: Option<ReminderRepeat>,
+        pay: Option<ReminderPay>,
+    ) -> Result<Reminder> {
         Self::check_reminder(text, due_at)?;
         let reminder = Reminder {
             repeat: repeat.map(Self::clean_repeat),
+            pay: self.clean_pay(pay)?,
             ..Reminder::new(text, due_at)
         };
         self.doc.reminders.push(reminder.clone());
@@ -154,6 +169,40 @@ impl UnlockedVault {
         let out = reminder.clone();
         self.persist()?;
         Ok(out)
+    }
+
+    /// Edit what, when and what «Оплатить» fills in.
+    pub fn update_reminder_paying(
+        &mut self,
+        id: &str,
+        text: &str,
+        due_at: &str,
+        repeat: Option<ReminderRepeat>,
+        pay: Option<ReminderPay>,
+    ) -> Result<Reminder> {
+        let pay = self.clean_pay(pay)?;
+        self.find_reminder_mut(id)?.pay = pay;
+        self.update_reminder(id, text, due_at, repeat)
+    }
+
+    /// An empty button is no button; a wallet must exist.
+    fn clean_pay(&self, pay: Option<ReminderPay>) -> Result<Option<ReminderPay>> {
+        let Some(pay) = pay else { return Ok(None) };
+        let pick = |value: Option<String>| {
+            value
+                .map(|text| text.trim().to_string())
+                .filter(|text| !text.is_empty())
+        };
+        let pay = ReminderPay {
+            store_id: pick(pay.store_id),
+            category: pick(pay.category),
+        };
+        if let Some(store_id) = &pay.store_id
+            && self.find_store(store_id).is_none()
+        {
+            return Err(Error::NotFound(format!("store {store_id}")));
+        }
+        Ok((pay.store_id.is_some() || pay.category.is_some()).then_some(pay))
     }
 
     fn clean_repeat(repeat: ReminderRepeat) -> ReminderRepeat {
@@ -280,6 +329,7 @@ impl UnlockedVault {
             active: draft.active,
             triggered_at: None,
             store_id: draft.store_id,
+            repeats: draft.repeats,
         };
         self.doc.price_alerts.push(alert.clone());
         self.persist()?;
@@ -302,6 +352,7 @@ impl UnlockedVault {
         alert.active = draft.active;
         alert.triggered_at = None;
         alert.store_id = draft.store_id;
+        alert.repeats = draft.repeats;
         let out = alert.clone();
         self.persist()?;
         Ok(out)
@@ -322,22 +373,24 @@ impl UnlockedVault {
         self.doc
             .price_alerts
             .iter()
-            .filter(|alert| alert.active && alert.triggered_at.is_none())
+            .filter(|alert| alert.active && (alert.triggered_at.is_none() || alert.repeats))
             .map(|alert| alert.asset.clone())
             .filter(|asset| seen.insert(asset.key()))
             .collect()
     }
 
     /// Fire every armed alert whose condition holds at the cached price.
-    /// An alert fires once: it stays triggered until edited.
+    /// A one-off alert stays triggered until edited; a repeating one is
+    /// armed again once the price is back on the other side.
     pub fn check_alerts(&mut self, now: i64) -> Result<Vec<PriceAlert>> {
         let book = self.rate_book();
         let mut fired = Vec::new();
+        let mut rearmed = false;
         for alert in self
             .doc
             .price_alerts
             .iter_mut()
-            .filter(|alert| alert.active && alert.triggered_at.is_none())
+            .filter(|alert| alert.active && (alert.triggered_at.is_none() || alert.repeats))
         {
             let Some(usd) = book.price_at(&alert.asset.key(), now) else {
                 continue;
@@ -349,12 +402,17 @@ impl UnlockedVault {
                 AlertCondition::Above => price >= alert.price,
                 AlertCondition::Below => price <= alert.price,
             };
-            if hit {
+            if alert.triggered_at.is_some() {
+                if !hit {
+                    alert.triggered_at = None;
+                    rearmed = true;
+                }
+            } else if hit {
                 alert.triggered_at = Some(now_iso());
                 fired.push(alert.clone());
             }
         }
-        if !fired.is_empty() {
+        if !fired.is_empty() || rearmed {
             self.persist()?;
         }
         Ok(fired)
@@ -756,12 +814,109 @@ mod tests {
                 currency: "usd".into(),
                 active: true,
                 store_id: None,
+                repeats: false,
             })
             .unwrap();
         let now = secs("2026-03-02T00:00:00Z");
         assert_eq!(vault.check_alerts(now).unwrap().len(), 1);
         assert!(vault.check_alerts(now).unwrap().is_empty());
         assert!(vault.alert_assets().is_empty());
+    }
+
+    #[test]
+    fn a_reminder_keeps_what_pay_fills_in_and_drops_an_empty_button() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let pay = |store_id: Option<&str>, category: &str| ReminderPay {
+            store_id: store_id.map(str::to_string),
+            category: Some(category.to_string()),
+        };
+        let reminder = vault
+            .create_reminder_paying(
+                "ЖКХ",
+                "2026-03-10T10:00:00Z",
+                None,
+                Some(pay(Some(&card), " utilities ")),
+            )
+            .unwrap();
+        assert_eq!(reminder.pay, Some(pay(Some(&card), "utilities")));
+
+        let edited = vault
+            .update_reminder_paying(
+                &reminder.id,
+                "ЖКХ",
+                "2026-03-10T10:00:00Z",
+                None,
+                Some(pay(None, " ")),
+            )
+            .unwrap();
+        assert_eq!(edited.pay, None);
+        assert!(
+            vault
+                .create_reminder_paying(
+                    "x",
+                    "2026-03-10T10:00:00Z",
+                    None,
+                    Some(pay(Some("nope"), "food"))
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_repeating_alert_rearms_after_the_price_crosses_back() {
+        let (_dir, mut vault) = empty_vault();
+        let price = |vault: &mut UnlockedVault, value: &str, ts: &str| {
+            vault.doc.price_cache.push(PricePoint {
+                asset_key: btc().key(),
+                value_usd: amount(value),
+                ts: ts.into(),
+                source: "test".into(),
+                change_24h_pct: None,
+            })
+        };
+        price(&mut vault, "100000", "2026-03-01T00:00:00Z");
+        vault
+            .create_price_alert(PriceAlertDraft {
+                asset: btc(),
+                condition: AlertCondition::Above,
+                price: amount("95000"),
+                currency: "usd".into(),
+                active: true,
+                store_id: None,
+                repeats: true,
+            })
+            .unwrap();
+        assert_eq!(
+            vault
+                .check_alerts(secs("2026-03-01T01:00:00Z"))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(
+            vault
+                .check_alerts(secs("2026-03-01T02:00:00Z"))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(vault.alert_assets().len(), 1);
+        price(&mut vault, "90000", "2026-03-02T00:00:00Z");
+        assert!(
+            vault
+                .check_alerts(secs("2026-03-02T01:00:00Z"))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(vault.doc.price_alerts[0].triggered_at.is_none());
+        price(&mut vault, "96000", "2026-03-03T00:00:00Z");
+        assert_eq!(
+            vault
+                .check_alerts(secs("2026-03-03T01:00:00Z"))
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -776,6 +931,7 @@ mod tests {
             currency: "usd".into(),
             active: true,
             store_id: Some(store_id.to_string()),
+            repeats: false,
         };
         let alert = vault.create_price_alert(draft(&exchange)).unwrap();
         assert_eq!(alert.store_id.as_deref(), Some(exchange.as_str()));

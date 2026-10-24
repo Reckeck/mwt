@@ -13,7 +13,12 @@ export const templates: WorkflowTemplateInfo[] = [
   {
     id: 'pay_yourself_first',
     moves_money: true,
-    fields: [field('category', 'category', 'salary'), field('pct', 'number', '10'), field('target', 'store')],
+    fields: [
+      field('category', 'category', 'salary'),
+      field('pct', 'number', '10'),
+      field('target', 'store'),
+      { ...field('source', 'store'), required: false },
+    ],
   },
   { id: 'rates_watch', moves_money: false, fields: [field('currency', 'currency', 'rub')] },
   { id: 'budget_pace', moves_money: false, fields: [field('budget', 'budget'), field('margin', 'number', '10')] },

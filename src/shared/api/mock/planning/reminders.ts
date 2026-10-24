@@ -28,6 +28,7 @@ export function planReminders(
         user_edited: false,
         snoozed_until: null,
         source_key: '',
+        pay: cleanPay(input.pay),
       }
       reminders.push(reminder)
       return reminder
@@ -39,6 +40,7 @@ export function planReminders(
         ...current,
         ...input.reminder,
         repeat: input.reminder.repeat ?? null,
+        pay: cleanPay(input.reminder.pay),
         snoozed_until: null,
       })
     }
@@ -94,6 +96,7 @@ export function planReminders(
         currency: input.currency,
         active: input.active,
         triggered_at: null,
+        repeats: input.repeats,
         ...(input.store_id ? { store_id: input.store_id } : {}),
       }
       alerts.push(alert)
@@ -114,4 +117,11 @@ export function planReminders(
     default:
       return undefined
   }
+}
+
+/** An empty «Оплатить» is no button, as in core. */
+function cleanPay(pay: ReminderPay | undefined): ReminderPay | null {
+  const store_id = pay?.store_id?.trim() || null
+  const category = pay?.category?.trim() || null
+  return store_id || category ? { store_id, category } : null
 }

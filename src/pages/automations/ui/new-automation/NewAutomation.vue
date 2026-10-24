@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { AutomationWizard, type WizardHandoff } from '@/features/automation-edit'
+import { AutomationWizard, SalaryDialog, SaveShareDialog, type WizardHandoff } from '@/features/automation-edit'
 import { PriceAlertDialog } from '@/features/price-alert-edit'
 import { ReminderDialog } from '@/features/reminder-edit'
 import { TransactionForm } from '@/features/transaction-create'
@@ -28,6 +28,24 @@ const wizardOpen = computed({
 })
 const reminderOpen = ref(false)
 const alertOpen = ref(false)
+const salaryOpen = ref(false)
+const shareOpen = ref(false)
+
+/**
+ * `?new=reminder`, `alert`, `salary` and `save_share` open their own forms straight
+ * away (links from other screens); `low_balance` is a scheme from its template.
+ */
+watch(
+  () => route.query.new,
+  (kind) => {
+    if (kind === 'low_balance') return void router.replace({ name: 'workflow-new', query: { template: 'lowBalance' } })
+    const opens = { reminder: reminderOpen, alert: alertOpen, salary: salaryOpen, save_share: shareOpen }[String(kind)]
+    if (!opens) return
+    opens.value = true
+    void router.replace({ query: { ...route.query, new: undefined } })
+  },
+  { immediate: true },
+)
 
 function handoff(to: WizardHandoff) {
   if (to.kind === 'reminder') reminderOpen.value = true
@@ -57,4 +75,6 @@ function handoff(to: WizardHandoff) {
   </AutomationWizard>
   <ReminderDialog v-model:open="reminderOpen" />
   <PriceAlertDialog v-model:open="alertOpen" />
+  <SalaryDialog v-model:open="salaryOpen" />
+  <SaveShareDialog v-model:open="shareOpen" />
 </template>
