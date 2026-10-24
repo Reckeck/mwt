@@ -70,6 +70,10 @@ export const queryClient = new QueryClient({
       // value), so it needs no deep proxies: walking a page of transactions through them
       // was ~140× slower than the plain objects (rule 17).
       shallow: true,
+      // Commands go to the local backend, not the network: offline they still answer
+      // (from the vault and the cached rates), so nothing waits for the connection.
+      networkMode: 'always',
     },
+    mutations: { networkMode: 'always' },
   },
 })

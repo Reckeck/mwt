@@ -19,6 +19,7 @@ import { useHomeToday } from './model/use-home-today'
 import { useLastVisit } from './model/use-last-visit'
 import { HomeChanges } from './ui/home-changes'
 import { HomeFigures } from './ui/home-figures'
+import { HomeRatesBar } from './ui/home-rates-bar'
 import { HomeFirstSteps } from './ui/home-first-steps'
 import { HomeTasks } from './ui/home-tasks'
 import { DashboardWidgetSlot } from './ui/dashboard-widget-slot'
@@ -131,6 +132,7 @@ const actionsById = useWidgetActions({
 
 <template>
   <div class="grid grid-cols-[minmax(0,1fr)] gap-3 pb-6 md:gap-4">
+    <HomeRatesBar />
     <HomeFigures :home="home" />
     <HomeFirstSteps v-if="home.fresh.value" />
     <template v-else>

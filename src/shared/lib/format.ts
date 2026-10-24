@@ -291,10 +291,7 @@ export function pluralForm(count: number, locale: string): Intl.LDMLPluralRule {
   return rule.select(count)
 }
 
-const listFormats = new Map<string, Intl.ListFormat>()
 /** «3 и 5», «3, 5 и 9»: a short list joined the way the UI language joins it. */
 export function formatList(items: string[], locale: string = activeLocale.value): string {
-  const format = listFormats.get(locale) ?? new Intl.ListFormat(locale, { type: 'conjunction' })
-  listFormats.set(locale, format)
-  return format.format(items)
+  return new Intl.ListFormat(locale, { type: 'conjunction' }).format(items)
 }

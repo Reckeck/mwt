@@ -12,11 +12,13 @@ import { pushBackLayer } from '@/shared/lib/back-stack'
 import { hotkeyLabel, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 
+import PaletteConvert from './PaletteConvert.vue'
 import PaletteHints from './PaletteHints.vue'
 import PaletteInput from './PaletteInput.vue'
 import PaletteMore from './PaletteMore.vue'
 import PalettePeek from './PalettePeek.vue'
 import PaletteSearch, { type PaletteTarget } from './PaletteSearch.vue'
+import { usePaletteConvert } from './use-palette-convert'
 import { usePalettePeek } from './use-palette-peek'
 
 /**
@@ -42,6 +44,8 @@ onClickOutside(panel, () => close(), { ignore: ['[data-command-palette-trigger]'
 const picked = ref<string>('')
 
 const peek = usePalettePeek({ open, search, list, phone })
+/** «100 usd»: the query read as a sum to convert (Currency-2 · 10) takes the place of the search. */
+const convert = usePaletteConvert(open, search)
 
 function show() {
   open.value = true
@@ -117,15 +121,18 @@ const TRIGGER_WIDE = { variant: 'outline', class: 'w-full justify-start gap-2 px
           <div class="flex min-h-0 flex-1" :class="phone && 'flex-col'">
             <div ref="list" class="min-h-0 min-w-0 flex-1 [&_[data-slot=command-item][data-highlighted]]:bg-primary/10" :class="phone && '[&_[data-slot=command-item]]:min-h-11'">
               <CommandList class="h-full" :class="phone ? 'max-h-none' : 'max-h-[min(40rem,calc(100dvh-200px))]'">
-                <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
-                <PaletteMore v-if="search && !actionsFor" :run="run" @quick-add="emit('quickAdd')" @settings="emit('settings')" @lock="emit('lock')" />
+                <PaletteConvert v-if="convert.query.value && !actionsFor" :convert="convert" :run="run" />
+                <template v-else>
+                  <PaletteSearch v-model:actions-for="actionsFor" :open="open" :run="run" />
+                  <PaletteMore v-if="search && !actionsFor" :run="run" @quick-add="emit('quickAdd')" @settings="emit('settings')" @lock="emit('lock')" />
+                </template>
               </CommandList>
             </div>
             <aside v-if="peek.item.value" class="shrink-0 bg-popover" :class="phone ? 'max-h-[55dvh] border-t' : 'w-[min(300px,40vw)] border-l'">
               <PalettePeek :item="peek.item.value" @open="openFromPeek" />
             </aside>
           </div>
-          <PaletteHints :category="peek.onCategory.value" :phone="phone" />
+          <PaletteHints :category="peek.onCategory.value" :converting="Boolean(convert.query.value)" :phone="phone" />
         </Command>
       </div>
     </template>

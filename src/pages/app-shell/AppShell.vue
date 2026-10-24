@@ -62,6 +62,8 @@ const walletName = computed(() => {
   if (route.name !== 'wallet') return null
   return flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === route.params.id)?.store.name ?? null
 })
+// Home says «Нет сети» in its own bar, with the rates' age (Currency-2 · 8); the red badge is for the other screens.
+const headerOnline = computed(() => isOnline.value || route.name === 'dashboard')
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
 useRecordPlaces(pageTitle)
 useHotkey('quickAdd', () => (quickAddOpen.value = true))
@@ -102,7 +104,7 @@ const pageClass = computed(() => {
         v-if="!fullscreen"
         :title="pageTitle"
         :summary="summary.data.value"
-        :online="isOnline"
+        :online="headerOnline"
         :has-tour="tour.hasTour(routeTour)"
         @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"

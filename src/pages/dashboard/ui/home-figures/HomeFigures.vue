@@ -4,10 +4,11 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { CapitalGlance, SpentGlance } from '@/widgets/quick-glance'
-import { Money } from '@/entities/currency'
+import { Money, useRatesAge } from '@/entities/currency'
 import { comparisonDelta } from '@/shared/lib/comparison'
-import { formatMoney, formatPct, signClass } from '@/shared/lib/format'
+import { dateFormat, formatMoney, formatPct, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
+import { Badge } from '@/shared/ui/badge'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 
@@ -26,6 +27,11 @@ const daily = computed(() => props.home.daily.data.value)
 const spent = computed(() => props.home.balance.data.value?.total.spent ?? '0')
 const spentCurrency = computed(() => props.home.balance.data.value?.currency ?? today.value?.currency ?? '')
 const change = computed(() => comparisonDelta(today.value?.net_worth).pct)
+/** «курс 20 окт.» (Currency-2 · 8): the capital is counted at an earlier day's rates. */
+const rates = useRatesAge()
+const ratesDay = computed(() =>
+  rates.stale.value && rates.at.value ? dateFormat({ day: 'numeric', month: 'short' }).format(new Date(rates.at.value)) : '',
+)
 /** Nothing to spread yet: no income, fact or plan, this month. */
 const noIncome = computed(() => !daily.value || (daily.value.mode === 'month' && Number(daily.value.income) === 0))
 /** The phone fills the card with the accent only for good news: red on blue does not read. */
@@ -67,8 +73,14 @@ const limitLine = computed(() => {
         <Money v-else :amount="'0'" :currency="props.home.summary.data.value?.base_currency" :convert="false" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capitalEmpty') }}</p>
-      <p v-else-if="change !== null" :class="cn('text-xs tabular-nums md:text-sm', signClass(change))">
-        {{ t('home.figures.capitalChange', { pct: formatPct(change, { signed: true, decimals: 1 }) }) }}
+      <Badge v-if="!props.home.fresh.value && ratesDay" variant="warning" class="h-5 justify-self-start md:hidden" data-rates-badge>
+        {{ t('ratesBar.badge', { day: ratesDay }) }}
+      </Badge>
+      <p v-if="!props.home.fresh.value && (change !== null || ratesDay)" class="flex flex-wrap items-center gap-x-1.5 text-xs md:text-sm">
+        <span v-if="change !== null" :class="cn('tabular-nums', signClass(change))">
+          {{ t('home.figures.capitalChange', { pct: formatPct(change, { signed: true, decimals: 1 }) }) }}
+        </span>
+        <Badge v-if="ratesDay" variant="warning" class="h-5 max-md:hidden">{{ t('ratesBar.badge', { day: ratesDay }) }}</Badge>
       </p>
       </div>
     </Card>
@@ -116,7 +128,7 @@ const limitLine = computed(() => {
         <span class="max-md:hidden">{{ t('home.figures.needIncome') }}</span>
         <span class="md:hidden">{{ t('home.figures.needIncomeShort') }}</span>
       </p>
-      <p v-else class="text-sm text-muted-foreground tabular-nums max-md:text-primary-foreground/85">{{ dayLine }}</p>
+      <p v-else class="text-sm text-muted-foreground tabular-nums" :class="filled && 'max-md:text-primary-foreground/85'">{{ dayLine }}</p>
       </div>
     </Card>
   </div>

@@ -90,7 +90,7 @@ function onKey(event: KeyboardEvent) {
       v-if="sum"
       align="end"
       :side-offset="8"
-      class="flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-0 rounded-[10px] p-0"
+      class="flex w-[min(340px,calc(100vw-2rem))] flex-col gap-0 rounded-[10px] p-0"
       data-money-card-host
       @open-auto-focus="focusCard"
       @keydown="onKey"

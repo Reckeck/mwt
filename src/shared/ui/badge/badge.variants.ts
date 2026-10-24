@@ -9,6 +9,8 @@ export const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         destructive: 'border-transparent bg-destructive text-destructive-foreground shadow',
         outline: 'text-foreground',
+        /** A figure to read with care (an old rate, a guess): the warning colour, its own border. */
+        warning: 'border-current font-medium text-warning',
       },
     },
     defaultVariants: { variant: 'default' },

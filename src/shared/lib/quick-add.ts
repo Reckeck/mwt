@@ -15,6 +15,8 @@ export interface QuickAddRequest {
   category?: string
   /** A transfer's destination: «Снять с карты» on an empty wallet (Wallets-3 · 18). */
   toStoreId?: string
+  /** The sum to start on: «Записать обмен 100 USD» from the Ctrl K converter (Currency-2 · 10). */
+  amount?: string
 }
 
 /** The request of the current opening; the dialog clears it on close. */
