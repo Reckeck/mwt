@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Download, Eye } from 'lucide-vue-next'
+import { Braces } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
+import { SettingsSection } from '@/shared/ui/settings-section'
 import { Dialog } from '@/shared/ui/dialog'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
@@ -45,27 +45,19 @@ function errorText(err: AppError): string {
 
 <template>
   <div class="contents">
-    <Card>
-      <template #header>
-        <div class="flex items-center justify-between">
-          <p class="font-medium">{{ t('settings.dev.openVault') }}</p>
-          <Badge variant="secondary" class="text-xs">DEV</Badge>
-        </div>
-      </template>
-      <div class="grid gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <Button variant="outline" @click="viewVaultJson">
-            <Eye class="size-4" />
-            {{ t('settings.dev.viewVault') }}
-          </Button>
-          <Button variant="outline" @click="devDumpVault">
-            <Download class="size-4" />
-            {{ t('settings.dev.dumpVault') }}
-          </Button>
-          <p class="text-xs text-muted-foreground">{{ t('settings.dev.dumpHint') }}</p>
-        </div>
+    <SettingsSection :title="t('settings.dev.openVault')">
+      <div class="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary" class="text-xs">DEV</Badge>
+        <Button variant="outline" @click="viewVaultJson">
+          <Braces class="size-4" />
+          {{ t('settings.dev.viewVault') }}
+        </Button>
+        <Button variant="outline" @click="devDumpVault">
+          {{ t('settings.dev.dumpVault') }}
+        </Button>
       </div>
-    </Card>
+      <p class="text-xs text-muted-foreground">{{ t('settings.dev.dumpHint') }}</p>
+    </SettingsSection>
 
     <Dialog
       v-model:open="jsonDialogOpen"

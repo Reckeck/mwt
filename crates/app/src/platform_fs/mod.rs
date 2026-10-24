@@ -116,6 +116,37 @@ pub fn save_bytes_dialog(
     Ok(Some(shown(&location)))
 }
 
+/// Save dialog for a copy of a vault. The chosen place is refused
+/// (`INVALID_INPUT`, nothing written) when it is one of the `keep` files.
+pub fn save_vault_copy_dialog(
+    app: &AppHandle,
+    file_name: &str,
+    bytes: &[u8],
+    keep: &[&Path],
+) -> Result<Option<String>> {
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .add_filter("Vault", &["wallet"])
+        .set_file_name(file_name)
+        .blocking_save_file()
+    else {
+        return Ok(None);
+    };
+    let location = location_of(picked);
+    if let VaultLocation::Path(path) = &location
+        && keep
+            .iter()
+            .any(|file| trade_core::vault_io::delete::is_same_file(file, path))
+    {
+        return Err(Error::InvalidInput(
+            "the copy cannot replace a vault that is in use".into(),
+        ));
+    }
+    write_location(app, &location, bytes)?;
+    Ok(Some(shown(&location)))
+}
+
 /// Read a whole file or document.
 pub fn read_location(app: &AppHandle, location: &VaultLocation) -> Result<Vec<u8>> {
     let mut options = OpenOptions::new();

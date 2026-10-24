@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -12,16 +13,19 @@ import { SyncChanges } from '../SyncChanges'
 /**
  * What a batch from another device will change here, before it is applied:
  * after pairing, with «Спрашивать перед синхронизацией», or while the other
- * device's clock is not trusted. Closing the window declines the batch.
+ * device's clock is not trusted. Closing the window declines the batch. Not on
+ * Настройки › Синхронизация › История: the same batch is answered there, in the list.
  */
 const { t } = useI18n()
 const { plan } = useSyncStatus()
 const { decidePlan } = useSyncActions()
+const route = useRoute()
 const answered = ref<string | null>(null)
+const answeredInList = computed(() => route.query.section === 'sync-history')
 
 const session = computed(() => plan.value)
 const open = computed({
-  get: () => Boolean(session.value?.plan) && answered.value !== session.value?.session_id,
+  get: () => Boolean(session.value?.plan) && !answeredInList.value && answered.value !== session.value?.session_id,
   set: (value: boolean) => {
     if (!value && session.value) decide(false)
   },

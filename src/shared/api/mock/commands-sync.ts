@@ -7,6 +7,7 @@
 
 import { resolve } from './core'
 import type { MockCommands } from './core'
+import { emitMock } from '../mock-bus'
 import { mockAppSettings } from './vault-data'
 
 const PHONE = { device_id: 'mock-phone', name: 'Pixel 8' }
@@ -37,12 +38,68 @@ const summary: SyncSummary = {
   overwritten: [{ collection: 'stores', label: 'Наличные', field: 'name', before: 'Кошелёк', after: 'Наличные' }],
 }
 
+/** What the backend already journaled before this session: applied, declined, sent. */
+const seedJournal = (): SyncJournalEntry[] => [
+  {
+    id: 'journal-3',
+    at: '2026-10-22T09:40:00Z',
+    peer_name: 'Pixel 8',
+    counts: [
+      { collection: 'transactions', count: 2 },
+      { collection: 'budgets', count: 1 },
+    ],
+    label: null,
+    outcome: 'applied',
+    batch_id: null,
+  },
+  {
+    id: 'journal-2',
+    at: '2026-10-21T18:00:00Z',
+    peer_name: 'Ноутбук',
+    counts: [],
+    label: null,
+    outcome: 'sent',
+    batch_id: null,
+  },
+  {
+    id: 'journal-1',
+    at: '2026-10-20T20:15:00Z',
+    peer_name: 'Pixel 8',
+    counts: [{ collection: 'transactions', count: 1 }],
+    label: 'Маме до зарплаты',
+    outcome: 'declined',
+    batch_id: null,
+  },
+]
+
+/** The real handshake gives the code five minutes. */
+const PAIRING_MS = 5 * 60_000
+
 const state = {
+  pairingStart: 0,
   phase: null as SyncPhase | null,
   peers: [] as SyncPeerView[],
   history: [] as AppliedBatch[],
+  journal: seedJournal(),
   since: Date.now(),
   firewallOpen: false,
+}
+
+/** One line of the journal for `summary`, as the backend writes it. */
+function journalLine(outcome: SyncJournalOutcome, batchId: string | null): SyncJournalEntry {
+  const counts = summary.collections.map((changes) => ({
+    collection: changes.collection,
+    count: changes.added + changes.updated + changes.deleted,
+  }))
+  return {
+    id: `journal-${state.journal.length + 4}`,
+    at: new Date().toISOString(),
+    peer_name: PHONE.name,
+    counts,
+    label: null,
+    outcome,
+    batch_id: batchId,
+  }
 }
 
 function session(): SyncSessionView[] {
@@ -58,6 +115,7 @@ function session(): SyncSessionView[] {
       progress: null,
       focused: false,
       pairing_code: state.phase === 'pairing' ? '482913' : null,
+      pairing_expires_ms: state.phase === 'pairing' ? state.pairingStart + PAIRING_MS : null,
       plan: state.phase === 'awaiting_confirm' ? { reason: 'paired', summary } : null,
     },
   ]
@@ -93,6 +151,9 @@ function status(): SyncStatus {
   }
 }
 
+/** What the backend does after every change: pushes the status (the browser has no events of its own). */
+const push = () => setTimeout(() => emitMock('sync-status', status()), 0)
+
 export const syncCommands: MockCommands = {
   sync_status: () => resolve(status()),
   sync_set_settings: ({ body }) => {
@@ -108,14 +169,18 @@ export const syncCommands: MockCommands = {
       mockAppSettings.device_name = input.device_name.trim() || null
     // The scripted phone shows up once sync is on and it is not paired yet.
     state.phase = prefs.enabled ? (state.peers.length ? 'live' : 'offer') : null
+    push()
     return resolve(status())
   },
   sync_pair: () => {
     state.phase = 'pairing'
+    state.pairingStart = Date.now()
+    push()
     return resolve(null)
   },
   sync_dismiss_offer: () => {
     state.phase = null
+    push()
     return resolve(null)
   },
   sync_confirm_pairing: ({ body }) => {
@@ -124,16 +189,19 @@ export const syncCommands: MockCommands = {
       state.peers = [{ ...PHONE, paired_at: new Date().toISOString(), last_synced_at: null, online: true }]
       state.phase = 'awaiting_confirm'
     } else state.phase = null
+    push()
     return resolve(null)
   },
   sync_decide_plan: ({ body }) => {
     const accept = Boolean((body as SyncDecisionInput).accept)
     state.phase = accept ? 'live' : null
+    const batchId = `batch-${state.history.length + 1}`
+    state.journal = [journalLine(accept ? 'applied' : 'declined', accept ? batchId : null), ...state.journal]
     if (accept) {
       const now = new Date().toISOString()
       state.history = [
         {
-          id: `batch-${state.history.length + 1}`,
+          id: batchId,
           peer_name: PHONE.name,
           applied_at: now,
           summary,
@@ -144,15 +212,18 @@ export const syncCommands: MockCommands = {
       ]
       state.peers = state.peers.map((peer) => ({ ...peer, last_synced_at: now }))
     }
+    push()
     return resolve(null)
   },
   sync_peers: () => resolve(state.peers.map((peer) => ({ ...peer, online: state.phase === 'live' }))),
   sync_forget_peer: () => {
     state.peers = []
     state.phase = null
+    push()
     return resolve(null)
   },
   sync_history: () => resolve(state.history),
+  sync_journal: () => resolve(state.journal),
   sync_undo: ({ args }) => {
     const id = String(args?.batchId ?? '')
     state.history = state.history.map((batch) =>

@@ -19,6 +19,8 @@ export interface MutationNotice extends Record<string, unknown> {
   silent?: string
   /** Offers "Отменить" in the success toast; runs this to put things back. */
   undo?: (data: unknown, variables: unknown) => Promise<unknown> | unknown
+  /** A button in the success toast that is not an undo («Открыть снова»); `undo` wins when both are set. */
+  action?: (data: unknown, variables: unknown) => { label: string; onClick: () => void }
 }
 
 /** A toast's text with a muted second line (the name of what was saved, a count). */

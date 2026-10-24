@@ -133,6 +133,23 @@ pub fn create(vault: &Path, stamp: &str) -> Result<BackupFile> {
     })
 }
 
+/// Delete this vault's backups that are not encrypted (made while it had no
+/// password) and report how many went. Every file goes through [`resolve`]
+/// (only this vault's backups in its own folder); an encrypted copy, a file
+/// that is not a vault and a copy that cannot be read are kept.
+pub fn remove_plain(vault: &Path) -> Result<u32> {
+    let mut removed = 0;
+    for file in list(vault)? {
+        let path = resolve(vault, &file.name)?;
+        if crate::crypto::file_is_encrypted(&path) {
+            continue;
+        }
+        std::fs::remove_file(&path).map_err(|err| Error::Io(err.to_string()))?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 /// `20261022-094000` for the moment `now`.
 pub fn stamp(now: time::OffsetDateTime) -> String {
     format!(

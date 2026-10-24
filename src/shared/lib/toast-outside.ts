@@ -6,5 +6,6 @@
  */
 export function keepOpenOnToast(event: CustomEvent<{ originalEvent?: Event }>) {
   const target = event.detail?.originalEvent?.target ?? event.target
-  if (target instanceof Element && target.closest('[data-sonner-toaster]')) event.preventDefault()
+  if (target instanceof Element && target.closest('[data-sonner-toaster], .driver-popover, .driver-overlay'))
+    event.preventDefault()
 }

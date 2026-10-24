@@ -25,6 +25,10 @@ export const useVaultStore = defineStore('vault', {
   getters: {
     /** Android/iOS: vaults live in app storage, a picked file is copied in. */
     appStorage: (state) => state.status?.storage === 'app',
+    /** The open vault has a password; `false` hides «Заблокировать» and the auto-lock (nothing to lock with). */
+    encrypted: (state) => state.status?.encrypted !== false,
+    /** The open vault is the sandbox (demo data, erased on exit): the shell shows its bar, the network features wait. */
+    sandbox: (state) => state.status?.sandbox === true,
   },
   actions: {
     async refreshStatus() {
@@ -45,6 +49,11 @@ export const useVaultStore = defineStore('vault', {
     /** Undo of `forgetRecent`: the row returns to `index`. */
     async restoreRecent(path: string, index: number) {
       await call('restore_recent_vault', { input: { path, index: Math.max(index, 0) } })
+      await this.loadRecents()
+    },
+    /** «Найти файл…»: the row of `path` points at `newPath` and keeps its place in the list. */
+    async relocateRecent(path: string, newPath: string) {
+      await call('relocate_recent_vault', { input: { path, new_path: newPath } })
       await this.loadRecents()
     },
     /** The chosen vault (on mobile already copied into app storage), or
@@ -74,6 +83,8 @@ export const useVaultStore = defineStore('vault', {
           unlocked: true,
           info: this.info,
           storage: this.status?.storage ?? 'files',
+          encrypted: this.info.encrypted,
+          sandbox: false,
         }
       } catch (err) {
         this.error = (err as Error).message
@@ -82,8 +93,8 @@ export const useVaultStore = defineStore('vault', {
         this.busy = false
       }
     },
-    /** `crypto`: the vault keeps crypto wallets and exchanges (asked on create). */
-    async createVault(path: string, password: string, crypto: boolean) {
+    /** `crypto`: the vault keeps crypto wallets and exchanges (asked on create); `password: null` — a vault without a password. */
+    async createVault(path: string, password: string | null, crypto: boolean) {
       this.busy = true
       this.error = null
       try {
@@ -98,6 +109,8 @@ export const useVaultStore = defineStore('vault', {
           unlocked: true,
           info: this.info,
           storage: this.status?.storage ?? 'files',
+          encrypted: this.info.encrypted,
+          sandbox: false,
         }
       } catch (err) {
         this.error = (err as Error).message
@@ -112,6 +125,30 @@ export const useVaultStore = defineStore('vault', {
       const status = await call<VaultStatus>('vault_status')
       this.status = status
       localStorage.setItem('trade-app:unlocked', 'false')
+    },
+    /** «Открыть песочницу»: the demo vault opens in place of the unlock screen. Not remembered as the last vault. */
+    async openSandbox() {
+      return await this.enterSandbox('open_sandbox')
+    },
+    /** «Сбросить»: the same demo data again, whatever was done in the sandbox. */
+    async resetSandbox() {
+      return await this.enterSandbox('reset_sandbox')
+    },
+    async enterSandbox(command: 'open_sandbox' | 'reset_sandbox') {
+      this.busy = true
+      try {
+        this.info = await call<VaultInfo>(command)
+        await this.refreshStatus()
+        return this.info
+      } finally {
+        this.busy = false
+      }
+    },
+    /** «Выйти»: the sandbox is closed and erased; the unlock screen follows (`locked`). */
+    async closeSandbox() {
+      await call('close_sandbox')
+      this.info = null
+      await this.refreshStatus()
     },
     /** The backend locked or unlocked the vault by itself (`vault-changed`, subscribed in App.vue). */
     applyStatus(status: VaultStatus) {

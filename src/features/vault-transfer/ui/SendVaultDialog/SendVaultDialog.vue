@@ -4,6 +4,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2 } from 'lucide-vue-next'
 
+import { useVaultStore } from '@/shared/store/vault'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Spinner } from '@/shared/ui/spinner'
@@ -20,6 +21,9 @@ import SendVaultPick from './SendVaultPick.vue'
  */
 const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
+const vault = useVaultStore()
+// A vault without a password: nothing to type again (the status says, not the form).
+const encrypted = computed(() => vault.status?.encrypted ?? true)
 const { nearby, view, phase, browse, close, send, sendCode } = useSendVault()
 
 watch(
@@ -51,6 +55,7 @@ function retry() {
         :nearby="nearby"
         :pending="send.isPending.value"
         :failure="send.error.value"
+        :encrypted="encrypted"
         @submit="send.mutate"
       />
 

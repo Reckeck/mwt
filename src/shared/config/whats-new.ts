@@ -13,6 +13,19 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'newSettings',
+    date: '2026-10-25',
+    points: [
+      { key: 'settings', route: 'settings:app' },
+      // The sign-in screen exists only before a vault is open: no link.
+      { key: 'login' },
+      { key: 'plain', route: 'settings:vault' },
+      { key: 'sandbox' },
+      { key: 'history', route: 'settings:sync:sync-history' },
+      { key: 'pair', route: 'settings:sync:sync-devices' },
+    ],
+  },
+  {
     id: 'newAutomations',
     date: '2026-10-25',
     points: [

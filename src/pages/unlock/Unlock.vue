@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FolderPlus, Settings, Smartphone } from 'lucide-vue-next'
+import { Settings } from 'lucide-vue-next'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
 import { RecentVaults } from '@/widgets/recent-vaults'
+import { SandboxOpenButton } from '@/features/sandbox-open'
 import { VaultCreateDialog } from '@/features/vault-create'
 import { ReceiveVaultDialog } from '@/features/vault-transfer'
 import { VaultUnlockDialog } from '@/features/vault-unlock'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
 import { useVaultStore } from '@/shared/store/vault'
+import { useTour } from '@/shared/lib/tour'
 
 const { t } = useI18n()
 const vault = useVaultStore()
@@ -21,6 +22,19 @@ const receiveOpen = ref(false)
 // A vault that just arrived from another device opens right away.
 const receivedPath = ref<string | null>(null)
 const unlockOpen = ref(false)
+
+// The first visit shows the card, the recent vaults and the sandbox once.
+const tour = useTour()
+let tourTimer: ReturnType<typeof setTimeout> | undefined
+onMounted(() => {
+  tourTimer = setTimeout(() => {
+    if (!document.querySelector('[role="dialog"]')) tour.autoStart('unlock')
+  }, 1200)
+})
+onBeforeUnmount(() => {
+  clearTimeout(tourTimer)
+  tour.stop()
+})
 
 function onReceived(path: string) {
   void vault.loadRecents().catch(() => {})
@@ -51,43 +65,10 @@ function onReceived(path: string) {
       </Button>
     </header>
 
-    <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-6">
-      <div class="grid w-full max-w-2xl gap-4">
-        <RecentVaults />
-
-        <!-- Block 2: create a vault at any path. Always available — it does not
-             depend on whether a vault already exists at the default location. -->
-        <Card>
-          <template #header>
-            <div class="flex items-center gap-2">
-              <FolderPlus class="size-4 shrink-0 text-muted-foreground" />
-              <h2 class="text-base font-semibold">{{ t('auth.createVaultTitle') }}</h2>
-            </div>
-            <p class="text-sm text-muted-foreground">{{ t(vault.appStorage ? 'auth.createVaultHintApp' : 'auth.createVaultHint') }}</p>
-          </template>
-
-          <!-- With a vault to open, creating another is the second choice. -->
-          <Button size="lg" class="w-full" :variant="vault.recents.length ? 'outline' : 'default'" @click="createOpen = true">
-            <FolderPlus class="size-4" />
-            {{ t('auth.createVaultButton') }}
-          </Button>
-        </Card>
-
-        <Card>
-          <template #header>
-            <div class="flex items-center gap-2">
-              <Smartphone class="size-4 shrink-0 text-muted-foreground" />
-              <h2 class="text-base font-semibold">{{ t('transfer.receive.cardTitle') }}</h2>
-            </div>
-            <p class="text-sm text-muted-foreground">{{ t('transfer.receive.cardHint') }}</p>
-          </template>
-
-          <Button size="lg" variant="outline" class="w-full" @click="receiveOpen = true">
-            <Smartphone class="size-4" />
-            {{ t('transfer.receive.cardButton') }}
-          </Button>
-        </Card>
-      </div>
+    <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-4 md:items-center md:p-6">
+      <RecentVaults @create="createOpen = true" @receive="receiveOpen = true">
+        <template #footer><SandboxOpenButton /></template>
+      </RecentVaults>
     </div>
 
     <VaultCreateDialog v-model:open="createOpen" />

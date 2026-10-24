@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, X } from 'lucide-vue-next'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { useVaultStore } from '@/shared/store/vault'
 import { Tabs } from '@/shared/ui/tabs'
 import { usePlatform } from '@/shared/lib/platform'
+import { useTour } from '@/shared/lib/tour'
 import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 import { cn } from '@/shared/lib/utils'
 
@@ -46,6 +47,16 @@ const vaultFile = computed(() => {
 const scroller = ref<HTMLElement | null>(null)
 const { open, isPhone, isList, activeGroup, activeTab, selectGroup, selectTab, backToList } = useSettingsNav(groups, scroller)
 
+// The first time the window opens, its tour starts once the window has rendered.
+const tour = useTour()
+let tourTimer: ReturnType<typeof setTimeout> | undefined
+watch(open, (isOpen) => {
+  clearTimeout(tourTimer)
+  if (isOpen) tourTimer = setTimeout(() => tour.autoStart('settings'), 900)
+  else tour.stop()
+})
+onBeforeUnmount(() => clearTimeout(tourTimer))
+
 const tabDefs = computed(() =>
   activeGroup.value.tabs.map((tab) => ({
     value: tab.id,
@@ -76,6 +87,7 @@ function onTab(id: string) {
       >
         <!-- Left column of groups; on a phone it is the first screen and hides once a group is open. -->
         <nav
+          data-tour="settings-groups"
           :class="cn(
             'flex shrink-0 flex-col gap-2 overflow-y-auto md:scrollbar-stable border-border bg-muted/30 p-3 md:w-70 md:border-r max-md:min-h-0 max-md:flex-1 max-md:bg-card',
             !isList && 'max-md:hidden',
@@ -111,6 +123,7 @@ function onTab(id: string) {
           <Tabs
             v-if="tabDefs.length > 1"
             fill
+            data-tour="settings-tabs"
             class="shrink-0 px-4 md:px-6"
             :model-value="activeTab.id"
             :tabs="tabDefs"

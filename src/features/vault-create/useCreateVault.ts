@@ -1,13 +1,11 @@
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useBaseCurrencyChoice } from '@/features/base-currency-choice'
+import { MIN_VAULT_PASSWORD } from '@/shared/lib/vault-password'
 import { vaultErrorMessage } from '@/shared/lib/vault-error'
 import { useVaultStore } from '@/shared/store/vault'
-
-/** Shortest master password the form accepts. */
-export const MIN_VAULT_PASSWORD = 4
 
 /** Name suggested for the first vault in app storage (`vault.wallet`). */
 const DEFAULT_VAULT_NAME = 'vault'
@@ -21,17 +19,18 @@ export function useCreateVault() {
   const path = ref('')
   const password = ref('')
   const passwordRepeat = ref('')
+  /** «С паролем» (the default) or «Без пароля»: a plain vault skips the password fields altogether. */
+  const withPassword = ref(true)
   /** The vault keeps crypto wallets and exchanges; most people start without them. */
   const crypto = ref(false)
   const baseCurrency = useBaseCurrencyChoice()
   const error = ref<string | null>(null)
   const busy = ref(false)
 
-  const passwordMatch = computed(() => passwordRepeat.value.length > 0 && passwordRepeat.value === password.value)
-
   async function reset() {
     password.value = ''
     passwordRepeat.value = ''
+    withPassword.value = true
     crypto.value = false
     baseCurrency.reset()
     error.value = null
@@ -62,18 +61,18 @@ export function useCreateVault() {
       error.value = t(vault.appStorage ? 'auth.nameRequired' : 'auth.pathRequired')
       return
     }
-    if (password.value.length < MIN_VAULT_PASSWORD) {
+    if (withPassword.value && password.value.length < MIN_VAULT_PASSWORD) {
       error.value = t('auth.passwordTooShort')
       return
     }
-    if (password.value !== passwordRepeat.value) {
+    if (withPassword.value && password.value !== passwordRepeat.value) {
       error.value = t('auth.passwordMismatch')
       return
     }
     busy.value = true
     error.value = null
     try {
-      await vault.createVault(target, password.value, crypto.value)
+      await vault.createVault(target, withPassword.value ? password.value : null, crypto.value)
       await baseCurrency.save()
       await router.replace({ name: 'dashboard' })
     } catch (err) {
@@ -83,5 +82,5 @@ export function useCreateVault() {
     }
   }
 
-  return { path, password, passwordRepeat, passwordMatch, crypto, baseCurrency, error, busy, reset, browse, submit }
+  return { path, password, passwordRepeat, withPassword, crypto, baseCurrency, error, busy, reset, browse, submit }
 }

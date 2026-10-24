@@ -1323,7 +1323,12 @@ opening: OpeningBalance | null,
  */
 card: FirstCard | null, };
 
-type CreateVaultInput = { path: string, password: string, 
+type CreateVaultInput = { path: string, 
+/**
+ * `None` makes a vault without a password (its file is not encrypted);
+ * an empty string is refused.
+ */
+password: string | null, 
 /**
  * Name of the cash wallet every vault starts with, in the user's language.
  */
@@ -1558,6 +1563,24 @@ type DebtTermsDraft = { contact_id: string, asset: string, due_at: string | null
 type DefiAction = "stake" | "unstake" | "claim" | "add_liquidity" | "remove_liquidity";
 
 type DefiTx = { meta: TxMeta, store_id: string, action: DefiAction, asset: AssetRef, amount: Amount, protocol: string | null, pool_id: string | null, network: Chain | null, tx_hash: string | null, fee: Fee | null, price: PriceStamp, };
+
+/**
+ * Input to delete a vault from the app's folder.
+ */
+type DeleteVaultFileInput = { path: string, };
+
+/**
+ * What `delete_vault_file` removed.
+ */
+type DeleteVaultFileOutput = { 
+/**
+ * Name of the deleted vault file.
+ */
+file_name: string, 
+/**
+ * Names of the backup copies deleted with it.
+ */
+backups: Array<string>, };
 
 type DeleteWorkflowTestInput = { workflow_id: string, test_id: string, };
 
@@ -1904,6 +1927,15 @@ type ExchangeProviderInfo = { provider: ExchangeProvider,
  * The app can connect to it; others are shown as «soon».
  */
 supported: boolean, };
+
+/**
+ * Input to save a copy of a vault file elsewhere.
+ */
+type ExportVaultCopyInput = { 
+/**
+ * The vault to copy.
+ */
+path: string, };
 
 /**
  * A wallet an exported workflow mentions: its id there and its name.
@@ -4043,7 +4075,16 @@ display_name: string,
 /**
  * Saves are copied to an external document.
  */
-linked: boolean, };
+linked: boolean, 
+/**
+ * The vault has a password (read from the file's header on each listing).
+ */
+encrypted: boolean, 
+/**
+ * The file is in the app's own folder (`vaults_dir`): the history offers
+ * "delete the vault" there instead of just forgetting it.
+ */
+in_app_folder: boolean, };
 
 type RefreshResult = { prices: number, fx: number, 
 /**
@@ -4078,6 +4119,19 @@ when: string | null, value: Amount | null, currency: string | null, archived: bo
  * What a group of related things is.
  */
 type RelationKind = "parent" | "children" | "stores" | "assets" | "goals" | "budgets" | "automations" | "workflows" | "reminders" | "alerts" | "rules" | "categories" | "contacts" | "transactions" | "origin" | "flow" | "created" | "scenarios";
+
+/**
+ * Input to point a recents row at the file found in a new place.
+ */
+type RelocateRecentVaultInput = { 
+/**
+ * The path the row has now (the file is not there any more).
+ */
+path: string, 
+/**
+ * Where the file was found; the row keeps its place in the list.
+ */
+new_path: string, };
 
 type Reminder = { id: string, text: string, 
 /**
@@ -4149,6 +4203,16 @@ type ReminderSource = { kind: ReminderSourceKind, id: string, };
  * the store, utility item, contact debt or goal it follows.
  */
 type ReminderSourceKind = "loan_payment" | "credit_card_payment" | "rent" | "utilities" | "meter_readings" | "deposit_end" | "pds_contribution" | "loyalty_expiry" | "debt" | "goal_saving" | "goal_deadline" | "property_tax" | "interest_tax" | "vehicle_insurance" | "vehicle_service";
+
+/**
+ * Take the password off the open vault.
+ */
+type RemoveVaultPasswordInput = { current_password: string, 
+/**
+ * The user agreed that the external copy loses its password too. Without
+ * it a vault with an external copy keeps its password (`INVALID_INPUT`).
+ */
+external_copy_too: boolean, };
 
 type RenameAttachmentInput = { id: string, title: string, };
 
@@ -4483,6 +4547,21 @@ type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: st
  * The «Вкл.» switch of a «Мои» row.
  */
 type SetMyAutomationActiveInput = { kind: MineKind, id: string, active: boolean, };
+
+/**
+ * Set a password on the open vault that has none.
+ */
+type SetVaultPasswordInput = { new_password: string, 
+/**
+ * Also delete this vault's `.bak` copies that are not encrypted.
+ */
+delete_plain_copies: boolean, };
+
+type SetVaultPasswordResult = { 
+/**
+ * How many unencrypted copies were deleted.
+ */
+removed_copies: number, };
 
 type SetWorkflowActiveInput = { id: string, active: boolean, };
 
@@ -5082,6 +5161,37 @@ type SyncErrorEvent = { code: string, message: string, peer_name: string | null,
 type SyncFirewallFix = "none" | "auto" | "manual";
 
 /**
+ * How many records of one collection a batch touched.
+ */
+type SyncJournalCount = { collection: string, count: number, };
+
+/**
+ * One batch, as the journal tells it.
+ */
+type SyncJournalEntry = { id: string, 
+/**
+ * RFC3339.
+ */
+at: string, 
+/**
+ * The device the batch came from.
+ */
+peer_name: string, counts: Array<SyncJournalCount>, 
+/**
+ * The record's label when the batch changed exactly one.
+ */
+label: string | null, outcome: SyncJournalOutcome, 
+/**
+ * The kept batch behind an applied line, for «Отменить» while it is kept.
+ */
+batch_id: string | null, };
+
+/**
+ * How a batch ended.
+ */
+type SyncJournalOutcome = "applied" | "declined" | "failed" | "sent";
+
+/**
  * The diagnostics of sync on the local network.
  */
 type SyncNetworkView = { 
@@ -5184,6 +5294,10 @@ focused: boolean,
  * While pairing: the code both screens show.
  */
 pairing_code: string | null, 
+/**
+ * While pairing: when the code stops being valid (Unix ms), for the countdown.
+ */
+pairing_expires_ms: number | null, 
 /**
  * The list of changes waiting for the user, if any.
  */
@@ -6338,7 +6452,11 @@ deposit_rate_sources: Array<DepositRateSource>,
  */
 attachments: Array<Attachment>, };
 
-type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, };
+type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, 
+/**
+ * The vault has a password; `false` = its file is not encrypted.
+ */
+encrypted: boolean, };
 
 /**
  * The external copy of the unlocked vault, if any.
@@ -6356,7 +6474,17 @@ last_error: string | null, };
 /**
  * What the unlock screen needs to know about the app.
  */
-type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, storage: VaultStorage, };
+type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, storage: VaultStorage, 
+/**
+ * The vault at `path` has a password (so the unlock screen asks for it
+ * and the lock button is shown). `true` when the file cannot be read.
+ */
+encrypted: boolean, 
+/**
+ * The open vault is the sandbox (demo data, erased on exit); the unlock
+ * screen is for the real vault, the sandbox bar shows while this is set.
+ */
+sandbox: boolean, };
 
 /**
  * How vault files are kept on this platform.

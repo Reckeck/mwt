@@ -14,6 +14,7 @@ use crate::commands::{AppState, err_to_string, require_vault};
 /// source's status shows.
 async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, String> {
     let state = app.state::<AppState>();
+    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
     let body = state
         .pricing
         .fetch_page(&source.url)
@@ -73,6 +74,7 @@ pub async fn datasource_preview(
     url: String,
     state: State<'_, AppState>,
 ) -> Result<SourcePreview, String> {
+    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
     let body = state
         .pricing
         .fetch_page(&url)
@@ -88,6 +90,7 @@ pub async fn datasource_test(
     draft: DataSourceDraft,
     state: State<'_, AppState>,
 ) -> Result<Extracted, String> {
+    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
     let body = state
         .pricing
         .fetch_page(&draft.url)

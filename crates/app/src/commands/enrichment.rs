@@ -14,6 +14,7 @@ use crate::commands::{AppState, err_to_string, require_vault};
 /// network call (AGENTS.md rule 3).
 pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRecord>, String> {
     let state = app.state::<AppState>();
+    crate::commands::sandbox::refuse(&state, "looking up a transaction online")?;
     let request = {
         let guard = require_vault(&state).map_err(err_to_string)?;
         guard.as_ref().unwrap().enrichment_request(tx_id)

@@ -114,7 +114,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     titleKey: 'settingsShell.group.help',
     hintKey: 'settingsShell.group.helpHint',
     icon: Book,
-    tabs: [{ id: 'tours', titleKey: 'settingsShell.tab.tours', sections: [section('tours', 'tours')] }],
+    tabs: [
+      {
+        id: 'tours',
+        titleKey: 'settingsShell.tab.tours',
+        sections: [section('tours', 'tours'), section('whats-new', 'whatsNew')],
+      },
+    ],
   },
   {
     id: 'dev',

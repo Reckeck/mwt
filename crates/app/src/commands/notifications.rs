@@ -35,6 +35,7 @@ pub async fn mark_notifications_read(
 /// Show a notice right now, to check that they come through.
 #[tauri::command]
 pub async fn send_test_notification(app: AppHandle) -> Result<(), String> {
+    crate::commands::sandbox::refuse_app(&app, "system notifications")?;
     let ru = crate::scheduler::russian(&app);
     let record = notice(
         NoticeCategory::Reminder,

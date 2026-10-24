@@ -1,7 +1,8 @@
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use trade_core::ipc_contract::{
-    ChangePasswordInput, CreateVaultInput, UnlockInput, VaultInfo, VaultStatus,
+    ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
+    SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
 use trade_core::service::UnlockedVault;
 
@@ -9,7 +10,7 @@ use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require
 
 /// Vault identity for the unlock screen. The base currency is *not* part of the
 /// document any more — it is an app-level preference — so it is left out here.
-fn info_of(vault: &UnlockedVault) -> VaultInfo {
+pub fn info_of(vault: &UnlockedVault) -> VaultInfo {
     VaultInfo {
         path: vault.path.display().to_string(),
         doc_version: vault.doc.version,
@@ -17,6 +18,7 @@ fn info_of(vault: &UnlockedVault) -> VaultInfo {
         created_at: vault.doc.created_at.clone(),
         format: vault.fmt.label().to_string(),
         base_currency: vault.base_currency().to_string(),
+        encrypted: vault.is_encrypted(),
     }
 }
 
@@ -34,12 +36,18 @@ fn status_of(state: &AppState) -> Result<VaultStatus, String> {
     let guard = lock_vault(state).map_err(err_to_string)?;
     let unlocked = guard.is_some();
     let info = guard.as_ref().map(info_of);
+    let encrypted = info.as_ref().map_or_else(
+        || trade_core::crypto::file_is_encrypted(&path),
+        |info| info.encrypted,
+    );
     Ok(VaultStatus {
         path: path.display().to_string(),
         exists: path.exists(),
         unlocked,
         info,
         storage: crate::platform_fs::storage(),
+        encrypted,
+        sandbox: crate::commands::sandbox::is_active(state),
     })
 }
 
@@ -47,6 +55,13 @@ fn status_of(state: &AppState) -> Result<VaultStatus, String> {
 /// sync notification): the window learns it from `vault-changed`.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn lock_now(app: &AppHandle) {
+    // Locking the sandbox is leaving it: the demo data goes.
+    if crate::commands::sandbox::leave(app, &app.state::<AppState>()) {
+        if let Ok(status) = status_of(&app.state::<AppState>()) {
+            let _ = app.emit("vault-changed", status);
+        }
+        return;
+    }
     // Unsaved changes first: if they cannot be written, the vault stays open.
     if let Err(err) = crate::vault_writer::flush_now(app) {
         let _ = app.emit(crate::vault_writer::SAVE_FAILED_EVENT, err.to_string());
@@ -69,11 +84,10 @@ pub async fn create_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
+    crate::commands::sandbox::leave(&app, &state);
     let path = crate::platform_fs::resolve_new_vault(&app, &input.path).map_err(err_to_string)?;
-    if input.password.is_empty() {
-        return Err("INVALID_INPUT: password must not be empty".into());
-    }
-    let mut vault = UnlockedVault::create(path.clone(), &input.password)
+    // `None` = a vault without a password; an empty one is refused by the core.
+    let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())
         .map_err(crate::commands::err_to_string)?;
     crate::vault_writer::install(&mut vault);
     if let Some(name) = input
@@ -127,6 +141,7 @@ pub async fn unlock_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
+    crate::commands::sandbox::leave(&app, &state);
     let path =
         crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
     // A linked vault first takes in what changed in its external copy.
@@ -160,6 +175,10 @@ pub async fn unlock_vault(
 
 #[tauri::command]
 pub async fn lock_vault_cmd(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    // Locking the sandbox is leaving it: the demo data goes, nothing is kept.
+    if crate::commands::sandbox::leave(&app, &state) {
+        return Ok(());
+    }
     // The last word before the vault closes: what to remind of while locked.
     crate::scheduler::snapshot_tick(&app, true);
     crate::sync::on_lock(&app);
@@ -210,4 +229,43 @@ pub async fn change_password(
     vault
         .change_password(&input.current_password, &input.new_password)
         .map_err(crate::commands::err_to_string)
+}
+
+/// Give the open vault that has no password one. The file is rewritten
+/// encrypted (a linked external copy follows with the next write); with
+/// `delete_plain_copies` the vault's unencrypted `.bak` copies are deleted.
+#[tauri::command]
+pub async fn set_vault_password(
+    input: SetVaultPasswordInput,
+    state: State<'_, AppState>,
+) -> Result<SetVaultPasswordResult, String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().ok_or("Vault is locked")?;
+    let removed_copies = vault
+        .set_password(&input.new_password, input.delete_plain_copies)
+        .map_err(err_to_string)?;
+    Ok(SetVaultPasswordResult { removed_copies })
+}
+
+/// Take the password off the open vault. The current password is checked in
+/// Rust first. A vault with an external copy keeps its password unless the
+/// caller confirms the copy loses it too (`external_copy_too`).
+#[tauri::command]
+pub async fn remove_vault_password(
+    input: RemoveVaultPasswordInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard.as_mut().ok_or("Vault is locked")?;
+    if !input.external_copy_too
+        && crate::platform_fs::links::is_linked(&app, &vault.path.to_string_lossy())
+    {
+        return Err(err_to_string(trade_core::Error::InvalidInput(
+            "the vault has an external copy that would lose its password too: confirm it".into(),
+        )));
+    }
+    vault
+        .remove_password(&input.current_password)
+        .map_err(err_to_string)
 }

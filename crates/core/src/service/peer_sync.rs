@@ -14,6 +14,7 @@ use crate::error::{Error, Result};
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
+use crate::sync::journal::SyncJournalOutcome;
 use crate::sync::manifest::{Manifest, digest};
 use crate::sync::registry::Rule;
 use crate::sync::state::{BATCH_DAYS, MAX_BATCHES, TOMBSTONE_DAYS};
@@ -284,6 +285,12 @@ impl UnlockedVault {
             undone_at: None,
         };
         let applied = applied_of(&batch);
+        self.journal_push(
+            &applied.peer_name,
+            &applied.summary,
+            SyncJournalOutcome::Applied,
+            Some(applied.id.clone()),
+        );
         self.doc.sync.batches.push(batch);
         self.prune_batches();
         self.compact_tombstones();
@@ -365,6 +372,12 @@ impl UnlockedVault {
                 device_name: device_name.to_string(),
                 at: at.clone(),
             });
+        self.journal_push(
+            device_name,
+            &SyncSummary::default(),
+            SyncJournalOutcome::Sent,
+            None,
+        );
         let extra = self
             .doc
             .sync
@@ -838,6 +851,9 @@ mod tests {
         let (applied, _) = exchange(&mut left, &mut right);
         let batch = applied.expect("left changed");
         assert_eq!(left.sync_history()[0].id, batch.id);
+        let line = &left.sync_journal()[0];
+        assert_eq!(line.batch_id.as_deref(), Some(batch.id.as_str()));
+        assert_eq!(line.outcome, SyncJournalOutcome::Applied);
 
         let report = left.sync_undo(&batch.id).unwrap();
         assert_eq!(report.restored, 2);

@@ -6,7 +6,8 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockAutostart, mockNotices, mockTransactions } from './demo'
 import { mockConflict } from './commands-vault-files'
-import { mockAppSettings, mockCurrencies, mockInfo, mockSettings, mockStatus } from './vault-data'
+import { leaveSandbox } from './sandbox-state'
+import { mockAppSettings, mockCurrencies, mockInfo, mockPassword, mockSettings, mockStatus } from './vault-data'
 
 /** Commands: vault. */
 export const vaultCommands: MockCommands = {
@@ -14,22 +15,31 @@ export const vaultCommands: MockCommands = {
     return resolve(mockStatus.value)
   },
   unlock_vault: ({ body }) => {
+    leaveSandbox()
     if (String(body?.path).includes('conflict') && !mockConflict.resolved) {
       throw { code: 'SYNC_CONFLICT', message: 'Download/vault.wallet' }
     }
-    if (body?.password === 'secret') {
+    // A vault without a password opens whatever was typed, as the core does.
+    if (mockPassword.value === null || body?.password === mockPassword.value) {
       mockStatus.value = {
         path: String(body?.path ?? mockStatus.value.path),
         exists: true,
         unlocked: true,
         info: mockInfo,
         storage: mockStatus.value.storage,
+        encrypted: mockInfo.encrypted,
+        sandbox: false,
       }
       return resolve(mockInfo)
     }
     throw { code: 'SECRET', message: 'Wrong password' }
   },
   create_vault: ({ body }) => {
+    leaveSandbox()
+    // `password: null` (or none) makes a vault without a password; an empty one is refused, as in the core.
+    if (body?.password === '') throw { code: 'INVALID_INPUT', message: 'the password must not be empty' }
+    mockPassword.value = typeof body?.password === 'string' ? body.password : null
+    mockInfo.encrypted = mockPassword.value !== null
     if (typeof body?.crypto === 'boolean') mockSettings.crypto = body.crypto
     mockStatus.value = {
       path: String(body?.path ?? mockStatus.value.path),
@@ -37,17 +47,26 @@ export const vaultCommands: MockCommands = {
       unlocked: true,
       info: mockInfo,
       storage: mockStatus.value.storage,
+      encrypted: mockInfo.encrypted,
+      sandbox: false,
     }
     return resolve(mockInfo)
   },
   change_password: ({ body }) => {
-    if (body?.current_password !== 'secret') throw { code: 'SECRET', message: 'Wrong password' }
+    if (mockPassword.value === null) {
+      throw { code: 'INVALID_INPUT', message: 'the vault has no password to change: set one' }
+    }
+    if (body?.current_password !== mockPassword.value) throw { code: 'SECRET', message: 'Wrong password' }
+    if (!body?.new_password) throw { code: 'INVALID_INPUT', message: 'the new password must not be empty' }
+    mockPassword.value = String(body.new_password)
     return resolve(undefined)
   },
   // The mock keeps everything in memory: nothing is ever waiting for the disk.
   flush_vault: () => resolve(undefined),
   exit_without_saving: () => resolve(undefined),
   lock_vault_cmd: (_call) => {
+    // Locking the sandbox is leaving it: the demo data goes.
+    if (leaveSandbox()) return resolve({})
     mockStatus.value = { ...mockStatus.value, unlocked: false, info: null }
     return resolve({})
   },

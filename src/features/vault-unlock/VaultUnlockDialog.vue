@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderOpen } from 'lucide-vue-next'
 
@@ -37,10 +37,15 @@ const {
 } = useUnlockVault()
 const { currency, asked } = baseCurrency
 
+/** A vault without a password (read from its file): nothing to type. */
+const plain = computed(
+  () => pathFixed.value && vault.recents.find((recent: RecentVault) => recent.path === path.value)?.encrypted === false,
+)
+
 const form = useFormValidation(
   () => ({
     path: pathFixed.value ? null : required(path.value),
-    password: required(password.value),
+    password: plain.value ? null : required(password.value),
     currency: asked.value ? required(currency.value) : null,
   }),
   { resetOn: open },
@@ -79,7 +84,7 @@ watch(open, (isOpen) => {
         </div>
       </FormField>
 
-      <FormField for="unlock-password" :label="t('auth.password')" required :error="form.error('password')">
+      <FormField v-if="!plain" for="unlock-password" :label="t('auth.password')" required :error="form.error('password')">
         <!-- biome-ignore lint/a11y/noAutofocus: the dialog exists to type the password. -->
         <Input id="unlock-password" v-model="password" type="password" autocomplete="current-password" autofocus />
         <p v-if="!vault.appStorage || pathFixed" class="truncate text-xs text-muted-foreground">{{ pickedName ?? path }}</p>

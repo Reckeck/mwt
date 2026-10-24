@@ -32,7 +32,10 @@ use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, Pric
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct CreateVaultInput {
     pub path: String,
-    pub password: String,
+    /// `None` makes a vault without a password (its file is not encrypted);
+    /// an empty string is refused.
+    #[serde(default)]
+    pub password: Option<String>,
     /// Name of the cash wallet every vault starts with, in the user's language.
     #[serde(default)]
     pub cash_name: Option<String>,
@@ -53,6 +56,36 @@ pub struct ChangePasswordInput {
     pub new_password: String,
 }
 
+/// `serde(default)` for `encrypted`: a payload without it is a vault with a password.
+fn yes() -> bool {
+    true
+}
+
+/// Set a password on the open vault that has none.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetVaultPasswordInput {
+    pub new_password: String,
+    /// Also delete this vault's `.bak` copies that are not encrypted.
+    #[serde(default)]
+    pub delete_plain_copies: bool,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetVaultPasswordResult {
+    /// How many unencrypted copies were deleted.
+    pub removed_copies: u32,
+}
+
+/// Take the password off the open vault.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct RemoveVaultPasswordInput {
+    pub current_password: String,
+    /// The user agreed that the external copy loses its password too. Without
+    /// it a vault with an external copy keeps its password (`INVALID_INPUT`).
+    #[serde(default)]
+    pub external_copy_too: bool,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct VaultInfo {
     pub path: String,
@@ -61,6 +94,9 @@ pub struct VaultInfo {
     pub created_at: String,
     pub format: String,
     pub base_currency: String,
+    /// The vault has a password; `false` = its file is not encrypted.
+    #[serde(default = "yes")]
+    pub encrypted: bool,
 }
 
 /// How vault files are kept on this platform.
@@ -84,6 +120,14 @@ pub struct VaultStatus {
     pub info: Option<VaultInfo>,
     #[serde(default)]
     pub storage: VaultStorage,
+    /// The vault at `path` has a password (so the unlock screen asks for it
+    /// and the lock button is shown). `true` when the file cannot be read.
+    #[serde(default = "yes")]
+    pub encrypted: bool,
+    /// The open vault is the sandbox (demo data, erased on exit); the unlock
+    /// screen is for the real vault, the sandbox bar shows while this is set.
+    #[serde(default)]
+    pub sandbox: bool,
 }
 
 // -- stores ------------------------------------------------------------------
@@ -1871,6 +1915,13 @@ pub struct RecentVault {
     /// Saves are copied to an external document.
     #[serde(default)]
     pub linked: bool,
+    /// The vault has a password (read from the file's header on each listing).
+    #[serde(default = "yes")]
+    pub encrypted: bool,
+    /// The file is in the app's own folder (`vaults_dir`): the history offers
+    /// "delete the vault" there instead of just forgetting it.
+    #[serde(default)]
+    pub in_app_folder: bool,
 }
 
 /// Input to select or pick a vault file.
@@ -1887,6 +1938,41 @@ pub struct RestoreRecentVaultInput {
     pub path: String,
     /// Position the row had before it was forgotten.
     pub index: u32,
+}
+
+/// Input to point a recents row at the file found in a new place.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct RelocateRecentVaultInput {
+    /// The path the row has now (the file is not there any more).
+    pub path: String,
+    /// Where the file was found; the row keeps its place in the list.
+    pub new_path: String,
+}
+
+/// Input to delete a vault from the app's folder.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct DeleteVaultFileInput {
+    pub path: String,
+}
+
+/// What `delete_vault_file` removed.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct DeleteVaultFileOutput {
+    /// Name of the deleted vault file.
+    pub file_name: String,
+    /// Names of the backup copies deleted with it.
+    pub backups: Vec<String>,
+}
+
+/// Input to save a copy of a vault file elsewhere.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ExportVaultCopyInput {
+    /// The vault to copy.
+    pub path: String,
 }
 
 /// A vault file chosen in the system dialog.
@@ -2185,6 +2271,10 @@ pub struct SyncSessionView {
     pub focused: bool,
     /// While pairing: the code both screens show.
     pub pairing_code: Option<String>,
+    /// While pairing: when the code stops being valid (Unix ms), for the countdown.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub pairing_expires_ms: Option<u64>,
     /// The list of changes waiting for the user, if any.
     pub plan: Option<SyncPendingPlan>,
 }

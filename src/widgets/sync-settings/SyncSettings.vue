@@ -6,6 +6,7 @@ import { History } from 'lucide-vue-next'
 import { useSyncActions, useSyncStatus } from '@/features/vault-sync'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { FormField } from '@/shared/ui/form-field'
+import { useVaultStore } from '@/shared/store/vault'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { SectionState } from '@/shared/ui/section-state'
@@ -13,10 +14,12 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
 import SyncNetwork from './SyncNetwork.vue'
+import SyncStatusLine from './SyncStatusLine.vue'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
 /** This device's sync switches: on/off, its name, «спрашивать», «главное». */
 const { t } = useI18n()
+const vault = useVaultStore()
 const { status } = useSyncStatus()
 const { settings, restore } = useSyncActions()
 
@@ -48,15 +51,19 @@ const keyHint = computed(() => {
 </script>
 
 <template>
+  <div class="grid gap-4">
   <SettingsSection :title="t('sync.title')" :description="t('sync.description')">
     <SectionState :loading="status.isPending.value" :error="status.error.value" skeleton="list" compact @retry="status.refetch()">
       <div class="grid gap-4">
+        <!-- The sandbox never syncs: the switch waits and the note says why. -->
+        <p v-if="vault.sandbox" class="text-sm text-muted-foreground" data-sync-sandbox>{{ t('errors.SANDBOX') }}</p>
         <SwitchRow
+          plain
           id="sync-enabled"
           :label="t('sync.enabled')"
           :hint="t('sync.enabledHint')"
           :model-value="current?.enabled ?? false"
-          :disabled="settings.isPending.value"
+          :disabled="settings.isPending.value || vault.sandbox"
           @update:model-value="(value: boolean) => settings.mutate({ enabled: value })"
         />
 
@@ -65,6 +72,7 @@ const keyHint = computed(() => {
         </FormField>
 
         <SwitchRow
+          plain
           id="sync-confirm"
           :label="t('sync.confirmFirst')"
           :hint="t('sync.confirmFirstHint')"
@@ -73,6 +81,7 @@ const keyHint = computed(() => {
         />
 
         <SwitchRow
+          plain
           id="sync-main"
           :label="t('sync.preferMain')"
           :hint="t('sync.preferMainHint')"
@@ -81,7 +90,7 @@ const keyHint = computed(() => {
         />
 
         <div
-          v-if="current?.background_supported"
+          v-if="current?.background_supported && vault.encrypted"
           class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
         >
           <div class="grid min-w-0 flex-1 gap-0.5">
@@ -122,4 +131,6 @@ const keyHint = computed(() => {
       </div>
     </SectionState>
   </SettingsSection>
+  <SyncStatusLine />
+  </div>
 </template>

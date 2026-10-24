@@ -9,6 +9,7 @@
 //! [`location`] tells a path from such a document. See `docs/storage-platforms.md`.
 
 pub mod backups;
+pub mod delete;
 pub mod import;
 pub mod local;
 pub mod location;

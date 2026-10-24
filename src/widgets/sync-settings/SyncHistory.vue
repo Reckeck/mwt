@@ -1,73 +1,97 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
-import { Undo2 } from 'lucide-vue-next'
 
-import { SYNC_HISTORY_KEY, SyncChanges, useSyncActions } from '@/features/vault-sync'
-import { call } from '@/shared/api/ipc'
+import { useSyncActions, useSyncJournal } from '@/features/vault-sync'
 import { formatDateTime } from '@/shared/lib/format'
-import { Badge } from '@/shared/ui/badge'
+import { useIsPhone } from '@/shared/lib/phone'
 import { Button } from '@/shared/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
+import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
-import { SettingsSection } from '@/shared/ui/settings-section'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
-/** The batches taken from other devices (20, a week): what each changed, «Отменить». */
+import SyncPendingChanges from './SyncPendingChanges.vue'
+
+/**
+ * «История»: the changes waiting for an answer, then the journal of what came from
+ * (or went to) the other devices: when, which device, what, how it ended. A phone gets a list.
+ */
 const { t } = useI18n()
+const { journal, rows } = useSyncJournal()
 const { undo } = useSyncActions()
-const history = useQuery({ queryKey: SYNC_HISTORY_KEY, queryFn: () => call<AppliedBatch[]>('sync_history') })
-const list = computed(() => history.data.value ?? [])
+const isPhone = useIsPhone()
+const empty = computed(() => journal.isSuccess.value && !rows.value.length)
 </script>
 
 <template>
-  <SettingsSection :title="t('sync.history.title')" :description="t('sync.history.description')">
-    <SectionState
-      :loading="history.isPending.value"
-      :error="history.error.value"
-      :empty="!list.length"
-      :empty-title="t('sync.history.empty')"
-      :empty-description="t('sync.history.emptyHint')"
-      skeleton="list"
-      compact
-      @retry="history.refetch()"
-    >
-      <ul class="grid gap-2">
-        <li v-for="batch in list" :key="batch.id">
-          <Collapsible class="rounded-md border border-border">
-            <div class="flex items-center gap-2 px-3 py-2">
-              <CollapsibleTrigger class="grid min-w-0 flex-1 gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span class="truncate text-sm font-medium">
-                  {{
-                    batch.transferred_to
-                      ? t('sync.history.transferred', { name: batch.transferred_to })
-                      : t('sync.history.from', { name: batch.peer_name, count: batch.summary.total })
-                  }}
-                </span>
-                <span class="text-xs text-muted-foreground">{{ formatDateTime(batch.applied_at) }}</span>
-              </CollapsibleTrigger>
-              <Badge v-if="batch.transferred_to" variant="outline">{{ t('sync.history.transferBadge') }}</Badge>
-              <Badge v-else-if="batch.undone_at" variant="outline">{{ t('sync.history.undone') }}</Badge>
+  <div class="grid gap-4" data-section="sync-history">
+    <SyncPendingChanges />
+    <Card data-tour="sync-history">
+      <SectionState
+        :loading="journal.isPending.value"
+        :error="journal.error.value"
+        :empty="empty"
+        :empty-title="t('sync.history.empty')"
+        :empty-description="t('sync.history.emptyHint')"
+        skeleton="list"
+        compact
+        @retry="journal.refetch()"
+      >
+        <ul v-if="isPhone" class="grid">
+          <li v-for="row in rows" :key="row.id" class="grid gap-1 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0">
+            <div class="flex items-baseline justify-between gap-3">
+              <span class="min-w-0 truncate text-sm font-medium">{{ row.device }}</span>
+              <span class="shrink-0 text-xs" :class="row.tone">{{ row.outcome }}</span>
+            </div>
+            <p class="text-sm">{{ row.what }}</p>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(row.at) }}</span>
               <Button
-                v-else
+                v-if="row.undoId"
                 size="sm"
-                variant="outline"
-                class="gap-1.5"
+                variant="ghost"
+               
                 :disabled="undo.isPending.value"
-                @click="undo.mutate(batch.id)"
-                :loading="undo.isPending.value && undo.variables.value === batch.id"
+                @click="undo.mutate(row.undoId ?? '')"
               >
-                <Undo2 class="size-3.5" />
                 {{ t('actions.undo') }}
               </Button>
             </div>
-            <CollapsibleContent v-if="!batch.transferred_to" class="border-t border-border p-3">
-              <SyncChanges :summary="batch.summary" />
-            </CollapsibleContent>
-          </Collapsible>
-        </li>
-      </ul>
-      <p class="mt-2 text-xs text-muted-foreground">{{ t('sync.history.undoHint') }}</p>
-    </SectionState>
-  </SettingsSection>
+          </li>
+        </ul>
+        <Table v-else>
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead>{{ t('sync.journal.when') }}</TableHead>
+              <TableHead>{{ t('sync.journal.device') }}</TableHead>
+              <TableHead>{{ t('sync.journal.what') }}</TableHead>
+              <TableHead class="text-right">{{ t('sync.journal.result') }}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in rows" :key="row.id">
+              <TableCell class="whitespace-nowrap text-sm tabular-nums text-muted-foreground">{{ formatDateTime(row.at) }}</TableCell>
+              <TableCell>{{ row.device }}</TableCell>
+              <TableCell class="whitespace-normal">{{ row.what }}</TableCell>
+              <TableCell class="text-right text-sm">
+                <span class="inline-flex items-center justify-end gap-2">
+                  <Button
+                    v-if="row.undoId"
+                    size="sm"
+                    variant="ghost"
+                    :disabled="undo.isPending.value"
+                    @click="undo.mutate(row.undoId ?? '')"
+                  >
+                    {{ t('actions.undo') }}
+                  </Button>
+                  <span :class="row.tone">{{ row.outcome }}</span>
+                </span>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <p v-if="!empty" class="mt-3 text-xs text-muted-foreground">{{ t('sync.history.undoHint') }}</p>
+      </SectionState>
+    </Card>
+  </div>
 </template>

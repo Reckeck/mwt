@@ -1,16 +1,25 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
+import { Dialog } from '@/shared/ui/dialog'
+import { SettingsSection } from '@/shared/ui/settings-section'
+import { SwitchRow } from '@/shared/ui/switch-row'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
+const open = ref(false)
 
 /** Turning it on goes through the consent dialog, so the user sees what leaves. */
-async function turnOff() {
+async function change(on: boolean) {
+  if (on) {
+    open.value = false
+    settings.enrichmentConsentOpen = true
+    return
+  }
   try {
     await settings.updateApp({ enrichment_opt_in: false })
     notify.saved()
@@ -21,23 +30,20 @@ async function turnOff() {
 </script>
 
 <template>
-  <Card>
-    <template #header>
-      <h3 class="heading-card">{{ t('enrichment.settingsTitle') }}</h3>
-      <p class="text-sm text-muted-foreground">{{ t('enrichment.settingsHint') }}</p>
-    </template>
-    <div class="flex items-center justify-between gap-3">
-      <span class="text-sm">
-        {{ settings.app?.enrichment_opt_in ? t('enrichment.stateOn') : t('enrichment.stateOff') }}
-      </span>
-      <!-- One button for both states: turning it off keeps the focus where it was (rule 17). -->
-      <Button
-        :variant="settings.app?.enrichment_opt_in ? 'outline' : 'default'"
-        size="sm"
-        @click="settings.app?.enrichment_opt_in ? turnOff() : (settings.enrichmentConsentOpen = true)"
-      >
-        {{ settings.app?.enrichment_opt_in ? t('enrichment.turnOff') : t('enrichment.turnOn') }}
-      </Button>
+  <SettingsSection :title="t('enrichment.settingsTitle')" :description="t('enrichment.settingsHint')">
+    <div class="flex flex-wrap items-center gap-2">
+      <Button variant="outline" @click="open = true">{{ t('enrichment.configure') }}</Button>
     </div>
-  </Card>
+    <Dialog v-model:open="open" :title="t('enrichment.settingsTitle')" :description="t('enrichment.stateHint')">
+      <SwitchRow
+        id="enrichment-opt-in"
+        :label="t('enrichment.settingsTitle')"
+        :model-value="settings.app?.enrichment_opt_in ?? false"
+        @update:model-value="change"
+      />
+      <template #footer>
+        <Button @click="open = false">{{ t('actions.close') }}</Button>
+      </template>
+    </Dialog>
+  </SettingsSection>
 </template>

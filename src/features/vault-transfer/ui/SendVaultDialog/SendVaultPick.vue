@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { Spinner } from '@/shared/ui/spinner'
 
 /** Step one: the device to hand the vault to, and the vault password again. */
-const props = defineProps<{ nearby: TransferNearby[]; pending: boolean; failure: unknown }>()
+const props = defineProps<{ nearby: TransferNearby[]; pending: boolean; failure: unknown; encrypted: boolean }>()
 const emit = defineEmits<{ submit: [input: TransferSendInput] }>()
 const { t } = useI18n()
 
@@ -46,15 +46,17 @@ watch(
 
 const form = useFormValidation(() => ({
   device: required(picked.value, 'pick'),
-  password:
-    required(password.value) ?? (rejected.value?.password === password.value ? rejected.value.message : null),
+  // A vault without a password asks for none: the backend lets any text through.
+  password: props.encrypted
+    ? (required(password.value) ?? (rejected.value?.password === password.value ? rejected.value.message : null))
+    : null,
 }))
 const deviceError = computed(() => form.error('device'))
 
 function submit(event: Event) {
   form.submit(() => {
     tried = password.value
-    emit('submit', { id: picked.value, password: password.value })
+    emit('submit', { id: picked.value, password: props.encrypted ? password.value : '' })
   }, event)
 }
 </script>
@@ -89,10 +91,11 @@ function submit(event: Event) {
       <p v-if="deviceError" class="text-xs text-destructive">{{ deviceError }}</p>
     </div>
 
-    <FormField for="transfer-password" :label="t('transfer.send.password')" required :hint="t('transfer.send.passwordHint')" :error="form.error('password')">
+    <FormField v-if="encrypted" for="transfer-password" :label="t('transfer.send.password')" required :hint="t('transfer.send.passwordHint')" :error="form.error('password')">
       <Input id="transfer-password" v-model="password" type="password" autocomplete="current-password" :disabled="pending" />
     </FormField>
 
+    <p v-else class="text-sm text-warning" data-transfer-no-password>{{ t('transfer.send.noPassword') }}</p>
     <p class="text-xs text-warning">{{ t('transfer.send.warning') }}</p>
   </form>
 </template>

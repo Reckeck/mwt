@@ -21,6 +21,7 @@ import { VaultSettings } from '@/widgets/vault-settings'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
 import type { SettingsSection as SectionDef } from './settings-shell.constants'
+import HelpWhatsNew from './HelpWhatsNew.vue'
 import HotkeySettings from './HotkeySettings.vue'
 import TourSettings from './TourSettings.vue'
 
@@ -42,6 +43,7 @@ const { t } = useI18n()
       <QuickAddSettings v-else-if="section.id === 'quick-add'" />
       <HotkeySettings v-else-if="section.id === 'hotkeys'" />
       <TourSettings v-else-if="section.id === 'tours'" />
+      <HelpWhatsNew v-else-if="section.id === 'whats-new'" />
       <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
       <VaultSettings v-else-if="section.id === 'vault'" />
       <VaultDirection v-else-if="section.id === 'direction'" />

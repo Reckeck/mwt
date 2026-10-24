@@ -13,6 +13,7 @@ use crate::sync::handover;
 /// «Получить хранилище»: visible nearby by this device's name for five minutes.
 #[tauri::command]
 pub async fn transfer_receive_start(app: AppHandle) -> Result<TransferReceiveView, String> {
+    crate::commands::sandbox::refuse_app(&app, "handing the vault over")?;
     handover::receive_start(&app).await.map_err(err_to_string)
 }
 
@@ -31,6 +32,7 @@ pub async fn transfer_receive_decide(app: AppHandle, accept: bool) -> Result<(),
 /// The sending screen opened: look for devices waiting to receive.
 #[tauri::command]
 pub async fn transfer_browse_start(app: AppHandle) -> Result<Vec<TransferNearby>, String> {
+    crate::commands::sandbox::refuse_app(&app, "handing the vault over")?;
     handover::browse_start(&app).map_err(err_to_string)
 }
 
@@ -46,6 +48,7 @@ pub async fn transfer_send(
     app: AppHandle,
     input: TransferSendInput,
 ) -> Result<TransferSendView, String> {
+    crate::commands::sandbox::refuse_app(&app, "handing the vault over")?;
     handover::send_start(&app, &input).map_err(err_to_string)
 }
 

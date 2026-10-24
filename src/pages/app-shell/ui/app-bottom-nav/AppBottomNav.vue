@@ -8,6 +8,7 @@ import { useStoreTree } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/shared/ui/drawer'
 import { cn } from '@/shared/lib/utils'
+import { useVaultStore } from '@/shared/store/vault'
 
 import { type NavItem, navItem } from '../../app-shell.constants'
 
@@ -16,6 +17,7 @@ import { type NavItem, navItem } from '../../app-shell.constants'
  * «More» — a sheet with wallets, automations, settings and the lock.
  */
 const emit = defineEmits<{ quickAdd: []; lock: []; openSettings: [] }>()
+const vault = useVaultStore()
 
 const { t } = useI18n()
 const route = useRoute()
@@ -105,7 +107,7 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
           <span class="flex-1">{{ t('settingsShell.title') }}</span>
           <ChevronRight class="size-4 text-muted-foreground" />
         </Button>
-        <Button variant="ghost" :class="ROW" @click="pick(() => emit('lock'))">
+        <Button v-if="vault.encrypted" variant="ghost" :class="ROW" @click="pick(() => emit('lock'))">
           <Lock class="size-5 text-muted-foreground" />
           <span class="flex-1">{{ t('auth.lock') }}</span>
         </Button>

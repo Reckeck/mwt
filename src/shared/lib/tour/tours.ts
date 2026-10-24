@@ -103,6 +103,23 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'open-settings', key: 'dashboard.settings', side: 'right' },
     { target: 'tour-help', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
+  // The settings window opens over any screen; a step of a tab that is not open is skipped.
+  settings: [
+    { target: 'settings-groups', key: 'settings.groups', side: 'right' },
+    { target: 'settings-tabs', key: 'settings.tabs', side: 'bottom' },
+    { target: 'vault-security', key: 'settings.security', side: 'top' },
+    { target: 'sync-add-device', key: 'settings.addDevice', side: 'top' },
+    { target: 'sync-pending', key: 'settings.pending', side: 'bottom' },
+    { target: 'sync-history', key: 'settings.history', side: 'top' },
+    { target: 'sync-transfer', key: 'settings.transfer', side: 'top' },
+    { target: 'learning-center', key: 'settings.learning', side: 'top' },
+  ],
+  // Before a vault is open: the card, the recent vaults, the sandbox.
+  unlock: [
+    { target: 'unlock-card', key: 'unlock.card', side: 'bottom' },
+    { target: 'unlock-recents', key: 'unlock.recents', side: 'bottom' },
+    { target: 'unlock-sandbox', key: 'unlock.sandbox', side: 'top' },
+  ],
   stores: [
     { target: 'stores-list', key: 'stores.list', side: 'top' },
     { target: 'stores-create', key: 'stores.create', side: 'left' },
@@ -250,8 +267,6 @@ export const TOURS: Record<string, TourStep[]> = {
 /** Routes with no tour, and why (the `check-onboarding` gate reads this). */
 export const TOURLESS_ROUTES: Record<string, string> = {
   'workflow-edit': 'The same editor as workflow-new; it shows that tour (TOUR_ALIASES).',
-  unlock: 'Before a vault is open: the unlock screen explains itself.',
-  settings: 'A redirect to the settings window, which has its own sections.',
 }
 
 /** Routes that show another route's tour: a saved workflow opens the same editor as a new one. */

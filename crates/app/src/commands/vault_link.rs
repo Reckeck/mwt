@@ -49,6 +49,7 @@ pub async fn link_vault_external(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<VaultLinkStatus>, String> {
+    crate::commands::sandbox::refuse(&state, "an external copy")?;
     let path = unlocked_path(&state)?;
     let name = trade_core::vault_io::display_name_of(&path.to_string_lossy());
     let Some(target) =

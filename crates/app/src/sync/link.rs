@@ -20,6 +20,7 @@ use trade_core::ipc_contract::{
 };
 use trade_core::service::PeerRef;
 use trade_core::sync::RecordState;
+use trade_core::sync::journal::SyncJournalOutcome;
 use trade_core::sync::manifest::{Manifest, diff};
 use trade_core::sync::protocol::{
     Hello, MANIFEST_PER_MESSAGE, Message, PROTOCOL_VERSION, RECORDS_PER_MESSAGE, decode, encode,
@@ -362,6 +363,7 @@ async fn session<H: Host>(
                     progress: None,
                     focused: false,
                     pairing_code: None,
+                    pairing_expires_ms: None,
                     plan: None,
                 },
                 orders: orders_in,
@@ -418,10 +420,13 @@ async fn pair<H: Host>(
         },
     );
     let code = wire.channel.pairing_code();
+    let expires_ms =
+        now_ms().saturating_add(u64::try_from(PAIRING_TIMEOUT.as_millis()).unwrap_or(u64::MAX));
     let show_code = |app: &H| {
         update_link(app, &peer.session_id, |link| {
             link.view.phase = SyncPhase::Pairing;
             link.view.pairing_code = Some(code.clone());
+            link.view.pairing_expires_ms = Some(expires_ms);
         });
         app.emit(
             PAIRING_EVENT,
@@ -483,7 +488,10 @@ async fn pair<H: Host>(
             },
         }
         if mine && theirs {
-            update_link(app, &peer.session_id, |link| link.view.pairing_code = None);
+            update_link(app, &peer.session_id, |link| {
+                link.view.pairing_code = None;
+                link.view.pairing_expires_ms = None;
+            });
             app.with_vault(|vault| {
                 vault.sync_trust_peer(&peer.device_id, &peer.name, &peer.remote_key)
             })?;
@@ -716,7 +724,7 @@ async fn apply<H: Host>(
                     session_id: peer.session_id.clone(),
                     peer_name: peer.name.clone(),
                     reason,
-                    summary,
+                    summary: summary.clone(),
                 },
             );
             let deadline = tokio::time::sleep(DECISION_TIMEOUT);
@@ -749,6 +757,9 @@ async fn apply<H: Host>(
             };
             update_link(app, &peer.session_id, |link| link.view.plan = None);
             if !accept {
+                let _ = app.with_vault(|vault| {
+                    vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Declined)
+                });
                 let _ = wire
                     .send(&Message::Bye {
                         reason: "declined".into(),
@@ -779,7 +790,20 @@ async fn apply<H: Host>(
         let keys = vault.sync_batch_keys(&batch.id);
         let notices = vault.sync_batch_notices(&batch.id);
         Ok(Some((batch, keys, notices)))
-    })?;
+    });
+    let applied = match applied {
+        Ok(applied) => applied,
+        Err(err) => {
+            // The journal tells that a batch came and failed; nothing of its content.
+            let summary = app
+                .with_vault(|vault| vault.sync_preview(&incoming))
+                .unwrap_or_default();
+            let _ = app.with_vault(|vault| {
+                vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Failed)
+            });
+            return Err(err.into());
+        }
+    };
     app.hub().last_activity = Some(std::time::Instant::now());
     update_link(app, &peer.session_id, |link| link.applied_once = true);
     if let Some((batch, keys, notices)) = applied {

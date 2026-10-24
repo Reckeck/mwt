@@ -31,7 +31,11 @@ use crate::commands::{AppState, err_to_string, require_vault};
 /// Never errors for a missing/unreachable provider — `fetched: false` with an
 /// optional `notice` is the failure channel.
 #[tauri::command]
-pub async fn inspect_tx(input: InspectTxInput) -> Result<InspectTxResult, String> {
+pub async fn inspect_tx(
+    input: InspectTxInput,
+    state: State<'_, AppState>,
+) -> Result<InspectTxResult, String> {
+    crate::commands::sandbox::refuse(&state, "looking up a transaction online")?;
     let hash = input.tx_hash.trim();
     if hash.is_empty() {
         return Ok(InspectTxResult {
@@ -190,6 +194,7 @@ pub async fn set_exchange_key(
     input: SetExchangeKeyInput,
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
+    crate::commands::sandbox::refuse(&state, "an exchange key")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     guard
         .as_mut()

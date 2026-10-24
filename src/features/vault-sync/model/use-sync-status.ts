@@ -6,6 +6,7 @@ import { call } from '@/shared/api/ipc'
 export const SYNC_STATUS_KEY = ['sync-status'] as const
 export const SYNC_PEERS_KEY = ['sync-peers'] as const
 export const SYNC_HISTORY_KEY = ['sync-history'] as const
+export const SYNC_JOURNAL_KEY = ['sync-journal'] as const
 
 /**
  * Sync of this vault with the other devices: the backend pushes every change
