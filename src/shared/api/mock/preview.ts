@@ -28,6 +28,25 @@ function mockSale(input: TransactionInput): SalePreview | null {
   return { currency: input.currency.symbol.toLowerCase(), book_value: String(book), gain: gain.toFixed(2) }
 }
 
+/** Like `convert_preview` in Rust: the overpay over the market at today's mock prices. */
+function mockConvert(input: TransactionInput): ConvertPreview | null {
+  if (input.type !== 'convert') return null
+  const give = Math.abs(Number(input.from.amount))
+  const got = Math.abs(Number(input.to.amount))
+  const fromUsd = priceOf(input.from.asset.symbol)
+  const toUsd = priceOf(input.to.asset.symbol)
+  if (!(give > 0 && got > 0 && fromUsd > 0 && toUsd > 0)) return null
+  const gotValue = (got * toUsd) / fromUsd
+  const overpay = give - gotValue
+  const baseUsd = priceOf(mockSummary.base_currency) || 1
+  return {
+    market_price: String(Number((gotValue / got).toFixed(6))),
+    overpay: overpay.toFixed(2),
+    overpay_base: ((overpay * fromUsd) / baseUsd).toFixed(2),
+    overpay_pct: ((overpay / give) * 100).toFixed(1),
+  }
+}
+
 /** Like `preview_transaction` in Rust: net legs per store and asset, nothing written. */
 export function mockPreview(input: PreviewTransactionInput): TxPreview {
   // Like the backend: a draft that would be refused (no category, no comment)
@@ -59,6 +78,7 @@ export function mockPreview(input: PreviewTransactionInput): TxPreview {
         error,
         liquidation_price: null,
         sale: null,
+        convert: null,
       }
     }
   }
@@ -102,5 +122,6 @@ export function mockPreview(input: PreviewTransactionInput): TxPreview {
     error,
     liquidation_price: mockLiquidation(input.transaction),
     sale: mockSale(input.transaction),
+    convert: mockConvert(input.transaction),
   }
 }

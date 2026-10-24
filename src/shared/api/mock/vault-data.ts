@@ -59,7 +59,7 @@ export const mockAppSettings: AppSettings = {
   base_currency: 'usd',
   // A fresh install: the create and open forms ask for the base currency.
   base_currency_chosen: false,
-  favorite_currencies: [],
+  favorite_currencies: ['rub', 'usdt', 'thb', 'btc'],
   timezone: null,
   inflation: { rub: '8', usd: '3', eur: '2.5', thb: '1' },
   enrichment_opt_in: null,

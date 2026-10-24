@@ -44,7 +44,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
     titleKey: 'settingsShell.tab.device',
     icon: MonitorSmartphone,
     sections: [
-      { id: 'device-app', titleKey: 'settingsShell.section.deviceApp' },
+      { id: 'device-app', titleKey: 'settingsShell.section.deviceApp', desktopOnly: true },
       { id: 'quick-add', titleKey: 'settingsShell.section.quickAdd', desktopOnly: true },
     ],
   },
@@ -65,7 +65,8 @@ export const SETTINGS_TABS: SettingsTab[] = [
     titleKey: 'settingsShell.tab.money',
     icon: Coins,
     sections: [
-      { id: 'rates', titleKey: 'settingsShell.section.rates' },
+      { id: 'currencies', titleKey: 'settingsShell.section.currencies' },
+      { id: 'rates', titleKey: 'settingsShell.section.ratesTable' },
       { id: 'budget', titleKey: 'settingsShell.section.budget' },
       { id: 'inflation', titleKey: 'settingsShell.section.inflation' },
     ],
@@ -114,6 +115,7 @@ export const SETTINGS_ALIASES: Record<string, { tab: string; section: string }> 
   budget: { tab: 'money', section: 'budget' },
   inflation: { tab: 'money', section: 'inflation' },
   rates: { tab: 'money', section: 'rates' },
+  currencies: { tab: 'money', section: 'currencies' },
   enrichment: { tab: 'vault', section: 'enrichment' },
   direction: { tab: 'vault', section: 'direction' },
   tours: { tab: 'learning', section: 'tours' },

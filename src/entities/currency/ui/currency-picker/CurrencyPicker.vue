@@ -131,7 +131,10 @@ function retryCatalog() {
            and the button is the only tab stop while closed. -->
       <ComboboxAnchor as-child class="w-full">
         <ComboboxTrigger as-child :aria-label="props.label || t('settings.currencySelect')">
+          <!-- `#trigger`: a control of its own opens the list («+ Валюта» among the favourites). -->
+          <slot v-if="$slots.trigger" name="trigger" :open="open" />
           <Button
+            v-else
             :id="triggerId"
             variant="outline"
             :aria-expanded="open"

@@ -1,10 +1,7 @@
 <script setup lang="ts">
-// check-ui-ignore invalidate-all: a new base currency changes every figure on every screen
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQueryClient } from '@tanstack/vue-query'
 
-import { CurrencyPicker } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
@@ -12,11 +9,8 @@ import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
 
-import FavoriteCurrenciesField from './ui/FavoriteCurrenciesField.vue'
-
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
-const queryClient = useQueryClient()
 
 const themes: Theme[] = ['light', 'dark', 'auto']
 
@@ -34,12 +28,6 @@ onMounted(async () => {
       /* the store falls back to its defaults, and every write reports itself */
     })
   }
-  // Warm the catalog so the dropdown is populated before the first keystroke.
-  // `loadCurrencies` is a no-op once the full list is in, so the pickers' own
-  // load on open costs nothing when this already succeeded.
-  await settingsStore.loadCurrencies().catch(() => {
-    /* the picker shows a notice and falls back to the built-in list */
-  })
 })
 
 /**
@@ -77,13 +65,6 @@ async function onLocaleChange(next: string) {
   }
 }
 
-/** Every figure in the base currency changes with it; nothing cached may survive. */
-async function onBaseCurrencyChange(next: string) {
-  if (!next || next === settingsStore.baseCurrency) return
-  await persist({ base_currency: next })
-  await queryClient.invalidateQueries()
-}
-
 </script>
 
 <template>
@@ -118,14 +99,5 @@ async function onBaseCurrencyChange(next: string) {
         </SelectItem>
       </Select>
     </div>
-
-    <!-- Base currency -->
-    <CurrencyPicker
-      :label="t('settings.baseCurrency')"
-      :model-value="settingsStore.baseCurrency"
-      @update:model-value="onBaseCurrencyChange"
-    />
-
-    <FavoriteCurrenciesField />
   </div>
 </template>

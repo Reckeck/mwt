@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use crate::Amount;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::{FuturesAction, FuturesDirection, Transaction};
+use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::service::worth::FlowClass;
 
@@ -54,6 +55,23 @@ pub struct TxPreview {
     /// books and what the sale made over it; `None` for anything else.
     #[serde(default)]
     pub sale: Option<SalePreview>,
+    /// An exchange against the market of its moment (Currency-1 · 6); `None`
+    /// for anything else or while the received side has no price.
+    #[serde(default)]
+    pub convert: Option<ConvertPreview>,
+}
+
+/// What an exchange paid over the market, valued like its loss (`TxLoss`).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ConvertPreview {
+    /// Market price of one received unit in the given currency.
+    pub market_price: Amount,
+    /// Given minus the market value of what was received, in the given currency.
+    pub overpay: Amount,
+    /// The same in the base currency.
+    pub overpay_base: Amount,
+    /// `overpay` as a share of what was given, percent.
+    pub overpay_pct: Amount,
 }
 
 /// A sale against the books, in the sale's currency.
@@ -181,6 +199,7 @@ impl UnlockedVault {
             error,
             liquidation_price: liquidation_price(&tx),
             sale: self.sale_preview(&tx),
+            convert: self.convert_preview(&tx),
         }
     }
 
@@ -200,6 +219,33 @@ impl UnlockedVault {
             currency,
             book_value,
             gain,
+        })
+    }
+
+    pub(crate) fn convert_preview(&self, tx: &Transaction) -> Option<ConvertPreview> {
+        let Transaction::Convert(inner) = tx else {
+            return None;
+        };
+        let (give, got) = (inner.from.amount.abs(), inner.to.amount.abs());
+        if !give.is_positive() || !got.is_positive() {
+            return None;
+        }
+        let book = self.rate_book();
+        let secs = secs_or_now(&tx.meta().timestamp);
+        let currency = inner.from.asset.symbol.to_lowercase();
+        let got_value = Self::value_at(&book, &inner.to.asset, got, &currency, secs);
+        if !got_value.is_positive() {
+            return None;
+        }
+        let base = self.base_and_fx().0;
+        let overpay = give - got_value;
+        let overpay_base = Self::value_at(&book, &inner.from.asset, give, &base, secs)
+            - Self::value_at(&book, &inner.to.asset, got, &base, secs);
+        Some(ConvertPreview {
+            market_price: (got_value / got).round(6),
+            overpay: overpay.round(2),
+            overpay_base: overpay_base.round(2),
+            overpay_pct: (overpay / give * Amount::from(100)).round(1),
         })
     }
 
