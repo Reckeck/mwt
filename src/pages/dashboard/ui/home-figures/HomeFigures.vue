@@ -56,7 +56,7 @@ const limitLine = computed(() => {
   <Card v-if="props.home.error.value" data-tour="home-figures">
     <SectionState compact :error="props.home.error.value" @retry="props.home.refetch()" />
   </Card>
-  <div v-else class="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-tour="home-figures">
+  <div v-else class="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 [&>*]:min-w-0" data-tour="home-figures">
     <Card>
       <div class="grid gap-1">
       <p class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capital') }}</p>

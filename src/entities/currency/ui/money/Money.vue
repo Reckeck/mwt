@@ -11,10 +11,11 @@ import type { MoneyProps } from './money.types'
 /**
  * An amount with grouped digits and a separate, muted currency mark.
  *
- * Hovering it shows the amount in the base and favourite currencies (then the
- * tracked ones) at the latest cached rate — for the base currency, any fiat
- * and any favourite; a rate older than today is labelled with its date. The
- * tooltip itself is one for the whole app: `MoneyTooltipHost`.
+ * A click on it — a tap on a phone — opens the sum card: the amount in the
+ * base currency at the operation's rate (`at`) and today's, and in the
+ * favourites (`MoneyCardHost`). Inside a button or a link, where a click is
+ * taken, hovering shows the conversions instead (`MoneyTooltipHost`). For the
+ * base currency, any fiat and any favourite. Both are one for the whole app.
  */
 const props = withDefaults(defineProps<MoneyProps>(), {
   currency: '',
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
   colored: false,
   compact: false,
   convert: undefined,
+  at: undefined,
 })
 
 const settings = useSettingsStore()
@@ -51,13 +53,15 @@ const convertible = computed(
 </script>
 
 <template>
-  <!-- One element for good: the conversions tooltip is shared (MoneyTooltipHost in the shell)
-       and finds this sum by its data attributes, so hovering mounts nothing here (rule 17). -->
+  <!-- One element for good: the card and the tooltip are shared (MoneyCardHost, MoneyTooltipHost
+       in the shell) and find this sum by its data attributes, so nothing mounts here (rule 17).
+       The dashed underline of a sum a click opens lives in app/styles.css: it depends on the parents. -->
   <span
-    :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone, convertible && 'cursor-default')"
+    :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone, convertible && 'money-convertible')"
     :data-money-convertible="convertible || undefined"
     :data-money-amount="convertible ? numeric : undefined"
     :data-money-currency="convertible ? code : undefined"
+    :data-money-at="convertible && props.at ? props.at : undefined"
   >
     <span>{{ parts.number }}</span>
     <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>

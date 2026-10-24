@@ -58,6 +58,7 @@ const { filter, range, fallback, effective, realTerms } = useReportFilter(group)
         :wallets="!ALL_WALLETS_GROUPS.includes(group)"
         :export-kinds="exportKinds"
         :effective="effective"
+        :currency-switch="group === 'spending'"
       />
     </div>
     <div class="min-w-0" data-tour="section-content">

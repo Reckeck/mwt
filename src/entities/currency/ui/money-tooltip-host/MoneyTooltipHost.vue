@@ -5,16 +5,18 @@ import { TooltipRoot } from 'reka-ui'
 
 import { TooltipContent } from '@/shared/ui/tooltip'
 
+import { isPressableSum, sumOf } from '../../lib/money-target'
 import { MoneyConversions } from '../money-conversions'
 
 /**
  * The one conversions tooltip for every `<Money>` on screen: a page has
  * hundreds of sums, and a tooltip each was slow to appear and swapped the
  * sum's element on first hover. This host watches the pointer, waits like any
- * tooltip, and shows the conversions next to the sum it rests on.
+ * tooltip, and shows the conversions next to the sum it rests on. Only for a
+ * sum inside a button or a link: any other sum opens its card on a click
+ * (`MoneyCardHost`).
  */
 const OPEN_DELAY_MS = 300
-const SUM = '[data-money-convertible]'
 
 const open = ref(false)
 const target = ref<HTMLElement | null>(null)
@@ -22,10 +24,6 @@ const amount = ref(0)
 const currency = ref('')
 let showTimer: ReturnType<typeof setTimeout> | undefined
 let hideTimer: ReturnType<typeof setTimeout> | undefined
-
-function sumOf(node: EventTarget | null): HTMLElement | null {
-  return node instanceof Element ? node.closest<HTMLElement>(SUM) : null
-}
 
 function show(sum: HTMLElement) {
   target.value = sum
@@ -38,7 +36,7 @@ useEventListener(document, 'pointerover', (event: PointerEvent) => {
   // A finger has no hover: the tooltip would only flash on a tap.
   if (event.pointerType === 'touch') return
   const sum = sumOf(event.target)
-  if (!sum) return
+  if (!sum || isPressableSum(sum)) return
   clearTimeout(hideTimer)
   if (open.value && sum === target.value) return
   clearTimeout(showTimer)

@@ -4,12 +4,13 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { SlidersHorizontal } from 'lucide-vue-next'
 
-import { CurrencyPicker } from '@/entities/currency'
+import { ChartCurrencySwitch, CurrencyPicker } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { ReportExportButton } from '@/features/report-export'
 import { useStoreTree } from '@/shared/api/queries'
 import type { MonthRange } from '@/shared/lib/period'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { useSettingsStore } from '@/shared/store/settings'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { PeriodPicker } from '@/shared/ui/period-picker'
@@ -19,6 +20,8 @@ import { Switch } from '@/shared/ui/switch'
 /**
  * The tab row's right side (the canvas toolbar): ‹ period ›, the wallets, the
  * rare filters behind one button, the export. One filter for the whole section.
+ * Where the tab asks for it, the budget currency or the base one sits before the
+ * period (Currency-1 · 7: «₽ | $»).
  */
 const props = defineProps<{
   fallback: MonthRange
@@ -26,6 +29,7 @@ const props = defineProps<{
   wallets: boolean
   exportKinds: ReportKind[]
   effective: ReportFilter
+  currencySwitch?: boolean
 }>()
 const filter = defineModel<ReportFilter>({ required: true })
 const range = defineModel<MonthRange>('range', { required: true })
@@ -40,12 +44,25 @@ const storeIds = computed({
     filter.value.scope = { store_ids: ids, include_children: true }
   },
 })
+const settings = useSettingsStore()
+const budgetCurrency = computed(() => (settings.vault?.budget_currency || settings.baseCurrency).toLowerCase())
+const currencies = computed(() => [...new Set([budgetCurrency.value, settings.baseCurrency.toLowerCase()])])
+/** The budget currency is the report's own: picking it clears the override. */
+const shownCurrency = computed({
+  get: () => filter.value.currency?.toLowerCase() || budgetCurrency.value,
+  set: (code: string) => {
+    if (code) filter.value.currency = code === budgetCurrency.value ? null : code
+  },
+})
 /** Set filters behind the button: a dot shows that something narrows the tab. */
 const extras = computed(() => (filter.value.currency ? 1 : 0) + (props.realTerms && filter.value.real_terms ? 1 : 0))
 </script>
 
 <template>
   <div class="flex min-w-0 flex-wrap items-center gap-2" data-tour="report-filter">
+    <div v-if="props.currencySwitch" class="max-md:hidden" data-tour="spending-currency">
+      <ChartCurrencySwitch v-model="shownCurrency" :options="currencies" />
+    </div>
     <div data-tour="period-picker" class="min-w-0 max-md:basis-full">
       <PeriodPicker v-model="range" :default-range="props.fallback" trigger-class="w-[170px] max-md:flex-1" />
     </div>

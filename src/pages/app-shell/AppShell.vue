@@ -11,7 +11,7 @@ import { QuickAddDialog } from '@/widgets/quick-add'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { WhatsNewDialog } from '@/widgets/whats-new'
-import { MoneyTooltipHost } from '@/entities/currency'
+import { MoneyCardHost, MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
@@ -126,6 +126,7 @@ const pageClass = computed(() => {
 
     <SettingsShell />
     <MoneyTooltipHost />
+    <MoneyCardHost />
     <QuickAddDialog v-model:open="quickAddOpen" />
     <EntityHost />
     <ConverterDialog />

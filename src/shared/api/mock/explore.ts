@@ -5,6 +5,7 @@
  */
 
 import { liveAttachments, mockAttachedTxIds } from './attachments'
+import { priceOf } from './prices'
 import { txContactIds, txId, txKind, txLegs, txMeta, txSearchText, txSides } from '@/shared/lib/transactions'
 
 export interface ExploreMockContext {
@@ -60,6 +61,12 @@ function usdValueOf(tx: Transaction): number {
   return Math.max(gave, got)
 }
 
+/** A payment or a top-up the rates cannot value, as the budget sees it (Currency-1 · 7). */
+function isUnpriced(tx: Transaction): boolean {
+  if (!('payment' in tx) && !('topup' in tx)) return false
+  return txLegs(tx).some((leg) => leg.role === 'principal' && !(Number(leg.price_usd) || priceOf(leg.asset.symbol)))
+}
+
 function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
   const ids = filter.scope.store_ids.length
     ? new Set(filter.scope.store_ids.flatMap((id) => ctx.scope(id, filter.scope.include_children)))
@@ -74,6 +81,7 @@ function filtered(filter: TxFilter, ctx: ExploreMockContext): Transaction[] {
     if (filter.flow_id && txMeta(tx).flow_id !== filter.flow_id) return false
     if (filter.with_fee && !txLegs(tx).some((leg) => leg.role === 'fee')) return false
     if (filter.with_attachments && !attached.has(txId(tx))) return false
+    if (filter.unpriced && !isUnpriced(tx)) return false
     // The mock keeps no cost basis: «closed a position» is a spot sale or an asset sale.
     if (filter.realized && !['trade_spot', 'asset_sell'].includes(txKind(tx))) return false
     const origin = txMeta(tx).origin

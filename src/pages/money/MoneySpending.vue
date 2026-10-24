@@ -9,7 +9,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
 
 import { useSpending } from './model/use-spending'
-import { SpendingAnswer, SpendingCategories, SpendingMonths } from './ui/spending'
+import { SpendingAnswer, SpendingCategories, SpendingIncomplete, SpendingMonths } from './ui/spending'
 
 /** «Траты» (Money 1 · 1): the answer, the twelve months, the categories. */
 const props = defineProps<{ filter: ReportFilter }>()
@@ -17,7 +17,7 @@ const props = defineProps<{ filter: ReportFilter }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { rows, balance, months, monthKeys, currency, loading, error, refetch } = useSpending(toRef(props, 'filter'))
+const { rows, balance, months, monthKeys, currency, unpriced, loading, error, refetch } = useSpending(toRef(props, 'filter'))
 
 /** A month's bar opens that month, with the rest of the filter kept. */
 function pick(month: string) {
@@ -29,12 +29,14 @@ function pick(month: string) {
   <div class="grid grid-cols-1 gap-4">
     <SectionState :loading="loading" :error="error" skeleton="report" @retry="refetch">
       <template v-if="balance.data.value">
+        <SpendingIncomplete v-if="unpriced?.count" :unpriced="unpriced" :from="props.filter.from ?? ''" :to="props.filter.to ?? ''" />
         <SpendingAnswer
           :from="props.filter.from ?? ''"
           :to="props.filter.to ?? ''"
           :balance="balance.data.value"
           :average="months.data.value?.average_spent ?? '0'"
           :rows="rows"
+          :incomplete="!!unpriced?.count"
         />
         <SpendingMonths
           v-if="months.data.value"

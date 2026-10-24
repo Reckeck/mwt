@@ -11,7 +11,7 @@ import type { FilterFieldProps } from '../../transaction-filter.types'
 
 /**
  * The on/off filters: made by an automation, lent or borrowed, without inner
- * moves. A computer puts the switch before its name, in one line; a phone
+ * moves, without a rate (Currency-1 · 7). A computer puts the switch before its name, in one line; a phone
  * puts it on the right, a row each.
  */
 const props = defineProps<FilterFieldProps>()
@@ -20,7 +20,7 @@ const filter = defineModel<TxFilter>({ required: true })
 const { t } = useI18n()
 const phone = useIsPhone()
 
-const flag = (name: 'auto_only' | 'debt_only' | 'hide_internal' | 'with_attachments') =>
+const flag = (name: 'auto_only' | 'debt_only' | 'hide_internal' | 'with_attachments' | 'unpriced') =>
   computed({
     get: () => filter.value[name],
     set: (value: boolean) => {
@@ -32,6 +32,7 @@ const rows = [
   { key: 'debt', label: 'filter.debtOnly', model: flag('debt_only') },
   { key: 'files', label: 'filter.withAttachments', model: flag('with_attachments') },
   { key: 'internal', label: 'filter.hideInternal', model: flag('hide_internal') },
+  { key: 'unpriced', label: 'filter.unpriced', model: flag('unpriced') },
 ]
 </script>
 

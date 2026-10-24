@@ -393,6 +393,7 @@ fn main() {
         trade_core::service::CategoriesReport,
         trade_core::service::CategoryGroupBlock,
         trade_core::service::CategoryRow,
+        trade_core::service::UnpricedSpending,
         trade_core::service::NetworthReport,
         trade_core::service::NetworthPoint,
         trade_core::service::StoresReport,

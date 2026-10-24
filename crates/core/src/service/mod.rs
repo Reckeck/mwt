@@ -149,7 +149,7 @@ pub use reports::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
     CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
     PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
-    ReportMeta, StoreReportRow, StoresReport, YearReport, YearRow, report_csv,
+    ReportMeta, StoreReportRow, StoresReport, UnpricedSpending, YearReport, YearRow, report_csv,
 };
 pub use scenarios::{
     CalcScenarioDeleted, CalcScenarioDraft, INCOME_MONTHS, ScenarioPrefill, planned_balance,

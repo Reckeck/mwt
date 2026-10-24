@@ -1,5 +1,6 @@
 /** Commands: contacts and transactions. */
 
+import { isFiatCode } from '@/shared/lib/format'
 import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockContactBalances, mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
 import { mockDebtTerms } from './catalog'
@@ -10,6 +11,17 @@ import { mockBalanceOf, mockPush, mockTransactions, priceOf } from './demo'
 import { mockCachedPrice, mockCalc, mockNetWorth, mockSearch } from './market'
 import { mockPreview } from './preview'
 import { mockLinkProperty, mockPropertyLinks } from './property-links'
+
+/**
+ * A fiat's USD price at a past moment: half a percent weaker a day, at most a
+ * month back, so the sum card shows a day's rate apart from today's.
+ */
+function mockPriceAt(code: string, at: string | null | undefined): number | undefined {
+  const price = priceOf(code)
+  const days = at ? Math.min(30, Math.max(0, (Date.now() - Date.parse(at)) / 86_400_000)) : 0
+  if (!price || !days || !isFiatCode(code) || code.toLowerCase() === 'usd') return price
+  return price * (1 - 0.005 * days)
+}
 
 /** Commands: contacts. */
 export const contactsCommands: MockCommands = {
@@ -187,8 +199,8 @@ export const transactionsCommands: MockCommands = {
   },
   convert_amount: ({ body }) => {
     const input = body as ConvertAmountInput
-    const from = priceOf(input.from)
-    const to = priceOf(input.to)
+    const from = mockPriceAt(input.from, input.at)
+    const to = mockPriceAt(input.to, input.at)
     return resolve({ amount: from && to ? String((Number(input.amount) * from) / to) : null })
   },
   calc_preview: ({ body }) => {
