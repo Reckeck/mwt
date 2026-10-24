@@ -48,6 +48,8 @@ export function planAutomations(
         workday_shift: input.workday_shift ?? 'none',
         property_id: input.template.common.property_id ?? null,
         estimate: null,
+        time: input.time ?? null,
+        asks: input.asks ?? false,
       }
       automations.push(automation)
       syncWorkflow(automation)
@@ -67,6 +69,8 @@ export function planAutomations(
           amount_mode: input.automation.amount_mode ?? 'fixed',
           workday_shift: input.automation.workday_shift ?? 'none',
           property_id: input.automation.template.common.property_id ?? null,
+          time: input.automation.time ?? null,
+          asks: input.automation.asks ?? false,
         }),
       )
     }

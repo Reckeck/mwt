@@ -25,6 +25,8 @@ function seedAutomation(transactions: Transaction[], comment: string, name: stri
     workday_shift: 'back',
     property_id: null,
     estimate: null,
+    time: null,
+    asks: false,
   }
   automations.push(automation)
   syncWorkflow(automation)

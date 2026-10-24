@@ -20,6 +20,8 @@ export function seedMine(transfer: Transaction) {
     workday_shift: 'none',
     property_id: null,
     estimate: null,
+    time: null,
+    asks: false,
   }
   automations.push(automation)
   syncWorkflow(automation)

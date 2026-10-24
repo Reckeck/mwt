@@ -46,6 +46,8 @@ pub struct AutomationDraft {
     pub amount_mode: AmountMode,
     pub workday_shift: WorkdayShift,
     pub property_id: Option<String>,
+    pub time: Option<String>,
+    pub asks: bool,
 }
 
 impl AutomationDraft {
@@ -58,6 +60,8 @@ impl AutomationDraft {
             amount_mode: self.amount_mode,
             workday_shift: self.workday_shift,
             property_id: self.property_id.clone(),
+            time: self.time.clone(),
+            asks: self.asks,
         }
     }
 }
@@ -71,6 +75,8 @@ fn spec_of(automation: &Automation) -> AutomationSpec {
         amount_mode: automation.amount_mode,
         workday_shift: automation.workday_shift,
         property_id: automation.property_id.clone(),
+        time: automation.time.clone(),
+        asks: automation.asks,
     }
 }
 
@@ -255,6 +261,8 @@ impl UnlockedVault {
             workday_shift: spec.workday_shift,
             estimate,
             property_id: spec.property_id.clone(),
+            time: spec.time.clone(),
+            asks: spec.asks,
         })
     }
 
@@ -349,6 +357,13 @@ impl UnlockedVault {
             ));
         }
         self.check_property_link(draft.property_id.as_deref())?;
+        if draft
+            .time
+            .as_deref()
+            .is_some_and(|time| graph_of::parse_time(time).is_none())
+        {
+            return Err(Error::InvalidInput("time is HH:MM".into()));
+        }
         let Some(starts) = unix_secs(&draft.starts_at) else {
             return Err(Error::InvalidInput("choose a start date".into()));
         };
@@ -890,6 +905,8 @@ mod tests {
     ) -> Automation {
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: name.into(),
                 active: true,
                 preset: None,
@@ -951,6 +968,8 @@ mod tests {
         let later = calendar::iso(secs(&now_iso()) + 30 * 86_400);
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Later".into(),
                 active: true,
                 preset: None,
@@ -1052,6 +1071,8 @@ mod tests {
         );
         let every = vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Fortnight".into(),
                 active: true,
                 preset: None,
@@ -1139,6 +1160,8 @@ mod tests {
         let card = store(&mut vault, "Card", StoreKind::Bank, None);
         let daily = vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Pocket money".into(),
                 active: true,
                 preset: None,
@@ -1311,6 +1334,8 @@ mod tests {
         bill.meta.categories.clear();
         let err = vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Bill".into(),
                 active: true,
                 preset: None,
@@ -1328,6 +1353,8 @@ mod tests {
     fn advance(vault: &mut UnlockedVault, card: &str) -> Automation {
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Advance".into(),
                 active: true,
                 preset: Some(AutomationPreset::Salary),
@@ -1443,6 +1470,8 @@ mod tests {
 
         // A change in the form rebuilds the graph and keeps the old one.
         let mut changed = AutomationDraft {
+            time: None,
+            asks: false,
             name: "Advance".into(),
             active: true,
             preset: Some(AutomationPreset::Salary),
@@ -1485,6 +1514,8 @@ mod tests {
         inner.to.account = crate::model::transaction::AccountRef::Store(card);
         let err = vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "DCA".into(),
                 active: true,
                 preset: None,
@@ -1497,5 +1528,68 @@ mod tests {
             })
             .unwrap_err();
         assert_eq!(err.code(), "INVALID_INPUT");
+    }
+
+    #[test]
+    fn a_repeat_fires_at_its_time_and_asks_before_booking() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let draft = AutomationDraft {
+            time: Some("18:30".into()),
+            asks: true,
+            name: "Asks".into(),
+            active: true,
+            preset: None,
+            schedule: Schedule::Monthly { day: 10 },
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            template: salary_draft(&card, "1000"),
+            amount_mode: Default::default(),
+            workday_shift: Default::default(),
+            property_id: None,
+        };
+        let automation = vault.create_automation(draft.clone()).unwrap();
+        assert_eq!(automation.time.as_deref(), Some("18:30"));
+        assert!(automation.asks);
+
+        let workflow = vault
+            .doc
+            .workflows
+            .iter()
+            .find(|wf| wf.id == automation.id)
+            .unwrap();
+        let graph = crate::workflow::graph::Graph::parse(&workflow.graph).unwrap();
+        assert!(graph.nodes.iter().any(|node| node.kind == "action.confirm"));
+        assert!(
+            graph
+                .edges
+                .iter()
+                .any(|edge| edge.from_port == "true" && edge.to == graph_of::ACTION)
+        );
+
+        let cal = Calendar::new("UTC");
+        let after = secs("2026-03-01T00:00:00Z");
+        let moments = vault.automation_occurrences(&automation, &cal, after, after + 40 * 86_400);
+        assert_eq!(calendar::iso(moments[0].0), "2026-03-10T18:30:00Z");
+
+        let bad = AutomationDraft {
+            time: Some("25:00".into()),
+            ..draft
+        };
+        assert!(vault.create_automation(bad).is_err());
+    }
+
+    #[test]
+    fn the_form_lists_the_next_three_dates_moved_off_days_off() {
+        let input = crate::ipc_contract::AutomationDatesInput {
+            schedule: Schedule::Monthly { day: 1 },
+            starts_at: "2026-10-24T00:00:00Z".into(),
+            workday_shift: WorkdayShift::Back,
+            time: None,
+        };
+        let dates = input.upcoming(secs("2026-10-24T12:00:00Z"), "UTC");
+        assert_eq!(dates.len(), 3);
+        // 1 November 2026 is a Sunday: back to Friday.
+        assert_eq!(dates[0], "2026-10-30T09:00:00Z");
+        assert_eq!(dates[1], "2026-12-01T09:00:00Z");
     }
 }

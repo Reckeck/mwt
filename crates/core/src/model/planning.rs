@@ -141,6 +141,12 @@ pub struct AutomationSpec {
     /// The property its operations belong to (plan G4).
     #[serde(default)]
     pub property_id: Option<String>,
+    /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
+    #[serde(default)]
+    pub time: Option<String>,
+    /// It asks «да» before it books the operation.
+    #[serde(default)]
+    pub asks: bool,
 }
 
 /// An automation as the app shows it: a workflow built from an
@@ -172,6 +178,12 @@ pub struct Automation {
     /// The property its operations belong to (plan G4).
     #[serde(default)]
     pub property_id: Option<String>,
+    /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
+    #[serde(default)]
+    pub time: Option<String>,
+    /// It asks «да» before it books the operation.
+    #[serde(default)]
+    pub asks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

@@ -5,6 +5,8 @@ export const dialogWidths = {
   confirm: 'max-w-[31.25rem]',
   /** 560px: the deal calculator (Money 4 · 23). */
   form: 'max-w-[35rem]',
+  /** 620px: the automation wizard (Auto-1 · 6–8). */
+  wizard: 'max-w-[38.75rem]',
   /** 640px: the month's utility bill and the item wizard (Wallets-2 · 13, Wallets-3 · 14–17). */
   bill: 'max-w-[40rem]',
   md: 'max-w-2xl',

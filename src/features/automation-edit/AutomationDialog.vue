@@ -143,6 +143,8 @@ const save = useMutation({
       template: templateInput,
       amount_mode: varies.value ? 'varies' : 'fixed',
       workday_shift: workdayShift.value,
+      time: props.automation?.time ?? null,
+      asks: props.automation?.asks ?? false,
     }
     return props.automation
       ? call<Automation>('update_automation', { input: { id: props.automation.id, automation: input } })

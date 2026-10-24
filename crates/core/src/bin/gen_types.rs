@@ -215,6 +215,7 @@ fn main() {
         trade_core::ipc_contract::EnsureFxOutput,
         trade_core::ipc_contract::ConvertedAmount,
         trade_core::ipc_contract::AutomationInput,
+        trade_core::ipc_contract::AutomationDatesInput,
         trade_core::ipc_contract::UpdateAutomationInput,
         trade_core::ipc_contract::ConfirmEstimatedInput,
         trade_core::ipc_contract::BudgetInput,

@@ -571,6 +571,8 @@ mod tests {
         salary.meta.categories = vec!["salary".into()];
         vault
             .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
                 name: "Salary".into(),
                 active: true,
                 preset: None,

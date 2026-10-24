@@ -16,6 +16,7 @@ import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
 import { MAIN_TABS, MORE_TABS, TAB_ROUTE } from './model/automation-tabs'
 import { MINE_KEY } from './model/use-mine'
+import { NewAutomation } from './ui/new-automation'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -69,6 +70,7 @@ const varsOpen = computed({
       </div>
     </div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
+    <NewAutomation />
     <WorkflowImportDialog v-model:open="importOpen" @imported="(workflow) => router.push({ name: 'workflow-edit', params: { id: workflow.id } })" />
     <Sheet v-model:open="varsOpen">
       <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
