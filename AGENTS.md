@@ -424,6 +424,38 @@ Co-authored-by: <Инструмент> <email>
 | `gitlab-ci-generator` | новый или изменённый job, правила, кэш в `.gitlab-ci.yml` |
 | `gitlab-ci-validator` | проверка `.gitlab-ci.yml` перед коммитом (синтаксис, best practices, безопасность) |
 | `glab` | пайплайны, логи job'ов, MR и релизы в GitLab через CLI `glab` |
+| `subtask-pipeline` | любая задача плана, которую можно отдать подагенту: бриф, исполнитель Sonnet, проверка Opus (см. «Подзадачи») |
+| `planning-and-task-breakdown` | разбиение этапа на проверяемые подзадачи |
+| `incremental-implementation` | правка больше одного файла: тонкими срезами, проверка после каждого |
+| `context-engineering` | бриф подзадачи, рабочий контекст новой сессии |
+| `debugging-and-error-recovery` | упало, зависло, ведёт себя не так: причина до починки |
+| `code-review-and-quality` | проверка результата подзадачи и своего диффа перед коммитом |
+| `doubt-driven-development` | рискованное решение (vault, крипта, деньги): разбор свежим взглядом |
+| `code-simplification` | код работает, но сложнее нужного; файл упёрся в лимит строк |
+| `test-driven-development` | логика в `crates/core`: сначала падающий тест (фронт-тестов нет) |
+| `source-driven-development` | API библиотеки (vue-flow, reka-ui, TanStack, Tauri) — по документации, не по памяти |
+| `security-and-hardening` | недоверенный ввод: импорт файлов, вложения, ссылки, синхронизация |
+| `performance-optimization` | заметные тормоза, регресс `check-layout`, тяжёлые списки и графики |
+| `graphify` | вопросы об устройстве кода и связях файлов, если собран `graphify-out/` |
+
+Подключены из реестров, но **в этом проекте не загружать** (повторяют
+проектный скилл или противоречат правилам выше):
+
+| Skill | Почему не нужен |
+|---|---|
+| `git-workflow-and-versioning` | учит `git commit/add` и веткам — здесь запрещено, вместо него `jj-workflow` |
+| `ci-cd-and-automation` | GitHub Actions; CI здесь GitLab — `gitlab-ci-generator`, `gitlab-ci-validator`, `glab` |
+| `browser-testing-with-devtools` | нужен MCP Chrome DevTools, его нет; есть `mise run shots` и `check-layout` (CDP) |
+| `frontend-ui-engineering` | общий, с примерами React; проектные `ui-design-system`, `frontend-feature`, `shadcn-vue` строже |
+| `api-and-interface-design` | REST/GraphQL; контракт здесь — Tauri IPC по `ipc-command` |
+| `spec-driven-development` | спецификация уже есть: холст и файл плана; второй PRD — дубль |
+| `constraint-driven-development` | заводит `CONSTRAINTS.md`; планка проекта — этот файл, DoD и базы `check-*` |
+| `interview-me`, `idea-refine` | расспрос по вопросу за раз и придумывание вариантов; решения уже приняты, этапы идут без остановок |
+| `using-agent-skills` | маршрутизация дублирует эту таблицу; «стоп и жди ответа» спорит с работой без подтверждений |
+| `documentation-and-adrs` | ADR в проекте не ведутся; какие docs обновлять — в DoD |
+| `observability-and-instrumentation` | метрики и алерты продакшена; приложение офлайн, телеметрии нет |
+| `shipping-and-launch` | выкатка на сервер, флаги, мониторинг; выпуск — по `docs/workflow.md` |
+| `deprecation-and-migration` | миграции БД продакшена; vault — `vault-crypto`, старые пути — редиректы |
 
 ### Управление скиллами
 
@@ -446,6 +478,7 @@ pnpm dlx skills list                             # что установлено
   иначе скилл молча выпадает из загрузки (видно в `skills list` как `Skipped`).
 - `shadcn-vue` ставится из `unovue/shadcn-vue`; он читает `components.json`,
   который лежит в корне и описывает алиасы проекта.
+- Скиллы ставятся **только** в `.agents/`.
 - `.claude/skills/` — ссылки на `.agents/skills/<name>`, по одной на скилл,
   чтобы Claude Code находил скиллы сам (инструмент Skill), а не только по
   таблице выше. Собирает их `scripts/link-claude-skills.sh`: после
@@ -458,6 +491,24 @@ pnpm dlx skills list                             # что установлено
   в `~/.claude/plans/` (в OpenCode и Codex — их каталог планов вне
   репозитория), подзадачи — список задач сессии. Каталог `tasks/` в рабочей
   копии не создавай; появился — удали до коммита.
+- `addyosmani/agent-skills` ставится как `skills add addyosmani/agent-skills`
+  целиком. Общие чек-листы репозитория (`references/`) CLI не копирует
+  (issue #361); нужные лежат в `.agents/references/`, куда и указывают ссылки
+  `../../references/…` из скиллов. При обновлении скиллов сверь их с
+  репозиторием.
+- `graphify` — CLI на Python (`uv tool install graphifyy`, пакет с двумя `y`),
+  скилл ставится `graphify install --project --platform agents`: пишет только
+  `.agents/skills/graphify/`. Граф кода без LLM — `graphify update .`,
+  результат в `graphify-out/` (в `.gitignore`).
+
+## Подзадачи
+
+Сильная модель (Opus) пишет план, разбивает этап на подзадачи, пишет бриф и
+проверяет результат; подзадачу выполняет подагент на более слабой модели
+(Sonnet). Исполнитель не коммитит и не расширяет задачу; гейт, коммит и
+отчёт — только планировщик, после своей проверки диффа, проверок и снимков.
+Один исполнитель за раз в рабочей копии, если подзадачи делят файлы или
+Vite. Бриф, запуск, проверка, возврат на доработку — скилл `subtask-pipeline`.
 
 ## Definition of Done
 

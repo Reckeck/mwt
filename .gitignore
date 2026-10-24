@@ -39,3 +39,6 @@ packaging/flatpak/mwt.app.*
 .flatpak-build/
 .flatpak-repo/
 .flatpak-builder/
+
+# graphify: code knowledge graph (graphify update .)
+graphify-out/
