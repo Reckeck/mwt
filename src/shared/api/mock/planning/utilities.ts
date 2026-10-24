@@ -5,7 +5,7 @@ import { mockStore } from '../tree'
 import { mockPropertyYear } from '../property-links'
 import { fail, iso, now, readings, remove, replace, utilities, uuid } from './state'
 import type { PlanningMockContext } from './state'
-import { paymentsOf, utilityTrend } from './utility-calc'
+import { billTotals, paymentsOf, utilityTrend } from './utility-calc'
 import { meterBill, previewFormula } from './utility-formula'
 
 /** Planning commands: Utility bills: items, meter readings, bills and payments. `undefined` when `cmd` is not one. */
@@ -115,6 +115,10 @@ export function planUtilities(
               previous_reading: parts[index].previous,
               reading: parts[index].current,
             })),
+            estimate:
+              'metered' in item.kind && consumption === null
+                ? (utilityTrend(item).forecast ?? utilityTrend(item).average)
+                : null,
           }
         })
       const day = String(Math.min(payDay ?? now().getDate(), 28)).padStart(2, '0')
@@ -124,6 +128,7 @@ export function planUtilities(
         pay_day: payDay,
         due_at: `${period}-${day}T12:00:00Z`,
         lines,
+        ...billTotals(lines, period),
       } satisfies UtilityBill
     }
     case 'pay_utility_bill': {

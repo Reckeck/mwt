@@ -84,7 +84,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
       </div>
     </SectionState>
     <template v-if="props.bare && rows.length" #footer>
-      <Button variant="link" size="sm" class="h-auto p-0" as-child>
+      <Button variant="link" size="sm" class="h-auto p-0 touch-hit-xl" as-child>
         <RouterLink :to="{ name: 'transactions', query: txFilterToQuery(filter) }" data-tour="wallet-all-operations">
           {{ t('wallet.allOperations') }} →
         </RouterLink>

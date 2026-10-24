@@ -121,6 +121,8 @@ export const bybitImportStagingCommands: MockCommands = {
       known: 0,
       filtered: 0,
       confirmed: 0,
+      trades: mockPendingImports().filter((entry) => entry.kind === 'fill').length,
+      transfers: mockPendingImports().filter((entry) => entry.kind === 'transfer').length,
       reconcile_tx_id: null,
       error: null,
     }

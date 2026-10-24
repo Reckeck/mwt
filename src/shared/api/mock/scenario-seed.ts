@@ -8,6 +8,7 @@ import { seedGoal } from './planning/goal-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
+import { mockImportRuns, mockKeyStatus } from './exchange-data'
 
 let seeded = false
 
@@ -27,7 +28,33 @@ export function seedMock() {
   seedSalaryAutomation(mockTransactions)
   seedGoal()
   seedLoyalty()
+  seedExchangeImport()
   if (mockScenario === 'stress') seedStress()
+}
+
+/** Bybit connected, with one import behind it (Wallets-2 · 8): 1 trade, 2 transfers, 3 duplicates. */
+function seedExchangeImport() {
+  const bybit = mockStores.find((store) => store.kind === 'exchange' && !store.parent_id)
+  if (!bybit) return
+  mockKeyStatus.value = { ...mockKeyStatus.value, configured: true, hint: '…7Q2f' }
+  if (bybit.exchange) bybit.exchange.import_interval_sec = 3600
+  const at = new Date()
+  at.setHours(at.getHours() - 3, 0, 0, 0)
+  mockImportRuns.push({
+    id: 'mock-run-1',
+    store_id: bybit.id,
+    at: at.toISOString(),
+    source: 'auto',
+    fetched: 6,
+    staged: 3,
+    known: 3,
+    filtered: 0,
+    confirmed: 3,
+    trades: 1,
+    transfers: 2,
+    reconcile_tx_id: null,
+    error: null,
+  })
 }
 
 /** The flat bought before the year began, so capital has property under it. */

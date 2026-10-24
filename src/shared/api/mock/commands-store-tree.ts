@@ -45,6 +45,8 @@ export const storeTreeCommands: MockCommands = {
       custody: input.kind === 'crypto' && !input.parent_id ? (input.custody ?? 'hot') : null,
       property: input.property ?? null,
       secured_by: input.secured_by ?? null,
+      // Like the backend: only a futures account keeps a margin coin.
+      ...(input.sub_type === 'futures' && input.margin ? { margin: input.margin } : {}),
       exchange: input.provider
         ? {
             provider: input.provider,

@@ -88,7 +88,7 @@ const live = computed(() => !props.store.archived)
       <ArrowLeftRight class="size-4 shrink-0" />
       {{ t('palette.converter') }}
     </DropdownMenuItem>
-    <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" @select="emit('subAccount')">
+    <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" data-gear="sub-account" @select="emit('subAccount')">
       <FolderPlus class="size-4 shrink-0" />
       {{ t('stores.newSubAccountShort') }}
     </DropdownMenuItem>

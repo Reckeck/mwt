@@ -28,7 +28,7 @@ export type WalletTabsKind = 'home' | 'money' | 'coins' | 'exchange'
  * The tabs a wallet's kind needs, kept in the URL so a link or «Back» returns
  * to them: a card opens on its operations, a coin wallet on its positions, an
  * exchange adds its terminal and keeps the import and relations under «Ещё»;
- * a home opens on its utilities. Old `?view=terminal|import` links still land.
+ * a home opens on its utilities beside its operations (Wallets-2 · 10). Old `?view=terminal|import` links still land.
  */
 export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolean>) {
   const { t } = useI18n()
@@ -47,7 +47,7 @@ export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolea
   const tabOf = (value: keyof typeof label) => ({ value, label: label[value]() })
 
   const tabs = computed(() => {
-    if (kind.value === 'home') return (['utilities', 'positions', 'history', 'relations'] as const).map(tabOf)
+    if (kind.value === 'home') return [tabOf('utilities'), tabOf('history')]
     if (kind.value === 'money') return [tabOf('history'), tabOf('positions'), tabOf('relations')]
     if (kind.value === 'coins') return [tabOf('positions'), tabOf('history'), tabOf('relations')]
     return [tabOf('positions'), tabOf('history'), ...(hasTerminal.value && !phone.value ? [tabOf('terminal')] : [])]
@@ -56,7 +56,9 @@ export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolea
   const more = computed(() =>
     kind.value === 'exchange'
       ? [...(hasTerminal.value && phone.value ? [tabOf('terminal')] : []), tabOf('import'), tabOf('relations')]
-      : [],
+      : kind.value === 'home'
+        ? [tabOf('relations')]
+        : [],
   )
 
   const known = (value: unknown) => [...tabs.value, ...more.value].some((tab) => tab.value === value)

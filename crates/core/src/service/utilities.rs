@@ -16,6 +16,21 @@ use crate::utilities_formula::{self, FormulaInput, FormulaIssue, ZoneValues};
 
 use super::UnlockedVault;
 
+/// Rent an automation pays: shown on the bill, never part of what is paid by hand.
+fn paid_by_automation(item: &UtilityItem) -> bool {
+    matches!(
+        &item.kind,
+        UtilityKind::Housing {
+            automation_id: Some(_),
+            ..
+        }
+    )
+}
+
+fn is_metered(item: &UtilityItem) -> bool {
+    matches!(item.kind, UtilityKind::Metered { .. })
+}
+
 /// Months the average and the forecast look back over.
 pub const TREND_MONTHS: usize = 6;
 
@@ -378,6 +393,10 @@ pub struct UtilityBillLine {
     /// A multi-rate meter: the previous and this month's reading per zone.
     #[serde(default)]
     pub zones: Vec<ZoneBillLine>,
+    /// A meter still waiting for its reading: what it will likely cost —
+    /// the trend's forecast, else its average («≈ 1 270 ₽»).
+    #[serde(default)]
+    pub estimate: Option<Amount>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -405,6 +424,23 @@ pub struct UtilityBill {
     /// the month is the current one and the day has passed. RFC3339.
     pub due_at: String,
     pub lines: Vec<UtilityBillLine>,
+    /// What the month will cost: the amounts, the estimates of the meters
+    /// still unread; rent an automation pays is left out (Wallets-2 · 10).
+    #[serde(default)]
+    pub total: Amount,
+    /// Part of `total` is an estimate: some meter waits for its reading.
+    #[serde(default)]
+    pub estimated: bool,
+    /// Meters waiting for this month's reading.
+    #[serde(default)]
+    pub unread: u32,
+    /// The bill of the last six months before this one, on average, counted
+    /// the same way as `total`.
+    #[serde(default)]
+    pub average: Option<Amount>,
+    /// `total` against `average`, percent.
+    #[serde(default)]
+    pub delta_pct: Option<Amount>,
 }
 
 /// One line the user confirmed in the bill dialog.
@@ -1256,6 +1292,7 @@ impl UnlockedVault {
                 paid,
                 includes_deposit: false,
                 zones: Vec::new(),
+                estimate: None,
             };
             let mut unread = false;
             if let UtilityKind::Metered { .. } = item.kind {
@@ -1293,8 +1330,27 @@ impl UnlockedVault {
                 line.consumption = draft.consumption;
                 line.includes_deposit = draft.includes_deposit;
             }
+            if unread && let Ok(trend) = self.meter_trend(&item.id, zone) {
+                line.estimate = trend.forecast.filter(Amount::is_positive).or(trend.average);
+            }
             lines.push(line);
         }
+        let counted: Vec<&UtilityBillLine> = lines
+            .iter()
+            .filter(|line| !paid_by_automation(&line.item))
+            .collect();
+        let total = counted
+            .iter()
+            .filter_map(|line| line.amount.or(line.estimate))
+            .fold(Amount::ZERO, |acc, value| acc + value);
+        let unread_count = counted
+            .iter()
+            .filter(|line| is_metered(&line.item) && line.amount.is_none())
+            .count();
+        let average = self.bill_average(&counted, &period, zone);
+        let delta_pct = average
+            .filter(|mean| mean.is_positive() && total.is_positive())
+            .map(|mean| ((total - mean) / mean * hundred()).round(0));
         let last_day = calendar::next_month(month) - chrono::Duration::days(1);
         let today = cal.date_of(calendar::now_secs());
         let day = match pay_day {
@@ -1311,6 +1367,40 @@ impl UnlockedVault {
             pay_day,
             due_at: calendar::iso(cal.at_local(day, 12)),
             lines,
+            total,
+            estimated: unread_count > 0,
+            unread: u32::try_from(unread_count).unwrap_or(u32::MAX),
+            average,
+            delta_pct,
+        })
+    }
+
+    /// The average of the last six months before `period` that had a bill,
+    /// summing the given lines' items month by month.
+    fn bill_average(&self, lines: &[&UtilityBillLine], period: &str, zone: &str) -> Option<Amount> {
+        let mut by_month: BTreeMap<String, Amount> = BTreeMap::new();
+        for line in lines {
+            let Ok(trend) = self.meter_trend(&line.item.id, zone) else {
+                continue;
+            };
+            for month in trend
+                .months
+                .iter()
+                .filter(|month| month.period.as_str() < period)
+            {
+                let sum = by_month.entry(month.period.clone()).or_insert(Amount::ZERO);
+                *sum += month.amount;
+            }
+        }
+        let recent: Vec<Amount> = by_month
+            .into_values()
+            .filter(Amount::is_positive)
+            .rev()
+            .take(TREND_MONTHS)
+            .collect();
+        (!recent.is_empty()).then(|| {
+            let sum = recent.iter().fold(Amount::ZERO, |acc, value| acc + *value);
+            (sum / Amount::new(rust_decimal::Decimal::from(recent.len() as u64))).round(2)
         })
     }
 
@@ -1669,6 +1759,51 @@ mod tests {
             })
             .unwrap();
         (flat, meter, internet, card)
+    }
+
+    #[test]
+    fn the_bill_estimates_an_unread_meter_and_compares_with_its_average() {
+        let (_dir, mut vault) = empty_vault();
+        let (flat, meter, _internet, card) = flat_with_bills(&mut vault);
+        vault
+            .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
+            .unwrap();
+        // February and March read and paid on the bill, 500 each.
+        for (reading, period) in [("1100", "2026-02"), ("1200", "2026-03")] {
+            vault
+                .pay_utility_bill(
+                    PayUtilityBillInput {
+                        property_id: flat.clone(),
+                        period: period.into(),
+                        store_id: card.clone(),
+                        timestamp: Some(format!("{period}-10T12:00:00Z")),
+                        lines: vec![PayUtilityLine {
+                            item_id: meter.id.clone(),
+                            amount: amount("500"),
+                            reading: Some(amount(reading)),
+                            reading_day: None,
+                            zone_readings: Vec::new(),
+                        }],
+                    },
+                    "UTC",
+                )
+                .unwrap();
+        }
+        // April not read yet: the meter is estimated, the internet is fixed.
+        let bill = vault.utility_bill(&flat, "2026-04", "UTC").unwrap();
+        let line = bill
+            .lines
+            .iter()
+            .find(|line| line.item.id == meter.id)
+            .unwrap();
+        assert_eq!(line.amount, None);
+        assert_eq!(line.estimate, Some(amount("500")));
+        assert_eq!(bill.unread, 1);
+        assert!(bill.estimated);
+        assert_eq!(bill.total, amount("1200"));
+        // February and March billed 500 each by the meter.
+        assert_eq!(bill.average, Some(amount("500")));
+        assert_eq!(bill.delta_pct, Some(amount("140")));
     }
 
     #[test]

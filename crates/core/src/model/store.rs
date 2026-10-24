@@ -687,6 +687,11 @@ pub struct Store {
     /// Exchange wallets only (top level).
     #[serde(default)]
     pub exchange: Option<ExchangeProfile>,
+    /// An exchange's futures sub-account: the coin its margin is kept in
+    /// (USDT for linear contracts, the coin itself for inverse ones).
+    #[serde(default)]
+    #[ts(optional)]
+    pub margin: Option<AssetRef>,
     /// Loyalty wallets: the programme's points and what a point is worth.
     #[serde(default)]
     #[ts(optional)]

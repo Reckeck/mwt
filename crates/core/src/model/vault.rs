@@ -566,6 +566,12 @@ pub struct ImportRun {
     pub filtered: u32,
     /// Booked at once by «подтверждать сразу».
     pub confirmed: u32,
+    /// Of the new ones: spot and futures fills.
+    #[serde(default)]
+    pub trades: u32,
+    /// Of the new ones: moves between the exchange's own accounts.
+    #[serde(default)]
+    pub transfers: u32,
     /// The correction that set the live balance, if one was needed.
     #[serde(default)]
     pub reconcile_tx_id: Option<String>,

@@ -10,6 +10,7 @@ import { DEFAULT_STORE_COLOR, KIND_COLORS } from '../store-create.constants'
 import type { StoreCreateDialogProps, StoreCreateStep } from '../store-create.types'
 import { useStoreTree } from '@/shared/api/queries'
 
+import { useExchangeSub } from './use-exchange-sub'
 import { useWizardSteps } from './use-wizard-steps'
 
 /**
@@ -133,7 +134,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const title = computed(() => {
     if (!props.parent) return t('wallet.newStore')
     const path = props.parentPath?.length ? props.parentPath : [props.parent.name]
-    return t('stores.newSubAccount', { parent: path.join(' › ') })
+    return t(props.parent.kind === 'exchange' ? 'exchangeSub.title' : 'stores.newSubAccount', {
+      parent: path.join(' › '),
+    })
   })
 
   /** A card on step 1 only picks; «Далее» (or a second click) moves on. */
@@ -187,9 +190,8 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     }
   })
 
-  const { steps, stepNumber, isLast, goBack, goNext, canGoBack } = useWizardSteps(step, isSub, offersOpening, () =>
-    Boolean(props.kind),
-  )
+  const exchange = useExchangeSub(props, open, step, subType)
+  const wizard = useWizardSteps(step, isSub, offersOpening, () => Boolean(props.kind), exchange.exchangeSub)
 
   const exchangeRoot = computed(() => !isSub.value && kind.value === 'exchange')
   /** Key and secret go together: one without the other cannot connect. */
@@ -210,6 +212,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
           ? (required(pairText.value) ?? (pair.value ? null : t('binding.pairInvalid')))
           : null,
       provider: exchangeRoot.value ? required(provider.value, 'pick') : null,
+      margin: exchange.withMargin.value ? required(exchange.margin.value, 'pick') : null,
       apiKey: keyHalf.value && !apiKey.value.trim() ? t('validation.keyPair') : null,
       apiSecret: keyHalf.value && !apiSecret.value.trim() ? t('validation.keyPair') : null,
       cardCurrency: withCard.value ? required(cardCurrency.value, 'pick') : null,
@@ -267,13 +270,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     title,
     pickKind,
     pickSubType,
-    steps,
-    stepNumber,
-    isLast,
-    goBack,
-    goNext,
-    canGoBack,
     form,
+    ...wizard,
+    ...exchange,
   }
 }
 

@@ -296,6 +296,9 @@ impl UnlockedVault {
             fresh.push(imp);
         }
         let ids: Vec<String> = fresh.iter().map(|imp| imp.exec_id.clone()).collect();
+        let count = |kind: ImportKind| fresh.iter().filter(|imp| imp.kind == kind).count() as u32;
+        run.trades = count(ImportKind::Fill);
+        run.transfers = count(ImportKind::Transfer);
         run.staged = self.stage_imports(fresh)?;
         if settings.auto_confirm && !ids.is_empty() {
             run.confirmed = self.confirm_pending_imports(&ids)?;
@@ -636,6 +639,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!((first.fetched, first.staged), (2, 2));
+        assert_eq!((first.trades, first.transfers), (2, 0), "both are fills");
         vault.confirm_pending_imports(&["a".to_string()]).unwrap();
         vault.discard_pending_imports(&["b".to_string()]).unwrap();
         let again = vault

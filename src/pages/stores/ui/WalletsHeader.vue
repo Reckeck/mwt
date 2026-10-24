@@ -56,7 +56,7 @@ const picked = computed({
           v-for="entry in modes"
           :key="entry.value"
           :value="entry.value"
-          class="h-6 rounded-lg px-2.5 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+          class="h-6 rounded-lg px-2.5 text-xs touch-hit-lg pointer-coarse:min-w-10 data-[state=on]:bg-background data-[state=on]:shadow-sm"
         >
           {{ entry.label }}
         </ToggleGroupItem>

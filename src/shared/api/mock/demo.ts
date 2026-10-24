@@ -182,6 +182,7 @@ mockStores.push({
   sub_type: 'futures',
   binding: { market: 'futures' },
   exchange: null,
+  margin: { symbol: 'USDT', name: 'Tether', coingecko_id: 'tether', chain: null, contract: null, quote: 'USDT' },
 })
 mockStores.push(newStore('Тинькофф', 'bank', '#facc15'))
 // A home with bills, so the utilities screens have something to show.

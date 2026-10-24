@@ -31,6 +31,13 @@ const coins = (list: { asset: AssetRef; quantity: Amount }[]) =>
     .filter((row) => Number(row.quantity) !== 0)
     .map((row) => `${formatQuantity(row.quantity, props.decimals)} ${row.asset.symbol.toUpperCase()}`)
     .join(' · ')
+/** A futures account: «маржа 400 USDT», the coin it keeps its margin in (Wallets-2 · 9). */
+function line(store: Store, balances: AssetBalance[]) {
+  const margin = store.margin?.symbol.toUpperCase()
+  if (!margin) return coins(balances)
+  const held = balances.find((row) => row.asset.symbol.toUpperCase() === margin)?.quantity ?? '0'
+  return t('exchangeSub.marginShort', { amount: `${formatQuantity(held, props.decimals)} ${margin}` })
+}
 
 const cards = computed(() => {
   const nodes = flattenStoreTree(tree.data.value ?? [])
@@ -40,7 +47,7 @@ const cards = computed(() => {
       id: row.store.id,
       label: row.store.name,
       sum: row.subtree_base,
-      line: coins(nodes.find((node) => node.store.id === row.store.id)?.balances ?? []),
+      line: line(row.store, nodes.find((node) => node.store.id === row.store.id)?.balances ?? []),
       to: { name: 'wallet', params: { id: row.store.id } },
     })),
   ]

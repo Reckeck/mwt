@@ -24,11 +24,11 @@ const TO_BYBIT = `
   if (link) await gp.$router.push(link.getAttribute('href'))
   await new Promise((done) => setTimeout(done, 900)); return true`
 /** A wallet's own page by the name in the wallets list. */
-const toWallet = (name) => `
+const toWallet = (name, tab = '') => `
   const gp = document.querySelector('#app').__vue_app__.config.globalProperties
   await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
   const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('${name}'))
-  if (link) await gp.$router.push(link.getAttribute('href'))
+  if (link) await gp.$router.push(link.getAttribute('href') + '${tab ? `?tab=${tab}` : ''}')
   await new Promise((done) => setTimeout(done, 900)); return true`
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
@@ -453,6 +453,14 @@ const stage4 = [
   { name: 'wallet-bank', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Wallets-1', frame: '5.' } },
   { name: 'wallet-crypto', route: '/stores', steps: [{ eval: toWallet('Ledger') }], canvas: { board: 'Wallets-1', frame: '6.' } },
   { name: 'wallet-exchange', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Wallets-1', frame: '7.' } },
+  { name: 'wallet-exchange-import', route: '/stores', steps: [{ eval: toWallet('Bybit', 'import') }], canvas: { board: 'Wallets-2', frame: '8.' } },
+  {
+    name: 'wallet-exchange-sub',
+    route: '/stores',
+    steps: [{ eval: toWallet('Bybit') }, { click: '[data-tour="wallet-gear"]' }, { wait: 300 }, { click: '[data-gear="sub-account"]' }, { wait: 500 }],
+    canvas: { board: 'Wallets-2', frame: '9.' },
+  },
+  { name: 'wallet-property', route: '/stores', steps: [{ eval: toWallet('Квартира') }], canvas: { board: 'Wallets-2', frame: '10.' } },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },
   { name: 'store-new-kind', route: '/stores', steps: CREATE_STORE, canvas: { board: 'Wallets-1', frame: '2.' } },

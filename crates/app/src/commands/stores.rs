@@ -48,6 +48,7 @@ pub async fn create_store(
         secured_by: input.secured_by,
         provider: input.provider,
         opening: input.opening,
+        margin: input.margin,
     };
     match input.card {
         Some(card) if input.kind == StoreKind::Bank && input.parent_id.is_none() => {
@@ -89,6 +90,7 @@ pub async fn update_store(
                 secured_by: input.secured_by,
                 provider: input.provider,
                 opening: None,
+                margin: None,
             },
         )
         .map_err(err_to_string)

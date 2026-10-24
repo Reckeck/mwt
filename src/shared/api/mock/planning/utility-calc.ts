@@ -100,33 +100,81 @@ export function utilityTrend(item: UtilityItem): UtilityTrend {
   }
 }
 
-/** Two bills of a demo flat with half a year of readings. */
+/** The demo flat of Wallets-2 · 10: a day/night meter not read this month, two
+ * water meters (one by its own formula), the internet, the rent an automation pays. */
 export function seedUtilityDemo(propertyId: string) {
   if (utilities.length) return
   const base = { active: true, currency: 'rub', property_id: propertyId, store_id: null, category: 'utilities' }
-  const power: UtilityItem = {
+  const metered = (
+    name: string,
+    unit: string,
+    tariff: string,
+    formula: string | null,
+    zones: string[],
+  ): UtilityItem => ({
     id: uuid(),
-    name: 'Электричество',
-    kind: { metered: { unit: 'кВт·ч', tariff: '6.5', formula: null, zones: [] } },
+    name,
+    kind: { metered: { unit, tariff, formula, zones } },
     ...base,
-  }
+  })
+  const power = metered('Электричество', 'кВт·ч', '6.5', null, ['день', 'ночь'])
+  const cold = metered('Холодная вода', 'м³', '49', null, [])
+  const hot = metered('Горячая вода', 'м³', '35', 'расход * тариф', [])
   const net: UtilityItem = { id: uuid(), name: 'Интернет', kind: { static: { amount: '700' } }, ...base }
-  utilities.push(power, net)
+  const rent: UtilityItem = {
+    id: uuid(),
+    name: 'Аренда',
+    kind: { housing: { amount: '35000', deposit: null, due_day: 10, automation_id: uuid() } },
+    ...base,
+    category: 'housing',
+  }
+  utilities.push(power, cold, hot, net, rent)
   const now = new Date()
-  let value = 12000
-  for (let back = 6; back >= 1; back -= 1) {
-    const month = new Date(now.getFullYear(), now.getMonth() - back, 1)
-    const period = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
-    value += 180 + back * 15
+  const read = (item: UtilityItem, value: number, period: string, zone: string | null = null) =>
     readings.push({
       id: uuid(),
-      item_id: power.id,
+      item_id: item.id,
       value: String(value),
       period,
-      recorded_at: month.toISOString(),
+      recorded_at: `${period}-25T12:00:00Z`,
       day: null,
-      zone: null,
+      zone,
     })
+  // Six months up to the last one; the current month has the water read, the power not yet.
+  for (let back = 6; back >= 0; back -= 1) {
+    const month = new Date(now.getFullYear(), now.getMonth() - back, 1)
+    const period = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+    if (back) {
+      read(power, 13395 - (back - 1) * 140 + (back % 2) * 6, period, 'день')
+      read(power, 5120 - (back - 1) * 55, period, 'ночь')
+    }
+    read(cold, 418 - back * 6, period)
+    read(hot, 209 - back * 4, period)
+  }
+}
+
+/** `UtilityBill`'s totals, like `utility_bill` in Rust: the amounts and the unread
+ * meters' estimates, without the rent an automation pays; the six months' average. */
+export function billTotals(lines: UtilityBillLine[], period: string) {
+  const counted = lines.filter((line) => !('housing' in line.item.kind && line.item.kind.housing.automation_id))
+  const total = counted.reduce((sum, line) => sum + Number(line.amount ?? line.estimate ?? 0), 0)
+  const unread = counted.filter((line) => 'metered' in line.item.kind && line.amount === null).length
+  const byMonth = new Map<string, number>()
+  for (const line of counted)
+    for (const month of utilityTrend(line.item).months.filter((entry) => entry.period < period))
+      byMonth.set(month.period, (byMonth.get(month.period) ?? 0) + Number(month.amount))
+  const recent = [...byMonth.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, value]) => value)
+    .filter((value) => value > 0)
+    .slice(-6)
+  const average = recent.length ? recent.reduce((sum, value) => sum + value, 0) / recent.length : null
+  return {
+    total: money(total),
+    estimated: unread > 0,
+    unread,
+    average: average === null ? null : money(average),
+    delta_pct: average && total ? String(Math.round(((total - average) / average) * 100)) : null,
   }
 }
 
