@@ -3797,13 +3797,22 @@ type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, pric
 /**
  * The exchange whose terminal set the alert; `None` for a vault-wide one.
  */
-store_id?: string, };
+store_id?: string, 
+/**
+ * Fires again each time the price crosses back: re-armed once the
+ * condition stops holding. Off — fires once and stays triggered.
+ */
+repeats: boolean, };
 
 type PriceAlertInput = { asset: AssetIdent, condition: AlertCondition, price: Amount, currency: string, active: boolean, 
 /**
  * The exchange whose terminal sets the alert.
  */
-store_id?: string, };
+store_id?: string, 
+/**
+ * Fires on every crossing instead of once.
+ */
+repeats: boolean, };
 
 /**
  * Where a price came from and when, for the hint next to it.
@@ -4092,7 +4101,12 @@ snoozed_until: string | null,
  * how far ahead, the time). Only a changed schedule moves it again, so a
  * sync never undoes «done».
  */
-source_key: string, };
+source_key: string, 
+/**
+ * «Кнопка в напоминании» (Auto-2 · 10): «Оплатить» opens the payment
+ * form filled with this wallet and category.
+ */
+pay: ReminderPay | null, };
 
 type ReminderInput = { text: string, 
 /**
@@ -4102,7 +4116,16 @@ due_at: string,
 /**
  * `None` = once.
  */
-repeat: ReminderRepeat | null, };
+repeat: ReminderRepeat | null, 
+/**
+ * «Оплатить» in the reminder; `None` — no button.
+ */
+pay?: ReminderPay, };
+
+/**
+ * What «Оплатить» in a reminder fills the payment form with.
+ */
+type ReminderPay = { store_id: string | null, category: string | null, };
 
 /**
  * «Every `every` `unit`s»: a monthly bill is `{ every: 1, unit: month }`.

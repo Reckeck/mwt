@@ -92,7 +92,12 @@ export function myAutomations(): MineItem[] {
   }
   for (const alert of alerts) {
     rows.push({
-      ...item('alert', alert.id, alert.asset.symbol.toUpperCase(), alert.active && !alert.triggered_at),
+      ...item(
+        'alert',
+        alert.id,
+        alert.asset.symbol.toUpperCase(),
+        alert.active && (alert.repeats || !alert.triggered_at),
+      ),
       amount: alert.price,
       asset: alert.asset,
       condition: alert.condition,

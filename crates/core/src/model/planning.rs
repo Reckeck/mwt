@@ -553,6 +553,19 @@ pub struct Reminder {
     /// sync never undoes «done».
     #[serde(default)]
     pub source_key: String,
+    /// «Кнопка в напоминании» (Auto-2 · 10): «Оплатить» opens the payment
+    /// form filled with this wallet and category.
+    #[serde(default)]
+    pub pay: Option<ReminderPay>,
+}
+
+/// What «Оплатить» in a reminder fills the payment form with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct ReminderPay {
+    #[serde(default)]
+    pub store_id: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 impl Reminder {
@@ -568,6 +581,7 @@ impl Reminder {
             user_edited: false,
             snoozed_until: None,
             source_key: String::new(),
+            pay: None,
         }
     }
 }
@@ -592,6 +606,10 @@ pub struct PriceAlert {
     #[serde(default)]
     #[ts(optional)]
     pub store_id: Option<String>,
+    /// Fires again each time the price crosses back: re-armed once the
+    /// condition stops holding. Off — fires once and stays triggered.
+    #[serde(default)]
+    pub repeats: bool,
 }
 
 /// «If the comment or the contact name contains `pattern`, use `category`.»

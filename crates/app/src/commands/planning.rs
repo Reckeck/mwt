@@ -340,7 +340,7 @@ pub async fn create_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| {
-        vault.create_reminder(&input.text, &input.due_at, input.repeat)
+        vault.create_reminder_paying(&input.text, &input.due_at, input.repeat, input.pay)
     })
 }
 
@@ -350,11 +350,12 @@ pub async fn update_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| {
-        vault.update_reminder(
+        vault.update_reminder_paying(
             &input.id,
             &input.reminder.text,
             &input.reminder.due_at,
             input.reminder.repeat,
+            input.reminder.pay,
         )
     })
 }

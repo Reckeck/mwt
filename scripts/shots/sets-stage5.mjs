@@ -27,4 +27,28 @@ export const stage5 = [
     steps: [{ wait: 400 }, { click: '[data-wizard-type="repeat"]' }, { fill: ['#tx-amount', '600'] }, { click: '[data-wizard-next]' }, { click: '[data-wizard-shift="back"]' }, { click: '#automation-wizard-asks' }, { wait: 800 }],
     canvas: { board: 'Auto-2', frame: '8.' },
   },
+  {
+    name: 'auto-save-share',
+    route: '/automations?new=save_share',
+    steps: [{ wait: 800 }],
+    canvas: { board: 'Auto-2', frame: '12.' },
+  },
+  {
+    name: 'auto-salary',
+    route: '/automations?new=salary',
+    steps: [{ wait: 500 }, { fill: ['#salary-amount', '1575'] }, { wait: 300 }],
+    canvas: { board: 'Auto-2', frame: '9.' },
+  },
+  {
+    name: 'auto-reminder',
+    route: '/automations?new=reminder',
+    steps: [{ wait: 500 }, { fill: ['#reminder-text', 'Заплатить ЖКХ'] }, { wait: 300 }],
+    canvas: { board: 'Auto-2', frame: '10.' },
+  },
+  {
+    name: 'auto-alert',
+    route: '/automations?new=alert',
+    steps: [{ wait: 600 }, { type: ['#price-alert-form input', 'btc'] }, { press: 'Enter' }, { fill: ['#alert-price', '90000'] }, { wait: 800 }],
+    canvas: { board: 'Auto-2', frame: '11.' },
+  },
 ]

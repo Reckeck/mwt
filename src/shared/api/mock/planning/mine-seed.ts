@@ -39,6 +39,7 @@ export function seedMine(transfer: Transaction) {
     user_edited: false,
     snoozed_until: null,
     source_key: '',
+    pay: null,
   })
   alerts.push({
     id: uuid(),
@@ -48,5 +49,6 @@ export function seedMine(transfer: Transaction) {
     currency: 'usd',
     active: true,
     triggered_at: null,
+    repeats: false,
   })
 }

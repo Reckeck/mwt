@@ -83,6 +83,7 @@ pub fn template_list(defaults: &TemplateDefaults) -> Vec<WorkflowTemplateInfo> {
                 field("category", Kind::Category, true, "salary"),
                 field("pct", Kind::Number, true, &defaults.savings_pct),
                 field("target", Kind::Store, true, ""),
+                field("source", Kind::Store, false, ""),
             ],
         ),
         info(
@@ -225,6 +226,8 @@ fn pay_yourself_first(build: &mut Builder) -> Texts {
     let category = build.value("category");
     let pct = build.number("pct");
     let target = build.value("target");
+    // «С кошелька» (Auto-2 · 12): only income to this wallet; empty — any.
+    let source = build.value("source");
     let question = build.tr(
         "Пришёл доход. Отложить {a}: в подушку {b}, на счёт накоплений {c}?",
         "Income arrived. Put aside {a}: {b} to the emergency fund, {c} to savings?",
@@ -234,7 +237,7 @@ fn pay_yourself_first(build: &mut Builder) -> Texts {
         "trigger.transaction",
         0,
         0,
-        json!({ "tx_kind": "topup", "category": category }),
+        json!({ "tx_kind": "topup", "category": category, "store": source }),
     );
     build.node(
         "share",

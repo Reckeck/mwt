@@ -8,6 +8,7 @@ import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
 import { noticeReminderId, noticeRoute } from '@/shared/lib/notice-link'
 import { notify } from '@/shared/lib/notify'
+import { openQuickAdd } from '@/shared/lib/quick-add'
 import { rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 
@@ -51,7 +52,7 @@ export function useBackendNotices() {
     notify.warning(t('automation.event.skipped', { count: payload.count }))
   })
 
-  useBackendEvent<NoticeRecord>('notification', (record) => {
+  useBackendEvent<NoticeRecord>('notification', async (record) => {
     void queryClient.invalidateQueries({ queryKey: ['notifications'] })
     if (record.key.startsWith('automation-rejected:')) return
     // The card opens over the screen the user is on when they click.
@@ -68,14 +69,25 @@ export function useBackendNotices() {
         })
         .catch((err) => notify.error(err, 'reminder.saveFailed'))
     }
+    // «Оплатить» (Auto-2 · 10) opens the payment form filled in; «Выполнено» stays in the bell and the list.
+    const reminders = reminderId
+      ? await queryClient
+          .ensureQueryData({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
+          .catch(() => [])
+      : []
+    const pay = reminders.find((entry) => entry.id === reminderId)?.pay
+    const payNow = () =>
+      openQuickAdd({ kind: 'payment', category: pay?.category ?? undefined, storeId: pay?.store_id ?? undefined })
     toast.info(record.title, {
       description: record.body,
       duration: reminderId ? 60_000 : 8_000,
-      action: reminderId
-        ? { label: t('reminder.done'), onClick: () => settle('set_reminder_done') }
-        : targetNow()
-          ? { label: t('actions.open'), onClick: () => void router.push(targetNow() ?? '/') }
-          : undefined,
+      action: pay
+        ? { label: t('reminder.payAction'), onClick: payNow }
+        : reminderId
+          ? { label: t('reminder.done'), onClick: () => settle('set_reminder_done') }
+          : targetNow()
+            ? { label: t('actions.open'), onClick: () => void router.push(targetNow() ?? '/') }
+            : undefined,
       cancel: reminderId ? { label: t('reminder.snooze.10m'), onClick: () => settle('snooze_reminder') } : undefined,
     })
   })

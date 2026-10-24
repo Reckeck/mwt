@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { AlarmClock, ExternalLink, Pencil, Repeat, Trash2 } from 'lucide-vue-next'
+import { AlarmClock, ExternalLink, Pencil, Repeat, Trash2, Wallet } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -10,6 +10,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { formatDateTime } from '@/shared/lib/format'
+import { openQuickAdd } from '@/shared/lib/quick-add'
 
 import { SNOOZES, type SnoozeChoice, dueOf, overdue, repeatLabel, sourceLink } from '../lib/reminder'
 
@@ -17,6 +18,12 @@ import { SNOOZES, type SnoozeChoice, dueOf, overdue, repeatLabel, sourceLink } f
 const props = defineProps<{ reminder: Reminder }>()
 const emit = defineEmits<{ done: []; snooze: [choice: SnoozeChoice]; finish: []; edit: []; remove: [] }>()
 const { t } = useI18n()
+
+/** «Оплатить» (Auto-2 · 10): the payment form filled with the reminder's category and wallet. */
+function pay() {
+  const target = props.reminder.pay
+  openQuickAdd({ kind: 'payment', category: target?.category ?? undefined, storeId: target?.store_id ?? undefined })
+}
 </script>
 
 <template>
@@ -63,6 +70,10 @@ const { t } = useI18n()
         </RouterLink>
       </span>
     </span>
+    <Button v-if="props.reminder.pay && !props.reminder.done" variant="outline" size="sm" class="h-8 gap-1 px-2" @click="pay">
+      <Wallet class="size-4" />
+      {{ t('reminder.payAction') }}
+    </Button>
     <DropdownMenu v-if="!props.reminder.done" align="end">
       <template #trigger>
         <Button variant="ghost" size="sm" class="h-8 gap-1 px-2 text-muted-foreground" :title="t('reminder.snoozeAction')">

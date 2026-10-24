@@ -5,7 +5,12 @@ import { syncWorkflow } from './automation-workflow'
 import { automations, draftOf, iso, now, runs, utilities, uuid } from './state'
 
 /** Make the transactions with this comment an automation's runs; the latest one's day is the schedule's. */
-function seedAutomation(transactions: Transaction[], comment: string, name: string) {
+function seedAutomation(
+  transactions: Transaction[],
+  comment: string,
+  name: string,
+  preset: AutomationPreset | null = null,
+) {
   const booked = transactions
     .filter((tx) => ('topup' in tx || 'payment' in tx) && txMeta(tx).comment === comment)
     .sort((left, right) => txMeta(left).timestamp.localeCompare(txMeta(right).timestamp))
@@ -15,7 +20,7 @@ function seedAutomation(transactions: Transaction[], comment: string, name: stri
     id: uuid(),
     name,
     active: true,
-    preset: null,
+    preset,
     schedule: { monthly: { day: new Date(txMeta(latest).timestamp).getDate() } },
     starts_at: txMeta(booked[0]).timestamp,
     template: draftOf(structuredClone(latest)),
@@ -52,7 +57,7 @@ function seedAutomation(transactions: Transaction[], comment: string, name: stri
 }
 
 export function seedSalaryAutomation(transactions: Transaction[]) {
-  seedAutomation(transactions, 'Зарплата', 'Зарплата')
+  seedAutomation(transactions, 'Зарплата', 'Зарплата', 'salary')
   // The flat's rent item names the automation that pays it (Wallets-2 · 10, Wallets-3 · 17).
   const rent = seedAutomation(transactions, 'Аренда квартиры', 'Аренда')
   for (const item of utilities) if (rent && 'housing' in item.kind) item.kind.housing.automation_id = rent.id

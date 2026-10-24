@@ -29,6 +29,7 @@ function auto(kind: ReminderSourceKind, store: Store, text: string, day: number)
     user_edited: false,
     snoozed_until: null,
     source_key: `${kind}:${store.id}`,
+    pay: null,
   }
 }
 
