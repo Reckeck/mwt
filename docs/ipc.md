@@ -53,20 +53,37 @@ Frontend парсит код и показывает локализованно�
 ### auth (`crates/app/src/commands/auth.rs`)
 | Команда | Вход | Выход |
 |---|---|---|
-| `vault_status` | — | `VaultStatus { exists, unlocked, path, info, storage }`; `storage`: `files` (десктоп) или `app` (Android/iOS, vault в памяти приложения) |
-| `create_vault` | `CreateVaultInput { path, password, cash_name?, crypto? }` | `VaultInfo` — vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя). `crypto` — направление «криптовалюты» (`Settings.crypto`), без поля — `true`. `path` без разделителей — имя: файл ляжет в каталог приложения; URI — `INVALID_INPUT` |
+| `vault_status` | — | `VaultStatus { exists, unlocked, path, info, storage, encrypted, sandbox }`; `sandbox` — открыто хранилище-песочница (см. «sandbox»), `serde(default)`; `encrypted` — у vault по `path` есть пароль (читается из заголовка файла; `false` — экран входа без поля пароля и без «Заблокировать»; нечитаемый файл считается зашифрованным); `storage`: `files` (десктоп) или `app` (Android/iOS, vault в памяти приложения) |
+| `create_vault` | `CreateVaultInput { path, password?, cash_name?, crypto? }` | `VaultInfo { …, encrypted }` — `password` не задан/`null` = vault без пароля (файл не шифруется), пустая строка — `INVALID_INPUT`; vault создаётся сразу с единственным кошельком «Наличные» (`cash_name` — его имя на языке пользователя). `crypto` — направление «криптовалюты» (`Settings.crypto`), без поля — `true`. `path` без разделителей — имя: файл ляжет в каталог приложения; URI — `INVALID_INPUT` |
 | `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo`; `content://` в `path` сначала копируется в каталог приложения; у привязанного vault сначала сверяется копия — `SYNC_CONFLICT`, если изменились обе стороны |
 | `lock_vault_cmd` | — | `()` |
 | `flush_vault` | — | `()` — записать отложенные изменения сейчас (окно ушло в фон, «Повторить» после ошибки) |
 | `exit_without_saving` | — | — выйти, хотя последние изменения записать не удалось |
-| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; текущий пароль проверяется расшифровкой файла (`SECRET` при ошибке), `.bak` не пишется |
+| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; текущий пароль проверяется расшифровкой файла (`SECRET` при ошибке), `.bak` не пишется; у vault без пароля — `INVALID_INPUT` (есть `set_vault_password`) |
+| `set_vault_password` | `SetVaultPasswordInput { new_password, delete_plain_copies }` | `SetVaultPasswordResult { removed_copies }`; только на vault без пароля (иначе `INVALID_INPUT`), файл переписывается зашифрованным сразу и атомарно, привязанная внешняя копия получает зашифрованные байты при той же записи. `delete_plain_copies` — после записи удаляются `.bak` этого vault без шифрования (только в папке vault, через `backups::resolve`; зашифрованные копии, чужие и не-vault файлы остаются) |
+| `remove_vault_password` | `RemoveVaultPasswordInput { current_password, external_copy_too }` | `()`; только на vault с паролем; текущий пароль проверяется расшифровкой файла (`SECRET`, файл не меняется); у vault с внешней копией без `external_copy_too` — `INVALID_INPUT` (копия тоже потеряет пароль, нужно согласие); старые зашифрованные копии остаются с прежним паролем |
+
+### sandbox (`crates/app/src/commands/sandbox.rs`, ядро — `crates/core/src/sandbox`)
+Песочница — отдельное временное хранилище с демо-данными за 12 месяцев; всё, что в ней сделано, стирается. Лежит в `app_cache_dir()/sandbox/sandbox.wallet` (у релиза и dev-сборки своя папка), **без пароля** (открытый вариант контейнера: данные демо не секрет, а ключ в памяти стоил бы Argon2 при каждом открытии и сбросе). Сид детерминирован: фиксированный seed и id, дата «сегодня» (UTC) приходит параметром.
+
+Стирается: `close_sandbox`, блокировка, вход в другое хранилище, выход из приложения (`RunEvent::Exit`) и следующий запуск (`setup`, до любого открытия). Путь проверяется в Rust (`SandboxDir::contains`: канонический, без `..`, без символических ссылок наружу); команды не принимают путь. Не попадает в `recent_vaults.json`, не меняет `vault_path`. Выключено, ответ `SANDBOX`: синхронизация (не стартует), передача на устройство, внешняя копия, ключи бирж и сверка с биржей, источники данных (`datasource_preview/test/refresh` и фон), поиск транзакции в сети, системные уведомления (окно получает их как обычно), снимок для экрана блокировки. Автоматизации считаются на демо-данных.
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `open_sandbox` | — | `VaultInfo` (`encrypted: false`); настоящее хранилище должно быть заблокировано (иначе `SANDBOX`); уже открытая песочница пересоздаётся |
+| `reset_sandbox` | — | `VaultInfo` — снова чистые демо-данные; только пока песочница открыта и её файл лежит в папке `sandbox/` (иначе `SANDBOX`) |
+| `close_sandbox` | — | `()` — закрыть и стереть; `SANDBOX`, если песочница не открыта (настоящее хранилище не трогается) |
+| `is_sandbox` | — | `bool` |
 
 ### vault recents (`crates/app/src/commands/vault_recents.rs`)
 | Команда | Вход | Выход |
 |---|---|---|
-| `recent_vaults` | — | `Vec<RecentVault { path, last_opened, exists, display_name, linked }>`; в режиме `app` дополняется всеми `*.wallet` каталога приложения |
+| `recent_vaults` | — | `Vec<RecentVault { path, last_opened, exists, display_name, linked, encrypted, in_app_folder }>` (`in_app_folder` — файл лежит в каталоге приложения: в истории «Удалить хранилище…» вместо «×»); в режиме `app` дополняется всеми `*.wallet` каталога приложения |
 | `forget_recent_vault` | `SelectVaultInput { path }` | `()` (убирает из списка, файл не трогает) |
 | `restore_recent_vault` | `RestoreRecentVaultInput { path, index }` | `()` (возвращает путь в историю на место `index`; дубликат не создаёт) |
+| `relocate_recent_vault` | `RelocateRecentVaultInput { path, new_path }` | `()` (строка истории с пропавшим файлом указывает на найденный файл; место в списке сохраняется, дубликат `new_path` убирается); `new_path` обязан существовать и быть vault (магия файла), иначе `INVALID_INPUT` |
+| `delete_vault_file` | `DeleteVaultFileInput { path }` | `DeleteVaultFileOutput { file_name, backups }` — удаляет файл хранилища и его `.bak`-копии (только этого vault) и строку из истории. Путь проверяет core (`vault_io/delete.rs`): канонический путь строго внутри каталога приложения, без `..` и симлинков, обычный файл с магией vault; иначе `INVALID_INPUT`, файл остаётся. Открытое (разблокированное) хранилище и песочница — `INVALID_INPUT`; нет файла — `NOT_FOUND` |
+| `export_vault_copy` | `ExportVaultCopyInput { path }` | `Option<String>` — «сохранено в»; `None`, если диалог закрыт. Место выбирает только системный диалог сохранения на стороне Rust (фронт путь не передаёт). Копия байт в байт; источник — файл с магией vault, иначе `INVALID_INPUT`; запись поверх самого источника и поверх открытого хранилища — `INVALID_INPUT` (ничего не пишется); локальный путь пишется атомарно |
 | `pick_vault_file` | `save: bool` | `Option<PickedVault { path, display_name, imported }>` (`null`, если диалог закрыт); при `save` к имени без `.wallet` расширение дописывается. На Android/iOS открытие копирует файл в каталог приложения (`imported`), `save` — `UNSUPPORTED` (создание по имени) |
 
 ### копия во внешнем файле (`crates/app/src/commands/vault_link.rs`)
@@ -90,7 +107,7 @@ Frontend парсит код и показывает локализованно�
 
 | Команда | Вход | Выход |
 |---|---|---|
-| `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup, background_supported, background_lock_min, network }`; `network` — диагностика: порт, адрес, сколько устройств видно, `inbound_blocked`, `firewall_fix` (`none`/`auto`/`manual`), команды, код последней ошибки |
+| `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup, background_supported, background_lock_min, network }`; `network` — диагностика: порт, адрес, сколько устройств видно, `inbound_blocked`, `firewall_fix` (`none`/`auto`/`manual`), команды, код последней ошибки; в `sessions[]` при сопряжении `pairing_code` и `pairing_expires_ms` (Unix мс, до какого времени код действует) |
 | `sync_set_settings` | `SyncSettingsInput { enabled?, confirm_first?, prefer_main?, device_name?, background_lock_min? }` | `SyncStatus`; включение и выключение действуют сразу; на Android включение спрашивает разрешение на уведомления |
 | `sync_open_firewall` | — | `SyncStatus`; правило для портов 53318–53319/tcp из локальной подсети (pkexec или UAC); `SYNC_FIREWALL` — отменено или фаервол не найден |
 | `transfer_receive_start` | — | `TransferReceiveView`; устройство видно рядом по имени 5 минут, без открытого vault |
@@ -108,6 +125,7 @@ Frontend парсит код и показывает локализованно�
 | `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online }>` — доверенные устройства |
 | `sync_forget_peer` | `deviceId` | `()`; устройство отклоняется здесь и, по мере синхронизации, везде |
 | `sync_history` | — | `Vec<AppliedBatch { id, peer_name, applied_at, summary, undone_at }>`, новые первыми (до 20 пачек, 7 дней) |
+| `sync_journal` | — | `Vec<SyncJournalEntry { id, at, peer_name, counts[{collection,count}], label, batch_id, outcome: applied/declined/failed/sent }>`, новые первыми (кольцо на 200 строк; без значений записей) |
 | `sync_undo` | `batchId` | `UndoReport { restored, skipped }`; откат — новая правка, уходит и на другие устройства |
 | `sync_restore_backup` | — | `()`; vault как до первой пачки последней сессии (`<vault>.presync.bak`) |
 
@@ -394,7 +412,7 @@ JSON без шифрования — там нет ничего секретно
 | `list_my_automations` | — | `Vec<MineItem { kind: scheme\|repeat\|reminder\|alert, id, name, active, next_at?, amount?, asset?, from_store?, to_store?, asks, notifies, condition?, currency?, description }>` — «Мои»: всё, что срабатывает само. `next_at` — ближайший запуск по расписанию (до 400 дней), у алерта и схемы без расписания нет; операция повтора — по первому запуску, у схемы — признаки `asks` (есть шаг «да») и `notifies` (только уведомляет). Сначала ближайшие, потом без даты по имени |
 | `set_my_automation_active` | `{ input: { kind, id, active } }` | `()` — переключатель «Вкл.» строки «Мои»: схема и повтор — как `set_workflow_active` (схему с ошибками не включить), напоминание — `muted`, алерт — `active`, включённый снова ждёт цену заново (`triggered_at` сброшен) |
 | `get_automation_card` | `{ id }` | `AutomationCard { kind: scheme\|repeat, id, name, description, active, schedule?, workday, follows?, trigger, actions, asks, next_at?, runs }` — карточка схемы или повтора (Auto-1 · 3). `trigger` — `{ kind: schedule\|manual }`, `{ kind: transaction, tx_kind, category?, store? }` или `{ kind: other, node_kind }`; `actions` — `CardAction { kind (topup/payment/transfer/convert/distribute/notify/…), percent?, money: CardMoney { amount?, currency?, from_store?, to_store? }, title }`, `percent` — доля из «Математики» в режиме процента. У схемы на доход с категорией «Когда» и «Следующий раз» берутся у ближайшего включённого повтора, который записывает эту категорию (`follows` — его имя). `runs` — до 5 последних запусков, как в журнале. Нет схемы — ошибка `Missing` |
-| `list_automation_journal` | `{ limit? }` (100, не больше 500) | `Vec<JournalEntry { id, kind, source_id, name, at, status: done\|asking\|waiting\|partial\|failed\|stopped\|rejected\|skipped\|shown, money: CardMoney, wait_id?, note }>` — журнал (Auto-1 · 4): запуски схем и повторов (без эмуляций) и показанные напоминания и алерты (`shown`), сначала новые. «Что сделала» — по первой созданной операции; у ждущего «да» — по сохранённым значениям запуска (сумма доли считается от дохода), `wait_id` — для `answer_workflow_wait` |
+| `list_automation_journal` | `{ limit? }` (100, не больше 500) | `Vec<SyncJournalEntry { id, kind, source_id, name, at, status: done\|asking\|waiting\|partial\|failed\|stopped\|rejected\|skipped\|shown, money: CardMoney, wait_id?, note }>` — журнал (Auto-1 · 4): запуски схем и повторов (без эмуляций) и показанные напоминания и алерты (`shown`), сначала новые. «Что сделала» — по первой созданной операции; у ждущего «да» — по сохранённым значениям запуска (сумма доли считается от дохода), `wait_id` — для `answer_workflow_wait` |
 
 ### workflows — схемы из узлов (`crates/app/src/commands/workflows.rs`)
 

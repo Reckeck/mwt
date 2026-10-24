@@ -18,6 +18,7 @@ import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useVaultStore } from '@/shared/store/vault'
 
 import { NAV_ITEMS } from './app-shell.constants'
 import { useBackButton } from './model/use-back-button'
@@ -35,6 +36,7 @@ import { AppHeader } from './ui/app-header'
 import { AppSidebar } from './ui/app-sidebar'
 import { CommandPalette } from './ui/command-palette'
 import { EntityHost } from './ui/entity-host'
+import { SandboxBar } from './ui/sandbox-bar'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
@@ -44,6 +46,7 @@ import { useStoreTree } from '@/shared/api/queries'
 const { t } = useI18n()
 const route = useRoute()
 const settingsStore = useSettingsStore()
+const vault = useVaultStore()
 
 useTheme()
 useNativeMenuBlock()
@@ -89,7 +92,8 @@ useEventListener(document, 'focusout', () => {
 const bottomNav = computed(() => phone.value && !fullscreen.value && !typing.value)
 /** Without the bar below, the page itself keeps clear of the gesture bar. */
 const pageClass = computed(() => {
-  if (fullscreen.value) return 'overflow-hidden p-0 pt-safe pb-safe'
+  // The sandbox bar above takes the status bar's inset itself.
+  if (fullscreen.value) return ['overflow-hidden p-0 pb-safe', !vault.sandbox && 'pt-safe']
   if (bottomNav.value) return 'overflow-y-auto p-3'
   return 'overflow-y-auto p-3 pb-[calc(0.75rem+var(--safe-bottom))] md:p-4 md:pb-[calc(1rem+var(--safe-bottom))]'
 })
@@ -100,12 +104,14 @@ const pageClass = computed(() => {
     <AppSidebar @lock="lock" @open-settings="openSettings()" />
 
     <SidebarInset class="min-h-0 min-w-0 overflow-hidden">
+      <SandboxBar v-if="vault.sandbox" />
       <AppHeader
         v-if="!fullscreen"
         :title="pageTitle"
         :summary="summary.data.value"
         :online="headerOnline"
         :has-tour="tour.hasTour(routeTour)"
+        :covered="vault.sandbox"
         @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
       >

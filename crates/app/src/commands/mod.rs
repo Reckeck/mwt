@@ -17,6 +17,7 @@ pub mod planning;
 pub mod portfolio;
 pub mod pricing;
 pub mod rates;
+pub mod sandbox;
 pub mod settings;
 pub mod sources;
 pub mod stores;
@@ -31,6 +32,7 @@ pub mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 use trade_core::error::Error;
 use trade_core::pricing::PricingService;
@@ -43,6 +45,8 @@ pub struct AppState {
     pub vault_path: Mutex<PathBuf>,
     /// Notices told while the vault is locked (see `notify_store`).
     pub notify: Mutex<crate::notify_store::NotifyMemory>,
+    /// The open vault is the sandbox (see `commands::sandbox`).
+    pub sandbox: AtomicBool,
 }
 
 impl AppState {
@@ -52,6 +56,7 @@ impl AppState {
             pricing: PricingService::default(),
             vault_path: Mutex::new(PathBuf::new()),
             notify: Mutex::new(crate::notify_store::NotifyMemory::default()),
+            sandbox: AtomicBool::new(false),
         }
     }
 }

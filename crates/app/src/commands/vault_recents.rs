@@ -3,9 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
+
+use crate::commands::{AppState, err_to_string, lock_vault};
 use trade_core::ipc_contract::{
-    PickedVault, RecentVault, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
+    DeleteVaultFileInput, DeleteVaultFileOutput, ExportVaultCopyInput, PickedVault, RecentVault,
+    RelocateRecentVaultInput, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
+};
+use trade_core::vault_io::delete::{
+    Protected, delete_in_app_folder, ensure_vault_file, inside_folder, read_vault_bytes,
 };
 use trade_core::vault_io::display_name_of;
 
@@ -97,33 +103,49 @@ fn stored_vaults(dir: &Path, known: &[RecentVault]) -> Vec<RecentVault> {
             last_opened: modified.to_string(),
             exists: true,
             linked: false,
+            encrypted: true,
+            in_app_folder: false,
         })
         .collect()
 }
 
-/// Add a vault to recents (move to top, dedupe, cap)
+/// Add a vault to recents (move to top, dedupe, cap). The sandbox is never added.
 pub fn add_recent(app: &AppHandle, path: &str) {
-    let mut recents = load_recents(app);
-    let path_str = path.to_string();
-    recents.retain(|recent| recent.path != path_str);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
+    let sandbox = crate::commands::sandbox::dir(app).ok();
+    let recents = opened(load_recents(app), path, now, sandbox.as_ref());
+    save_recents(app, &recents);
+}
+
+/// `recents` after `path` was opened at `now` (seconds): it moves to the top,
+/// the list is capped. The sandbox's file stays out of it.
+fn opened(
+    mut recents: Vec<RecentVault>,
+    path: &str,
+    now: u64,
+    sandbox: Option<&trade_core::sandbox::SandboxDir>,
+) -> Vec<RecentVault> {
+    if sandbox.is_some_and(|dir| Path::new(path).starts_with(dir.root())) {
+        return recents;
+    }
+    recents.retain(|recent| recent.path != path);
     recents.insert(
         0,
         RecentVault {
-            path: path_str,
+            path: path.to_string(),
             last_opened: now.to_string(),
             exists: Path::new(path).exists(),
             display_name: display_name_of(path),
             linked: false,
+            encrypted: true,
+            in_app_folder: false,
         },
     );
-    if recents.len() > MAX_RECENTS {
-        recents.truncate(MAX_RECENTS);
-    }
-    save_recents(app, &recents);
+    recents.truncate(MAX_RECENTS);
+    recents
 }
 
 /// Remove a vault from recents
@@ -143,6 +165,22 @@ fn insert_at(recents: &mut Vec<RecentVault>, entry: RecentVault, index: usize, m
     recents.truncate(max);
 }
 
+/// `recents` with the row of `old` pointing at `new_path`: the row keeps its place
+/// and `last_opened`; another row already at `new_path` is dropped, so no
+/// duplicate appears. An unknown `old` leaves the list as it was.
+fn relocated(mut recents: Vec<RecentVault>, old: &str, new_path: &str) -> Vec<RecentVault> {
+    if old == new_path || !recents.iter().any(|recent| recent.path == old) {
+        return recents;
+    }
+    recents.retain(|recent| recent.path != new_path);
+    if let Some(row) = recents.iter_mut().find(|recent| recent.path == old) {
+        row.path = new_path.to_string();
+        row.display_name = display_name_of(new_path);
+        row.exists = Path::new(new_path).exists();
+    }
+    recents
+}
+
 // --- Tauri commands ---
 
 #[tauri::command]
@@ -159,9 +197,14 @@ pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
     {
         recents.extend(stored_vaults(&dir, &recents));
     }
+    let app_dir = crate::platform_fs::vaults_dir(&app).ok();
     for recent in &mut recents {
+        recent.in_app_folder = app_dir
+            .as_deref()
+            .is_some_and(|dir| inside_folder(dir, Path::new(&recent.path)).is_some());
         recent.display_name = display_name_of(&recent.path);
         recent.linked = crate::platform_fs::links::is_linked(&app, &recent.path);
+        recent.encrypted = trade_core::crypto::file_is_encrypted(Path::new(&recent.path));
     }
     Ok(recents)
 }
@@ -189,10 +232,80 @@ pub async fn restore_recent_vault(
         exists: Path::new(&input.path).exists(),
         display_name: display_name_of(&input.path),
         linked: false,
+        encrypted: true,
+        in_app_folder: false,
     };
     insert_at(&mut recents, entry, input.index as usize, MAX_RECENTS);
     save_recents(&app, &recents);
     Ok(())
+}
+
+/// "Find the file…": the history row of a vanished file points at the file the
+/// user found (the system dialog is opened by `pick_vault_file`).
+#[tauri::command]
+pub async fn relocate_recent_vault(
+    app: AppHandle,
+    input: RelocateRecentVaultInput,
+) -> Result<(), String> {
+    // The row may only point at a file that exists and is a vault: anything else is refused.
+    ensure_vault_file(Path::new(&input.new_path)).map_err(err_to_string)?;
+    let recents = relocated(load_recents(&app), &input.path, &input.new_path);
+    save_recents(&app, &recents);
+    Ok(())
+}
+
+/// Delete a vault from the app's own folder with its backup copies, and drop
+/// it from recents. The path is checked in core (`vault_io::delete`); the open
+/// vault and the sandbox are refused.
+#[tauri::command]
+pub async fn delete_vault_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: DeleteVaultFileInput,
+) -> Result<DeleteVaultFileOutput, String> {
+    let dir = crate::platform_fs::vaults_dir(&app).map_err(err_to_string)?;
+    let sandbox = crate::commands::sandbox::dir(&app).map_err(err_to_string)?;
+    let open_path = {
+        let unlocked = lock_vault(&state).map_err(err_to_string)?.is_some();
+        let path = state
+            .vault_path
+            .lock()
+            .map_err(|_| "lock poisoned".to_string())?;
+        unlocked.then(|| path.clone())
+    };
+    let protected = Protected {
+        open_vault: open_path.as_deref(),
+        sandbox: Some(sandbox.root()),
+    };
+    let done =
+        delete_in_app_folder(&dir, Path::new(&input.path), protected).map_err(err_to_string)?;
+    remove_recent(&app, &input.path);
+    Ok(DeleteVaultFileOutput {
+        file_name: done.file_name,
+        backups: done.backups,
+    })
+}
+
+/// "Save a copy…": the vault file, byte for byte, to the place the system save
+/// dialog picks (the frontend never names the path). Returns what to show as
+/// "saved to"; `None` when the dialog was closed. The source itself and the
+/// open vault are never overwritten.
+#[tauri::command]
+pub async fn export_vault_copy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: ExportVaultCopyInput,
+) -> Result<Option<String>, String> {
+    let source = Path::new(&input.path);
+    let bytes = read_vault_bytes(source).map_err(err_to_string)?;
+    let open_path = state
+        .vault_path
+        .lock()
+        .map_err(|_| "lock poisoned".to_string())?
+        .clone();
+    let name = display_name_of(&input.path);
+    crate::platform_fs::save_vault_copy_dialog(&app, &name, &bytes, &[source, &open_path])
+        .map_err(err_to_string)
 }
 
 #[tauri::command]
@@ -213,6 +326,26 @@ mod tests {
 
     fn paths(list: &[RecentVault]) -> Vec<&str> {
         list.iter().map(|recent| recent.path.as_str()).collect()
+    }
+
+    #[test]
+    fn the_sandbox_is_not_a_recent_vault() {
+        let cache = std::path::Path::new("/cache/app");
+        let sandbox = trade_core::sandbox::SandboxDir::in_cache(cache);
+        let file = sandbox.file().to_string_lossy().into_owned();
+        let before = vec![rv("/home/me/main.wallet")];
+        let after = opened(before.clone(), &file, 1, Some(&sandbox));
+        assert_eq!(paths(&after), ["/home/me/main.wallet"]);
+        // A real vault is added, on top; the list is capped.
+        let after = opened(before, "/home/me/other.wallet", 2, Some(&sandbox));
+        assert_eq!(
+            paths(&after),
+            ["/home/me/other.wallet", "/home/me/main.wallet"]
+        );
+        let many: Vec<_> = (0..MAX_RECENTS)
+            .map(|number| rv(&format!("/v/{number}.wallet")))
+            .collect();
+        assert_eq!(opened(many, "/v/new.wallet", 3, None).len(), MAX_RECENTS);
     }
 
     #[test]
@@ -243,5 +376,51 @@ mod tests {
         let mut list = vec![rv("a"), rv("b")];
         insert_at(&mut list, rv("c"), 2, 2);
         assert_eq!(paths(&list), ["a", "b"]);
+    }
+
+    #[test]
+    fn relocated_keeps_place_and_drops_duplicate() {
+        let list = vec![rv("a"), rv("gone"), rv("c"), rv("found")];
+        let after = relocated(list, "gone", "found");
+        assert_eq!(paths(&after), ["a", "found", "c"]);
+        let same = relocated(vec![rv("a")], "x", "y");
+        assert_eq!(paths(&same), ["a"]);
+    }
+
+    #[test]
+    fn relocation_target_must_be_a_vault_file() {
+        let dir = std::env::temp_dir().join(format!("relocate-check-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault = dir.join("found.wallet");
+        let mut bytes = trade_core::VAULT_MAGIC.to_vec();
+        bytes.extend_from_slice(b"rest");
+        std::fs::write(&vault, bytes).unwrap();
+        let other = dir.join("notes.txt");
+        std::fs::write(&other, b"not a vault at all").unwrap();
+
+        assert!(ensure_vault_file(&vault).is_ok());
+        for bad in [
+            other.as_path(),
+            dir.join("missing.wallet").as_path(),
+            dir.as_path(),
+        ] {
+            let err = ensure_vault_file(bad).unwrap_err();
+            assert!(err_to_string(err).starts_with("INVALID_INPUT"), "{bad:?}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The frontend sends `{ input: { path } }`: the command argument is named `input`.
+    #[test]
+    fn recents_commands_take_the_input_wrapper() {
+        let args = serde_json::json!({ "input": { "path": "/v/a.wallet" } });
+        let input: SelectVaultInput = serde_json::from_value(args["input"].clone()).unwrap();
+        assert_eq!(input.path, "/v/a.wallet");
+        let args = serde_json::json!({ "input": { "path": "/v/a", "new_path": "/w/a" } });
+        let input: RelocateRecentVaultInput =
+            serde_json::from_value(args["input"].clone()).unwrap();
+        assert_eq!(input.new_path, "/w/a");
+        // The bare `{ path }` form is what the old frontend sent: no `input` key to read.
+        assert!(serde_json::json!({ "path": "/v/a" }).get("input").is_none());
     }
 }

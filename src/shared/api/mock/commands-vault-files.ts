@@ -2,16 +2,43 @@
 
 import { resolve } from './core'
 import type { MockCommands } from './core'
-import { mockStatus } from './vault-data'
+import { mockInfo, mockStatus } from './vault-data'
 
 /** A path with `conflict` in it answers `SYNC_CONFLICT` until it is resolved. */
 export const mockConflict = { resolved: false }
 
 /** Linked copy of the mock vault; `null` while none is linked. */
-const mockLink: { value: VaultLinkStatus | null } = { value: null }
+export const mockLink: { value: VaultLinkStatus | null } = { value: null }
 
-/** Recent vault paths of the mock, newest first. */
-const mockRecents = ['/tmp/mock/vault.wallet', '/tmp/mock/family.wallet', '/tmp/mock/old.wallet']
+/** A history row of the mock; the shots and `pnpm dev` bend these (missing file, no password). */
+export interface MockRecent {
+  path: string
+  /** Unix seconds. */
+  opened: number
+  exists: boolean
+  encrypted: boolean
+}
+
+const DAY = 86400
+
+/** Recent vaults of the mock, newest first (Full-New-Recents: «vault», «семья», «old-2024»). */
+export const mockRecents: MockRecent[] = [
+  { path: '/home/anna/Документы/vault.wallet', opened: Math.floor(Date.now() / 1000), exists: true, encrypted: true },
+  {
+    path: '/home/anna/Документы/Семья/семья.wallet',
+    opened: Math.floor(Date.now() / 1000) - 13 * DAY,
+    exists: true,
+    encrypted: true,
+  },
+  { path: '/home/anna/Загрузки/old-2024.wallet', opened: 1_720_000_000, exists: false, encrypted: true },
+]
+
+/** Rows taken out of the history, for «Отменить». */
+const forgotten = new Map<string, MockRecent>()
+
+const reject = (code: string, message: string) => Promise.reject({ code, message })
+
+const indexOfPath = (path: unknown) => mockRecents.findIndex((row) => row.path === path)
 
 const nameOf = (path: string) => path.split(/[\\/]/).pop() || path
 
@@ -25,27 +52,61 @@ export const vaultFilesCommands: MockCommands = {
     return resolve<PickedVault>({ path, display_name: nameOf(path), imported: app })
   },
   recent_vaults: (_call) => {
+    const app = mockStatus.value.storage === 'app'
     return resolve<RecentVault[]>(
-      mockRecents.map((path) => ({
-        path,
-        last_opened: String(Math.floor(Date.now() / 1000)),
-        exists: true,
-        display_name: nameOf(path),
-        linked: mockLink.value !== null && path === mockRecents[0],
+      mockRecents.map((row, index) => ({
+        path: row.path,
+        last_opened: String(row.opened),
+        exists: row.exists,
+        display_name: nameOf(row.path),
+        linked: mockLink.value !== null && index === 0,
+        encrypted: index === 0 ? mockInfo.encrypted && row.encrypted : row.encrypted,
+        in_app_folder: app,
       })),
     )
   },
   forget_recent_vault: ({ body }) => {
-    const index = mockRecents.indexOf(String(body?.path))
-    if (index >= 0) mockRecents.splice(index, 1)
-    return resolve(undefined)
-  },
-  restore_recent_vault: ({ body }) => {
-    const path = String(body?.path)
-    if (!mockRecents.includes(path)) {
-      mockRecents.splice(Math.min(Number(body?.index ?? 0), mockRecents.length), 0, path)
+    const index = indexOfPath(body?.path)
+    if (index >= 0) {
+      const [row] = mockRecents.splice(index, 1)
+      forgotten.set(row.path, row)
     }
     return resolve(undefined)
+  },
+  // Undo: the row returns to its old place (what was dropped is kept for it).
+  restore_recent_vault: ({ body }) => {
+    const path = String(body?.path)
+    if (indexOfPath(path) < 0) {
+      const row = forgotten.get(path) ?? { path, opened: Math.floor(Date.now() / 1000), exists: true, encrypted: true }
+      mockRecents.splice(Math.min(Number(body?.index ?? 0), mockRecents.length), 0, row)
+    }
+    return resolve(undefined)
+  },
+  // «Найти файл…»: the row points at the found file and keeps its place.
+  relocate_recent_vault: ({ body }) => {
+    const index = indexOfPath(body?.path)
+    const target = String(body?.new_path)
+    if (index < 0 || target === body?.path) return resolve(undefined)
+    const other = indexOfPath(target)
+    if (other >= 0) mockRecents.splice(other, 1)
+    const row = mockRecents[indexOfPath(body?.path)]
+    row.path = target
+    row.exists = true
+    return resolve(undefined)
+  },
+  delete_vault_file: ({ body }) => {
+    const path = String(body?.path)
+    if (mockStatus.value.storage !== 'app') return reject('INVALID_INPUT', 'the file is not in the app folder')
+    if (indexOfPath(path) < 0) return reject('NOT_FOUND', path)
+    if (mockStatus.value.unlocked && mockStatus.value.path === path) {
+      return reject('INVALID_INPUT', 'the open vault cannot be deleted')
+    }
+    mockRecents.splice(indexOfPath(path), 1)
+    return resolve<DeleteVaultFileOutput>({ file_name: nameOf(path), backups: [`${nameOf(path)}.bak`] })
+  },
+  export_vault_copy: ({ body }) => {
+    const path = String(body?.path)
+    return resolve<string | null>(`Download/${nameOf(path)}`)
   },
   vault_link_status: (_call) => {
     return resolve<VaultLinkStatus>(

@@ -6,6 +6,7 @@ use tauri::{AppHandle, State};
 use trade_core::appconfig::{UpdateAppSettingsInput, load_settings};
 use trade_core::ipc_contract::{SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus};
 use trade_core::service::{AppliedBatch, UndoReport};
+use trade_core::sync::journal::SyncJournalEntry;
 
 use crate::commands::{AppState, err_to_string, require_vault};
 use crate::sync::{self, Order};
@@ -50,7 +51,8 @@ pub async fn sync_set_settings(
     if input.enabled == Some(true) {
         crate::platform_net::ask_notifications(&app);
     }
-    if restart || input.device_name.is_some() {
+    // Sync never starts on the sandbox's demo data.
+    if (restart || input.device_name.is_some()) && !crate::commands::sandbox::is_active_app(&app) {
         sync::restart(&app);
     }
     Ok(sync::status(&app))
@@ -158,6 +160,16 @@ pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch
         .as_ref()
         .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
     Ok(vault.sync_history())
+}
+
+/// The journal of taken batches (applied, declined, failed), newest first.
+#[tauri::command]
+pub async fn sync_journal(state: State<'_, AppState>) -> Result<Vec<SyncJournalEntry>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_ref()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    Ok(vault.sync_journal())
 }
 
 /// Undo one batch; the undo itself reaches the other devices.

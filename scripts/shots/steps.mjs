@@ -39,6 +39,16 @@ export async function freshStart(page, url, theme, touch) {
   await page.eval(`try { localStorage.clear(); sessionStorage.clear() } catch {} return true`)
   await page.goto(url)
   await mounted(page)
+  // A tour of the sign-in screen would start over the shot: mark every tour seen first.
+  await page.eval(`${APP}
+    const { TOURS } = await import('/src/shared/lib/tour/tours.ts')
+    const settings = gp.$pinia._s.get('settings')
+    await settings.loadApp()
+    await settings.updateApp({ completed_tours: Object.keys(TOURS) })
+    return true`)
+  // One that started before the mark landed (it waits 1.2 s after the screen mounts) is closed.
+  await page.sleep(1600)
+  await page.eval(`document.querySelector('.driver-popover-close-btn')?.click(); return true`)
   await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
   await page.eval(`const { setLocalePreference } = await import('/src/shared/lib/locale.ts'); await setLocalePreference('ru'); return true`)
   await setTheme(page, theme)

@@ -50,6 +50,7 @@ mod envelopes;
 mod exchange_sync;
 mod investments;
 mod passive;
+mod password;
 mod property_links;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
@@ -68,6 +69,7 @@ mod peer_sync;
 mod saving;
 mod scenarios;
 mod search;
+mod sync_journal;
 mod vehicle;
 mod where_went;
 pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
@@ -280,7 +282,23 @@ pub struct UnlockedVault {
 
 impl UnlockedVault {
     pub fn create(path: PathBuf, password: &str) -> Result<Self> {
-        let key = SealKey::fresh(password.as_bytes())?;
+        Self::create_with(path, Some(password))
+    }
+
+    /// A new vault; `None` makes one without a password (its file is not
+    /// encrypted, see `crypto`). An empty password is refused: say `None`.
+    pub fn create_with(path: PathBuf, password: Option<&str>) -> Result<Self> {
+        let password = match password {
+            Some("") => {
+                return Err(Error::InvalidInput("the password must not be empty".into()));
+            }
+            other => other.unwrap_or_default(),
+        };
+        let key = if password.is_empty() {
+            SealKey::plain()
+        } else {
+            SealKey::fresh(password.as_bytes())?
+        };
         VaultFile::create_keyed(&path, &key)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let doc = VaultDoc::default();
@@ -309,6 +327,10 @@ impl UnlockedVault {
     /// device): `Error::Secret` unless it is this vault's. Constant time.
     pub fn check_password(&self, candidate: &str) -> Result<()> {
         use hmac::Mac;
+        // Nothing to check on a vault without a password.
+        if !self.is_encrypted() {
+            return Ok(());
+        }
         type Check = hmac::Hmac<sha2::Sha256>;
         let tag = |password: &str| {
             let mut mac =
@@ -324,6 +346,8 @@ impl UnlockedVault {
 
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
         let (decoded, fmt, key) = VaultFile::open_keyed(&path, password)?;
+        // A file without a password opens whatever was typed; none is kept.
+        let password = if key.is_plain() { "" } else { password };
         // After the password check: a wrong password must not hint the vault is in use.
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let migrated = decoded.from_version < crate::VAULT_FORMAT_VERSION;
@@ -478,6 +502,11 @@ impl UnlockedVault {
         if new_password.is_empty() {
             return Err(Error::InvalidInput(
                 "the new password must not be empty".into(),
+            ));
+        }
+        if !self.is_encrypted() {
+            return Err(Error::InvalidInput(
+                "the vault has no password to change: set one".into(),
             ));
         }
         VaultFile::open(&self.path, current_password)?;

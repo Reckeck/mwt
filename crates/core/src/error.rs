@@ -87,6 +87,11 @@ pub enum Error {
     /// Device-to-device sync could not go on (the reason is the code).
     #[error("device sync: {0:?}")]
     PeerSync(PeerSyncFailure),
+
+    /// The sandbox refused: a path outside its folder, or something that is
+    /// switched off in it (sync, handing the vault over, cloud sources).
+    #[error("sandbox: {0}")]
+    Sandbox(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -231,6 +236,7 @@ impl Error {
             Error::VaultBusy(_) => "VAULT_BUSY",
             Error::SyncConflict(_) => "SYNC_CONFLICT",
             Error::PeerSync(failure) => failure.code(),
+            Error::Sandbox(_) => "SANDBOX",
         }
     }
 }

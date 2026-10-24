@@ -26,6 +26,11 @@ impl VaultHeader {
     pub const LEN: usize = HEADER_LEN;
 
     pub const KDF_ARGON2ID: u8 = 0;
+    /// No password: the payload follows the header in the clear, closed by a
+    /// SHA-256 checksum (corruption check, not protection). Older builds read
+    /// an unknown `kdf_id` as `Unsupported`, so they refuse such a file
+    /// instead of mistaking it for a wrong password.
+    pub const KDF_NONE: u8 = 1;
     pub const FMT_JSON: u8 = 0;
     /// bincode: positional, written by v1 release builds; read-only now.
     pub const FMT_BIN: u8 = 1;
@@ -43,6 +48,25 @@ impl VaultHeader {
             nonce,
             payload_fmt: fmt.as_u8(),
         }
+    }
+
+    /// The header of a vault without a password: no salt, nonce or KDF cost.
+    pub fn plain(fmt: SnapshotFormat) -> Self {
+        Self {
+            version: crate::VAULT_CONTAINER_VERSION,
+            kdf_id: Self::KDF_NONE,
+            kdf_mem_kib: 0,
+            kdf_iters: 0,
+            kdf_par: 0,
+            salt: [0u8; SALT_LEN],
+            nonce: [0u8; NONCE_LEN],
+            payload_fmt: fmt.as_u8(),
+        }
+    }
+
+    /// The file is not encrypted (see [`Self::KDF_NONE`]).
+    pub fn is_plain(&self) -> bool {
+        self.kdf_id == Self::KDF_NONE
     }
 
     pub fn payload_format(&self) -> Option<SnapshotFormat> {
@@ -77,7 +101,7 @@ impl VaultHeader {
         nonce.copy_from_slice(&bytes[30..30 + NONCE_LEN]);
         let payload_fmt = bytes[54];
 
-        if kdf_id != Self::KDF_ARGON2ID {
+        if kdf_id != Self::KDF_ARGON2ID && kdf_id != Self::KDF_NONE {
             return Err(Error::Unsupported);
         }
 
@@ -109,5 +133,20 @@ mod tests {
         assert_eq!(header.salt, parsed.salt);
         assert_eq!(header.nonce, parsed.nonce);
         assert_eq!(header.payload_fmt, parsed.payload_fmt);
+        assert!(!parsed.is_plain());
+    }
+
+    #[test]
+    fn a_plain_header_roundtrips_and_an_unknown_kdf_is_refused() {
+        let header = VaultHeader::plain(SnapshotFormat::Json);
+        let bytes = header.bytes();
+        assert_eq!(bytes.len(), HEADER_LEN);
+        assert!(VaultHeader::from_bytes(&bytes).unwrap().is_plain());
+        let mut unknown = bytes;
+        unknown[4] = 9;
+        assert!(matches!(
+            VaultHeader::from_bytes(&unknown),
+            Err(Error::Unsupported)
+        ));
     }
 }

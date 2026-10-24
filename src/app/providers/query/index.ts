@@ -43,7 +43,7 @@ const mutationCache = new MutationCache({
               },
             },
           }
-        : { description },
+        : { description, action: meta.action?.(data, variables) },
     )
   },
   onError: (err, _variables, _context, mutation) => {

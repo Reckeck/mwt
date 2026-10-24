@@ -7,6 +7,7 @@ import { CheckCircle2, Smartphone } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { Spinner } from '@/shared/ui/spinner'
 
 import { useReceiveVault } from '../../model/use-receive-vault'
 import { TransferProgress } from '../TransferProgress'
@@ -59,8 +60,8 @@ function openVault() {
       <template v-if="phase === 'waiting' || phase === 'idle'">
         <div class="grid justify-items-center gap-2 text-center">
           <Smartphone class="size-8 text-muted-foreground" />
-          <p class="text-xs text-muted-foreground">{{ t('transfer.receive.visibleAs') }}</p>
-          <p class="text-2xl font-semibold">{{ view?.device_name || '…' }}</p>
+          <p class="text-sm text-muted-foreground">{{ t('transfer.receive.visibleAs') }}</p>
+          <p class="break-words text-3xl font-semibold" data-transfer-name>{{ view?.device_name || '…' }}</p>
           <p v-if="left" class="text-xs text-muted-foreground tabular-nums">{{ t('transfer.receive.left', { time: left }) }}</p>
         </div>
         <p class="text-sm text-muted-foreground">{{ t('transfer.receive.howTo') }}</p>
@@ -105,7 +106,13 @@ function openVault() {
       </template>
       <Button v-else-if="phase === 'done'" @click="openVault">{{ t('transfer.receive.open') }}</Button>
       <Button v-else-if="phase === 'failed'" @click="start.mutate()">{{ t('transfer.receive.again') }}</Button>
-      <Button v-else variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
+      <template v-else>
+        <span v-if="phase === 'waiting' || phase === 'idle'" class="flex items-center gap-2 text-sm text-muted-foreground sm:mr-auto">
+          <Spinner />
+          {{ t('transfer.receive.waiting') }}
+        </span>
+        <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
+      </template>
     </template>
   </Dialog>
 </template>

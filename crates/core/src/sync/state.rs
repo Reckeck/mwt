@@ -166,6 +166,9 @@ pub struct SyncState {
     /// Times this vault was handed to a new device from here, newest last.
     #[serde(default)]
     pub transfers: Vec<TransferRecord>,
+    /// The journal of taken batches, newest last (at most `MAX_JOURNAL`).
+    #[serde(default)]
+    pub journal: Vec<super::journal::SyncJournalEntry>,
 }
 
 /// The vault was handed to a new device from this one.

@@ -68,10 +68,16 @@ pub fn spawn(app: AppHandle) {
             // In a sync group only the main device runs the jobs; the
             // others get their results by sync (docs/sync.md).
             if crate::sync::runs_jobs(&app) {
-                bybit_tick(&app, &mut memory);
+                // The sandbox talks to no exchange and fetches no user source.
+                let sandbox = crate::commands::sandbox::is_active_app(&app);
+                if !sandbox {
+                    bybit_tick(&app, &mut memory);
+                }
                 prices_tick(&app, &mut memory);
                 rates_tick(&app, &mut memory);
-                sources_tick(&app);
+                if !sandbox {
+                    sources_tick(&app);
+                }
                 workflows_tick(&app);
                 alerts_tick(&app, &mut memory);
                 reminders_tick(&app, &mut memory);
@@ -179,15 +185,17 @@ pub fn deliver(app: &AppHandle, records: Vec<NoticeRecord>, force: bool) {
     }
     // In a sync group the device whose window has focus shows it (all of
     // them when none has).
-    let system = force
-        || crate::sync::show_system_here(app) && {
-            let state = app.state::<AppState>();
-            state.vault.lock().ok().is_none_or(|guard| {
-                guard
-                    .as_ref()
-                    .is_none_or(|vault| vault.doc.settings.notifications.system)
-            })
-        };
+    // The sandbox shows its notices in the window only, never to the system.
+    let system = !crate::commands::sandbox::is_active_app(app)
+        && (force
+            || crate::sync::show_system_here(app) && {
+                let state = app.state::<AppState>();
+                state.vault.lock().ok().is_none_or(|guard| {
+                    guard
+                        .as_ref()
+                        .is_none_or(|vault| vault.doc.settings.notifications.system)
+                })
+            });
     for record in records {
         let _ = app.emit("notification", &record);
         if system {
@@ -222,6 +230,10 @@ pub fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
 /// `force`) and keep it, encrypted.
 pub fn snapshot_tick(app: &AppHandle, force: bool) {
     let state = app.state::<AppState>();
+    // The sandbox's notices are never kept for the locked screen.
+    if crate::commands::sandbox::is_active(&state) {
+        return;
+    }
     let due = state.notify.lock().is_ok_and(|notify| {
         force
             || notify

@@ -15,6 +15,8 @@ export function tourLocation(route: string, walletId: string | null): RouteLocat
     const [group, section] = route.slice(SETTINGS_PREFIX.length).split(':')
     return { query: section ? { settings: group, section } : { settings: group } }
   }
+  // The sign-in tour belongs to the screen before a vault is open; the settings one starts in its window.
+  if (route === 'unlock' || route === 'settings') return null
   if (WALLET_ROUTES.has(route)) {
     return walletId ? { name: route, params: { id: walletId }, query: { tour: route } } : null
   }

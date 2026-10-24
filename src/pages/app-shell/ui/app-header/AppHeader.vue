@@ -18,6 +18,8 @@ const props = defineProps<{
   online: boolean
   /** The screen has a tour to start with «?». */
   hasTour: boolean
+  /** Something above (the sandbox bar) already clears the status bar. */
+  covered?: boolean
 }>()
 const emit = defineEmits<{ quickAdd: []; startTour: [] }>()
 
@@ -25,7 +27,10 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <header class="relative box-content flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 pt-safe max-md:gap-1 max-md:pr-2 md:px-4">
+  <header
+    class="relative box-content flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 max-md:gap-1 max-md:pr-2 md:px-4"
+    :class="!props.covered && 'pt-safe'"
+  >
     <!-- The sidebar folds from its own logo (AppSidebar); a phone reaches it from «More». -->
     <h1 class="heading-page min-w-0 flex-1 truncate">{{ props.title }}</h1>
 

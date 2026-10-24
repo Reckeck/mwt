@@ -21,9 +21,9 @@ mod vault_writer;
 
 use commands::{
     AppState, analytics, app_settings, attachments, auth, calc, categories, contacts, enrichment,
-    exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, settings,
-    sources, stores, transactions, transactions_bulk, vault_backups, vault_link, vault_recents,
-    workflows,
+    exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, sandbox,
+    settings, sources, stores, transactions, transactions_bulk, vault_backups, vault_link,
+    vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -74,6 +74,13 @@ pub fn run() {
             auth::flush_vault,
             auth::exit_without_saving,
             auth::change_password,
+            auth::set_vault_password,
+            auth::remove_vault_password,
+            // sandbox (demo data, erased on exit)
+            sandbox::open_sandbox,
+            sandbox::reset_sandbox,
+            sandbox::close_sandbox,
+            sandbox::is_sandbox,
             // stores
             stores::list_stores,
             stores::get_wallet_catalog,
@@ -370,6 +377,9 @@ pub fn run() {
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,
             vault_recents::restore_recent_vault,
+            vault_recents::relocate_recent_vault,
+            vault_recents::delete_vault_file,
+            vault_recents::export_vault_copy,
             vault_recents::pick_vault_file,
             // external copy of a vault
             vault_backups::list_vault_backups,
@@ -390,6 +400,7 @@ pub fn run() {
             commands::sync::sync_peers,
             commands::sync::sync_forget_peer,
             commands::sync::sync_history,
+            commands::sync::sync_journal,
             commands::sync::sync_undo,
             commands::sync::sync_restore_backup,
             commands::sync::sync_open_firewall,
@@ -403,6 +414,8 @@ pub fn run() {
             commands::transfer::transfer_send_cancel,
         ])
         .setup(|app| {
+            // Before any vault is opened: what a crashed run left of the sandbox goes.
+            sandbox::erase_on_start(app.handle());
             // Resolve the default vault location once (`platform_fs::vaults_dir`).
             let default_path = platform_fs::default_vault_path(app.handle());
             let state = app.state::<AppState>();
@@ -508,6 +521,8 @@ pub fn run() {
                 if let Err(err) = vault_writer::flush_now(app) {
                     eprintln!("vault: unsaved changes lost on exit: {err}");
                 }
+                // The demo data does not outlive the run.
+                sandbox::erase_on_exit(app);
             }
             _ => {}
         });

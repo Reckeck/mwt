@@ -399,7 +399,9 @@ body {
 /* While a modal is open Reka turns pointer events off on <body>: the toasts (an «Undo»
    among them) stay clickable, and the overlays ignore those clicks (shared/lib/toast-outside). */
 [data-sonner-toaster],
-[data-sonner-toast] {
+[data-sonner-toast],
+body .driver-popover,
+body .driver-overlay {
   pointer-events: auto;
 }
 /* Two buttons («Отложить», «Выполнено») squeezed the text into a column of syllables:

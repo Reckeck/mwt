@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 import { keysOfBatch, touchesSettings } from '../lib/sync-keys'
 
-import { SYNC_HISTORY_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
+import { SYNC_HISTORY_KEY, SYNC_JOURNAL_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
 
 /** The sessions a status names, to tell a new or gone device from a progress tick. */
 const sessionSet = (status: SyncStatus | undefined) =>
@@ -46,6 +46,7 @@ export function useSyncEvents() {
 
   useBackendEvent<VaultSyncedEvent>('vault-synced', ({ batch }) => {
     refreshAfter(batch.summary)
+    void queryClient.invalidateQueries({ queryKey: SYNC_JOURNAL_KEY })
     notify.success(t('sync.synced', { name: batch.peer_name, count: batch.summary.total }), {
       action: {
         label: t('actions.undo'),
@@ -65,6 +66,7 @@ export function useSyncEvents() {
   // A closed or locked session ends quietly; what arrives here is worth telling.
   useBackendEvent<SyncErrorEvent>('sync-error', (event) => {
     const error = { code: event.code, message: event.message }
+    void queryClient.invalidateQueries({ queryKey: SYNC_JOURNAL_KEY })
     notify.error(error, event.peer_name ? t('sync.failedWith', { name: event.peer_name }) : 'sync.failed')
   })
 

@@ -80,6 +80,8 @@ export function useShellActions() {
     void router.push({ query: settingsQuery(route.query, tab) })
   }
   async function lock() {
+    // The tray and the shortcut may ask for it: a vault without a password cannot be locked.
+    if (!vault.encrypted) return
     await vault.lock()
   }
 

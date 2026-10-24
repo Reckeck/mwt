@@ -15,8 +15,13 @@ export const mockStatus: { value: VaultStatus } = {
     info: null,
     // `?storage=app` shows the Android/iOS screens (vaults in app storage).
     storage: new URLSearchParams(globalThis.location?.search ?? '').get('storage') === 'app' ? 'app' : 'files',
+    encrypted: true,
+    sandbox: false,
   },
 }
+
+/** The vault password of the mock (`null` = a vault without a password); only the password commands change it. */
+export const mockPassword: { value: string | null } = { value: 'secret' }
 
 export const mockInfo: VaultInfo = {
   path: '/tmp/mock/vault.wallet',
@@ -25,6 +30,7 @@ export const mockInfo: VaultInfo = {
   created_at: new Date().toISOString(),
   format: 'json',
   base_currency: 'usd',
+  encrypted: true,
 }
 
 export const mockSettings: Settings = {

@@ -36,7 +36,9 @@ const vault = useVaultStore()
 
 /** File name of the open vault; the full path is in the tooltip. */
 const vaultPath = computed(() => vault.status?.path ?? '')
-const vaultFile = computed(() => vaultPath.value.split(/[\\/]/).pop() ?? '')
+const vaultFile = computed(() =>
+  vault.sandbox ? t('sandbox.sidebar') : (vaultPath.value.split(/[\\/]/).pop() ?? ''),
+)
 
 const { setOpenMobile, setOpen, state, isMobile, narrow, toggleSidebar } = useSidebar()
 const collapsed = computed(() => state.value === 'collapsed' && !isMobile.value)
@@ -104,7 +106,8 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
             <span>{{ t('settingsShell.title') }}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
-        <SidebarMenuItem>
+        <!-- A vault without a password has nothing to lock with (Full-New-Encrypt 3). -->
+        <SidebarMenuItem v-if="vault.encrypted">
           <SidebarMenuButton :tooltip="t('auth.lock')" @click="emit('lock')">
             <Lock />
             <span>{{ t('auth.lock') }}</span>

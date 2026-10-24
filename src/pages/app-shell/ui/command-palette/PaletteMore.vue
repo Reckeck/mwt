@@ -13,6 +13,7 @@ import { entityKey } from '@/shared/lib/entity-link'
 import { hotkeyLabel } from '@/shared/lib/hotkeys'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useVaultStore } from '@/shared/store/vault'
 
 import { NAV_ITEMS } from '../../app-shell.constants'
 import { usePaletteIndex } from './use-palette-index'
@@ -23,6 +24,7 @@ import { usePaletteIndex } from './use-palette-index'
  */
 const props = defineProps<{ run: (action: () => void) => void }>()
 const emit = defineEmits<{ quickAdd: []; settings: []; lock: [] }>()
+const vault = useVaultStore()
 
 const { t } = useI18n()
 const route = useRoute()
@@ -68,7 +70,7 @@ const groups = computed(() => [
       <ArrowLeftRight />
       {{ t('palette.converter') }}
     </CommandItem>
-    <CommandItem value="action-lock" @select="props.run(() => emit('lock'))">
+    <CommandItem v-if="vault.encrypted" value="action-lock" @select="props.run(() => emit('lock'))">
       <Lock />
       {{ t('auth.lock') }}
     </CommandItem>

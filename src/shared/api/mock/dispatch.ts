@@ -19,10 +19,13 @@ import { syncCommands } from './commands-sync'
 import { transferCommands } from './commands-transfer'
 import { vaultBackupsCommands } from './commands-vault-backups'
 import { vaultFilesCommands } from './commands-vault-files'
+import { vaultPasswordCommands } from './commands-vault-password'
 import { overviewCommands, walletsCommands } from './commands-wallets'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockStores, mockTransactions, priceOf } from './demo'
+import { sandboxCommands } from './commands-sandbox'
+import { keepPristine, refusedInSandbox } from './sandbox-state'
 import { seedMock } from './scenario-seed'
 import { mockAppSettings, mockSettings } from './vault-data'
 import { mockScenario } from './scenario'
@@ -32,6 +35,8 @@ const MOCK_COMMANDS: MockCommands = {
   ...vaultCommands,
   ...vaultFilesCommands,
   ...vaultBackupsCommands,
+  ...vaultPasswordCommands,
+  ...sandboxCommands,
   ...syncCommands,
   ...transferCommands,
   ...notificationsCommands,
@@ -61,6 +66,7 @@ const BOOT_COMMANDS = new Set(
 
 export function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<unknown> {
   seedMock()
+  keepPristine()
   if (mockScenario === 'error' && !BOOT_COMMANDS.has(cmd)) {
     return new Promise((_, fail) =>
       setTimeout(() => fail({ code: 'MOCK_ERROR', message: `Сценарий error: ${cmd} отказал` }), 30),
@@ -69,6 +75,8 @@ export function mock(cmd: string, rawArgs?: Record<string, unknown>): Promise<un
   // Like Tauri, which sends arguments as JSON: detaches Vue proxies the mock would otherwise store.
   const args = rawArgs ? (JSON.parse(JSON.stringify(rawArgs)) as Record<string, unknown>) : rawArgs
   const body = args?.input as Record<string, unknown> | undefined
+  const refused = refusedInSandbox(cmd)
+  if (refused) return Promise.reject(refused)
   const handler = MOCK_COMMANDS[cmd]
   if (handler) return handler({ cmd, args, body })
   try {

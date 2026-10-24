@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { call } from '@/shared/api/ipc'
 
-import { SYNC_HISTORY_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
+import { SYNC_HISTORY_KEY, SYNC_JOURNAL_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
 
 /** What the user does with sync: settings, pairing, the list of changes, devices, undo. */
 export function useSyncActions() {
@@ -60,6 +60,8 @@ export function useSyncActions() {
 
   const decidePlan = useMutation({
     mutationFn: (input: SyncDecisionInput) => call('sync_decide_plan', { input }),
+    // Accepted or declined, the journal has a new line (the backend writes it when it is done).
+    onSettled: () => refresh(SYNC_JOURNAL_KEY, SYNC_HISTORY_KEY),
     meta: {
       // Applying reports itself through `vault-synced` (with «Отменить»).
       success: (_data, input) => ((input as SyncDecisionInput).accept ? '' : t('sync.plan.declined')),
@@ -76,7 +78,7 @@ export function useSyncActions() {
   const undo = useMutation({
     mutationFn: (batchId: string) => call<UndoReport>('sync_undo', { batchId }),
     onSettled: () => {
-      refresh(SYNC_HISTORY_KEY)
+      refresh(SYNC_HISTORY_KEY, SYNC_JOURNAL_KEY)
       void queryClient.invalidateQueries()
     },
     meta: {

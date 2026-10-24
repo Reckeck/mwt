@@ -4,6 +4,7 @@
 //! `service::sync`, the transport in the app crate.
 
 pub mod alias;
+pub mod journal;
 pub mod manifest;
 pub mod merge;
 pub mod plan;

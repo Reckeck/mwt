@@ -1,7 +1,6 @@
 // What `mise run shots -- <set>` photographs. See steps.mjs for the shape of a shot.
 
 import { stage5 } from './sets-stage5.mjs'
-import { recents } from './sets-recents.mjs'
 import { stage6 } from './sets-stage6.mjs'
 import { GP } from './steps.mjs'
 
@@ -679,4 +678,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, recents }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6 }
