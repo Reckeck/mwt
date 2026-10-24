@@ -29,7 +29,7 @@ const ON = 'data-[state=on]:border-foreground data-[state=on]:bg-foreground data
       v-for="entry in MINE_FILTERS"
       :key="entry"
       :value="entry"
-      class="h-7 rounded-md border border-border px-2.5 text-caption font-normal text-muted-foreground hover:text-foreground"
+      class="h-7 rounded-md border border-border px-2.5 text-caption max-sm:h-9 font-normal text-muted-foreground hover:text-foreground"
       :class="ON"
     >
       {{ t(`automations.mine.type.${entry}`) }}

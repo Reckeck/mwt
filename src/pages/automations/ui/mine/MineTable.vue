@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { Badge } from '@/shared/ui/badge'
 import { Switch } from '@/shared/ui/switch'
@@ -16,6 +16,7 @@ import { mineDoes, mineName, mineRoute, mineWhen } from '../../lib/mine-view'
 const props = defineProps<{ items: MineItem[]; storeName: (id: string) => string }>()
 const emit = defineEmits<{ toggle: [item: MineItem, active: boolean] }>()
 const { t } = useI18n()
+const route = useRoute()
 
 const TH = 'h-auto px-3 py-2 text-xs font-medium text-muted-foreground'
 const rows = computed(() =>
@@ -25,7 +26,7 @@ const rows = computed(() =>
     name: mineName(item),
     when: mineWhen(item, t),
     does: mineDoes(item, props.storeName, t),
-    to: mineRoute(item),
+    to: mineRoute(item, route.query),
   })),
 )
 /** The name's link covers the whole row; its focus ring goes round the row. */

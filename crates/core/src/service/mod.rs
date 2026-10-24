@@ -32,6 +32,7 @@ mod allocation;
 mod asset_holdings;
 mod attachments;
 mod auto_reminders;
+mod automation_card;
 mod automations;
 mod budget;
 mod bulk;
@@ -95,6 +96,9 @@ pub use allocation::{
 pub use asset_holdings::{AssetHolding, AssetHoldings};
 pub use attachments::NewFile;
 pub use auto_reminders::category_of;
+pub use automation_card::{
+    AutomationCard, CardAction, CardMoney, CardTrigger, JournalEntry, JournalStatus,
+};
 pub(crate) use automations::draft_to_transaction;
 pub use automations::{
     AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,

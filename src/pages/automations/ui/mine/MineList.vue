@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { Switch } from '@/shared/ui/switch'
 
@@ -11,6 +11,7 @@ import { mineName, mineRoute, mineWhen } from '../../lib/mine-view'
 const props = defineProps<{ items: MineItem[] }>()
 const emit = defineEmits<{ toggle: [item: MineItem, active: boolean] }>()
 const { t } = useI18n()
+const route = useRoute()
 
 const rows = computed(() =>
   props.items.map((item) => ({
@@ -18,7 +19,7 @@ const rows = computed(() =>
     key: `${item.kind}:${item.id}`,
     name: mineName(item),
     sub: `${t(`automations.mine.kind.${item.kind}`)} · ${mineWhen(item, t)}`,
-    to: mineRoute(item),
+    to: mineRoute(item, route.query),
   })),
 )
 </script>

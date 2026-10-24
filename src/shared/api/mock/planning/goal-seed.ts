@@ -4,7 +4,7 @@ import { mockAttachmentData, mockAttachments } from '../attachments'
 import { mockEnvelopes } from '../catalog'
 import { mockStores, mockTransactions, priceOf } from '../demo'
 import { mockTransactionFrom } from '../ledger'
-import { workflows } from '../workflows/state'
+import { seedShare } from './share-seed'
 import { goals, iso, now, uuid } from './state'
 
 const USD: AssetRef = {
@@ -24,7 +24,8 @@ const monthsFrom = (months: number) => {
 }
 
 /** «10 % зарплаты» put aside three times since the start: the card's «История». */
-function seedDeposits(from: string, to: string) {
+function seedDeposits(from: string, to: string): Transaction[] {
+  const booked: Transaction[] = []
   for (const months of [-2, -1, 0]) {
     const at = new Date(`${monthsFrom(months)}T09:00:00Z`)
     at.setDate(Math.min(25, now().getDate()))
@@ -50,15 +51,17 @@ function seedDeposits(from: string, to: string) {
       tx_hash: null,
       debt: null,
     }
-    mockTransactions.push(mockTransactionFrom(input, priceOf))
+    booked.push(mockTransactionFrom(input, priceOf))
   }
+  mockTransactions.push(...booked)
+  return booked
 }
 
 export function seedGoal() {
   const cash = mockStores.find((store) => store.kind === 'cash')
   const bank = mockStores.find((store) => store.kind === 'bank')
   if (!cash || !bank) return
-  seedDeposits(bank.id, cash.id)
+  const deposits = seedDeposits(bank.id, cash.id)
   const created = iso(now())
   const goal: Goal = {
     id: uuid(),
@@ -86,26 +89,7 @@ export function seedGoal() {
     goal_id: goal.id,
     created_at: created,
   })
-  // What `pay_yourself_first` builds: the goal's wallet is quoted in the graph.
-  // Pushed as is: the shortened graph would not pass `save`'s check.
-  workflows.push({
-    id: uuid(),
-    name: '10 % зарплаты',
-    description: '',
-    active: true,
-    graph: JSON.stringify({
-      version: 3,
-      nodes: [{ id: 'to', kind: 'action.transfer', params: { to: cash.id } }],
-      edges: [],
-      comments: [],
-    }),
-    created_at: created,
-    updated_at: created,
-    react_to_workflows: false,
-    max_amount: null,
-    versions: [],
-    tests: [],
-  })
+  seedShare(bank.id, cash.id, deposits)
   const file = uuid()
   mockAttachmentData.set(file, btoa('%PDF-1.7 mock fund'))
   const owner: EntityRef = { kind: 'goal', id: goal.id }

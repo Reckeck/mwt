@@ -1,5 +1,8 @@
 /** How a «Мои» row reads (Auto-1 · 1): the name, when it fires next, what it will do. */
 
+import type { LocationQuery, RouteLocationRaw } from 'vue-router'
+
+import { entityLocation } from '@/shared/lib/entity-link'
 import { formatDayMonthShort, formatMoney } from '@/shared/lib/format'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
@@ -46,11 +49,11 @@ export function mineDoes(item: MineItem, storeName: (id: string) => string, t: T
   return (to ? `${amount} → ${to}` : `${amount} ${from}`.trim()) + asks
 }
 
-/** Where a row leads until the card of Auto-1 · 3 opens it in place. */
-export function mineRoute(item: MineItem): { name: string; params?: Record<string, string> } {
+/** Where a row leads: a scheme or a repeat opens its card in place (Auto-1 · 3), a reminder and an alert their lists. */
+export function mineRoute(item: MineItem, query: LocationQuery): RouteLocationRaw {
   if (item.kind === 'reminder') return { name: 'automations-reminders' }
   if (item.kind === 'alert') return { name: 'automations-alerts' }
-  return { name: 'workflow-edit', params: { id: item.id } }
+  return entityLocation({ kind: 'automation', id: item.id }, query)
 }
 
 /** The ready-made starts of the empty «Мои» (Auto-1 · 2), in the frame's order. */
