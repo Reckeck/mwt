@@ -30,6 +30,11 @@ const toWallet = (name, tab = '') => `
   const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('${name}'))
   if (link) await gp.$router.push(link.getAttribute('href') + '${tab ? `?tab=${tab}` : ''}')
   await new Promise((done) => setTimeout(done, 900)); return true`
+/** Opens an item of the home's bill by its name (Wallets-2 · 11–12). */
+const openLine = (name) => `
+  const rows = [...document.querySelectorAll('[data-utility-lines] tr[data-utility-line], [data-utility-lines] li > button')]
+  rows.find((row) => row.textContent.includes('${name}'))?.click()
+  await new Promise((done) => setTimeout(done, 900)); return true`
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
@@ -461,6 +466,8 @@ const stage4 = [
     canvas: { board: 'Wallets-2', frame: '9.' },
   },
   { name: 'wallet-property', route: '/stores', steps: [{ eval: toWallet('Квартира') }], canvas: { board: 'Wallets-2', frame: '10.' } },
+  { name: 'wallet-utility-zones', route: '/stores', steps: [{ eval: toWallet('Квартира') }, { eval: openLine('Электр') }], canvas: { board: 'Wallets-2', frame: '11.' } },
+  { name: 'wallet-utility-formula', route: '/stores', steps: [{ eval: toWallet('Квартира') }, { eval: openLine('Горяч') }], canvas: { board: 'Wallets-2', frame: '12.' } },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },
   { name: 'store-new-kind', route: '/stores', steps: CREATE_STORE, canvas: { board: 'Wallets-1', frame: '2.' } },
