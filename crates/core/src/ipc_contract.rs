@@ -1941,6 +1941,14 @@ pub struct SetWorkflowActiveInput {
     pub active: bool,
 }
 
+/// The «Вкл.» switch of a «Мои» row.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetMyAutomationActiveInput {
+    pub kind: crate::service::MineKind,
+    pub id: String,
+    pub active: bool,
+}
+
 /// Emulate a graph — saved or still in the editor — on a copy of the vault.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct DryRunWorkflowInput {

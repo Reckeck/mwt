@@ -328,6 +328,8 @@ pub fn run() {
             planning::update_price_alert,
             planning::delete_price_alert,
             planning::get_upcoming,
+            planning::list_my_automations,
+            planning::set_my_automation_active,
             planning::set_loyalty_info,
             planning::create_loyalty_program,
             planning::adjust_points,

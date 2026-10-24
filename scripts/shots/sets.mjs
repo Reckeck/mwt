@@ -1,5 +1,7 @@
 // What `mise run shots -- <set>` photographs. See steps.mjs for the shape of a shot.
 
+import { stage5 } from './sets-stage5.mjs'
+
 /** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
 const OFFLINE = `Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); return true`
 /** Back online: the override above outlives a route change, the shots do not reload the page. */
@@ -674,4 +676,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4 }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5 }

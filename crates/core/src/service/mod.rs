@@ -59,6 +59,7 @@ mod ledger;
 mod losses;
 mod loyalty;
 mod month_balance;
+mod my_automations;
 mod notifications;
 mod notify_snapshot;
 mod peer_sync;
@@ -134,6 +135,7 @@ pub use losses::{
 };
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceRow};
+pub use my_automations::{MineItem, MineKind};
 pub use notifications::{notice, notice_title};
 pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
 pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};

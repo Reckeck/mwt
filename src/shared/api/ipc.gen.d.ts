@@ -2886,6 +2886,58 @@ day: number | null,
 zone: string | null, };
 
 /**
+ * One row of «Мои».
+ */
+type MineItem = { kind: MineKind, 
+/**
+ * The workflow, automation, reminder or alert id.
+ */
+id: string, name: string, 
+/**
+ * Switched on: a reminder that is not muted, an alert that has not fired.
+ */
+active: boolean, 
+/**
+ * When it fires next, RFC3339; `None` for an alert (it waits for the
+ * price) and for a scheme without a schedule.
+ */
+next_at: string | null, 
+/**
+ * The operation it makes: signed as it moves the money (an income
+ * positive, a payment negative, a transfer by what arrives).
+ */
+amount: Amount | null, asset: AssetRef | null, 
+/**
+ * The wallet the money leaves.
+ */
+from_store: string | null, 
+/**
+ * The wallet the money comes to.
+ */
+to_store: string | null, 
+/**
+ * It asks «да» before it does anything.
+ */
+asks: boolean, 
+/**
+ * It only notifies: a reminder, an alert, a scheme without operations.
+ */
+notifies: boolean, 
+/**
+ * For an alert: above or below `amount` of `asset`, in `currency`.
+ */
+condition: AlertCondition | null, currency: string | null, 
+/**
+ * The scheme's own description.
+ */
+description: string, };
+
+/**
+ * What kind of thing fires.
+ */
+type MineKind = "scheme" | "repeat" | "reminder" | "alert";
+
+/**
  * The months of a period with what each left and what carried over.
  */
 type MonthBalance = { currency: string, 
@@ -4250,6 +4302,11 @@ type SetImportSettingsInput = { store_id: string, settings: ImportSettings, };
 type SetLoyaltyInfoInput = { store_id: string, info: LoyaltyInfo, };
 
 type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
+
+/**
+ * The «Вкл.» switch of a «Мои» row.
+ */
+type SetMyAutomationActiveInput = { kind: MineKind, id: string, active: boolean, };
 
 type SetWorkflowActiveInput = { id: string, active: boolean, };
 

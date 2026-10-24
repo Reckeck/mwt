@@ -1,22 +1,39 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
-import { TemplateGallery } from '@/features/workflow-template-gallery'
-import { AutomationList } from '@/widgets/automation-list'
-import { UpcomingList } from '@/widgets/upcoming-list'
+import { useIsPhone } from '@/shared/lib/phone'
+import { SectionState } from '@/shared/ui/section-state'
 
-/** The gallery waits for the list: cards landing above would push it down. */
-const listReady = ref(false)
+import type { MineStarter } from './lib/mine-view'
+import { useMine } from './model/use-mine'
+import { MineChips, MineEmpty, MineList, MineTable } from './ui/mine'
+
+/**
+ * «Мои» (Auto-1 · 1–2): everything that fires on its own in one list —
+ * repeats, schemes, reminders, price alerts — the soonest first. Empty, it
+ * offers four ready-made starts.
+ */
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const phone = useIsPhone()
+const { list, items, filter, storeName, setActive } = useMine()
+
+/** The wizard (Auto-1 · 6) reads `?new=` and starts from that template. */
+const start = (starter: MineStarter) => void router.push({ query: { ...route.query, new: starter } })
 </script>
 
 <template>
-  <!-- Every automation in one place: created and edited here (the dialog picks the wallet)
-       or on the wallet's own tab, which shows the same list filtered to it. -->
-  <div class="grid gap-6">
-    <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <AutomationList @ready="listReady = true" />
-      <UpcomingList :days="45" :limit="12" />
+  <SectionState :loading="list.isPending.value" :error="list.error.value" skeleton="list" :rows="5">
+    <MineEmpty v-if="!list.data.value?.length" @pick="start" />
+    <div v-else class="grid gap-4 max-sm:gap-3" data-tour="automations-mine">
+      <div class="flex items-center gap-3">
+        <MineChips v-model="filter" />
+        <span class="ml-auto text-sm text-muted-foreground max-md:hidden">{{ t('automations.mine.hint') }}</span>
+      </div>
+      <MineList v-if="phone" :items="items" @toggle="setActive" />
+      <MineTable v-else :items="items" :store-name="storeName" @toggle="setActive" />
     </div>
-    <TemplateGallery v-if="listReady" />
-  </div>
+  </SectionState>
 </template>

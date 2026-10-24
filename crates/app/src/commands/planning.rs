@@ -438,6 +438,27 @@ pub async fn get_upcoming(
     })
 }
 
+/// «Мои»: everything that fires on its own, with when and what it does next.
+#[tauri::command]
+pub async fn list_my_automations(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<trade_core::service::MineItem>, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| Ok(vault.my_automations(now_secs(), &zone)))
+}
+
+/// The «Вкл.» switch of a «Мои» row, whatever kind it is.
+#[tauri::command]
+pub async fn set_my_automation_active(
+    input: trade_core::ipc_contract::SetMyAutomationActiveInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault.set_my_automation_active(input.kind, &input.id, input.active, now_secs())
+    })
+}
+
 // -- savings, deposits, ПДС ---------------------------------------------------------
 
 #[tauri::command]

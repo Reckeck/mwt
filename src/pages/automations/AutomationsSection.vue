@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Variable } from 'lucide-vue-next'
+import { Plus, Variable } from 'lucide-vue-next'
 
+import { WorkflowImportDialog } from '@/features/workflow-manage'
 import { WorkflowVars } from '@/widgets/workflow-vars'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { RouteTabs } from '@/shared/ui/route-tabs'
 import { call } from '@/shared/api/ipc'
+import { useIsPhone } from '@/shared/lib/phone'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
 import { MAIN_TABS, MORE_TABS, TAB_ROUTE } from './model/automation-tabs'
+import { MINE_KEY } from './model/use-mine'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -31,6 +34,13 @@ const tabs = computed(() => MAIN_TABS.map((tab) => ({ name: TAB_ROUTE[tab], labe
 const more = computed(() =>
   MORE_TABS.map((tab) => ({ name: TAB_ROUTE[tab], label: label(tab), hint: t(`automations.hint.${tab}`) })),
 )
+const phone = useIsPhone()
+/** «Импорт» and «Создать» belong to «Мои» (Auto-1 · 1); the empty one offers only «Создать» (Auto-1 · 2). */
+const onMine = computed(() => route.name === TAB_ROUTE.mine)
+const mine = useQuery({ queryKey: MINE_KEY, queryFn: () => call<MineItem[]>('list_my_automations'), enabled: onMine })
+const importOpen = ref(false)
+const create = () => void router.push({ query: { ...route.query, new: 'blank' } })
+
 /** Variables open over any tab; `?vars=1` keeps the panel across Back and a reload. */
 const varsOpen = computed({
   get: () => route.query.vars === '1',
@@ -42,12 +52,24 @@ const varsOpen = computed({
   <div class="grid grid-cols-1 gap-4 @container">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
-      <Button variant="outline" size="sm" data-tour="workflow-vars-open" @click="varsOpen = true">
-        <Variable class="size-4" />
-        {{ t('workflow.tab.vars') }}
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" :aria-label="t('workflow.tab.vars')" data-tour="workflow-vars-open" @click="varsOpen = true">
+          <Variable class="size-4" />
+          <span v-if="!phone">{{ t('workflow.tab.vars') }}</span>
+        </Button>
+        <template v-if="onMine">
+          <Button v-if="mine.data.value?.length && !phone" variant="outline" size="sm" data-mine-import @click="importOpen = true">
+            {{ t('automations.mine.import') }}
+          </Button>
+          <Button size="sm" :aria-label="t('automations.mine.create')" data-mine-create @click="create">
+            <Plus class="size-4" />
+            <span v-if="!phone">{{ t('automations.mine.create') }}</span>
+          </Button>
+        </template>
+      </div>
     </div>
     <div class="min-w-0" data-tour="section-content"><RouterView /></div>
+    <WorkflowImportDialog v-model:open="importOpen" @imported="(workflow) => router.push({ name: 'workflow-edit', params: { id: workflow.id } })" />
     <Sheet v-model:open="varsOpen">
       <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
