@@ -126,7 +126,8 @@ watch(
       </div>
     </SectionState>
 
-    <Collapsible v-model:open="learnOpen" class="grid gap-3 rounded-lg border border-border p-3">
+    <!-- After the cards: landing above it, they would push it down. -->
+    <Collapsible v-if="!workflows.isPending.value" v-model:open="learnOpen" class="grid gap-3 rounded-lg border border-border p-3">
       <CollapsibleTrigger
         class="flex w-full items-center justify-between gap-2 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >

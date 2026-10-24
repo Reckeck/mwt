@@ -19,28 +19,31 @@ export const FORMULA_VARIABLES = [
 /** A zone's name inside a variable: «пик ночь» → «пик_ночь». */
 export const zoneKey = (zone: string) => zone.trim().toLowerCase().split(/\s+/).join('_')
 
-/** «день, ночь» → ['день', 'ночь']. */
-export const zoneList = (text: string) =>
-  text
-    .split(/[,;]/)
-    .map((zone) => zone.trim())
-    .filter(Boolean)
-
-/** The bill of 100 units in every zone by the formula being typed, and what is wrong with it. */
+/**
+ * The bill by the formula being typed, and what is wrong with it: on the last
+ * real readings when the meter has them (`sample`), else on 100 units per zone.
+ */
 export function useFormulaPreview(state: {
   tariff: Ref<string>
   mode: Ref<MeterMode>
   formula: Ref<string>
-  zones: Ref<string>
+  zones: Ref<string[]>
+  sample: Ref<{ previous: string; current: string }[] | null>
 }) {
   const formula = refDebounced(state.formula, 400)
   const input = computed<UtilityFormulaInput>(() => {
-    const zones = zoneList(state.zones.value)
+    const zones = state.zones.value
+    const sample = state.sample.value
+    const fields = zones.length ? zones : [null]
     return {
       tariff: state.tariff.value.trim() || '0',
       formula: state.mode.value === 'formula' ? formula.value : null,
       zones,
-      readings: (zones.length ? zones : [null]).map((zone) => ({ zone, previous: '0', current: '100' })),
+      readings: fields.map((zone, index) => ({
+        zone,
+        previous: sample?.length === fields.length ? sample[index].previous : '0',
+        current: sample?.length === fields.length ? sample[index].current : '100',
+      })),
       days: null,
     }
   })
@@ -49,5 +52,5 @@ export function useFormulaPreview(state: {
     queryFn: () => call<UtilityFormulaPreview>('preview_utility_formula', { input: input.value }),
     placeholderData: keepPreviousData,
   })
-  return computed(() => query.data.value ?? null)
+  return computed(() => (query.data.value ? { ...query.data.value, input: input.value } : null))
 }
