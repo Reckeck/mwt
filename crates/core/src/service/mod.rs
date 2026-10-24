@@ -190,6 +190,8 @@ pub struct StoreExtras {
     pub provider: Option<ExchangeProvider>,
     /// Create only: money already there, booked as one top-up.
     pub opening: Option<OpeningBalance>,
+    /// Create only: an exchange's futures sub-account keeps its margin in it.
+    pub margin: Option<AssetRef>,
 }
 
 /// The first card of a new bank: a sub-account bound to one currency.
@@ -921,6 +923,10 @@ impl UnlockedVault {
             store.custody = None;
         }
         store.secured_by = extras.secured_by;
+        // Margin only means something on an exchange's futures account.
+        store.margin = extras
+            .margin
+            .filter(|_| kind == StoreKind::Exchange && sub_type == Some(SubType::Futures));
         store.parent_id = parent_id;
         self.doc.stores.push(store.clone());
         // Validated before anything is written, so a bad opening balance
@@ -3650,6 +3656,38 @@ mod tests {
             .unwrap()
             .id;
         (dir, vault, [bybit, spot, futures, ledger, bank])
+    }
+
+    #[test]
+    fn a_futures_account_keeps_its_margin_coin_and_nothing_else_does() {
+        let (_dir, mut vault, [bybit, ..]) = two_levels();
+        let usdt = AssetRef::fiat("USDT", "Tether");
+        let mut create = |name: &str, sub_type| {
+            vault
+                .create_store_with(
+                    name,
+                    StoreKind::Exchange,
+                    "",
+                    "",
+                    Some(bybit.clone()),
+                    StoreExtras {
+                        sub_type: Some(sub_type),
+                        margin: Some(usdt.clone()),
+                        ..StoreExtras::default()
+                    },
+                )
+                .unwrap()
+        };
+        let futures = create("Perps", SubType::Futures);
+        assert_eq!(
+            futures.margin.map(|asset| asset.symbol),
+            Some("USDT".into())
+        );
+        assert_eq!(
+            create("Savings", SubType::Earn).margin,
+            None,
+            "earn has no margin"
+        );
     }
 
     #[test]

@@ -46,6 +46,7 @@ const save = useMutation({
     value.value = ''
     form.reset()
     void queryClient.invalidateQueries({ queryKey: ['utility-trend'] })
+    void queryClient.invalidateQueries({ queryKey: ['utility-bill'] })
   },
   meta: { error: 'utilities.readingFailed', success: 'utilities.readingSaved' },
 })

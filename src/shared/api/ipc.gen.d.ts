@@ -1190,6 +1190,10 @@ contact_id: string | null, custody: Custody | null, property: PropertyInfo | nul
  */
 provider: ExchangeProvider | null, 
 /**
+ * An exchange's futures sub-account: the coin its margin is kept in.
+ */
+margin: AssetRef | null, 
+/**
  * Money the wallet already holds; booked as one opening top-up. With
  * `card` it goes on the card.
  */
@@ -2270,6 +2274,14 @@ filtered: number,
  * Booked at once by «подтверждать сразу».
  */
 confirmed: number, 
+/**
+ * Of the new ones: spot and futures fills.
+ */
+trades: number, 
+/**
+ * Of the new ones: moves between the exchange's own accounts.
+ */
+transfers: number, 
 /**
  * The correction that set the live balance, if one was needed.
  */
@@ -4483,6 +4495,11 @@ secured_by: string | null,
  */
 exchange: ExchangeProfile | null, 
 /**
+ * An exchange's futures sub-account: the coin its margin is kept in
+ * (USDT for linear contracts, the coin itself for inverse ones).
+ */
+margin?: AssetRef, 
+/**
  * Loyalty wallets: the programme's points and what a point is worth.
  */
 loyalty?: LoyaltyInfo, 
@@ -5685,7 +5702,29 @@ pay_day: number | null,
  * The date the payments get: the pay day of that month, or today when
  * the month is the current one and the day has passed. RFC3339.
  */
-due_at: string, lines: Array<UtilityBillLine>, };
+due_at: string, lines: Array<UtilityBillLine>, 
+/**
+ * What the month will cost: the amounts, the estimates of the meters
+ * still unread; rent an automation pays is left out (Wallets-2 · 10).
+ */
+total: Amount, 
+/**
+ * Part of `total` is an estimate: some meter waits for its reading.
+ */
+estimated: boolean, 
+/**
+ * Meters waiting for this month's reading.
+ */
+unread: number, 
+/**
+ * The bill of the last six months before this one, on average, counted
+ * the same way as `total`.
+ */
+average: Amount | null, 
+/**
+ * `total` against `average`, percent.
+ */
+delta_pct: Amount | null, };
 
 /**
  * One line of a month's utility bill.
@@ -5710,7 +5749,12 @@ paid: Amount, includes_deposit: boolean,
 /**
  * A multi-rate meter: the previous and this month's reading per zone.
  */
-zones: Array<ZoneBillLine>, };
+zones: Array<ZoneBillLine>, 
+/**
+ * A meter still waiting for its reading: what it will likely cost —
+ * the trend's forecast, else its average («≈ 1 270 ₽»).
+ */
+estimate: Amount | null, };
 
 /**
  * What a meter's bill would be: the form's preview and the bill dialog's

@@ -12,6 +12,7 @@ import { useCreateStore } from './model/use-create-store'
 import { provideStoreCreate } from './model/use-store-create-state'
 import type { StoreCreateDialogProps } from './store-create.types'
 import { ExchangeProviderFields } from './ui/exchange-provider-fields'
+import { ExchangeSubFields } from './ui/exchange-sub-fields'
 import { StoreBindingFields } from './ui/store-binding-fields'
 import { StoreKindFields } from './ui/store-kind-fields'
 import { StoreKindPicker } from './ui/store-kind-picker'
@@ -29,7 +30,7 @@ const emit = defineEmits<{ created: [store: Store] }>()
 
 const { t } = useI18n()
 const state = provideStoreCreate(props, open)
-const { step, steps, stepNumber, isLast, isSub, kind, name, nameTouched, title, canGoBack, goBack, goNext, form } = state
+const { step, steps, stepNumber, isLast, isSub, kind, name, nameTouched, title, canGoBack, goBack, goNext, form, exchangeSub } = state
 const createStore = useCreateStore(state, (store) => emit('created', store))
 
 const stepTitles = computed(() => steps.value.map((entry) => t(`storeWizard.step.${isSub.value && entry === 'pick' ? 'subType' : entry}`)))
@@ -44,12 +45,13 @@ function submit(event?: Event) {
 <template>
   <Dialog v-model:open="open" :title="title" size="form">
     <div class="@container grid gap-4">
-      <WizardSteps :step="stepNumber" :titles="stepTitles" />
+      <WizardSteps v-if="steps.length > 1" :step="stepNumber" :titles="stepTitles" />
 
       <StoreKindPicker v-if="step === 'pick'" />
 
       <form v-else id="store-create-form" class="grid gap-4" @submit.prevent="submit($event)">
-        <template v-if="isSub">
+        <ExchangeSubFields v-if="exchangeSub" />
+        <template v-else-if="isSub">
           <StoreBindingFields />
           <FormField for="store-name" :label="t('stores.name')" required :error="form.error('name')">
             <Input id="store-name" v-model="name" :placeholder="t('stores.namePlaceholder')" @input="nameTouched = true" />

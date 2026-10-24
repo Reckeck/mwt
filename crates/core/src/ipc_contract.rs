@@ -121,6 +121,9 @@ pub struct CreateStoreInput {
     /// Exchange wallets: which exchange it is.
     #[serde(default)]
     pub provider: Option<ExchangeProvider>,
+    /// An exchange's futures sub-account: the coin its margin is kept in.
+    #[serde(default)]
+    pub margin: Option<AssetRef>,
     /// Money the wallet already holds; booked as one opening top-up. With
     /// `card` it goes on the card.
     #[serde(default)]

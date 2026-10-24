@@ -105,10 +105,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'stores-create', key: 'stores.create', side: 'left' },
   ],
   wallet: [
-    { target: 'wallet-operation', key: 'wallet.operation', side: 'bottom' },
-    { target: 'wallet-deal', key: 'wallet.deal', side: 'bottom' },
-    { target: 'wallet-adjust', key: 'wallet.adjust', side: 'bottom' },
-    { target: 'wallet-settings', key: 'wallet.settings', side: 'bottom' },
+    { target: 'wallet-actions', key: 'wallet.operation', side: 'bottom' },
+    { target: 'wallet-gear', key: 'wallet.settings', side: 'bottom' },
     { target: 'wallet-all-operations', key: 'wallet.allOperations', side: 'bottom' },
     { target: 'wallet-relations', key: 'wallet.relations', side: 'top' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
@@ -117,7 +115,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'property-year', key: 'wallet.propertyYear', side: 'top' },
     { target: 'chart-currency', key: 'wallet.chartCurrency', side: 'left' },
     { target: 'wallet-positions', key: 'wallet.positions', side: 'top' },
-    { target: 'exchange-views', key: 'wallet.views', side: 'bottom' },
+    { target: 'wallet-tabs', key: 'wallet.views', side: 'bottom' },
     { target: 'exchange-terminal', key: 'wallet.terminal', side: 'top' },
   ],
   'wallet-settings': [

@@ -144,7 +144,7 @@ const save = useMutation({
       : call<UtilityItem>('create_utility_item', { input })
   },
   onSuccess: () => {
-    for (const queryKey of [['utilities'], ['utility-trend'], ...PLANNING_KEYS]) void queryClient.invalidateQueries({ queryKey })
+    for (const queryKey of [['utilities'], ['utility-trend'], ['utility-bill'], ...PLANNING_KEYS]) void queryClient.invalidateQueries({ queryKey })
     open.value = false
   },
   meta: { error: 'utilities.saveFailed', success: () => props.item ? t('utilities.saved') : t('utilities.created') },

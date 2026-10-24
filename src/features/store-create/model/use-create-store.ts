@@ -38,6 +38,7 @@ function createInput(state: StoreCreateState, baseCurrency: string): CreateStore
         : null,
     secured_by: kind.value === 'liability' && state.securedBy.value ? state.securedBy.value : null,
     provider: !isSub.value && kind.value === 'exchange' ? state.provider.value : null,
+    margin: state.withMargin.value ? state.margin.value : null,
     opening:
       state.offersOpening.value && state.openingAmountValue.value && state.openingAsset.value
         ? {

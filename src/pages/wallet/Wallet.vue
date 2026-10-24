@@ -144,12 +144,14 @@ function openWallet(created: Store) {
         :ancestors="ancestors"
         :figure="figure"
         :can-add-child="canAddChild"
-        :has-children="hasChildren"
+        :has-children="hasChildren && !isExchangeNode"
         :refreshing="priceRefresh.isPending.value"
         :exchange="isExchangeNode"
         @act="act"
         @operation="openTransaction"
         @adjust="adjustOpen = true"
+        @revalue="adjustOpen = true"
+        @sell="openTransaction"
         @calculator="calculatorOpen = true"
         @sub-account="subWalletOpen = true"
         @goal="goalOpen = true"
@@ -186,7 +188,7 @@ function openWallet(created: Store) {
           :store-id="store.id"
         />
 
-        <PropertyValueCard v-if="isPropertyRoot" :store="store" />
+        <PropertyValueCard v-if="isPropertyRoot && !isHomeRoot" :store="store" />
         <VehicleCard v-if="isPropertyRoot && store.property?.category === 'car'" :store="store" />
 
         <WalletTabs

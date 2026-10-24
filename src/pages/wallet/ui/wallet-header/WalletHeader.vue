@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
 import { walletSubtitle } from '@/entities/store'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
+import { Button } from '@/shared/ui/button'
 import { formatMoney } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
 import { storeIcon } from '@/shared/lib/store-icons'
@@ -39,6 +40,8 @@ const emit = defineEmits<{
   goal: []
   automation: []
   refresh: []
+  revalue: []
+  sell: []
 }>()
 
 const { t } = useI18n()
@@ -51,13 +54,16 @@ const crumbs = computed<PageCrumb[]>(() => [
 ])
 
 const actions = computed(() => walletActions(props.store, Boolean(props.exchange)))
-/** «курс 93,75 ₽ · Банк · в бюджете» or «Биржа · BTC, USDT»; a phone drops the rate. */
+/** Property (Wallets-2 · 10): «стоимость не задана · Оценить» until it has one, and «Продать». */
+const property = computed(() => props.store.kind === 'property' && !props.store.parent_id)
+/** «курс 93,75 ₽ · Банк · в бюджете» or «Биржа · BTC, USDT»; a phone drops the rate, property its asset's code. */
 const subtitle = computed(() => {
   const own = props.figure.base
   const rate = own?.rate && !phone.value ? [t('wallet.rate', { rate: formatMoney(own.rate, { currency: props.figure.currency }) })] : []
-  const assets = own || !props.figure.assets.length ? [] : [props.figure.assets.join(', ')]
+  const assets = own || property.value || !props.figure.assets.length ? [] : [props.figure.assets.join(', ')]
   return [...rate, walletSubtitle(props.store, t), ...assets].join(' · ')
 })
+const unvalued = computed(() => property.value && !Number(props.figure.amount))
 </script>
 
 <template>
@@ -75,6 +81,12 @@ const subtitle = computed(() => {
         <span class="truncate text-caption text-muted-foreground">
           <template v-if="props.figure.base">≈ <Money :amount="props.figure.base.amount" :decimals="2" /> · </template>
           {{ subtitle }}
+          <template v-if="unvalued">
+            · {{ t('wallet.valueUnset') }} ·
+            <Button variant="link" class="h-auto p-0 text-caption touch-hit-xl" :disabled="props.store.archived" @click="emit('revalue')">
+              {{ t('wallet.revalue') }}
+            </Button>
+          </template>
         </span>
       </div>
       <WalletActions
@@ -84,6 +96,7 @@ const subtitle = computed(() => {
         :disabled="props.store.archived"
         @act="(kind) => emit('act', kind)"
       />
+      <Button v-if="property && !phone" variant="outline" :disabled="props.store.archived" @click="emit('sell')">{{ t('wallet.sell') }}</Button>
       <WalletGearMenu
         :store="props.store"
         :can-add-child="props.canAddChild"
