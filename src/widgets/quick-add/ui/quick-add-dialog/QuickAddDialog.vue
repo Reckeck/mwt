@@ -97,6 +97,7 @@ const initial = computed<TransactionInitial | null>(() => {
     kind: asked.kind,
     categories: asked.category ? [asked.category] : [],
     ...(asked.toStoreId ? { to: asked.toStoreId } : {}),
+    ...(asked.amount ? { amount: asked.amount } : {}),
   }
 })
 

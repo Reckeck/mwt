@@ -1,5 +1,9 @@
 // What `mise run shots -- <set>` photographs. See steps.mjs for the shape of a shot.
 
+/** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
+const OFFLINE = `Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); return true`
+/** Back online: the override above outlives a route change, the shots do not reload the page. */
+const ONLINE = `delete navigator.onLine; window.dispatchEvent(new Event('online')); return true`
 const PALETTE = [{ desktop: [{ press: 'ctrl+k' }] }, { phone: [{ click: '[data-command-palette-trigger]' }] }]
 const QUICK_ADD = [{ desktop: [{ click: '[data-tour="quick-add"]' }] }]
 const COLLAPSE = [{ desktop: [{ press: 'ctrl+b' }] }]
@@ -599,6 +603,15 @@ const stage4 = [
     canvas: { board: 'Currency-1', frame: '7.' },
   },
   {
+    name: 'rates-offline',
+    route: '/',
+    scenarios: ['stress'],
+    steps: [{ eval: OFFLINE }, { wait: 1500 }],
+    canvas: { board: 'Currency-2', frame: '8.' },
+  },
+  { name: 'rates-stale', route: '/', scenarios: ['stress'], steps: [{ eval: ONLINE }, { wait: 1500 }] },
+  { name: 'rates-refreshed', route: '/', scenarios: ['stress'], steps: [{ eval: ONLINE }, { wait: 1500 }, { click: '[data-rates-refresh]' }, { wait: 1500 }] },
+  {
     name: 'spending-unpriced-show',
     route: '/money',
     scenarios: ['stress'],
@@ -617,6 +630,24 @@ const stage4 = [
       { wait: 800 },
     ],
     canvas: { board: 'Currency-2', frame: '9.' },
+  },
+  {
+    name: 'palette-convert',
+    route: '/',
+    steps: [{ wait: 600 }, ...PALETTE, { wait: 300 }, { type: ['[data-command-palette] input', '100 usd'] }, { wait: 1200 }],
+    canvas: { board: 'Currency-2', frame: '10.' },
+  },
+  {
+    name: 'palette-convert-dated',
+    route: '/',
+    steps: [{ wait: 600 }, ...PALETTE, { wait: 300 }, { type: ['[data-command-palette] input', '5000 руб'] }, { wait: 1500 }],
+    canvas: { board: 'Currency-2', frame: '10.' },
+  },
+  {
+    name: 'palette-convert-to',
+    route: '/',
+    steps: [{ wait: 600 }, ...PALETTE, { wait: 300 }, { type: ['[data-command-palette] input', '0.01 btc в thb'] }, { wait: 1200 }],
+    canvas: { board: 'Currency-2', frame: '10.' },
   },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },

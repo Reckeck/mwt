@@ -8,7 +8,8 @@ import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockBalanceOf, mockPush, mockTransactions, priceOf } from './demo'
-import { mockCachedPrice, mockCalc, mockNetWorth, mockSearch } from './market'
+import { mockCachedPrice, mockCalc, mockNetWorth, mockRatesRefreshed } from './market'
+import { mockSearch } from './market-assets'
 import { mockPreview } from './preview'
 import { mockLinkProperty, mockPropertyLinks } from './property-links'
 
@@ -216,6 +217,7 @@ export const transactionsCommands: MockCommands = {
     return resolve({ points: [], missing: [] } satisfies EnsureFxOutput)
   },
   refresh_all: (_call) => {
+    mockRatesRefreshed()
     const result: RefreshResult = { prices: 3, fx: 1, restamped: 0, updated_at: new Date().toISOString() }
     // Like the backend: the screens follow the event, not the command's answer.
     setTimeout(() => emitMock('prices-updated', result), 0)

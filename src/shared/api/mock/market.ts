@@ -1,10 +1,25 @@
-/** Prices, FX, losses, flows, net worth, search and candles. */
+/** Prices, FX, losses, flows and net worth; asset search and candles are in `market-assets`. */
 
 import { txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockCategories, mockContactBalances } from './ledger'
 import { mockStores, mockTransactions, priceOf } from './demo'
 import { MOCK_PER_USD } from './fx-rates'
 import { mockAppSettings, mockSettings } from './vault-data'
+import { mockScenario } from './scenario'
+
+/** When the FX rows were taken: `stress` has rates from two days ago, 18:05 (Currency-2 · 8); `null` is now. */
+let ratesTakenAt: string | null = (() => {
+  if (mockScenario !== 'stress') return null
+  const day = new Date()
+  day.setDate(day.getDate() - 2)
+  day.setHours(18, 5, 0, 0)
+  return day.toISOString()
+})()
+
+/** A refresh brings the rates up to now. */
+export function mockRatesRefreshed() {
+  ratesTakenAt = null
+}
 
 /** Rough losses in the mock: the fee only, at the mock prices. */
 export function mockLossOf(id: string): TxLoss {
@@ -61,7 +76,7 @@ export function mockFxTable(): FxTable {
       currency: code,
       per_base: String(rate / baseRate),
       in_base: String(baseRate / rate),
-      updated_at: new Date().toISOString(),
+      updated_at: ratesTakenAt ?? new Date().toISOString(),
       tracked: code === 'rub',
       crypto: false,
       favorite: favorites.includes(code),
@@ -253,43 +268,3 @@ export const mockHistory: HistoryPoint[] = [
   { ts: '2026-09-01T00:00:00Z', ts_ms: 1785542400000n, value_usd: '32000', value_base: '32000' },
   { ts: '2026-09-28T00:00:00Z', ts_ms: 1787961600000n, value_usd: '42000', value_base: '42000' },
 ]
-
-export function mockSearch(rawQuery: string): AssetSearchHit[] {
-  const known = [
-    { symbol: 'BTC', name: 'Bitcoin', coingecko_id: 'bitcoin' },
-    { symbol: 'ETH', name: 'Ethereum', coingecko_id: 'ethereum' },
-    { symbol: 'SOL', name: 'Solana', coingecko_id: 'solana' },
-    { symbol: 'USDT', name: 'Tether', coingecko_id: 'tether' },
-  ]
-  const needle = (rawQuery ?? '').toLowerCase()
-  return known
-    .filter((entry) => entry.symbol.toLowerCase().includes(needle) || entry.name.toLowerCase().includes(needle))
-    .map((entry) => ({ ...entry, chain: 'ethereum', contract: null, rank: 1n }))
-}
-
-export function mockCandles(input: GetCandlesInput): GetCandlesOutput {
-  const limit = Math.min(Math.max(input.limit || 300, 1), 1000)
-  const stepMs = (input.interval_min || 60) * 60_000
-  const now = Math.floor(Date.now() / stepMs) * stepMs
-  const basePrice = 60000 + ((input.symbol.length * 1500) % 30000)
-  let price = basePrice
-  const candles: CandlePoint[] = []
-  for (let step = limit - 1; step >= 0; step--) {
-    const drift = Math.sin(step / 17) * 0.004 + Math.cos(step / 6) * 0.002
-    const open = price
-    const close = open * (1 + drift)
-    const high = Math.max(open, close) * (1 + 0.002 * ((step * 7) % 5))
-    const low = Math.min(open, close) * (1 - 0.002 * ((step * 3) % 5))
-    const volume = String(50 + ((step * 37) % 200))
-    candles.push({
-      ts: new Date(now - step * stepMs).toISOString(),
-      open: open.toFixed(2),
-      high: high.toFixed(2),
-      low: low.toFixed(2),
-      close: close.toFixed(2),
-      volume,
-    })
-    price = close
-  }
-  return { candles }
-}
