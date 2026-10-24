@@ -13,6 +13,8 @@ export interface QuickAddRequest {
   kind?: TxKind
   /** A payment's category: «Записать оплату в „Продукты“» (Paths 2 · 8). */
   category?: string
+  /** A transfer's destination: «Снять с карты» on an empty wallet (Wallets-3 · 18). */
+  toStoreId?: string
 }
 
 /** The request of the current opening; the dialog clears it on close. */

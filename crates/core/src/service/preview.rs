@@ -50,6 +50,21 @@ pub struct TxPreview {
     /// the settle asset; `None` for anything else or without leverage.
     #[serde(default)]
     pub liquidation_price: Option<Amount>,
+    /// An asset sold for money (Wallets-4 · 21): what it stood at in the
+    /// books and what the sale made over it; `None` for anything else.
+    #[serde(default)]
+    pub sale: Option<SalePreview>,
+}
+
+/// A sale against the books, in the sale's currency.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct SalePreview {
+    /// Lowercase code of the amounts below.
+    pub currency: String,
+    /// The sold quantity at the price the wallet is valued at today.
+    pub book_value: Amount,
+    /// Proceeds minus `book_value`; negative for a sale at a loss.
+    pub gain: Amount,
 }
 
 /// Maintenance margin rate assumed for the estimate (Bybit's first tier, 0.5 %).
@@ -165,7 +180,27 @@ impl UnlockedVault {
             warnings,
             error,
             liquidation_price: liquidation_price(&tx),
+            sale: self.sale_preview(&tx),
         }
+    }
+
+    /// `None` when the asset has no price yet: there is nothing to compare with.
+    fn sale_preview(&self, tx: &Transaction) -> Option<SalePreview> {
+        let Transaction::AssetSell(sell) = tx else {
+            return None;
+        };
+        let usd = self.price_usd_for(&sell.asset.key());
+        if !usd.is_positive() || !sell.quantity.is_positive() {
+            return None;
+        }
+        let currency = sell.currency.symbol.to_lowercase();
+        let book_value = (sell.quantity * usd * self.per_usd(&currency)?).round(2);
+        let gain = (sell.quantity * sell.unit_price).round(2) - book_value;
+        Some(SalePreview {
+            currency,
+            book_value,
+            gain,
+        })
     }
 
     /// Current quantity of one asset in one store (zero when not held).
@@ -200,6 +235,54 @@ mod tests {
         assert!(preview.warnings.is_empty());
         assert_eq!(preview.flow, FlowClass::Daily);
         assert_eq!(vault.doc.transactions.len(), count);
+    }
+
+    #[test]
+    fn a_sale_shows_the_book_value_and_the_gain() {
+        use crate::model::transaction::{AssetSellTx, KindDetails, TopupTx, TxMeta};
+        use crate::service::test_support::{meta, usd};
+        let (_dir, mut vault) = crate::service::test_support::empty_vault();
+        vault.set_base_currency("usd");
+        let things = store(&mut vault, "Things", StoreKind::Property, None);
+        let car = AssetRef {
+            symbol: "CAR".into(),
+            name: "Car".into(),
+            coingecko_id: None,
+            chain: None,
+            contract: None,
+            quote: "CAR".into(),
+        };
+        vault
+            .add_transaction(Transaction::Topup(TopupTx {
+                meta: meta("bought", &["income_other"]),
+                store_id: things.clone(),
+                asset: car.clone(),
+                amount: amount("1"),
+                fee: None,
+                from: None,
+                details: KindDetails {
+                    unit_price: Some(amount("10000")),
+                    ..KindDetails::default()
+                },
+                price: Default::default(),
+            }))
+            .unwrap();
+        let sell = Transaction::AssetSell(AssetSellTx {
+            meta: TxMeta::new("car"),
+            store_id: things,
+            asset: car,
+            unit_price: amount("12000"),
+            quantity: amount("1"),
+            currency: usd(),
+            proceeds_to: None,
+            fee: None,
+            price: Default::default(),
+        });
+        let sale = vault.sale_preview(&sell).unwrap();
+        assert_eq!(sale.currency, "usd");
+        assert_eq!(sale.book_value, amount("10000"));
+        assert_eq!(sale.gain, amount("2000"));
+        assert_eq!(vault.sale_preview(&payment("cash", "1", "food")), None);
     }
 
     #[test]

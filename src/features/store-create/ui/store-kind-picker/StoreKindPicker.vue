@@ -30,6 +30,7 @@ function choose(value: StoreKind) {
           :key="info.kind"
           variant="outline"
           :aria-pressed="kind === info.kind"
+          :data-kind="info.kind"
           :class="cn(PICK_CARD_CLASS, 'flex-col gap-1', kind === info.kind && 'border-primary bg-primary/5 hover:bg-primary/5')"
           @click="choose(info.kind)"
         >

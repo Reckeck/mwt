@@ -52,6 +52,8 @@ const itemStep2 = (name, card = 0) => [
   { click: '[data-wizard-next]' },
   { wait: 500 },
 ]
+/** A wallet's gear menu item (Wallets-3 · 19–20). */
+const gear = (item) => [{ click: '[data-tour="wallet-gear"]' }, { wait: 300 }, { click: `[data-gear="${item}"]` }, { wait: 600 }]
 const deal = (kind, fills) => [{ eval: TO_BYBIT }, { click: `[data-deal="${kind}"]` }, { wait: 800 }, ...fills.map((fill) => ({ fill })), { wait: 900 }]
 
 const ALL = ['year', 'empty', 'stress', 'slow', 'error']
@@ -520,6 +522,40 @@ const stage4 = [
     route: '/stores',
     steps: [...itemStep2('Аренда', 3), { fill: ['#utility-amount', '35000'] }, { fill: ['#utility-due', '10'] }, { wait: 500 }],
     canvas: { board: 'Wallets-3', frame: '17.' },
+  },
+  {
+    // a new vault: the «Наличные» it comes with, nothing in it
+    name: 'wallet-cash-empty',
+    route: '/stores',
+    scenarios: ['fresh'],
+    steps: [{ eval: toWallet('Наличные') }],
+    canvas: { board: 'Wallets-3', frame: '18.' },
+  },
+  { name: 'wallet-settings', route: '/stores', steps: [{ eval: toWallet('Bybit') }, ...gear('settings')], canvas: { board: 'Wallets-3', frame: '19.' } },
+  {
+    name: 'wallet-adjust',
+    route: '/stores',
+    // one currency: the short form (Тинькофф holds RUB and USD in the mock, so it gets the table)
+    steps: [{ eval: toWallet('Наличные') }, ...gear('adjust'), { fill: ['#adjustment-actual', '95400'] }, { wait: 400 }],
+    canvas: { board: 'Wallets-3', frame: '20.' },
+  },
+  {
+    name: 'wallet-cash-balance',
+    route: '/stores',
+    scenarios: ['fresh'],
+    steps: [{ eval: toWallet('Наличные') }, { click: '[data-wallet-balance]' }, { wait: 600 }],
+    canvas: { board: 'Wallets-3', frame: '20.' },
+  },
+  {
+    name: 'property-sell',
+    route: '/stores',
+    steps: [
+      { eval: toWallet('Машина') },
+      { desktop: [{ click: '[data-wallet-sell]' }] },
+      { phone: [{ click: '[data-tour="wallet-gear"]' }, { wait: 300 }, { click: '[data-gear="sell"]' }] },
+      { wait: 500 },
+      { fill: ['#sell-received', '12000'] }, { wait: 400 }],
+    canvas: { board: 'Wallets-4', frame: '21.' },
   },
   { name: 'wallet-bank-currency', route: '/stores', steps: [{ eval: toWallet('Тинькофф') }], canvas: { board: 'Currency-1', frame: '3.' } },
   { name: 'wallet-exchange-currency', route: '/stores', steps: [{ eval: toWallet('Bybit') }], canvas: { board: 'Currency-1', frame: '4.' } },

@@ -7,9 +7,12 @@ import { AutomationDialog } from '@/features/automation-edit'
 import { useExchangeKeyStatus } from '@/features/exchange-key'
 import { GoalDialog } from '@/features/goal-edit'
 import { PlanCalculatorDialog, type CalculatorPlan } from '@/features/plan-calculator'
+import { PropertySellDialog } from '@/features/property-sell'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { AdjustmentDialog } from '@/features/store-adjust'
+import { StoreChangeDialog, CONVERTIBLE_KINDS, convertibleKinds } from '@/features/store-change'
 import { StoreCreateDialog } from '@/features/store-create'
+import { StoreSettingsDialog } from '@/features/store-edit'
 import { QuickAddDialog } from '@/widgets/quick-add'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { DepositSummary } from '@/widgets/deposit-summary'
@@ -17,7 +20,6 @@ import { PropertyValueCard } from '@/widgets/property-value'
 import { VehicleCard } from '@/widgets/vehicle-card'
 import { isHome, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
-import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { openQuickAdd } from '@/shared/lib/quick-add'
@@ -26,6 +28,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { walletFigure } from './lib/wallet-figure'
 import { type WalletTabsKind, useWalletScope, useWalletTabs } from './model/use-wallet-view'
 import { SubAccountsCard } from './ui/sub-accounts-card'
+import { WalletEmpty } from './ui/wallet-empty'
 import { WalletHeader } from './ui/wallet-header'
 import { WalletTabs } from './ui/wallet-tabs'
 
@@ -93,6 +96,15 @@ const priceRefresh = usePriceRefresh()
 /* --- dialogs: one per action, never one inside another --- */
 const transactionOpen = ref(false)
 const adjustOpen = ref(false)
+const settingsOpen = ref(false)
+const changeOpen = ref(false)
+const sellOpen = ref(false)
+/** Kinds the settings may switch to; the change itself is the «Сменить тип» dialog. */
+const kinds = computed(() =>
+  store.value && !store.value.parent_id && CONVERTIBLE_KINDS.includes(store.value.kind)
+    ? convertibleKinds(store.value.kind, settingsStore.cryptoEnabled)
+    : [],
+)
 const calculatorOpen = ref(false)
 /** Plan handed from the calculator to the transaction form. */
 const plan = ref<CalculatorPlan | null>(null)
@@ -147,11 +159,13 @@ function openWallet(created: Store) {
         :has-children="hasChildren && !isExchangeNode"
         :refreshing="priceRefresh.isPending.value"
         :exchange="isExchangeNode"
+        :empty="isEmpty"
         @act="act"
+        @settings="settingsOpen = true"
         @operation="openTransaction"
         @adjust="adjustOpen = true"
         @revalue="adjustOpen = true"
-        @sell="openTransaction"
+        @sell="sellOpen = true"
         @calculator="calculatorOpen = true"
         @sub-account="subWalletOpen = true"
         @goal="goalOpen = true"
@@ -159,9 +173,7 @@ function openWallet(created: Store) {
         @refresh="priceRefresh.mutate()"
       />
 
-      <EmptyState v-if="isEmpty" :title="t('wallet.empty.title')" :description="t('wallet.empty.description')">
-        <Button :disabled="isArchived" @click="openTransaction">{{ t('wallet.empty.action') }}</Button>
-      </EmptyState>
+      <WalletEmpty v-if="isEmpty" :store="store" @balance="adjustOpen = true" />
 
       <template v-else>
         <!-- A wallet with sub-accounts chooses its scope; an exchange lists them as cards instead. -->
@@ -214,6 +226,16 @@ function openWallet(created: Store) {
       <QuickAddDialog v-if="deal" v-model:open="dealOpen" :deal="deal" />
       <TransactionCreateDialog v-model:open="transactionOpen" :store-id="storeId" :disabled="isArchived" :plan="plan" />
       <AdjustmentDialog v-model:open="adjustOpen" :store-id="storeId" />
+      <StoreSettingsDialog
+        v-model:open="settingsOpen"
+        :store="store"
+        :kinds="kinds"
+        @adjust="adjustOpen = true"
+        @change-kind="changeOpen = true"
+        @more="router.push({ name: 'wallet-settings', params: { id: store.id } })"
+      />
+      <StoreChangeDialog v-model:open="changeOpen" :store="store" initial="change_kind" />
+      <PropertySellDialog v-if="isPropertyRoot" v-model:open="sellOpen" :store="store" :positions="positions" />
       <PlanCalculatorDialog v-model:open="calculatorOpen" :base-currency="base" :exchange="isExchangeNode ? store?.name : null" @apply="onApplyPlan" />
       <GoalDialog v-model:open="goalOpen" :store-id="storeId" />
       <AutomationDialog v-model:open="automationOpen" :store-id="storeId" />

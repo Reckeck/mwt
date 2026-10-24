@@ -84,7 +84,13 @@ defineExpose({
   pending: computed(() => save.isPending.value),
   input: computed(() => formToInput(form)),
   /** What the user typed, for the next form when the dialog swaps the wallet. */
-  draft: computed(() => ({ kind: form.kind, categories: [...form.categories], amount: form.amount, comment: form.comment })),
+  draft: computed(() => ({
+    kind: form.kind,
+    categories: [...form.categories],
+    amount: form.amount,
+    comment: form.comment,
+    ...(form.to && 'store' in form.to ? { to: form.to.store } : {}),
+  })),
 })
 </script>
 

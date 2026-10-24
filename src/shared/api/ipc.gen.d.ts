@@ -4026,6 +4026,23 @@ edge_values: { [key: string]: string }, };
 
 type RunWorkflowInput = { id: string, trigger_node: string | null, };
 
+/**
+ * A sale against the books, in the sale's currency.
+ */
+type SalePreview = { 
+/**
+ * Lowercase code of the amounts below.
+ */
+currency: string, 
+/**
+ * The sold quantity at the price the wallet is valued at today.
+ */
+book_value: Amount, 
+/**
+ * Proceeds minus `book_value`; negative for a sale at a loss.
+ */
+gain: Amount, };
+
 type SaveTerminalDrawingsInput = { store_id: string, symbol: string, 
 /**
  * The chart drawing manager's JSON export; empty or `[]` removes it.
@@ -5488,7 +5505,12 @@ error: string | null,
  * An opened futures position: the price near which it is liquidated, in
  * the settle asset; `None` for anything else or without leverage.
  */
-liquidation_price: Amount | null, };
+liquidation_price: Amount | null, 
+/**
+ * An asset sold for money (Wallets-4 · 21): what it stood at in the
+ * books and what the sale made over it; `None` for anything else.
+ */
+sale: SalePreview | null, };
 
 /**
  * An operation that belongs to a property (plan G4): rent received for a
