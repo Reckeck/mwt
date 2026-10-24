@@ -2,6 +2,7 @@
 import { BudgetDialog } from '@/features/budget-edit'
 import { GoalDialog } from '@/features/goal-edit'
 import { PriceAlertDialog } from '@/features/price-alert-edit'
+import { AutomationDetailsSheet } from '@/widgets/automation-details'
 import { EntityRelations, EntitySheet } from '@/widgets/entity-sheet'
 import { GoalDetailsSheet } from '@/widgets/goal-details'
 import { WalletGlance } from '@/widgets/quick-glance'
@@ -11,7 +12,7 @@ import { useEntityHost } from './use-entity-host'
 
 /** Every entity card of the app, drawn from the address (`?open=goal:g1`). */
 const host = useEntityHost()
-const { txOpen, goalCardOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
+const { txOpen, goalCardOpen, automationOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
 </script>
 
 <template>
@@ -31,6 +32,7 @@ const { txOpen, goalCardOpen, cardOpen, goalOpen, budgetOpen, alertOpen } = host
   >
     <template #wallet="{ storeId, label }"><WalletGlance :store-id="storeId" :name="label" /></template>
   </GoalDetailsSheet>
+  <AutomationDetailsSheet v-model:open="automationOpen" :automation-id="host.top.value?.kind === 'automation' ? host.top.value.id : null" />
   <EntitySheet
     v-model:open="cardOpen"
     :card="host.current.value"

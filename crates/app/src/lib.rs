@@ -330,6 +330,8 @@ pub fn run() {
             planning::get_upcoming,
             planning::list_my_automations,
             planning::set_my_automation_active,
+            planning::get_automation_card,
+            planning::list_automation_journal,
             planning::set_loyalty_info,
             planning::create_loyalty_program,
             planning::adjust_points,

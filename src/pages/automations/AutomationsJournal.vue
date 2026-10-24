@@ -1,51 +1,46 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
 
 import { WorkflowQueue } from '@/widgets/workflow-queue'
-import { WorkflowRuns } from '@/widgets/workflow-runs'
+import { AutomationConfirmDialog } from '@/features/workflow-manage'
+import { useIsPhone } from '@/shared/lib/phone'
 import { buttonVariants } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
-import { call } from '@/shared/api/ipc'
-import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
+import { SectionState } from '@/shared/ui/section-state'
 
+import { useJournal } from './model/use-journal'
+import { JournalList, JournalTable } from './ui/journal'
+
+/**
+ * The journal (Auto-1 · 4): everything that ran — schemes, repeats, reminders,
+ * alerts — in one list, the newest first. A run waiting for «да» is confirmed
+ * from its row (Auto-1 · 5).
+ */
 const { t } = useI18n()
-
-// The same queries the sections read: a journal with nothing at all says so once.
-const queue = useQuery({ queryKey: WORKFLOW_KEYS.queue, queryFn: () => call<QueuedActions[]>('list_workflow_queue') })
-const waits = useQuery({ queryKey: WORKFLOW_KEYS.waits, queryFn: () => call<WorkflowWait[]>('list_workflow_waits') })
-const runs = useQuery({
-  queryKey: WORKFLOW_KEYS.runs,
-  queryFn: () => call<WorkflowRun[]>('list_workflow_runs', { input: { workflow_id: null, limit: 200 } }),
-})
-const nothing = computed(
-  () =>
-    queue.isSuccess.value &&
-    waits.isSuccess.value &&
-    runs.isSuccess.value &&
-    !queue.data.value?.length &&
-    !waits.data.value?.length &&
-    !runs.data.value?.length,
-)
+const phone = useIsPhone()
+const { list, rows, queued, confirming, confirmOpen, storeName } = useJournal()
+const confirm = (entry: JournalEntry) => (confirming.value = entry)
 </script>
 
 <template>
-  <EmptyState v-if="nothing" :title="t('workflow.journal.empty')" :description="t('workflow.journal.emptyHint')">
-    <RouterLink :to="{ name: 'automations-workflows' }" :class="buttonVariants({ variant: 'outline' })">
-      {{ t('workflow.journal.toLessons') }}
-    </RouterLink>
-  </EmptyState>
-  <!-- What waits for you first, then what already ran. -->
-  <div v-else class="grid gap-6">
-    <section class="grid gap-3">
-      <h2 class="heading-section">{{ t('workflow.journal.waiting') }}</h2>
-      <WorkflowQueue />
-    </section>
-    <section class="grid gap-3">
-      <h2 class="heading-section">{{ t('workflow.journal.history') }}</h2>
-      <WorkflowRuns />
-    </section>
-  </div>
+  <SectionState :loading="list.isPending.value" :error="list.error.value" skeleton="list" :rows="5">
+    <EmptyState v-if="!rows.length" :title="t('workflow.journal.empty')" :description="t('workflow.journal.emptyHint')">
+      <RouterLink :to="{ name: 'automations-workflows' }" :class="buttonVariants({ variant: 'outline' })">
+        {{ t('workflow.journal.toLessons') }}
+      </RouterLink>
+    </EmptyState>
+    <div v-else class="grid gap-6">
+      <div data-tour="automations-journal">
+        <JournalList v-if="phone" :rows="rows" @confirm="confirm" />
+        <JournalTable v-else :rows="rows" @confirm="confirm" />
+      </div>
+      <!-- Operations a scheme prepared for confirmation are not runs: they wait under the journal. -->
+      <section v-if="queued" class="grid gap-3">
+        <h2 class="heading-section">{{ t('workflow.journal.waiting') }}</h2>
+        <WorkflowQueue />
+      </section>
+    </div>
+  </SectionState>
+  <AutomationConfirmDialog v-model:open="confirmOpen" :entry="confirming" :store-name="storeName" />
 </template>

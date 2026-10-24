@@ -74,9 +74,9 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'workflow-vars-open', key: 'workflows.vars', side: 'left' },
   ]),
   'automations-journal': workflows([
-    { target: 'workflow-questions', key: 'workflows.questions', side: 'top' },
+    { target: 'automations-journal', key: 'workflows.runs', side: 'top' },
+    { target: 'journal-confirm', key: 'workflows.questions', side: 'left' },
     { target: 'workflow-queue', key: 'workflows.queue', side: 'top' },
-    { target: 'workflow-runs', key: 'workflows.runs', side: 'top' },
   ]),
   'workflow-new': WORKFLOW_EDITOR,
   dashboard: [

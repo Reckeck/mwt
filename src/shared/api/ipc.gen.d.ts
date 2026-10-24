@@ -426,6 +426,24 @@ estimate: Amount | null,
 property_id: string | null, };
 
 /**
+ * The card of a scheme or a repeat.
+ */
+type AutomationCard = { kind: MineKind, id: string, name: string, description: string, active: boolean, 
+/**
+ * «Когда»; for a scheme on an income, the schedule of the repeat that
+ * books it (see `follows`).
+ */
+schedule: Schedule | null, workday: WorkdayShift, 
+/**
+ * The repeat whose schedule «Когда» borrows.
+ */
+follows: string | null, trigger: CardTrigger, actions: Array<CardAction>, asks: boolean, 
+/**
+ * RFC3339.
+ */
+next_at: string | null, runs: Array<JournalEntry>, };
+
+/**
  * An automation as the form edits it. The template is an ordinary
  * transaction input of one of the four verbs.
  */
@@ -850,6 +868,42 @@ service_interval_km: number | null,
  * Last known mileage, km, and the `YYYY-MM-DD` it was read.
  */
 mileage_km: number | null, mileage_at: string | null, };
+
+/**
+ * «Сделать»: one action of it.
+ */
+type CardAction = { 
+/**
+ * The operation kind (`transfer`, `payment` …), `distribute`, `notify`,
+ * `reminder`, or another action node's kind.
+ */
+kind: string, 
+/**
+ * The amount is this share of the incoming one, in percent.
+ */
+percent: Amount | null, money: CardMoney, 
+/**
+ * A notice's title.
+ */
+title: string, };
+
+/**
+ * The money of one operation, made or about to be made.
+ */
+type CardMoney = { 
+/**
+ * What arrives (or leaves, for a payment), without a sign.
+ */
+amount: Amount | null, 
+/**
+ * Lowercase code: `usd`, `usdt`.
+ */
+currency: string | null, from_store: string | null, to_store: string | null, };
+
+/**
+ * «Если»: what starts it.
+ */
+type CardTrigger = { "kind": "schedule" } | { "kind": "transaction", tx_kind: string, category: string | null, store: string | null, } | { "kind": "manual" } | { "kind": "other", node_kind: string, };
 
 /**
  * One banknote line of a cash count.
@@ -2646,6 +2700,40 @@ cost_known: boolean, };
 type Investments = { base_currency: string, invested: Amount, value: Amount, profit: Amount, rows: Array<InvestmentRow>, };
 
 type IssueLevel = "error" | "warning";
+
+/**
+ * One row of the journal: a run or a notice shown.
+ */
+type JournalEntry = { 
+/**
+ * The run id, or the notice key.
+ */
+id: string, kind: MineKind, 
+/**
+ * The workflow, reminder or alert.
+ */
+source_id: string, name: string, 
+/**
+ * RFC3339.
+ */
+at: string, status: JournalStatus, 
+/**
+ * What it did, or what it asks to do.
+ */
+money: CardMoney, 
+/**
+ * For «Подтвердить» in the row.
+ */
+wait_id: string | null, 
+/**
+ * The reason or the error, as the run wrote it.
+ */
+note: string, };
+
+/**
+ * How a run ended, as the journal says it.
+ */
+type JournalStatus = "done" | "asking" | "waiting" | "partial" | "failed" | "stopped" | "rejected" | "skipped" | "shown";
 
 /**
  * The Bank of Russia key rate from a day on, percent.

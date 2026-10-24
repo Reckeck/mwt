@@ -41,7 +41,7 @@ function withOperation(row: MineItem, tx: Transaction): MineItem {
 }
 
 /** A scheme's next run: the mock reads only a daily «HH:MM», tomorrow at that time. */
-function nextScheme(graph: WorkflowGraph): string | null {
+export function nextScheme(graph: WorkflowGraph): string | null {
   const schedule = graph.nodes.find((node) => node.kind === 'trigger.schedule' && !node.disabled)
   if (!schedule) return null
   const [hours, minutes] = String((schedule.params as { time?: string }).time ?? '09:00')

@@ -459,6 +459,30 @@ pub async fn set_my_automation_active(
     })
 }
 
+/// The card of a scheme or a repeat: when, if, what, asks, next time, runs.
+#[tauri::command]
+pub async fn get_automation_card(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<trade_core::service::AutomationCard, String> {
+    let zone = current_zone(&app);
+    with_vault(&state, |vault| {
+        vault.automation_card(&id, now_secs(), &zone)
+    })
+}
+
+/// The journal: every run and every reminder or alert shown, newest first.
+#[tauri::command]
+pub async fn list_automation_journal(
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<trade_core::service::JournalEntry>, String> {
+    with_vault(&state, |vault| {
+        Ok(vault.automation_journal(limit.unwrap_or(100).min(500)))
+    })
+}
+
 // -- savings, deposits, ПДС ---------------------------------------------------------
 
 #[tauri::command]
