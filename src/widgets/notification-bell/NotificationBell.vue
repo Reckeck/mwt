@@ -45,7 +45,7 @@ const markRead = useMutation({
 /** What gets announced is chosen in the settings: the empty panel leads there. */
 function openSettings() {
   open.value = false
-  void router.push({ query: settingsQuery(router.currentRoute.value.query, 'notifications') })
+  void router.push({ query: settingsQuery(router.currentRoute.value.query, 'app', 'notifications') })
 }
 
 function openNotice(record: NoticeRecord) {

@@ -2,9 +2,9 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
@@ -72,18 +72,19 @@ async function onLocaleChange(next: string) {
     <!-- Theme -->
     <div class="grid gap-1.5">
       <Label>{{ t('settings.theme.title') }}</Label>
-      <div class="grid grid-cols-3 gap-2">
-        <Button
-          variant="outline"
-          v-for="option in themes"
-          :key="option"
-          class="font-normal rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
-          :class="settingsStore.theme === option && 'border-primary bg-accent font-medium'"
-          @click="setTheme(option)"
-        >
+      <ToggleGroup
+        type="single"
+        variant="segmented"
+        :spacing="1"
+        class="max-w-full"
+        :model-value="settingsStore.theme"
+        :aria-label="t('settings.theme.title')"
+        @update:model-value="(value) => value && setTheme(value as Theme)"
+      >
+        <ToggleGroupItem v-for="option in themes" :key="option" :value="option" class="h-10 px-3 md:px-5">
           {{ t(`settings.theme.${option}`) }}
-        </Button>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
     </div>
 
     <!-- Language -->

@@ -27,7 +27,23 @@ fn slug(label: &str) -> String {
     }
 }
 
+const SYSTEM_CATEGORY: &str = "system categories are set by the app and cannot be changed";
+
 impl UnlockedVault {
+    /// The app's own categories (group `Service`) back reports, exchanges and
+    /// imports: they are never renamed, regrouped, archived or deleted.
+    fn ensure_editable(&self, key: &str) -> Result<()> {
+        let system = self
+            .doc
+            .categories
+            .iter()
+            .any(|category| category.key == key && category.group == CategoryGroup::Service);
+        if system {
+            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
+        }
+        Ok(())
+    }
+
     fn find_category_mut(&mut self, key: &str) -> Result<&mut Category> {
         self.doc
             .categories
@@ -47,6 +63,9 @@ impl UnlockedVault {
         let name = name.trim();
         if name.is_empty() {
             return Err(Error::InvalidInput("a category needs a name".into()));
+        }
+        if group == CategoryGroup::Service {
+            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
         }
         let wanted = key.map(slug).unwrap_or_else(|| slug(name));
         let mut candidate = wanted.clone();
@@ -84,6 +103,11 @@ impl UnlockedVault {
         essential: Option<bool>,
         passive: Option<bool>,
     ) -> Result<Category> {
+        self.find_category_mut(key)?;
+        self.ensure_editable(key)?;
+        if group == CategoryGroup::Service {
+            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
+        }
         let category = self.find_category_mut(key)?;
         if essential.is_some() {
             category.essential = essential;
@@ -102,6 +126,8 @@ impl UnlockedVault {
     }
 
     pub fn archive_category(&mut self, key: &str, archived: bool) -> Result<()> {
+        self.find_category_mut(key)?;
+        self.ensure_editable(key)?;
         self.find_category_mut(key)?.archived = archived;
         self.persist()
     }
@@ -143,6 +169,7 @@ impl UnlockedVault {
 
     /// Only an unused category can be deleted; otherwise archive it.
     pub fn delete_category(&mut self, key: &str) -> Result<()> {
+        self.ensure_editable(key)?;
         if self.category_in_use(key) {
             return Err(Error::InvalidInput(
                 "the category is in use; archive it instead".into(),
@@ -319,5 +346,35 @@ mod vault_tests {
             .update_category("taxi", Some("  "), CategoryGroup::Daily, None, None)
             .unwrap();
         assert_eq!(reset.name, None);
+    }
+
+    #[test]
+    fn system_categories_cannot_be_changed() {
+        let (_dir, mut vault) = setup();
+        assert!(
+            vault
+                .update_category("trading", Some("Mine"), CategoryGroup::Service, None, None)
+                .is_err()
+        );
+        assert!(vault.archive_category("fee", true).is_err());
+        assert!(vault.delete_category("exchange").is_err());
+        assert!(
+            vault
+                .create_category(None, "Sneaky", CategoryGroup::Service)
+                .is_err()
+        );
+        // a user's category cannot be moved into the service group either
+        assert!(
+            vault
+                .update_category("taxi", None, CategoryGroup::Service, None, None)
+                .is_err()
+        );
+        assert!(
+            vault
+                .doc
+                .categories
+                .iter()
+                .any(|category| category.key == "trading" && !category.archived)
+        );
     }
 }

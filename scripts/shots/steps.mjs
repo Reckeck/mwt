@@ -6,10 +6,18 @@
 //   { hover: 'css' }   { fill: ['css', 'text'] }   { press: 'ctrl+k' | 'Escape' | … }
 //   { type: ['css', 'text'] } — real key input, for a combobox that keeps its own search term
 //   { wait: ms }       { eval: 'page code, returns anything' }
+// `login: false` — no login: the shot starts from a reloaded, locked app (mock state and LocalStorage reset), route as given.
 // `desktop` / `phone` steps run only there (`{ desktop: [...] }`, `{ phone: [...] }`).
 import { pathToFileURL } from 'node:url'
 
-const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
+import { login, mounted, setTheme } from '../check-layout/scenario.mjs'
+
+/** Page code: wait for the app to mount (a Vite reload may be under way), then `gp` is its global properties. */
+export const GP = `
+  for (let tries = 0; !document.querySelector('#app')?.__vue_app__ && tries < 300; tries++) await new Promise((done) => setTimeout(done, 100))
+  if (!document.querySelector('#app')?.__vue_app__) throw new Error('the app did not mount in 30 s')
+  const gp = document.querySelector('#app').__vue_app__.config.globalProperties;`
+const APP = GP
 
 /** Find by CSS or by visible text; the element, or a thrown error naming what is missing. */
 const FIND = `
@@ -25,6 +33,16 @@ const FIND = `
     if (!el) throw new Error('no element with text ' + what.text)
     return el
   }`
+
+/** A reloaded app, locked, in `theme`: the start of a `login: false` shot. */
+export async function freshStart(page, url, theme, touch) {
+  await page.eval(`try { localStorage.clear(); sessionStorage.clear() } catch {} return true`)
+  await page.goto(url)
+  await mounted(page)
+  await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+  await page.eval(`const { setLocalePreference } = await import('/src/shared/lib/locale.ts'); await setLocalePreference('ru'); return true`)
+  await setTheme(page, theme)
+}
 
 /** Close what an earlier shot left open, then open the route. */
 async function reset(page, route) {
@@ -95,7 +113,21 @@ async function runList(page, list, touch) {
   for (const item of list) await step(page, item, touch)
 }
 
+/**
+ * A shared-login shot needs the mounted, logged-in app: Vite may have reloaded the page since
+ * the last shot, and a reload leaves the unlock screen. Logs in again and restores the theme.
+ */
+export async function ensureReady(page, theme, touch) {
+  await mounted(page)
+  const locked = await page.eval(`${APP} return gp.$pinia._s.get('vault').locked !== false`)
+  if (!locked) return
+  await login(page)
+  await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+  await setTheme(page, theme)
+}
+
 export async function runSteps(page, shot, touch) {
+  await mounted(page)
   await reset(page, shot.route)
   await runList(page, shot.steps ?? [], touch)
 }

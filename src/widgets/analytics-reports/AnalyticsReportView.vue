@@ -40,7 +40,7 @@ function resetFilter() {
 const action = computed(() => EMPTY_ACTION[props.kind])
 function runAction() {
   if (action.value === 'createWallet') void router.push({ name: 'stores' })
-  else if (action.value === 'inflation') void router.replace({ query: { ...route.query, settings: 'inflation' } })
+  else if (action.value === 'inflation') void router.replace({ query: { ...route.query, settings: 'accounting', section: 'inflation' } })
   else quickAddOpen.value = true
 }
 

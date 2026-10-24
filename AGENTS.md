@@ -455,7 +455,7 @@ Co-authored-by: <Инструмент> <email>
 | `documentation-and-adrs` | ADR в проекте не ведутся; какие docs обновлять — в DoD |
 | `observability-and-instrumentation` | метрики и алерты продакшена; приложение офлайн, телеметрии нет |
 | `shipping-and-launch` | выкатка на сервер, флаги, мониторинг; выпуск — по `docs/workflow.md` |
-| `deprecation-and-migration` | миграции БД продакшена; vault — `vault-crypto`, старые пути — редиректы |
+| `deprecation-and-migration` | миграции БД продакшена; vault — `vault-crypto`, старые пути интерфейса не поддерживаются |
 
 ### Управление скиллами
 

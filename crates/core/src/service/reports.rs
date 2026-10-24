@@ -2335,7 +2335,7 @@ mod tests {
                 category: crate::model::notify::NoticeCategory::PriceAlert,
                 title: "BTC ≥ 90 000".into(),
                 body: String::new(),
-                link: Some("/planning/alerts".into()),
+                link: Some("/automations/alerts".into()),
                 at: "2026-03-05T09:00:00Z".into(),
                 delivered_at: "2026-03-05T09:00:01Z".into(),
                 read: false,

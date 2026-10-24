@@ -1,7 +1,7 @@
 import type { LocationQueryRaw } from 'vue-router'
 
-/** Query that opens the settings window on a tab (and section): `?settings=categories&section=rules`. */
-export function settingsQuery(current: LocationQueryRaw, tab = 'general', section?: string): LocationQueryRaw {
+/** Query that opens the settings window on a tab (and section): `?settings=accounting&section=rules`. */
+export function settingsQuery(current: LocationQueryRaw, tab = 'app', section?: string): LocationQueryRaw {
   const next: LocationQueryRaw = { ...current, settings: tab }
   if (section) next.section = section
   else delete next.section

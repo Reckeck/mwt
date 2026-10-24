@@ -129,7 +129,7 @@ pub struct NoticeRecord {
     pub category: NoticeCategory,
     pub title: String,
     pub body: String,
-    /// In-app route the notice opens, e.g. `/planning/reminders`.
+    /// In-app route the notice opens, e.g. `/automations/reminders`.
     pub link: Option<String>,
     /// RFC3339: when it was due.
     pub at: String,

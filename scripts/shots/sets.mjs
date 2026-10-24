@@ -1,6 +1,9 @@
 // What `mise run shots -- <set>` photographs. See steps.mjs for the shape of a shot.
 
 import { stage5 } from './sets-stage5.mjs'
+import { recents } from './sets-recents.mjs'
+import { stage6 } from './sets-stage6.mjs'
+import { GP } from './steps.mjs'
 
 /** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
 const OFFLINE = `Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); return true`
@@ -14,7 +17,7 @@ const EXPAND = { name: 'sidebar-restore', route: '/', steps: COLLAPSE, phone: fa
 
 /** «Недавние» as on Paths 1 · 7: a wallet, the October spending and an operation card were open a moment ago. */
 const SEED_RECENT = `
-  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  ${GP}
   const wait = () => new Promise((done) => setTimeout(done, 600))
   await gp.$router.push('/money?from=2026-10&to=2026-10'); await wait()
   await gp.$router.push('/stores'); await wait()
@@ -24,14 +27,14 @@ const SEED_RECENT = `
 
 /** The Bybit wallet's own page: «Сделка · Bybit» opens from its header (OpForm-2 · 9–11). */
 const TO_BYBIT = `
-  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  ${GP}
   await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
   const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('Bybit'))
   if (link) await gp.$router.push(link.getAttribute('href'))
   await new Promise((done) => setTimeout(done, 900)); return true`
 /** A wallet's own page by the name in the wallets list. */
 const toWallet = (name, tab = '') => `
-  const gp = document.querySelector('#app').__vue_app__.config.globalProperties
+  ${GP}
   await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
   const link = [...document.querySelectorAll('a[href^="/stores/"]')].find((a) => a.textContent.includes('${name}'))
   if (link) await gp.$router.push(link.getAttribute('href') + '${tab ? `?tab=${tab}` : ''}')
@@ -70,11 +73,11 @@ const before = [
   { name: 'stores', route: '/stores', scenarios: ['year', 'empty', 'stress'] },
   { name: 'transactions', route: '/transactions', scenarios: ['year', 'empty'], canvas: { board: 'Ops-1', frame: '1.' } },
   { name: 'calendar', route: '/transactions/calendar', canvas: { board: 'Ops-1', frame: '5.' } },
-  { name: 'flow', route: '/analytics/flow', scenarios: ['year', 'stress'], canvas: { board: 'Money-1', frame: '1.' } },
-  { name: 'saldo', route: '/analytics/saldo', canvas: { board: 'Money-3', frame: '15.' } },
-  { name: 'wealth', route: '/analytics/wealth' },
-  { name: 'budgets', route: '/planning/budgets' },
-  { name: 'automations', route: '/planning/automations', scenarios: ['year', 'empty'] },
+  { name: 'flow', route: '/money/where', scenarios: ['year', 'stress'], canvas: { board: 'Money-1', frame: '1.' } },
+  { name: 'saldo', route: '/money/month', canvas: { board: 'Money-3', frame: '15.' } },
+  { name: 'wealth', route: '/money/wealth' },
+  { name: 'budgets', route: '/money/plan' },
+  { name: 'automations', route: '/automations', scenarios: ['year', 'empty'] },
   { name: 'palette', route: '/', steps: PALETTE, canvas: { board: 'Shell', frame: '4.' } },
   { name: 'quick-add', route: '/', steps: QUICK_ADD, phone: false },
   { name: 'sidebar-collapsed', route: '/', steps: COLLAPSE, phone: false, canvas: { board: 'Shell', frame: '7.' } },
@@ -676,4 +679,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5 }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, recents }

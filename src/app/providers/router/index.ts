@@ -4,7 +4,6 @@ import { type RouteLocationNormalized, createRouter, createWebHistory } from 'vu
 import { i18n } from '@/shared/config/i18n'
 
 import { automationsRoutes } from './automations.routes'
-import { legacyRoutes } from './legacy.routes'
 import { moneyRoutes } from './money.routes'
 
 export const router = createRouter({
@@ -54,10 +53,6 @@ export const router = createRouter({
               component: () => import('@/pages/transactions').then((page) => page.Transactions),
               meta: { i18n: 'nav.transactions' },
             },
-            // Losses live in Money now; old links and tours land there.
-            { path: 'losses', redirect: { name: 'money-investments' } },
-            // The money graph was dropped (2026-10): old links open the list.
-            { path: 'graph', redirect: (to) => ({ name: 'transactions', query: to.query }) },
             {
               path: 'contacts',
               name: 'transactions-contacts',
@@ -80,12 +75,11 @@ export const router = createRouter({
         },
         moneyRoutes,
         ...automationsRoutes,
-        ...legacyRoutes,
         {
           // The settings window opens over any page; old links land on the dashboard with it open.
           path: 'settings',
           name: 'settings',
-          redirect: { name: 'dashboard', query: { settings: 'general' } },
+          redirect: { name: 'dashboard', query: { settings: 'list' } },
         },
       ],
     },

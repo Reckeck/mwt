@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Manager};
-use trade_core::ipc_contract::{PickedVault, RecentVault, SelectVaultInput, VaultStorage};
+use trade_core::ipc_contract::{
+    PickedVault, RecentVault, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
+};
 use trade_core::vault_io::display_name_of;
 
 const RECENTS_FILE: &str = "recent_vaults.json";
@@ -131,6 +133,16 @@ fn remove_recent(app: &AppHandle, path: &str) {
     save_recents(app, &recents);
 }
 
+/// Put `entry` back at `index`; past the end it goes last, a duplicate path is
+/// never created (the row stays where it is), the list stays within `max`.
+fn insert_at(recents: &mut Vec<RecentVault>, entry: RecentVault, index: usize, max: usize) {
+    if recents.iter().any(|recent| recent.path == entry.path) {
+        return;
+    }
+    recents.insert(index.min(recents.len()), entry);
+    recents.truncate(max);
+}
+
 // --- Tauri commands ---
 
 #[tauri::command]
@@ -160,7 +172,76 @@ pub async fn forget_recent_vault(app: AppHandle, input: SelectVaultInput) -> Res
     Ok(())
 }
 
+/// Undo of `forget_recent_vault`: the row returns to its former place.
+#[tauri::command]
+pub async fn restore_recent_vault(
+    app: AppHandle,
+    input: RestoreRecentVaultInput,
+) -> Result<(), String> {
+    let mut recents = load_recents(&app);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let entry = RecentVault {
+        path: input.path.clone(),
+        last_opened: now.to_string(),
+        exists: Path::new(&input.path).exists(),
+        display_name: display_name_of(&input.path),
+        linked: false,
+    };
+    insert_at(&mut recents, entry, input.index as usize, MAX_RECENTS);
+    save_recents(&app, &recents);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<PickedVault>, String> {
     crate::platform_fs::pick_vault(&app, save).map_err(crate::commands::err_to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rv(path: &str) -> RecentVault {
+        RecentVault {
+            path: path.into(),
+            ..Default::default()
+        }
+    }
+
+    fn paths(list: &[RecentVault]) -> Vec<&str> {
+        list.iter().map(|recent| recent.path.as_str()).collect()
+    }
+
+    #[test]
+    fn insert_at_restores_position() {
+        let mut list = vec![rv("a"), rv("c")];
+        insert_at(&mut list, rv("b"), 1, 10);
+        assert_eq!(paths(&list), ["a", "b", "c"]);
+        insert_at(&mut list, rv("z"), 0, 10);
+        assert_eq!(paths(&list), ["z", "a", "b", "c"]);
+    }
+
+    #[test]
+    fn insert_at_past_end_goes_last() {
+        let mut list = vec![rv("a")];
+        insert_at(&mut list, rv("b"), 99, 10);
+        assert_eq!(paths(&list), ["a", "b"]);
+    }
+
+    #[test]
+    fn insert_at_skips_duplicate() {
+        let mut list = vec![rv("a"), rv("b")];
+        insert_at(&mut list, rv("b"), 0, 10);
+        assert_eq!(paths(&list), ["a", "b"]);
+    }
+
+    #[test]
+    fn insert_at_respects_cap() {
+        let mut list = vec![rv("a"), rv("b")];
+        insert_at(&mut list, rv("c"), 2, 2);
+        assert_eq!(paths(&list), ["a", "b"]);
+    }
 }

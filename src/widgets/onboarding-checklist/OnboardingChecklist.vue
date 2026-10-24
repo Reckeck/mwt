@@ -49,7 +49,7 @@ const steps = computed<Step[]>(() => [
   {
     key: 'savings',
     done: settings.vault?.budget_configured === true,
-    action: { to: { name: 'dashboard', query: { settings: 'budget' } } },
+    action: { to: { name: 'dashboard', query: { settings: 'accounting', section: 'budget' } } },
   },
   { key: 'operation', done: txCount.value > 0, action: 'quickAdd' },
   {

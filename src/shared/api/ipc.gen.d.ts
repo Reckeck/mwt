@@ -3362,7 +3362,7 @@ type NoticeRecord = {
  */
 key: string, category: NoticeCategory, title: string, body: string, 
 /**
- * In-app route the notice opens, e.g. `/planning/reminders`.
+ * In-app route the notice opens, e.g. `/automations/reminders`.
  */
 link: string | null, 
 /**
@@ -4215,6 +4215,24 @@ type ReportOverview = { currency: string,
 month: string, previous_month: string, year: number, flow: OverviewFlow, wealth: OverviewWealth, investments: OverviewInvestments, savings: OverviewYear, };
 
 type ResolveVaultConflictInput = { path: string, keep: ConflictSide, };
+
+/**
+ * Input to put a forgotten vault back into recents.
+ */
+type RestoreRecentVaultInput = { path: string, 
+/**
+ * Position the row had before it was forgotten.
+ */
+index: number, };
+
+/**
+ * Which backup `restore_vault_backup` puts back.
+ */
+type RestoreVaultBackupInput = { 
+/**
+ * A name from `list_vault_backups`; anything else is refused.
+ */
+name: string, };
 
 type RestoreWorkflowVersionInput = { id: string, saved_at: string, };
 
@@ -6216,6 +6234,19 @@ type ValuationInput = { store_id: string, asset_key: string,
 date: string, unit_price: Amount, currency: string, };
 
 type VarScope = "global" | { "workflow": string };
+
+/**
+ * A backup copy of the vault file, next to it.
+ */
+type VaultBackup = { 
+/**
+ * File name inside the vault's folder (`vault.wallet.v2.bak`).
+ */
+name: string, 
+/**
+ * RFC 3339 time the copy was written.
+ */
+modified_at: string, size_bytes: number, };
 
 /**
  * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).

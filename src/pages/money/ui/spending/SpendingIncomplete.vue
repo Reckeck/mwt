@@ -49,7 +49,7 @@ function show() {
   void router.push(drillTo({ from: props.from, to: props.to, kinds: ['payment'], unpriced: true, back }))
 }
 function enterRate() {
-  void router.push({ query: settingsQuery(route.query, 'money', 'rates') })
+  void router.push({ query: settingsQuery(route.query, 'accounting', 'rates') })
 }
 </script>
 

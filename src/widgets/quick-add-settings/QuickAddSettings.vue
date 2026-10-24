@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Copy } from 'lucide-vue-next'
 import { useQuery } from '@tanstack/vue-query'
 
 import { Button } from '@/shared/ui/button'
@@ -77,7 +78,7 @@ async function save(shortcut: string | null) {
       <p class="text-sm">{{ t('quickAdd.waylandHint') }}</p>
       <code class="block overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs">{{ binding }}</code>
       <div class="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" @click="copyBinding">{{ t('quickAdd.copy') }}</Button>
+        <Button size="sm" variant="outline" @click="copyBinding"><Copy class="size-4" />{{ t('quickAdd.copy') }}</Button>
         <span class="text-xs text-muted-foreground">{{ t('quickAdd.waylandWhere') }}</span>
       </div>
     </div>
