@@ -3,25 +3,44 @@ import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
 import { getStoreIcon, getSubTypeIcon } from '@/shared/lib/store-icons'
+import { cn } from '@/shared/lib/utils'
 
 import { useStoreCreate } from '../../model/use-store-create-state'
-import { KIND_COLORS, PICK_CARD_CLASS } from '../../store-create.constants'
+import { PICK_CARD_CLASS } from '../../store-create.constants'
 
-/** Step 1: a card per wallet kind (top level) or per sub-account type. */
+/**
+ * Step 1 (Wallets-1 · 2): a card per wallet kind, two in a row; a click picks,
+ * «Далее» or a second click moves on. A sub-account: a card per type, a click moves on.
+ */
 const { t } = useI18n()
-const { isSub, creatableKinds, subTypes, pickKind, pickSubType } = useStoreCreate()
+const { isSub, kind, creatableKinds, subTypes, pickKind, pickSubType, goNext } = useStoreCreate()
+
+function choose(value: StoreKind) {
+  if (kind.value === value) goNext()
+  else pickKind(value)
+}
 </script>
 
 <template>
-  <div class="grid gap-2" data-tour="store-create-pick">
+  <div class="grid gap-3" data-tour="store-create-pick">
     <template v-if="!isSub">
-      <Button v-for="info in creatableKinds" :key="info.kind" variant="outline" :class="PICK_CARD_CLASS" @click="pickKind(info.kind)">
-        <component :is="getStoreIcon(info.kind)" class="mt-0.5 size-5 shrink-0" :style="{ color: KIND_COLORS[info.kind] }" />
-        <span class="grid gap-0.5">
-          <span class="text-sm font-medium">{{ t(`stores.kind.${info.kind}`) }}</span>
+      <div class="grid gap-2 @md:grid-cols-2">
+        <Button
+          v-for="info in creatableKinds"
+          :key="info.kind"
+          variant="outline"
+          :aria-pressed="kind === info.kind"
+          :class="cn(PICK_CARD_CLASS, 'flex-col gap-1', kind === info.kind && 'border-primary bg-primary/5 hover:bg-primary/5')"
+          @click="choose(info.kind)"
+        >
+          <span class="flex items-center gap-2 text-sm font-medium">
+            <component :is="getStoreIcon(info.kind)" class="size-4 shrink-0" />
+            {{ t(`stores.kind.${info.kind}`) }}
+          </span>
           <span class="text-xs font-normal text-muted-foreground">{{ t(`stores.kindHint.${info.kind}`) }}</span>
-        </span>
-      </Button>
+        </Button>
+      </div>
+      <p class="text-xs text-muted-foreground">{{ t('storeWizard.kindMatters') }}</p>
     </template>
     <template v-else>
       <p v-if="!subTypes.length" class="text-sm text-muted-foreground">{{ t('errors.SUB_TYPE_NOT_ALLOWED') }}</p>

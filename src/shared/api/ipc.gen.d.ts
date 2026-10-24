@@ -206,6 +206,11 @@ type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary
 transferred_to: string | null, };
 
 /**
+ * One currency a wallet holds: how much of it, and its worth in the base.
+ */
+type AssetBalance = { asset: AssetRef, quantity: Amount, value_base: Amount, };
+
+/**
  * A basket of the portfolio with its target share (plan F). The shares of
  * all baskets sum to 100.
  */
@@ -3181,7 +3186,12 @@ strip: string, };
  * What a new wallet already holds. Booked as a top-up in the service
  * category `opening_balance`, so it is neither income nor spending.
  */
-type OpeningBalance = { asset: AssetRef, amount: Amount, };
+type OpeningBalance = { asset: AssetRef, amount: Amount, 
+/**
+ * The day it was there (ISO 8601); `None` = now. A past date keeps the
+ * wallet's history from starting with today's balance.
+ */
+at?: string, };
 
 /**
  * «Income and spending» card: the month against the one before.
@@ -4710,6 +4720,11 @@ can_add_child: boolean, children: Array<StoreTreeNode>,
  * Up to three biggest assets, its own first, then its sub-accounts'.
  */
 top_assets: Array<AssetRef>, 
+/**
+ * Every currency here and in the sub-accounts with its amount, biggest
+ * value first: the wallets table shows the balance in its own currency.
+ */
+balances: Array<AssetBalance>, 
 /**
  * RFC3339 of the newest transaction here or in a sub-account.
  */

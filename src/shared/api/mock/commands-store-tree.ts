@@ -88,7 +88,7 @@ export const storeTreeCommands: MockCommands = {
           {
             type: 'topup',
             common: {
-              timestamp: new Date().toISOString(),
+              timestamp: input.opening.at || new Date().toISOString(),
               comment: 'Opening balance',
               categories: ['opening_balance'],
               flow_id: null,

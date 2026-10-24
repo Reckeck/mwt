@@ -1,37 +1,38 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeftRight, Calculator, FolderPlus, Goal as GoalIcon, Plus, RefreshCw, Repeat, Scale, Settings2 } from 'lucide-vue-next'
 
-import { bindingBadge } from '@/entities/store'
-import { Badge } from '@/shared/ui/badge'
-import { Button, buttonVariants } from '@/shared/ui/button'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
+import { Money } from '@/entities/currency'
+import { walletSubtitle } from '@/entities/store'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
-import { openConverter } from '@/shared/lib/converter'
+import { formatMoney } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { storeIcon } from '@/shared/lib/store-icons'
 
-import { WalletDealActions } from '../wallet-deal-actions'
+import { walletActions } from '../../lib/wallet-actions'
+import type { WalletFigure } from '../../lib/wallet-figure'
+import { WalletActions } from '../wallet-actions'
+import { WalletGearMenu } from '../wallet-gear-menu'
 
 /**
- * Where the wallet sits, what it is, and what one does with it: the main
- * action first, matching reality, prices and settings at hand, the rarer
- * ones under «Ещё».
+ * The top of a wallet (Wallets-1 · 5–7, Currency-1 · 3–4): its sum as its bank
+ * shows it, the base and the rate beside, the buttons its kind allows and the
+ * gear with the rest. Its name is the top bar's title.
  */
 const props = defineProps<{
   store: Store
   ancestors: StoreCrumb[]
+  figure: WalletFigure
   canAddChild: boolean
   /** The sub-accounts card offers a new one already. */
   hasChildren: boolean
   refreshing: boolean
-  /** An exchange's own wallet: its operations are «Сделка» buttons instead of «+ Операция». */
+  /** An exchange's own wallet: its buttons open «Сделка». */
   exchange?: boolean
 }>()
 const emit = defineEmits<{
+  act: [kind: TxKind]
   operation: []
-  deal: [kind: TxKind]
   adjust: []
   calculator: []
   subAccount: []
@@ -41,135 +42,65 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
+const phone = useIsPhone()
 
-function openSettings() {
-  void router.push({ name: 'wallet-settings', params: { id: props.store.id } })
-}
-
-/** The way up to this wallet; its own name is the heading below and the top bar. */
+/** A sub-account shows the way up to it; a wallet of the top level needs none. */
 const crumbs = computed<PageCrumb[]>(() => [
   { label: t('nav.stores'), to: { name: 'stores' } },
   ...props.ancestors.map((parent) => ({ label: parent.name, to: { name: 'wallet', params: { id: parent.id } } })),
 ])
 
-const moneyWallet = computed(() => ['bank', 'cash', 'liability'].includes(props.store.kind))
-/** A wallet bound to one currency starts the converter from it. */
-const ownCurrency = computed(() => {
-  const binding = props.store.binding
-  return binding && typeof binding === 'object' && 'asset' in binding && binding.asset.chain === 'fiat'
-    ? binding.asset.symbol.toLowerCase()
-    : null
+const actions = computed(() => walletActions(props.store, Boolean(props.exchange)))
+/** «курс 93,75 ₽ · Банк · в бюджете» or «Биржа · BTC, USDT»; a phone drops the rate. */
+const subtitle = computed(() => {
+  const own = props.figure.base
+  const rate = own?.rate && !phone.value ? [t('wallet.rate', { rate: formatMoney(own.rate, { currency: props.figure.currency }) })] : []
+  const assets = own || !props.figure.assets.length ? [] : [props.figure.assets.join(', ')]
+  return [...rate, walletSubtitle(props.store, t), ...assets].join(' · ')
 })
 </script>
 
 <template>
   <div class="flex flex-col gap-3">
-    <PageHeader :crumbs="crumbs">
-      <span
-        class="flex size-10 shrink-0 items-center justify-center rounded-lg border"
-        :style="{ backgroundColor: `${props.store.color}1A`, color: props.store.color, borderColor: `${props.store.color}33` }"
-      >
+    <PageHeader v-if="props.ancestors.length" :crumbs="crumbs" />
+
+    <div class="flex items-center gap-3">
+      <span class="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground max-md:hidden">
         <component :is="storeIcon(props.store)" class="size-5" />
       </span>
-      <div class="flex min-w-0 flex-col">
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 class="heading-page truncate">{{ props.store.name }}</h2>
-          <Badge variant="secondary">
-            {{ props.store.sub_type ? t(`subType.${props.store.sub_type}`) : t(`stores.kind.${props.store.kind}`) }}
-          </Badge>
-          <Badge v-if="bindingBadge(props.store)" variant="outline">{{ bindingBadge(props.store) }}</Badge>
-          <Badge v-if="props.store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
-          <Badge
-            v-if="props.store.purpose !== 'everyday' || props.store.kind !== 'liability'"
-            variant="outline"
-            :title="t(`purpose.${props.store.purpose}Hint`)"
-          >
-            {{ t(`purpose.${props.store.purpose}`) }}
-          </Badge>
-        </div>
-        <p v-if="props.store.note" class="truncate text-sm text-muted-foreground">{{ props.store.note }}</p>
+      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xl font-semibold tabular-nums max-md:text-[1.75rem] max-md:leading-tight" data-wallet-sum>
+          <Money :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
+        </span>
+        <span class="truncate text-caption text-muted-foreground">
+          <template v-if="props.figure.base">≈ <Money :amount="props.figure.base.amount" :decimals="2" /> · </template>
+          {{ subtitle }}
+        </span>
       </div>
+      <WalletActions
+        v-if="!phone"
+        :actions="actions"
+        :phone="false"
+        :disabled="props.store.archived"
+        @act="(kind) => emit('act', kind)"
+      />
+      <WalletGearMenu
+        :store="props.store"
+        :can-add-child="props.canAddChild"
+        :has-children="props.hasChildren"
+        :refreshing="props.refreshing"
+        :operation="!actions.length"
+        @operation="emit('operation')"
+        @adjust="emit('adjust')"
+        @calculator="emit('calculator')"
+        @sub-account="emit('subAccount')"
+        @goal="emit('goal')"
+        @automation="emit('automation')"
+        @refresh="emit('refresh')"
+      />
+    </div>
 
-      <template #actions>
-        <WalletDealActions v-if="props.exchange" :disabled="props.store.archived" @deal="(kind) => emit('deal', kind)" />
-        <Button
-          v-if="props.store.kind !== 'property' && !props.exchange"
-          variant="outline"
-          size="sm"
-          class="max-md:hidden"
-          :disabled="props.store.archived"
-          data-tour="wallet-adjust"
-          @click="emit('adjust')"
-        >
-          <Scale class="size-4" />
-          {{ t('adjustment.open') }}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          class="max-md:hidden"
-          :title="t('store.refresh')"
-          :aria-label="t('store.refresh')"
-          :disabled="props.refreshing"
-          @click="emit('refresh')"
-          :loading="props.refreshing"
-        >
-          <RefreshCw class="size-4" />
-        </Button>
-        <RouterLink
-          :to="{ name: 'wallet-settings', params: { id: props.store.id } }"
-          :class="buttonVariants({ variant: 'outline', size: 'icon' })"
-          class="size-8 max-md:hidden"
-          :title="t('walletSettings.nav')"
-          :aria-label="t('walletSettings.nav')"
-          data-tour="wallet-settings"
-        >
-          <Settings2 class="size-4" />
-        </RouterLink>
-        <Button v-if="!props.exchange" size="sm" :disabled="props.store.archived" data-tour="wallet-operation" @click="emit('operation')">
-          <Plus class="size-4" />
-          {{ t('wallet.addOperation') }}
-        </Button>
-      </template>
-
-      <template #more>
-        <!-- On a phone the header keeps the main action; these move here. -->
-        <DropdownMenuItem v-if="props.store.kind !== 'property'" value="adjust" :class="!props.exchange && 'md:hidden'" :disabled="props.store.archived" @select="emit('adjust')">
-          <Scale class="size-4 shrink-0" />
-          {{ t('adjustment.open') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem value="refresh" class="md:hidden" :disabled="props.refreshing" @select="emit('refresh')">
-          <RefreshCw class="size-4 shrink-0" />
-          {{ t('store.refresh') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem value="settings" class="md:hidden" @select="openSettings">
-          <Settings2 class="size-4 shrink-0" />
-          {{ t('walletSettings.nav') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem value="calculator" @select="emit('calculator')">
-          <Calculator class="size-4 shrink-0" />
-          {{ t('calc.title') }}
-        </DropdownMenuItem>
-        <!-- Money wallets convert their own currency; a coin wallet has the terminal. -->
-        <DropdownMenuItem v-if="moneyWallet" value="converter" @select="openConverter(ownCurrency)">
-          <ArrowLeftRight class="size-4 shrink-0" />
-          {{ t('palette.converter') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" @select="emit('subAccount')">
-          <FolderPlus class="size-4 shrink-0" />
-          {{ t('stores.newSubAccountShort') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem v-if="!props.store.archived" value="goal" @select="emit('goal')">
-          <GoalIcon class="size-4 shrink-0" />
-          {{ t('goal.makeFromStore') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem v-if="!props.store.archived" value="automation" @select="emit('automation')">
-          <Repeat class="size-4 shrink-0" />
-          {{ t('automation.makeFromStore') }}
-        </DropdownMenuItem>
-      </template>
-    </PageHeader>
+    <WalletActions v-if="phone" :actions="actions" phone :disabled="props.store.archived" @act="(kind) => emit('act', kind)" />
 
     <p v-if="props.store.archived" class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       {{ t('wallet.archivedHint') }}

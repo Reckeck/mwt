@@ -43,7 +43,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
 
 <template>
   <Card>
-    <template #header>
+    <template v-if="!props.bare" #header>
       <div class="grid gap-3">
         <p class="font-medium">{{ t('hist.title') }}</p>
         <TransactionFilterBar v-model="filter" fixed-scope id-prefix="store-hist">
@@ -83,6 +83,13 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
         />
       </div>
     </SectionState>
+    <template v-if="props.bare && rows.length" #footer>
+      <Button variant="link" size="sm" class="h-auto p-0" as-child>
+        <RouterLink :to="{ name: 'transactions', query: txFilterToQuery(filter) }" data-tour="wallet-all-operations">
+          {{ t('wallet.allOperations') }} →
+        </RouterLink>
+      </Button>
+    </template>
     <TxRowMenuHost :menu="rowMenu" />
   </Card>
 </template>

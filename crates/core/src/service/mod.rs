@@ -206,6 +206,11 @@ pub struct FirstCard {
 pub struct OpeningBalance {
     pub asset: AssetRef,
     pub amount: Amount,
+    /// The day it was there (ISO 8601); `None` = now. A past date keeps the
+    /// wallet's history from starting with today's balance.
+    #[serde(default)]
+    #[ts(optional)]
+    pub at: Option<String>,
 }
 
 /// A partial update of an exchange terminal; `None` keeps the field.
@@ -1639,7 +1644,7 @@ impl UnlockedVault {
     pub fn store_tree(&self) -> Vec<StoreTreeNode> {
         let (_base, fx) = self.base_and_fx();
         let mut own_usd: HashMap<&str, Amount> = HashMap::new();
-        let mut held: HashMap<&str, Vec<(Amount, AssetRef)>> = HashMap::new();
+        let mut held: HashMap<&str, Vec<(Amount, Amount, AssetRef)>> = HashMap::new();
         for holding in self
             .doc
             .holdings
@@ -1649,9 +1654,11 @@ impl UnlockedVault {
             let value = holding.quantity * self.price_usd_for(&holding.asset.key());
             *own_usd.entry(holding.store_id.as_str()).or_default() += value;
             if holding.quantity.is_positive() {
-                held.entry(holding.store_id.as_str())
-                    .or_default()
-                    .push((value, holding.asset.clone()));
+                held.entry(holding.store_id.as_str()).or_default().push((
+                    value,
+                    holding.quantity,
+                    holding.asset.clone(),
+                ));
             }
         }
         let mut tx_count: HashMap<String, u32> = HashMap::new();
@@ -1669,7 +1676,7 @@ impl UnlockedVault {
             }
         }
         for assets in held.values_mut() {
-            assets.sort_by_key(|(value, _)| std::cmp::Reverse(*value));
+            assets.sort_by_key(|(value, _, _)| std::cmp::Reverse(*value));
         }
         let ctx = TreeCtx {
             fx,
@@ -1733,7 +1740,7 @@ impl UnlockedVault {
             .get(store.id.as_str())
             .into_iter()
             .flatten()
-            .map(|(_, asset)| asset);
+            .map(|(_, _, asset)| asset);
         for asset in own_assets.chain(children.iter().flat_map(|child| child.top_assets.iter())) {
             if top_assets.len() < TOP_ASSETS
                 && !top_assets
@@ -1743,6 +1750,7 @@ impl UnlockedVault {
                 top_assets.push(asset.clone());
             }
         }
+        let balances = self.tree_balances(store, own_usd, &children, ctx);
         let last_tx_at = children
             .iter()
             .filter_map(|child| child.last_tx_at.clone())
@@ -1750,6 +1758,7 @@ impl UnlockedVault {
             .max();
         StoreTreeNode {
             top_assets,
+            balances,
             last_tx_at,
             store: store.clone(),
             depth: depth as u32,
@@ -1765,6 +1774,59 @@ impl UnlockedVault {
                 && !store.kind.sub_types().is_empty(),
             children,
         }
+    }
+
+    /// What a wallet holds per currency, its sub-accounts merged in by ticker,
+    /// biggest value first. Property counts in its own currency (a flat bought
+    /// in roubles shows roubles), as long as that currency has a rate.
+    fn tree_balances(
+        &self,
+        store: &Store,
+        own_usd: Amount,
+        children: &[StoreTreeNode],
+        ctx: &TreeCtx,
+    ) -> Vec<AssetBalance> {
+        let property_currency = store
+            .property
+            .as_ref()
+            .map(|info| info.currency.to_ascii_lowercase())
+            .filter(|code| !code.is_empty());
+        let mut own: Vec<AssetBalance> = match property_currency
+            .as_deref()
+            .and_then(|code| self.per_usd(code).map(|rate| (code, rate)))
+        {
+            Some((code, rate)) => vec![AssetBalance {
+                asset: AssetRef::fiat(code, &code.to_uppercase()),
+                quantity: own_usd * rate,
+                value_base: own_usd * ctx.fx,
+            }],
+            None => ctx
+                .held
+                .get(store.id.as_str())
+                .into_iter()
+                .flatten()
+                .map(|(value, quantity, asset)| AssetBalance {
+                    asset: asset.clone(),
+                    quantity: *quantity,
+                    value_base: *value * ctx.fx,
+                })
+                .collect(),
+        };
+        for balance in children.iter().flat_map(|child| child.balances.iter()) {
+            match own.iter_mut().find(|seen| {
+                seen.asset
+                    .symbol
+                    .eq_ignore_ascii_case(&balance.asset.symbol)
+            }) {
+                Some(seen) => {
+                    seen.quantity += balance.quantity;
+                    seen.value_base += balance.value_base;
+                }
+                None => own.push(balance.clone()),
+            }
+        }
+        own.sort_by_key(|balance| std::cmp::Reverse(balance.value_base));
+        own
     }
 
     /// Single-round-trip view of one store for the wallet page.
@@ -3033,9 +3095,21 @@ pub struct StoreTreeNode {
     /// Up to three biggest assets, its own first, then its sub-accounts'.
     #[serde(default)]
     pub top_assets: Vec<AssetRef>,
+    /// Every currency here and in the sub-accounts with its amount, biggest
+    /// value first: the wallets table shows the balance in its own currency.
+    #[serde(default)]
+    pub balances: Vec<AssetBalance>,
     /// RFC3339 of the newest transaction here or in a sub-account.
     #[serde(default)]
     pub last_tx_at: Option<String>,
+}
+
+/// One currency a wallet holds: how much of it, and its worth in the base.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct AssetBalance {
+    pub asset: AssetRef,
+    pub quantity: Amount,
+    pub value_base: Amount,
 }
 
 /// Allowed destinations for moving a sub-account.
@@ -3053,8 +3127,8 @@ struct TreeCtx<'doc> {
     own_usd: HashMap<&'doc str, Amount>,
     tx_count: HashMap<String, u32>,
     last_tx: HashMap<String, String>,
-    /// Positive holdings per store, biggest value first.
-    held: HashMap<&'doc str, Vec<(Amount, AssetRef)>>,
+    /// Positive holdings per store as (USD value, quantity, asset), biggest value first.
+    held: HashMap<&'doc str, Vec<(Amount, Amount, AssetRef)>>,
 }
 
 /// Assets a wallet card names.
@@ -3119,6 +3193,9 @@ fn default_sub_extras(kind: StoreKind) -> StoreExtras {
 fn opening_topup(store_id: &str, opening: OpeningBalance) -> Transaction {
     let mut meta = TxMeta::new("Opening balance");
     meta.categories = vec!["opening_balance".to_string()];
+    if let Some(at) = opening.at.filter(|at| !at.trim().is_empty()) {
+        meta.timestamp = at;
+    }
     Transaction::Topup(crate::model::transaction::TopupTx {
         meta,
         store_id: store_id.to_string(),
@@ -3743,12 +3820,31 @@ mod tests {
     // -- wallet rules -----------------------------------------------------------
 
     #[test]
+    fn an_opening_balance_keeps_its_date() {
+        let (_dir, mut vault) = empty_vault();
+        let extras = StoreExtras {
+            opening: Some(OpeningBalance {
+                asset: usd(),
+                amount: amount("95"),
+                at: Some("2026-10-01T00:00:00Z".to_string()),
+            }),
+            ..StoreExtras::default()
+        };
+        vault
+            .create_store_with("Bank", StoreKind::Bank, "", "", None, extras)
+            .unwrap();
+        let tx = vault.doc.transactions.last().unwrap();
+        assert_eq!(tx.meta().timestamp, "2026-10-01T00:00:00Z");
+    }
+
+    #[test]
     fn an_opening_balance_is_one_service_topup_or_nothing() {
         let (_dir, mut vault) = empty_vault();
         let opening = |raw: &str, asset: AssetRef| StoreExtras {
             opening: Some(OpeningBalance {
                 asset,
                 amount: amount(raw),
+                at: None,
             }),
             ..StoreExtras::default()
         };
@@ -4290,6 +4386,38 @@ mod tests {
     }
 
     #[test]
+    fn store_tree_balances_merge_sub_accounts_by_ticker() {
+        let (_dir, mut vault) = setup();
+        let cold = vault.doc.stores[1].id.clone();
+        let mut child = vault.doc.stores[1].clone();
+        child.id = "child".into();
+        child.name = "Sub".into();
+        child.parent_id = Some(cold.clone());
+        vault.doc.stores.push(child);
+        vault
+            .add_transaction(income_of(&cold, btc(), "0.5", "50000", "buy"))
+            .unwrap();
+        vault
+            .add_transaction(income_of(&cold, usd(), "100", "1", "cash"))
+            .unwrap();
+        vault
+            .add_transaction(income_of("child", btc(), "0.25", "50000", "buy"))
+            .unwrap();
+        let tree = vault.store_tree();
+        let node = tree
+            .iter()
+            .find(|node| node.store.id == cold)
+            .expect("the wallet is a root");
+        let balances: Vec<(&str, Amount)> = node
+            .balances
+            .iter()
+            .map(|balance| (balance.asset.symbol.as_str(), balance.quantity))
+            .collect();
+        assert_eq!(balances, [("BTC", amount("0.75")), ("USD", amount("100"))]);
+        assert_eq!(node.children[0].balances.len(), 1);
+    }
+
+    #[test]
     fn store_overview_sums_unrealized_and_reports_prices_as_of() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
@@ -4587,6 +4715,7 @@ mod import_tests {
                     opening: Some(OpeningBalance {
                         asset: AssetRef::fiat("RUB", "RUB"),
                         amount: amount("1500"),
+                        at: None,
                     }),
                     ..StoreExtras::default()
                 },
@@ -4618,6 +4747,7 @@ mod import_tests {
                         opening: Some(OpeningBalance {
                             asset: AssetRef::fiat("USD", "USD"),
                             amount: amount("10"),
+                            at: None,
                         }),
                         ..StoreExtras::default()
                     },
