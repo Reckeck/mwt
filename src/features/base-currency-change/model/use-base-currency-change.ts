@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { useConversions } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { useSettingsStore } from '@/shared/store/settings'
 
 export type BudgetChoice = 'keep' | 'follow'
@@ -38,15 +37,14 @@ export function useBaseCurrencyChange(target: MaybeRefOrGetter<string>, open: Re
     enabled: open,
     staleTime: 60_000,
   })
-  /** «42 052,50 $ → 3 872 960 ₽» at today's rate; empty when the new currency has no rate. */
+  /** «42 052,50 $ → 3 872 960 ₽» at today's rate (the two sums); null when the new currency has no rate. */
   const example = computed(() => {
     const worth = summary.data.value?.net_worth_base
-    if (!worth) return ''
+    if (!worth) return null
     const amount = Number(worth)
     const converted = conversions.convert(amount, from.value).find((entry) => entry.currency === to.value)
-    if (!converted) return ''
-    const before = formatMoney(worth, { currency: from.value, decimals: 2 })
-    return `${before} → ${formatMoney(converted.value, { currency: to.value, decimals: 0 })}`
+    if (!converted) return null
+    return { before: { amount: worth, currency: from.value }, after: { amount: converted.value, currency: to.value } }
   })
 
   const save = useMutation({

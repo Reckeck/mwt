@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Gift, Minus, Plus, Settings2 } from 'lucide-vue-next'
 
+import { MoneyPhrase } from '@/entities/currency'
+import { partsText } from '@/shared/lib/money-parts'
 import { ActionSheet } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import type { UiAction } from '@/shared/ui/context-menu'
@@ -54,7 +56,10 @@ const actions = computed<UiAction[]>(() => {
       <span class="flex min-w-0 flex-1 flex-col">
         <span class="truncate text-sm font-medium">{{ row.store.name }}</span>
         <span :class="cn('truncate text-xs', row.soon ? 'text-warning' : 'text-muted-foreground')">
-          {{ row.soon ? row.expiring : row.subtitle }}
+          <template v-if="row.soon">{{ row.expiring }}</template>
+          <template v-else>
+            <MoneyPhrase :parts="row.subtitle" />
+          </template>
         </span>
       </span>
       <span class="shrink-0 text-sm font-semibold tabular-nums">{{ row.points }}</span>
@@ -64,6 +69,6 @@ const actions = computed<UiAction[]>(() => {
     v-model:open="sheetOpen"
     :actions="actions"
     :title="picked?.store.name ?? ''"
-    :description="picked ? `${picked.points} · ${picked.subtitle}` : ''"
+    :description="picked ? `${picked.points} · ${partsText(picked.subtitle)}` : ''"
   />
 </template>

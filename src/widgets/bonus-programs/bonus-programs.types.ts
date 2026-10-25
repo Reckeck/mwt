@@ -1,8 +1,10 @@
+import type { SumPart } from '@/shared/lib/money-parts'
+
 /** One programme as a row of the table (Ops-2 · 12). */
 export interface ProgramRow {
   store: Store
   /** «Тинькофф · баллы = ₽», «Bybit · 1 купон = 2,50 $». */
-  subtitle: string
+  subtitle: SumPart[]
   /** «1 240 баллов». */
   points: string
   valueBase: string

@@ -2,6 +2,7 @@
 
 import { stage5 } from './sets-stage5.mjs'
 import { links } from './sets-links.mjs'
+import { money } from './sets-money.mjs'
 import { stage6 } from './sets-stage6.mjs'
 import { GP } from './steps.mjs'
 
@@ -679,4 +680,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money }

@@ -13,7 +13,8 @@
 // - transition-all  animate the properties that change, not `all`;
 // - to-fixed        `.toFixed()` in a template → `shared/lib/format`;
 // - div-click       `<div @click>` without a role → `Button`, or role + keyboard;
-// - format-money    `{{ formatMoney(…) }}` alone in a template → `<Money>`;
+// - money-text / money-lib  a sum as text in a template, or made by a slice's lib/model → `<Money>`
+//                   (`scripts/check-ui/rules-money.mjs`, docs/ui-money.md);
 // - entity-text     `{{ storeName(…) }}` (category, contact) as text → `<EntityLink>`
 //                   — a name of an entity opens its card (plan J1);
 // - viewport-height `h-screen`, `vh` → `dvh` or `h-full` (references/mobile.md);
@@ -48,6 +49,7 @@ import { blankComments, callBody } from './check-ui/lib.mjs'
 import { BEHAVIOUR_RULES } from './check-ui/rules-behaviour.mjs'
 import { CSS_RULES } from './check-ui/rules-css.mjs'
 import { MARKUP_RULES } from './check-ui/rules-markup.mjs'
+import { MONEY_RULES } from './check-ui/rules-money.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const baselinePath = join(root, 'scripts/check-ui.baseline.json')
@@ -120,22 +122,6 @@ const RULES = [
     say: '<div @click> without a role — use Button, or give it a role and keyboard handling',
   },
   {
-    // A sum shown on its own in a template is a <Money>: it brings the conversions on hover.
-    // Text built with formatMoney (an i18n argument, a chart axis) is fine.
-    id: 'format-money',
-    vueOnly: true,
-    find: (text) => {
-      const start = text.indexOf('<template>')
-      if (start === -1) return []
-      const template = text.slice(start)
-      return [
-        ...template.matchAll(/\{\{\s*formatMoney\((?:[^{}]|\{[^{}]*\})*\)\s*\}\}/g),
-        ...template.matchAll(/:value="formatMoney\(/g),
-      ].map((match) => Object.assign(match, { index: match.index + start }))
-    },
-    say: 'a sum by formatMoney in a template — use <Money> (or StatCard with <Money> in its slot)',
-  },
-  {
     // The name of a wallet, category or contact shown as text cannot be opened: it is an
     // <EntityLink :label="…">. Names inside i18n arguments and attributes are fine.
     id: 'entity-text',
@@ -196,6 +182,7 @@ const RULES = [
   },
   ...BEHAVIOUR_RULES,
   ...MARKUP_RULES,
+  ...MONEY_RULES,
 ]
 
 const counts = new Map()

@@ -5,10 +5,11 @@ import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { useConversions } from './conversions'
+import { useConversionsAt } from './conversions-at'
 import { useFavoriteCurrencies } from './favorites'
 
 /** `amount` of `from` in `to` at a moment (now when `at` is empty), or `null` without a rate. */
-function useConverted(
+export function useConverted(
   amount: () => number,
   from: () => string,
   to: () => string,
@@ -59,8 +60,12 @@ export function useMoneyCard(
   /** Units of the sum's currency per one of the base: «93,75 ₽ за $». */
   const rate = (value: number | null | undefined) => (value ? size() / value : null)
 
+  // With a moment the favourites are at the operation's rate too, not at today's.
+  const dated = useConversionsAt(size, from, () => toValue(at))
   const favoriteRows = computed(() =>
-    conversions.convert(size(), from()).filter((row) => row.currency !== base() && favorites.isFavorite(row.currency)),
+    (toValue(at) ? dated.rows.value : conversions.convert(size(), from())).filter(
+      (row) => row.currency !== base() && favorites.isFavorite(row.currency),
+    ),
   )
 
   return {

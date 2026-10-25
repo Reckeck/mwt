@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { formatMoney, formatMonthKey } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
@@ -21,16 +22,16 @@ const { t } = useI18n()
 const phone = useIsPhone()
 const top = computed(() => Math.max(1, ...props.balance.rows.flatMap((row) => [Number(row.income), Number(row.spent)])))
 const height = (value: string) => `${Math.max(0, (Number(value) / top.value) * 100)}%`
-const money = (value: string, signed = false) =>
-  formatMoney(value, { decimals: 0, compact: Math.abs(Number(value)) >= 100_000, signed })
-const left = (row: MonthBalanceRow) => money(row.left, true)
+const compact = (value: string) => Math.abs(Number(value)) >= 100_000
+/** The bar's spoken name: a label read aloud, so the sums stay text. */
+// money: plain — aria-label of a bar: a screen reader reads the text, a card cannot open there
+const speak = (value: string) => formatMoney(value, { decimals: 0, compact: compact(value) })
 const span = computed(() => {
   const rows = props.balance.rows
   if (!rows.length) return ''
   const long = (key: string) => formatMonthKey(key, { month: 'long', year: 'numeric' }).replace(/\s*г\.$/, '')
   return `${long(rows[0].month)} — ${long(rows[rows.length - 1].month)}`
 })
-const average = computed(() => formatMoney(props.balance.average_spent, { decimals: 0, currency: props.balance.currency }))
 const inPeriod = (key: string) => key >= props.from && key <= props.to
 </script>
 
@@ -48,7 +49,12 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
       <span class="flex items-center gap-1 text-muted-foreground max-md:hidden">
         <span class="inline-block size-2.5 rounded-[2px] bg-primary" />{{ t('money.months.spent') }}
       </span>
-      <span class="text-muted-foreground">- - {{ t('money.months.average', { average }) }}</span>
+      <span class="text-muted-foreground">
+        - -
+        <i18n-t keypath="money.months.average">
+          <template #average><Money :amount="props.balance.average_spent" :currency="props.balance.currency" :decimals="0" /></template>
+        </i18n-t>
+      </span>
       <span class="text-muted-foreground max-lg:hidden">· {{ t('money.months.leftHint') }}</span>
     </div>
     <div class="relative grid h-[170px] grid-cols-12 gap-1 md:gap-2">
@@ -63,7 +69,7 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
         :key="row.month"
         v-bind="phone ? {} : { variant: 'ghost', onClick: () => emit('pick', row.month) }"
         :class="cn('group flex h-auto min-w-0 flex-col items-center gap-0 rounded-md px-0 pt-2 pb-1 font-normal', inPeriod(row.month) && 'bg-accent/50')"
-        :aria-label="`${formatMonthKey(row.month)}: ${money(row.spent)} / ${money(row.income)}`"
+        :aria-label="`${formatMonthKey(row.month)}: ${speak(row.spent)} / ${speak(row.income)}`"
       >
         <span class="relative flex w-full flex-1 items-end justify-center">
           <span class="absolute bottom-0 w-[70%] max-w-[46px] rounded-[3px] bg-border" :style="{ height: height(row.income) }" />
@@ -75,7 +81,8 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
           <span v-if="row.current" class="max-lg:hidden">· {{ t('balance.running') }}</span>
         </span>
         <span :class="cn('text-xs font-semibold tabular-nums max-md:hidden', Number(row.left) < 0 ? 'text-warning' : 'text-success')">
-          {{ left(row) }}
+          <!-- Twelve narrow columns: the mark is in the legend, so it is hidden here (the sum stays hoverable). -->
+          <Money bare :amount="row.left" :currency="props.balance.currency" :decimals="0" :compact="compact(row.left)" signed />
         </span>
       </component>
     </div>

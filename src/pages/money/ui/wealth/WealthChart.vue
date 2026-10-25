@@ -2,10 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useMoneyChartTooltip } from '@/entities/currency'
+import { useMoneyChartTooltip, Money } from '@/entities/currency'
 import { axisNumber, chartColors } from '@/shared/lib/chart-theme'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { formatMonthKey } from '@/shared/lib/format'
 
 import { STACKED, type WealthGroup, groupValue } from '@/entities/report'
 
@@ -50,7 +50,7 @@ const labels = computed(() =>
   [...STACKED].reverse().map((group: WealthGroup) => {
     const last = props.points.at(-1)
     const value = last ? groupValue(last, group) : 0
-    return { group, text: `${t(`money.wealth.group.${group}Short`)} ${formatMoney(value, { decimals: 0, currency: props.currency })}` }
+    return { group, name: t(`money.wealth.group.${group}Short`), value }
   }),
 )
 </script>
@@ -61,7 +61,7 @@ const labels = computed(() =>
     <ul class="grid shrink-0 gap-1.5 text-xs max-md:hidden">
       <li v-for="label in labels" :key="label.group" class="flex items-center gap-1.5 tabular-nums">
         <span class="size-2 rounded-full" :style="{ background: fill[label.group] }" aria-hidden="true" />
-        {{ label.text }}
+        {{ label.name }} <Money :amount="label.value" :currency="props.currency" :decimals="0" />
       </li>
     </ul>
   </div>

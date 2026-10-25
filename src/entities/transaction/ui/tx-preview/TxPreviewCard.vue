@@ -44,6 +44,7 @@ const errorText = computed(() => {
   return MONEY_CODES.has(parsed.code) ? codeErrorMessage(parsed, t) : null
 })
 
+// money: plain — a transient warning in the entity; an entity cannot draw a neighbour's <Money>
 const warningTexts = computed(() =>
   (props.preview?.warnings ?? []).map((warning) => {
     const name = props.preview?.changes.find((change) => change.store_id === warning.store_id)?.store_name ?? ''

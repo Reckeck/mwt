@@ -1,4 +1,5 @@
-import { formatMoney, formatMonthKey, formatQuantity } from '@/shared/lib/format'
+import { formatMonthKey, formatQuantity } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 
 type T = (key: string, values?: Record<string, unknown>) => string
 
@@ -10,7 +11,8 @@ export interface UtilityHistoryRow {
   reading: string
   /** «120 / 75», «4», «—». */
   consumption: string
-  amount: string
+  /** The month's sum; `null` while there is none yet («—»). */
+  amount: SumPart | null
   /** This month is not read yet: «ждёт». */
   waiting: boolean
   /** The last bill is well above the average: «необычно много». */
@@ -25,7 +27,6 @@ const number = (value: string | null | undefined) =>
  * reading. Only the last month can carry the anomaly: core flags no other.
  */
 export function historyRows(item: UtilityItem, trend: UtilityTrend, period: string): UtilityHistoryRow[] {
-  const money = (value: string) => formatMoney(value, { currency: item.currency, decimals: 2 })
   const month = (key: string) => formatMonthKey(key, { month: 'long' }).slice(0, 3)
   const months = [...trend.months].reverse().slice(0, 4)
   const rows: UtilityHistoryRow[] = months.map((entry, index) => ({
@@ -35,7 +36,7 @@ export function historyRows(item: UtilityItem, trend: UtilityTrend, period: stri
     consumption: entry.zones.length
       ? entry.zones.map((zone) => number(zone.consumption)).join(' / ')
       : number(entry.consumption),
-    amount: money(entry.amount),
+    amount: { amount: entry.amount, currency: item.currency, decimals: 2, at: entry.period },
     waiting: false,
     anomaly: index === 0 && trend.anomaly,
   }))
@@ -45,7 +46,7 @@ export function historyRows(item: UtilityItem, trend: UtilityTrend, period: stri
     month: month(period),
     reading: '—',
     consumption: '—',
-    amount: '—',
+    amount: null,
     waiting: true,
     anomaly: false,
   }

@@ -58,7 +58,7 @@ const mainRate = computed(() => (props.at ? card.atMomentRate.value : card.nowRa
     </template>
     <template v-if="card.favorites.value.length">
       <div class="h-px bg-border" />
-      <span class="text-xs text-muted-foreground">{{ t('moneyCard.favorites') }}</span>
+      <span class="text-xs text-muted-foreground">{{ props.at ? t('moneyCard.favoritesAt', { date: day(props.at) }) : t('moneyCard.favorites') }}</span>
       <div v-for="row in card.favorites.value" :key="row.currency" class="flex items-baseline gap-3">
         <span class="min-w-0 flex-1">
           <span aria-hidden="true" class="text-warning">★</span>

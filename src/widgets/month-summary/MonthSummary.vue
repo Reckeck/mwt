@@ -2,13 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { useMonthPace } from '@/shared/api/queries'
 import { comparisonDelta } from '@/shared/lib/comparison'
-import { formatMoney } from '@/shared/lib/format'
+import { composeSums } from '@/shared/lib/money-parts'
 import { MetricTile } from '@/shared/ui/metric-tile'
 import { SectionState } from '@/shared/ui/section-state'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
@@ -26,7 +26,13 @@ const size = useWidgetSize()
 const summary = useQuery({ queryKey: ['month-summary'], queryFn: () => call<MonthSummary>('get_month_summary', { month: null }) })
 const pace = useMonthPace()
 const data = computed(() => summary.data.value ?? null)
-const money = (value: string | undefined) => formatMoney(value, { decimals: 0, currency: data.value?.currency })
+const moves = computed(() => {
+  const value = data.value
+  if (!value) return []
+  const { mark, parts } = composeSums()
+  const sum = (amount: string) => mark({ amount, decimals: 0, currency: value.currency })
+  return parts(t('monthSummary.moves', { in: sum(value.budget_in), out: sum(value.budget_out) }))
+})
 
 const tiles = computed(() => {
   const value = pace.data.value
@@ -89,7 +95,7 @@ const rows = computed(() => {
           {{ t('monthSummary.notExecuted', { count: data.not_executed }) }}
         </p>
         <p v-if="size !== 's' && (Number(data.budget_in) || Number(data.budget_out))" class="text-xs text-muted-foreground">
-          {{ t('monthSummary.moves', { in: money(data.budget_in), out: money(data.budget_out) }) }}
+          <MoneyPhrase :parts="moves" />
         </p>
       </div>
     </SectionState>

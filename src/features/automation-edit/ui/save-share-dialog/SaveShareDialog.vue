@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +13,6 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
-import { formatMoney } from '@/shared/lib/format'
 import { flattenStoreTree, withoutLoyalty } from '@/shared/lib/store-tree'
 
 import { SALARY_SHARE_PCT } from '../../lib/salary-plan'
@@ -49,8 +49,8 @@ const salary = computed(() => {
 const share = computed(() => {
   const part = Number(pct.value)
   if (!salary.value || !Number.isFinite(part) || part <= 0) return null
-  const money = (value: number) => formatMoney(value, { currency: salary.value?.currency ?? '' })
-  return { from: money(salary.value.amount), part: money((salary.value.amount * part) / 100) }
+  const { currency, amount } = salary.value
+  return { currency, from: amount, part: (amount * part) / 100 }
 })
 
 watch(
@@ -111,8 +111,12 @@ const save = useMutation({
         </FormField>
       </div>
       <p v-if="share" class="flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm" data-save-share-line>
-        <span>{{ t('saveShare.from', { sum: share.from }) }}</span>
-        <b class="font-semibold tabular-nums">{{ t('saveShare.perMonth', { sum: share.part }) }}</b>
+        <i18n-t keypath="saveShare.from" tag="span">
+          <template #sum><Money :amount="share.from" :currency="share.currency" /></template>
+        </i18n-t>
+        <i18n-t keypath="saveShare.perMonth" tag="b" class="font-semibold tabular-nums">
+          <template #sum><Money :amount="share.part" :currency="share.currency" /></template>
+        </i18n-t>
       </p>
     </form>
     <template #footer>

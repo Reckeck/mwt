@@ -4,15 +4,17 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { useCategories } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { drillTo } from '@/shared/lib/drill'
-import { formatMoney, pluralForm } from '@/shared/lib/format'
+import { pluralForm } from '@/shared/lib/format'
+import { composeSums, partsText, type SumPart } from '@/shared/lib/money-parts'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
-import { WHERE_OPENS, WHERE_TX_KINDS, exchangeText, sharedUnit, unitText } from '../../lib/where-view'
+import { WHERE_OPENS, WHERE_TX_KINDS, exchangeParts, sharedUnit, unitPart } from '../../lib/where-view'
 import WhereOpened from './WhereOpened.vue'
 
 /**
@@ -37,7 +39,15 @@ const listOf = (kind: WhereKind) =>
     back: { to: route.fullPath, label: t('money.where.back') },
   })
 const categories = useCategories()
-const money = (value: string) => formatMoney(value, { decimals: Math.abs(Number(value)) < 100 ? 2 : 0, currency: props.report.meta.currency })
+const money = (value: string): SumPart => ({
+  amount: value,
+  decimals: Math.abs(Number(value)) < 100 ? 2 : 0,
+  currency: props.report.meta.currency,
+})
+const words = (text: string): SumPart[] => [{ text }]
+const SEP: SumPart = { text: ' · ' }
+/** The parts of several items, a separator between them. */
+const joined = (groups: SumPart[][]): SumPart[] => groups.flatMap((group, at) => (at ? [SEP, ...group] : group))
 
 const TONE: Record<WhereKind, string> = {
   spending: 'text-destructive',
@@ -47,50 +57,59 @@ const TONE: Record<WhereKind, string> = {
   losses: 'text-warning',
 }
 
-function what(row: WhereRow): string {
-  const more = row.count > row.items.length && row.kind !== 'spending' ? [t('money.where.more', { count: row.count - row.items.length })] : []
+function spot(trade: SumPart[]): SumPart[] {
+  const { mark, parts } = composeSums()
+  return parts(t('money.where.spot', { trade: mark(trade) }))
+}
+
+function what(row: WhereRow): SumPart[] {
+  const more = row.count > row.items.length && row.kind !== 'spending' ? [words(t('money.where.more', { count: row.count - row.items.length }))] : []
   switch (row.kind) {
     case 'spending':
-      return row.items.map((item) => categoryKeyLabel(item.label, categories.data.value, t) || t('money.categories.none')).join(', ')
+      return words(row.items.map((item) => categoryKeyLabel(item.label, categories.data.value, t) || t('money.categories.none')).join(', '))
     case 'lent':
-      return [...row.items.map((item) => [item.comment || item.label, item.to].filter(Boolean).join(', ')), ...more].join(' · ')
+      return joined([...row.items.map((item) => words([item.comment || item.label, item.to].filter(Boolean).join(', '))), ...more])
     case 'moved':
-      return [...row.items.map((item) => `${item.label} → ${item.to ?? ''} ${exchangeText(item)}`), ...more].join(' · ')
+      return joined([...row.items.map((item) => [{ text: `${item.label} → ${item.to ?? ''} ` }, ...exchangeParts(item)]), ...more])
     case 'invested':
-      return [...row.items.map((item) => t('money.where.spot', { trade: exchangeText(item) })), ...more].join(' · ')
+      return joined([...row.items.map((item) => spot(exchangeParts(item))), ...more])
     case 'losses':
-      return t('money.where.fees')
+      return words(t('money.where.fees'))
   }
 }
 
-function howMuch(row: WhereRow): string {
+function howMuch(row: WhereRow): SumPart[] {
   const unit = sharedUnit(row)
-  const own = (qty: (item: WhereItem) => string) => unitText(String(row.items.reduce((sum, item) => sum + Math.abs(Number(qty(item))), 0)), unit ?? '')
+  const own = (qty: (item: WhereItem) => string) => unitPart(String(row.items.reduce((sum, item) => sum + Math.abs(Number(qty(item))), 0)), unit ?? '')
   switch (row.kind) {
     case 'moved':
-      return t(`money.where.transfers.${pluralForm(row.count, locale.value)}`, { count: row.count })
+      return words(t(`money.where.transfers.${pluralForm(row.count, locale.value)}`, { count: row.count }))
     case 'lent':
-      return unit && unit.toLowerCase() !== props.report.meta.currency ? `${own((item) => item.qty)} · ${money(row.value)}` : money(row.value)
+      return unit && unit.toLowerCase() !== props.report.meta.currency ? [own((item) => item.qty), SEP, money(row.value)] : [money(row.value)]
     case 'invested':
-      return unit && row.count === row.items.length ? own((item) => item.qty) : money(row.value)
+      return unit && row.count === row.items.length ? [own((item) => item.qty)] : [money(row.value)]
     default:
-      return money(row.value)
+      return [money(row.value)]
   }
 }
 
 const lines = computed(() =>
-  props.report.rows.map((row) => ({
+  props.report.rows.map((row) => {
+    const parts = what(row)
+    return {
     row,
     kind: row.kind,
     title: t(`money.where.kind.${row.kind}`),
-    what: what(row),
+    what: parts,
+    whatText: partsText(parts),
     much: howMuch(row),
     tone: TONE[row.kind],
     opens: WHERE_OPENS.includes(row.kind) && row.items.some((item) => item.at),
     open: opened.value === row.kind,
     to: listOf(row.kind),
     toggle: () => toggle(row.kind),
-  })),
+    }
+  }),
 )
 </script>
 
@@ -127,10 +146,13 @@ const lines = computed(() =>
                 </Button>
                 <template v-else>{{ line.title }}</template>
               </TableCell>
-              <TableCell class="max-w-0 truncate px-3 text-xs text-muted-foreground" :title="line.what">
-                {{ line.open ? t(`money.where.hint.${line.kind}`) : line.what }}
+              <TableCell class="max-w-0 truncate px-3 text-xs text-muted-foreground" :title="line.whatText">
+                <template v-if="line.open">{{ t(`money.where.hint.${line.kind}`) }}</template>
+                <MoneyPhrase v-else :parts="line.what" />
               </TableCell>
-              <TableCell :class="['px-3 text-right font-semibold whitespace-nowrap tabular-nums', line.tone]">{{ line.much }}</TableCell>
+              <TableCell :class="['px-3 text-right font-semibold whitespace-nowrap tabular-nums', line.tone]">
+                <MoneyPhrase :parts="line.much" />
+              </TableCell>
             </TableRow>
             <WhereOpened v-if="line.open" :row="line.row" :to="line.to" />
           </template>
@@ -156,18 +178,19 @@ const lines = computed(() =>
           <span class="grid min-w-0 flex-1">
             <span class="text-sm font-medium">{{ line.title }}</span>
             <span class="truncate text-xs font-normal text-muted-foreground">
-              {{ line.open ? t(`money.where.hintShort.${line.kind}`) : line.what }}
+              <template v-if="line.open">{{ t(`money.where.hintShort.${line.kind}`) }}</template>
+              <MoneyPhrase v-else :parts="line.what" />
             </span>
           </span>
-          <b :class="['text-sm whitespace-nowrap tabular-nums', line.tone]">{{ line.much }}</b>
+          <b :class="['text-sm whitespace-nowrap tabular-nums', line.tone]"><MoneyPhrase :parts="line.much" /></b>
           <ChevronDown class="size-4 shrink-0 text-muted-foreground transition-transform" :class="line.open && 'rotate-180'" />
         </Button>
         <div v-else class="flex items-center gap-3">
           <div class="grid min-w-0 flex-1">
             <span class="text-sm font-medium">{{ line.title }}</span>
-            <span class="truncate text-xs text-muted-foreground">{{ line.what }}</span>
+            <span class="truncate text-xs text-muted-foreground"><MoneyPhrase :parts="line.what" /></span>
           </div>
-          <b :class="['text-sm whitespace-nowrap tabular-nums', line.tone]">{{ line.much }}</b>
+          <b :class="['text-sm whitespace-nowrap tabular-nums', line.tone]"><MoneyPhrase :parts="line.much" /></b>
         </div>
         <WhereOpened v-if="line.open" :row="line.row" :to="line.to" phone />
       </div>

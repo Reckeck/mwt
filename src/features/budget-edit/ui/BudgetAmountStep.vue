@@ -2,8 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { CurrencyPicker } from '@/entities/currency'
-import { formatMoney } from '@/shared/lib/format'
+import { CurrencyPicker, Money } from '@/entities/currency'
 import type { FormValidation } from '@/shared/lib/form'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
@@ -22,15 +21,14 @@ const currency = defineModel<string>('currency', { required: true })
 const warn = defineModel<boolean>('warn', { required: true })
 
 const { t } = useI18n()
-const money = (value: string, code = props.spending?.currency) => formatMoney(value, { decimals: 0, currency: code })
 
-/** «36 из 50 $ · 72 %»: only a monthly limit in the spending's own currency compares. */
+/** «36 $ из 50 $ · 72 %»: only a monthly limit in the spending's own currency compares. */
 const taken = computed(() => {
   const spending = props.spending
   const cap = Number(limit.value)
   if (!spending || props.period !== 'month' || !(cap > 0) || currency.value.toLowerCase() !== spending.currency.toLowerCase()) return null
   const percent = Math.round((Number(spending.spent) / cap) * 100)
-  return t('budget.takenOf', { spent: money(spending.spent).replace(/\s*\D+$/, ''), limit: money(limit.value), percent })
+  return { spent: spending.spent, percent }
 })
 </script>
 
@@ -43,14 +41,23 @@ const taken = computed(() => {
         </template>
       </AmountInput>
       <p v-if="props.spending" class="text-xs text-muted-foreground">
-        <template v-if="props.spending.average">{{ t('budget.usual', { average: money(props.spending.average) }) }} · </template>
-        {{ props.spending.when }} {{ money(props.spending.spent) }}
+        <template v-if="props.spending.average">
+          <i18n-t keypath="budget.usual" tag="span">
+            <template #average><Money :amount="props.spending.average" :currency="props.spending.currency" :decimals="0" /></template>
+          </i18n-t>
+          ·
+        </template>
+        {{ props.spending.when }} <Money :amount="props.spending.spent" :currency="props.spending.currency" :decimals="0" />
       </p>
     </FormField>
 
     <div v-if="taken" class="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm">
       <span>{{ t('budget.takenNow') }}</span>
-      <b class="tabular-nums">{{ taken }}</b>
+      <i18n-t keypath="budget.takenOf" tag="b" class="tabular-nums">
+        <template #spent><Money bare :amount="taken.spent" :currency="currency" :decimals="0" /></template>
+        <template #limit><Money :amount="limit" :currency="currency" :decimals="0" /></template>
+        <template #percent>{{ taken.percent }}</template>
+      </i18n-t>
     </div>
 
     <SwitchRow id="budget-warn" v-model="warn" :label="t('budget.warnAt', { percent: BUDGET_WARN_PERCENT })" />

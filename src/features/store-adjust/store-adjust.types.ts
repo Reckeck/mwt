@@ -13,3 +13,9 @@ export interface AdjustmentRow {
   /** What is really there; empty = unchanged. */
   actual: string
 }
+
+/** What the app holds in the account: the sum in its own asset and, for another currency, the base sum. */
+export interface AdjustmentInApp {
+  own: { amount: string; currency: string }
+  base?: { amount: string; currency: string }
+}

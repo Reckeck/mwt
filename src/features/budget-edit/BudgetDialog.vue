@@ -102,6 +102,7 @@ const save = useMutation({
   },
   meta: {
     error: 'budget.saveFailed',
+    // money: plain — the toast after a save is text
     success: (_data, input) =>
       t('budget.savedOn', {
         target: targetName(input as BudgetInput),

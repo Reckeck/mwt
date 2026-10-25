@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
 import { Pencil, Tag, Trash2, Wallet, X } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { formatMoney } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
 import { txId } from '@/shared/lib/transactions'
@@ -23,10 +24,10 @@ const { t } = useI18n()
 const phone = useIsPhone()
 
 const picked = computed(() => props.transactions.filter((tx) => props.selection.has(txId(tx))))
-const totals = computed(() =>
-  bulkTotals(picked.value)
-    .map((total) => formatMoney(total.amount, { currency: total.symbol, signed: total.signed }))
-    .join(' · '),
+const totals = computed(() => bulkTotals(picked.value))
+// money: plain — the sheet's description is a string prop of ActionSheet
+const totalsText = computed(() =>
+  totals.value.map((total) => formatMoney(total.amount, { currency: total.symbol, signed: total.signed })).join(' · '),
 )
 /** A transfer or an exchange has two wallets: it can't move to one. */
 const cantMove = computed(() => (picked.value.every(movable) ? false : t('bulk.cantMove')))
@@ -79,12 +80,17 @@ useEventListener(document, 'keydown', (event: KeyboardEvent) => {
         <Trash2 class="size-4" />
       </Button>
     </div>
-    <span v-if="totals" class="text-sm text-muted-foreground">{{ totals }}</span>
+    <span v-if="totals.length" class="text-sm text-muted-foreground">
+      <template v-for="(total, index) in totals" :key="`${total.symbol}:${total.signed}`">
+        <template v-if="index"> · </template>
+        <Money :amount="total.amount" :currency="total.symbol" :signed="total.signed" />
+      </template>
+    </span>
     <ActionSheet
       v-model:open="sheetOpen"
       :actions="sheetActions"
       :title="t('bulk.picked', { count: selection.count.value })"
-      :description="totals"
+      :description="totalsText"
     />
   </div>
   <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-primary/12 px-3 py-2" data-tx-bulk>
@@ -95,7 +101,12 @@ useEventListener(document, 'keydown', (event: KeyboardEvent) => {
       @click.stop="selection.clear()"
     />
     <b>{{ t('bulk.picked', { count: selection.count.value }) }}</b>
-    <span v-if="totals" class="text-sm text-muted-foreground">{{ totals }}</span>
+    <span v-if="totals.length" class="text-sm text-muted-foreground">
+      <template v-for="(total, index) in totals" :key="`${total.symbol}:${total.signed}`">
+        <template v-if="index"> · </template>
+        <Money :amount="total.amount" :currency="total.symbol" :signed="total.signed" />
+      </template>
+    </span>
     <span class="flex-1" />
     <Button variant="outline" size="sm" @click="pick('category')">{{ t('bulk.category') }}</Button>
     <Button variant="outline" size="sm" :disabled="cantMove" :title="cantMove || undefined" @click="pick('store')">

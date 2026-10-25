@@ -19,7 +19,6 @@ import { categoryKeyLabel } from '@/shared/lib/categories'
 import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { drillTo, localDay } from '@/shared/lib/drill'
 import { budgetEntity } from '@/shared/lib/entity-link'
-import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useCategories, useStoreTree } from '@/shared/api/queries'
@@ -137,11 +136,12 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
               class="text-xs tabular-nums"
               :class="Number(status?.remaining ?? 0) < 0 ? 'text-destructive' : 'text-muted-foreground'"
             >
-              {{
-                Number(status?.remaining ?? 0) < 0
-                  ? t('budget.over', { amount: formatMoney(String(-Number(status?.remaining)), { currency: budget.currency }) })
-                  : t('budget.left', { amount: formatMoney(status?.remaining ?? budget.limit, { currency: budget.currency }) })
-              }}
+              <i18n-t v-if="Number(status?.remaining ?? 0) < 0" keypath="budget.over">
+                <template #amount><Money :amount="String(-Number(status?.remaining))" :currency="budget.currency" /></template>
+              </i18n-t>
+              <i18n-t v-else keypath="budget.left">
+                <template #amount><Money :amount="status?.remaining ?? budget.limit" :currency="budget.currency" /></template>
+              </i18n-t>
             </p>
           </div>
         </div>

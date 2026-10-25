@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { CarryOverSwitch } from '@/features/month-carry-over'
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { Money } from '@/entities/currency'
+import { formatMonthKey } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -19,8 +20,6 @@ const props = defineProps<{ balance: MonthBalance; month: string }>()
 const emit = defineEmits<{ pick: [month: string] }>()
 
 const { t } = useI18n()
-const number = (value: string, signed = false) => formatMoney(value, { decimals: 0, signed })
-const money = (value: string, signed = false) => formatMoney(value, { decimals: 0, signed, currency: props.balance.currency })
 const short = (key: string) => formatMonthKey(key, { month: 'short' }).replace('.', '')
 const carries = computed(() => props.balance.carry_since !== null)
 const tone = (value: string) => (Number(value) < 0 ? 'text-warning' : 'text-success')
@@ -32,8 +31,8 @@ const LINES = computed(() => [
   { key: 'left' as const, label: t('balance.left'), signed: true, class: 'font-semibold' },
   ...(carries.value ? [{ key: 'total' as const, label: t('balance.carried'), signed: false, class: 'font-semibold' }] : []),
 ])
-const cell = (row: MonthBalanceRow, key: 'income' | 'spent' | 'left' | 'total', signed: boolean) =>
-  key === 'spent' ? number(`-${row.spent}`.replace('--', '')) : number(row[key], signed)
+const cell = (row: MonthBalanceRow, key: 'income' | 'spent' | 'left' | 'total') =>
+  key === 'spent' ? `-${row.spent}`.replace('--', '') : row[key]
 
 /** The table worked out once: a head per month, a cell per line and month. */
 const heads = computed(() =>
@@ -48,7 +47,7 @@ const table = computed(() =>
     ...line,
     cells: props.balance.rows.map((row) => ({
       month: row.month,
-      text: cell(row, line.key, line.signed),
+      amount: cell(row, line.key),
       class: cn(line.key === 'left' && tone(row.left), row.month === props.month && 'bg-accent/50'),
     })),
   })),
@@ -76,8 +75,9 @@ const table = computed(() =>
       <TableBody>
         <TableRow v-for="line in table" :key="line.key">
           <TableCell>{{ line.label }}</TableCell>
+          <!-- The column head names the currency, so the mark in each cell is hidden (the sum stays hoverable). -->
           <TableCell v-for="value in line.cells" :key="value.month" :class="cn('text-right', line.class, value.class)">
-            {{ value.text }}
+            <Money bare :amount="value.amount" :currency="props.balance.currency" :decimals="0" :signed="line.signed" />
           </TableCell>
         </TableRow>
       </TableBody>
@@ -86,9 +86,14 @@ const table = computed(() =>
       <li v-for="row in latestFirst" :key="row.month" class="flex min-h-11 items-center gap-2 border-b py-1.5 last:border-0">
         <Button variant="ghost" class="h-auto min-w-0 flex-1 flex-col items-start gap-0 px-0 font-normal" @click="emit('pick', row.month)">
           <span class="font-medium capitalize">{{ formatMonthKey(row.month, { month: 'long' }) }}</span>
-          <span v-if="carries" class="text-xs text-muted-foreground">{{ t('balance.totalNow', { total: money(row.total) }) }}</span>
+          <span v-if="carries" class="text-xs text-muted-foreground"><i18n-t keypath="balance.totalNow">
+              <template #total><Money :amount="row.total" :currency="props.balance.currency" :decimals="0" /></template>
+            </i18n-t>
+          </span>
         </Button>
-        <b :class="['whitespace-nowrap', tone(row.left)]">{{ money(row.left, true) }}</b>
+        <b :class="['whitespace-nowrap', tone(row.left)]">
+          <Money :amount="row.left" :currency="props.balance.currency" :decimals="0" signed />
+        </b>
       </li>
     </ul>
   </section>

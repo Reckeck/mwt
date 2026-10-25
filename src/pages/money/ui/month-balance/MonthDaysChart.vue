@@ -2,10 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useMoneyChartTooltip } from '@/entities/currency'
+import { Money, useMoneyChartTooltip } from '@/entities/currency'
 import { chartColors } from '@/shared/lib/chart-theme'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
-import { formatMoney } from '@/shared/lib/format'
 
 /** «{Month} по дням»: what was left at the end of each day, and dashed, where the allowance takes it. */
 const props = defineProps<{ balance: MonthBalance; title: string }>()
@@ -35,11 +34,6 @@ const option = computed<ChartOption>(() => {
     ],
   }
 })
-const legend = computed(() =>
-  props.balance.per_day
-    ? t('balance.days.legend', { perDay: formatMoney(props.balance.per_day, { decimals: 0, currency: props.balance.currency }) })
-    : t('balance.days.fact'),
-)
 </script>
 
 <template>
@@ -48,7 +42,10 @@ const legend = computed(() =>
       <b>{{ props.title }}</b>
       <span class="text-muted-foreground">{{ t('balance.days.hint') }}</span>
       <span class="flex-1" />
-      <span class="text-muted-foreground max-md:hidden">{{ legend }}</span>
+      <i18n-t v-if="props.balance.per_day" keypath="balance.days.legend" tag="span" class="text-muted-foreground max-md:hidden">
+        <template #perDay><Money :amount="props.balance.per_day" :currency="props.balance.currency" :decimals="0" /></template>
+      </i18n-t>
+      <span v-else class="text-muted-foreground max-md:hidden">{{ t('balance.days.fact') }}</span>
     </div>
     <div class="h-44 w-full"><Chart :option="option" autoresize /></div>
   </section>

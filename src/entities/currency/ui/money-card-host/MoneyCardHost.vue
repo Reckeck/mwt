@@ -12,7 +12,8 @@ import { Drawer, DrawerContent, DrawerTitle } from '@/shared/ui/drawer'
 import { Kbd } from '@/shared/ui/kbd'
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/ui/popover'
 
-import { type SumData, isPressableSum, sumData, sumOf } from '../../lib/money-target'
+import { type SumData, isPressableSum, sumAtPoint, sumData, sumOf } from '../../lib/money-target'
+import { moneyCardRequest } from '../../model/money-card-open'
 import { MoneyCard } from '../money-card'
 
 /**
@@ -20,8 +21,9 @@ import { MoneyCard } from '../money-card'
  * sum — a tap on a phone — shows it in the base currency at the operation's
  * rate and today's, and in the favourites. A card by the sum on a computer, a
  * sheet on a phone. C copies the number, Esc closes, «Все курсы» opens the
- * rates in Настройки › Деньги. A sum inside a button or a link keeps its click
- * and the hover tooltip (`MoneyTooltipHost`).
+ * rates in Настройки › Деньги. A sum inside a button or a link keeps its click:
+ * a hold opens the card there (and the row menu's «Сумма в других валютах»);
+ * the hover tooltip is `MoneyTooltipHost`'s.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -31,26 +33,84 @@ const phone = useIsPhone()
 const open = ref(false)
 const target = ref<HTMLElement | null>(null)
 const sum = ref<SumData | null>(null)
+const HOLD_MS = 500
+const HOLD_SLOP_PX = 10
+/** The click a finger's lift makes after a hold comes within this. */
+const HELD_CLICK_MS = 1500
 /** The click that closed the card by pressing its own sum must not open it again. */
 let closed = { at: 0, sum: null as HTMLElement | null }
+
+function openFor(node: HTMLElement | null, data: SumData) {
+  target.value?.removeAttribute('data-money-open')
+  target.value = node
+  sum.value = data
+  node?.setAttribute('data-money-open', '')
+  open.value = true
+}
 
 useEventListener(
   document,
   'click',
   (event: MouseEvent) => {
+    // A hold on a sum in a button just ended: the click the finger's lift makes is not a press.
+    if (held && Date.now() - heldAt < HELD_CLICK_MS) {
+      event.preventDefault()
+      event.stopPropagation()
+      held = null
+      return
+    }
     const node = sumOf(event.target)
-    if (!node || !isPressableSum(node)) return
-    // The row under the sum must not open its operation as well.
-    event.stopPropagation()
-    if (closed.sum === node && Date.now() - closed.at < 400) return
-    target.value?.removeAttribute('data-money-open')
-    target.value = node
-    sum.value = sumData(node)
-    node.setAttribute('data-money-open', '')
-    open.value = true
+    if (!node) return
+    if (isPressableSum(node)) {
+      // The row under the sum must not open its operation as well.
+      event.stopPropagation()
+      if (closed.sum === node && Date.now() - closed.at < 400) return
+      openFor(node, sumData(node))
+    }
   },
   { capture: true },
 )
+
+// A finger has no hover: a sum in a button or a link opens its card on a hold. A row with
+// its own hold (a history row) lists it in its menu instead, «Сумма в других валютах».
+let holdTimer: ReturnType<typeof setTimeout> | undefined
+let holdFrom = { x: 0, y: 0 }
+let held: HTMLElement | null = null
+let heldAt = 0
+const cancelHold = () => clearTimeout(holdTimer)
+
+useEventListener(document, 'pointerdown', (event: PointerEvent) => {
+  held = null
+  cancelHold()
+  if (event.pointerType !== 'touch') return
+  const node = sumAtPoint(event.target, { x: event.clientX, y: event.clientY })
+  if (!node || isPressableSum(node) || node.closest('[data-tx-row]')) return
+  holdFrom = { x: event.clientX, y: event.clientY }
+  holdTimer = setTimeout(() => {
+    held = node
+    heldAt = Date.now()
+    openFor(node, sumData(node))
+  }, HOLD_MS)
+})
+useEventListener(document, 'pointermove', (event: PointerEvent) => {
+  if (Math.hypot(event.clientX - holdFrom.x, event.clientY - holdFrom.y) > HOLD_SLOP_PX) cancelHold()
+})
+useEventListener(document, 'pointerup', () => {
+  cancelHold()
+  if (held) heldAt = Date.now()
+})
+useEventListener(document, 'pointercancel', cancelHold)
+useEventListener(document, 'scroll', cancelHold, { capture: true, passive: true })
+// The system menu a long press brings up on a sum would cover the card.
+useEventListener(document, 'contextmenu', (event: MouseEvent) => {
+  if (held && sumOf(event.target) === held) event.preventDefault()
+})
+
+watch(moneyCardRequest, (request) => {
+  if (!request) return
+  moneyCardRequest.value = null
+  openFor(request.anchor, request.sum)
+})
 
 watch(open, (value) => {
   if (value) return

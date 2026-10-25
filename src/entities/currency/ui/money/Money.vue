@@ -5,17 +5,20 @@ import { isFiatCode, moneyParts, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { moneyMoment } from '../../lib/money-moment'
 import { useFavoriteCurrencies } from '../../model/favorites'
 import type { MoneyProps } from './money.types'
 
 /**
  * An amount with grouped digits and a separate, muted currency mark.
  *
- * A click on it — a tap on a phone — opens the sum card: the amount in the
- * base currency at the operation's rate (`at`) and today's, and in the
- * favourites (`MoneyCardHost`). Inside a button or a link, where a click is
- * taken, hovering shows the conversions instead (`MoneyTooltipHost`). For the
- * base currency, any fiat and any favourite. Both are one for the whole app.
+ * Hovering it shows the amount in the base and favourite currencies, at the
+ * rate of `at` when there is one (`MoneyTooltipHost`). A click on it — a tap on
+ * a phone — opens the sum card: the amount in the base currency at the
+ * operation's rate and today's, and in the favourites (`MoneyCardHost`); inside
+ * a button or a link the click is the button's, and a hold opens the card.
+ * For the base currency, any fiat, any favourite and any tracked coin. Both
+ * hosts are one for the whole app.
  */
 const props = withDefaults(defineProps<MoneyProps>(), {
   currency: '',
@@ -23,6 +26,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
   signed: false,
   colored: false,
   compact: false,
+  bare: false,
   convert: undefined,
   at: undefined,
 })
@@ -45,7 +49,8 @@ const known = computed(
   () =>
     code.value === settings.baseCurrency ||
     isFiatCode(code.value) ||
-    favorites.isFavorite(code.value),
+    favorites.isFavorite(code.value) ||
+    settings.cryptoCurrencies.includes(code.value),
 )
 const convertible = computed(
   () => (props.convert ?? known.value) && Number.isFinite(numeric.value) && numeric.value !== 0,
@@ -61,9 +66,9 @@ const convertible = computed(
     :data-money-convertible="convertible || undefined"
     :data-money-amount="convertible ? numeric : undefined"
     :data-money-currency="convertible ? code : undefined"
-    :data-money-at="convertible && props.at ? props.at : undefined"
+    :data-money-at="convertible && props.at ? moneyMoment(props.at) : undefined"
   >
     <span>{{ parts.number }}</span>
-    <span v-if="parts.symbol" class="text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
+    <span v-if="parts.symbol && !props.bare" class="money-symbol text-[0.85em] font-normal text-muted-foreground">{{ parts.symbol }}</span>
   </span>
 </template>

@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AssetChip } from '@/entities/asset'
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
-import { formatAsOf, formatMoney, formatPct } from '@/shared/lib/format'
+import { formatAsOf, formatPct } from '@/shared/lib/format'
 import { toIsoTimestamp } from '@/shared/lib/datetime'
 import { accountStoreId } from '@/shared/lib/transactions'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -29,11 +30,8 @@ const fromStore = computed(() => accountStoreId(form.from))
 const rate = computed(() => {
   const give = Number(form.fromAmount.replace(/\s/g, '').replace(',', '.'))
   const got = Number(form.toAmount.replace(/\s/g, '').replace(',', '.'))
-  if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return ''
-  return t('tx.quick.dealPrice', {
-    price: formatMoney(give / got, { currency: form.fromAsset.symbol }),
-    unit: form.toAsset.symbol,
-  })
+  if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return null
+  return { price: give / got, currency: form.fromAsset.symbol, unit: form.toAsset.symbol }
 })
 /** «Рынок 21 окт. 14:00 · 92,10 ₽» and «Переплата обменнику 805 ₽ · 8,60 $ · 1,8 %», from the core. */
 const market = computed(() => {
@@ -45,12 +43,11 @@ const market = computed(() => {
   const abs = (value: string) => String(Math.abs(Number(value)))
   return {
     at: formatAsOf(toIsoTimestamp(form.timestamp) ?? new Date().toISOString()),
-    price: formatMoney(convert.market_price, { currency }),
-    overpay: [
-      formatMoney(abs(convert.overpay), { currency, decimals: 0 }),
-      formatMoney(abs(convert.overpay_base), { currency: settings.baseCurrency.toUpperCase() }),
-      formatPct(Math.abs(pct), { decimals: 1 }),
-    ].join(' · '),
+    price: convert.market_price,
+    currency,
+    overpay: abs(convert.overpay),
+    overpayBase: abs(convert.overpay_base),
+    pct: formatPct(Math.abs(pct), { decimals: 1 }),
     // A point over the market is the exchanger's usual cut; past it the line is worth a look.
     high: pct > 1,
     gain: pct < 0,
@@ -90,15 +87,21 @@ const getError = computed(() => (check.error('toAmount') ? t('form.amountError')
 
   <div v-if="rate" class="grid gap-1.5 rounded-md bg-muted px-3 py-2.5 text-sm" data-tx-rate>
     <p class="flex justify-between gap-3">
-      <span>{{ t('tx.quick.dealRate') }}</span><b class="font-semibold tabular-nums">{{ rate }}</b>
+      <span>{{ t('tx.quick.dealRate') }}</span><i18n-t keypath="tx.quick.dealPrice" tag="b" class="font-semibold tabular-nums">
+        <template #price><Money :amount="rate.price" :currency="rate.currency" /></template>
+        <template #unit>{{ rate.unit }}</template>
+      </i18n-t>
     </p>
     <template v-if="market">
       <p class="flex justify-between gap-3 text-muted-foreground">
-        <span>{{ t('tx.quick.market', { at: market.at }) }}</span><span class="tabular-nums">{{ market.price }}</span>
+        <span>{{ t('tx.quick.market', { at: market.at }) }}</span><span class="tabular-nums"><Money :amount="market.price" :currency="market.currency" /></span>
       </p>
       <p class="flex justify-between gap-3" data-tx-overpay>
         <span>{{ t(market.gain ? 'tx.quick.underpay' : 'tx.quick.overpay') }}</span>
-        <b class="text-right font-semibold tabular-nums" :class="market.high ? 'text-warning' : market.gain && 'text-success'">{{ market.overpay }}</b>
+        <b class="text-right font-semibold tabular-nums" :class="market.high ? 'text-warning' : market.gain && 'text-success'">
+          <Money :amount="market.overpay" :currency="market.currency" :decimals="0" /> ·
+          <Money :amount="market.overpayBase" :currency="settings.baseCurrency" /> · {{ market.pct }}
+        </b>
       </p>
     </template>
   </div>

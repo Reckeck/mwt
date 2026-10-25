@@ -2,6 +2,7 @@
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { bindingBadge } from '@/entities/store'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import {
@@ -48,8 +49,8 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
     </ContextMenu>
 
     <!-- A parent keeps its rolled-up total, shifted left of the chevron. -->
-    <SidebarMenuBadge v-if="total(props.node)" :class="cn('tabular-nums', props.node.children.length && 'right-8')">
-      {{ total(props.node) }}
+    <SidebarMenuBadge v-if="Number(total(props.node).amount)" :class="cn('tabular-nums', props.node.children.length && 'right-8')">
+      <Money v-bind="total(props.node)" />
     </SidebarMenuBadge>
     <SidebarMenuAction
       v-if="props.node.children.length"
@@ -75,8 +76,8 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
               <span v-if="bindingBadge(child.store)" class="shrink-0 text-2xs uppercase text-muted-foreground">
                 {{ bindingBadge(child.store) }}
               </span>
-              <span v-if="total(child)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {{ total(child) }}
+              <span v-if="Number(total(child).amount)" class="shrink-0 text-xs tabular-nums text-muted-foreground">
+                <Money v-bind="total(child)" />
               </span>
             </RouterLink>
           </SidebarMenuSubButton>

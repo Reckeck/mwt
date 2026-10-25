@@ -1,7 +1,7 @@
 /** Every `<Money>` that can show itself in other currencies. */
 export const MONEY_SUM = '[data-money-convertible]'
 
-/** A sum inside one of these already does something on a click: it keeps the hover tooltip instead. */
+/** A sum inside one of these already does something on a click: a click goes to the button, a hold opens the card. */
 const PRESSABLE =
   'a, button, label, input, select, textarea, [role="button"], [role="menuitem"], [role="option"], [role="tab"]'
 
@@ -10,7 +10,23 @@ export function sumOf(node: EventTarget | null): HTMLElement | null {
   return node instanceof Element ? node.closest<HTMLElement>(MONEY_SUM) : null
 }
 
-/** A sum a click opens as a card (Currency-1 · 5): not one inside a button or a link. */
+/**
+ * The sum under a finger at `point`: the node itself, or — a button's enlarged touch area is the
+ * event's target, not the sum drawn on it — a sum inside the pressed button that holds the point.
+ */
+export function sumAtPoint(node: EventTarget | null, point: { x: number; y: number }): HTMLElement | null {
+  const own = sumOf(node)
+  if (own || !(node instanceof Element)) return own
+  const holder = node.closest(PRESSABLE)
+  const inside = (rect: DOMRect) =>
+    point.x >= rect.left - 6 && point.x <= rect.right + 6 && point.y >= rect.top - 6 && point.y <= rect.bottom + 6
+  return (
+    [...(holder?.querySelectorAll<HTMLElement>(MONEY_SUM) ?? [])].find((sum) => inside(sum.getBoundingClientRect())) ??
+    null
+  )
+}
+
+/** A sum a click opens as a card (Currency-1 · 5): true for one not inside a button or a link. */
 export function isPressableSum(sum: HTMLElement): boolean {
   return !sum.parentElement?.closest(PRESSABLE)
 }

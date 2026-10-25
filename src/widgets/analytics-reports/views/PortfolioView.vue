@@ -6,7 +6,7 @@ import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { useTheme } from '@/shared/lib/theme'
 
@@ -82,9 +82,10 @@ const allocationOption = computed<ChartOption>(() => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
+      // The slice's name as the title, its sum with the other currencies under it (the shared tooltip), then the share.
       formatter: (params: unknown) => {
         const item = params as { name: string; value: number; percent: number }
-        return `${item.name}: ${formatMoney(item.value, { currency: currency.value })} (${item.percent}%)`
+        return `${moneyTooltip.value({ ...item, seriesName: '' })}<div style="opacity:.7">${item.percent}%</div>`
       },
     },
     series: [

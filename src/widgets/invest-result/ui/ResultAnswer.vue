@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import type { CalcOutcome } from '@/features/invest-calculator'
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatPct } from '@/shared/lib/format'
+import { composeSums, type Sum, type SumPart } from '@/shared/lib/money-parts'
 import { Button } from '@/shared/ui/button'
 
 import { planMonth, termText } from '../lib/answer'
@@ -28,8 +29,15 @@ const input = computed(() => props.outcome.input)
 const result = computed(() => props.outcome.result)
 const solved = computed(() => props.outcome.solved)
 const term = computed(() => termText(input.value.term_months, t, locale.value))
-const money = (amount: string | number) => formatMoney(amount, { currency: props.currency, decimals: 0 })
-const exact = (amount: string | number) => formatMoney(amount, { currency: props.currency, decimals: 2 })
+const sum = (amount: string | number, decimals = 0): Sum => ({ amount, currency: props.currency, decimals })
+/** A phrase whose sums (objects from `sum`) are drawn as `<Money>`. */
+function phrase(key: string, values: Record<string, unknown>): SumPart[] {
+  const { mark, parts } = composeSums()
+  const marked = Object.fromEntries(
+    Object.entries(values).map(([name, value]) => [name, typeof value === 'object' && value ? mark(value as Sum) : value]),
+  )
+  return parts(t(key, marked))
+}
 
 const depletedAt = computed(() => (input.value.withdrawal ? result.value.depleted_at : null))
 const withdrawal = computed(() => input.value.withdrawal)
@@ -41,8 +49,8 @@ const incomeShare = computed(() => {
   const pct = formatPct((Number(solved.value.value) / income) * 100, { decimals: 0 })
   const now = props.prefilled?.monthly_contribution
   return now
-    ? t('invest.answer.incomeShareNow', { pct, income: money(income), now: exact(now) })
-    : t('invest.answer.incomeShare', { pct, income: money(income) })
+    ? phrase('invest.answer.incomeShareNow', { pct, income: sum(income), now: sum(now, 2) })
+    : phrase('invest.answer.incomeShare', { pct, income: sum(income) })
 })
 </script>
 
@@ -51,14 +59,16 @@ const incomeShare = computed(() => {
   <div class="grid gap-1" :class="solved && 'rounded-lg border border-primary/40 bg-primary/5 p-4'" data-calc-answer>
     <template v-if="depletedAt !== null && withdrawal">
       <p class="text-sm text-muted-foreground">
-        {{ t('invest.answer.withdrawing', { amount: money(withdrawal.amount), freq: t(`invest.freqShort.${withdrawal.freq}`) }) }}
+        <MoneyPhrase :parts="phrase('invest.answer.withdrawing', { amount: sum(withdrawal.amount), freq: t(`invest.freqShort.${withdrawal.freq}`) })" />
       </p>
       <p class="text-2xl font-semibold text-destructive">
         {{ t('invest.answer.runsOut', { term: termText(depletedAt, t, locale) }) }}
       </p>
       <p class="text-sm text-muted-foreground">
         {{ planMonth(input.start, depletedAt) }}
-        <template v-if="props.safeWithdrawal !== null">· {{ t('invest.answer.safe', { term, amount: money(props.safeWithdrawal) }) }}</template>
+        <template v-if="props.safeWithdrawal !== null">
+          · <MoneyPhrase :parts="phrase('invest.answer.safe', { term, amount: sum(props.safeWithdrawal) })" />
+        </template>
         <Button
           v-if="props.safeWithdrawal !== null"
           variant="link"
@@ -74,10 +84,10 @@ const incomeShare = computed(() => {
     <template v-else-if="solved">
       <p class="text-sm text-muted-foreground">
         <template v-if="solved.unknown === 'contribution'">
-          {{ t('invest.answer.toReach', { date: planMonth(input.start, input.term_months + 1), target: money(props.target) }) }}
+          <MoneyPhrase :parts="phrase('invest.answer.toReach', { date: planMonth(input.start, input.term_months + 1), target: sum(props.target) })" />
         </template>
-        <template v-else-if="solved.unknown === 'term'">{{ t('invest.answer.toReachTerm', { target: money(props.target) }) }}</template>
-        <template v-else>{{ t('invest.answer.toReachRate', { term, target: money(props.target) }) }}</template>
+        <MoneyPhrase v-else-if="solved.unknown === 'term'" :parts="phrase('invest.answer.toReachTerm', { target: sum(props.target) })" />
+        <MoneyPhrase v-else :parts="phrase('invest.answer.toReachRate', { term, target: sum(props.target) })" />
       </p>
       <p class="text-2xl font-semibold" :class="!solved.reachable && 'text-warning'">
         <template v-if="!solved.reachable">{{ t(`invest.unreachable.${solved.unknown}`) }} </template>
@@ -90,7 +100,7 @@ const incomeShare = computed(() => {
         </template>
         <template v-else>{{ t('invest.answer.rate', { pct: formatPct(solved.value) }) }}</template>
       </p>
-      <p v-if="incomeShare" class="text-sm text-muted-foreground">{{ incomeShare }}</p>
+      <p v-if="incomeShare" class="text-sm text-muted-foreground"><MoneyPhrase :parts="incomeShare" /></p>
       <div v-if="solved.reachable" class="flex flex-wrap gap-2 pt-2">
         <Button size="sm" @click="emit('goal')">{{ t(`invest.answer.goal.${solved.unknown}`) }}</Button>
         <Button variant="outline" size="sm" @click="emit('accept')">{{ t('invest.solved.apply') }}</Button>

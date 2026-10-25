@@ -7,7 +7,7 @@ import { Money } from '@/entities/currency'
 import { ReportTerm } from '@/entities/report'
 import { Card } from '@/shared/ui/card'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatMoney, formatPct, signClass } from '@/shared/lib/format'
+import { formatPct, signClass } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
@@ -21,7 +21,6 @@ const props = defineProps<{ report: CategoriesReport; filter: ReportFilter }>()
 const { t } = useI18n()
 const categories = useCategories()
 const label = (key: string) => (key ? categoryKeyLabel(key, categories.data.value, t) : t('report.categories.none'))
-const money = (value: string) => formatMoney(value, { decimals: 0, currency: props.report.meta.currency })
 const months = computed(() => props.report.meta.months)
 /** The category's transactions over the whole period, or over one month. */
 const ofCategory = (key: string, month?: string) =>
@@ -130,7 +129,8 @@ function heat(block: CategoryGroupBlock, value: string): string {
                 class="text-right"
                 :class="!Number(cell) && 'text-muted-foreground'"
               >
-                {{ Number(cell) ? money(cell) : '—' }}
+                <Money v-if="Number(cell)" :amount="cell" :decimals="0" :currency="props.report.meta.currency" />
+                <template v-else>—</template>
               </TableCell>
               <TableCell class="text-right"><Money :amount="block.total" :decimals="0" :currency="props.report.meta.currency" /></TableCell>
               <TableCell colspan="2" />

@@ -2,10 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { UtilityRemindersButton } from '@/features/utility-reminders'
 import { Button } from '@/shared/ui/button'
-import { formatDayMonthShort, formatMoney, formatMonthKey, pluralForm } from '@/shared/lib/format'
+import { formatDayMonthShort, formatMonthKey, pluralForm } from '@/shared/lib/format'
+import { composeSums } from '@/shared/lib/money-parts'
 
 /**
  * «Счёт за октябрь · оплатить до 10 нояб» (Wallets-2 · 10): what the month will
@@ -30,12 +31,11 @@ const automated = computed(() =>
   props.bill.lines.filter((line) => 'housing' in line.item.kind && line.item.kind.housing.automation_id),
 )
 const automatedNote = computed(() =>
-  automated.value.map((line) =>
-    t('utilityTab.automatedNote', {
-      name: line.item.name,
-      amount: formatMoney(line.amount, { currency: line.item.currency, decimals: 0 }),
-    }),
-  ),
+  automated.value.map((line) => {
+    const { mark, parts } = composeSums()
+    const amount = mark({ amount: line.amount, currency: line.item.currency, decimals: 0 })
+    return { id: line.item.id, parts: parts(t('utilityTab.automatedNote', { name: line.item.name, amount })) }
+  }),
 )
 /** The phone's one line: «1 статья ждёт показаний · аренду платит автоматизация». */
 const phoneNote = computed(() =>
@@ -62,9 +62,11 @@ const delta = computed(() => (props.bill.delta_pct === null ? null : Number(prop
     </div>
     <div v-if="!props.phone" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
       <span v-if="unread" class="text-warning">{{ t('utilityTab.unreadHint', { unread }) }}</span>
-      <span v-for="note in automatedNote" :key="note" class="text-muted-foreground">{{ note }}</span>
+      <span v-for="note in automatedNote" :key="note.id" class="text-muted-foreground"><MoneyPhrase :parts="note.parts" /></span>
       <span v-if="props.bill.average" class="ml-auto whitespace-nowrap text-muted-foreground">
-        {{ t('utilityTab.average', { amount: formatMoney(props.bill.average, { currency, decimals: 0 }) }) }}
+        <i18n-t keypath="utilityTab.average">
+          <template #amount><Money :amount="props.bill.average" :currency="currency" :decimals="0" /></template>
+        </i18n-t>
         <template v-if="delta !== null">
           · <span :class="delta < 0 ? 'text-success' : delta > 0 ? 'text-warning' : ''">{{ delta > 0 ? '+' : delta < 0 ? '−' : '' }}{{ Math.abs(delta) }} %</span>
         </template>

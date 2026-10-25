@@ -5,6 +5,7 @@ import { Info, TrendingDown, TrendingUp } from 'lucide-vue-next'
 
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { activeLocale } from '@/shared/lib/locale'
+import { partsText } from '@/shared/lib/money-parts'
 import { cn } from '@/shared/lib/utils'
 
 import { type InsightTone, insightText, insightTone } from '../../lib/insight-text'
@@ -45,7 +46,13 @@ const lines = computed(() =>
   <ul v-if="lines.length" :class="cn('grid gap-1.5', 'text-sm')">
     <li v-for="(line, index) in lines" :key="index" class="flex items-start gap-2">
       <component :is="line.icon" :class="cn('mt-0.5 size-4 shrink-0', TONE_CLASS[line.tone])" aria-hidden="true" />
-      <span :class="cn(index === 0 && !props.compact && 'font-medium')">{{ line.text }}</span>
+      <span :class="cn(index === 0 && !props.compact && 'font-medium')">
+        <template v-for="(part, at) in line.text" :key="at">
+          <!-- A sum is drawn by the consumer (a widget may use <Money>; an entity may not import it). -->
+          <slot v-if="'amount' in part" name="sum" :sum="part">{{ partsText([part]) }}</slot>
+          <template v-else>{{ part.text }}</template>
+        </template>
+      </span>
     </li>
   </ul>
 </template>

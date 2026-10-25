@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Copy, Link2, Link2Off, Redo2 } from 'lucide-vue-next'
 
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { EnrichmentBanner } from '@/features/enrichment-review'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionLinkDialog } from '@/features/transaction-link'
@@ -12,7 +12,8 @@ import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { copyText } from '@/shared/lib/clipboard'
-import { formatDateTime, formatMoney } from '@/shared/lib/format'
+import { formatDateTime } from '@/shared/lib/format'
+import { composeSums } from '@/shared/lib/money-parts'
 import { notify } from '@/shared/lib/notify'
 import { txId, txKind, txLegs, txMeta } from '@/shared/lib/transactions'
 
@@ -44,9 +45,10 @@ const flows = useQuery({
 const flow = computed(() => flows.data.value?.find((entry) => entry.flow_id === meta.value.flow_id) ?? null)
 const flowResult = computed(() => {
   const chain = flow.value
-  if (!chain) return {}
-  const money = (value: string) => formatMoney(value, { currency: chain.currency })
-  return { gave: money(chain.gave_value), got: money(chain.got_value), loss: money(chain.loss) }
+  if (!chain) return []
+  const { mark, parts } = composeSums()
+  const sum = (amount: string) => mark({ amount, currency: chain.currency })
+  return parts(t('flows.result', { gave: sum(chain.gave_value), got: sum(chain.got_value), loss: sum(chain.loss) }))
 })
 
 /** Where the money of this operation ended up: the next link starts there. */
@@ -106,7 +108,7 @@ const unlink = useMutation({
           </li>
         </ol>
         <p class="text-xs tabular-nums text-muted-foreground">
-          {{ t('flows.result', flowResult) }}
+          <MoneyPhrase :parts="flowResult" />
         </p>
       </template>
       <p v-else class="text-xs text-muted-foreground">{{ t('flows.none') }}</p>

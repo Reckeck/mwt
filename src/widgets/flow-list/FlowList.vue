@@ -7,7 +7,7 @@ import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format'
+import { formatDate, formatDateTime } from '@/shared/lib/format'
 import { txId, txKind, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
 import { Button } from '@/shared/ui/button'
 import { openTxDetails } from '@/shared/lib/tx-details'
@@ -82,10 +82,16 @@ const amounts = (list: FlowAmount[]) => list.map((item) => `${item.amount} ${ite
             </li>
           </ol>
           <p class="tabular-nums text-muted-foreground">
-            {{ t('flows.result', { gave: formatMoney(flow.gave_value, { currency: flow.currency }), got: formatMoney(flow.got_value, { currency: flow.currency }), loss: formatMoney(flow.loss, { currency: flow.currency }) }) }}
+            <i18n-t keypath="flows.result">
+              <template #gave><Money :amount="flow.gave_value" :currency="flow.currency" /></template>
+              <template #got><Money :amount="flow.got_value" :currency="flow.currency" /></template>
+              <template #loss><Money :amount="flow.loss" :currency="flow.currency" /></template>
+            </i18n-t>
           </p>
           <p v-if="flow.difference !== flow.loss" class="text-muted-foreground">
-            {{ t('flows.difference', { amount: formatMoney(flow.difference, { currency: flow.currency }) }) }}
+            <i18n-t keypath="flows.difference">
+              <template #amount><Money :amount="flow.difference" :currency="flow.currency" /></template>
+            </i18n-t>
           </p>
         </div>
       </li>

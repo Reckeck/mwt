@@ -2,12 +2,13 @@
 import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 import { assetKey } from '@/shared/lib/asset-ref'
 import { signClass } from '@/shared/lib/format'
 
-import { badRow, difference, shownBalance } from '../../lib/adjustment-rows'
+import { badRow, difference } from '../../lib/adjustment-rows'
 import type { AdjustmentRow } from '../../store-adjust.types'
 
 /** Asset, ledger balance, what is really there, and the difference — one row per asset. */
@@ -49,7 +50,7 @@ function removeRow(index: number) {
     <div v-for="(row, index) in rows" :key="assetKey(row.asset)" :class="[GRID, 'border-b border-border px-3 py-1.5 last:border-b-0']">
       <span class="truncate text-sm font-medium" :class="ASSET" :title="row.asset.name">{{ row.asset.symbol }}</span>
       <span class="truncate text-right text-sm tabular-nums text-muted-foreground" :title="row.before">
-        {{ shownBalance(row.before, row.asset) }}
+        <Money :amount="row.before" :currency="row.asset.symbol" />
       </span>
       <AmountInput
         v-model="row.actual"
@@ -62,7 +63,8 @@ function removeRow(index: number) {
         class="truncate text-right text-sm tabular-nums"
         :class="difference(row) === null ? 'text-muted-foreground' : signClass(difference(row))"
       >
-        {{ shownBalance(difference(row), row.asset, true) }}
+        <Money v-if="difference(row) !== null" :amount="difference(row)" :currency="row.asset.symbol" signed />
+        <template v-else>—</template>
       </span>
       <Button
         v-if="row.before === '0'"

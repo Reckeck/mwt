@@ -6,6 +6,7 @@ import { Plus } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
 import { TransactionCreateDialog } from '@/features/transaction-create'
+import { Money } from '@/entities/currency'
 import { useWalletCatalog } from '@/entities/store'
 import { ContextMenu } from '@/shared/ui/context-menu'
 import {
@@ -82,11 +83,11 @@ const addLabel = (kind: StoreKind) => t('stores.addOfKind', { kind: t(`stores.ki
       <SidebarGroupLabel class="flex items-center gap-2 h-6 group-data-[collapsible=icon]:-mt-6">
         <span class="min-w-0 flex-1 truncate">{{ t(`stores.group.${group.info.kind}`) }}</span>
         <span
-          v-if="groupTotal(group.nodes, settings.baseCurrency)"
+          v-if="Number(groupTotal(group.nodes, settings.baseCurrency).amount)"
           class="shrink-0 tabular-nums"
           :class="canAddOfKind(group.info, group.nodes.length) && 'mr-6'"
         >
-          {{ groupTotal(group.nodes, settings.baseCurrency) }}
+          <Money v-bind="groupTotal(group.nodes, settings.baseCurrency)" />
         </span>
       </SidebarGroupLabel>
     </ContextMenu>

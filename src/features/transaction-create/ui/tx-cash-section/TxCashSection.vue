@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { AssetInput } from '@/entities/asset'
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
@@ -15,7 +16,7 @@ import { AvailableHint } from '../available-hint'
 
 /** Top-up, payment and DeFi: one asset on this wallet. */
 const { t } = useI18n()
-const { form, check, props, isProperty, propertyName, overrunText } = useTxForm()
+const { form, check, props, isProperty, propertyName, overruns } = useTxForm()
 </script>
 
 <template>
@@ -35,8 +36,14 @@ const { form, check, props, isProperty, propertyName, overrunText } = useTxForm(
       />
     </FormField>
   </div>
-  <p v-if="overrunText" class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-    {{ overrunText }}
+  <p v-if="overruns.length" class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+    <template v-for="(overrun, index) in overruns" :key="overrun.id">
+      <template v-if="index"> · </template>
+      <i18n-t keypath="budget.overrunHint" tag="span">
+        <template #period>{{ overrun.period }}</template>
+        <template #amount><Money :amount="overrun.amount" :currency="overrun.currency" /></template>
+      </i18n-t>
+    </template>
   </p>
   <div v-if="isProperty && form.kind === 'topup'" class="grid gap-1.5">
     <Label for="tx-unit-price">{{ t('tx.field.unitPrice') }}</Label>

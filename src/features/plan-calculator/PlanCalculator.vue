@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { USDT } from '@/entities/asset'
+import { Money } from '@/entities/currency'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
 import { Tabs } from '@/shared/ui/tabs'
@@ -84,7 +85,10 @@ defineExpose({ apply })
           class="truncate font-semibold tabular-nums"
           :class="cn(row.tone === 'positive' && 'text-success', row.tone === 'negative' && 'text-destructive')"
         >
-          {{ row.value }}
+          <template v-for="(part, at) in row.value" :key="at">
+            <Money v-if="'amount' in part" v-bind="part" />
+            <template v-else>{{ part.text }}</template>
+          </template>
         </span>
       </div>
     </div>

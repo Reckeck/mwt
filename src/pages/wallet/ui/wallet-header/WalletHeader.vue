@@ -66,6 +66,7 @@ const actions = computed(() => walletActions(props.store, Boolean(props.exchange
 /** Property (Wallets-2 · 10): «стоимость не задана · Оценить» until it has one, and «Продать». */
 const property = computed(() => props.store.kind === 'property' && !props.store.parent_id)
 /** «курс 93,75 ₽ · Банк · в бюджете» or «Биржа · BTC, USDT»; a phone drops the rate, property its asset's code. */
+// money: plain — an exchange rate, a price of one unit rather than a sum to convert
 const subtitle = computed(() => {
   const own = props.figure.base
   const rate = own?.rate && !phone.value ? [t('wallet.rate', { rate: formatMoney(own.rate, { currency: props.figure.currency }) })] : []

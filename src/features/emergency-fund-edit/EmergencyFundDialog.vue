@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useStoreTree } from '@/shared/api/queries'
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { formatMoney, formatQuantity } from '@/shared/lib/format'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
@@ -28,6 +29,7 @@ const { storeIds, targetMonths, avgMonths, makeGoal, goal, form, set, save } = u
   open,
 )
 
+// money: plain — the hint under the field is a string prop of FormField
 const money = (amount: string, currency: string) => formatMoney(amount, { currency, decimals: 0 })
 /** «Расходы в месяц: 1 265 $ — по средним за 3 месяца»; the general advice until spending is known. */
 const monthsHint = computed(() => {
@@ -37,14 +39,6 @@ const monthsHint = computed(() => {
     amount: money(status.e_mand, status.currency),
     months: formatQuantity(String(status.e_mand_months || props.fund.avg_months), 0),
   })
-})
-const goalText = computed(() => {
-  const sized = goal.value
-  if (!sized) return ''
-  const amount = money(sized.amount, sized.currency)
-  return Number(sized.gap) > 0
-    ? t('emergency.dialog.goalGap', { amount, gap: money(sized.gap, sized.currency) })
-    : t('emergency.dialog.goalDone', { amount })
 })
 </script>
 
@@ -81,7 +75,10 @@ const goalText = computed(() => {
     <template v-if="goal">
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg bg-muted/60 px-3 py-2.5 text-sm" data-fund-goal>
         <span class="text-muted-foreground">{{ t('emergency.dialog.goal') }}</span>
-        <b class="font-medium tabular-nums">{{ goalText }}</b>
+        <i18n-t :keypath="Number(goal.gap) > 0 ? 'emergency.dialog.goalGap' : 'emergency.dialog.goalDone'" tag="b" class="font-medium tabular-nums">
+          <template #amount><Money :amount="goal.amount" :currency="goal.currency" :decimals="0" /></template>
+          <template #gap><Money :amount="goal.gap" :currency="goal.currency" :decimals="0" /></template>
+        </i18n-t>
       </div>
       <SwitchRow id="emergency-make-goal" v-model="makeGoal" :label="t('emergency.dialog.makeGoal')" plain />
     </template>

@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { formatMoney } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 import { txKind, txLegs } from '@/shared/lib/transactions'
 import { outcomeQuestion } from '@/shared/lib/workflow'
 
@@ -21,17 +21,18 @@ export function useRunSummary(report: () => RunReport, answers: () => Record<str
       .join(', '),
   )
 
-  function line(tx: Transaction): string {
-    const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
-    const amount = leg ? formatMoney(String(Math.abs(Number(leg.amount))), { currency: leg.asset.symbol }) : ''
-    return `${t(`tx.kind.${txKind(tx)}`)} ${amount}`.trim()
-  }
-  /** «Создала бы операций: 1 · Перевод 157,50 $.» */
-  const made = computed(() => {
+  /** «Создала бы операций: 1 · Перевод 157,50 $.», the sums as parts for `<Money>`. */
+  const made = computed<SumPart[]>(() => {
     const list = report().transactions
-    if (!list.length) return ''
+    if (!list.length) return []
+    const { mark, parts } = composeSums()
+    const line = (tx: Transaction) => {
+      const leg = txLegs(tx).find((entry) => Number(entry.amount) < 0) ?? txLegs(tx)[0]
+      const amount = leg ? mark({ amount: String(Math.abs(Number(leg.amount))), currency: leg.asset.symbol }) : ''
+      return `${t(`tx.kind.${txKind(tx)}`)} ${amount}`.trim()
+    }
     const key = report().run.dry_run ? 'workflow.runPanel.wouldMakeLine' : 'workflow.runPanel.madeLine'
-    return t(key, { count: list.length, list: list.map(line).join('; ') })
+    return parts(t(key, { count: list.length, list: list.map(line).join('; ') }))
   })
 
   return { question, answered, made }

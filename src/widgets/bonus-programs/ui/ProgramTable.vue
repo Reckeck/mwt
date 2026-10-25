@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { Minus, Settings2 } from 'lucide-vue-next'
 
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import type { UiAction } from '@/shared/ui/context-menu'
@@ -46,7 +46,9 @@ const actions = (store: Store): UiAction[] => [
         >
           <TableCell class="max-w-0 py-3">
             <p class="truncate font-medium">{{ row.store.name }}</p>
-            <p class="truncate text-xs text-muted-foreground">{{ row.subtitle }}</p>
+            <p class="truncate text-xs text-muted-foreground">
+              <MoneyPhrase :parts="row.subtitle" />
+            </p>
             <p v-if="row.expiring" :class="cn('truncate text-xs', row.soon ? 'text-warning' : 'text-muted-foreground')">
               {{ row.expiring }}
             </p>

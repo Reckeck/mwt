@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
-import { CurrencyPicker } from '@/entities/currency'
+import { CurrencyPicker, Money } from '@/entities/currency'
 import { AssetInput, resolveTicker } from '@/entities/asset'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +12,6 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { SwitchRow } from '@/shared/ui/switch-row'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
-import { formatMoney } from '@/shared/lib/format'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
@@ -48,9 +47,6 @@ watch(open, async (isOpen) => {
 }, { immediate: true })
 
 const current = useCurrentPrice(asset, currency)
-const currentHint = computed(() =>
-  current.value === null ? undefined : t('alert.now', { price: formatMoney(current.value, { currency: currency.value }) }),
-)
 
 const form = useFormValidation(
   () => ({
@@ -108,9 +104,13 @@ const save = useMutation({
         for="alert-price"
         :label="t('alert.value')"
         required
-        :hint="currentHint"
         :error="form.error('price') ?? form.error('currency')"
       >
+        <template v-if="current !== null" #hint>
+          <i18n-t keypath="alert.now">
+            <template #price><Money :amount="current" :currency="currency" /></template>
+          </i18n-t>
+        </template>
         <AmountInput id="alert-price" v-model="price" size="lg">
           <template #suffix>
             <CurrencyPicker id="alert-currency" v-model="currency" label="" chip />

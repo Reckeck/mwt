@@ -3,7 +3,6 @@ import { useI18n } from 'vue-i18n'
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 
 import type { TxFormState } from './use-tx-form-state'
 
@@ -49,16 +48,15 @@ export function useTxBudget(state: TxFormState) {
     },
     enabled: computed(() => !props.template && form.kind === 'payment' && Boolean(budgetStatus.data.value?.length)),
   })
-  const overrunText = computed(() =>
-    (overLimits.data.value ?? [])
-      .map(({ status, over }) =>
-        t('budget.overrunHint', {
-          period: t(`budget.periodKind.${status.budget.period}`),
-          amount: formatMoney(over, { currency: status.budget.currency }),
-        }),
-      )
-      .join(' · '),
+  /** «Лимит на месяц будет превышен на 120 $», one per budget the sum does not fit: the parts of each. */
+  const overruns = computed(() =>
+    (overLimits.data.value ?? []).map(({ status, over }) => ({
+      id: status.budget.id,
+      period: t(`budget.periodKind.${status.budget.period}`),
+      amount: over,
+      currency: status.budget.currency,
+    })),
   )
 
-  return { overrunText }
+  return { overruns }
 }

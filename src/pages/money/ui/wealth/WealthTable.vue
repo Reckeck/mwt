@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { formatMoney } from '@/shared/lib/format'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
+import { Money } from '@/entities/currency'
 import { wealthRows } from '@/entities/report'
 
 /** «Из чего»: each group's value and share now (Money 2 · 12); a card list on a phone. */
@@ -12,7 +12,6 @@ const props = defineProps<{ point: NetworthPoint | undefined; currency: string }
 
 const { t } = useI18n()
 const rows = computed(() => wealthRows(props.point))
-const money = (value: number) => formatMoney(value, { currency: props.currency })
 </script>
 
 <template>
@@ -28,7 +27,9 @@ const money = (value: number) => formatMoney(value, { currency: props.currency }
       <TableBody>
         <TableRow v-for="row in rows" :key="row.group">
           <TableCell>{{ t(`money.wealth.group.${row.group}`) }}</TableCell>
-          <TableCell class="text-right font-semibold tabular-nums" :class="row.value < 0 && 'text-destructive'">{{ money(row.value) }}</TableCell>
+          <TableCell class="text-right font-semibold tabular-nums" :class="row.value < 0 && 'text-destructive'">
+            <Money :amount="row.value" :currency="props.currency" />
+          </TableCell>
           <TableCell class="text-right tabular-nums text-muted-foreground">{{ row.share === null ? '' : `${row.share} %` }}</TableCell>
         </TableRow>
       </TableBody>
@@ -39,7 +40,7 @@ const money = (value: number) => formatMoney(value, { currency: props.currency }
           {{ t(`money.wealth.group.${row.group}`) }}
           <span v-if="row.share !== null" class="text-muted-foreground"> · {{ row.share }} %</span>
         </span>
-        <b class="shrink-0 tabular-nums" :class="row.value < 0 && 'text-destructive'">{{ money(row.value) }}</b>
+        <b class="shrink-0 tabular-nums" :class="row.value < 0 && 'text-destructive'"><Money :amount="row.value" :currency="props.currency" /></b>
       </li>
     </ul>
   </div>

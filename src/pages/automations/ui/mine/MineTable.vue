@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { Switch } from '@/shared/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -60,7 +61,9 @@ const RING = 'focus-visible:after:ring-2 focus-visible:after:ring-ring focus-vis
             <Badge variant="secondary" class="h-5.5 px-2 font-medium">{{ t(`automations.mine.kind.${row.item.kind}`) }}</Badge>
           </TableCell>
           <TableCell class="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{{ row.when }}</TableCell>
-          <TableCell class="px-3 py-2.5 text-sm whitespace-nowrap">{{ row.does }}</TableCell>
+          <TableCell class="px-3 py-2.5 text-sm whitespace-nowrap">
+            <MoneyPhrase :parts="row.does" />
+          </TableCell>
           <TableCell class="px-3 py-2.5 text-right">
             <Switch
               class="relative z-10 ml-auto"

@@ -1,6 +1,5 @@
 import { assetKey } from '@/shared/lib/asset-ref'
 import { decimalSub, parseDecimal } from '@/shared/lib/decimal'
-import { formatMoney } from '@/shared/lib/format'
 
 import type { AdjustmentRow } from '../store-adjust.types'
 
@@ -39,10 +38,6 @@ export const difference = (row: AdjustmentRow): string | null =>
 
 /** A typed balance that is not a number. */
 export const badRow = (row: { actual: string }) => Boolean(row.actual.trim()) && parseDecimal(row.actual) === null
-
-/** A balance in its asset: a fiat code gets its symbol, a ticker stays. */
-export const shownBalance = (value: string | null, asset: AssetRef, signed = false) =>
-  value === null ? '—' : formatMoney(value, { currency: asset.symbol.toLowerCase(), signed })
 
 /** The correction's lines for the backend. */
 export function adjustmentLines(rows: AdjustmentRow[]): AdjustmentLineInput[] {

@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { ReportInsights } from '@/entities/report'
 import { Card } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -34,7 +35,9 @@ const { t } = useI18n()
     </template>
     <div v-if="props.hasData" class="grid gap-4">
       <div class="grid grid-cols-2 gap-3 @mid:grid-cols-3"><slot /></div>
-      <div data-tour="overview-insights"><ReportInsights :insights="props.insights" :currency="props.currency" /></div>
+      <div data-tour="overview-insights"><ReportInsights :insights="props.insights" :currency="props.currency">
+          <template #sum="{ sum }"><Money v-bind="sum" /></template>
+        </ReportInsights></div>
     </div>
     <EmptyState v-else compact :title="props.emptyTitle" :description="props.emptyDescription">
       <slot name="action" />

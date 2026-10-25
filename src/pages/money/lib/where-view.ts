@@ -1,17 +1,18 @@
-import { formatMoney, formatQuantity, isFiatCode } from '@/shared/lib/format'
+import { formatQuantity, isFiatCode } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 
-/** A sum in the units it moved in: «5 000 ₽», «0,04 BTC». */
-export function unitText(qty: string, unit: string): string {
-  if (isFiatCode(unit)) return formatMoney(Math.abs(Number(qty)), { decimals: 0, currency: unit })
-  return `${formatQuantity(Math.abs(Number(qty)))} ${unit.toUpperCase()}`
+/** A sum in the units it moved in: «5 000 ₽» (a `<Money>`), «0,04 BTC» (words). */
+export function unitPart(qty: string, unit: string): SumPart {
+  if (isFiatCode(unit)) return { amount: Math.abs(Number(qty)), currency: unit, decimals: 0 }
+  return { text: `${formatQuantity(Math.abs(Number(qty)))} ${unit.toUpperCase()}` }
 }
 
 /** «4 500 USDT → 0,05 BTC», or only what left. */
-export function exchangeText(item: WhereItem): string {
-  const sent = unitText(item.qty, item.unit)
+export function exchangeParts(item: WhereItem): SumPart[] {
+  const sent = unitPart(item.qty, item.unit)
   return item.got_qty && item.got_unit && item.got_unit !== item.unit
-    ? `${sent} → ${unitText(item.got_qty, item.got_unit)}`
-    : sent
+    ? [sent, { text: ' → ' }, unitPart(item.got_qty, item.got_unit)]
+    : [sent]
 }
 
 /** The one unit every item of a row moved in, if they share one. */

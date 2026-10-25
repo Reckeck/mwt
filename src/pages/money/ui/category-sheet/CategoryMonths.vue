@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { Money } from '@/entities/currency'
+import { formatMonthKey } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
 /**
@@ -10,11 +10,10 @@ import { cn } from '@/shared/lib/utils'
  * primary with its sum over it, the usual month dashed across.
  */
 const props = defineProps<{ title: string; cells: string[]; months: string[]; average: string | null; currency: string; to: string }>()
-const { t } = useI18n()
 
 const top = computed(() => Math.max(1, Number(props.average ?? 0), ...props.cells.map(Number)))
 const share = (value: string | number) => `${Math.max(0, (Number(value) / top.value) * 100)}%`
-const money = (value: string) => formatMoney(value, { decimals: 0, currency: props.currency, compact: Math.abs(Number(value)) >= 100_000 })
+const compact = (value: string) => Math.abs(Number(value)) >= 100_000
 const bars = computed(() =>
   props.months.map((month, at) => ({ month, value: props.cells[at] ?? '0', current: month === props.to })),
 )
@@ -30,7 +29,9 @@ const bars = computed(() =>
         :style="{ bottom: `calc(18px + (100% - 34px) * ${Number(props.average) / top})` }"
         aria-hidden="true"
       >
-        <span class="absolute -top-4 left-0 text-2xs text-muted-foreground">{{ t('money.category.average', { average: money(props.average) }) }}</span>
+        <span class="absolute -top-4 left-0 text-2xs text-muted-foreground"><i18n-t keypath="money.category.average">
+          <template #average><Money :amount="props.average" :currency="props.currency" :decimals="0" :compact="compact(props.average)" /></template>
+        </i18n-t></span>
       </div>
       <div v-for="bar in bars" :key="bar.month" class="flex min-w-0 flex-col items-center gap-1">
         <span class="relative flex w-full flex-1 items-end justify-center">
@@ -39,7 +40,7 @@ const bars = computed(() =>
             :style="{ height: share(bar.value) }"
           />
           <span v-if="bar.current" class="absolute bottom-full mb-0.5 text-2xs font-semibold whitespace-nowrap tabular-nums" :style="{ bottom: share(bar.value) }">
-            {{ money(bar.value) }}
+            <Money :amount="bar.value" :currency="props.currency" :decimals="0" :compact="compact(bar.value)" />
           </span>
         </span>
         <span :class="cn('text-2xs text-muted-foreground', bar.current && 'font-semibold text-foreground')">

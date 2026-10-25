@@ -1,4 +1,5 @@
-import { formatMoney, formatQuantity } from '@/shared/lib/format'
+import { formatQuantity } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 import { fillFormula, prettyFormula } from '@/shared/lib/utility-formula'
 
 import type { BillRow } from '../utility-bill.types'
@@ -25,10 +26,17 @@ const quantity = (value: string | number) => formatQuantity(String(value), 3)
  * The line under an item's name (Wallets-2 · 13): «было 13 395 / 5 120 · 6,50 ₽
  * за кВт·ч», «показание 418 записано в карточке · 6 м³ × 49 ₽», «было 205 ·
  * своя формула: …», «как в прошлый раз · можно изменить», or why the rent is off.
+ * The sums come as parts, so the row draws them as `<Money>`.
  */
-export function lineNote(row: BillRow, t: T, automation: string | null): string {
+export function lineNote(row: BillRow, t: T, automation: string | null): SumPart[] {
   const { item } = row.line
-  const money = (value: string) => formatMoney(value, { currency: item.currency, decimals: Number(value) % 1 ? 2 : 0 })
+  const { mark, parts } = composeSums()
+  const money = (value: string) => mark({ amount: value, currency: item.currency, decimals: Number(value) % 1 ? 2 : 0 })
+  return parts(noteText(row, t, automation, money))
+}
+
+function noteText(row: BillRow, t: T, automation: string | null, money: (value: string) => string): string {
+  const { item } = row.line
   const paid = Number(row.line.paid) > 0 ? `${t('utilityBill.alreadyPaid', { amount: money(row.line.paid) })} · ` : ''
   if ('housing' in item.kind) {
     const day = item.kind.housing.due_day

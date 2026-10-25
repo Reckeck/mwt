@@ -3,12 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { PairInput } from '@/entities/asset'
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { formatMoney, formatQuantity } from '@/shared/lib/format'
+import { formatQuantity } from '@/shared/lib/format'
 import { parseDecimal, decimalInput } from '@/shared/lib/decimal'
 import { parsePairSymbol } from '@/shared/lib/pair'
 
@@ -52,7 +53,7 @@ const summary = computed(() => {
   const liquidation = preview.data.value?.liquidation_price
   return {
     position,
-    liquidation: liquidation ? formatMoney(Number(liquidation), { decimals: 0 }) : null,
+    liquidation: liquidation ?? null,
   }
 })
 const marginError = computed(() => (margin.value ? undefined : check.error('quantity')))
@@ -100,7 +101,12 @@ const marginError = computed(() => (margin.value ? undefined : check.error('quan
     <span>{{ t('tx.quick.position') }}</span>
     <b class="font-semibold tabular-nums">
       {{ summary.position
-      }}<template v-if="summary.liquidation"> · {{ t('tx.quick.liquidation', { price: summary.liquidation }) }}</template>
+      }}<template v-if="summary.liquidation">
+        ·
+        <i18n-t keypath="tx.quick.liquidation" tag="span">
+          <template #price><Money :amount="summary.liquidation" :decimals="0" /></template>
+        </i18n-t>
+      </template>
     </b>
   </p>
 </template>

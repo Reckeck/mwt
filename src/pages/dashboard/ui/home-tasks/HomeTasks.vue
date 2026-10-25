@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useLocalStorage } from '@vueuse/core'
 import { Bell } from 'lucide-vue-next'
 
-import { formatDayMonth, formatMoney, formatQuantity } from '@/shared/lib/format'
+import { Money } from '@/entities/currency'
+import { formatDayMonth, formatQuantity } from '@/shared/lib/format'
 import { dayKey } from '@/shared/lib/period'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -23,14 +24,19 @@ const today = dayKey()
 const hiddenOn = useLocalStorage('trade-app:home-tasks-hidden', '')
 const hidden = computed(() => hiddenOn.value === today)
 
-function meta(todo: TodayTodo): string {
-  const parts: string[] = []
-  if (todo.kind === 'reminder') parts.push(t('home.tasks.reminder'))
-  if (todo.date && isOverdue(todo, today)) parts.push(t('home.tasks.wasDue', { date: formatDayMonth(`${todo.date}T12:00`) }))
-  else if (todo.date && todo.date > today) parts.push(formatDayMonth(`${todo.date}T12:00`))
-  if (todo.amount !== null)
-    parts.push(isMoneyTask(todo.kind) ? formatMoney(todo.amount, { currency: props.currency, decimals: 2 }) : formatQuantity(todo.amount, 0))
-  return parts.join(' · ')
+/** The line under a thing's title: words, and a sum drawn as `<Money>`. */
+type MetaPart = { text: string } | { amount: string }
+function meta(todo: TodayTodo): MetaPart[] {
+  const parts: MetaPart[] = []
+  const word = (text: string) => parts.push({ text })
+  if (todo.kind === 'reminder') word(t('home.tasks.reminder'))
+  if (todo.date && isOverdue(todo, today)) word(t('home.tasks.wasDue', { date: formatDayMonth(`${todo.date}T12:00`) }))
+  else if (todo.date && todo.date > today) word(formatDayMonth(`${todo.date}T12:00`))
+  if (todo.amount !== null) {
+    if (isMoneyTask(todo.kind)) parts.push({ amount: todo.amount })
+    else word(formatQuantity(todo.amount, 0))
+  }
+  return parts
 }
 const rows = computed(() =>
   props.todos.map((todo) => {
@@ -72,7 +78,12 @@ const overdue = computed(() => rows.value.filter((row) => row.overdue).length)
         <span v-if="row.overdue" class="size-2 shrink-0 rounded-full bg-warning" aria-hidden="true" />
         <p class="min-w-0 flex-1 text-sm font-medium">
           {{ row.title }}
-          <span v-if="row.meta" class="font-normal text-muted-foreground"> · {{ row.meta }}</span>
+          <span v-if="row.meta.length" class="font-normal text-muted-foreground">
+            <template v-for="(part, at) in row.meta" :key="at">
+              {{ ' · ' }}<Money v-if="'amount' in part" :amount="part.amount" :currency="props.currency" />
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </span>
         </p>
         <TaskButton :to="row.to" :label="row.label" />
       </div>

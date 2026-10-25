@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { FormField } from '@/shared/ui/form-field'
@@ -44,7 +45,11 @@ function pickTaxMode(value: unknown) {
     >
       <span class="grid min-w-0 gap-0.5">
         <span class="text-sm font-medium">{{ t('invest.advanced') }}</span>
-        <span class="truncate text-xs text-muted-foreground">{{ summary }}</span>
+        <span class="truncate text-xs text-muted-foreground"><template v-for="(part, at) in summary" :key="at">
+            <Money v-if="'amount' in part" v-bind="part" />
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </span>
       </span>
       <ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform" :class="open && 'rotate-90'" />
     </CollapsibleTrigger>

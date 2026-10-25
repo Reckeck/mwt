@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { cn } from '@/shared/lib/utils'
@@ -50,8 +51,9 @@ const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
           <TableCell :class="cn('px-2 py-2 whitespace-nowrap tabular-nums', row.consumption === '—' && 'text-muted-foreground')">
             {{ row.consumption }}
           </TableCell>
-          <TableCell :class="cn('px-2 py-2 text-right whitespace-nowrap tabular-nums', row.amount === '—' && 'text-muted-foreground')">
-            {{ row.amount }}
+          <TableCell :class="cn('px-2 py-2 text-right whitespace-nowrap tabular-nums', !row.amount && 'text-muted-foreground')">
+            <Money v-if="row.amount && 'amount' in row.amount" v-bind="row.amount" />
+            <template v-else>—</template>
           </TableCell>
           <TableCell v-if="!props.phone" class="px-2 py-2 text-right">
             <Badge v-if="row.waiting || row.anomaly" variant="outline" class="h-5.5 rounded-md border-warning/40 bg-warning/10 font-normal whitespace-nowrap text-warning">

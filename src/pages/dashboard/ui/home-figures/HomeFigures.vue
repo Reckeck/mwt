@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { CapitalGlance, SpentGlance } from '@/widgets/quick-glance'
 import { Money, useRatesAge } from '@/entities/currency'
 import { comparisonDelta } from '@/shared/lib/comparison'
-import { dateFormat, formatMoney, formatPct, signClass } from '@/shared/lib/format'
+import { dateFormat, formatPct, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { Badge } from '@/shared/ui/badge'
 import { Card } from '@/shared/ui/card'
@@ -37,24 +37,25 @@ const noIncome = computed(() => !daily.value || (daily.value.mode === 'month' &&
 /** The phone fills the card with the accent only for good news: red on blue does not read. */
 const filled = computed(() => !noIncome.value && Number(daily.value?.left_today) >= 0)
 
-const money = (value: string, currency: string) => formatMoney(value, { decimals: 0, currency })
+/** The day's allowance phrase with its sums, drawn as `<Money>` by the template. */
 const dayLine = computed(() => {
   const budget = daily.value
-  if (!budget) return ''
-  const perDay = money(budget.per_day, budget.currency)
+  if (!budget) return null
   const carry = Number(budget.carry)
-  if (budget.mode !== 'month' || Math.round(carry) === 0) return t('home.figures.perDay', { perDay })
-  const key = carry > 0 ? 'home.figures.carryPlus' : 'home.figures.carryMinus'
-  return t(key, { perDay, carry: money(String(Math.abs(carry)), budget.currency) })
+  const base = { perDay: budget.per_day, currency: budget.currency }
+  if (budget.mode !== 'month' || Math.round(carry) === 0) return { ...base, key: 'home.figures.perDay', carry: null }
+  return { ...base, key: carry > 0 ? 'home.figures.carryPlus' : 'home.figures.carryMinus', carry: String(Math.abs(carry)) }
 })
 const limitLine = computed(() => {
   const status = props.home.limit.value
   if (!status) return null
   const over = Number(status.remaining) < 0
-  return t(over ? 'home.figures.limitOver' : 'home.figures.limitLeft', {
-    limit: money(status.budget.limit, status.budget.currency),
-    left: money(String(Math.abs(Number(status.remaining))), status.budget.currency),
-  })
+  return {
+    key: over ? 'home.figures.limitOver' : 'home.figures.limitLeft',
+    limit: status.budget.limit,
+    left: String(Math.abs(Number(status.remaining))),
+    currency: status.budget.currency,
+  }
 })
 </script>
 
@@ -97,7 +98,12 @@ const limitLine = computed(() => {
         <Money v-else :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.spentEmpty') }}</p>
-      <p v-else-if="limitLine" class="text-xs text-muted-foreground tabular-nums md:text-sm">{{ limitLine }}</p>
+      <p v-else-if="limitLine" class="text-xs text-muted-foreground tabular-nums md:text-sm">
+        <i18n-t :keypath="limitLine.key">
+          <template #limit><Money :amount="limitLine.limit" :currency="limitLine.currency" :decimals="0" /></template>
+          <template #left><Money :amount="limitLine.left" :currency="limitLine.currency" :decimals="0" /></template>
+        </i18n-t>
+      </p>
       <p v-else class="text-xs md:text-sm">
         <span class="text-muted-foreground max-md:hidden">{{ t('home.figures.noLimit') }} · </span>
         <RouterLink :to="{ name: 'money-plan', query: { new: 'limit' } }" class="text-primary hover:underline">
@@ -128,7 +134,12 @@ const limitLine = computed(() => {
         <span class="max-md:hidden">{{ t('home.figures.needIncome') }}</span>
         <span class="md:hidden">{{ t('home.figures.needIncomeShort') }}</span>
       </p>
-      <p v-else class="text-sm text-muted-foreground tabular-nums" :class="filled && 'max-md:text-primary-foreground/85'">{{ dayLine }}</p>
+      <p v-else class="text-sm text-muted-foreground tabular-nums" :class="filled && 'max-md:text-primary-foreground/85'">
+        <i18n-t v-if="dayLine" :keypath="dayLine.key">
+          <template #perDay><Money :amount="dayLine.perDay" :currency="dayLine.currency" :decimals="0" /></template>
+          <template v-if="dayLine.carry" #carry><Money :amount="dayLine.carry" :currency="dayLine.currency" :decimals="0" /></template>
+        </i18n-t>
+      </p>
       </div>
     </Card>
   </div>

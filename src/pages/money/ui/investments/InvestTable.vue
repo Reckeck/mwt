@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { formatQuantity, signClass } from '@/shared/lib/format'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
@@ -31,9 +32,9 @@ const key = (row: InvestmentRow) => row.store_id ?? row.label
         <TableRow v-for="row in props.rows" :key="key(row)" data-invest-row>
           <TableCell class="font-medium">{{ row.label }}</TableCell>
           <TableCell class="text-right tabular-nums">{{ quantity(row) }}</TableCell>
-          <TableCell class="text-right tabular-nums">{{ money(row.invested) }}</TableCell>
+          <TableCell class="text-right tabular-nums"><Money v-bind="money(row.invested)" /></TableCell>
           <TableCell class="text-right tabular-nums" :class="signClass(row.profit)">
-            {{ money(row.profit, true) }}<span v-if="!row.cost_known" class="text-muted-foreground" :title="t('money.invest.costUnknown')">*</span>
+            <Money v-bind="money(row.profit, true)" /><span v-if="!row.cost_known" class="text-muted-foreground" :title="t('money.invest.costUnknown')">*</span>
           </TableCell>
         </TableRow>
       </TableBody>
@@ -42,7 +43,7 @@ const key = (row: InvestmentRow) => row.store_id ?? row.label
       <li v-for="row in props.rows" :key="key(row)" class="flex items-baseline gap-3 px-4 py-3 text-sm">
         <b class="min-w-0 truncate">{{ row.label }}</b>
         <span class="tabular-nums text-muted-foreground">{{ quantity(row) }}</span>
-        <b class="ms-auto shrink-0 tabular-nums" :class="signClass(row.profit)">{{ money(row.profit, true) }}</b>
+        <b class="ms-auto shrink-0 tabular-nums" :class="signClass(row.profit)"><Money v-bind="money(row.profit, true)" /></b>
       </li>
     </ul>
     <p v-if="props.rows.some((row) => !row.cost_known)" class="border-t px-4 py-2 text-xs text-muted-foreground">* {{ t('money.invest.costUnknown') }}</p>

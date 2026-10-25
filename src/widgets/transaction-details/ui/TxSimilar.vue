@@ -3,9 +3,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { backQuery } from '@/shared/lib/drill'
-import { formatDayMonth, formatMoney } from '@/shared/lib/format'
+import { formatDayMonth } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { txFilterToQuery } from '@/shared/lib/tx-filter'
 import { txId, txKind, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
@@ -34,7 +36,7 @@ const allTo = computed(() => {
   return { name: 'transactions', query: { ...query, ...backQuery({ to: route.fullPath, label: title.value }) } }
 })
 
-const money = (amount: number, currency: string) => formatMoney(amount, { currency, decimals: 0 })
+const sum = (amount: number, currency: string): SumPart => ({ amount, currency, decimals: 0 })
 
 const rows = computed(() =>
   props.items.slice(0, SHOWN).map((other) => {
@@ -44,11 +46,12 @@ const rows = computed(() =>
       tx: other,
       date: formatDayMonth(txMeta(other).timestamp),
       what: pair
-        ? `${money(pair.out.amount, pair.out.symbol)} → ${money(pair.into.amount, pair.into.symbol)}`
-        : txMeta(other).comment,
+        ? [sum(pair.out.amount, pair.out.symbol), { text: ' → ' }, sum(pair.into.amount, pair.into.symbol)]
+        : [{ text: txMeta(other).comment }],
+      // A pair shows its rate, which is no sum to convert.
       value: pair
-        ? formatMoney(pairRate(pair), { currency: pair.out.symbol, decimals: 2 })
-        : formatMoney(Math.abs(Number(leg?.amount ?? 0)), { currency: leg?.asset.symbol }),
+        ? { amount: pairRate(pair), currency: pair.out.symbol, decimals: 2, convert: false }
+        : { amount: Math.abs(Number(leg?.amount ?? 0)), currency: leg?.asset.symbol },
     }
   }),
 )
@@ -69,8 +72,8 @@ const rows = computed(() =>
       @click="openTxDetails(row.tx, props.items)"
     >
       <span class="font-medium">{{ row.date }}</span>
-      <span class="min-w-0 flex-1 truncate text-muted-foreground tabular-nums">· {{ row.what }}</span>
-      <b class="tabular-nums">{{ row.value }}</b>
+      <span class="min-w-0 flex-1 truncate text-muted-foreground tabular-nums">· <MoneyPhrase :parts="row.what" /></span>
+      <b class="tabular-nums"><Money v-bind="row.value" /></b>
     </Button>
   </section>
 </template>
