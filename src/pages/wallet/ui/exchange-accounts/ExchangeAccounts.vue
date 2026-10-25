@@ -61,6 +61,7 @@ const cards = computed(() => {
       v-for="card in cards"
       :key="card.id"
       :to="card.to ?? undefined"
+      :data-entity="card.to ? `store:${card.id}` : undefined"
       class="flex min-h-13 items-center gap-3 border-b border-border py-1.5 last:border-0"
     >
       <span class="flex min-w-0 flex-1 flex-col">
@@ -76,6 +77,7 @@ const cards = computed(() => {
       v-for="card in cards"
       :key="card.id"
       :to="card.to ?? undefined"
+      :data-entity="card.to ? `store:${card.id}` : undefined"
       class="flex min-w-0 flex-col rounded-xl border border-border bg-card p-4 shadow-sm"
       :class="card.to && 'transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'"
     >

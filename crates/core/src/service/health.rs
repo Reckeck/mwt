@@ -422,7 +422,7 @@ impl UnlockedVault {
             format!("health:{month}"),
             notice_title(NoticeCategory::Health, ru),
             body,
-            Some("analytics-health".into()),
+            Some(crate::routes::MONEY_HEALTH.into()),
             calendar::iso(now),
         )))
     }
@@ -738,7 +738,7 @@ mod tests {
             .unwrap()
             .expect("sent");
         assert_eq!(sent.key, "health:2026-05");
-        assert_eq!(sent.link.as_deref(), Some("analytics-health"));
+        assert_eq!(sent.link.as_deref(), Some(crate::routes::MONEY_HEALTH));
         assert!(sent.body.contains("жёлтый"), "{}", sent.body);
         assert_eq!(vault.health_notice(may, "UTC", true).unwrap(), None);
 

@@ -8,29 +8,39 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// `(menu id, route name, Russian label, English label)` of the screens the tray opens.
 const SCREENS: [(&str, &str, &str, &str); 6] = [
-    ("nav_dashboard", "dashboard", "Дашборд", "Dashboard"),
-    ("nav_stores", "stores", "Кошельки", "Wallets"),
+    (
+        "nav_dashboard",
+        trade_core::routes::DASHBOARD,
+        "Дашборд",
+        "Dashboard",
+    ),
+    (
+        "nav_stores",
+        trade_core::routes::STORES,
+        "Кошельки",
+        "Wallets",
+    ),
     (
         "nav_transactions",
-        "transactions",
+        trade_core::routes::TRANSACTIONS,
         "Операции",
         "Transactions",
     ),
     (
         "nav_calendar",
-        "transactions-calendar",
+        trade_core::routes::TRANSACTIONS_CALENDAR,
         "Календарь",
         "Calendar",
     ),
     (
         "nav_analytics",
-        "analytics-cashflow",
+        trade_core::routes::MONEY,
         "Аналитика",
         "Analytics",
     ),
     (
         "nav_planning",
-        "planning-automations",
+        trade_core::routes::AUTOMATIONS,
         "Планирование",
         "Planning",
     ),

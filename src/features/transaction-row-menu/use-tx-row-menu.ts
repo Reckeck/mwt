@@ -1,14 +1,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Eye, Pencil, Repeat2, Search, Trash2, User, Wallet } from 'lucide-vue-next'
+import { Eye, Pencil, Repeat2, Search, Tag, Trash2, User, Wallet } from 'lucide-vue-next'
 
 import type { UiAction } from '@/shared/ui/context-menu'
 import { openEntity } from '@/shared/lib/entity-link'
-import { accountContactId, similarFilter, txMeta, txSides, txStoreId } from '@/shared/lib/transactions'
+import { accountContactId, similarFilter, similarLocation, txMeta, txSides, txStoreId } from '@/shared/lib/transactions'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { useTxContext } from '@/shared/lib/tx-context'
-import { txFilterToQuery } from '@/shared/lib/tx-filter'
 
 import type { TxRowMenu, TxRowMenuOptions } from './transaction-row-menu.types'
 
@@ -29,11 +28,8 @@ export function useTxRowMenu(options: TxRowMenuOptions = {}): TxRowMenu {
   const storeId = computed(() => options.storeId?.() ?? null)
 
   function similar(tx: Transaction) {
-    const filter = similarFilter(tx)
-    if (!filter) return
-    const query: Record<string, string> = {}
-    for (const [key, value] of Object.entries(txFilterToQuery(filter))) if (value) query[key] = value
-    void router.push({ name: 'transactions', query })
+    const to = similarLocation(tx)
+    if (to) void router.push(to)
   }
 
   function actions(tx: Transaction): UiAction[] {
@@ -74,6 +70,12 @@ export function useTxRowMenu(options: TxRowMenuOptions = {}): TxRowMenu {
         hidden: !wallet || wallet === (storeId.value && context.rootOf(storeId.value)),
         run: () => openEntity({ kind: 'store', id: wallet }),
       },
+      ...txMeta(tx).categories.map((key) => ({
+        id: `category:${key}`,
+        label: t('tx.menu.category', { name: context.categoryName(key) }),
+        icon: Tag,
+        run: () => openEntity({ kind: 'category', id: key }),
+      })),
       {
         id: 'contact',
         label: t('tx.menu.contact', { name: contact ? context.contactName(contact) : '' }),

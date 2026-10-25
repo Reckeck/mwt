@@ -118,7 +118,7 @@ impl NotificationSnapshot {
                         &format!("alert:{}:{at}", alert.alert_id),
                         notice_title(NoticeCategory::PriceAlert, ru),
                         &alert.body,
-                        Some("planning-alerts".into()),
+                        Some(crate::routes::AUTOMATIONS_ALERTS.into()),
                         &at,
                     );
                     (alert.alert_id.clone(), record)
@@ -177,7 +177,7 @@ impl UnlockedVault {
                     category,
                     title: notice_title(category, ru).to_string(),
                     body: reminder.text.clone(),
-                    link: Some("planning-reminders".into()),
+                    link: Some(crate::routes::AUTOMATIONS_REMINDERS.into()),
                     at: at.clone(),
                 });
                 let Some(next) = reminder
@@ -209,7 +209,7 @@ impl UnlockedVault {
                     } else {
                         format!("«{}» is waiting: unlock the vault to run it", item.title)
                     },
-                    link: Some("planning-automations".into()),
+                    link: Some(crate::routes::AUTOMATIONS.into()),
                     at: item.at.clone(),
                 });
             }

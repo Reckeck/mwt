@@ -6,4 +6,6 @@ export interface EntityLinkProps {
   archived?: boolean
   /** Hide the kind icon where the column already says what it is. */
   plain?: boolean
+  /** Its own right-click menu; off inside a row whose menu already lists the entity. */
+  menu?: boolean
 }

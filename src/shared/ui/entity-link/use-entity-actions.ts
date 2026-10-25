@@ -16,6 +16,7 @@ export function useEntityActions() {
       id: action.id,
       label: t(action.labelKey),
       icon: action.icon,
+      hidden: action.hidden?.(target) ?? false,
       run: () => {
         if (action.to) void router.push(action.to(target))
         else if (action.dialog) requestEntityDialog({ dialog: action.dialog, target, title })

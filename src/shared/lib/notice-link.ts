@@ -1,4 +1,4 @@
-import type { LocationQuery, RouteLocationRaw } from 'vue-router'
+import type { LocationQuery, RouteLocationRaw, Router } from 'vue-router'
 
 import { entityLocation, parseEntityKey } from './entity-link'
 
@@ -18,6 +18,18 @@ export function noticeRoute(link: string | null | undefined, query: LocationQuer
   }
   const [name, id] = link.split(':')
   return id ? { name, params: { id } } : { name }
+}
+
+/**
+ * The target if the router knows it, else the home screen: the log can hold
+ * notices with links of older versions (a renamed route, a removed path), and
+ * `router.push` throws on a name with no route.
+ */
+export function reachable(router: Router, target: RouteLocationRaw): RouteLocationRaw {
+  if (typeof target === 'object' && 'name' in target && target.name) {
+    return router.hasRoute(target.name) ? target : '/'
+  }
+  return router.resolve(target).matched.length > 0 ? target : '/'
 }
 
 /** The reminder a notice is about, from its key `reminder:<id>:<when>`. */

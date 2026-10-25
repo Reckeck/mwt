@@ -74,6 +74,10 @@ pub fn notice(
     link: Option<String>,
     at: String,
 ) -> NoticeRecord {
+    debug_assert!(
+        link.as_deref().is_none_or(crate::routes::is_known_link),
+        "unknown notice link {link:?}"
+    );
     NoticeRecord {
         key,
         category,
@@ -197,7 +201,8 @@ impl UnlockedVault {
                 format!("shortfall:{:?}:{}:{}", item.kind, item.source_id, item.date),
                 notice_title(NoticeCategory::Shortfall, ru),
                 body,
-                item.store_id.map(|id| format!("wallet:{id}")),
+                item.store_id
+                    .map(|id| format!("{}:{id}", crate::routes::WALLET)),
                 item.at.clone(),
             ));
         }

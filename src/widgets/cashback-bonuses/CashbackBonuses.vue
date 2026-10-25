@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call } from '@/shared/api/ipc'
@@ -48,7 +49,15 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
       <p v-if="!data.by_source.length && !data.programmes.length" class="text-xs text-muted-foreground">{{ t('cashback.empty') }}</p>
       <ul v-if="data.by_source.length" class="grid gap-1">
         <li v-for="row in data.by_source" :key="row.store_id ?? 'none'" class="flex items-center justify-between gap-2">
-          <span class="truncate">{{ row.name || t('cashback.unknownSource') }}</span>
+          <span class="min-w-0 truncate">
+            <EntityLink
+              v-if="row.store_id"
+              :target="{ kind: 'store', id: row.store_id }"
+              :label="row.name || t('cashback.unknownSource')"
+              plain
+            />
+            <template v-else>{{ row.name || t('cashback.unknownSource') }}</template>
+          </span>
           <Money
             :amount="Number(row.cashback_base) + Number(row.points_base)"
             :currency="data.base_currency"
@@ -60,7 +69,9 @@ const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now
       <ul v-if="data.programmes.length" class="grid gap-1 border-t border-border pt-2">
         <li v-for="row in data.programmes" :key="row.store_id" class="grid gap-0.5">
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate">{{ row.name }}</span>
+            <span class="min-w-0 truncate">
+              <EntityLink :target="{ kind: 'store', id: row.store_id }" :label="row.name" plain />
+            </span>
             <span class="tabular-nums">
               {{ formatQuantity(row.points, 0) }} {{ row.points_symbol }}
               <span class="text-muted-foreground">≈ <Money :amount="row.value_base" :currency="data.base_currency" :convert="false" /></span>

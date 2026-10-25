@@ -69,7 +69,7 @@ const create = useMutation({
       <h3 class="heading-card">{{ t('rules.title') }}</h3>
     </template>
 
-    <div class="grid gap-4">
+    <div class="grid grid-cols-1 gap-4">
       <p class="text-xs text-muted-foreground">{{ t('rules.hint') }}</p>
 
       <form class="grid gap-1" @submit.prevent="adder.submit(create.mutate, $event)">
@@ -106,7 +106,7 @@ const create = useMutation({
           :aria-label="t('rules.pattern')"
           @change="(event: Event) => update.mutate({ ...rule, pattern: (event.target as HTMLInputElement).value })"
         />
-        <div class="min-w-0 flex-1 md:w-48 md:flex-none">
+        <div class="min-w-0 flex-1 basis-32 md:w-48 md:flex-none md:basis-auto">
           <CategorySelect
             :model-value="rule.category"
             :groups="CATEGORY_GROUPS"

@@ -17,9 +17,7 @@
 //   node scripts/check-layout.mjs --report   # print only
 //   node scripts/check-layout.mjs --quick    # 1280 and 390 only
 // Screenshots: .cache/check-layout/<theme>-<width>-<view>.png
-import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { createServer } from 'node:net'
 import { join } from 'node:path'
 
 import { findChromium, launch } from './check-layout/cdp.mjs'
@@ -37,39 +35,13 @@ import {
   toastOverDialog,
   views,
 } from './check-layout/scenario.mjs'
+import { freePort, startVite } from './check-layout/server.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const report = process.argv.includes('--report')
 const quick = process.argv.includes('--quick')
 const shots = join(root, '.cache/check-layout')
 mkdirSync(shots, { recursive: true })
-
-const freePort = () =>
-  new Promise((done) => {
-    const server = createServer()
-    server.listen(0, () => {
-      const { port } = server.address()
-      server.close(() => done(port))
-    })
-  })
-
-async function startVite() {
-  const port = await freePort()
-  const vite = spawn('pnpm', ['exec', 'vite', '--port', String(port), '--strictPort', '--clearScreen', 'false'], {
-    cwd: root,
-    stdio: 'ignore',
-  })
-  const url = `http://localhost:${port}/`
-  for (let tries = 0; tries < 200; tries++) {
-    try {
-      if ((await fetch(url)).ok) return { vite, url }
-    } catch {
-      await new Promise((done) => setTimeout(done, 150))
-    }
-  }
-  vite.kill()
-  throw new Error('vite did not start')
-}
 
 const binary = findChromium()
 if (!binary) {
@@ -100,7 +72,7 @@ try {
         await page.viewport(width, height, touch)
         const size = `${width}x${height}`
         const list = await views(page, size)
-        for (const view of theme === 'light' ? list.slice(0, 7) : list) {
+        for (const view of theme === 'light' ? list.slice(0, 8) : list) {
           await open(page, view)
           const name = view.replace(/[/:]+/g, '_').replace(/^_|_$/g, '') || 'dashboard'
           await page.shot(join(shots, `${theme}-${width}-${name}.png`))

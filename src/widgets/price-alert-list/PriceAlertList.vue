@@ -8,11 +8,13 @@ import { Money } from '@/entities/currency'
 import { PriceAlertDialog, type PriceAlertPreset } from '@/features/price-alert-edit'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { ListHeader } from '@/shared/ui/list-header'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime, } from '@/shared/lib/format'
+import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 /**
@@ -27,6 +29,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const alerts = useQuery({ queryKey: ['price-alerts'], queryFn: () => call<PriceAlert[]>('list_price_alerts') })
+useFocusRow(() => alerts.isSuccess.value)
 const shown = computed(() =>
   (alerts.data.value ?? []).filter(
     (alert) =>
@@ -72,11 +75,12 @@ function openEdit(alert: PriceAlert) {
       <li
         v-for="alert in shown"
         :key="alert.id"
+        :data-focus-row="alert.id"
         class="flex flex-wrap items-center gap-3 rounded-md px-3 py-2 hover:bg-accent/50"
         :class="!alert.active && 'opacity-60'"
       >
         <span class="min-w-0 flex-1 text-sm">
-          <span class="font-medium">{{ alert.asset.symbol }}</span>
+          <EntityLink :target="{ kind: 'alert', id: alert.id }" :label="alert.asset.symbol" plain class="font-medium" />
           {{ alert.condition === 'above' ? t('alert.above') : t('alert.below') }}
           <span class="tabular-nums"><Money :amount="alert.price" :currency="alert.currency" /></span>
         </span>

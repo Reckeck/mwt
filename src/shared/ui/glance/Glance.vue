@@ -48,7 +48,7 @@ function onKey(event: KeyboardEvent) {
 
 <template>
   <Popover v-if="!phone" v-model:open="open">
-    <PopoverTrigger :class="cn(GLANCE_TRIGGER_CLASS, props.triggerClass)" :data-glance-trigger="props.kind ?? ''">
+    <PopoverTrigger :class="cn(GLANCE_TRIGGER_CLASS, props.triggerClass)" :data-glance-trigger="props.kind ?? ''" :data-entity="props.entity">
       <slot />
     </PopoverTrigger>
     <PopoverContent
@@ -75,7 +75,7 @@ function onKey(event: KeyboardEvent) {
     </PopoverContent>
   </Popover>
   <Drawer v-else v-model:open="open">
-    <DrawerTrigger :class="cn(GLANCE_TRIGGER_CLASS, props.triggerClass)" :data-glance-trigger="props.kind ?? ''">
+    <DrawerTrigger :class="cn(GLANCE_TRIGGER_CLASS, props.triggerClass)" :data-glance-trigger="props.kind ?? ''" :data-entity="props.entity">
       <slot />
     </DrawerTrigger>
     <DrawerContent class="gap-3 px-4 pt-2 pb-5" data-glance>

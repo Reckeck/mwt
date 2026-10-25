@@ -5,6 +5,7 @@ import { useEventListener } from '@vueuse/core'
 import { Link } from 'lucide-vue-next'
 
 import { ActionMenu, ActionSheet } from '@/shared/ui/action-menu'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
@@ -13,6 +14,7 @@ import { call } from '@/shared/api/ipc'
 import { txExplorerUrl, txId } from '@/shared/lib/transactions'
 import { provideTxContext } from '@/shared/lib/tx-context'
 import { useIsPhone } from '@/shared/lib/phone'
+import { useTxGlances } from '@/shared/lib/tx-glances'
 
 import { dayLabel } from '../../lib/day-label'
 import { type TxDay, groupByDay } from '../../lib/group-by-day'
@@ -42,6 +44,7 @@ const slots = defineSlots<{
 
 const { t } = useI18n()
 const phone = useIsPhone()
+const glances = useTxGlances()
 
 /**
  * A long history renders a page at a time: rows differ in height (badges,
@@ -188,11 +191,23 @@ function showMore() {
               <ActionMenu :actions="actionsFor(row)" :label="t('actions.more')" :sheet="rowMenu.sheetHead(row)" />
             </template>
             <!-- The clipped second line leaves a wallet name a 16px target on touch: a tap opens the card, a press — the menu with the wallet. -->
-            <template v-if="slots.side && !rowMenu.coarse.value" #side="side">
-              <slot name="side" v-bind="side" />
+            <!-- A list may override both; by default the shell's glances. The wallet of this very page is no link. -->
+            <template v-if="(slots.side || glances) && !rowMenu.coarse.value" #side="side">
+              <slot name="side" v-bind="side">
+                <component
+                  :is="glances?.wallet"
+                  v-if="glances && 'store' in side.side && side.side.store !== props.storeId"
+                  :store-id="side.side.store"
+                  :name="side.label"
+                />
+                <template v-else>{{ side.label }}</template>
+              </slot>
             </template>
-            <template v-if="slots.origin" #origin="origin">
-              <slot name="origin" v-bind="origin" />
+            <template v-if="slots.origin || glances" #origin="origin">
+              <slot name="origin" v-bind="origin">
+                <component :is="glances?.automation" v-if="glances" v-bind="origin" />
+                <Badge v-else variant="outline">{{ t('glance.auto.badge') }}</Badge>
+              </slot>
             </template>
           </TransactionRow>
         </div>

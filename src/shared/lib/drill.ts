@@ -21,8 +21,11 @@ export interface DrillContext {
   realized?: boolean
   /** Only operations without a rate, left out of the sums (Currency-1 · 7). */
   unpriced?: boolean
-  /** Where the click came from: the list shows «← <label>» back to it (Paths 1 · 5). */
-  back?: DrillBack
+  /**
+   * Where the click came from: the list shows «← <label>» back to it (Paths 1 · 5).
+   * Left out, it is the screen the shell is on (`registerDefaultBack`); `false` = no chip.
+   */
+  back?: DrillBack | false
 }
 
 /** The way back from a list opened with context: the screen's address and its name. */
@@ -46,8 +49,24 @@ export function drillTo(context: DrillContext): RouteLocationRaw {
   if (context.withFee) query.fee = '1'
   if (context.realized) query.realized = '1'
   if (context.unpriced) query.norate = '1'
-  if (context.back) Object.assign(query, backQuery(context.back))
+  const back = context.back === undefined ? currentBack() : context.back
+  if (back) Object.assign(query, backQuery(back))
   return { name: 'transactions', query }
+}
+
+let backSource: (() => DrillBack | null) | null = null
+
+/** The shell says where the user is, so every jump to a list can offer the way back (docs/ui-links.md, 22). */
+export function registerDefaultBack(source: () => DrillBack | null): () => void {
+  backSource = source
+  return () => {
+    if (backSource === source) backSource = null
+  }
+}
+
+/** «← <this screen>» for a jump made from here; `null` before the shell is up. */
+export function currentBack(): DrillBack | null {
+  return backSource?.() ?? null
 }
 
 /** The local day `YYYY-MM-DD` of a moment; `exclusive` takes the day before an end bound. */
@@ -62,6 +81,12 @@ export const BACK_QUERY_KEYS = ['back', 'backLabel'] as const
 
 export function backQuery(back: DrillBack): Record<string, string> {
   return { back: back.to, backLabel: back.label }
+}
+
+/** The `back` query of a jump made from here, to spread into a hand-made `query`; empty without a shell. */
+export function hereBackQuery(): Record<string, string> {
+  const back = currentBack()
+  return back ? backQuery(back) : {}
 }
 
 /** The way back an address carries, if any. */

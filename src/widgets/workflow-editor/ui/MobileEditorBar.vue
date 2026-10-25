@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft,
@@ -25,6 +24,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { pluralForm } from '@/shared/lib/format'
+import { useCameFrom } from '@/shared/lib/use-came-from'
 
 import type { EditCommandSet } from '../model/edit-commands'
 import { activeStatus } from '../model/node-problem'
@@ -65,13 +65,10 @@ const simple = defineModel<boolean>('simple', { required: true })
 const { t, locale } = useI18n()
 const status = computed(() => activeStatus(active.value, props.blockers, t, pluralForm(props.blockers, locale.value)))
 const blocked = computed(() => !active.value && props.blockers > 0)
-const router = useRouter()
 const renameOpen = ref(false)
 
-function back() {
-  if (window.history.length > 1) router.back()
-  else void router.push({ name: 'automations-workflows' })
-}
+const cameFrom = useCameFrom({ name: 'automations-workflows' }, 'nav.automations')
+const back = cameFrom.go
 </script>
 
 <template>

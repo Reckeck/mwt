@@ -21,3 +21,11 @@ export function assetKey(asset: AssetRef): string {
   if (asset.coingecko_id) return `coin:${asset.coingecko_id}`
   return `${asset.chain === 'fiat' ? 'fiat' : 'asset'}:${asset.symbol}`
 }
+
+/** What the operations search matches an asset by: its ticker, from an `assetKey` (`token:eth:USDT:0x…` → `USDT`). */
+export function assetSearchText(key: string): string {
+  const parts = key.split(':')
+  if (parts[0] === 'token') return parts[2] ?? key
+  if (parts[0] === 'perp') return parts.at(-1) ?? key
+  return parts.slice(1).join(':') || key
+}

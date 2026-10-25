@@ -9,6 +9,7 @@ import { Money } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
@@ -75,7 +76,9 @@ const payOpen = computed({
     <ul v-else class="grid gap-3">
       <li v-for="row in rows" :key="row.store.id" class="grid gap-1.5">
         <div class="flex items-center justify-between gap-2">
-          <span class="truncate text-sm font-medium">{{ row.store.name }}</span>
+          <span class="min-w-0 truncate text-sm font-medium">
+            <EntityLink :target="{ kind: 'store', id: row.store.id }" :label="row.store.name" plain />
+          </span>
           <Badge v-if="overdue(row)" variant="destructive" class="shrink-0">
             {{ t('utilitiesDue.overdue', { date: formatDate(row.bill?.due_at ?? '') }) }}
           </Badge>

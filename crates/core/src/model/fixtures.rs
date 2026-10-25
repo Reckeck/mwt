@@ -467,7 +467,7 @@ pub fn full_doc() -> VaultDoc {
         category: crate::model::notify::NoticeCategory::Reminder,
         title: "Reminder".into(),
         body: "Call the bank".into(),
-        link: Some("/planning".into()),
+        link: Some("/automations".into()),
         at: "2026-03-01T09:00:00Z".into(),
         delivered_at: "2026-03-01T09:00:10Z".into(),
         read: true,

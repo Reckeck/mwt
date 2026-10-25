@@ -11,4 +11,6 @@ export interface GlanceProps {
   triggerClass?: string
   /** Which glance, as `data-glance-trigger` names it for tests and tours. */
   kind?: string
+  /** The thing it shows as `kind:id` (`entityKey`): `data-entity` of the trigger, for tests and link checks. */
+  entity?: string
 }

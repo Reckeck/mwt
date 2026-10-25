@@ -19,6 +19,8 @@ export const PHONE = [
 /** Every view in full at these sizes; the rest get the main screens only. */
 const FULL_AT = new Set(['1280x720', '1024x640', '768x800', '560x860', '390x844', '360x740'])
 
+const PHONE_AT = new Set(['390x844', '360x740'])
+
 const MAIN_ROUTES = ['/', '/stores', '/transactions', '/money/where', '/automations/reminders', 'settings:app:app', 'settings:accounting:currencies']
 
 const STATIC_ROUTES = [
@@ -125,7 +127,14 @@ export async function views(page, size) {
   const tabs = await page.eval(`
     const { SETTINGS_GROUPS } = await import('/src/widgets/settings-shell/settings-shell.constants.ts')
     return SETTINGS_GROUPS.flatMap((group) => group.tabs.map((tab) => group.id + ':' + tab.sections[0].id))`)
+  // The plan with its goal and limit lists unfolded (a link's `?focus=`): wide tables and cards live there.
+  const goalId = PHONE_AT.has(size)
+    ? await page.eval(`
+        const { call } = await import('/src/shared/api/ipc.ts')
+        return (await call('list_goals'))[0]?.id ?? null`)
+    : null
   const all = [
+    ...(goalId ? [`/money/plan?focus=${goalId}`] : []),
     ...STATIC_ROUTES,
     ...stores.flatMap((id) => [`/stores/${id}`, `/stores/${id}/settings`]),
     ...tabs.map((id) => `settings:${id}`),

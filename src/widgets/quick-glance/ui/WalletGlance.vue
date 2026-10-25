@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { entityKey } from '@/shared/lib/entity-link'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 import { Button } from '@/shared/ui/button'
 import { Glance } from '@/shared/ui/glance'
@@ -33,6 +34,7 @@ function record(kind: TxKind) {
     :open-label="t('glance.wallet.open')"
     :trigger-class="props.triggerClass"
     kind="wallet"
+    :entity="entityKey({ kind: 'store', id: props.storeId })"
   >
     <slot>{{ props.name }}</slot>
     <template #body>

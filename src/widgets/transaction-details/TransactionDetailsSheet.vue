@@ -10,6 +10,7 @@ import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
 import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
+import { EntityBack } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDayMonthShort } from '@/shared/lib/format'
@@ -65,7 +66,10 @@ const ownerLabel = computed(() =>
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-tx-card>
+    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-tx-card
+      :data-entity-card="props.tx ? `tx:${owner.id}` : undefined"
+    >
+      <EntityBack class="mx-2 mt-2" />
       <div v-if="props.tx && meta" ref="cardBody" class="relative flex min-h-0 flex-1 flex-col">
         <div class="grid flex-1 content-start gap-5 overflow-y-auto pt-2 pb-6">
           <TxCardHead

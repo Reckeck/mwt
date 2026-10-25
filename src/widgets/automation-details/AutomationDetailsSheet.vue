@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { SectionState } from '@/shared/ui/section-state'
 import { Separator } from '@/shared/ui/separator'
+import { EntityBack } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/shared/ui/sheet'
 import { Switch } from '@/shared/ui/switch'
 import { useIsPhone } from '@/shared/lib/phone'
@@ -52,7 +53,9 @@ const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-2')
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[460px]" data-automation-card>
+    <SheetContent side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[460px]" data-automation-card
+      :data-entity-card="props.automationId ? `automation:${props.automationId}` : undefined"
+    >
       <header :class="cn('flex shrink-0 items-center gap-1', phone ? 'h-14 px-2' : 'px-6 pt-5 pb-3 pe-12')">
         <Button v-if="phone" variant="ghost" size="icon" class="touch-hit" :aria-label="t('actions.close')" @click="open = false">
           <ChevronLeft class="size-5" />
@@ -63,6 +66,7 @@ const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-2')
         <SheetDescription class="sr-only">{{ t('automationCard.subtitle') }}</SheetDescription>
       </header>
 
+      <EntityBack class="mx-4 mb-1" />
       <SectionState :loading="details.card.isPending.value" :error="details.card.error.value" :empty="false" @retry="details.card.refetch()">
         <div v-if="card" class="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain px-6 pt-1 pb-4 max-sm:flex-none max-sm:overflow-visible max-sm:px-4">
           <div class="flex items-center gap-2">

@@ -12,6 +12,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { Switch } from '@/shared/ui/switch'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
@@ -82,9 +83,7 @@ watch(
             />
             <div class="grid min-w-0 flex-1 gap-1">
               <span class="flex flex-wrap items-center gap-2">
-                <RouterLink :to="{ name: 'workflow-edit', params: { id: workflow.id } }" class="font-medium hover:underline">
-                  {{ workflow.name }}
-                </RouterLink>
+                <EntityLink :target="{ kind: 'workflow', id: workflow.id }" :label="workflow.name" plain class="font-medium" />
                 <!-- Built from the automation form: changed there. -->
                 <Badge v-if="workflow.automation" variant="secondary" :title="t('workflow.list.automationHint')">
                   {{ t('workflow.list.automation') }}

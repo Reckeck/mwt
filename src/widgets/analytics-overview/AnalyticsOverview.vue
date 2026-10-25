@@ -8,6 +8,7 @@ import { openQuickAdd } from '@/shared/lib/quick-add'
 import { Money, PnlText } from '@/entities/currency'
 import { monthName } from '@/entities/report'
 import { Button, buttonVariants } from '@/shared/ui/button'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { formatPct } from '@/shared/lib/format'
 import { activeLocale } from '@/shared/lib/locale'
 import { useTxContext } from '@/shared/lib/tx-context'
@@ -72,7 +73,11 @@ const month = computed(() => (data.value ? monthName(data.value.month, activeLoc
           </span>
         </OverviewFigure>
         <OverviewFigure v-if="data.flow.top_category" :label="t('analytics.overview.topCategory')">
-          {{ context.categoryName(data.flow.top_category) }}
+          <EntityLink
+            :target="{ kind: 'category', id: data.flow.top_category }"
+            :label="context.categoryName(data.flow.top_category)"
+            plain
+          />
         </OverviewFigure>
         <template #action>
           <Button size="sm" @click="openQuickAdd()"><Plus class="size-4" />{{ t('analytics.overview.addTx') }}</Button>

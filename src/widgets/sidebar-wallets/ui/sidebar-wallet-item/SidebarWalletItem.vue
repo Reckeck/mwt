@@ -40,7 +40,7 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
         :tooltip="props.node.store.name"
         :class="cn(props.node.store.archived && 'opacity-50')"
       >
-        <RouterLink :to="{ name: 'wallet', params: { id: props.node.store.id } }">
+        <RouterLink :to="{ name: 'wallet', params: { id: props.node.store.id } }" :data-entity="`store:${props.node.store.id}`">
           <component :is="storeIcon(props.node.store)" class="store-tint" :style="{ '--store-color': props.node.store.color }" />
           <span>{{ props.node.store.name }}</span>
         </RouterLink>
@@ -69,7 +69,7 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
             :is-active="props.activeId === child.store.id"
             :class="cn(child.store.archived && 'opacity-50')"
           >
-            <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }">
+            <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }" :data-entity="`store:${child.store.id}`">
               <component :is="storeIcon(child.store)" class="store-tint" :style="{ '--store-color': child.store.color }" />
               <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
               <span v-if="bindingBadge(child.store)" class="shrink-0 text-2xs uppercase text-muted-foreground">

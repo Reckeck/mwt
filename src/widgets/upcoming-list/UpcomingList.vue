@@ -9,6 +9,7 @@ import { Money } from '@/entities/currency'
 import { AutomationRunActions } from '@/features/automation-edit'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
+import { pageEntityKey } from '@/shared/lib/entity-link'
 import { formatDate } from '@/shared/lib/format'
 
 import type { UpcomingListProps } from './upcoming-list.types'
@@ -72,6 +73,7 @@ const ICONS = {
 } as const
 
 /** Where an item is managed: its list, its loan wallet or its contact. A refused run keeps its own buttons. */
+const entityOf = (item: UpcomingItem) => pageEntityKey(targetOf(item))
 function targetOf(item: UpcomingItem): RouteLocationRaw | null {
   switch (item.kind) {
     case 'automation':
@@ -133,6 +135,7 @@ function targetOf(item: UpcomingItem): RouteLocationRaw | null {
           <RouterLink
             v-if="targetOf(item)"
             :to="targetOf(item) as RouteLocationRaw"
+            :data-entity="entityOf(item)"
             class="min-w-0 flex-1 truncate hover:underline"
             :title="item.title"
           >

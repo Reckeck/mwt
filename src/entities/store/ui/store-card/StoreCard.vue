@@ -82,6 +82,7 @@ const actions = computed<UiAction[]>(() => [
               <!-- The stretched link: its ::after covers the card, so a click anywhere opens the wallet. -->
               <RouterLink
                 :to="{ name: 'wallet', params: { id: store.id } }"
+                :data-entity="`store:${store.id}`"
                 class="block truncate font-medium after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
               >
                 {{ store.name }}

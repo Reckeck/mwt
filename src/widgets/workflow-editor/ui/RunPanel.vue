@@ -6,6 +6,7 @@ import { computed } from 'vue'
 import { OutcomeBadge, explainRun } from '@/entities/workflow'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { formatDateTime, formatDayMonthShort } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 import { call } from '@/shared/api/ipc'
@@ -72,7 +73,7 @@ const nameOf = (id: string) => (workflows.data.value ?? []).find((entry) => entr
     <div v-if="props.report.event_runs.length" class="grid gap-1" data-tour="workflow-event-runs">
       <h4 class="text-xs font-medium text-muted-foreground">{{ t('workflow.runPanel.eventRuns') }}</h4>
       <p v-for="run in props.report.event_runs" :key="run.id" class="flex flex-wrap items-center gap-2 text-sm">
-        <span>{{ nameOf(run.workflow_id) }}</span>
+        <EntityLink :target="{ kind: 'workflow', id: run.workflow_id }" :label="nameOf(run.workflow_id)" plain />
         <OutcomeBadge :outcome="run.outcome" />
         <span class="text-xs text-muted-foreground">{{ t('workflow.runPanel.eventSteps', { count: run.trace.length }) }}</span>
       </p>

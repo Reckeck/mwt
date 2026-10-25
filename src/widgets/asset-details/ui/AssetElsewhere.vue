@@ -46,7 +46,7 @@ const network = (row: AssetHolding) => (row.asset.chain && row.asset.chain !== '
           :class="row.store_id === props.storeId && 'bg-accent/50'"
         >
           <span class="min-w-0 flex-1 truncate">
-            <RouterLink :to="{ name: 'wallet', params: { id: row.store_id } }" class="font-medium hover:underline">
+            <RouterLink :to="{ name: 'wallet', params: { id: row.store_id } }" :data-entity="`store:${row.store_id}`" class="font-medium hover:underline">
               {{ [...row.path, row.store_name].join(' › ') }}
             </RouterLink>
             <span v-if="network(row)" class="ml-2 text-xs text-muted-foreground">{{ network(row) }}</span>

@@ -10,7 +10,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
-import { noticeRoute } from '@/shared/lib/notice-link'
+import { noticeRoute, reachable } from '@/shared/lib/notice-link'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { cn } from '@/shared/lib/utils'
 
@@ -53,7 +53,7 @@ function openNotice(record: NoticeRecord) {
   const target = noticeRoute(record.link, router.currentRoute.value.query)
   if (!target) return
   open.value = false
-  void router.push(target)
+  void router.push(reachable(router, target))
 }
 </script>
 

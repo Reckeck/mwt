@@ -30,25 +30,31 @@ const empty = computed(() => runs.isSuccess.value && !(runs.data.value ?? []).le
     <p class="text-sm text-muted-foreground">{{ t('workflow.runs.intro') }}</p>
     <EmptyState v-if="empty" compact :title="t('workflow.runs.empty')" />
     <Card v-for="run in runs.data.value ?? []" :key="run.id" size="sm">
-      <Button
-        variant="ghost"
-        size="block"
-        class="px-0 hover:bg-transparent flex w-full flex-wrap items-center gap-2 text-left"
-        :aria-expanded="open === run.id"
-        @click="open = open === run.id ? null : run.id"
-      >
-        <OutcomeBadge :outcome="run.outcome" :dry-run="run.dry_run" />
-        <span class="font-medium">{{ nameOf(run.workflow_id) }}</span>
-        <span class="text-xs text-muted-foreground">{{ formatDateTime(run.started_at) }} · {{ run.trigger }}</span>
-        <span v-if="run.created.length" class="text-xs text-muted-foreground">{{ t('workflow.run.made', { count: run.created.length }) }}</span>
-        <span v-if="run.queued" class="text-xs text-muted-foreground">{{ t('workflow.run.queued', { count: run.queued }) }}</span>
-        <span class="flex-1" />
-        <ChevronDown class="size-4 transition-transform" :class="open === run.id ? 'rotate-180' : ''" />
-      </Button>
+      <!-- The toggle is a see-through button under the row; the workflow's name above it is a link. -->
+      <div class="relative">
+        <Button
+          variant="ghost"
+          size="block"
+          class="absolute inset-0 p-0 hover:bg-transparent"
+          :aria-expanded="open === run.id"
+          :aria-label="nameOf(run.workflow_id)"
+          @click="open = open === run.id ? null : run.id"
+        />
+        <div class="pointer-events-none relative flex flex-wrap items-center gap-2">
+          <OutcomeBadge :outcome="run.outcome" :dry-run="run.dry_run" />
+          <span class="pointer-events-auto relative min-w-0 font-medium">
+            <EntityLink :target="{ kind: 'workflow', id: run.workflow_id }" :label="nameOf(run.workflow_id)" plain />
+          </span>
+          <span class="text-xs text-muted-foreground">{{ formatDateTime(run.started_at) }} · {{ run.trigger }}</span>
+          <span v-if="run.created.length" class="text-xs text-muted-foreground">{{ t('workflow.run.made', { count: run.created.length }) }}</span>
+          <span v-if="run.queued" class="text-xs text-muted-foreground">{{ t('workflow.run.queued', { count: run.queued }) }}</span>
+          <span class="flex-1" />
+          <ChevronDown class="size-4 transition-transform" :class="open === run.id ? 'rotate-180' : ''" />
+        </div>
+      </div>
       <div v-if="open === run.id" class="mt-3 grid gap-3">
-        <!-- What the run made: each operation opens its card, the workflow its page. -->
+        <!-- What the run made: each operation opens its card. -->
         <div class="flex flex-wrap items-center gap-2 text-sm">
-          <EntityLink :target="{ kind: 'workflow', id: run.workflow_id }" :label="nameOf(run.workflow_id)" />
           <EntityLink
             v-for="(txId, at) in run.created"
             :key="txId"

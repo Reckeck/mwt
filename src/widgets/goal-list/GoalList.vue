@@ -13,6 +13,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { useEmergencyStatus, useStoreTree } from '@/shared/api/queries'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -25,6 +26,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_goals') })
+useFocusRow(() => goals.isSuccess.value)
 const progress = useQuery({ queryKey: ['goal-progress'], queryFn: () => call<GoalProgress[]>('get_goal_progress') })
 const scenarios = useQuery({ queryKey: ['calc-scenarios'], queryFn: () => call<CalcScenario[]>('calc_scenarios_list') })
 const scenarioName = (id: string) => scenarios.data.value?.find((entry) => entry.id === id)?.name ?? ''
@@ -86,15 +88,15 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <ListHeader :intro="t('goal.intro')" :action-label="t('goal.new')" :hide-action="empty" @action="openNew" />
 
     <EmptyState v-if="empty" compact :title="t('goal.empty')">
       <Button @click="openNew"><Plus class="size-4" />{{ t('goal.new') }}</Button>
     </EmptyState>
 
-    <div class="grid gap-4 @wide:grid-cols-2">
-      <Card v-for="{ goal, entry } in rows" :key="goal.id" :class="!goal.active && 'opacity-60'">
+    <div class="grid grid-cols-1 gap-4 @wide:grid-cols-2">
+      <Card v-for="{ goal, entry } in rows" :key="goal.id" :data-focus-row="goal.id" :class="!goal.active && 'opacity-60'">
         <div class="grid gap-3">
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
@@ -108,7 +110,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                 />
               </div>
             </div>
-            <div class="flex shrink-0 items-center gap-1">
+            <div class="flex shrink-0 items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon-sm"
