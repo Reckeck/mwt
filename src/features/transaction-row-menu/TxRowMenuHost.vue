@@ -55,7 +55,7 @@ function confirmDelete() {
     :prefill="props.menu.duplicating.value"
   />
   <!-- Deleting from a menu asks first: the row is gone for good. -->
-  <Dialog
+  <Dialog overlay="tx-delete"
     :open="props.menu.deleting.value !== null"
     :title="t('tx.deleteConfirmTitle')"
     :description="t('tx.deleteConfirmHint')"

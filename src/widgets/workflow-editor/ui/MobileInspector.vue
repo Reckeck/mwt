@@ -31,7 +31,7 @@ const tabs = computed(() => [
 
 <template>
   <Drawer v-model:open="open" :modal="false" :snap-points="SNAPS" v-model:snap-point="snap">
-    <DrawerContent :overlay="false" class="h-[calc(100dvh-var(--safe-top)-1.5rem)] shadow-lg">
+    <DrawerContent layer="workflow-inspector" :overlay="false" class="h-[calc(100dvh-var(--safe-top)-1.5rem)] shadow-lg">
       <DrawerTitle class="sr-only">{{ tabs.find((entry) => entry.value === tab)?.label }}</DrawerTitle>
       <div class="px-3 pt-2">
         <Tabs :model-value="tab" :tabs="tabs" @update:model-value="(value) => (tab = value as MobileInspectorTab)" />

@@ -69,7 +69,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('vaultPassword.setTitle')" size="sm">
+  <Dialog overlay="password-set" v-model:open="open" :title="t('vaultPassword.setTitle')" size="sm">
     <form id="set-password-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <NewPasswordFields
         id="set-password"

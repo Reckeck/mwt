@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useAttrs } from 'vue'
 import { ChevronRight, MoreHorizontal } from 'lucide-vue-next'
 import {
   DropdownMenuContent,
@@ -27,7 +27,10 @@ import { cn } from '@/shared/lib/utils'
 import type { ActionMenuProps } from './action-menu.types'
 import ActionSheet from './ActionSheet.vue'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<ActionMenuProps>()
+/** The caller's `class` (a row's `relative z-10` over its stretched link) goes on the «⋯» button, the only element. */
+const attrs = useAttrs()
 
 const phone = useIsPhone()
 const sheetOpen = ref(false)
@@ -39,14 +42,14 @@ const TRIGGER =
 <template>
   <!-- On a phone the same list comes up as a sheet from below. -->
   <template v-if="phone">
-    <Button variant="ghost" size="icon" :class="TRIGGER" :aria-label="props.label" @click="sheetOpen = true">
+    <Button variant="ghost" size="icon" :class="cn(TRIGGER, attrs.class as string | undefined)" :aria-label="props.label" @click="sheetOpen = true">
       <MoreHorizontal class="size-4" />
     </Button>
     <ActionSheet v-model:open="sheetOpen" :actions="props.actions" v-bind="props.sheet" />
   </template>
   <!-- The «⋯» twin of the right-click menu: built from the same action list. -->
   <DropdownMenuRoot v-else :modal="false">
-    <DropdownMenuTrigger :class="TRIGGER" :aria-label="props.label" :title="props.label">
+    <DropdownMenuTrigger :class="cn(TRIGGER, attrs.class as string | undefined)" :aria-label="props.label" :title="props.label">
       <MoreHorizontal class="size-4" />
     </DropdownMenuTrigger>
     <DropdownMenuPortal>

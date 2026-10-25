@@ -8,13 +8,14 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import { cn } from '@/shared/lib/utils'
+import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 
 defineOptions({
   inheritAttrs: false,
 })
 
 const props = withDefaults(
-  defineProps<PopoverContentProps & { class?: HTMLAttributes['class'] }>(),
+  defineProps<PopoverContentProps & { class?: HTMLAttributes['class']; overlay?: string }>(),
   {
     align: 'center',
     sideOffset: 4,
@@ -22,7 +23,7 @@ const props = withDefaults(
 )
 const emits = defineEmits<PopoverContentEmits>()
 
-const delegatedProps = reactiveOmit(props, 'class')
+const delegatedProps = reactiveOmit(props, 'class', 'overlay')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -31,6 +32,9 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <PopoverPortal>
     <PopoverContent
       data-slot="popover-content"
+      :data-overlay="props.overlay"
+      @pointer-down-outside="keepOpenOnToast"
+      @interact-outside="keepOpenOnToast"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(

@@ -93,7 +93,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="form" :title="t('saveShare.title')" :description="t('saveShare.subtitle')">
+  <Dialog overlay="automation-save-share" v-model:open="open" size="form" :title="t('saveShare.title')" :description="t('saveShare.subtitle')">
     <form id="save-share-form" class="grid gap-4" data-tour="save-share-form" @submit.prevent="form.submit(save.mutate, $event)">
       <FormField for="save-share-pct" :label="t('saveShare.pct')" required :error="form.error('pct')">
         <AmountInput id="save-share-pct" v-model="pct" size="lg">

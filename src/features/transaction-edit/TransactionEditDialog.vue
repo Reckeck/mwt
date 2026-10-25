@@ -25,7 +25,7 @@ const isAdjustment = computed(() => txKind(props.transaction) === 'adjustment')
     :store-id="txStoreId(props.transaction)"
     :transaction="props.transaction"
   />
-  <Dialog v-else v-model:open="open" :title="t('tx.edit')" size="lg">
+  <Dialog overlay="tx-edit" v-else v-model:open="open" :title="t('tx.edit')" size="lg">
     <div class="@container">
       <!-- Keyed by the transaction: every opening loads it afresh. -->
       <TransactionForm

@@ -13,4 +13,6 @@ export interface FormDialogProps {
   pending?: boolean
   /** On a phone: no Cancel (the sheet has its ×), one full-width save button (Wallets-2 · 13, Wallets-3 · 20). */
   phoneSubmitOnly?: boolean
+  /** Name of the layer for `data-overlay`. */
+  overlay?: string
 }

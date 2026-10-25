@@ -80,7 +80,14 @@ const toggle = useMutation({
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" :hide-close="props.phone" class="flex w-full flex-col gap-0 p-0 sm:max-w-[560px]" data-utility-item @open-auto-focus="focusReading">
+    <SheetContent
+      overlay="utility-sheet"
+      side="right"
+      :hide-close="props.phone"
+      class="flex w-full flex-col gap-0 p-0 sm:max-w-[560px]"
+      data-utility-item
+      @open-auto-focus="focusReading"
+    >
       <template v-if="item">
         <header :class="cn('flex shrink-0 items-start gap-1', props.phone ? 'h-14 items-center px-2' : 'px-5 pt-4 pb-3 pe-12')">
           <Button v-if="props.phone" variant="ghost" size="icon" class="touch-hit" :aria-label="t('actions.close')" @click="open = false">

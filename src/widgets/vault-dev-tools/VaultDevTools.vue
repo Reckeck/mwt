@@ -59,7 +59,7 @@ function errorText(err: AppError): string {
       <p class="text-xs text-muted-foreground">{{ t('settings.dev.dumpHint') }}</p>
     </SettingsSection>
 
-    <Dialog
+    <Dialog overlay="dev-tools"
       v-model:open="jsonDialogOpen"
       :title="t('settings.dev.vaultJsonTitle')"
       :description="t('settings.dev.vaultJsonHint')"

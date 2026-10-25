@@ -60,7 +60,7 @@ const journal = computed(() =>
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-[460px]" data-tour="category-sheet">
+    <SheetContent overlay="category-sheet" side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-[460px]" data-tour="category-sheet">
       <SheetHeader class="px-6 pt-5 pb-3 max-md:px-4">
         <SheetTitle class="truncate pr-8 text-lg">{{ props.label }}</SheetTitle>
         <SheetDescription>{{ props.period }}</SheetDescription>

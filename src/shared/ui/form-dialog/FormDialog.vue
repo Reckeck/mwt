@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<FormDialogProps>(), {
   submitLabel: undefined,
   pending: false,
   phoneSubmitOnly: false,
+  overlay: undefined,
 })
 const emit = defineEmits<{ 'update:open': [boolean]; submit: [Event] }>()
 
@@ -35,6 +36,7 @@ const phone = useIsPhone()
     :title="props.title"
     :description="props.description"
     :size="props.size"
+    :overlay="props.overlay"
     @update:open="(value) => emit('update:open', value)"
   >
     <form :id="props.formId" class="@container flex flex-col gap-4" @submit.prevent="emit('submit', $event)">

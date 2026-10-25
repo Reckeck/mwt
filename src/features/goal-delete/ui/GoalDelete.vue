@@ -40,7 +40,7 @@ function confirm() {
     <Trash2 class="size-4" />
     {{ props.label ?? t('actions.delete') }}
   </Button>
-  <Dialog v-model:open="open" size="sm" :title="t('goalDelete.title', { name: props.progress.goal.name })">
+  <Dialog overlay="goal-delete" v-model:open="open" size="sm" :title="t('goalDelete.title', { name: props.progress.goal.name })">
     <div class="grid gap-3 px-4 pb-2 text-sm" data-goal-delete-text>
       <i18n-t v-if="keeps" keypath="goalDelete.money" tag="p">
         <template #wallet>{{ props.wallet }}</template>

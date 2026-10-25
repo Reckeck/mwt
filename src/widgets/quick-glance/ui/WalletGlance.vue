@@ -27,7 +27,7 @@ function record(kind: TxKind) {
 </script>
 
 <template>
-  <Glance
+  <Glance overlay="glance-wallet"
     v-model:open="open"
     :title="props.name"
     :open-to="{ name: 'wallet', params: { id: props.storeId } }"

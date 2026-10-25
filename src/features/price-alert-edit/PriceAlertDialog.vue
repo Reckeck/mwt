@@ -89,7 +89,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.alert ? t('alert.edit') : t('alert.newPrice')" size="form">
+  <Dialog overlay="price-alert" v-model:open="open" :title="props.alert ? t('alert.edit') : t('alert.newPrice')" size="form">
     <form id="price-alert-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <div class="grid items-start gap-4 sm:grid-cols-2">
         <AssetInput v-model="asset" :label="t('alert.asset')" required :error="form.error('asset')" />

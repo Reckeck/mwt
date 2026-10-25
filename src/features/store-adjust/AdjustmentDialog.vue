@@ -23,7 +23,7 @@ const { fiatOnly, simple, inApp, node, title, timestamp, comment, rows, draft, c
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="wallet-adjust"
     v-model:open="open"
     :title="simple ? t('adjustment.open') : title"
     :description="simple ? undefined : t('adjustment.hint')"

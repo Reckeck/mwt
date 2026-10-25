@@ -28,7 +28,7 @@ function submit() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="vehicle-mileage"
     v-model:open="open"
     :title="t('car.updateMileage')"
     form-id="mileage-form"

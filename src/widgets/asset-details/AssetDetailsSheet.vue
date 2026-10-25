@@ -53,7 +53,7 @@ const analyticsLink = computed(() => ({ name: 'money-investments', query: { stor
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
+    <SheetContent overlay="asset-details" side="right" class="w-full overflow-y-auto sm:max-w-2xl">
       <template v-if="props.position && asset">
         <SheetHeader>
           <SheetTitle>{{ symbol }}</SheetTitle>

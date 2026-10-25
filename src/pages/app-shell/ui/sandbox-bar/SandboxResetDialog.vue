@@ -13,7 +13,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('sandbox.resetTitle')" size="confirm">
+  <Dialog overlay="sandbox-reset" v-model:open="open" :title="t('sandbox.resetTitle')" size="confirm">
     <div class="grid gap-2 text-sm">
       <p>{{ t('sandbox.resetBody') }}</p>
       <p class="text-muted-foreground">{{ t('sandbox.resetReal') }}</p>

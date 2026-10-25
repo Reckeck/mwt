@@ -19,6 +19,8 @@ const settingsStore = useSettingsStore()
 
 const { resolved: theme } = useTheme()
 const phone = useIsPhone()
+/** Under the status bar and a full-screen layer's header (the way out stays uncovered). */
+const PHONE_TOAST_TOP = 'calc(var(--safe-top) + 3.75rem)'
 useLocale()
 
 // Loaded before any vault work: the theme and language follow the user, not the
@@ -84,11 +86,12 @@ watch(
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <!-- On a phone the toasts drop from the top, below the status bar, clear of the bottom navigation. -->
+  <!-- On a phone the toasts drop from the top, below the status bar and the 3.5 rem header of a full-screen
+       sheet or the settings window (its «×» and «‹» stay reachable), clear of the bottom navigation. -->
   <Sonner
     :position="phone ? 'top-center' : 'bottom-right'"
-    :offset="phone ? 'calc(var(--safe-top) + 12px)' : undefined"
-    :mobile-offset="{ top: 'calc(var(--safe-top) + 12px)' }"
+    :offset="phone ? PHONE_TOAST_TOP : undefined"
+    :mobile-offset="{ top: PHONE_TOAST_TOP }"
     :theme="theme"
     rich-colors
     close-button

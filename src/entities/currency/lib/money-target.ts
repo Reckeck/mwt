@@ -11,6 +11,14 @@ export function sumOf(node: EventTarget | null): HTMLElement | null {
 }
 
 /**
+ * The sum a keyboard focus is on: the node's own, or the one inside the focused button or link.
+ * A panel that holds sums (a dialog taking focus as it opens) is not a sum's button.
+ */
+export function sumOfFocus(node: Element): HTMLElement | null {
+  return sumOf(node) ?? (node.matches(PRESSABLE) ? node.querySelector<HTMLElement>(MONEY_SUM) : null)
+}
+
+/**
  * The sum under a finger at `point`: the node itself, or — a button's enlarged touch area is the
  * event's target, not the sum drawn on it — a sum inside the pressed button that holds the point.
  */

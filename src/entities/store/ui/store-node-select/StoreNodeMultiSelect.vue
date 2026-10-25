@@ -45,11 +45,11 @@ function toggle(id: string, on: boolean) {
       <span class="truncate">{{ summary }}</span>
       <ChevronDown class="size-4 shrink-0 opacity-50" />
     </PopoverTrigger>
-    <PopoverContent align="start" class="max-h-80 w-(--reka-popover-trigger-width) min-w-[min(14rem,calc(100vw-2rem))] overflow-y-auto p-1">
+    <PopoverContent overlay="store-multiselect" align="start" class="max-h-80 w-(--reka-popover-trigger-width) min-w-[min(14rem,calc(100vw-2rem))] overflow-y-auto p-1">
       <label
         v-if="props.emptyLabel"
         :for="`${uid}-all`"
-        class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+        class="touch-hit flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
       >
         <Checkbox :id="`${uid}-all`" :model-value="!ids.length" @update:model-value="ids = []" />
         {{ props.emptyLabel }}
@@ -58,7 +58,7 @@ function toggle(id: string, on: boolean) {
         v-for="option in props.options"
         :key="option.id"
         :for="`${uid}-${option.id}`"
-        class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+        class="touch-hit flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
       >
         <Checkbox
           :id="`${uid}-${option.id}`"

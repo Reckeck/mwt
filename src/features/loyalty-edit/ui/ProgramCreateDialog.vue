@@ -96,7 +96,7 @@ function submit(event: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('bonuses.new')">
+  <Dialog overlay="bonus-program" v-model:open="open" :title="t('bonuses.new')">
     <form id="program-create-form" class="grid gap-4" data-tour="bonuses-wizard" @submit.prevent="submit">
       <WizardSteps :step="step" :titles="steps" />
       <ProgramWhatStep v-if="step === 1" v-model:name="name" v-model:wallet="wallet" :state="state" :error="form.error" />

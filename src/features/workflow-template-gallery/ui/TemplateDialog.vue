@@ -51,7 +51,7 @@ function save() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="template-dialog"
     v-model:open="open"
     :title="props.template ? t(`workflowTemplates.${props.template.id}.title`) : ''"
     :description="props.template ? t(`workflowTemplates.${props.template.id}.desc`) : undefined"

@@ -88,7 +88,7 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
   </nav>
 
   <Drawer v-model:open="moreOpen">
-    <DrawerContent data-bottom-more-sheet>
+    <DrawerContent layer="bottom-more" data-bottom-more-sheet>
       <DrawerHeader class="px-4 pb-0 text-left">
         <DrawerTitle>{{ t('nav.more') }}</DrawerTitle>
         <DrawerDescription class="sr-only">{{ t('nav.moreHint') }}</DrawerDescription>

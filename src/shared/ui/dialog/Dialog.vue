@@ -49,7 +49,9 @@ function focusFirstField(event: Event) {
     ;(marked ?? panel)?.focus()
     return
   }
-  const field = marked ?? panel?.querySelector<HTMLElement>(`[data-dialog-body] :is(${FIELD})`)
+  // A field that is not drawn (a `hidden` file input behind a button) cannot take focus: skip it.
+  const drawn = (node: HTMLElement) => node.getClientRects().length > 0
+  const field = marked ?? [...(panel?.querySelectorAll<HTMLElement>(`[data-dialog-body] :is(${FIELD})`) ?? [])].find(drawn)
   if (!field) return
   event.preventDefault()
   field.focus()
@@ -61,6 +63,7 @@ function focusFirstField(event: Event) {
     <DrawerContent
       v-bind="props.description ? {} : { 'aria-describedby': undefined }"
       tabindex="-1"
+      :layer="props.overlay"
       @open-auto-focus="focusFirstField"
     >
       <header class="flex items-start gap-3 border-b border-border px-4 pt-2 pb-3">
@@ -92,6 +95,7 @@ function focusFirstField(event: Event) {
       <DialogContent
         class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
         :class="widths[props.size]"
+        :data-overlay="props.overlay"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"
         @open-auto-focus="focusFirstField"
         @pointer-down-outside="keepOpenOnToast"

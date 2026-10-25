@@ -64,7 +64,7 @@ const FIELD = 'flex items-center rounded-md border border-input bg-muted/40 px-3
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="automation-confirm"
     v-model:open="open"
     size="form"
     :title="t('automations.confirm.title', { name: props.entry?.name ?? '' })"

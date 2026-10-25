@@ -91,7 +91,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="form" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
+  <Dialog overlay="reminder" v-model:open="open" size="form" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
     <form id="reminder-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <FormField for="reminder-text" :label="t('reminder.text')" required :error="form.error('text')">
         <Input id="reminder-text" v-model="text" />

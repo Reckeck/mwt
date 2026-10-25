@@ -38,7 +38,7 @@ watch(asset, () => (open.value = false))
       {{ asset?.symbol?.toUpperCase() ?? props.placeholder }}
       <ChevronDown class="size-3.5" />
     </PopoverTrigger>
-    <PopoverContent align="end" class="w-[min(20rem,calc(100vw-2rem))] p-2">
+    <PopoverContent overlay="asset-chip" align="end" class="w-[min(20rem,calc(100vw-2rem))] p-2">
       <AssetInput v-model="asset" label="" open-on-focus />
     </PopoverContent>
   </Popover>

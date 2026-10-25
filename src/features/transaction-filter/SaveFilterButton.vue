@@ -43,7 +43,7 @@ function save() {
     {{ t('pins.saveFilter') }}
   </Button>
 
-  <FormDialog
+  <FormDialog overlay="tx-save-filter"
     v-model:open="open"
     :title="t('pins.saveFilterTitle')"
     :description="t('pins.saveFilterHint')"

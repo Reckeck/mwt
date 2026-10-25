@@ -67,6 +67,12 @@ function onTab(id: string) {
   const tab = activeGroup.value.tabs.find((item) => item.id === id)
   if (tab && tab.id !== activeTab.value.id) selectTab(tab)
 }
+
+/** Focus lands on the window itself: Esc and Tab work from inside, and no field opens a keyboard. */
+function focusPanel(event: Event) {
+  event.preventDefault()
+  if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+}
 </script>
 
 <template>
@@ -81,7 +87,8 @@ function onTab(id: string) {
           'md:settings-window md:max-h-175 md:max-w-230 md:rounded-xl md:border md:border-border md:shadow-lg',
         )"
         data-tour="settings-shell"
-        @open-auto-focus.prevent
+        data-overlay="settings"
+        @open-auto-focus="focusPanel"
         @pointer-down-outside="keepOpenOnToast"
         @interact-outside="keepOpenOnToast"
       >

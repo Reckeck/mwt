@@ -63,7 +63,7 @@ function leave(event: 'adjust' | 'more') {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="store-settings"
     v-model:open="open"
     :title="t('storeSettings.title', { name: props.store.name })"
     size="bill"

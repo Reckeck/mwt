@@ -51,7 +51,7 @@ function setLimit() {
 </script>
 
 <template>
-  <Glance
+  <Glance overlay="glance-spent"
     v-model:open="open"
     :title="title"
     :open-to="{ name: 'money', query: { from: props.month, to: props.month } }"

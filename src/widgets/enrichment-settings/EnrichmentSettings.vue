@@ -34,7 +34,7 @@ async function change(on: boolean) {
     <div class="flex flex-wrap items-center gap-2">
       <Button variant="outline" @click="open = true">{{ t('enrichment.configure') }}</Button>
     </div>
-    <Dialog v-model:open="open" :title="t('enrichment.settingsTitle')" :description="t('enrichment.stateHint')">
+    <Dialog overlay="enrichment-settings" v-model:open="open" :title="t('enrichment.settingsTitle')" :description="t('enrichment.stateHint')">
       <SwitchRow
         id="enrichment-opt-in"
         :label="t('enrichment.settingsTitle')"

@@ -19,7 +19,7 @@ const { t } = useI18n()
 
 <template>
   <Drawer v-if="props.phone" :open="Boolean(props.state)" @update:open="(value) => !value && emit('close')">
-    <DrawerContent>
+    <DrawerContent layer="workflow-add-node">
       <DrawerTitle class="sr-only">{{ t('workflow.mobile.add') }}</DrawerTitle>
       <QuickAddPanel
         v-if="props.state"

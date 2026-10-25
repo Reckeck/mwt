@@ -11,7 +11,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <Dialog v-model:open="converterOpen" :title="t('rates.converter')" size="sm">
+  <Dialog overlay="converter" v-model:open="converterOpen" :title="t('rates.converter')" size="sm">
     <ConverterPanel v-if="converterOpen" :from="converterFrom" />
   </Dialog>
 </template>

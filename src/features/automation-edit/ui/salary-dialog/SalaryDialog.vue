@@ -117,7 +117,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="form" :title="t('salary.title')" :description="t('salary.subtitle')">
+  <Dialog overlay="automation-salary" v-model:open="open" size="form" :title="t('salary.title')" :description="t('salary.subtitle')">
     <form id="salary-form" class="grid gap-4" data-tour="salary-form" @submit.prevent="form.submit(save.mutate, $event)">
       <div class="grid items-start gap-4 sm:grid-cols-2">
         <FormField for="salary-source" :label="t('salary.source')" required :hint="t('salary.sourceHint')" :error="form.error('category')">

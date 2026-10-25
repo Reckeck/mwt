@@ -62,7 +62,7 @@ function onSubmit(event: Event) {
 
 <template>
   <!-- Where the file lies and whether it has a password, then how the books are kept; the vault is saved and opened. -->
-  <Dialog v-model:open="open" :title="t('auth.createVaultTitle')" size="sm">
+  <Dialog overlay="vault-create" v-model:open="open" :title="t('auth.createVaultTitle')" size="sm">
     <form id="create-form" class="grid gap-4" @submit.prevent="onSubmit">
       <WizardSteps :step="step" :titles="titles" />
 

@@ -10,6 +10,7 @@
 // - touch: controls are 40×40 (or have that hit area) and none is invisible.
 // Once per run: a dialog opens in place, a second visit adds no event listener,
 // Back closes the settings window, the quick-add dialog and the command palette,
+// every layer of overlay-list.mjs opens in view, stays put, closes (Esc / Back) and leaves the page as it was,
 // an armed ConfirmButton keeps its width and focus, and a toast over a dialog
 // can be clicked without closing the dialog.
 //
@@ -35,11 +36,15 @@ import {
   toastOverDialog,
   views,
 } from './check-layout/scenario.mjs'
+import { overlays } from './check-layout/overlays.mjs'
 import { freePort, startVite } from './check-layout/server.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const report = process.argv.includes('--report')
 const quick = process.argv.includes('--quick')
+// --overlays[=id,id]: only the layers (docs/ui-overlays.md), for working on one.
+const onlyArg = process.argv.find((arg) => arg.startsWith('--overlays'))
+const only = onlyArg?.split('=')[1]?.split(',') ?? []
 const shots = join(root, '.cache/check-layout')
 mkdirSync(shots, { recursive: true })
 
@@ -84,15 +89,19 @@ try {
   }
 
   // Mouse first: touch emulation leaves the pointer coarse for the rest of the run.
-  await sweep(desktop, false)
+  if (!onlyArg) await sweep(desktop, false)
   await page.viewport(1280, 720, false)
-  add('dialog', await dialogJump(page))
-  add('listeners', await listenerLeak(page))
-  add('confirm', await confirmStable(page))
-  add('toast', await toastOverDialog(page))
-  await sweep(phone, true)
+  if (!onlyArg) {
+    add('dialog', await dialogJump(page))
+    add('listeners', await listenerLeak(page))
+    add('confirm', await confirmStable(page))
+    add('toast', await toastOverDialog(page))
+  }
+  add('overlays', await overlays(page, { touch: false, label: '1280', only }))
+  if (!onlyArg) await sweep(phone, true)
   await page.viewport(390, 844, true)
-  add('back (phone)', await backCloses(page))
+  if (!onlyArg) add('back (phone)', await backCloses(page))
+  add('overlays', await overlays(page, { touch: true, label: '390', only }))
 } finally {
   await page.close()
   vite.kill()

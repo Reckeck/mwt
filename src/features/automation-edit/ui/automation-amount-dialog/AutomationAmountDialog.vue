@@ -42,7 +42,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="automation-amount"
     v-model:open="open"
     :title="t('automation.amount.title', { name: props.name })"
     :description="t('automation.amount.description')"

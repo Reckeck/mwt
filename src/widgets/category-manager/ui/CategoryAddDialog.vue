@@ -29,7 +29,7 @@ watch(open, (shown) => {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="category-add"
     v-model:open="open"
     form-id="category-add-form"
     :title="t('categories.manage.addTitle')"

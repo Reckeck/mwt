@@ -45,7 +45,7 @@ function done(action: () => void) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="category ? categoryLabel(category, t) : ''" :description="t('categories.manage.hint')">
+  <Dialog overlay="category-edit" v-model:open="open" :title="category ? categoryLabel(category, t) : ''" :description="t('categories.manage.hint')">
     <div v-if="category" class="flex flex-col gap-4">
       <Input
         v-model="name"

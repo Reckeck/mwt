@@ -44,7 +44,7 @@ function decide(accept: boolean) {
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="sync-plan"
     v-model:open="open"
     size="lg"
     :title="t('sync.plan.title', { name: session?.name ?? '' })"

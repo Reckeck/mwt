@@ -53,7 +53,7 @@ const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-2')
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[460px]" data-automation-card
+    <SheetContent overlay="entity-automation" side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[460px]" data-automation-card
       :data-entity-card="props.automationId ? `automation:${props.automationId}` : undefined"
     >
       <header :class="cn('flex shrink-0 items-center gap-1', phone ? 'h-14 px-2' : 'px-6 pt-5 pb-3 pe-12')">

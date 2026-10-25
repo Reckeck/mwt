@@ -30,7 +30,7 @@ const actions = computed(() => (props.card && !props.card.missing ? actionsOf(pr
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent
+    <SheetContent overlay="entity-card"
       :side="phone ? 'bottom' : 'right'"
       class="w-full overflow-y-auto sm:max-w-md"
       :class="phone && 'max-h-[85dvh]'"

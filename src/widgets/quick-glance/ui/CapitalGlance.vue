@@ -51,7 +51,7 @@ function toWallets() {
 </script>
 
 <template>
-  <Glance
+  <Glance overlay="glance-capital"
     v-model:open="open"
     :title="t('money.wealth.title')"
     :open-to="{ name: 'money-wealth' }"

@@ -140,7 +140,7 @@ function submit(event: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title">
+  <Dialog overlay="budget" v-model:open="open" :title="title">
     <form id="budget-form" class="grid gap-4" @submit.prevent="submit">
       <WizardSteps :step="step" :titles="steps" />
       <BudgetTargetStep

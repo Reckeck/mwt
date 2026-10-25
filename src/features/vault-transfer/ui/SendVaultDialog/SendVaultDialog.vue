@@ -48,7 +48,7 @@ function retry() {
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="sm" :title="t('transfer.send.title')" :description="t('transfer.send.description')">
+  <Dialog overlay="vault-send" v-model:open="open" size="sm" :title="t('transfer.send.title')" :description="t('transfer.send.description')">
     <div class="py-2">
       <SendVaultPick
         v-if="phase === 'idle'"

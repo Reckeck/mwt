@@ -13,4 +13,6 @@ export interface GlanceProps {
   kind?: string
   /** The thing it shows as `kind:id` (`entityKey`): `data-entity` of the trigger, for tests and link checks. */
   entity?: string
+  /** Name of the layer for `data-overlay` (docs/ui-overlays.md). */
+  overlay?: string
 }

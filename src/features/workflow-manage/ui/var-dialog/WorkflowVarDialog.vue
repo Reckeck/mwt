@@ -79,7 +79,13 @@ function submit() {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t(props.variable ? 'workflow.vars.edit' : 'workflow.vars.new')" :description="t('workflow.vars.description')" size="sm">
+  <Dialog
+    overlay="workflow-var"
+    v-model:open="open"
+    :title="t(props.variable ? 'workflow.vars.edit' : 'workflow.vars.new')"
+    :description="t('workflow.vars.description')"
+    size="sm"
+  >
     <form id="workflow-var" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
       <FormField :label="t('workflow.vars.name')" for="workflow-var-name" required :error="form.error('name')">
         <Input id="workflow-var-name" v-model="name" :disabled="Boolean(props.variable)" />

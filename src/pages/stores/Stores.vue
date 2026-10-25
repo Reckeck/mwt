@@ -137,7 +137,7 @@ function openWallet(created: Store) {
 
     <StoreCreateDialog v-model:open="createDialogOpen" @created="openWallet" />
     <!-- A menu has no room for the two-step button: the page asks before a wallet is gone. -->
-    <Dialog
+    <Dialog overlay="store-delete"
       :open="deleting !== null"
       :title="t('stores.deleteConfirmTitle', { name: deleting?.name ?? '' })"
       :description="t('stores.deleteConfirmHint')"

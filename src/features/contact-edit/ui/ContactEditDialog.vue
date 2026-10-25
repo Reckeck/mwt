@@ -67,7 +67,7 @@ function onDeleted() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="contact-edit"
     v-model:open="open"
     :title="props.contact ? t('contacts.edit') : t('contacts.new')"
     size="sm"
