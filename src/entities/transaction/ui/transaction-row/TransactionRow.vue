@@ -122,7 +122,7 @@ const phoneLine = computed(() => {
       <component :is="TX_KIND_ICON[kind]" class="size-4" />
     </span>
     <!-- One grey mark for every kind: the colour of the amount already tells in from out. -->
-    <div v-else class="w-[66px] shrink-0">
+    <div v-else class="w-22 shrink-0">
       <Badge variant="secondary" class="mt-0.5">{{ t(`tx.kindNoun.${kind}`) }}</Badge>
     </div>
 
