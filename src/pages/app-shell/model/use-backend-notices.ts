@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
-import { noticeReminderId, noticeRoute } from '@/shared/lib/notice-link'
+import { noticeReminderId, noticeRoute, reachable } from '@/shared/lib/notice-link'
 import { notify } from '@/shared/lib/notify'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 import { rejectText } from '@/shared/lib/planning'
@@ -86,7 +86,7 @@ export function useBackendNotices() {
         : reminderId
           ? { label: t('reminder.done'), onClick: () => settle('set_reminder_done') }
           : targetNow()
-            ? { label: t('actions.open'), onClick: () => void router.push(targetNow() ?? '/') }
+            ? { label: t('actions.open'), onClick: () => void router.push(reachable(router, targetNow() ?? '/')) }
             : undefined,
       cancel: reminderId ? { label: t('reminder.snooze.10m'), onClick: () => settle('snooze_reminder') } : undefined,
     })

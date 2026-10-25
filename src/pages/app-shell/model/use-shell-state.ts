@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { usePriceRefresh } from '@/features/price-refresh'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
+import { reachable } from '@/shared/lib/notice-link'
 import { quickAddOpen } from '@/shared/lib/quick-add'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { tourIdOf, useTour } from '@/shared/lib/tour'
@@ -91,7 +92,7 @@ export function useShellActions() {
   })
   useBackendEvent<string>('tray-navigate', (target) => {
     if (target === 'settings') openSettings()
-    else void router.push({ name: target })
+    else void router.push(reachable(router, { name: target }))
   })
   const priceRefresh = usePriceRefresh()
   useBackendEvent('refresh-prices', () => priceRefresh.mutate())

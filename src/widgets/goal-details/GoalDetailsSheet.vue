@@ -9,6 +9,7 @@ import { GoalDialog } from '@/features/goal-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { Button } from '@/shared/ui/button'
 import { ProgressBar } from '@/shared/ui/progress-bar'
+import { EntityBack } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { formatMoney, formatPct } from '@/shared/lib/format'
 
@@ -63,7 +64,10 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-goal-card>
+    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-goal-card
+      :data-entity-card="props.goalId ? `goal:${props.goalId}` : undefined"
+    >
+      <EntityBack class="mx-2 mt-2" />
       <div v-if="entry && summary" ref="cardBody" class="relative flex min-h-0 flex-1 flex-col">
         <div class="grid flex-1 content-start gap-5 overflow-y-auto pt-2 pb-6">
           <SheetHeader class="gap-0.5 pe-12">

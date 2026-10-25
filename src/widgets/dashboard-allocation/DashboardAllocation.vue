@@ -123,6 +123,7 @@ const currency = computed(() =>
           v-for="row in rows"
           :key="row.key"
           :to="row.storeId ? { name: 'wallet', params: { id: row.storeId } } : undefined"
+          :data-entity="row.storeId ? `store:${row.storeId}` : undefined"
           class="-mx-2 flex flex-col gap-1 rounded-md px-2 py-1"
           :class="row.storeId && 'transition-colors hover:bg-accent'"
         >

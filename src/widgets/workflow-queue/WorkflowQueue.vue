@@ -8,6 +8,7 @@ import { useWorkflowActions } from '@/features/workflow-manage'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/empty-state'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -45,7 +46,8 @@ const empty = computed(
           <div class="grid min-w-0 flex-1 gap-1">
             <span class="font-medium">{{ wait.question || t('workflow.defaultQuestion') }}</span>
             <span class="text-xs text-muted-foreground">
-              {{ nameOf(wait.workflow_id) }}<template v-if="wait.created_at"> · {{ formatDateTime(wait.created_at) }}</template>
+              <EntityLink :target="{ kind: 'workflow', id: wait.workflow_id }" :label="nameOf(wait.workflow_id)" plain />
+              <template v-if="wait.created_at"> · {{ formatDateTime(wait.created_at) }}</template>
               <template v-if="wait.resume_at"> · {{ t('workflow.queue.deadline', { when: formatDateTime(wait.resume_at) }) }}</template>
             </span>
           </div>
@@ -73,7 +75,7 @@ const empty = computed(
           <div class="grid min-w-0 flex-1 gap-1">
             <span class="font-medium">{{ batch.summary }}</span>
             <span class="text-xs text-muted-foreground">
-              {{ nameOf(batch.workflow_id) }} · {{ formatDateTime(batch.created_at) }} ·
+              <EntityLink :target="{ kind: 'workflow', id: batch.workflow_id }" :label="nameOf(batch.workflow_id)" plain /> · {{ formatDateTime(batch.created_at) }} ·
               {{ t('workflow.queue.count', { count: batch.transactions.length }) }}
             </span>
           </div>
@@ -94,7 +96,7 @@ const empty = computed(
       <Card v-for="wait in asleep" :key="wait.id" size="sm">
         <div class="flex items-center gap-3">
           <Clock class="size-4 shrink-0 text-muted-foreground" />
-          <span class="min-w-0 flex-1 text-sm">{{ nameOf(wait.workflow_id) }}</span>
+          <span class="min-w-0 flex-1 truncate text-sm"><EntityLink :target="{ kind: 'workflow', id: wait.workflow_id }" :label="nameOf(wait.workflow_id)" plain /></span>
           <span class="text-xs text-muted-foreground">{{ t('workflow.queue.asleepUntil', { when: formatDateTime(wait.resume_at) }) }}</span>
         </div>
       </Card>

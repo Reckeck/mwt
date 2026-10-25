@@ -46,6 +46,11 @@ export const OVERFLOW = `
   if (document.documentElement.scrollWidth > vw + 1) out.push('page scrolls sideways: ' + document.documentElement.scrollWidth + ' > ' + vw)
   const scrollsX = (el) => { const ox = getComputedStyle(el).overflowX; return ox === 'auto' || ox === 'scroll' }
   const inScroller = (el) => { for (let node = el.parentElement; node; node = node.parentElement) if (scrollsX(node)) return true; return false }
+  // A vertical scroller (overflow-y only) turns overflow-x into auto too: content wider than it is clipped, not scrolled on purpose.
+  for (const el of document.querySelectorAll('[class*="overflow-y-"]')) {
+    if (/overflow-x-/.test(el.className) || !scrollsX(el)) continue
+    if (el.scrollWidth > el.clientWidth + 2) out.push('scroll area content ' + (el.scrollWidth - el.clientWidth) + 'px wider than its box: ' + describe(el))
+  }
   for (const el of document.querySelectorAll('body *')) {
     if (el.closest('[data-layout-ignore], [data-sonner-toaster], canvas, svg, .vue-flow')) continue
     const cs = getComputedStyle(el)

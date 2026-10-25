@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -125,13 +124,6 @@ function rowActions(tx: Transaction): UiAction[] {
             @open="openDetails"
             @more="txs.fetchNextPage()"
           >
-            <template #side="{ side, label }">
-              <WalletGlance v-if="'store' in side" :store-id="side.store" :name="label" />
-              <template v-else>{{ label }}</template>
-            </template>
-            <template #origin="origin">
-              <AutomationGlance v-bind="origin" />
-            </template>
           </TransactionsList>
         </div>
       </SectionState>

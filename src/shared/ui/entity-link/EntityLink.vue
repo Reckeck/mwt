@@ -3,7 +3,7 @@ import { computed, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { entityLocation } from '@/shared/lib/entity-link'
+import { entityLocation, entityPage } from '@/shared/lib/entity-link'
 import { cn } from '@/shared/lib/utils'
 import { ContextMenu } from '@/shared/ui/context-menu'
 
@@ -16,7 +16,7 @@ import { useEntityActions } from './use-entity-actions'
  * lists what can be done with it. On touch the same actions are in the card.
  */
 defineOptions({ inheritAttrs: false })
-const props = withDefaults(defineProps<EntityLinkProps>(), { label: '', archived: false, plain: false })
+const props = withDefaults(defineProps<EntityLinkProps>(), { label: '', archived: false, plain: false, menu: true })
 const attrs = useAttrs()
 
 const { t } = useI18n()
@@ -33,11 +33,12 @@ const actions = computed(() => actionsOf(props.target, text.value))
 </script>
 
 <template>
-  <ContextMenu :actions="actions">
+  <ContextMenu :actions="actions" :disabled="!props.menu">
     <RouterLink
       :to="to"
       :class="linkClass"
       :data-entity="`${props.target.kind}:${props.target.id}`"
+      :data-entity-open="entityPage(props.target) ? 'page' : 'card'"
     >
       <component
         :is="ENTITY_ICONS[props.target.kind]"

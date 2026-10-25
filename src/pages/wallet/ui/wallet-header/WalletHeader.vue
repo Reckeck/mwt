@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { ChevronLeft } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { walletSubtitle } from '@/entities/store'
@@ -49,12 +51,16 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const phone = useIsPhone()
+const router = useRouter()
 
-/** A sub-account shows the way up to it; a wallet of the top level needs none. */
+/** The way up: «Кошельки ›», then the wallets above this one; a top-level wallet ends with its own name. */
 const crumbs = computed<PageCrumb[]>(() => [
   { label: t('nav.stores'), to: { name: 'stores' } },
   ...props.ancestors.map((parent) => ({ label: parent.name, to: { name: 'wallet', params: { id: parent.id } } })),
+  ...(props.ancestors.length ? [] : [{ label: props.store.name }]),
 ])
+/** A root wallet on a phone: «‹» to the list instead of a trail. */
+const rootOnPhone = computed(() => phone.value && !props.ancestors.length)
 
 const actions = computed(() => walletActions(props.store, Boolean(props.exchange)))
 /** Property (Wallets-2 · 10): «стоимость не задана · Оценить» until it has one, and «Продать». */
@@ -71,7 +77,18 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
 
 <template>
   <div class="flex flex-col gap-3">
-    <PageHeader v-if="props.ancestors.length" :crumbs="crumbs" />
+    <Button
+      v-if="rootOnPhone"
+      variant="ghost"
+      size="icon"
+      class="touch-hit -ms-2 self-start"
+      :aria-label="t('nav.stores')"
+      data-wallet-back
+      @click="router.push({ name: 'stores' })"
+    >
+      <ChevronLeft class="size-5" />
+    </Button>
+    <PageHeader v-else :crumbs="crumbs" />
 
     <div v-if="!(props.empty && phone)" class="flex items-center gap-3">
       <span class="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground max-md:hidden">

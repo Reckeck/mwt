@@ -13,6 +13,7 @@ import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { Toggle } from '@/shared/ui/toggle'
 import { pluralForm } from '@/shared/lib/format'
+import { useCameFrom } from '@/shared/lib/use-came-from'
 
 import type { TriggerChoice } from '../model/trigger-choices'
 import type { EditCommandSet } from '../model/edit-commands'
@@ -56,13 +57,20 @@ const simple = defineModel<boolean>('simple', { required: true })
 const hotkeysOpen = defineModel<boolean>('hotkeys', { required: true })
 
 const { t, locale } = useI18n()
+/** «Автоматизации ›» leads to where the editor was opened from (a wallet, a card, Home), else to «Мои». */
+const cameFrom = useCameFrom({ name: 'automations' }, 'nav.automations')
 const status = computed(() => activeStatus(active.value, props.blockers, t, pluralForm(props.blockers, locale.value)))
 </script>
 
 <template>
   <div class="flex items-center gap-2" data-tour="workflow-toolbar">
-    <RouterLink :to="{ name: 'automations' }" class="flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-      {{ t('nav.automations') }}
+    <RouterLink
+      :to="{ name: 'automations' }"
+      class="flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      data-editor-back
+      @click.prevent="cameFrom.go"
+    >
+      {{ cameFrom.label }}
       <ChevronRight class="size-3.5" />
     </RouterLink>
     <div class="w-full min-w-0 shrink sm:w-56" :data-invalid="nameError ? '' : undefined">

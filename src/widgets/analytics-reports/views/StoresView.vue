@@ -30,6 +30,7 @@ const columns = ['value_start', 'value_end', 'change', 'inflow', 'outflow'] as c
             <TableCell class="sticky left-0 z-[1] bg-card">
               <RouterLink
                 :to="{ name: 'wallet', params: { id: row.store_id } }"
+                :data-entity="`store:${row.store_id}`"
                 class="hover:underline"
                 :style="{ paddingLeft: `${row.depth * 1.25}rem` }"
               >

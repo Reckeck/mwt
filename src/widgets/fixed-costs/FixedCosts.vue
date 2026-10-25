@@ -54,6 +54,7 @@ const totals = computed(() => {
         <!-- A bill lives in its property: the row opens that property's utilities. -->
         <RouterLink
           :to="{ name: 'wallet', params: { id: row.item.property_id }, query: { tab: 'utilities' } }"
+          :data-entity="`store:${row.item.property_id}`"
           class="flex min-w-0 items-center gap-1.5 truncate hover:underline"
         >
           <CircleAlert v-if="row.anomaly" class="size-3.5 shrink-0 text-destructive" :aria-label="t('utilities.anomaly')" />

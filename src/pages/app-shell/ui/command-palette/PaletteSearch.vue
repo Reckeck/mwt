@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRightLeft, ExternalLink, Plus, ShoppingCart, Target } f
 import { Money } from '@/entities/currency'
 import { CommandEmpty, CommandGroup, CommandItem, CommandShortcut, useCommand } from '@/shared/ui/command'
 import { ENTITY_ICONS, useEntityActions } from '@/shared/ui/entity-link'
+import { spendingOfCategory } from '@/shared/lib/entity-actions'
 import { entityKey, entityLocation, parseEntityKey } from '@/shared/lib/entity-link'
 import { formatDayMonthShort, formatMoney, formatMonthKey } from '@/shared/lib/format'
 import { hotkeyLabel } from '@/shared/lib/hotkeys'
@@ -48,7 +49,7 @@ const go = (to: RouteLocationRaw) => props.run(() => void router.push(to))
 function openTarget(target: EntityRef) {
   if (target.kind === 'category') {
     const month = found.monthTotals.value.month
-    go({ name: 'money', query: { from: month, to: month, category: target.id } })
+    go(spendingOfCategory(target.id, month))
   } else go(entityLocation(target, route.query))
 }
 const actions = computed(() =>

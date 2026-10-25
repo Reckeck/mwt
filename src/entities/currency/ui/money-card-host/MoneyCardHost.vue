@@ -103,7 +103,7 @@ function onKey(event: KeyboardEvent) {
         </p>
       </div>
       <div class="flex border-t border-border px-3.5 py-2.5">
-        <Button variant="link" size="sm" class="h-auto px-0 text-sm" data-money-card-rates @click="allRates">
+        <Button variant="link" size="sm" class="h-auto px-0 text-sm" data-money-card-rates data-glance-open @click="allRates">
           {{ t('moneyCard.allRates') }} →
         </Button>
       </div>
@@ -115,7 +115,7 @@ function onKey(event: KeyboardEvent) {
       <MoneyCard :key="`${sum.currency}:${sum.amount}:${sum.at}`" v-bind="sum" />
       <div class="grid grid-cols-[auto_1fr] gap-2 [&_button]:h-11">
         <Button variant="outline" @click="copy">{{ t('moneyCard.copyButton') }}</Button>
-        <Button data-money-card-rates @click="allRates">{{ t('moneyCard.allRates') }}</Button>
+        <Button data-money-card-rates data-glance-open @click="allRates">{{ t('moneyCard.allRates') }}</Button>
       </div>
     </DrawerContent>
   </Drawer>

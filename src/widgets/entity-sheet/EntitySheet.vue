@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Link2Off } from 'lucide-vue-next'
+import { Link2Off } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { useIsPhone } from '@/shared/lib/phone'
 import { Button } from '@/shared/ui/button'
-import { ENTITY_ICONS, useEntityActions } from '@/shared/ui/entity-link'
+import { ENTITY_ICONS, EntityBack, useEntityActions } from '@/shared/ui/entity-link'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
@@ -16,9 +16,8 @@ import { useEntityName } from './model/use-entity-name'
 import EntityRelations from './ui/EntityRelations.vue'
 
 /** The card of any entity without a page of its own: name, main figure, links, actions. */
-const props = withDefaults(defineProps<EntitySheetProps>(), { loading: false, error: undefined, canGoBack: false })
+const props = withDefaults(defineProps<EntitySheetProps>(), { loading: false, error: undefined })
 const open = defineModel<boolean>('open', { required: true })
-const emit = defineEmits<{ back: [] }>()
 
 const { t } = useI18n()
 const phone = useIsPhone()
@@ -26,7 +25,7 @@ const nameOf = useEntityName()
 const actionsOf = useEntityActions()
 
 const title = computed(() => (props.card ? nameOf(props.card.target, props.card.title) : ''))
-const actions = computed(() => (props.card && !props.card.missing ? actionsOf(props.card.target, title.value) : []))
+const actions = computed(() => (props.card && !props.card.missing ? actionsOf(props.card.target, title.value).filter((action) => !action.hidden) : []))
 </script>
 
 <template>
@@ -36,6 +35,7 @@ const actions = computed(() => (props.card && !props.card.missing ? actionsOf(pr
       class="w-full overflow-y-auto sm:max-w-md"
       :class="phone && 'max-h-[85dvh]'"
       data-tour="entity-card"
+      :data-entity-card="props.card ? `${props.card.target.kind}:${props.card.target.id}` : undefined"
     >
       <SheetHeader>
         <SheetTitle class="flex min-w-0 items-center gap-2">
@@ -49,10 +49,7 @@ const actions = computed(() => (props.card && !props.card.missing ? actionsOf(pr
       </SheetHeader>
 
       <div class="grid gap-5 px-4 pb-6 text-sm">
-        <Button v-if="props.canGoBack" variant="ghost" size="sm" class="justify-self-start" @click="emit('back')">
-          <ArrowLeft class="size-4" />
-          {{ t('entity.back') }}
-        </Button>
+        <EntityBack />
 
         <SectionState :loading="props.loading && !props.card" :error="props.error" skeleton="list" :rows="4" compact>
           <EmptyState
@@ -68,7 +65,7 @@ const actions = computed(() => (props.card && !props.card.missing ? actionsOf(pr
             </p>
 
             <div v-if="actions.length" class="flex flex-wrap gap-2" data-tour="entity-actions">
-              <Button v-for="action in actions" :key="action.id" variant="outline" size="sm" @click="action.run?.()">
+              <Button v-for="action in actions" :key="action.id" variant="outline" size="sm" :data-entity-action="action.id" @click="action.run?.()">
                 <component :is="action.icon" class="size-4" />
                 {{ action.label }}
               </Button>

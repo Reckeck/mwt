@@ -425,7 +425,11 @@ impl Executor<'_> {
                     key,
                     &title,
                     text.clone(),
-                    Some(format!("workflow-edit:{}", self.ctx.workflow_id)),
+                    Some(format!(
+                        "{}:{}",
+                        crate::routes::WORKFLOW_EDIT,
+                        self.ctx.workflow_id
+                    )),
                     crate::calendar::iso(now),
                 ));
                 Ok(Step::next(

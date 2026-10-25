@@ -466,7 +466,7 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
                 } else {
                     format!("New operations to confirm: {staged}")
                 },
-                Some("transactions".into()),
+                Some(trade_core::routes::TRANSACTIONS.into()),
                 trade_core::model::vault::now_iso(),
             )],
         );
@@ -620,7 +620,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
                 } else {
                     format!("Automatic transactions created: {}", news.created.len())
                 },
-                Some("planning-automations".into()),
+                Some(trade_core::routes::AUTOMATIONS.into()),
                 trade_core::model::vault::now_iso(),
             )],
         );
@@ -642,7 +642,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
             format!("automation-estimated:{tx_id}"),
             &title,
             body,
-            Some("planning-automations".into()),
+            Some(trade_core::routes::AUTOMATIONS.into()),
             trade_core::model::vault::now_iso(),
         );
         record.title = title;
@@ -670,7 +670,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
             format!("automation-rejected:{run_id}"),
             &title,
             body,
-            Some("planning-automations".into()),
+            Some(trade_core::routes::AUTOMATIONS.into()),
             planned_at.clone(),
         );
         record.title = title;
@@ -778,7 +778,7 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
                     alert.price,
                     alert.currency.to_uppercase()
                 ),
-                Some("planning-alerts".into()),
+                Some(trade_core::routes::AUTOMATIONS_ALERTS.into()),
                 trade_core::model::vault::now_iso(),
             )
         })

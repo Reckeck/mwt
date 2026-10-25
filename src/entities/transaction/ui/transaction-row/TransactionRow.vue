@@ -6,6 +6,7 @@ import { Money } from '@/entities/currency'
 import { Check, ExternalLink, Paperclip } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
@@ -30,6 +31,7 @@ import { useIsPhone } from '@/shared/lib/phone'
 
 import { dayLabel } from '../../lib/day-label'
 import { TX_KIND_ICON } from '../../lib/kind-icon'
+import { sideRoute, sideRouteText } from '../../lib/side-route'
 
 import type { TransactionRowProps } from './transaction-row.types'
 
@@ -67,23 +69,9 @@ const imported = computed(() => {
   return typeof origin === 'object' && 'import' in origin && !meta.value.categories.includes('exchange_import')
 })
 
-/** Where the money went or came from, seen from this list's wallet. */
-const route = computed(() => {
-  const { from, to } = txSides(props.tx)
-  if (from && to) return `${context.sideLabel(from)} → ${context.sideLabel(to)}`
-  if (from) return `← ${context.sideLabel(from)}`
-  if (to) return `→ ${context.sideLabel(to)}`
-  return ''
-})
-/** The same route in parts, so each side can be its own link: arrows are strings, sides objects. */
-const routeParts = computed(() => {
-  const { from, to } = txSides(props.tx)
-  const part = (side: AccountRef) => ({ side, label: context.sideLabel(side) })
-  if (from && to) return [part(from), '→', part(to)]
-  if (from) return ['←', part(from)]
-  if (to) return ['→', part(to)]
-  return []
-})
+/** Where the money went or came from, seen from this list's wallet; in parts so each side can be a link. */
+const routeParts = computed(() => sideRoute(props.tx, context.sideLabel))
+const route = computed(() => sideRouteText(routeParts.value))
 
 /** In a wallet's history only its own side; in the full list every principal leg. */
 const shownLegs = computed(() =>
@@ -161,8 +149,9 @@ const phoneLine = computed(() => {
         >
           <Paperclip class="size-3" aria-hidden="true" />{{ attached }}
         </span>
-        <Badge v-for="key in meta.categories" :key="key" variant="outline" class="shrink-0">
-          {{ context.categoryName(key) }}
+        <!-- Links sit above the see-through button; the row's own menu lists them (no menu of their own). -->
+        <Badge v-for="key in meta.categories" :key="key" variant="outline" class="pointer-events-auto relative min-w-0">
+          <EntityLink :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" plain :menu="false" />
         </Badge>
         <Badge v-if="imported" variant="outline" class="shrink-0">{{ t('tx.imported') }}</Badge>
         <span v-if="automation" class="pointer-events-auto relative shrink-0" data-tx-auto>
@@ -193,7 +182,18 @@ const phoneLine = computed(() => {
             {{ ' ' }}
           </template>
         </template>
-        <template v-if="meta.contact_id"> · {{ context.contactName(meta.contact_id) }}</template>
+        <template v-if="meta.contact_id">
+          {{ ' · ' }}
+          <span class="pointer-events-auto relative">
+            <EntityLink
+              :target="{ kind: 'contact', id: meta.contact_id }"
+              :label="context.contactName(meta.contact_id)"
+              plain
+              :menu="false"
+              class="text-muted-foreground"
+            />
+          </span>
+        </template>
       </p>
       <p v-if="notes && !phone" class="pointer-events-none relative truncate text-xs text-muted-foreground">{{ notes }}</p>
     </div>

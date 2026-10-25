@@ -11,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/ui/breadcrumb'
+import { pageEntityKey } from '@/shared/lib/entity-link'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 
@@ -38,7 +39,7 @@ const { t } = useI18n()
         <template v-for="(crumb, index) in props.crumbs" :key="`${index}-${crumb.label}`">
           <BreadcrumbItem class="min-w-0">
             <BreadcrumbLink v-if="crumb.to && index < props.crumbs.length - 1" as-child>
-              <RouterLink :to="crumb.to" class="truncate">{{ crumb.label }}</RouterLink>
+              <RouterLink :to="crumb.to" :data-entity="pageEntityKey(crumb.to)" class="truncate">{{ crumb.label }}</RouterLink>
             </BreadcrumbLink>
             <BreadcrumbPage v-else class="truncate">{{ crumb.label }}</BreadcrumbPage>
           </BreadcrumbItem>

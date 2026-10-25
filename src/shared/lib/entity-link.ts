@@ -40,6 +40,14 @@ export function parseEntityKey(raw: string): EntityRef | null {
   return ENTITY_KINDS.includes(kind) && id ? { kind, id } : null
 }
 
+/** A limit's name leads to its category when it has one, else to the limit's own card. */
+export function budgetEntity(budget: Pick<Budget, 'id' | 'target'>): EntityRef {
+  const { target } = budget
+  return typeof target === 'object' && 'category' in target
+    ? { kind: 'category', id: target.category }
+    : { kind: 'budget', id: budget.id }
+}
+
 export function sameEntity(left: EntityRef | null | undefined, right: EntityRef | null | undefined): boolean {
   return !!left && !!right && left.kind === right.kind && left.id === right.id
 }
@@ -68,6 +76,19 @@ export function entityPage(target: EntityRef): RouteLocationRaw | null {
   if (target.kind === 'workflow') return { name: 'workflow-edit', params: { id: target.id } }
   if (target.kind === 'scenario') return { name: 'money-calculator', query: { scenario: target.id } }
   return null
+}
+
+/**
+ * `store:<id>` / `workflow:<id>` for a raw link to an entity's page, else
+ * nothing: the `data-entity` mark a plain RouterLink carries (docs/ui-links.md, 30).
+ */
+export function pageEntityKey(to: RouteLocationRaw | null | undefined): string | undefined {
+  if (!to || typeof to !== 'object' || !('name' in to) || !to.params) return undefined
+  const id = to.params.id
+  if (typeof id !== 'string' || !id) return undefined
+  if (to.name === 'wallet') return `store:${id}`
+  if (to.name === 'workflow-edit') return `workflow:${id}`
+  return undefined
 }
 
 /**

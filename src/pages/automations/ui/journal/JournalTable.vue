@@ -44,7 +44,7 @@ const opens = (entry: JournalEntry) => entry.kind === 'scheme' || entry.kind ===
             >
               {{ row.entry.name }}
             </RouterLink>
-            <span v-else class="block truncate">{{ row.entry.name }}</span>
+            <span v-else class="block truncate" :title="t('automations.journal.removed')">{{ row.entry.name }}</span>
           </TableCell>
           <TableCell class="px-3 py-2.5 whitespace-nowrap" :class="row.tone">{{ row.status }}</TableCell>
           <TableCell class="px-3 py-2.5 text-sm whitespace-nowrap">{{ row.did }}</TableCell>

@@ -23,6 +23,7 @@ const { t, locale } = useI18n()
       v-for="node in props.rows"
       :key="node.store.id"
       :to="{ name: 'wallet', params: { id: node.store.id } }"
+      :data-entity="`store:${node.store.id}`"
       :class="cn('flex min-h-13 items-center gap-3 py-2.5', node.store.archived && 'opacity-60')"
       :data-store="node.store.id"
     >

@@ -7,6 +7,8 @@ import { Money } from '@/entities/currency'
 
 import { buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { EntityLink } from '@/shared/ui/entity-link'
+import { budgetEntity } from '@/shared/lib/entity-link'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
@@ -40,7 +42,10 @@ const paces = computed(() => byRisk(statuses.data.value ?? []))
     <ul class="grid gap-3">
       <li v-for="{ status, elapsed, forecast, risk } in paces" :key="status.budget.id" class="grid gap-1">
         <div class="flex items-center justify-between gap-2 text-sm">
-          <span class="min-w-0 truncate">{{ label(status.budget.target) }} · {{ t(`budget.periodKind.${status.budget.period}`) }}</span>
+          <span class="min-w-0 truncate">
+            <EntityLink :target="budgetEntity(status.budget)" :label="label(status.budget.target)" plain />
+            · {{ t(`budget.periodKind.${status.budget.period}`) }}
+          </span>
           <span class="shrink-0 tabular-nums" :class="Number(status.remaining) < 0 ? 'text-destructive' : 'text-muted-foreground'">
             <Money :amount="status.spent" :decimals="0" :currency="status.budget.currency" /> / <Money :amount="status.budget.limit" :decimals="0" :currency="status.budget.currency" />
           </span>

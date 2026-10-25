@@ -38,8 +38,6 @@ const { txOpen, goalCardOpen, automationOpen, cardOpen, goalOpen, budgetOpen, al
     :card="host.current.value"
     :loading="host.card.isFetching.value"
     :error="host.card.error.value"
-    :can-go-back="host.canGoBack.value"
-    @back="host.back"
   />
 
   <GoalDialog v-model:open="goalOpen" :store-id="host.request.value?.target.id" />

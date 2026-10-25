@@ -19,6 +19,7 @@ const { t } = useI18n()
 <template>
   <RouterLink
     :to="{ name: 'wallet', params: { id: props.store.id } }"
+    :data-entity="`store:${props.store.id}`"
     :class="
       cn(
         '-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',

@@ -13,9 +13,12 @@ import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
+import { EntityLink } from '@/shared/ui/entity-link'
 import { call } from '@/shared/api/ipc'
 import { categoryKeyLabel } from '@/shared/lib/categories'
+import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { drillTo, localDay } from '@/shared/lib/drill'
+import { budgetEntity } from '@/shared/lib/entity-link'
 import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -27,6 +30,7 @@ const queryClient = useQueryClient()
 
 const budgets = useQuery({ queryKey: ['budgets'], queryFn: () => call<Budget[]>('list_budgets') })
 const statuses = useQuery({ queryKey: ['budget-status'], queryFn: () => call<BudgetStatus[]>('get_budget_status') })
+useFocusRow(() => budgets.isSuccess.value && statuses.isSuccess.value)
 const categories = useCategories()
 const tree = useStoreTree()
 
@@ -79,20 +83,22 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid grid-cols-1 gap-4">
     <ListHeader :intro="t('budget.intro')" :action-label="t('budget.new')" :hide-action="empty" @action="openNew" />
 
     <EmptyState v-if="empty" compact :title="t('budget.empty')">
       <Button @click="openNew"><Plus class="size-4" />{{ t('budget.new') }}</Button>
     </EmptyState>
 
-    <div class="grid gap-4 @wide:grid-cols-2">
-      <Card v-for="{ budget, status } in rows" :key="budget.id">
+    <div class="grid grid-cols-1 gap-4 @wide:grid-cols-2">
+      <Card v-for="{ budget, status } in rows" :key="budget.id" :data-focus-row="budget.id">
         <div class="grid gap-3">
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
               <div class="flex flex-wrap items-center gap-2">
-                <p class="truncate font-medium">{{ targetText(budget.target) }}</p>
+                <p class="min-w-0 truncate font-medium">
+                  <EntityLink :target="budgetEntity(budget)" :label="targetText(budget.target)" plain />
+                </p>
                 <Badge variant="outline">{{ t(`budget.periodKind.${budget.period}`) }}</Badge>
                 <Badge v-if="!budget.active" variant="outline">{{ t('budget.paused') }}</Badge>
               </div>
@@ -105,7 +111,7 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
                 <Money :amount="budget.limit" :currency="budget.currency" />
               </p>
             </div>
-            <div class="flex shrink-0 items-center gap-1">
+            <div class="flex shrink-0 items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon-sm"

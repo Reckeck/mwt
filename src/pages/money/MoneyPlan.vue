@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { BudgetList } from '@/widgets/budget-list'
 import { GoalList } from '@/widgets/goal-list'
 import { Button } from '@/shared/ui/button'
+import { FOCUS_QUERY_KEY } from '@/shared/lib/use-focus-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 
 import { PlanGoals, PlanLimits, PlanNext } from './ui/plan'
@@ -18,7 +20,13 @@ import { PlanGoals, PlanLimits, PlanNext } from './ui/plan'
 const props = defineProps<{ filter: ReportFilter }>()
 
 const { t } = useI18n()
-const details = ref(false)
+const route = useRoute()
+/** A link to one goal or limit (`?focus=`) unfolds the lists, where its row is lit. */
+const focused = () => typeof route.query[FOCUS_QUERY_KEY] === 'string'
+const details = ref(focused())
+watch(focused, (now) => {
+  if (now) details.value = true
+})
 </script>
 
 <template>
@@ -28,13 +36,13 @@ const details = ref(false)
       <PlanGoals :filter="props.filter" />
     </div>
     <PlanNext />
-    <Collapsible v-model:open="details" class="grid gap-3">
+    <Collapsible v-model:open="details" class="grid grid-cols-1 gap-3">
       <CollapsibleTrigger as-child>
         <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-details>
           {{ t('money.plan.details') }} <ChevronDown :class="['transition-transform', details && 'rotate-180']" />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent class="grid gap-6">
+      <CollapsibleContent class="grid grid-cols-1 gap-6">
         <BudgetList v-if="details" />
         <GoalList v-if="details" />
       </CollapsibleContent>

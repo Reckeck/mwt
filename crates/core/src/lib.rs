@@ -15,6 +15,7 @@ pub mod ipc_contract;
 pub mod market;
 pub mod model;
 pub mod pricing;
+pub mod routes;
 pub mod sandbox;
 pub mod service;
 pub mod storage;

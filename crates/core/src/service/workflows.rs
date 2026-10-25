@@ -551,7 +551,7 @@ impl UnlockedVault {
                 format!("wf-off:{id}"),
                 &name,
                 format!("Схема выключена: {}", issue.text_ru),
-                Some(format!("workflow-edit:{id}")),
+                Some(format!("{}:{id}", crate::routes::WORKFLOW_EDIT)),
                 crate::calendar::iso(now),
             ));
         }
@@ -1142,7 +1142,7 @@ impl UnlockedVault {
                     } else {
                         format!("Нужен ваш ответ: {}", wait.question)
                     },
-                    Some("workflows-journal".to_string()),
+                    Some(crate::routes::AUTOMATIONS_JOURNAL.to_string()),
                     wait.created_at.clone(),
                 ));
             }

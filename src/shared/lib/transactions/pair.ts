@@ -1,4 +1,6 @@
-import { emptyTxFilter } from '@/shared/lib/tx-filter'
+import type { RouteLocationRaw } from 'vue-router'
+
+import { emptyTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
 
 import { txKind, txMeta } from './access'
 import { txPrincipalLegs } from './legs'
@@ -33,4 +35,13 @@ export function similarFilter(tx: Transaction): TxFilter | null {
   const category = txMeta(tx).categories[0]
   if (kind === 'payment' && category) return emptyTxFilter({ kinds: ['payment'], category })
   return null
+}
+
+/** The operations list of `similarFilter`, or `null`: one builder for a row's menu and a link's menu. */
+export function similarLocation(tx: Transaction): RouteLocationRaw | null {
+  const filter = similarFilter(tx)
+  if (!filter) return null
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(txFilterToQuery(filter))) if (value) query[key] = value
+  return { name: 'transactions', query }
 }

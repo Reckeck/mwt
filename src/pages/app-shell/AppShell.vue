@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // check-ui-ignore router-key: keyed by the page record and its params, not by the path
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -8,15 +8,19 @@ import { useI18n } from 'vue-i18n'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
 import { QuickAddDialog } from '@/widgets/quick-add'
+import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyCardHost, MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
+import { registerDefaultBack } from '@/shared/lib/drill'
+import { withOpenStack } from '@/shared/lib/entity-link'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
+import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -43,6 +47,8 @@ import { useStoreTree } from '@/shared/api/queries'
  * The frame around every unlocked screen: sidebar, top bar, the page, and the
  * app-wide dialogs. Background events are handled here once for all screens.
  */
+// Every list of operations below makes a wallet's name and «авто» a glance.
+provideTxGlances({ wallet: WalletGlance, automation: AutomationGlance })
 const { t } = useI18n()
 const route = useRoute()
 const settingsStore = useSettingsStore()
@@ -70,8 +76,15 @@ const headerOnline = computed(() => isOnline.value || route.name === 'dashboard'
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
 useRecordPlaces(pageTitle)
 useHotkey('quickAdd', () => (quickAddOpen.value = true))
-/** Alt 1…5: a section without the search (Paths 1 · 7). */
 const router = useRouter()
+/** A jump to a list of operations from here offers «← <this screen>» (docs/ui-links.md, 22–23); an open card is not part of the way back. */
+onScopeDispose(
+  registerDefaultBack(() => ({
+    to: router.resolve({ path: route.path, query: withOpenStack(route.query, []) }).fullPath,
+    label: pageTitle.value,
+  })),
+)
+/** Alt 1…5: a section without the search (Paths 1 · 7). */
 for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_ITEMS[index]?.name ?? 'dashboard' }))
 
 /** The shell's child page and its params: a section's own sub-routes do not change it. */

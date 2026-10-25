@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { spendingOfCategory } from '@/shared/lib/entity-actions'
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -75,8 +76,7 @@ function run(action: () => void) {
 }
 function openFromPeek(target: EntityRef) {
   if (target.kind !== 'category') return
-  const month = new Date().toISOString().slice(0, 7)
-  run(() => void router.push({ name: 'money', query: { from: month, to: month, category: target.id } }))
+  run(() => void router.push(spendingOfCategory(target.id)))
 }
 
 const width = computed(() => (peek.item.value ? 'w-[min(860px,calc(100vw-2rem))]' : 'w-[min(620px,calc(100vw-2rem))]'))

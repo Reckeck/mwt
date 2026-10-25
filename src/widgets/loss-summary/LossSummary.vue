@@ -8,6 +8,7 @@ import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
+import { hereBackQuery } from '@/shared/lib/drill'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 import type { LossSummaryProps } from './loss-summary.types'
@@ -94,8 +95,9 @@ const groups = computed(() => {
           >
             <!-- The transactions behind the row, in the journal with the same filter. -->
             <RouterLink
-              :to="{ name: 'transactions', query: { [group.filter]: row.key } }"
+              :to="{ name: 'transactions', query: { [group.filter]: row.key, ...hereBackQuery() } }"
               class="min-w-0 truncate hover:underline"
+              :title="t('losses.journalFor', { name: group.label(row.key) })"
             >
               {{ group.label(row.key) }}
             </RouterLink>

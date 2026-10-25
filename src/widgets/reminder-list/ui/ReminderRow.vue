@@ -10,6 +10,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { formatDateTime } from '@/shared/lib/format'
+import { pageEntityKey } from '@/shared/lib/entity-link'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 
 import { SNOOZES, type SnoozeChoice, dueOf, overdue, repeatLabel, sourceLink } from '../lib/reminder'
@@ -62,6 +63,7 @@ function pay() {
         <RouterLink
           v-if="props.reminder.source && sourceLink(props.reminder.source)"
           :to="sourceLink(props.reminder.source) ?? '/'"
+          :data-entity="pageEntityKey(sourceLink(props.reminder.source))"
           class="text-muted-foreground hover:text-foreground"
           :title="t('reminder.openSource')"
           :aria-label="t('reminder.openSource')"

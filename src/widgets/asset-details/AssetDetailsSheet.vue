@@ -12,6 +12,7 @@ import { priceOriginText } from '@/entities/store'
 import { buttonVariants } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
 import { CHAIN_LABELS } from '@/shared/lib/chains'
+import { hereBackQuery } from '@/shared/lib/drill'
 import { formatPct, formatQuantity } from '@/shared/lib/format'
 
 import type { AssetDetailsSheetProps } from './asset-details.types'
@@ -46,7 +47,7 @@ function alertAt(price: string, condition: 'above' | 'below') {
   alertOpen.value = true
 }
 
-const txLink = computed(() => ({ name: 'transactions', query: { store: props.storeId, q: symbol.value } }))
+const txLink = computed(() => ({ name: 'transactions', query: { store: props.storeId, q: symbol.value, ...hereBackQuery() } }))
 const analyticsLink = computed(() => ({ name: 'money-investments', query: { store: props.storeId } }))
 </script>
 

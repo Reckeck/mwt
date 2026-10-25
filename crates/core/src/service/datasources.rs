@@ -532,7 +532,7 @@ fn broken_notice(source: &DataSource, at: &str, ru: bool) -> NoticeRecord {
         format!("source:{}:broken:{at}", source.id),
         super::notice_title(NoticeCategory::Rates, ru),
         body,
-        Some("planning-sources".into()),
+        Some(crate::routes::AUTOMATIONS_SOURCES.into()),
         at.to_string(),
     )
 }
@@ -560,7 +560,7 @@ fn pending_notice(
         format!("source:{}:pending:{at}", source.id),
         super::notice_title(NoticeCategory::Rates, ru),
         body,
-        Some("planning-sources".into()),
+        Some(crate::routes::AUTOMATIONS_SOURCES.into()),
         at.to_string(),
     )
 }

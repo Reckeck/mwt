@@ -143,7 +143,7 @@ pub fn inflation_notice(news: &InflationNews, ru: bool) -> NoticeRecord {
         format!("rates:inflation:{}:{}", news.currency, news.month),
         super::notice_title(NoticeCategory::Rates, ru),
         body,
-        Some("/?settings=inflation".into()),
+        Some(crate::routes::SETTINGS_INFLATION.into()),
         crate::model::vault::now_iso(),
     )
 }

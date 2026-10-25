@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +7,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { call } from '@/shared/api/ipc'
+import { hereBackQuery } from '@/shared/lib/drill'
 import { formatDayMonth } from '@/shared/lib/format'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { emptyTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
@@ -36,7 +36,7 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
         <h2 class="text-base font-semibold">{{ t('home.changes.title') }}</h2>
         <span class="text-sm text-muted-foreground max-md:hidden">{{ t('home.changes.since', { date: sinceText }) }}</span>
         <span class="flex-1" />
-        <RouterLink :to="{ name: 'transactions', query: txFilterToQuery(filter) }" class="text-sm text-primary hover:underline">
+        <RouterLink :to="{ name: 'transactions', query: { ...txFilterToQuery(filter), ...hereBackQuery() } }" class="text-sm text-primary hover:underline">
           <span class="max-md:hidden">{{ t('home.changes.all') }} →</span>
           <span class="md:hidden">{{ t('home.changes.allShort') }}</span>
         </RouterLink>
@@ -68,13 +68,6 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
           @open="openTxDetails"
           @more="txs.fetchNextPage()"
         >
-          <template #side="{ side, label }">
-            <WalletGlance v-if="'store' in side" :store-id="side.store" :name="label" />
-            <template v-else>{{ label }}</template>
-          </template>
-          <template #origin="origin">
-            <AutomationGlance v-bind="origin" />
-          </template>
         </TransactionsList>
       </div>
     </SectionState>

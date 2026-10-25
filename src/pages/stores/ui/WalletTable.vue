@@ -103,6 +103,7 @@ const items = computed(() =>
                   <!-- The stretched link: its ::after covers the row, so a click anywhere opens the wallet. -->
                   <RouterLink
                     :to="{ name: 'wallet', params: { id: row.store.id } }"
+                    :data-entity="`store:${row.store.id}`"
                     :class="LINK_CLASS"
                   >
                     {{ row.store.name }}

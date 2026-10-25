@@ -96,8 +96,6 @@ export function useEntityHost() {
     goalCardOpen: sheetOpen('goal'),
     automationOpen: sheetOpen('automation'),
     cardOpen: sheetOpen('other'),
-    canGoBack: computed(() => nav.stack.value.length > 1),
-    back: nav.back,
     request,
     goalOpen: dialogOpen('goal'),
     budgetOpen: dialogOpen('budget'),

@@ -11,6 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
+import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 import { type ReminderGroup, type SnoozeChoice, groupOf, snoozeUntil } from './lib/reminder'
@@ -20,6 +21,7 @@ const { t } = useI18n()
 const queryClient = useQueryClient()
 
 const reminders = useQuery({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
+useFocusRow(() => reminders.isSuccess.value)
 /** «Мои» are written by the user, «Авто» are made from the data. */
 const show = ref<'all' | 'mine' | 'auto'>('all')
 /** By time; grouped below into overdue, today, later and done. Muted automatic ones are hidden. */
@@ -127,6 +129,7 @@ function openEdit(reminder: Reminder) {
         <ReminderRow
           v-for="reminder in group.items"
           :key="reminder.id"
+          :data-focus-row="reminder.id"
           :reminder="reminder"
           @done="setDone.mutate(reminder)"
           @snooze="(choice) => snooze.mutate({ reminder, choice })"

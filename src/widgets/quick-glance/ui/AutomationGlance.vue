@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { AutomationAmountDialog } from '@/features/automation-edit'
 import { useRoute, useRouter } from 'vue-router'
 
-import { entityLocation } from '@/shared/lib/entity-link'
+import { entityKey, entityLocation } from '@/shared/lib/entity-link'
 import { formatDateTime, formatDayMonthShort, formatMoney } from '@/shared/lib/format'
 import { scheduleText } from '@/shared/lib/planning'
 import { txId, txPrincipalLegs } from '@/shared/lib/transactions'
@@ -75,6 +75,7 @@ function correct() {
     :open-label="automation ? t('glance.auto.automation') : t('glance.auto.scheme')"
     trigger-class="rounded-md border border-primary/40 px-1.5 text-xs leading-5"
     kind="auto"
+    :entity="entityKey({ kind: automation ? 'automation' : 'workflow', id: props.automationId })"
   >
     {{ t('glance.auto.badge') }}
     <template #body>
