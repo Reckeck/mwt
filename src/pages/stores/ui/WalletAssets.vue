@@ -47,7 +47,7 @@ const pct = (share: number) => formatPct(share * 100, { decimals: 0 })
     <span class="text-sm font-semibold">{{ t('stores.view.assets') }}</span>
     <div class="flex flex-wrap gap-x-4.5 gap-y-1 text-sm">
       <span v-for="row in props.assets" :key="row.asset.symbol" class="whitespace-nowrap tabular-nums">
-        <b class="font-semibold"><Money :amount="row.quantity" :currency="row.asset.symbol" :decimals="0" /></b>
+        <b class="font-semibold"><Money :amount="row.quantity" :currency="row.asset.symbol" /></b>
         <span class="text-muted-foreground">
           · <Money :amount="row.value_base" :currency="props.base" :decimals="0" /> · {{ pct(row.share) }}
         </span>
