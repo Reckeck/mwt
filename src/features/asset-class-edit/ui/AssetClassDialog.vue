@@ -21,7 +21,7 @@ const { rows, total, form, set, add, remove, resetPreset, save } = useClassesFor
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="asset-class"
     v-model:open="open"
     :title="t('assetClass.dialog.title')"
     :description="t('assetClass.dialog.description')"

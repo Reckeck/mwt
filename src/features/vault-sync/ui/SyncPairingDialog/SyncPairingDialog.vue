@@ -49,7 +49,7 @@ function decide(accept: boolean) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="sm" :title="t('sync.pairing.title')">
+  <Dialog overlay="sync-pairing" v-model:open="open" size="sm" :title="t('sync.pairing.title')">
     <div class="flex flex-col items-center gap-2 py-3">
       <Smartphone class="size-8" aria-hidden="true" />
       <p class="text-center text-sm text-muted-foreground">{{ t('sync.pairing.instruction') }}</p>

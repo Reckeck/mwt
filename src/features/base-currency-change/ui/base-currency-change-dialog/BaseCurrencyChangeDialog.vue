@@ -25,7 +25,7 @@ const pickBudget = (value: unknown) => {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="base-currency"
     v-model:open="open"
     :title="t('baseChange.title')"
     size="confirm"

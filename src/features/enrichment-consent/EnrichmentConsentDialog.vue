@@ -24,7 +24,7 @@ async function answer(consent: boolean) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('enrichment.consent.title')">
+  <Dialog overlay="enrichment-consent" v-model:open="open" :title="t('enrichment.consent.title')">
     <div class="grid gap-3 text-sm">
       <p>{{ t('enrichment.consent.what') }}</p>
       <ul class="grid list-disc gap-1 pl-5 text-muted-foreground">

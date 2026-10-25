@@ -65,7 +65,7 @@ const rows = computed(() => (simulation.data.value?.runs ?? []).map(runRow))
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="automation-simulate"
     v-model:open="open"
     :title="props.name ? t('simulation.titleFor', { name: props.name }) : t('simulation.title')"
     :description="t('simulation.hint')"

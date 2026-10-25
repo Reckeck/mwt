@@ -12,7 +12,7 @@ const { t } = useI18n()
 
 <template>
   <!-- Settings save as they change, so there is no footer to confirm. -->
-  <Dialog v-model:open="open" :title="t('settings.appTitle')" :description="t('settings.appScopeHint')" size="lg">
+  <Dialog overlay="app-settings-unlock" v-model:open="open" :title="t('settings.appTitle')" :description="t('settings.appScopeHint')" size="lg">
     <!-- Mounted per open so every visit starts from the file on disk. -->
     <AppSettingsModal v-if="open" />
   </Dialog>

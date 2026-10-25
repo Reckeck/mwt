@@ -47,7 +47,7 @@ function switchOff() {
     {{ current ? t('utilityReminders.buttonOn', { day: current }) : t('utilityReminders.button') }}
   </Button>
 
-  <FormDialog
+  <FormDialog overlay="utility-reminders"
     v-model:open="open"
     :title="t('utilityReminders.title')"
     :description="t('utilityReminders.description')"

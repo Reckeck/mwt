@@ -15,12 +15,13 @@ defineOptions({ inheritAttrs: false })
  * A panel that slides in from an edge and follows the finger. From the bottom
  * (the default) it stops below the status bar and keeps clear of the gesture bar.
  * `overlay: false` leaves the page usable behind it (a non-modal drawer).
+ * `layer` is the name for `data-overlay` (`overlay` is taken by the backdrop).
  */
-const props = withDefaults(defineProps<DrawerContentProps & { class?: HTMLAttributes['class']; overlay?: boolean }>(), {
+const props = withDefaults(defineProps<DrawerContentProps & { class?: HTMLAttributes['class']; overlay?: boolean; layer?: string }>(), {
   overlay: true,
 })
 const emits = defineEmits<DrawerContentEmits>()
-const delegatedProps = reactiveOmit(props, 'class', 'overlay')
+const delegatedProps = reactiveOmit(props, 'class', 'overlay', 'layer')
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
 
@@ -29,6 +30,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <DrawerOverlay v-if="props.overlay" />
     <DrawerContent
       data-slot="drawer-content"
+      :data-overlay="props.layer"
       @pointer-down-outside="keepOpenOnToast"
       @interact-outside="keepOpenOnToast"
       v-bind="{ ...$attrs, ...forwarded }"

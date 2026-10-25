@@ -41,7 +41,7 @@ function remove() {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" size="confirm">
+  <Dialog overlay="vault-delete" v-model:open="open" :title="title" size="confirm">
     <div class="grid gap-3">
       <p class="text-sm">{{ t('vaultDelete.body') }}</p>
       <Button

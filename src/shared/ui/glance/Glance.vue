@@ -56,6 +56,7 @@ function onKey(event: KeyboardEvent) {
       :side-offset="8"
       class="flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-0 rounded-[10px] p-0"
       data-glance
+      :overlay="props.overlay"
       @keydown="onKey"
     >
       <div class="flex flex-col gap-2.5 p-3.5 text-sm">
@@ -78,7 +79,7 @@ function onKey(event: KeyboardEvent) {
     <DrawerTrigger :class="cn(GLANCE_TRIGGER_CLASS, props.triggerClass)" :data-glance-trigger="props.kind ?? ''" :data-entity="props.entity">
       <slot />
     </DrawerTrigger>
-    <DrawerContent class="gap-3 px-4 pt-2 pb-5" data-glance>
+    <DrawerContent class="gap-3 px-4 pt-2 pb-5" data-glance :layer="props.overlay">
       <DrawerTitle class="sr-only">{{ props.title }}</DrawerTitle>
       <div class="flex flex-col gap-2.5 text-sm"><slot name="body" /></div>
       <div v-if="props.openTo || $slots.actions" class="grid auto-cols-fr grid-flow-col gap-2 [&_button]:h-11">

@@ -164,7 +164,7 @@ function submit(event: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" size="form">
+  <Dialog overlay="goal" v-model:open="open" :title="title" size="form">
     <fieldset class="grid min-w-0 gap-4" @keydown="onKeydown">
     <form id="goal-form" class="grid gap-4" @submit.prevent="submit">
       <p v-if="creating && props.fromCalc" class="text-sm text-muted-foreground">{{ t('goal.fromCalcNote', { name: props.fromCalc.scenario }) }}</p>

@@ -73,7 +73,7 @@ const varsOpen = computed({
     <NewAutomation />
     <WorkflowImportDialog v-model:open="importOpen" @imported="(workflow) => router.push({ name: 'workflow-edit', params: { id: workflow.id } })" />
     <Sheet v-model:open="varsOpen">
-      <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-2xl">
+      <SheetContent overlay="workflow-vars" side="right" class="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{{ t('workflow.tab.vars') }}</SheetTitle>
           <SheetDescription>{{ t('workflow.vars.sheetHint') }}</SheetDescription>

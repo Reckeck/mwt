@@ -77,7 +77,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="props.mode === 'credit' ? t('loyalty.credit') : t('loyalty.spend')">
+  <Dialog overlay="bonus-points" v-model:open="open" :title="props.mode === 'credit' ? t('loyalty.credit') : t('loyalty.spend')">
     <form id="points-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
       <FormField for="points-amount" :label="t('loyalty.amount')" required :error="form.error('amount')">
         <AmountInput id="points-amount" v-model="amount">

@@ -77,7 +77,7 @@ function openNotice(record: NoticeRecord) {
   </Button>
 
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="w-full gap-0 sm:max-w-lg">
+    <SheetContent overlay="notifications" side="right" class="w-full gap-0 sm:max-w-lg">
       <SheetHeader class="border-b border-border">
         <div class="flex items-center justify-between gap-2 pr-8">
           <SheetTitle>{{ t('notices.title') }}</SheetTitle>

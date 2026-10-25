@@ -41,7 +41,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="property-value"
     v-model:open="open"
     :title="t('revalueRule.title')"
     :description="t('revalueRule.description')"

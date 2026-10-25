@@ -22,7 +22,7 @@ watch(open, () => {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('vaultBackups.restoreTitle')" :description="t('vaultBackups.restoreHint')">
+  <Dialog overlay="backup-restore" v-model:open="open" :title="t('vaultBackups.restoreTitle')" :description="t('vaultBackups.restoreHint')">
     <div class="grid gap-4">
       <RadioGroup v-model="picked" class="grid gap-2" data-vault-backup-list>
         <label

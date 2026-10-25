@@ -161,7 +161,7 @@ const pay = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" :description="t('utilityBill.intro', { name: property })" size="bill">
+  <Dialog overlay="utility-bill" v-model:open="open" :title="title" :description="t('utilityBill.intro', { name: property })" size="bill">
     <form id="utility-bill-form" class="@container flex flex-col gap-4" data-bill-form @submit.prevent="form.submit(pay.mutate, $event)">
       <div class="grid gap-3 @lg:grid-cols-2">
         <FormField for="bill-date" :label="t('utilityBill.date')" required :error="form.error('when')">

@@ -72,7 +72,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('flows.linkTitle')" size="lg">
+  <Dialog overlay="tx-link" v-model:open="open" :title="t('flows.linkTitle')" size="lg">
     <div class="grid gap-3">
       <p class="text-sm text-muted-foreground">{{ t('flows.linkHint') }}</p>
       <Input v-model="search" :placeholder="t('flows.search')" />

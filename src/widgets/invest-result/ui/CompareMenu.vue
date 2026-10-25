@@ -26,7 +26,7 @@ const full = () => props.compare.picked.value.length >= MAX_COMPARED
         <Badge v-if="props.compare.picked.value.length" variant="secondary">{{ props.compare.picked.value.length }}</Badge>
       </Button>
     </PopoverTrigger>
-    <PopoverContent align="end" class="grid w-[min(18rem,calc(100vw-2rem))] gap-1 p-2" data-calc-compare-menu>
+    <PopoverContent overlay="calc-compare" align="end" class="grid w-[min(18rem,calc(100vw-2rem))] gap-1 p-2" data-calc-compare-menu>
       <p class="px-2 py-1 text-xs font-medium text-muted-foreground">{{ t('invest.compareWith.title', { max: MAX_COMPARED }) }}</p>
       <label
         v-for="option in props.compare.options.value"

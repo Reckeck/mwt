@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { useQuery } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { AutomationWizard, SalaryDialog, SaveShareDialog, type WizardHandoff } from '@/features/automation-edit'
+import { AutomationDialog, AutomationWizard, SalaryDialog, SaveShareDialog, type WizardHandoff } from '@/features/automation-edit'
 import { PriceAlertDialog } from '@/features/price-alert-edit'
 import { ReminderDialog } from '@/features/reminder-edit'
 import { TransactionForm } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
+import { call } from '@/shared/api/ipc'
 import { FormField } from '@/shared/ui/form-field'
 
 /**
@@ -24,6 +26,27 @@ const wizardOpen = computed({
   get: () => route.query.new === 'blank',
   set: (open: boolean) => {
     if (!open && route.query.new === 'blank') void router.replace({ query: { ...route.query, new: undefined } })
+  },
+})
+
+/**
+ * `?edit=<id>` (the «Изменить» of an automation's card or menu) opens its form here; the key goes
+ * when the form closes. The automation stays in `editing` while the form slides out.
+ */
+const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })
+const editing = ref<Automation | null>(null)
+watch(
+  () => [route.query.edit, automations.data.value] as const,
+  ([id, list]) => {
+    const found = typeof id === 'string' ? list?.find((entry) => entry.id === id) : undefined
+    if (found) editing.value = found
+  },
+  { immediate: true },
+)
+const editOpen = computed({
+  get: () => typeof route.query.edit === 'string' && editing.value?.id === route.query.edit,
+  set: (open: boolean) => {
+    if (!open && route.query.edit !== undefined) void router.replace({ query: { ...route.query, edit: undefined } })
   },
 })
 const reminderOpen = ref(false)
@@ -73,6 +96,7 @@ function handoff(to: WizardHandoff) {
       </TransactionForm>
     </template>
   </AutomationWizard>
+  <AutomationDialog v-model:open="editOpen" :automation="editing" />
   <ReminderDialog v-model:open="reminderOpen" />
   <PriceAlertDialog v-model:open="alertOpen" />
   <SalaryDialog v-model:open="salaryOpen" />

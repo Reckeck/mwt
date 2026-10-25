@@ -32,7 +32,7 @@ const decimalsOf = (value: string) => (Number(value) % 1 ? 2 : 0)
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="property-sell"
     v-model:open="open"
     :title="t('propertySell.title', { name: props.store.name })"
     size="form"

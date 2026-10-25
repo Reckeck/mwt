@@ -55,7 +55,7 @@ function openVault() {
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="sm" :title="t('transfer.receive.title')" :description="t('transfer.receive.description')">
+  <Dialog overlay="vault-receive" v-model:open="open" size="sm" :title="t('transfer.receive.title')" :description="t('transfer.receive.description')">
     <div class="grid gap-4 py-2">
       <template v-if="phase === 'waiting' || phase === 'idle'">
         <div class="grid justify-items-center gap-2 text-center">

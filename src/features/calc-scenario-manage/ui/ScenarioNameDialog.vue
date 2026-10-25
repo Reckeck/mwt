@@ -21,7 +21,7 @@ const form = useFormValidation(() => ({ name: required(name.value) }), { resetOn
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="calc-scenario-name"
     v-model:open="open"
     :title="props.title"
     size="sm"

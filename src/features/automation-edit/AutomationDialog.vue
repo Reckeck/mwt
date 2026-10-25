@@ -166,7 +166,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="automation-edit"
     v-model:open="open"
     :title="props.automation ? t('automation.edit') : props.preset ? t(`preset.${props.preset.preset}`) : t('automation.new')"
     size="lg"

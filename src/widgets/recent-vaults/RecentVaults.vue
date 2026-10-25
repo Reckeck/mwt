@@ -143,12 +143,12 @@ function clearHistory() {
                 <ChevronsUpDown class="size-4 shrink-0 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" class="w-(--reka-popover-trigger-width) p-1">
+            <PopoverContent overlay="recent-vaults" align="start" class="w-(--reka-popover-trigger-width) p-1">
               <RecentVaultList v-bind="listBindings" v-on="listHandlers" />
             </PopoverContent>
           </Popover>
           <Drawer :open="isPhone && listOpen" @update:open="listOpen = $event">
-            <DrawerContent class="gap-2 px-3 pt-2 pb-5">
+            <DrawerContent layer="recent-vaults" class="gap-2 px-3 pt-2 pb-5">
               <DrawerTitle class="px-2 text-base font-semibold">{{ t('vaultForget.sheetTitle') }}</DrawerTitle>
               <RecentVaultList v-bind="listBindings" sheet v-on="listHandlers" />
               <div class="border-t border-border px-1 pt-3">

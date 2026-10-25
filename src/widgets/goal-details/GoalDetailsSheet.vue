@@ -68,7 +68,7 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-goal-card
+    <SheetContent overlay="entity-goal" side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-goal-card
       :data-entity-card="props.goalId ? `goal:${props.goalId}` : undefined"
     >
       <EntityBack class="mx-2 mt-2" />

@@ -113,7 +113,7 @@ function onSaved(tx: Transaction) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" size="form">
+  <Dialog overlay="quick-add" v-model:open="open" :title="title" size="form">
     <fieldset
       class="@container m-0 grid min-w-0 gap-4 border-0 p-0"
       @keydown.enter.exact="series.saveOnce"

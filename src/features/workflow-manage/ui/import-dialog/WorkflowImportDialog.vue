@@ -51,7 +51,7 @@ useEventListener(zone, 'drop', (event: DragEvent) => {
 </script>
 
 <template>
-  <Dialog v-model:open="open" size="form" :title="t('workflow.import.title')">
+  <Dialog overlay="workflow-import" v-model:open="open" size="form" :title="t('workflow.import.title')">
     <form id="workflow-import" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
       <div class="grid gap-1.5">
         <div ref="zone" data-import-zone>

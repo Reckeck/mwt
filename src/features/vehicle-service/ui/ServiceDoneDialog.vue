@@ -42,7 +42,7 @@ function submit() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="vehicle-service"
     v-model:open="open"
     :title="t('car.serviceDone')"
     :description="t('car.serviceDoneHint')"

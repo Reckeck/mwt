@@ -78,7 +78,7 @@ function show(target: string) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('whatsNew.title')" :description="t('whatsNew.hint')" size="lg">
+  <Dialog overlay="whats-new" v-model:open="open" :title="t('whatsNew.title')" :description="t('whatsNew.hint')" size="lg">
     <div class="grid gap-5">
       <section v-for="entry in entries" :key="entry.id" class="grid gap-2">
         <p class="flex items-center gap-2 text-sm font-medium">

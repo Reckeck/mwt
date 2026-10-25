@@ -61,7 +61,7 @@ const remove = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('vaultPassword.removeTitle')" size="sm">
+  <Dialog overlay="password-remove" v-model:open="open" :title="t('vaultPassword.removeTitle')" size="sm">
     <form id="remove-password-form" class="grid gap-4" @submit.prevent="form.submit(remove.mutate, $event)">
       <FormField for="remove-password-current" :label="t('vaultPassword.removeCurrent')" required :error="form.error('current')">
         <!-- biome-ignore lint/a11y/noAutofocus: the password is the only thing to type here. -->

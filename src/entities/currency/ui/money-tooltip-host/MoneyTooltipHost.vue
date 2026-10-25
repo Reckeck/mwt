@@ -5,7 +5,7 @@ import { TooltipRoot } from 'reka-ui'
 
 import { TooltipContent } from '@/shared/ui/tooltip'
 
-import { MONEY_SUM, sumOf } from '../../lib/money-target'
+import { sumOf, sumOfFocus } from '../../lib/money-target'
 import { MoneyConversions } from '../money-conversions'
 
 /**
@@ -90,7 +90,7 @@ useEventListener(document, 'keydown', (event: KeyboardEvent) => {
 useEventListener(document, 'focusin', (event: FocusEvent) => {
   const node = event.target
   if (!(node instanceof Element) || !node.matches(':focus-visible')) return
-  const sum = sumOf(node) ?? node.querySelector<HTMLElement>(MONEY_SUM)
+  const sum = sumOfFocus(node)
   if (sum) schedule(sum)
 })
 useEventListener(document, 'focusout', (event: FocusEvent) => {

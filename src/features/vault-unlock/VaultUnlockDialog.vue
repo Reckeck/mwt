@@ -59,7 +59,7 @@ watch(open, (isOpen) => {
 
 <template>
   <!-- Password for a vault chosen from the recents, or for any file. -->
-  <Dialog v-model:open="open" :title="t('auth.unlockTitle')" :description="t('auth.unlockHint')" size="sm">
+  <Dialog overlay="vault-unlock" v-model:open="open" :title="t('auth.unlockTitle')" :description="t('auth.unlockHint')" size="sm">
     <form id="unlock-form" class="grid gap-4" @submit.prevent="form.submit(submit, $event)">
       <!-- App storage (Android/iOS): no paths to type, the picked file is copied in. -->
       <FormField

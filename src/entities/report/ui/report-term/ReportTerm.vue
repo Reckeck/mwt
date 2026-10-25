@@ -20,7 +20,7 @@ const TERM_CLASS =
   <span v-if="!props.hint">{{ props.label }}</span>
   <Popover v-else-if="coarse">
     <PopoverTrigger data-touch-inline :class="TERM_CLASS">{{ props.label }}</PopoverTrigger>
-    <PopoverContent side="top" class="w-auto max-w-64 p-2 text-xs text-pretty">{{ props.hint }}</PopoverContent>
+    <PopoverContent overlay="report-term" side="top" class="w-auto max-w-64 p-2 text-xs text-pretty">{{ props.hint }}</PopoverContent>
   </Popover>
   <Tooltip v-else>
     <TooltipTrigger data-touch-inline :class="TERM_CLASS">{{ props.label }}</TooltipTrigger>

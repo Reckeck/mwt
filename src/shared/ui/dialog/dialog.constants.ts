@@ -23,4 +23,6 @@ export interface DialogProps {
   description?: string
   /** Tailwind max-width class for the panel. */
   size?: DialogSize
+  /** Name of the layer for `data-overlay` (docs/ui-overlays.md; check-layout opens it by that). */
+  overlay?: string
 }

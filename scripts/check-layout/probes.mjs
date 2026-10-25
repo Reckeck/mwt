@@ -43,15 +43,16 @@ export const OVERFLOW = `
   quiet.textContent = '[class*="touch-hit"]::after { display: none !important }'
   document.head.append(quiet)
   const vw = document.documentElement.clientWidth
-  if (document.documentElement.scrollWidth > vw + 1) out.push('page scrolls sideways: ' + document.documentElement.scrollWidth + ' > ' + vw)
+  if (!window.__scope && document.documentElement.scrollWidth > vw + 1) out.push('page scrolls sideways: ' + document.documentElement.scrollWidth + ' > ' + vw)
   const scrollsX = (el) => { const ox = getComputedStyle(el).overflowX; return ox === 'auto' || ox === 'scroll' }
   const inScroller = (el) => { for (let node = el.parentElement; node; node = node.parentElement) if (scrollsX(node)) return true; return false }
   // A vertical scroller (overflow-y only) turns overflow-x into auto too: content wider than it is clipped, not scrolled on purpose.
-  for (const el of document.querySelectorAll('[class*="overflow-y-"]')) {
+  for (const el of (window.__scope ?? document).querySelectorAll('[class*="overflow-y-"]')) {
     if (/overflow-x-/.test(el.className) || !scrollsX(el)) continue
     if (el.scrollWidth > el.clientWidth + 2) out.push('scroll area content ' + (el.scrollWidth - el.clientWidth) + 'px wider than its box: ' + describe(el))
   }
-  for (const el of document.querySelectorAll('body *')) {
+  // overlays.mjs sets window.__scope to the layer under test: only what is inside it is measured.
+  for (const el of (window.__scope ?? document.body).querySelectorAll(window.__scope ? '*' : 'body *')) {
     if (el.closest('[data-layout-ignore], [data-sonner-toaster], canvas, svg, .vue-flow')) continue
     const cs = getComputedStyle(el)
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue
@@ -117,7 +118,7 @@ export const TOUCH = `
     }
     return false
   }
-  for (const el of document.querySelectorAll('button, [role="button"], [role="checkbox"], [role="switch"], [role="tab"], [role="menuitem"]')) {
+  for (const el of (window.__scope ?? document).querySelectorAll('button, [role="button"], [role="checkbox"], [role="switch"], [role="tab"], [role="menuitem"]')) {
     // [data-touch-inline]: a term inside a sentence, tapped like a link in text (WCAG 2.5.8 exception).
     if (el.closest('[data-layout-ignore], [data-sonner-toaster], .vue-flow, [aria-hidden="true"], [data-touch-inline]')) continue
     const rect = el.getBoundingClientRect()

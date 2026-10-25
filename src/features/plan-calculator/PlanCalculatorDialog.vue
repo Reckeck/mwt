@@ -19,7 +19,7 @@ const calculator = ref<InstanceType<typeof PlanCalculator> | null>(null)
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="plan-calculator"
     v-model:open="open"
     :title="props.exchange ? t('calc.titleAt', { exchange: props.exchange }) : t('calc.title')"
     :description="t('calc.hint')"

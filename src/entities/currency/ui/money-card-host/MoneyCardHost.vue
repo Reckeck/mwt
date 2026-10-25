@@ -132,7 +132,10 @@ function allRates() {
 /** The card takes focus itself, not its first button: C and Esc work at once, no ring on «Все курсы». */
 function focusCard(event: Event) {
   event.preventDefault()
-  ;(event.target as HTMLElement | null)?.focus()
+  // In a popover Reka aims the event at the positioning wrapper around the card, which cannot take focus.
+  const root = event.target instanceof HTMLElement ? event.target : null
+  const card = root?.matches('[data-money-card-host]') ? root : root?.querySelector<HTMLElement>('[data-money-card-host]')
+  card?.focus()
 }
 
 function onKey(event: KeyboardEvent) {
@@ -146,7 +149,7 @@ function onKey(event: KeyboardEvent) {
 <template>
   <Popover v-if="!phone" v-model:open="open">
     <PopoverAnchor v-if="target" :key="sum ? `${sum.currency}:${sum.amount}:${sum.at}` : ''" :reference="target" />
-    <PopoverContent
+    <PopoverContent overlay="money-card"
       v-if="sum"
       align="end"
       :side-offset="8"
@@ -170,7 +173,7 @@ function onKey(event: KeyboardEvent) {
     </PopoverContent>
   </Popover>
   <Drawer v-else v-model:open="open">
-    <DrawerContent v-if="sum" class="gap-3 px-4 pt-2 pb-5" data-money-card-host @open-auto-focus="focusCard">
+    <DrawerContent layer="money-card" v-if="sum" class="gap-3 px-4 pt-2 pb-5" data-money-card-host @open-auto-focus="focusCard">
       <DrawerTitle class="sr-only">{{ t('moneyCard.title') }}</DrawerTitle>
       <MoneyCard :key="`${sum.currency}:${sum.amount}:${sum.at}`" v-bind="sum" />
       <div class="grid grid-cols-[auto_1fr] gap-2 [&_button]:h-11">

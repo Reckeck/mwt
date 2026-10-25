@@ -93,7 +93,7 @@ function throwAway() {
       @lesson="(id) => router.push({ name: 'workflow-new', query: { lesson: id } })"
     />
     <!-- A new workflow has nothing saved to keep running: its own title and text. -->
-    <Dialog
+    <Dialog overlay="workflow-leave"
       v-model:open="leaveOpen"
       :title="editor?.canDraft ? t('workflow.leave.title') : t('workflow.leave.newTitle')"
       :description="editor?.canDraft ? t('workflow.leave.body') : t('workflow.leave.newHint')"

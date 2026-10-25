@@ -19,6 +19,8 @@ interface SheetContentProps extends DialogContentProps {
   side?: "top" | "right" | "bottom" | "left"
   /** The screen draws its own way out («‹» in its header). */
   hideClose?: boolean
+  /** Name of the layer for `data-overlay`. */
+  overlay?: string
 }
 
 defineOptions({
@@ -30,7 +32,7 @@ const props = withDefaults(defineProps<SheetContentProps>(), {
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "side", "hideClose")
+const delegatedProps = reactiveOmit(props, "class", "side", "hideClose", "overlay")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const { t } = useI18n()
@@ -41,6 +43,7 @@ const { t } = useI18n()
     <SheetOverlay />
     <DialogContent
       data-slot="sheet-content"
+      :data-overlay="props.overlay"
       @pointer-down-outside="keepOpenOnToast"
       @interact-outside="keepOpenOnToast"
       :class="cn(

@@ -59,7 +59,7 @@ function save() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="source"
     v-model:open="open"
     :title="props.view ? t('sources.edit') : t('sources.add')"
     :description="t('sources.addHint')"

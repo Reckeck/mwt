@@ -77,7 +77,7 @@ const label = computed(() => {
     >
       {{ label }}
     </PopoverTrigger>
-    <PopoverContent align="start" class="grid w-[min(18rem,calc(100vw-2rem))] gap-3">
+    <PopoverContent overlay="debt-terms" align="start" class="grid w-[min(18rem,calc(100vw-2rem))] gap-3">
       <form class="grid gap-3" @submit.prevent="save.mutate()">
         <FormField :label="t('debt.dueDate')">
           <DateTimePicker v-model="due" :aria-label="t('debt.dueDate')" />

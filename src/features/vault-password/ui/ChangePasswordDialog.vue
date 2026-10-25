@@ -51,7 +51,7 @@ const change = useMutation({
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('vault.password.title')">
+  <Dialog overlay="password-change" v-model:open="open" :title="t('vault.password.title')">
     <form id="change-password-form" class="grid gap-4" @submit.prevent="form.submit(change.mutate, $event)">
       <FormField for="password-current" :label="t('vault.password.current')" required :error="form.error('current')">
         <Input id="password-current" v-model="current" type="password" autocomplete="current-password" />

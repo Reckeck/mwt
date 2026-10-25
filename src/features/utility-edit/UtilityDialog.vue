@@ -48,7 +48,7 @@ function submit(event?: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" size="bill">
+  <Dialog overlay="utility" v-model:open="open" :title="title" size="bill">
     <form id="utility-form" class="@container grid gap-4" @submit.prevent="submit($event)">
       <WizardSteps v-if="!editing" :step="step" :titles="[t('utilityEdit.step.kind'), secondTitle]" />
       <UtilityKindStep v-if="step === 1" :ask-property="!props.propertyId" @next="submit()" />

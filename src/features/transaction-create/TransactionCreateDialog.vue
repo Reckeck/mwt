@@ -23,7 +23,7 @@ const form = ref<InstanceType<typeof TransactionForm> | null>(null)
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('wallet.operation')" size="lg">
+  <Dialog overlay="tx-create" v-model:open="open" :title="t('wallet.operation')" size="lg">
     <!-- The form's field rows are container queries; the dialog is outside the page container. -->
     <div class="@container">
       <TransactionForm

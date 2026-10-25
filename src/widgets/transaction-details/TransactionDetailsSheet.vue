@@ -66,7 +66,7 @@ const ownerLabel = computed(() =>
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-tx-card
+    <SheetContent overlay="entity-tx" side="right" class="flex w-full flex-col gap-0 p-0 sm:max-w-md" data-tx-card
       :data-entity-card="props.tx ? `tx:${owner.id}` : undefined"
     >
       <EntityBack class="mx-2 mt-2" />

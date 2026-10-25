@@ -74,7 +74,7 @@ const save = useMutation({
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="trade-record"
     v-model:open="open"
     form-id="trade-record"
     :title="t('trade.record.title')"

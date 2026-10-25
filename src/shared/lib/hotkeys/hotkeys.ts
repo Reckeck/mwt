@@ -71,10 +71,16 @@ export function hotkeyLabel(id: HotkeyId): string {
     .join(' ')
 }
 
-/** Run `handler` on the key while the calling component lives. */
+/** A modal layer (a dialog, the settings window) is open: it holds the focus and the page is not clickable. */
+const modalOpen = () => document.querySelector('[role="dialog"][data-state="open"]') !== null
+
+/**
+ * Run `handler` on the key while the calling component lives. The app's keys go to the page: while a
+ * modal layer is open they wait (a palette or a second dialog over it would be out of reach).
+ */
 export function useHotkey(id: HotkeyId, handler: (event: KeyboardEvent) => void): void {
   const listener = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || !matchesHotkey(event, id)) return
+    if (event.defaultPrevented || !matchesHotkey(event, id) || modalOpen()) return
     event.preventDefault()
     handler(event)
   }

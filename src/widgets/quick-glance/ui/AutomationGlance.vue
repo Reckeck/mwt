@@ -66,7 +66,7 @@ function correct() {
 </script>
 
 <template>
-  <Glance
+  <Glance overlay="glance-automation"
     v-model:open="open"
     :title="automation?.name ?? t('glance.auto.title')"
     :open-to="toAutomation"

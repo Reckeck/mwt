@@ -83,7 +83,7 @@ const extras = computed(() => (filter.value.currency ? 1 : 0) + (props.realTerms
           <span v-if="extras" class="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" class="grid w-[min(18rem,100vw-2rem)] gap-4">
+      <PopoverContent overlay="money-wallets-filter" align="end" class="grid w-[min(18rem,100vw-2rem)] gap-4">
         <div class="grid gap-1.5">
           <Label for="money-currency">{{ t('report.filter.currency') }}</Label>
           <CurrencyPicker

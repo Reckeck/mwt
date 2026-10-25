@@ -143,7 +143,7 @@ const back = cameFrom.go
   </div>
   <p v-if="props.message" class="px-3 pt-1 text-xs text-destructive" role="alert">{{ props.message }}</p>
 
-  <Dialog v-model:open="renameOpen" :title="t('workflow.mobile.rename')" size="sm">
+  <Dialog overlay="workflow-rename" v-model:open="renameOpen" :title="t('workflow.mobile.rename')" size="sm">
     <div class="grid gap-4">
       <div class="grid gap-1.5" :data-invalid="props.nameError ? '' : undefined">
         <Label for="workflow-name-mobile">{{ t('workflow.name') }}</Label>

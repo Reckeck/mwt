@@ -69,7 +69,7 @@ const PHONE_ROWS = [
       <Plus class="size-4" />{{ props.label ?? t('actions.add') }}<ChevronDown v-if="!props.label" class="size-3.5" />
     </Button>
     <Drawer v-model:open="sheetOpen">
-      <DrawerContent data-attachment-sheet>
+      <DrawerContent layer="attachments" data-attachment-sheet>
         <DrawerHeader class="px-4 pb-2 text-left">
           <DrawerTitle class="text-base">{{ t('attachments.addTo') }}</DrawerTitle>
           <DrawerDescription class="sr-only">{{ t('attachments.addTo') }}</DrawerDescription>
@@ -99,7 +99,7 @@ const PHONE_ROWS = [
       </DrawerContent>
     </Drawer>
     <Drawer v-model:open="linkOpen">
-      <DrawerContent>
+      <DrawerContent layer="attachment-actions">
         <DrawerHeader class="sr-only">
           <DrawerTitle>{{ t('attachments.link') }}</DrawerTitle>
           <DrawerDescription>{{ t('attachments.linkHint') }}</DrawerDescription>
@@ -151,7 +151,7 @@ const PHONE_ROWS = [
         </DropdownMenuRoot>
       </div>
     </PopoverAnchor>
-    <PopoverContent :align="props.label ? 'start' : 'end'" class="w-[min(21.25rem,calc(100vw-2rem))] p-3">
+    <PopoverContent overlay="attachments" :align="props.label ? 'start' : 'end'" class="w-[min(21.25rem,calc(100vw-2rem))] p-3">
       <AttachmentLinkForm :url="props.linkUrl" :pending="props.pending" @submit="emit('link', $event)" @cancel="linkOpen = false" />
     </PopoverContent>
   </Popover>

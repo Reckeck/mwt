@@ -71,7 +71,7 @@ const save = () =>
     {{ t('asset.revalue') }}
   </Button>
 
-  <FormDialog
+  <FormDialog overlay="asset-revalue"
     v-model:open="open"
     :title="t('asset.revalueTitle', { name: props.asset.name || props.asset.symbol })"
     form-id="asset-revalue-form"

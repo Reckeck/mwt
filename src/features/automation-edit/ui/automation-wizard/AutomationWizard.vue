@@ -34,7 +34,7 @@ const isLast = computed(() => step.value === 'when')
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="t('automationWizard.title')" size="wizard" data-automation-wizard>
+  <Dialog overlay="automation-wizard" v-model:open="open" :title="t('automationWizard.title')" size="wizard" data-automation-wizard>
     <div class="grid gap-4">
       <WizardSteps :step="stepNumber" :titles="titles" />
       <WizardWhat v-if="step === 'what'" />

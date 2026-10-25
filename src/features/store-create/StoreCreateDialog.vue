@@ -43,7 +43,7 @@ function submit(event?: Event) {
 </script>
 
 <template>
-  <Dialog v-model:open="open" :title="title" size="form">
+  <Dialog overlay="store-create" v-model:open="open" :title="title" size="form">
     <div class="@container grid gap-4">
       <WizardSteps v-if="steps.length > 1" :step="stepNumber" :titles="stepTitles" />
 

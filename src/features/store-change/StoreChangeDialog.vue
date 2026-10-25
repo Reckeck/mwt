@@ -149,7 +149,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
 </script>
 
 <template>
-  <Dialog
+  <Dialog overlay="store-change"
     v-model:open="open"
     :title="t('storeChange.title', { name: props.store.name })"
     :description="t('storeChange.hint')"

@@ -48,7 +48,7 @@ function save() {
 </script>
 
 <template>
-  <FormDialog
+  <FormDialog overlay="tx-bulk-pick"
     v-model:open="open"
     :title="title"
     size="sm"
