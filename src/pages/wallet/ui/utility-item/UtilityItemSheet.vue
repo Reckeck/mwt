@@ -4,12 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ChevronLeft, Pencil } from 'lucide-vue-next'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { UtilityDialog } from '@/features/utility-edit'
 import { Button } from '@/shared/ui/button'
 import { SectionState } from '@/shared/ui/section-state'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { formatMonthKey } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
 
@@ -38,15 +40,18 @@ const trend = useQuery({
   enabled: computed(() => open.value && Boolean(item.value)),
 })
 const meter = computed(() => (item.value && 'metered' in item.value.kind ? item.value.kind.metered : null))
-const money = (value: string, decimals = 2) => formatMoney(value, { currency: item.value?.currency ?? 'rub', decimals })
+const money = (value: string, decimals = 2): SumPart => ({ amount: value, currency: item.value?.currency ?? 'rub', decimals })
 const month = computed(() => formatMonthKey(props.period, { month: 'long' }))
 const stats = computed(() => {
   const data = trend.data.value
-  const list: { label: string; value: string; hint?: string }[] = []
+  const list: { label: string; value: SumPart[] }[] = []
   if (meter.value && !meter.value.formula)
-    list.push({ label: t('utilityItem.tariff'), value: `${money(meter.value.tariff)} / ${meter.value.unit}` })
-  list.push({ label: t('utilityItem.average'), value: data?.average ? money(data.average) : '—' })
-  list.push({ label: t('utilityItem.forecast', { month: month.value }), value: data?.forecast ? `≈ ${money(data.forecast, 0)}` : '—' })
+    list.push({ label: t('utilityItem.tariff'), value: [money(meter.value.tariff), { text: ` / ${meter.value.unit}` }] })
+  list.push({ label: t('utilityItem.average'), value: data?.average ? [money(data.average)] : [{ text: '—' }] })
+  list.push({
+    label: t('utilityItem.forecast', { month: month.value }),
+    value: data?.forecast ? [{ text: '≈ ' }, money(data.forecast, 0)] : [{ text: '—' }],
+  })
   return list
 })
 const rows = computed(() => (item.value && trend.data.value ? historyRows(item.value, trend.data.value, props.period) : []))
@@ -98,7 +103,7 @@ const toggle = useMutation({
           <div :class="cn('grid gap-3', stats.length === 3 ? 'grid-cols-3' : props.phone ? 'grid-cols-1' : 'grid-cols-2')" data-utility-stats>
             <div v-for="stat in stats" :key="stat.label" class="flex flex-col gap-0.5">
               <span class="text-xs text-muted-foreground">{{ stat.label }}</span>
-              <span class="text-sm font-semibold tabular-nums">{{ stat.value }}</span>
+              <span class="text-sm font-semibold tabular-nums"><MoneyPhrase :parts="stat.value" /></span>
             </div>
           </div>
           <UtilityReadingCard v-if="meter && props.line && !props.disabled" :line="props.line" :phone="props.phone" :disabled="props.disabled" />

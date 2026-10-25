@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { ArrowRight } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { Separator } from '@/shared/ui/separator'
@@ -40,7 +41,16 @@ const pickBudget = (value: unknown) => {
     </div>
     <div class="flex flex-col gap-1.5 text-sm">
       <b class="font-semibold">{{ t('baseChange.recounted') }}</b>
-      <span>· {{ example ? t('baseChange.worthExample', { example }) : t('baseChange.worth') }}</span>
+      <span v-if="example">
+        ·
+        <i18n-t keypath="baseChange.worthExample" tag="span">
+          <template #example>
+            <Money :amount="example.before.amount" :currency="example.before.currency" :decimals="2" /> →
+            <Money :amount="example.after.amount" :currency="example.after.currency" :decimals="0" />
+          </template>
+        </i18n-t>
+      </span>
+      <span v-else>· {{ t('baseChange.worth') }}</span>
       <span>· {{ t('baseChange.history') }}</span>
     </div>
     <div class="flex flex-col gap-1.5 text-sm">

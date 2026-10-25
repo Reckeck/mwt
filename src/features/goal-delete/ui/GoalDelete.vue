@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
 
-import { formatMoney } from '@/shared/lib/format'
+import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 
@@ -19,13 +19,8 @@ const { t } = useI18n()
 const open = ref(false)
 const remove = useGoalDelete()
 
-/** Frame 5: what happens to the money first, then to the automation and the files. */
-const money = computed(() => {
-  const { goal, saved } = props.progress
-  return props.wallet && Number(saved) > 0
-    ? t('goalDelete.money', { wallet: props.wallet, saved: formatMoney(saved, { currency: goal.currency, decimals: 0 }) })
-    : t('goalDelete.moneyFree')
-})
+/** Frame 5: whether the saved money stays in the wallet; it is named first, then the automation and the files. */
+const keeps = computed(() => Boolean(props.wallet) && Number(props.progress.saved) > 0)
 const rest = computed(() =>
   [props.filler ? t('goalDelete.filler', { name: props.filler }) : '', t('goalDelete.files')].filter(Boolean).join(' '),
 )
@@ -47,7 +42,11 @@ function confirm() {
   </Button>
   <Dialog v-model:open="open" size="sm" :title="t('goalDelete.title', { name: props.progress.goal.name })">
     <div class="grid gap-3 px-4 pb-2 text-sm" data-goal-delete-text>
-      <p>{{ money }}</p>
+      <i18n-t v-if="keeps" keypath="goalDelete.money" tag="p">
+        <template #wallet>{{ props.wallet }}</template>
+        <template #saved><Money :amount="props.progress.saved" :currency="props.progress.goal.currency" :decimals="0" /></template>
+      </i18n-t>
+      <p v-else>{{ t('goalDelete.moneyFree') }}</p>
       <p class="text-muted-foreground">{{ rest }}</p>
     </div>
     <template #footer>

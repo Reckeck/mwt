@@ -3,13 +3,13 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { PairInput, resolveTicker } from '@/entities/asset'
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { decimalAdd, decimalMul, decimalSub, decimalInput } from '@/shared/lib/decimal'
-import { formatMoney } from '@/shared/lib/format'
 import { parsePairSymbol } from '@/shared/lib/pair'
 
 import { useTxForm } from '../../model/use-tx-form'
@@ -77,7 +77,7 @@ const total = computed(() => {
   if (!cost.value || !quote.value) return null
   const fee = form.feeAmount.trim() || '0'
   const sum = side.value === 'buy' ? decimalAdd(cost.value, fee) : decimalSub(cost.value, fee)
-  return sum === null ? null : formatMoney(Number(sum), { currency: quote.value.symbol })
+  return sum === null ? null : { amount: sum, currency: quote.value.symbol }
 })
 
 const pairError = computed(() => check.error('soldAsset') ?? check.error('boughtAsset'))
@@ -127,6 +127,6 @@ const priceError = computed(() =>
 
   <p v-if="total" class="flex flex-wrap items-baseline justify-between gap-x-2 rounded-md bg-muted px-3 py-2.5 text-sm" data-spot-total>
     <span>{{ t(side === 'buy' ? 'tx.quick.totalSpent' : 'tx.quick.totalGot') }}</span>
-    <b class="font-semibold tabular-nums">{{ total }}</b>
+    <b class="font-semibold tabular-nums"><Money :amount="total.amount" :currency="total.currency" /></b>
   </p>
 </template>

@@ -3,11 +3,11 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 
@@ -56,8 +56,12 @@ const save = useMutation({
       :label="t('automation.amount.label')"
       required
       :error="form.error('amount')"
-      :hint="props.estimate ? t('automation.amount.hint', { estimate: formatMoney(props.estimate, { currency: props.symbol }) }) : undefined"
     >
+      <template v-if="props.estimate" #hint>
+        <i18n-t keypath="automation.amount.hint">
+          <template #estimate><Money :amount="props.estimate" :currency="props.symbol" /></template>
+        </i18n-t>
+      </template>
       <AmountInput id="automation-amount" v-model="amount">
         <template v-if="props.symbol" #suffix>{{ props.symbol }}</template>
       </AmountInput>

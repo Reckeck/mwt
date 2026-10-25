@@ -13,7 +13,6 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { notify } from '@/shared/lib/notify'
@@ -36,7 +35,6 @@ const tree = useStoreTree()
 const kindName = computed(() =>
   'metered' in props.item.kind ? 'metered' : 'static' in props.item.kind ? 'static' : 'housing',
 )
-const money = (value: string | null | undefined) => formatMoney(value, { currency: props.item.currency })
 const last = computed(() => trend.data.value?.months.at(-1) ?? null)
 
 /* --- «Записать расход»: the payment form, pre-filled --- */
@@ -88,7 +86,9 @@ function onPaid() {
             </Badge>
           </div>
           <p class="text-sm tabular-nums">
-            {{ t('utilities.monthly', { amount: money(trend.data.value?.monthly) }) }}
+            <i18n-t keypath="utilities.monthly">
+              <template #amount><Money :amount="trend.data.value?.monthly" :currency="props.item.currency" /></template>
+            </i18n-t>
             <span
               v-if="trend.data.value?.delta_pct"
               class="ml-1 inline-flex items-center gap-0.5 text-xs"

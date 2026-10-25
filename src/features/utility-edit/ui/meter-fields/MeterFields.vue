@@ -3,6 +3,7 @@ import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -10,7 +11,7 @@ import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { currencySymbol, formatMoney, formatQuantity } from '@/shared/lib/format'
+import { currencySymbol, formatQuantity } from '@/shared/lib/format'
 import { fillFormula, prettyFormula } from '@/shared/lib/utility-formula'
 
 import { FORMULA_VARIABLES, type MeterMode } from '../../meter-formula'
@@ -25,7 +26,8 @@ import { ZONE_COUNTS, type ZoneCount } from '../../utility-edit.constants'
 const { t, locale } = useI18n()
 const { unit, tariff, meterMode, formula, zoneNames, zoneCount, setZoneCount, currency, preview, sample, form } = useUtilityForm()
 
-const money = (value: string) => formatMoney(value, { currency: currency.value, decimals: Number(value) % 1 ? 2 : 0 })
+/** Whole sums without cents, the rest with. */
+const decimalsOf = (value: string) => (Number(value) % 1 ? 2 : 0)
 const quantity = (value: string) => formatQuantity(value, 3)
 const ru = computed(() => locale.value === 'ru')
 
@@ -35,7 +37,8 @@ const example = computed(() => {
   if (!amount || !(Number(tariff.value) > 0)) return null
   const zones = zoneNames.value.length
   return {
-    sum: t(zones ? 'utilityEdit.exampleZones' : 'utilityEdit.example', { unit: unit.value, amount: money(amount) }),
+    sumKey: zones ? 'utilityEdit.exampleZones' : 'utilityEdit.example',
+    amount,
     how: zones ? t('utilityEdit.exampleZonesHow', { names: zoneNames.value.join(', ') }) : t('utilityEdit.exampleOneHow'),
   }
 })
@@ -43,7 +46,6 @@ const example = computed(() => {
 const check = computed(() => {
   const result = preview.value
   if (!result?.amount || result.issue || !formula.value.trim()) return null
-  const amount = formatMoney(result.amount, { currency: currency.value, decimals: 2 })
   const reading = result.input.readings[0]
   const text =
     result.input.readings.length === 1 && reading
@@ -54,7 +56,7 @@ const check = computed(() => {
           tariff: quantity(tariff.value || '0'),
         })
       : prettyFormula(formula.value)
-  return { label: t(sample.value ? 'utilityEdit.checkLast' : 'utilityEdit.checkSample'), text: `${text} = ${amount}` }
+  return { label: t(sample.value ? 'utilityEdit.checkLast' : 'utilityEdit.checkSample'), text: `${text} =`, amount: result.amount }
 })
 
 /** Puts a name where the caret is in the formula field. */
@@ -124,7 +126,15 @@ function onMode(value: unknown) {
   </template>
   <div v-if="meterMode === 'tariff' ? example : check" class="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm" data-utility-example>
     <Check class="mt-0.5 size-4 shrink-0" />
-    <p v-if="meterMode === 'tariff' && example">{{ example.sum }} {{ example.how }}</p>
-    <p v-else-if="check" class="tabular-nums">{{ check.label }} {{ check.text }}</p>
+    <p v-if="meterMode === 'tariff' && example">
+      <i18n-t :keypath="example.sumKey" tag="span">
+        <template #unit>{{ unit }}</template>
+        <template #amount><Money :amount="example.amount" :currency="currency" :decimals="decimalsOf(example.amount)" /></template>
+      </i18n-t>
+      {{ example.how }}
+    </p>
+    <p v-else-if="check" class="tabular-nums">
+      {{ check.label }} {{ check.text }} <Money :amount="check.amount" :currency="currency" :decimals="2" />
+    </p>
   </div>
 </template>

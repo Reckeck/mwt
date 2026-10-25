@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Plus } from 'lucide-vue-next'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { AttachmentsBlock } from '@/features/attachment-edit'
 import { GoalDelete } from '@/features/goal-delete'
 import { GoalDialog } from '@/features/goal-edit'
@@ -11,7 +12,8 @@ import { Button } from '@/shared/ui/button'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 import { EntityBack } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatPct } from '@/shared/lib/format'
+import { composeSums, partsText } from '@/shared/lib/money-parts'
 
 import type { GoalDetailsSheetProps } from './goal-details.types'
 import { useGoalDetails } from './model/use-goal-details'
@@ -36,16 +38,18 @@ const details = useGoalDetails(
 )
 const entry = details.entry
 
-const money = (value: string | number, currency: string) => formatMoney(value, { currency, decimals: 0 })
-const bare = (value: string, currency: string) => money(value, currency).replace(/\s*\D+$/, '')
 const summary = computed(() => {
   if (!entry.value) return null
   const { goal, saved, pct } = entry.value
   const left = Math.max(0, Number(goal.target_amount) - Number(saved))
+  const { mark, parts } = composeSums()
+  const sum = (amount: string | number, bare = false) => mark({ amount, currency: goal.currency, decimals: 0, bare })
+  const leftParts = parts(t('goalCard.left', { pct: formatPct(pct, { decimals: 0 }), left: sum(left) }))
   return {
-    saved: t('goalCard.savedOf', { saved: bare(saved, goal.currency), target: money(goal.target_amount, goal.currency) }),
+    saved: parts(t('goalCard.savedOf', { saved: sum(saved, true), target: sum(goal.target_amount) })),
     pct: Math.min(100, Math.max(0, Number(pct))),
-    left: t('goalCard.left', { pct: formatPct(pct, { decimals: 0 }), left: money(left, goal.currency) }),
+    left: leftParts,
+    leftText: partsText(leftParts),
   }
 })
 
@@ -77,9 +81,9 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
 
           <div class="grid gap-5 px-4">
             <div class="grid gap-2" data-goal-progress>
-              <p class="text-base font-medium tabular-nums">{{ summary.saved }}</p>
-              <ProgressBar :value="summary.pct" :label="summary.left" />
-              <p class="text-sm text-muted-foreground tabular-nums">{{ summary.left }}</p>
+              <p class="text-base font-medium tabular-nums"><MoneyPhrase :parts="summary.saved" /></p>
+              <ProgressBar :value="summary.pct" :label="summary.leftText" />
+              <p class="text-sm text-muted-foreground tabular-nums"><MoneyPhrase :parts="summary.left" /></p>
             </div>
 
             <GoalFacts :entry="entry" :store="details.store.value" :store-name="details.storeName.value" :filler="details.filler.value">
@@ -108,7 +112,7 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
           </Button>
         </footer>
 
-        <GoalDialog v-model:open="editOpen" :goal="entry.goal" :saved="money(entry.saved, entry.goal.currency)">
+        <GoalDialog v-model:open="editOpen" :goal="entry.goal" :saved="entry.saved">
           <template #extras>
             <GoalEditFiller :filler="details.filler.value" />
             <AttachmentsBlock :owner="owner" :owner-label="ownerLabel" :active="editOpen" />

@@ -2,8 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { groupByDay } from '@/entities/transaction'
-import { formatMoney, pluralForm } from '@/shared/lib/format'
+import { pluralForm } from '@/shared/lib/format'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 /**
@@ -33,12 +34,12 @@ const sum = computed(() => {
   const net = days.reduce((total, day) => total + day.totalBase, 0)
   // Spending alone reads as what was spent («36 $»), a mix keeps its sign.
   const shown = payments.value ? Math.abs(net) : net
-  return formatMoney(shown, { currency: props.baseCurrency, signed: !payments.value })
+  return { amount: shown, currency: props.baseCurrency }
 })
 </script>
 
 <template>
   <span class="text-sm whitespace-nowrap text-muted-foreground tabular-nums" data-filter-total>
-    {{ count }}<template v-if="sum"> · <b class="font-semibold text-foreground">{{ sum }}</b></template>
+    {{ count }}<template v-if="sum"> · <b class="font-semibold text-foreground"><Money :amount="sum.amount" :currency="sum.currency" :signed="!payments" /></b></template>
   </span>
 </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { currencySymbol } from '@/shared/lib/format'
@@ -49,7 +50,9 @@ const AMOUNT =
     <Checkbox v-model="props.row.include" class="mt-0.5" :aria-label="t('utilityBill.include', { name: item.name })" />
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       <span class="text-sm font-medium">{{ item.name }}</span>
-      <span class="text-xs text-muted-foreground tabular-nums">{{ note }}</span>
+      <span class="text-xs text-muted-foreground tabular-nums">
+        <MoneyPhrase :parts="note" />
+      </span>
       <div v-if="fields.length && props.row.include" class="flex gap-2">
         <AmountInput
           v-for="field in fields"

@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 import { rejectText } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { amountClass, txLegs } from '@/shared/lib/transactions'
@@ -49,16 +49,19 @@ function pickDays(value: unknown) {
   if (typeof value === 'string' && value) days.value = Number(value)
 }
 
-/** «+1 000 USD · Card» from the operation the run would create. */
-function runLine(run: SimulatedRun): string {
-  if (run.outcome === 'skipped') return t('automation.run.outcome.skipped')
-  if ('rejected' in run.outcome) return rejectText(run.outcome.rejected.reason, t, storeName)
-  const leg = run.transaction ? txLegs(run.transaction)[0] : null
-  return leg
-    ? `${formatMoney(leg.amount, { currency: leg.asset.symbol, signed: true })} · ${storeName(leg.store_id)}`
-    : t('automation.run.outcome.created')
+/** A run as a row: the leg of the operation it would create («+1 000 USD · Card»), else the words. */
+function runRow(run: SimulatedRun) {
+  const failed = typeof run.outcome === 'object' && 'rejected' in run.outcome
+  const leg = failed || run.outcome === 'skipped' || !run.transaction ? null : (txLegs(run.transaction)[0] ?? null)
+  let text = ''
+  if (!leg) {
+    if (run.outcome === 'skipped') text = t('automation.run.outcome.skipped')
+    else if (typeof run.outcome === 'object' && 'rejected' in run.outcome) text = rejectText(run.outcome.rejected.reason, t, storeName)
+    else text = t('automation.run.outcome.created')
+  }
+  return { run, key: `${run.automation_id}:${run.planned_at}`, failed, leg, text, store: leg ? storeName(leg.store_id) : '' }
 }
-const rejected = (run: SimulatedRun) => typeof run.outcome === 'object' && 'rejected' in run.outcome
+const rows = computed(() => (simulation.data.value?.runs ?? []).map(runRow))
 </script>
 
 <template>
@@ -98,14 +101,18 @@ const rejected = (run: SimulatedRun) => typeof run.outcome === 'object' && 'reje
         <p v-if="!simulation.data.value.runs.length" class="text-sm text-muted-foreground">{{ t('simulation.nothing') }}</p>
         <ul v-else class="grid max-h-80 gap-1 overflow-y-auto">
           <li
-            v-for="run in simulation.data.value.runs"
-            :key="`${run.automation_id}:${run.planned_at}`"
+            v-for="row in rows"
+            :key="row.key"
             class="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-sm"
           >
-            <span class="tabular-nums text-muted-foreground">{{ formatDate(run.planned_at) }}</span>
+            <span class="tabular-nums text-muted-foreground">{{ formatDate(row.run.planned_at) }}</span>
             <span class="min-w-0">
-              <span v-if="!props.automationId" class="font-medium">{{ run.automation_name }} · </span>
-              <span :class="rejected(run) && 'text-destructive'">{{ runLine(run) }}</span>
+              <span v-if="!props.automationId" class="font-medium">{{ row.run.automation_name }} · </span>
+              <span v-if="row.leg">
+                <Money :amount="row.leg.amount" :currency="row.leg.asset.symbol" signed :at="row.run.planned_at" />
+                · {{ row.store }}
+              </span>
+              <span v-else :class="row.failed && 'text-destructive'">{{ row.text }}</span>
             </span>
           </li>
         </ul>

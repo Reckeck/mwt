@@ -1,12 +1,13 @@
-import { formatMoney, formatPct, formatQuantity } from '@/shared/lib/format'
+import { formatPct, formatQuantity } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
 export interface ReasonText {
   /** What is wrong, in one sentence. */
-  what: string
+  what: SumPart[]
   /** The first step to fix it. */
-  step: string
+  step: SumPart[]
 }
 
 /** Whole percents without «,0»; a fraction keeps one place. */
@@ -14,8 +15,9 @@ export const percent = (value: string | null) => formatPct(value, { decimals: Nu
 
 /** A reason of the checkup and its first step: `health.reason.<code>` / `health.step.<code>`. */
 export function reasonText(reason: HealthReason, currency: string, t: Translate): ReasonText {
+  const { mark, parts } = composeSums()
   const params = {
-    amount: formatMoney(reason.amount, { currency, decimals: 0 }),
+    amount: mark({ amount: reason.amount, currency, decimals: 0 }),
     pct: percent(reason.pct),
     months: formatQuantity(reason.pct, 1),
     base: reason.code === 'lifestyle_creep' && reason.subject ? t(`insight.creepBase.${reason.subject}`) : '',
@@ -28,7 +30,7 @@ export function reasonText(reason: HealthReason, currency: string, t: Translate)
     reason.code === 'savings_below_plan' && reason.amount === null
       ? 'health.step.savings_below_plan_plain'
       : `health.step.${reason.code}`
-  return { what: t(what, params), step: t(step, params) }
+  return { what: parts(t(what, params)), step: parts(t(step, params)) }
 }
 
 /** The loan the reason is about, for its link; only loan reasons carry a store. */

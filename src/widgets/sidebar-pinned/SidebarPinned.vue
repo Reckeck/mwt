@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Filter, PinOff } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { usePins } from '@/shared/api/pins'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { ENTITY_ICONS } from '@/shared/ui/entity-link'
@@ -18,6 +19,8 @@ import {
   SidebarMenuItem,
 } from '@/shared/ui/sidebar'
 import { cn } from '@/shared/lib/utils'
+
+import { partsText } from '@/shared/lib/money-parts'
 
 import { pinnedLocation, pinnedValue } from './lib/pinned-item'
 
@@ -51,7 +54,7 @@ const rows = computed(() =>
       value,
       icon: iconOf(view),
       missing: view.missing,
-      tooltip: value ? `${name} · ${value}` : name,
+      tooltip: value ? `${name} · ${partsText([value])}` : name,
       to: pinnedLocation(view.pin, route.query),
       actions: actionsOf(index),
     }
@@ -82,7 +85,8 @@ const rows = computed(() =>
               v-if="row.value"
               class="right-1 text-muted-foreground tabular-nums pointer-coarse:right-8 pointer-fine:group-hover/pin:opacity-0 pointer-fine:group-focus-within/pin:opacity-0"
             >
-              {{ row.value }}
+              <Money v-if="'amount' in row.value" v-bind="row.value" />
+              <template v-else>{{ row.value.text }}</template>
             </SidebarMenuBadge>
             <SidebarMenuAction
               class="pointer-fine:opacity-0 pointer-fine:group-hover/pin:opacity-100 pointer-fine:group-focus-within/pin:opacity-100"

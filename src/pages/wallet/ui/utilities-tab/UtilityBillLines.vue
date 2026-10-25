@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -19,7 +20,12 @@ const props = defineProps<{ bill: UtilityBill; phone: boolean; disabled: boolean
 const emit = defineEmits<{ open: [line: UtilityBillLine] }>()
 const { t } = useI18n()
 
-const rows = computed(() => props.bill.lines.map((line) => utilityLineView(line, t)))
+const rows = computed(() =>
+  props.bill.lines.map((line) => {
+    const view = utilityLineView(line, t)
+    return { ...view, phoneSub: phoneSubtitle(view, t) }
+  }),
+)
 const month = computed(() => formatMonthKey(props.bill.period, { month: 'long' }))
 const ROW = 'flex h-auto min-h-13 w-full items-center justify-start gap-3 rounded-none px-3 py-1.5 text-left font-normal whitespace-normal'
 const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
@@ -39,10 +45,13 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
         </span>
         <span class="flex min-w-0 flex-1 flex-col">
           <span class="truncate font-medium">{{ row.name }}</span>
-          <span class="truncate text-xs text-muted-foreground">{{ phoneSubtitle(row, t) }}</span>
+          <span class="truncate text-xs text-muted-foreground">
+            <MoneyPhrase :parts="row.phoneSub" />
+          </span>
         </span>
         <span :class="cn('font-medium whitespace-nowrap tabular-nums', row.waiting && 'text-warning', row.automated && 'text-muted-foreground')">
-          {{ row.amount }}
+          <MoneyPhrase :parts="row.amount" />
+          <template v-if="!row.amount.length">—</template>
         </span>
         </Button>
       </li>
@@ -70,7 +79,9 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
               <component :is="row.icon" class="size-4 shrink-0 text-muted-foreground" />
               <span class="flex min-w-0 flex-col">
                 <span class="truncate font-medium">{{ row.name }}</span>
-                <span class="truncate text-xs text-muted-foreground">{{ row.subtitle }}</span>
+                <span class="truncate text-xs text-muted-foreground">
+                  <MoneyPhrase :parts="row.subtitle" />
+                </span>
               </span>
             </div>
           </TableCell>
@@ -78,7 +89,10 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
           <TableCell :class="cn('px-3 py-2.5 whitespace-nowrap', row.waiting && 'text-warning', row.consumption === '—' && 'text-muted-foreground')">
             {{ row.consumption }}
           </TableCell>
-          <TableCell class="px-3 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">{{ row.amount }}</TableCell>
+          <TableCell class="px-3 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
+            <MoneyPhrase :parts="row.amount" />
+            <template v-if="!row.amount.length">—</template>
+          </TableCell>
           <TableCell class="px-3 py-2.5 text-right">
             <Button v-if="row.waiting" variant="outline" size="sm" :disabled="props.disabled" @click.stop="emit('open', row.line)">
               {{ t('utilityTab.read') }}

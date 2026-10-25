@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { entityLocation } from '@/shared/lib/entity-link'
 import { Button } from '@/shared/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -47,7 +48,9 @@ const opens = (entry: JournalEntry) => entry.kind === 'scheme' || entry.kind ===
             <span v-else class="block truncate" :title="t('automations.journal.removed')">{{ row.entry.name }}</span>
           </TableCell>
           <TableCell class="px-3 py-2.5 whitespace-nowrap" :class="row.tone">{{ row.status }}</TableCell>
-          <TableCell class="px-3 py-2.5 text-sm whitespace-nowrap">{{ row.did }}</TableCell>
+          <TableCell class="px-3 py-2.5 text-sm whitespace-nowrap">
+            <MoneyPhrase :parts="row.did" />
+          </TableCell>
           <TableCell class="px-3 py-1.5 text-right">
             <Button v-if="row.entry.wait_id" size="sm" data-journal-confirm data-tour="journal-confirm" @click="emit('confirm', row.entry)">
               {{ t('automations.journal.confirm') }}

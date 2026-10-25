@@ -5,10 +5,10 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
+import { composeSums } from '@/shared/lib/money-parts'
 
 import type { UtilityListProps } from './utility-list.types'
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 
 const props = defineProps<UtilityListProps>()
 const { t } = useI18n()
@@ -19,8 +19,19 @@ const summary = useQuery({
   queryFn: () => call<PropertySummary>('get_property_summary', { storeId: props.propertyId }),
 })
 
-const money = (value: string | undefined) =>
-  formatMoney(value ?? '0', { currency: summary.data.value?.base_currency, decimals: 0 })
+const breakdown = computed(() => {
+  const data = summary.data.value
+  if (!data) return []
+  const { mark, parts } = composeSums()
+  const sum = (amount: string | undefined) => mark({ amount: amount ?? '0', currency: data.base_currency, decimals: 0 })
+  return parts(
+    t('propertySummary.breakdown', {
+      utilities: sum(data.utilities_month_base),
+      loan: sum(data.loan_month_base),
+      count: data.utility_count,
+    }),
+  )
+})
 
 const rows = computed(() => {
   const data = summary.data.value
@@ -73,13 +84,7 @@ const year = computed(() => {
         </div>
       </div>
       <p v-if="summary.data.value" class="text-xs text-muted-foreground">
-        {{
-          t('propertySummary.breakdown', {
-            utilities: money(summary.data.value.utilities_month_base),
-            loan: money(summary.data.value.loan_month_base),
-            count: summary.data.value.utility_count,
-          })
-        }}
+        <MoneyPhrase :parts="breakdown" />
       </p>
     </div>
   </Card>

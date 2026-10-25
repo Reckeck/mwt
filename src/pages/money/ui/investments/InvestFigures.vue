@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { Calculator, Plus } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { signClass } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 
@@ -19,15 +20,19 @@ const { t } = useI18n()
     <div class="grid grid-cols-3 gap-3 max-md:grid-cols-2">
       <section class="grid gap-1 rounded-xl border bg-card p-4 shadow-sm">
         <span class="text-xs text-muted-foreground">{{ t('money.invest.profit') }}</span>
-        <b class="text-xl tabular-nums" :class="signClass(props.profit)" data-invest-profit>{{ investMoney(props.profit, props.currency, true) }}</b>
+        <b class="text-xl tabular-nums" :class="signClass(props.profit)" data-invest-profit>
+          <Money v-bind="investMoney(props.profit, props.currency, true)" />
+        </b>
       </section>
       <section class="grid gap-1 rounded-xl border bg-card p-4 shadow-sm">
         <span class="text-xs text-muted-foreground">{{ t('money.invest.fees') }}</span>
-        <b class="text-xl tabular-nums" :class="Number(props.fees) > 0 && 'text-warning'">{{ investMoney(props.fees, props.currency) }}</b>
+        <b class="text-xl tabular-nums" :class="Number(props.fees) > 0 && 'text-warning'">
+          <Money v-bind="investMoney(props.fees, props.currency)" />
+        </b>
       </section>
       <section class="grid gap-1 rounded-xl border bg-card p-4 shadow-sm max-md:hidden">
         <span class="text-xs text-muted-foreground">{{ t('money.invest.invested') }}</span>
-        <b class="text-xl tabular-nums">{{ investMoney(props.invested, props.currency) }}</b>
+        <b class="text-xl tabular-nums"><Money v-bind="investMoney(props.invested, props.currency)" /></b>
       </section>
     </div>
     <div class="flex justify-end gap-2 max-md:grid max-md:grid-cols-2">

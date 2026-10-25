@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
-import { formatMoney } from '@/shared/lib/format'
 import type { FormValidation } from '@/shared/lib/form'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { FormField } from '@/shared/ui/form-field'
@@ -20,7 +20,6 @@ const storeId = defineModel<string>('storeId', { required: true })
 const period = defineModel<BudgetPeriod>('period', { required: true })
 
 const { t } = useI18n()
-const spent = () => formatMoney(props.spending?.spent ?? '0', { decimals: 0, currency: props.spending?.currency })
 </script>
 
 <template>
@@ -29,7 +28,10 @@ const spent = () => formatMoney(props.spending?.spent ?? '0', { decimals: 0, cur
       <!-- The dialog puts the category picker here: a feature takes another feature only at its root. -->
       <slot name="category" />
       <p v-if="props.spending" class="text-xs text-muted-foreground">
-        {{ t('budget.fromSpending', { spent: spent(), when: props.spending.when }) }}
+        <i18n-t keypath="budget.fromSpending">
+          <template #spent><Money :amount="props.spending.spent" :currency="props.spending.currency" :decimals="0" /></template>
+          <template #when>{{ props.spending.when }}</template>
+        </i18n-t>
       </p>
     </FormField>
     <FormField v-else-if="kind === 'store'" for="budget-store" :label="t('budget.on')" required :error="props.form.error('store')">

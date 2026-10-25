@@ -9,7 +9,6 @@ import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
-import { formatMoney } from '@/shared/lib/format'
 import { SectionState } from '@/shared/ui/section-state'
 
 const { t } = useI18n()
@@ -45,7 +44,9 @@ const totals = computed(() => {
       <div class="flex items-center justify-between gap-2">
         <span data-widget-title class="text-sm text-muted-foreground">{{ t('utilities.dashboardTitle') }}</span>
         <span class="text-sm tabular-nums">
-          {{ totals.map(([currency, sum]) => formatMoney(sum, { decimals: 0, currency })).join(' + ') }}
+          <template v-for="([currency, sum], index) in totals" :key="currency">
+            <template v-if="index"> + </template><Money :amount="sum" :decimals="0" :currency="currency" />
+          </template>
         </span>
       </div>
     </template>

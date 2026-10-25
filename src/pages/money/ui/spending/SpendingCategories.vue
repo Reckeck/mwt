@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
 import { useCategories } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatMoney, formatMonthKey, pluralForm } from '@/shared/lib/format'
+import { formatMonthKey, pluralForm } from '@/shared/lib/format'
+import { composeSums, type Sum, type SumPart } from '@/shared/lib/money-parts'
 import { Button } from '@/shared/ui/button'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -26,21 +28,34 @@ const { t, locale } = useI18n()
 const categories = useCategories()
 const from = computed(() => props.filter.from ?? '')
 const to = computed(() => props.filter.to ?? '')
-const money = (value: string | null, currency = props.currency) => (value === null ? '—' : formatMoney(value, { decimals: 0, currency }))
-const bare = (value: string) => formatMoney(value, { decimals: 0 })
+const sum = (value: string, currency = props.currency, bare = false): Sum => ({ amount: value, currency, decimals: 0, bare })
+const money = (value: string | null): SumPart[] => (value === null ? [{ text: '—' }] : [sum(value)])
+const words = (text: string): SumPart[] => [{ text }]
 
-function limitOf(row: SpendingCategory): { text: string; hint: string | null } {
+function limitOf(row: SpendingCategory): { text: SumPart[]; hint: SumPart[] | null } {
   const budget = row.budget
-  if (!budget) return { text: t('money.categories.noLimit'), hint: null }
+  if (!budget) return { text: words(t('money.categories.noLimit')), hint: null }
+  const { mark, parts } = composeSums()
   if (!comparable(budget, from.value, to.value, props.currency)) {
-    const value = money(budget.limit, budget.currency)
-    return { text: budget.period === 'month' ? value : `${value} / ${t(`budget.periodKind.${budget.period}`)}`, hint: null }
+    const value = sum(budget.limit, budget.currency)
+    return { text: budget.period === 'month' ? [value] : [value, { text: ` / ${t(`budget.periodKind.${budget.period}`)}` }], hint: null }
   }
   const rest = Number(budget.limit) - Number(row.total)
   return {
-    text: t('money.categories.ofLimit', { spent: bare(row.total), limit: money(budget.limit) }),
-    hint: rest >= 0 ? t('money.categories.left', { left: money(String(rest)) }) : t('money.categories.over', { over: money(String(-rest)) }),
+    text: parts(t('money.categories.ofLimit', { spent: mark(sum(row.total, props.currency, true)), limit: mark(sum(budget.limit)) })),
+    hint: parts(
+      rest >= 0
+        ? t('money.categories.left', { left: mark(sum(String(rest))) })
+        : t('money.categories.over', { over: mark(sum(String(-rest))) }),
+    ),
   }
+}
+
+/** The limit's words for the category sheet: «Лимит: …». */
+function sheetLimit(item: (typeof view.value)[number] | null): SumPart[] {
+  if (!item?.row.budget) return words(t('money.category.noLimit'))
+  const { mark, parts } = composeSums()
+  return parts(t('money.category.limit', { limit: mark(item.limit.text) }))
 }
 
 /** What a row shows, worked out once per row. */
@@ -125,13 +140,13 @@ function edit(row: SpendingCategory) {
             </TableCell>
             <TableCell class="px-3"><ProgressBar :value="item.bar.percent" :tone="item.bar.tone" /></TableCell>
             <TableCell class="px-3 text-right font-semibold tabular-nums">
-              {{ item.total }}
+              <MoneyPhrase :parts="item.total" />
               <span v-if="item.unpriced" class="block text-xs font-normal text-muted-foreground">{{ item.unpriced }}</span>
             </TableCell>
-            <TableCell class="px-3 text-right text-muted-foreground tabular-nums">{{ item.average }}</TableCell>
+            <TableCell class="px-3 text-right text-muted-foreground tabular-nums"><MoneyPhrase :parts="item.average" /></TableCell>
             <TableCell class="px-3 text-right tabular-nums" :class="!item.row.budget && 'text-muted-foreground'">
-              {{ item.limit.text }}
-              <span v-if="item.limit.hint" class="block text-xs text-muted-foreground">{{ item.limit.hint }}</span>
+              <MoneyPhrase :parts="item.limit.text" />
+              <span v-if="item.limit.hint" class="block text-xs text-muted-foreground"><MoneyPhrase :parts="item.limit.hint" /></span>
             </TableCell>
             <TableCell class="px-3 text-right">
               <Button v-if="!item.row.budget" variant="outline" size="sm" data-category-limit @click.stop="edit(item.row)">
@@ -146,13 +161,16 @@ function edit(row: SpendingCategory) {
       <div v-for="item in view" :key="item.row.key" class="grid gap-2 rounded-xl border bg-card p-4 shadow-sm">
         <Button variant="ghost" size="block" class="flex items-baseline gap-2 p-0 text-left hover:bg-transparent" data-category-row @click="show(item)">
           <span class="min-w-0 flex-1 truncate font-medium">{{ item.label }}</span>
-          <b class="whitespace-nowrap tabular-nums">{{ item.total }}</b>
+          <b class="whitespace-nowrap tabular-nums"><MoneyPhrase :parts="item.total" /></b>
           <span v-if="item.unpriced" class="text-xs whitespace-nowrap text-muted-foreground">{{ item.unpriced }}</span>
         </Button>
         <ProgressBar :value="item.bar.percent" :tone="item.bar.tone" />
         <div class="flex justify-between gap-2 text-xs text-muted-foreground">
-          <span>{{ t('money.categories.average') }} {{ item.average }}</span>
-          <span>{{ item.limit.hint ? `${item.limit.text} · ${item.limit.hint}` : item.limit.text }}</span>
+          <span>{{ t('money.categories.average') }} <MoneyPhrase :parts="item.average" /></span>
+          <span>
+            <MoneyPhrase :parts="item.limit.text" />
+            <template v-if="item.limit.hint"> · <MoneyPhrase :parts="item.limit.hint" /></template>
+          </span>
         </div>
         <Button v-if="!item.row.budget" variant="outline" class="h-11" data-category-limit @click="edit(item.row)">
           {{ t('money.categories.setLimitOn', { category: item.label }) }}
@@ -167,7 +185,7 @@ function edit(row: SpendingCategory) {
       :filter="props.filter"
       :months="props.months"
       :currency="props.currency"
-      :limit="opened?.row.budget ? t('money.category.limit', { limit: opened.limit.text }) : t('money.category.noLimit')"
+      :limit="sheetLimit(opened)"
       @limit="sheet = false; opened && edit(opened.row)"
     />
     <BudgetDialog v-model:open="dialog" :budget="editing.budget" :category="editing.category" :spending="editing.spending" />

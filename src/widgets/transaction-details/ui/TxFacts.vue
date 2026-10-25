@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { ReportTerm } from '@/entities/report'
 import { EntityLink } from '@/shared/ui/entity-link'
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatPct } from '@/shared/lib/format'
 import { txMeta, txSides } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
@@ -30,12 +31,12 @@ const context = useTxContext()
 
 const sides = computed(() => txSides(props.tx))
 const contact = computed(() => txMeta(props.tx).contact_id)
+const at = computed(() => txMeta(props.tx).timestamp)
 
 const rate = computed(() => {
   const pair = txPair(props.tx)
   if (!pair) return null
-  const price = formatMoney(pairRate(pair), { currency: pair.out.symbol, decimals: 2 })
-  return t('txCard.ratePer', { price, asset: pair.into.symbol })
+  return { price: pairRate(pair), currency: pair.out.symbol, asset: pair.into.symbol }
 })
 const compare = computed(() => {
   const delta = props.delta
@@ -47,9 +48,9 @@ const compare = computed(() => {
 
 const flow = computed(() => txFlowKind(props.tx))
 const base = computed(() => {
-  if (!props.baseCurrency) return null
+  if (!props.baseCurrency) return undefined
   const value = txBaseValue(props.tx, Number(props.fxPerUsd ?? 1))
-  return value === null ? t('txCard.noPrice') : formatMoney(value, { currency: props.baseCurrency })
+  return value === null ? null : { amount: value, currency: props.baseCurrency }
 })
 
 const ROW = 'flex items-baseline justify-between gap-4 py-3'
@@ -72,7 +73,10 @@ const ROW = 'flex items-baseline justify-between gap-4 py-3'
     <div v-if="rate" :class="ROW">
       <dt class="text-muted-foreground">{{ t('txCard.rate') }}</dt>
       <dd class="text-right tabular-nums" data-tx-rate>
-        {{ rate }}<span v-if="compare" class="text-muted-foreground"> · {{ compare }}</span>
+        <i18n-t keypath="txCard.ratePer" tag="span">
+          <template #price><Money :amount="rate.price" :currency="rate.currency" :decimals="2" :at="at" /></template>
+          <template #asset>{{ rate.asset }}</template>
+        </i18n-t><span v-if="compare" class="text-muted-foreground"> · {{ compare }}</span>
       </dd>
     </div>
     <div v-if="contact" :class="ROW">
@@ -81,10 +85,11 @@ const ROW = 'flex items-baseline justify-between gap-4 py-3'
         <EntityLink :target="{ kind: 'contact', id: contact }" :label="context.contactName(contact)" />
       </dd>
     </div>
-    <div v-if="base" :class="ROW">
+    <div v-if="base !== undefined" :class="ROW">
       <dt class="text-muted-foreground">{{ t('txCard.base') }}</dt>
       <dd class="text-right tabular-nums">
-        {{ base }} ·
+        <Money v-if="base" :amount="base.amount" :currency="base.currency" :at="at" />
+        <template v-else>{{ t('txCard.noPrice') }}</template> ·
         <ReportTerm :label="t(`txCard.flow.${flow}`)" :hint="t(`txCard.flowHint.${flow}`)" />
       </dd>
     </div>

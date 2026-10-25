@@ -3,10 +3,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { formatDayMonthShort } from '@/shared/lib/format'
 import { TableCell, TableRow } from '@/shared/ui/table'
 
-import { exchangeText, whereItemRoute } from '../../lib/where-view'
+import { exchangeParts, whereItemRoute } from '../../lib/where-view'
 
 /**
  * An opened «Между своими» (Paths 2 · 9): the operations behind the row, each
@@ -23,7 +24,7 @@ const items = computed(() =>
     key: `${item.at}-${index}`,
     day: formatDayMonthShort(item.at),
     route: whereItemRoute(props.row.kind, item),
-    sum: exchangeText(item),
+    sum: exchangeParts(item),
   })),
 )
 const openLabel = computed(() =>
@@ -36,7 +37,7 @@ const openLabel = computed(() =>
     <TableRow v-for="item in items" :key="item.key" class="bg-muted/40 text-xs hover:bg-muted/40" data-where-item>
       <TableCell class="px-3 text-right text-muted-foreground tabular-nums">{{ item.day }}</TableCell>
       <TableCell class="max-w-0 truncate px-3">{{ item.route }}</TableCell>
-      <TableCell class="px-3 text-right whitespace-nowrap tabular-nums">{{ item.sum }}</TableCell>
+      <TableCell class="px-3 text-right whitespace-nowrap tabular-nums"><MoneyPhrase :parts="item.sum" /></TableCell>
     </TableRow>
     <TableRow class="bg-muted/40 hover:bg-muted/40">
       <TableCell colspan="3" class="px-3 py-2 text-right">
@@ -50,7 +51,7 @@ const openLabel = computed(() =>
         <span class="truncate">{{ item.route }}</span>
         <span class="text-muted-foreground">{{ item.day }}</span>
       </span>
-      <span class="shrink-0 tabular-nums">{{ item.sum }}</span>
+      <span class="shrink-0 tabular-nums"><MoneyPhrase :parts="item.sum" /></span>
     </div>
     <RouterLink :to="props.to" class="touch-hit-lg ps-3 text-xs text-primary" data-where-open-all>{{ openLabel }} →</RouterLink>
   </div>

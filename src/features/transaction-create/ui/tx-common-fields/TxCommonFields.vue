@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { TxCategorySelect } from '../tx-category-select'
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
@@ -46,7 +47,13 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
       <Label for="tx-date">{{ t('form.date') }}</Label>
       <DateTimePicker id="tx-date" v-model="form.timestamp" mode="datetime" :placeholder="t('form.dateNow')" class="min-w-0 px-2" />
       <p v-if="rateHint && form.kind !== 'asset_sell' && form.kind !== 'trade_futures'" class="text-xs text-muted-foreground">
-        {{ rateHint }}
+        <template v-if="rateHint.text">{{ rateHint.text }}</template>
+        <i18n-t v-else keypath="tx.rate.at" tag="span">
+          <template #date>{{ rateHint.date }}</template>
+          <template #price>
+            1 {{ rateHint.symbol }} = <Money :amount="rateHint.amount" :currency="rateHint.currency" :decimals="rateHint.decimals" />
+          </template>
+        </i18n-t>
       </p>
     </div>
   </div>

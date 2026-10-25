@@ -1,5 +1,6 @@
 {
   "entity-text src/features/automation-simulate/AutomationSimulationDialog.vue": 1,
+  "file-size src/entities/transaction/ui/transactions-list/TransactionsList.vue": 253,
   "long-line src/entities/asset/ui/asset-input/AssetInput.vue": 1,
   "long-line src/entities/asset/ui/pair-input/PairInput.vue": 1,
   "long-line src/entities/report/ui/report-term/ReportTerm.vue": 1,
@@ -55,7 +56,6 @@
   "long-line src/shared/ui/widget-frame/WidgetFrame.vue": 2,
   "long-line src/widgets/analytics-overview/ui/overview-card/OverviewCard.vue": 1,
   "long-line src/widgets/dashboard-budgets/DashboardBudgets.vue": 1,
-  "long-line src/widgets/flow-list/FlowList.vue": 1,
   "long-line src/widgets/reminder-list/ui/ReminderRow.vue": 1,
   "long-line src/widgets/settings-shell/SettingsShell.vue": 1,
   "long-line src/widgets/trading-chart/ui/chart-legend/ChartLegend.vue": 1,

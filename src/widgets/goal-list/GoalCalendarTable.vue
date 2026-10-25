@@ -9,7 +9,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { call } from '@/shared/api/ipc'
-import { formatMoney, formatMonthKey } from '@/shared/lib/format'
+import { formatMonthKey } from '@/shared/lib/format'
 
 const { t } = useI18n()
 
@@ -21,7 +21,6 @@ const calendar = useQuery({
 })
 
 const monthName = (key: string) => formatMonthKey(key, { month: 'short' })
-const money = (value: string) => formatMoney(value, { currency: calendar.data.value?.currency })
 const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
 </script>
 
@@ -61,7 +60,9 @@ const isFuture = (key: string) => key > new Date().toISOString().slice(0, 7)
               <span v-if="Number(month.need) === 0" class="text-muted-foreground">—</span>
               <span v-else-if="month.done" class="text-success">✓ {{ t('goalCalendar.done') }}</span>
               <span v-else-if="isFuture(month.month)" class="text-muted-foreground">{{ t('goalCalendar.ahead') }}</span>
-              <span v-else class="text-warning">{{ t('goalCalendar.short', { amount: money(month.shortfall) }) }}</span>
+              <i18n-t v-else keypath="goalCalendar.short" tag="span" class="text-warning">
+                <template #amount><Money :amount="month.shortfall" :currency="calendar.data.value?.currency" /></template>
+              </i18n-t>
             </TableCell>
           </TableRow>
         </TableBody>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 
 import { fundCanImprove, healthFigures, healthPhrase, type HealthTone } from '../../lib/health-view'
@@ -44,9 +45,9 @@ const fundSetup = computed(() => fundCanImprove(props.report.emergency))
       >
         <span class="text-xs text-muted-foreground max-md:text-sm max-md:text-foreground">{{ t(`money.health.${figure.key}`) }}</span>
         <b class="text-xl tabular-nums max-md:row-span-2 max-md:self-center max-md:text-sm" :class="TONE[figure.tone]">
-          {{ figure.value }}
+          <MoneyPhrase :parts="figure.value" />
         </b>
-        <span class="text-xs text-muted-foreground">{{ figure.hint }}</span>
+        <span class="text-xs text-muted-foreground"><MoneyPhrase :parts="figure.hint" /></span>
         <Button
           v-if="figure.key === 'fund' && fundSetup"
           variant="outline"

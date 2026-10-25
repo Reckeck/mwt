@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Star } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { formatMoney } from '@/shared/lib/format'
 import type { FormValidation } from '@/shared/lib/form'
@@ -31,7 +32,7 @@ const props = defineProps<{
   currency: string
   /** What the goal has from the start — a calculation's starting sum. */
   already?: string | null
-  /** An edited goal's money in its wallet, formatted: a new wallet does not move it. */
+  /** An edited goal's money in its wallet (amount in the goal's currency): a new wallet does not move it. */
   saved?: string | null
 }>()
 const storeIds = defineModel<string[]>('storeIds', { required: true })
@@ -44,19 +45,20 @@ const priority = defineModel<number>('priority', { required: true })
 const active = defineModel<boolean>('active', { required: true })
 
 const { t } = useI18n()
+// money: plain — the switch's label is a string prop of SwitchRow
 const money = (value: string | number) => formatMoney(value, { decimals: 0, currency: props.currency })
 
 const offer = computed(() =>
   props.creating && props.remainder && props.remainder.currency.toLowerCase() === props.currency.toLowerCase() ? props.remainder : null,
 )
-/** «1 539 из 5 000 $ · 31 %» when the remainder goes in, or with what a calculation started from. */
+/** «1 539 $ из 5 000 $ · 31 %» when the remainder goes in, or with what a calculation started from. */
 const after = computed(() => {
   const goal = Number(props.target)
   const start = offer.value && fund.value ? Number(offer.value.amount) : Number(props.already ?? 0)
   if (!(start > 0) || !(goal > 0)) return null
   const saved = Math.min(start, goal)
   const pct = Math.round((saved / goal) * 100)
-  return t('goal.afterValue', { saved: money(saved).replace(/\s*\D+$/, ''), target: money(goal), pct })
+  return { saved, target: goal, pct }
 })
 const advanced = computed(() => Boolean(props.form.error('startsAt') || props.form.error('commitment') || props.form.error('expectedReturn')))
 </script>
@@ -65,7 +67,12 @@ const advanced = computed(() => Boolean(props.form.error('startsAt') || props.fo
   <div class="grid gap-4">
     <FormField for="goal-stores" data-tour="goal-stores" :label="t('goal.where')" required :error="props.form.error('stores')">
       <StoreNodeSelect id="goal-stores" v-model:ids="storeIds" multiple :nodes="props.nodes" :placeholder="t('goal.wherePick')" :invalid="Boolean(props.form.error('stores'))" />
-      <p class="text-xs text-muted-foreground">{{ props.saved ? t('goal.whereSaved', { saved: props.saved }) : t('goal.whereHint') }}</p>
+      <p class="text-xs text-muted-foreground">
+        <i18n-t v-if="props.saved" keypath="goal.whereSaved">
+          <template #saved><Money :amount="props.saved" :currency="props.currency" :decimals="0" /></template>
+        </i18n-t>
+        <template v-else>{{ t('goal.whereHint') }}</template>
+      </p>
     </FormField>
 
     <template v-if="props.creating">
@@ -74,12 +81,16 @@ const advanced = computed(() => Boolean(props.form.error('startsAt') || props.fo
     </template>
 
     <p v-if="props.already && Number(props.already) > 0" class="text-sm">
-      {{ t('goal.already') }} <b class="tabular-nums">{{ money(props.already) }}</b>
+      {{ t('goal.already') }} <b class="tabular-nums"><Money :amount="props.already" :currency="props.currency" :decimals="0" /></b>
       <span class="text-xs text-muted-foreground"> · {{ t('goal.alreadyHint') }}</span>
     </p>
     <div v-if="after" class="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm">
       <span>{{ t('goal.after') }}</span>
-      <b class="tabular-nums">{{ after }}</b>
+      <i18n-t keypath="goal.afterValue" tag="b" class="tabular-nums">
+        <template #saved><Money bare :amount="after.saved" :currency="props.currency" :decimals="0" /></template>
+        <template #target><Money :amount="after.target" :currency="props.currency" :decimals="0" /></template>
+        <template #pct>{{ after.pct }}</template>
+      </i18n-t>
     </div>
 
     <AdvancedFields :default-open="advanced">

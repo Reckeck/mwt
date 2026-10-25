@@ -3,7 +3,8 @@
 // A shot: { name, route, steps?, scenarios?, phone?, desktop?, canvas?: { board, frame } }.
 // A step is one of:
 //   { click: 'css' }  or  { click: { text: 'Сохранить', within?: 'css' } }
-//   { hover: 'css' }   { fill: ['css', 'text'] }   { press: 'ctrl+k' | 'Escape' | … }
+//   { hover: 'css' }   { tap: 'css' }   { hold: 'css' } — a finger, phone only; a hold lasts 0.8 s
+//   { fill: ['css', 'text'] }   { press: 'ctrl+k' | 'Escape' | … }
 //   { type: ['css', 'text'] } — real key input, for a combobox that keeps its own search term
 //   { wait: ms }       { eval: 'page code, returns anything' }
 // `login: false` — no login: the shot starts from a reloaded, locked app (mock state and LocalStorage reset), route as given.
@@ -104,12 +105,19 @@ async function step(page, item, touch) {
       return true`)
     return page.sleep(200)
   }
-  const what = item.click ?? item.hover
+  const what = item.click ?? item.hover ?? item.tap ?? item.hold
   const at = await page.eval(`${FIND}
     const el = find(${JSON.stringify(what)})
     el.scrollIntoView({ block: 'center' })
     const rect = el.getBoundingClientRect()
     return [Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2)]`)
+  if (item.tap || item.hold) {
+    const point = [{ x: at[0], y: at[1] }]
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point })
+    await page.sleep(item.hold ? 800 : 60)
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    return page.sleep(500)
+  }
   await page.mouse(at[0], at[1])
   if (item.click) {
     for (const type of ['mousePressed', 'mouseReleased']) {

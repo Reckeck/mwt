@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import { quickAddOpen } from '@/shared/lib/quick-add'
 
+import { Money } from '@/entities/currency'
 import { ReportInsights } from '@/entities/report'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -72,7 +73,9 @@ const meta = computed(() => (data.value ? Object.values(data.value)[0].meta : nu
     </template>
     <div v-if="data" class="grid grid-cols-1 gap-4">
       <Card v-if="meta?.insights.length && !props.hideInsights" data-tour="report-insights">
-        <ReportInsights :insights="meta.insights" :currency="meta.currency" />
+        <ReportInsights :insights="meta.insights" :currency="meta.currency">
+          <template #sum="{ sum }"><Money v-bind="sum" /></template>
+        </ReportInsights>
       </Card>
       <CashflowView v-if="'cashflow' in data" :report="data.cashflow" :filter="props.filter" />
       <YearView v-else-if="'year' in data" :report="data.year" :filter="props.filter" />

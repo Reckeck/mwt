@@ -6,8 +6,9 @@ import { Plus } from 'lucide-vue-next'
 
 import { GoalDialog, type GoalRemainder } from '@/features/goal-edit'
 import { useReport } from '@/widgets/analytics-reports'
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { ProgressBar } from '@/shared/ui/progress-bar'
@@ -23,8 +24,6 @@ const progress = useQuery({ queryKey: ['goal-progress'], queryFn: () => call<Goa
 const where = useReport('where', () => props.filter)
 
 const rows = computed(() => (progress.data.value ?? []).filter((entry) => entry.goal.active))
-const money = (value: string, currency: string) => formatMoney(value, { decimals: 0, currency })
-const bare = (value: string, currency: string) => money(value, currency).replace(/\s*\D+$/, '')
 const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
 
 /** What is left of the period's income, for a first goal. */
@@ -48,11 +47,17 @@ const open = ref(false)
       <li v-for="entry in rows" :key="entry.goal.id" class="grid gap-1">
         <div class="flex items-baseline justify-between gap-2 text-sm">
           <EntityLink :target="{ kind: 'goal', id: entry.goal.id }" :label="entry.goal.name" plain class="min-w-0 truncate" />
-          <span class="shrink-0 tabular-nums">{{ bare(entry.saved, entry.goal.currency) }} / {{ money(entry.goal.target_amount, entry.goal.currency) }}</span>
+          <span class="shrink-0 tabular-nums"><!-- The target's mark names the currency for both, so the saved sum shows the number only. -->
+            <Money bare :amount="entry.saved" :currency="entry.goal.currency" :decimals="0" />
+            /
+            <Money :amount="entry.goal.target_amount" :currency="entry.goal.currency" :decimals="0" />
+          </span>
         </div>
         <ProgressBar :value="pct(entry.pct)" size="sm" />
         <p v-if="entry.forecast || entry.need_per_month" class="text-xs text-muted-foreground">
-          <template v-if="entry.need_per_month">{{ t('goal.needShort', { amount: money(entry.need_per_month, entry.goal.currency) }) }}</template>
+          <i18n-t v-if="entry.need_per_month" keypath="goal.needShort">
+            <template #amount><Money :amount="entry.need_per_month" :currency="entry.goal.currency" :decimals="0" /></template>
+          </i18n-t>
           <template v-if="entry.need_per_month && entry.forecast"> · </template>
           <template v-if="entry.forecast">{{ t('goal.forecastShort', { date: formatDate(entry.forecast) }) }}</template>
         </p>
@@ -61,7 +66,10 @@ const open = ref(false)
     <div v-else-if="empty" class="grid justify-items-start gap-2 text-sm">
       <p>{{ t('money.plan.noGoals') }}</p>
       <p v-if="remainder" class="text-muted-foreground">
-        {{ t('money.plan.noGoalsHint', { month: t(`period.of.${remainder.month.slice(5, 7)}`), amount: money(remainder.amount, remainder.currency) }) }}
+        <i18n-t keypath="money.plan.noGoalsHint">
+          <template #month>{{ t(`period.of.${remainder.month.slice(5, 7)}`) }}</template>
+          <template #amount><Money :amount="remainder.amount" :currency="remainder.currency" :decimals="0" /></template>
+        </i18n-t>
       </p>
       <Button size="sm" class="max-md:h-10" @click="open = true">{{ t('money.plan.createGoal') }}</Button>
     </div>

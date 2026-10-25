@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { ClipboardCheck, X } from 'lucide-vue-next'
 import { computed } from 'vue'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { OutcomeBadge, explainRun } from '@/entities/workflow'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -55,8 +56,8 @@ const nameOf = (id: string) => (workflows.data.value ?? []).find((entry) => entr
       </div>
     </div>
     <p v-else class="text-sm" data-tour="workflow-explain">{{ explainRun(props.report, t, locale) }}</p>
-    <p v-if="summary.made.value || question" class="text-xs text-muted-foreground">
-      {{ summary.made.value }}
+    <p v-if="summary.made.value.length || question" class="text-xs text-muted-foreground">
+      <MoneyPhrase :parts="summary.made.value" />
       <template v-if="question">{{ t('workflow.runPanel.questionHint') }}</template>
     </p>
     <p v-if="dry && summary.answered.value" class="text-xs text-muted-foreground">

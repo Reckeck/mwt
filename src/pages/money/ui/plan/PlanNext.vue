@@ -4,8 +4,9 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 import { Badge } from '@/shared/ui/badge'
 
 /** «Дальше в этом месяце» (Money 2 · 9, 10): what the automations and reminders bring before the month ends. */
@@ -18,7 +19,6 @@ const items = computed(() => (upcoming.data.value ?? []).slice(0, 6))
 
 const KIND_LABEL: Partial<Record<UpcomingKind, string>> = { automation: 'automation', reminder: 'reminder' }
 const kindText = (kind: UpcomingKind) => t(`money.plan.kind.${KIND_LABEL[kind] ?? 'other'}`)
-const amountText = (item: UpcomingItem) => (item.amount ? formatMoney(item.amount, { decimals: 0, currency: item.asset?.symbol }) : '')
 </script>
 
 <template>
@@ -32,7 +32,9 @@ const amountText = (item: UpcomingItem) => (item.amount ? formatMoney(item.amoun
         <Badge variant="secondary" class="shrink-0">{{ kindText(item.kind) }}</Badge>
         <span class="min-w-0 truncate">
           {{ formatDate(item.date) }} · {{ item.title }}
-          <b v-if="item.amount" class="tabular-nums font-medium">{{ amountText(item) }}</b>
+          <b v-if="item.amount" class="tabular-nums font-medium">
+            <Money :amount="item.amount" :currency="item.asset?.symbol" :decimals="0" :at="item.at" />
+          </b>
         </span>
       </li>
     </ul>

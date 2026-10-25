@@ -5,10 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { AutomationAmountDialog } from '@/features/automation-edit'
 import { useRoute, useRouter } from 'vue-router'
 
+import { Money } from '@/entities/currency'
 import { entityKey, entityLocation } from '@/shared/lib/entity-link'
-import { formatDateTime, formatDayMonthShort, formatMoney } from '@/shared/lib/format'
+import { formatDateTime, formatDayMonthShort } from '@/shared/lib/format'
 import { scheduleText } from '@/shared/lib/planning'
-import { txId, txPrincipalLegs } from '@/shared/lib/transactions'
+import { txId, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Glance } from '@/shared/ui/glance'
@@ -56,11 +57,8 @@ function toJournal() {
   open.value = false
   void router.push(journal.value)
 }
-const amount = computed(() => {
-  const leg = txPrincipalLegs(props.tx)[0]
-  return leg ? formatMoney(leg.amount, { currency: leg.asset.symbol, signed: Number(leg.amount) > 0 }) : ''
-})
-const income = computed(() => Number(txPrincipalLegs(props.tx)[0]?.amount ?? 0) > 0)
+const leg = computed(() => txPrincipalLegs(props.tx)[0] ?? null)
+const income = computed(() => Number(leg.value?.amount ?? 0) > 0)
 function correct() {
   open.value = false
   amountOpen.value = true
@@ -82,7 +80,9 @@ function correct() {
       <div class="flex items-center gap-2">
         <Badge variant="outline" class="border-primary/40 text-primary">{{ t('glance.auto.badge') }}</Badge>
         <b class="min-w-0 flex-1 truncate">{{ automation?.name ?? t('glance.auto.title') }}</b>
-        <b class="shrink-0 text-lg tabular-nums" :class="income && 'text-success'">{{ amount }}</b>
+        <b class="shrink-0 text-lg tabular-nums" :class="income && 'text-success'">
+          <Money v-if="leg" :amount="leg.amount" :currency="leg.asset.symbol" :at="txMeta(props.tx).timestamp" :signed="income" />
+        </b>
       </div>
       <p v-if="automation" data-glance-auto-who>
         {{ t('glance.auto.who') }} <b>«{{ automation.name }}»</b>{{ booked ? `, ${booked}` : '' }}.

@@ -4,10 +4,10 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Target } from 'lucide-vue-next'
 
+import { Money } from '@/entities/currency'
 import { GoalDialog, type GoalRemainder } from '@/features/goal-edit'
 import { AnalyticsReportView, useReport } from '@/widgets/analytics-reports'
 import { drillTo } from '@/shared/lib/drill'
-import { formatMoney } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { SectionState } from '@/shared/ui/section-state'
@@ -29,7 +29,6 @@ const router = useRouter()
 const report = useReport('where', () => props.filter)
 const where = computed(() => (report.data.value && 'where' in report.data.value ? report.data.value.where : null))
 const left = computed(() => (where.value && Number(where.value.left) > 0 ? where.value.left : null))
-const money = (value: string) => formatMoney(value, { decimals: 0, currency: where.value?.meta.currency })
 const journal = computed(() => drillTo({ from: props.filter.from ?? undefined, to: props.filter.to ?? undefined, storeIds: props.filter.scope.store_ids }))
 
 const goal = ref(false)
@@ -62,7 +61,9 @@ const view = computed({
           </Button>
           <Button v-if="left" class="max-md:h-11" data-where-goal @click="goal = true">
             <Target />
-            <span class="max-md:hidden">{{ t('money.where.toGoal', { left: money(left) }) }}</span>
+            <i18n-t keypath="money.where.toGoal" tag="span" class="max-md:hidden">
+              <template #left><Money :amount="left" :currency="where.meta.currency" :decimals="0" /></template>
+            </i18n-t>
             <span class="md:hidden">{{ t('money.where.toGoalShort') }}</span>
           </Button>
         </div>

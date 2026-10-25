@@ -1,11 +1,14 @@
-import { formatDayMonthShort, formatMoney } from '@/shared/lib/format'
+import { formatDayMonthShort } from '@/shared/lib/format'
 import { txSides } from '@/shared/lib/transactions'
 
 export interface GlancePayment {
   id: string
   name: string
   day: string
+  /** The sum for `<Money :amount :currency :at>`: the template draws it. */
   amount: string
+  currency: string
+  at: string
 }
 
 /**
@@ -21,7 +24,15 @@ export function glancePayments(
     const body = tx.payment
     const { to } = txSides(tx)
     const name = body.meta.comment || (to ? names.side(to) : names.category(body.meta.categories[0] ?? ''))
-    const amount = formatMoney(body.amount, { decimals: 0, currency: body.asset.symbol })
-    return [{ id: body.meta.id, name, day: formatDayMonthShort(body.meta.timestamp), amount }]
+    return [
+      {
+        id: body.meta.id,
+        name,
+        day: formatDayMonthShort(body.meta.timestamp),
+        amount: body.amount,
+        currency: body.asset.symbol,
+        at: body.meta.timestamp,
+      },
+    ]
   })
 }

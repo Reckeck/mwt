@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
@@ -9,9 +9,7 @@ import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { SwitchRow } from '@/shared/ui/switch-row'
-import { formatMoney } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
-import { cn } from '@/shared/lib/utils'
 
 import { usePropertySell } from '../../model/use-property-sell'
 
@@ -29,8 +27,8 @@ const { nodes, held, currency, received, proceedsTo, date, archive, sale, gain, 
   () => props.positions,
   open,
 )
-const money = (value: string) => formatMoney(value, { currency: currency.value, decimals: Number(value) % 1 ? 2 : 0 })
-const signed = computed(() => (gain.value === null ? '—' : `${Number(gain.value) > 0 ? '+' : ''}${money(gain.value)}`))
+/** Whole sums without cents, the rest with. */
+const decimalsOf = (value: string) => (Number(value) % 1 ? 2 : 0)
 </script>
 
 <template>
@@ -63,12 +61,16 @@ const signed = computed(() => (gain.value === null ? '—' : `${Number(gain.valu
     <div class="flex flex-col text-sm" data-sell-figures>
       <div class="flex justify-between gap-3 py-1.5">
         <span class="text-muted-foreground">{{ t('propertySell.bookValue') }}</span>
-        <span class="tabular-nums">{{ sale ? money(sale.book_value) : '—' }}</span>
+        <span class="tabular-nums">
+          <Money v-if="sale" :amount="sale.book_value" :currency="currency" :decimals="decimalsOf(sale.book_value)" />
+          <template v-else>—</template>
+        </span>
       </div>
       <div class="flex justify-between gap-3 py-1.5">
         <span class="text-muted-foreground">{{ t('propertySell.gain') }}</span>
-        <span :class="cn('font-medium tabular-nums', gain !== null && Number(gain) > 0 && 'text-success', gain !== null && Number(gain) < 0 && 'text-destructive')" data-sell-gain>
-          {{ signed }}
+        <span class="font-medium tabular-nums" data-sell-gain>
+          <Money v-if="gain !== null" :amount="gain" :currency="currency" :decimals="decimalsOf(gain)" colored />
+          <template v-else>—</template>
         </span>
       </div>
     </div>

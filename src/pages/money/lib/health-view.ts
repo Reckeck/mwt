@@ -1,4 +1,5 @@
-import { dateFormat, formatMoney, formatPct, formatQuantity } from '@/shared/lib/format'
+import { dateFormat, formatPct, formatQuantity } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 export type HealthTone = 'success' | 'warning' | 'destructive' | 'muted'
@@ -6,10 +7,12 @@ export type HealthTone = 'success' | 'warning' | 'destructive' | 'muted'
 /** One figure of the checkup (Money 3 · 16): a label, the value, one line under it. */
 export interface HealthFigure {
   key: 'fund' | 'debts' | 'savings'
-  value: string
+  value: SumPart[]
   tone: HealthTone
-  hint: string
+  hint: SumPart[]
 }
+
+const text = (value: string): SumPart[] => [{ text: value }]
 
 const DTI_ELEVATED = 30
 const DTI_HIGH = 50
@@ -48,40 +51,53 @@ export function healthPhrase(report: HealthReport, t: Translate): string {
 function fundFigure(fund: EmergencyStatus, t: Translate): HealthFigure {
   const target = fund.fund.target_months
   if (!fund.stores.length)
-    return { key: 'fund', value: t('money.health.none'), tone: 'destructive', hint: t('money.health.fundUnset') }
-  if (fund.months_covered === null) return { key: 'fund', value: '—', tone: 'muted', hint: t('health.fund.noSpending') }
+    return {
+      key: 'fund',
+      value: text(t('money.health.none')),
+      tone: 'destructive',
+      hint: text(t('money.health.fundUnset')),
+    }
+  if (fund.months_covered === null)
+    return { key: 'fund', value: text('—'), tone: 'muted', hint: text(t('health.fund.noSpending')) }
   const covered = Number(fund.months_covered)
-  const money = (value: string) => formatMoney(value, { currency: fund.currency, decimals: 0 })
+  const { mark, parts } = composeSums()
+  const money = (amount: string): string => mark({ amount, currency: fund.currency, decimals: 0 })
   const hint = fund.target_amount
-    ? t('money.health.fundHint', { target, total: money(fund.total), goal: money(fund.target_amount) })
-    : t('money.health.fundHintPlain', { target })
+    ? parts(t('money.health.fundHint', { target, total: money(fund.total), goal: money(fund.target_amount) }))
+    : text(t('money.health.fundHintPlain', { target }))
   const tone = covered < 1 ? 'destructive' : covered < target ? 'warning' : 'success'
-  return { key: 'fund', value: t('health.fund.level', { months: formatQuantity(fund.months_covered, 1) }), tone, hint }
+  return {
+    key: 'fund',
+    value: text(t('health.fund.level', { months: formatQuantity(fund.months_covered, 1) })),
+    tone,
+    hint,
+  }
 }
 
 function debtsFigure(debts: DebtLoad, t: Translate): HealthFigure {
   if (!debts.loans.length)
-    return { key: 'debts', value: t('money.health.none'), tone: 'success', hint: t('money.health.noLoans') }
+    return { key: 'debts', value: text(t('money.health.none')), tone: 'success', hint: text(t('money.health.noLoans')) }
   const dti = debts.dti_pct === null ? null : Number(debts.dti_pct)
   const tone = dti === null || dti < DTI_ELEVATED ? 'muted' : dti < DTI_HIGH ? 'warning' : 'destructive'
-  const payments = formatMoney(debts.payments, { currency: debts.currency, decimals: 0 })
+  const { mark, parts } = composeSums()
+  const payments = mark({ amount: debts.payments, currency: debts.currency, decimals: 0 })
   const hint =
     debts.dti_pct === null
-      ? t('money.health.paymentsPlain', { payments })
-      : t('money.health.payments', { payments, pct: pct(debts.dti_pct) })
-  return { key: 'debts', value: formatMoney(debts.owed, { currency: debts.currency, decimals: 0 }), tone, hint }
+      ? parts(t('money.health.paymentsPlain', { payments }))
+      : parts(t('money.health.payments', { payments, pct: pct(debts.dti_pct) }))
+  return { key: 'debts', value: [{ amount: debts.owed, currency: debts.currency, decimals: 0 }], tone, hint }
 }
 
 function savingsFigure(report: HealthReport, t: Translate): HealthFigure {
   const month = lastSavings(report)
-  if (!month) return { key: 'savings', value: '—', tone: 'muted', hint: t('money.health.savingsNone') }
+  if (!month) return { key: 'savings', value: text('—'), tone: 'muted', hint: text(t('money.health.savingsNone')) }
   const saved = Number(month.saved_pct)
   const tone = saved < 0 ? 'destructive' : saved < Number(report.savings_target_pct) ? 'warning' : 'success'
   return {
     key: 'savings',
-    value: pct(month.saved_pct),
+    value: text(pct(month.saved_pct)),
     tone,
-    hint: t('money.health.savingsHint', { month: monthOf(month.month) }),
+    hint: text(t('money.health.savingsHint', { month: monthOf(month.month) })),
   }
 }
 

@@ -2,10 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useMoneyChartTooltip } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { formatMoney } from '@/shared/lib/format'
+import { useSettingsStore } from '@/shared/store/settings'
 import { useTheme } from '@/shared/lib/theme'
 
 import type { AllocationPieProps } from './allocation-pie.types'
@@ -18,6 +19,8 @@ const props = withDefaults(defineProps<AllocationPieProps>(), { title: '', bare:
 const { t } = useI18n()
 const { resolved } = useTheme()
 const axisColor = chartAxisColor(resolved)
+const settings = useSettingsStore()
+const moneyTooltip = useMoneyChartTooltip(computed(() => props.currency ?? settings.baseCurrency))
 
 const data = computed(() => {
   const sorted = props.slices
@@ -33,10 +36,10 @@ const option = computed<ChartOption>(() => ({
   backgroundColor: 'transparent',
   tooltip: {
     trigger: 'item',
-    // Chart tooltips are text: the hover with conversions belongs to the figures next to it.
+    // The slice's name as the title, its sum with the other currencies under it (the shared tooltip), then the share.
     formatter: (params) => {
       const item = params as unknown as { name: string; value: number; percent: number }
-      return `${item.name}: ${formatMoney(item.value, { currency: props.currency })} (${item.percent}%)`
+      return `${moneyTooltip.value({ ...item, seriesName: '' })}<div style="opacity:.7">${item.percent}%</div>`
     },
   },
   series: [

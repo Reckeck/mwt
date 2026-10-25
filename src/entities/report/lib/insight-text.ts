@@ -1,4 +1,5 @@
-import { formatMoney, formatMonthKey, formatPct } from '@/shared/lib/format'
+import { formatMonthKey, formatPct } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
@@ -45,7 +46,7 @@ const percent = (value: string | null, signed = false) =>
   formatPct(value, { decimals: Number.isInteger(Number(value)) ? 0 : 1, signed })
 
 /** One fact as a sentence of the UI language: `insight.<code>` with its numbers. */
-export function insightText(fact: Insight, ctx: InsightTextContext): string {
+export function insightText(fact: Insight, ctx: InsightTextContext): SumPart[] {
   const subject = fact.subject ?? ''
   const named =
     fact.code === 'top_category' || fact.code === 'category_grew'
@@ -60,12 +61,15 @@ export function insightText(fact: Insight, ctx: InsightTextContext): string {
   // A fact without its percent (nothing to compare with) has its own wording.
   const key =
     fact.pct === null && OPTIONAL_PCT.includes(fact.code) ? `insight.${fact.code}_abs` : `insight.${fact.code}`
-  return ctx.t(key, {
-    amount: formatMoney(fact.amount, { currency: ctx.currency, decimals: 0 }),
-    pct: percent(fact.pct),
-    // `real_change` carries the nominal percent in `amount`.
-    nominal: percent(fact.amount, true),
-    real: percent(fact.pct, true),
-    subject: named,
-  })
+  const { mark, parts } = composeSums()
+  return parts(
+    ctx.t(key, {
+      amount: mark({ amount: fact.amount, currency: ctx.currency, decimals: 0 }),
+      pct: percent(fact.pct),
+      // `real_change` carries the nominal percent in `amount`.
+      nominal: percent(fact.amount, true),
+      real: percent(fact.pct, true),
+      subject: named,
+    }),
+  )
 }

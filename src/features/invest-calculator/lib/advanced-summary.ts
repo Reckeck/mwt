@@ -1,4 +1,5 @@
-import { formatMoney, formatPct } from '@/shared/lib/format'
+import { formatPct } from '@/shared/lib/format'
+import { composeSums, type Sum, type SumPart } from '@/shared/lib/money-parts'
 
 import type { CalcForm } from '../model/calc-form'
 
@@ -13,18 +14,20 @@ const pct = (value: string) =>
  * The folded row's second line: what the rare settings hold now, so the user
  * sees what is counted without opening it — «инфляция 3,74 % · налога нет · снятий нет».
  */
-export function advancedSummary(form: CalcForm, t: Translate): string {
-  const parts: string[] = []
-  if (numeric(form.indexation) > 0) parts.push(t('invest.summary.indexation', { pct: pct(form.indexation) }))
-  parts.push(t('invest.summary.inflation', { pct: pct(form.inflation) }))
-  parts.push(numeric(form.taxPct) > 0 ? t('invest.summary.tax', { pct: pct(form.taxPct) }) : t('invest.summary.noTax'))
-  parts.push(
-    form.withdrawal.on && numeric(form.withdrawal.amount) > 0
-      ? t('invest.summary.withdrawal', {
-          amount: formatMoney(numeric(form.withdrawal.amount), { currency: form.currency, decimals: 0 }),
-          freq: t(`invest.freqShort.${form.withdrawal.freq}`),
-        })
-      : t('invest.summary.noWithdrawal'),
-  )
-  return parts.join(' · ')
+export function advancedSummary(form: CalcForm, t: Translate): SumPart[] {
+  const parts: SumPart[][] = []
+  const words = (text: string) => parts.push([{ text }])
+  if (numeric(form.indexation) > 0) words(t('invest.summary.indexation', { pct: pct(form.indexation) }))
+  words(t('invest.summary.inflation', { pct: pct(form.inflation) }))
+  words(numeric(form.taxPct) > 0 ? t('invest.summary.tax', { pct: pct(form.taxPct) }) : t('invest.summary.noTax'))
+  if (form.withdrawal.on && numeric(form.withdrawal.amount) > 0) {
+    const sum: Sum = { amount: numeric(form.withdrawal.amount), currency: form.currency, decimals: 0 }
+    const { mark, parts: phrase } = composeSums()
+    parts.push(
+      phrase(
+        t('invest.summary.withdrawal', { amount: mark(sum), freq: t(`invest.freqShort.${form.withdrawal.freq}`) }),
+      ),
+    )
+  } else words(t('invest.summary.noWithdrawal'))
+  return parts.flatMap((part, at): SumPart[] => (at ? [{ text: ' · ' }, ...part] : part))
 }

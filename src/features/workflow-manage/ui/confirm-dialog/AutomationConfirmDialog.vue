@@ -3,12 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { useCategories } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatDayMonthShort, formatMoney } from '@/shared/lib/format'
+import { formatDayMonthShort, numberFormat } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 
@@ -35,18 +35,13 @@ const card = useQuery({
 })
 
 const money = computed(() => props.entry?.money ?? null)
-const amount = computed(() => (money.value?.amount ? formatMoney(money.value.amount, { decimals: 2 }) : '—'))
-const currency = computed(() => money.value?.currency?.toUpperCase() ?? '')
 /** «10 % от 1 575 $»: the income the share was taken from. */
 const share = computed(() => {
   const percent = card.data.value?.id === sourceId.value ? card.data.value?.actions[0]?.percent : null
   const sum = Number(money.value?.amount)
   if (!percent || !sum || !money.value?.currency) return ''
   const income = (sum * 100) / Number(percent)
-  return t('automations.confirm.share', {
-    percent: formatMoney(percent, { decimals: 0 }),
-    income: formatMoney(income, { currency: money.value.currency, decimals: Number.isInteger(income) ? 0 : 2 }),
-  })
+  return { percent: numberFormat({ maximumFractionDigits: 0 }).format(Number(percent)), income, currency: money.value.currency, decimals: Number.isInteger(income) ? 0 : 2 }
 })
 const lead = computed(() => {
   const date = formatDayMonthShort(props.entry?.at)
@@ -79,10 +74,15 @@ const FIELD = 'flex items-center rounded-md border border-input bg-muted/40 px-3
       <div class="flex flex-col gap-1.5">
         <span class="text-sm font-medium">{{ t('automations.confirm.amount') }}</span>
         <div :class="[FIELD, 'h-13 gap-2 text-2xl font-semibold tabular-nums']" data-automation-confirm-amount>
-          <span class="min-w-0 flex-1 truncate">{{ amount }}</span>
-          <Badge v-if="currency" variant="secondary">{{ currency }}</Badge>
+          <span class="min-w-0 flex-1 truncate">
+            <Money v-if="money?.amount" :amount="money.amount" :currency="money.currency ?? undefined" :decimals="2" :at="props.entry?.at" />
+            <template v-else>—</template>
+          </span>
         </div>
-        <span v-if="share" class="text-xs text-muted-foreground">{{ share }}</span>
+        <i18n-t v-if="share" keypath="automations.confirm.share" tag="span" class="text-xs text-muted-foreground">
+          <template #percent>{{ share.percent }}</template>
+          <template #income><Money :amount="share.income" :currency="share.currency" :decimals="share.decimals" :at="props.entry?.at" /></template>
+        </i18n-t>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div class="flex min-w-0 flex-col gap-1.5">

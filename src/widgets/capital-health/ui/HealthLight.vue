@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { cn } from '@/shared/lib/utils'
@@ -41,14 +42,22 @@ const reasons = computed(() =>
     <ul v-if="reasons.length" class="mt-4 grid gap-3">
       <li v-for="(row, index) in reasons" :key="index" class="grid gap-0.5 border-l-2 border-border pl-3 text-sm">
         <p :class="MARK[row.reason.level]">
-          {{ row.text.what }}
+          <template v-for="(part, at) in row.text.what" :key="at">
+            <Money v-if="'amount' in part" v-bind="part" />
+            <template v-else>{{ part.text }}</template>
+          </template>
           <EntityLink
             v-if="row.store"
             :target="{ kind: 'store', id: row.store }"
             :label="props.names[row.store] ?? ''"
           />
         </p>
-        <p class="text-muted-foreground">{{ row.text.step }}</p>
+        <p class="text-muted-foreground">
+          <template v-for="(part, at) in row.text.step" :key="at">
+            <Money v-if="'amount' in part" v-bind="part" />
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
       </li>
     </ul>
   </Card>

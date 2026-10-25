@@ -5,14 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 import { assetKey, fiatRef } from '@/shared/lib/asset-ref'
 import { keepOriginalMoment, toLocalInput } from '@/shared/lib/datetime'
-import { formatMoney } from '@/shared/lib/format'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { body, txId } from '@/shared/lib/transactions'
 
-import { adjustmentLines, badRow, difference, mergeDraftRows, shownBalance } from '../lib/adjustment-rows'
-import type { AdjustmentDialogProps, AdjustmentRow } from '../store-adjust.types'
+import { adjustmentLines, badRow, difference, mergeDraftRows } from '../lib/adjustment-rows'
+import type { AdjustmentDialogProps, AdjustmentInApp, AdjustmentRow } from '../store-adjust.types'
 import { keepPreviousFor } from '@/shared/lib/query'
 import { useStoreTree } from '@/shared/api/queries'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -153,13 +152,13 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   })
 
   /** «1 014,30 $ · 95 900 ₽»: the base sum first when the account holds another currency. */
-  const inApp = computed(() => {
+  const inApp = computed<AdjustmentInApp | null>(() => {
     const row = rows.value[0]
-    if (!row) return ''
-    const own = shownBalance(row.before, row.asset)
+    if (!row) return null
+    const own = { amount: row.before, currency: row.asset.symbol }
     const base = settings.baseCurrency
-    if (row.asset.symbol.toLowerCase() === base.toLowerCase() || !node.value) return own
-    return `${formatMoney(node.value.own_base, { currency: base, decimals: 2 })} · ${own}`
+    if (row.asset.symbol.toLowerCase() === base.toLowerCase() || !node.value) return { own }
+    return { own, base: { amount: node.value.own_base, currency: base } }
   })
 
   return { fiatOnly, simple, inApp, node, title, timestamp, comment, rows, draft, changed, form, save }

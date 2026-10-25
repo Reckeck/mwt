@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { OutcomeBadge, explainRun } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 
@@ -37,7 +38,12 @@ const reply = (yes: boolean) => question.value && emit('answer', question.value.
       <h3 class="text-sm font-semibold">{{ props.report.run.dry_run ? t('workflow.runPanel.dry') : t('workflow.runPanel.live') }}</h3>
       <OutcomeBadge :outcome="props.report.run.outcome" />
     </div>
-    <p class="text-sm text-muted-foreground">{{ summary.made.value || explainRun(props.report, t, locale) }}</p>
+    <p class="text-sm text-muted-foreground">
+      <template v-if="summary.made.value.length">
+        <MoneyPhrase :parts="summary.made.value" />
+      </template>
+      <template v-else>{{ explainRun(props.report, t, locale) }}</template>
+    </p>
     <Button variant="outline" class="h-11" @click="emit('details')">{{ t('workflow.runPanel.details') }}</Button>
   </section>
 </template>

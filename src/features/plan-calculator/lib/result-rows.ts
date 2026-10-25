@@ -1,10 +1,12 @@
 import { USDT } from '@/entities/asset'
-import { formatMoney, formatPct, formatQuantity } from '@/shared/lib/format'
+import { formatPct, formatQuantity } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 
 export interface ResultRow {
   key: string
   label: string
-  value: string
+  /** Words and sums: the template draws a sum as `<Money>`. */
+  value: SumPart[]
   tone?: 'positive' | 'negative'
 }
 
@@ -19,24 +21,24 @@ export function resultRows(
   t: (key: string) => string,
 ): ResultRow[] {
   if (mode === 'converter') {
-    const money = (value: string) => formatMoney(value, { currency: baseCurrency })
+    const money = (amount: string, currency = baseCurrency): SumPart[] => [{ amount, currency }]
     return [
       { key: 'gross_in', label: t('calc.grossIn'), value: money(calc.gross_in) },
       { key: 'fee', label: t('calc.fee'), value: money(calc.fee) },
       { key: 'gross_out', label: t('calc.grossOut'), value: money(calc.gross_out) },
-      { key: 'net_out', label: t('calc.netOut'), value: formatMoney(calc.net_out, { currency: toSymbol }) },
+      { key: 'net_out', label: t('calc.netOut'), value: money(calc.net_out, toSymbol) },
     ]
   }
   // «Выход по цели · Профит · Риск до стопа · Риск / прибыль» (Money 4 · 23), all in the quote.
-  const quote = (value: string, signed = false) => formatMoney(value, { currency: USDT.symbol, decimals: 2, signed })
+  const quote = (amount: string, signed = false): SumPart => ({ amount, currency: USDT.symbol, decimals: 2, signed })
   const pct = (value: string) => formatPct(value, { signed: true, decimals: 1 })
   const rows: ResultRow[] = []
   if (!isZero(calc.exit_value)) {
-    rows.push({ key: 'exit_value', label: t('calc.exitValue'), value: quote(calc.exit_value) })
+    rows.push({ key: 'exit_value', label: t('calc.exitValue'), value: [quote(calc.exit_value)] })
     rows.push({
       key: 'pnl',
       label: t('calc.pnl'),
-      value: `${quote(calc.pnl, true)} · ${pct(calc.roi_pct)}`,
+      value: [quote(calc.pnl, true), { text: ` · ${pct(calc.roi_pct)}` }],
       tone: Number(calc.pnl) < 0 ? 'negative' : 'positive',
     })
   }
@@ -45,12 +47,16 @@ export function resultRows(
       key: 'risk',
       label: t('calc.risk'),
       // A loss up to the stop, so the true minus sign («−52,03 USDT · −5,2 %»).
-      value: `\u2212${quote(calc.risk)} · \u2212${formatPct(calc.risk_pct, { decimals: 1 })}`,
+      value: [{ text: '\u2212' }, quote(calc.risk), { text: ` · \u2212${formatPct(calc.risk_pct, { decimals: 1 })}` }],
       tone: 'negative',
     })
   }
   if (!isZero(calc.reward_risk)) {
-    rows.push({ key: 'reward_risk', label: t('calc.rewardRisk'), value: `1 : ${formatQuantity(calc.reward_risk, 1)}` })
+    rows.push({
+      key: 'reward_risk',
+      label: t('calc.rewardRisk'),
+      value: [{ text: `1 : ${formatQuantity(calc.reward_risk, 1)}` }],
+    })
   }
   return rows
 }

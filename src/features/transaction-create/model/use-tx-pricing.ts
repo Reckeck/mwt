@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
-import { formatDateTime, formatMoney } from '@/shared/lib/format'
+import { formatDateTime } from '@/shared/lib/format'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { pricedAsset, toIsoTimestamp } from '../transaction-form.model'
@@ -103,15 +103,18 @@ export function useTxPricing(state: TxFormState) {
   const rateHint = computed(() => {
     const data = quote.data.value
     // A dollar is always worth a dollar; saying so is noise.
-    if (!priced.value || priced.value.symbol.toLowerCase() === hintCode.value || form.price.trim() || !data) return ''
-    if (!data.ts) return t('tx.rate.none')
+    if (!priced.value || priced.value.symbol.toLowerCase() === hintCode.value || form.price.trim() || !data) return null
+    if (!data.ts) return { text: t('tx.rate.none') }
     const converted = hintCode.value === 'usd' ? data.price_usd : quoteInCurrency.data.value?.amount
-    if (!converted) return ''
+    if (!converted) return null
     const price = Number(converted)
-    return t('tx.rate.at', {
+    return {
       date: formatDateTime(data.ts),
-      price: `1 ${priced.value.symbol.toUpperCase()} = ${formatMoney(price, { decimals: price < 1 ? 6 : 2, currency: hintCode.value })}`,
-    })
+      symbol: priced.value.symbol.toUpperCase(),
+      amount: price,
+      currency: hintCode.value,
+      decimals: price < 1 ? 6 : 2,
+    }
   })
 
   // Moving an operation to another date re-prices it there, unless the price

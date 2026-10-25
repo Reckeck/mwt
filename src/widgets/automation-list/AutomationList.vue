@@ -16,7 +16,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
-import { formatMoney } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txKind, txLegs } from '@/shared/lib/transactions'
@@ -50,14 +50,17 @@ const storeName = (id: string) => paths.value.get(id) ?? id
  * «−25 000 RUB · Тинькофф» from the template's first leg. An amount that
  * differs shows as «~» and the current estimate (the average of the latest).
  */
-function templateLine(automation: Automation): string {
+function templateLine(automation: Automation): SumPart[] {
   const tx = automation.template as Transaction
   const leg = txLegs(tx)[0]
-  if (!leg) return t(`tx.kind.${txKind(tx)}`)
+  if (!leg) return [{ text: t(`tx.kind.${txKind(tx)}`) }]
   const varies = automation.amount_mode === 'varies'
   const value = varies && automation.estimate ? automation.estimate : leg.amount
-  const money = `${varies ? '~' : ''}${formatMoney(value, { currency: leg.asset.symbol })}`
-  return `${t(`tx.kind.${txKind(tx)}`)} · ${money} · ${storeName(leg.store_id)}`
+  return [
+    { text: `${t(`tx.kind.${txKind(tx)}`)} · ${varies ? '~' : ''}` },
+    { amount: value, currency: leg.asset.symbol },
+    { text: ` · ${storeName(leg.store_id)}` },
+  ]
 }
 
 /** On a wallet: only the automations that move money in or out of it (or its sub-accounts). */

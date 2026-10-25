@@ -3,12 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
+import { Money } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { call } from '@/shared/api/ipc'
-import { formatMoney, formatMonthKey, formatQuantity } from '@/shared/lib/format'
+import { formatMonthKey, formatQuantity } from '@/shared/lib/format'
 import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { localDate, readingDateParts } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
@@ -75,13 +76,12 @@ const preview = useQuery({
   enabled: computed(() => input.value !== null),
   placeholderData: keepPreviousData,
 })
-const money = (value: string) => formatMoney(value, { currency: props.line.item.currency, decimals: 2 })
 const used = computed(() =>
   values.value.map((value, index) => Math.max(0, Number(value.replace(',', '.')) - Number(previous.value[index] ?? 0))),
 )
 /** «Расход 125 + 70 кВт·ч → 1 036,50 ₽»; with a formula «(209 − 205) × 3,5 × 10 = 140,00 ₽». */
 const calc = computed(() => {
-  const amount = input.value && preview.data.value?.amount ? money(preview.data.value.amount) : null
+  const amount = (input.value && preview.data.value?.amount) || null
   if (!meter.value || !amount) return null
   if (meter.value.formula && !zones.value.length) {
     const filled = fillFormula(prettyFormula(meter.value.formula), {
@@ -159,7 +159,10 @@ const label1 = (index: number) => label(index).charAt(0).toUpperCase() + label(i
     <p v-if="form.firstMessage()" class="text-xs text-destructive" role="alert">{{ form.firstMessage() }}</p>
     <div class="flex items-center gap-3">
       <span class="min-w-0 flex-1 text-sm text-muted-foreground tabular-nums" data-utility-calc>
-        <template v-if="calc">{{ calc.text }} <b class="font-semibold text-foreground">{{ calc.amount }}</b></template>
+        <template v-if="calc">
+          {{ calc.text }}
+          <b class="font-semibold text-foreground"><Money :amount="calc.amount" :currency="props.line.item.currency" :decimals="2" /></b>
+        </template>
         <template v-else>{{ t('utilityItem.recalc') }}</template>
       </span>
       <Button type="submit" :class="props.phone && 'h-11'" :disabled="save.isPending.value">{{ t('utilityItem.save') }}</Button>

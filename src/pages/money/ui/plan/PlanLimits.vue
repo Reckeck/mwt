@@ -7,10 +7,11 @@ import { Plus } from 'lucide-vue-next'
 
 import { BUDGET_WARN_PERCENT, BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
 import { useReport } from '@/widgets/analytics-reports'
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { useCategories, useStoreTree } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
-import { formatMoney, pluralForm } from '@/shared/lib/format'
+import { pluralForm } from '@/shared/lib/format'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { Button } from '@/shared/ui/button'
 import { ProgressBar, type ProgressTone } from '@/shared/ui/progress-bar'
@@ -47,8 +48,6 @@ const rows = computed(() =>
       return { status, used, tone, days, label: targetText(status.budget.target) }
     }),
 )
-const money = (value: string, currency: string) => formatMoney(value, { decimals: 0, currency })
-const bare = (value: string, currency: string) => money(value, currency).replace(/\s*\D+$/, '')
 
 /** The period's biggest category: what a first limit is best set on. */
 const top = computed<{ key: string; spending: BudgetSpending } | null>(() => {
@@ -99,23 +98,37 @@ watch(
         <div class="flex items-baseline justify-between gap-2 text-sm">
           <span class="min-w-0 truncate">{{ row.label }}</span>
           <span class="shrink-0 tabular-nums">
-            {{ bare(row.status.spent, row.status.budget.currency) }} / {{ money(row.status.budget.limit, row.status.budget.currency) }}
+            <!-- The limit's mark names the currency for both, so the spent sum shows the number only. -->
+            <Money bare :amount="row.status.spent" :currency="row.status.budget.currency" :decimals="0" />
+            /
+            <Money :amount="row.status.budget.limit" :currency="row.status.budget.currency" :decimals="0" />
           </span>
         </div>
         <ProgressBar :value="row.used" :tone="row.tone" size="sm" />
         <p class="text-xs text-muted-foreground max-md:hidden">
           <template v-if="Number(row.status.remaining) > 0">
-            {{ t('money.plan.leftFor', { amount: money(row.status.remaining, row.status.budget.currency), days: row.days }) }}
+            <i18n-t keypath="money.plan.leftFor">
+              <template #amount><Money :amount="row.status.remaining" :currency="row.status.budget.currency" :decimals="0" /></template>
+              <template #days>{{ row.days }}</template>
+            </i18n-t>
             {{ t(`money.plan.days.${pluralForm(row.days, locale)}`) }}
           </template>
-          <template v-else>{{ t('money.plan.over', { amount: money(String(-Number(row.status.remaining)), row.status.budget.currency) }) }}</template>
+          <i18n-t v-else keypath="money.plan.over">
+            <template #amount>
+              <Money :amount="String(-Number(row.status.remaining))" :currency="row.status.budget.currency" :decimals="0" />
+            </template>
+          </i18n-t>
         </p>
       </li>
     </ul>
     <div v-else-if="empty" class="grid justify-items-start gap-2 text-sm">
       <p>{{ t('money.plan.noLimits') }}</p>
       <p v-if="top" class="text-muted-foreground">
-        {{ t('money.plan.noLimitsHint', { when: top.spending.when, name: topName, amount: money(top.spending.spent, top.spending.currency) }) }}
+        <i18n-t keypath="money.plan.noLimitsHint">
+          <template #when>{{ top.spending.when }}</template>
+          <template #name>{{ topName }}</template>
+          <template #amount><Money :amount="top.spending.spent" :currency="top.spending.currency" :decimals="0" /></template>
+        </i18n-t>
       </p>
       <Button v-if="top" size="sm" class="max-md:h-10" data-plan-limit-top @click="create(top.key)">{{ t('money.plan.limitOn', { name: topName }) }}</Button>
     </div>

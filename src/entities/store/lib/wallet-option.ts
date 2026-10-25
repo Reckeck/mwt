@@ -20,6 +20,7 @@ export function walletRow(node: StoreTreeNode, t: (key: string) => string, baseC
   const parent = node.path.slice(0, -1).join(' › ')
   const binding =
     typeof node.store.binding === 'object' && 'asset' in node.store.binding ? node.store.binding.asset.symbol : ''
+  // money: plain — a part of a picker option's and a search row's text, joined with the path and the asset
   const balance = formatMoney(node.subtree_base, { currency: baseCurrency })
   return {
     id: node.store.id,

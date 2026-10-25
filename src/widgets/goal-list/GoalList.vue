@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { CircleAlert, CircleCheck, Pencil, Plus, Star, Trash2 } from 'lucide-vue-next'
-import { Money } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 
 import { GoalDialog } from '@/features/goal-edit'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +13,7 @@ import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
-import { formatDate, formatMoney } from '@/shared/lib/format'
+import { formatDate } from '@/shared/lib/format'
 import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { useEmergencyStatus, useStoreTree } from '@/shared/api/queries'
@@ -50,18 +51,15 @@ const rows = computed(() => {
   return (goals.data.value ?? []).map((goal) => ({ goal, entry: byId.get(goal.id) ?? null }))
 })
 
-function issueText(issue: RealismIssue, currency: string): string {
+function issueText(issue: RealismIssue, currency: string): SumPart[] {
+  const { mark, parts } = composeSums()
+  const sum = (amount: string, code: string) => mark({ amount, currency: code })
   if ('over_commitment' in issue) {
-    return t('goal.issue.commitment', {
-      need: formatMoney(issue.over_commitment.need, { currency }),
-      commitment: formatMoney(issue.over_commitment.commitment, { currency }),
-    })
+    const { need, commitment } = issue.over_commitment
+    return parts(t('goal.issue.commitment', { need: sum(need, currency), commitment: sum(commitment, currency) }))
   }
   const data = issue.over_surplus
-  return t('goal.issue.surplus', {
-    need: formatMoney(data.need_total, { currency: data.currency }),
-    surplus: formatMoney(data.surplus, { currency: data.currency }),
-  })
+  return parts(t('goal.issue.surplus', { need: sum(data.need_total, data.currency), surplus: sum(data.surplus, data.currency) }))
 }
 
 const dialogOpen = ref(false)
@@ -186,7 +184,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
                 {{ t('goal.revise') }}
               </p>
               <p v-for="(issue, index) in entry?.issues ?? []" :key="index">
-                {{ issueText(issue, goal.currency) }}
+                <MoneyPhrase :parts="issueText(issue, goal.currency)" />
               </p>
             </div>
           </template>

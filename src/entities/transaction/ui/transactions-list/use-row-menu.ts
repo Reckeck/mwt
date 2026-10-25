@@ -93,6 +93,7 @@ export function useRowMenu(options: {
     return {
       title: meta.comment || leg?.asset.symbol || '',
       description: [formatDayMonth(meta.timestamp), route.join(' → ')].filter(Boolean).join(' · '),
+      // money: plain — the sheet's value is a string prop of ActionSheet
       value: leg ? formatMoney(leg.amount, { currency: leg.asset.symbol, signed: true, decimals: 0 }) : '',
     }
   }

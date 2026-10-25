@@ -481,6 +481,13 @@ body .driver-overlay {
   text-decoration: none;
 }
 
+/* The mark of a sum on a filled button (a primary «Направить остаток 558 $ в цель»): the muted
+   grey would vanish on the blue, so it takes the button's text colour, a little softer. */
+:is(.bg-primary, .bg-destructive) .money-symbol {
+  color: inherit;
+  opacity: 0.7;
+}
+
 body {
   margin: 0;
   background-color: var(--background);

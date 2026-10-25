@@ -4,7 +4,8 @@ import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
-import { currencySymbol, formatDate, formatMoney, formatQuantity, pluralForm } from '@/shared/lib/format'
+import { currencySymbol, formatDate, formatQuantity, pluralForm } from '@/shared/lib/format'
+import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 import type { ProgramRow } from '../bonus-programs.types'
@@ -31,15 +32,16 @@ export function useProgramRows() {
   }
 
   /** «Тинькофф · баллы = ₽» when a point is a unit of the currency, else «· 1 купон = 2,50 $». */
-  function subtitle(store: Store): string {
+  function subtitle(store: Store): SumPart[] {
     const info = store.loyalty
-    if (!info) return t('loyalty.setup')
+    if (!info) return [{ text: t('loyalty.setup') }]
     const wallet = names.value.get(info.source_store_ids[0] ?? '') ?? ''
+    const { mark, parts } = composeSums()
     const rate =
       Number(info.point_value) === 1
         ? `${t(`loyaltyUnit.${info.unit}`).toLowerCase()} = ${currencySymbol(info.currency)}`
-        : `${t(`loyaltyUnit.one.${info.unit}`)} = ${formatMoney(info.point_value, { currency: info.currency })}`
-    return [wallet, rate].filter(Boolean).join(' · ')
+        : `${t(`loyaltyUnit.one.${info.unit}`)} = ${mark({ amount: info.point_value, currency: info.currency })}`
+    return parts([wallet, rate].filter(Boolean).join(' · '))
   }
 
   const rows = computed<ProgramRow[]>(() =>

@@ -5,10 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { call } from '@/shared/api/ipc'
 import { drillTo } from '@/shared/lib/drill'
-import { formatMoney, pluralForm } from '@/shared/lib/format'
+import { pluralForm } from '@/shared/lib/format'
+import type { SumPart } from '@/shared/lib/money-parts'
 import { rangeDays } from '@/shared/lib/period'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
@@ -31,7 +33,7 @@ const props = defineProps<{
   filter: ReportFilter
   months: string[]
   currency: string
-  limit: string
+  limit: SumPart[]
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ limit: [] }>()
@@ -50,19 +52,7 @@ const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioS
 const { query: txs, rows, total } = useTxPages(txFilter)
 const rowMenu = useTxRowMenu({ duplicate: true })
 
-const money = (value: string) => formatMoney(value, { decimals: 0, currency: props.currency })
 const operations = (count: number) => t(`money.category.operations.${pluralForm(count, locale.value)}`, { count })
-const facts = computed(() => {
-  const row = props.row
-  if (!row) return ''
-  return [
-    operations(total.value ?? rows.value.length),
-    row.average ? t('money.category.usual', { average: money(row.average) }) : null,
-    props.limit,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-})
 const journal = computed(() =>
   drillTo({ from: props.filter.from ?? undefined, to: props.filter.to ?? undefined, category: props.row?.key ?? '', storeIds: props.filter.scope.store_ids }),
 )
@@ -77,8 +67,17 @@ const journal = computed(() =>
       </SheetHeader>
       <div v-if="props.row" class="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-6 pb-6 max-md:px-4">
         <section class="grid gap-1 rounded-xl border bg-card p-4 shadow-sm">
-          <b class="text-xl tabular-nums">{{ money(props.row.total) }}</b>
-          <p class="text-sm text-muted-foreground">{{ facts }}</p>
+          <b class="text-xl tabular-nums"><Money :amount="props.row.total" :currency="props.currency" :decimals="0" /></b>
+          <p class="text-sm text-muted-foreground">
+            {{ operations(total ?? rows.length) }}
+            <template v-if="props.row.average">
+              ·
+              <i18n-t keypath="money.category.usual">
+                <template #average><Money :amount="props.row.average" :currency="props.currency" :decimals="0" /></template>
+              </i18n-t>
+            </template>
+            <template v-if="props.limit.length"> · <MoneyPhrase :parts="props.limit" /></template>
+          </p>
         </section>
         <CategoryMonths
           :title="t('money.category.byMonth', { category: props.label })"

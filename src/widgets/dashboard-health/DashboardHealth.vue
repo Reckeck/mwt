@@ -6,6 +6,7 @@ import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { ArrowRight } from 'lucide-vue-next'
 
 import { HEALTH_DOT, percent, reasonText } from '@/widgets/capital-health'
+import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { CAPITAL_HEALTH_KEY } from '@/shared/api/queries'
 import { formatQuantity } from '@/shared/lib/format'
@@ -80,8 +81,18 @@ const figures = computed(() => {
           <span class="truncate font-semibold">{{ t(`health.color.${report.data.value.color}`) }}</span>
         </RouterLink>
         <template v-if="size !== 's'">
-          <p v-if="first" class="line-clamp-2 text-xs">{{ first.what }}</p>
-          <p v-if="first" class="line-clamp-2 text-xs text-muted-foreground">{{ first.step }}</p>
+          <p v-if="first" class="line-clamp-2 text-xs">
+            <template v-for="(part, at) in first.what" :key="at">
+              <Money v-if="'amount' in part" v-bind="part" />
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </p>
+          <p v-if="first" class="line-clamp-2 text-xs text-muted-foreground">
+            <template v-for="(part, at) in first.step" :key="at">
+              <Money v-if="'amount' in part" v-bind="part" />
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </p>
           <p v-else class="line-clamp-2 text-xs text-muted-foreground">
             {{ t(`health.colorHint.${report.data.value.color}`) }}
           </p>

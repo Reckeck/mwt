@@ -2,16 +2,16 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
-import { Link } from 'lucide-vue-next'
+import { Coins, Link } from 'lucide-vue-next'
 
 import { ActionMenu, ActionSheet } from '@/shared/ui/action-menu'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
-import { Money } from '@/entities/currency'
+import { Money, showMoneyCard } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
-import { txExplorerUrl, txId } from '@/shared/lib/transactions'
+import { txExplorerUrl, txId, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
 import { provideTxContext } from '@/shared/lib/tx-context'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTxGlances } from '@/shared/lib/tx-glances'
@@ -75,11 +75,29 @@ const days = computed<TxDay[]>(() =>
 /** The row's menu: the list's own actions, the explorer link (when there is one) just before the delete. */
 function actionsFor(tx: Transaction): UiAction[] {
   const own = props.rowActions?.(tx) ?? []
+  if (!own.length) return own
+  const extra: UiAction[] = []
+  // A finger holds the row for this menu, so a hold on the sum cannot open its card (Currency-1 · 5).
+  const leg = txPrincipalLegs(tx)[0]
+  if (leg && Number(leg.amount) !== 0) {
+    extra.push({
+      id: 'money',
+      label: t('money.inOtherCurrencies'),
+      icon: Coins,
+      run: () => {
+        const row = document.querySelector<HTMLElement>(`[data-tx-row="${txId(tx)}"]`)
+        showMoneyCard(
+          { amount: Number(leg.amount), currency: leg.asset.symbol.toLowerCase(), at: txMeta(tx).timestamp },
+          row?.querySelector<HTMLElement>('[data-money-convertible]') ?? null,
+        )
+      },
+    })
+  }
   const url = txExplorerUrl(tx)
-  if (!url) return own
-  const explorer: UiAction = { id: 'explorer', label: t('hist.openExplorer'), icon: Link, run: () => void call('open_explorer', { url }) }
+  if (url) extra.push({ id: 'explorer', label: t('hist.openExplorer'), icon: Link, run: () => void call('open_explorer', { url }) })
+  if (!extra.length) return own
   const at = own.findIndex((action) => action.destructive)
-  return at < 0 ? [...own, explorer] : [...own.slice(0, at), explorer, ...own.slice(at)]
+  return at < 0 ? [...own, ...extra] : [...own.slice(0, at), ...extra, ...own.slice(at)]
 }
 
 const listRoot = ref<HTMLElement | null>(null)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { Badge } from '@/shared/ui/badge'
 import { scheduleText } from '@/shared/lib/planning'
 
@@ -29,6 +30,6 @@ const { t } = useI18n()
         · {{ t(`automation.workday.short.${props.automation.workday_shift}`) }}
       </template>
     </p>
-    <p class="text-sm tabular-nums">{{ props.line }}</p>
+    <p class="text-sm tabular-nums"><MoneyPhrase :parts="props.line" /></p>
   </div>
 </template>

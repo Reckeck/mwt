@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { MoneyPhrase } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 
 import type { JournalRow } from './journal.types'
@@ -24,7 +25,10 @@ const { t } = useI18n()
     >
       <div class="flex min-w-0 flex-1 flex-col">
         <span class="truncate font-medium">{{ row.entry.name }}</span>
-        <span class="truncate text-xs text-muted-foreground">{{ row.when }} · {{ row.did }}</span>
+        <span class="truncate text-xs text-muted-foreground">
+          {{ row.when }} ·
+          <MoneyPhrase :parts="row.did" />
+        </span>
       </div>
       <Button
         v-if="row.entry.wait_id"
