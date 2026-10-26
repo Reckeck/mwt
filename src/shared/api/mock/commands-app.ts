@@ -154,6 +154,8 @@ export const appSettingsOutsideCommands: MockCommands = {
     if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
       mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
     if (input.completed_tours) mockAppSettings.completed_tours = [...new Set(input.completed_tours)]
+    if (input.declined_tours) mockAppSettings.declined_tours = [...new Set(input.declined_tours)]
+    if (input.tour_offers !== null && input.tour_offers !== undefined) mockAppSettings.tour_offers = input.tour_offers
     if (input.seen_whats_new) mockAppSettings.seen_whats_new = [...new Set(input.seen_whats_new)]
     if (input.device_name !== null && input.device_name !== undefined)
       mockAppSettings.device_name = input.device_name.trim() || null

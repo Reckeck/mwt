@@ -1,3 +1,5 @@
 export { default as BudgetDialog } from './BudgetDialog.vue'
 export * from './budget-edit.constants'
 export * from './budget-edit.types'
+export { default as BudgetDeleteDialog } from './BudgetDeleteDialog.vue'
+export * from './model/use-budget-delete'

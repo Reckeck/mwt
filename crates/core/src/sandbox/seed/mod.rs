@@ -8,6 +8,7 @@
 
 mod ids;
 mod ledger;
+mod plan;
 mod rng;
 mod spends;
 mod wallets;
@@ -47,6 +48,7 @@ fn book(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
         vault.add_transaction(planned.into_transaction(number as u128))?;
     }
     fix_holdings(vault);
+    plan::add(vault, &wallets, today)?;
     Ok(())
 }
 

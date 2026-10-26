@@ -126,6 +126,8 @@ export const useSettingsStore = defineStore('settings', {
           fx_refresh_interval_sec: patch.fx_refresh_interval_sec ?? null,
           display_decimals: patch.display_decimals ?? null,
           dashboard_today_collapsed: patch.dashboard_today_collapsed ?? null,
+          tour_offers: patch.tour_offers ?? null,
+          declined_tours: patch.declined_tours ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

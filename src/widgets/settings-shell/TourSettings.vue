@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, CircleCheck, GraduationCap, PlayCircle } from 'lucide-vue-next'
+import { ChevronDown, CircleCheck, GraduationCap } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 import { SettingsSection } from '@/shared/ui/settings-section'
+import { SwitchRow } from '@/shared/ui/switch-row'
+import { useSettingsStore } from '@/shared/store/settings'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { TOURS, tourIdOf, tourLocation, useTour } from '@/shared/lib/tour'
 import { notify } from '@/shared/lib/notify'
@@ -18,6 +20,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const tour = useTour()
+const settings = useSettingsStore()
 
 const tree = useStoreTree()
 const firstWallet = computed(() => flattenStoreTree(tree.data.value ?? []).find((node) => !node.store.archived)?.store.id ?? null)
@@ -49,6 +52,15 @@ function open(id: string) {
   if (location) void router.push(location)
 }
 
+/** «Предлагать подсказки в новых разделах»: on until the banner's «Больше не предлагать». */
+async function setOffers(on: boolean) {
+  try {
+    await tour.setOffers(on)
+  } catch {
+    notify.error(null, 'settings.saveFailed')
+  }
+}
+
 async function reset() {
   try {
     await tour.resetAll()
@@ -61,6 +73,14 @@ async function reset() {
 
 <template>
   <SettingsSection :title="t('help.learning', { done: doneCount, total: tours.length })">
+    <SwitchRow
+      id="tour-offers"
+      :model-value="settings.app?.tour_offers ?? true"
+      :label="t('tour.offersSwitch')"
+      :hint="t('tour.offersSwitchHint')"
+      class="mb-3"
+      @update:model-value="setOffers"
+    />
     <div data-tour="learning-center" class="grid gap-3">
       <ProgressBar :value="tours.length ? (doneCount / tours.length) * 100 : 0" :label="t('help.learning', { done: doneCount, total: tours.length })" />
       <p class="text-sm text-muted-foreground">
@@ -76,7 +96,7 @@ async function reset() {
           {{ t('tour.reset') }}
         </Button>
       </div>
-      <Collapsible class="grid gap-2">
+      <Collapsible class="grid gap-2" default-open>
         <CollapsibleTrigger as-child>
           <Button variant="ghost" class="w-fit">
             {{ t('help.allTours') }}
@@ -95,15 +115,8 @@ async function reset() {
                 <span v-else class="size-4 shrink-0 rounded-full border border-border" />
                 <span class="truncate">{{ t(`tourName.${entry.id}`) }}</span>
               </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="shrink-0"
-                :title="t('tour.start')"
-                :aria-label="t('tour.start')"
-                @click="open(entry.id)"
-              >
-                <PlayCircle class="size-4" />
+              <Button variant="ghost" size="sm" class="shrink-0 max-md:h-10" @click="open(entry.id)">
+                {{ t('tour.show') }}
               </Button>
             </li>
           </ul>

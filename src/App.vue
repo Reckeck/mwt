@@ -95,5 +95,7 @@ watch(
     :theme="theme"
     rich-colors
     close-button
+    expand
+    :visible-toasts="4"
   />
 </template>

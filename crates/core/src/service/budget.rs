@@ -373,6 +373,11 @@ impl UnlockedVault {
         if self.doc.budgets.len() == before {
             return Err(Error::Missing(format!("budget {id}")));
         }
+        // A deleted limit takes its notices with it: «превышен» about nothing is stale.
+        let prefix = format!("budget:{id}:");
+        self.doc
+            .notification_log
+            .retain(|record| !record.key.starts_with(&prefix));
         self.persist()
     }
 

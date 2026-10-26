@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, X } from 'lucide-vue-next'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
@@ -47,15 +47,11 @@ const vaultFile = computed(() => {
 const scroller = ref<HTMLElement | null>(null)
 const { open, isPhone, isList, activeGroup, activeTab, selectGroup, selectTab, backToList } = useSettingsNav(groups, scroller)
 
-// The first time the window opens, its tour starts once the window has rendered.
+// The window's tour starts from Help only; it closes with the window.
 const tour = useTour()
-let tourTimer: ReturnType<typeof setTimeout> | undefined
 watch(open, (isOpen) => {
-  clearTimeout(tourTimer)
-  if (isOpen) tourTimer = setTimeout(() => tour.autoStart('settings'), 900)
-  else tour.stop()
+  if (!isOpen) tour.stop()
 })
-onBeforeUnmount(() => clearTimeout(tourTimer))
 
 const tabDefs = computed(() =>
   activeGroup.value.tabs.map((tab) => ({

@@ -3,9 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { Plus } from 'lucide-vue-next'
+import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
-import { BUDGET_WARN_PERCENT, BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
+import { BUDGET_WARN_PERCENT, BudgetDeleteDialog, BudgetDialog, type BudgetSpending } from '@/features/budget-edit'
 import { useReport } from '@/widgets/analytics-reports'
 import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
@@ -67,10 +67,36 @@ const empty = computed(() => budgets.isSuccess.value && !rows.value.length)
 
 const open = ref(false)
 const category = ref('')
+const editing = ref<Budget | null>(null)
+const deleting = ref<{ budget: Budget; name: string } | null>(null)
+const deleteOpen = ref(false)
 function create(key = '') {
+  editing.value = null
   category.value = key
   open.value = true
 }
+function edit(budget: Budget) {
+  editing.value = budget
+  category.value = ''
+  open.value = true
+}
+function askDelete(budget: Budget, name: string) {
+  deleting.value = { budget, name }
+  deleteOpen.value = true
+}
+
+/** What each category spent in the period and its usual month: the hint under an edited limit's sum. */
+const spendingOf = computed(() => {
+  const data = report.data.value && 'categories' in report.data.value ? report.data.value.categories : null
+  const month = (props.filter.from ?? '').slice(5, 7)
+  const when = month ? t(`period.in.${month}`) : ''
+  const capital = when.charAt(0).toUpperCase() + when.slice(1)
+  const rows = new Map((data?.groups ?? []).flatMap((block) => block.rows).map((row) => [row.key, row]))
+  return (budget: Budget): BudgetSpending | null => {
+    const row = typeof budget.target === 'object' && 'category' in budget.target ? rows.get(budget.target.category) : undefined
+    return data && row ? { spent: row.total, average: row.average ?? null, currency: data.meta.currency, when: capital } : null
+  }
+})
 
 /** `?new=limit&category=…` from a glance or Ctrl K («Задать лимит на „Продукты“»). */
 const route = useRoute()
@@ -95,14 +121,36 @@ watch(
     </header>
     <ul v-if="rows.length" class="grid gap-3">
       <li v-for="row in rows" :key="row.status.budget.id" class="grid gap-1">
-        <div class="flex items-baseline justify-between gap-2 text-sm">
-          <span class="min-w-0 truncate">{{ row.label }}</span>
+        <div class="flex items-center justify-between gap-2 text-sm">
+          <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>
           <span class="shrink-0 tabular-nums">
             <!-- The limit's mark names the currency for both, so the spent sum shows the number only. -->
             <Money bare :amount="row.status.spent" :currency="row.status.budget.currency" :decimals="0" />
             /
             <Money :amount="row.status.budget.limit" :currency="row.status.budget.currency" :decimals="0" />
           </span>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            class="shrink-0 max-md:size-10"
+            :title="t('budget.edit')"
+            :aria-label="t('budget.edit')"
+            data-plan-limit-edit
+            @click="edit(row.status.budget)"
+          >
+            <Pencil class="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            class="shrink-0 text-destructive max-md:size-10"
+            :title="t('budget.delete')"
+            :aria-label="t('budget.delete')"
+            data-plan-limit-delete
+            @click="askDelete(row.status.budget, row.label)"
+          >
+            <Trash2 class="size-4" />
+          </Button>
         </div>
         <ProgressBar :value="row.used" :tone="row.tone" size="sm" />
         <p class="text-xs text-muted-foreground max-md:hidden">
@@ -132,6 +180,12 @@ watch(
       </p>
       <Button v-if="top" size="sm" class="max-md:h-10" data-plan-limit-top @click="create(top.key)">{{ t('money.plan.limitOn', { name: topName }) }}</Button>
     </div>
-    <BudgetDialog v-model:open="open" :category="category" :spending="category && top?.key === category ? top.spending : null" />
+    <BudgetDialog
+      v-model:open="open"
+      :budget="editing"
+      :category="category"
+      :spending="editing ? spendingOf(editing) : category && top?.key === category ? top.spending : null"
+    />
+    <BudgetDeleteDialog v-model:open="deleteOpen" :budget="deleting?.budget ?? null" :name="deleting?.name ?? ''" />
   </section>
 </template>

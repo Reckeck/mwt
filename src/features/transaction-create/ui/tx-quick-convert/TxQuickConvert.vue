@@ -49,6 +49,8 @@ const market = computed(() => {
     overpayBase: abs(convert.overpay_base),
     pct: formatPct(Math.abs(pct), { decimals: 1 }),
     // A point over the market is the exchanger's usual cut; past it the line is worth a look.
+    // The same currency as the base one: the sum is told once, not again in other rounding.
+    sameAsBase: currency.toLowerCase() === settings.baseCurrency.toLowerCase(),
     high: pct > 1,
     gain: pct < 0,
   }
@@ -99,8 +101,11 @@ const getError = computed(() => (check.error('toAmount') ? t('form.amountError')
       <p class="flex justify-between gap-3" data-tx-overpay>
         <span>{{ t(market.gain ? 'tx.quick.underpay' : 'tx.quick.overpay') }}</span>
         <b class="text-right font-semibold tabular-nums" :class="market.high ? 'text-warning' : market.gain && 'text-success'">
-          <Money :amount="market.overpay" :currency="market.currency" :decimals="0" /> ·
-          <Money :amount="market.overpayBase" :currency="settings.baseCurrency" /> · {{ market.pct }}
+          <template v-if="market.sameAsBase"><Money :amount="market.overpay" :currency="market.currency" /> · {{ market.pct }}</template>
+          <template v-else>
+            <Money :amount="market.overpay" :currency="market.currency" :decimals="0" /> ·
+            <Money :amount="market.overpayBase" :currency="settings.baseCurrency" /> · {{ market.pct }}
+          </template>
         </b>
       </p>
     </template>

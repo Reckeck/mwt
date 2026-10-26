@@ -1,4 +1,4 @@
-import { computed, onUnmounted, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useEventListener, useOnline } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -24,11 +24,13 @@ export function useConnectivity() {
   return { summary, isOnline }
 }
 
-/** Guided tours: «?» starts the page's tour; a first visit starts it once. */
+/** Guided tours: «?» starts the page's tour; a first visit only offers it (a banner). */
 export function useTourAutostart() {
   const route = useRoute()
   const tour = useTour()
   const routeTour = computed(() => tourIdOf(String(route.name ?? '')))
+  /** The screen whose tour the banner offers now. */
+  const offer = ref<string | null>(null)
   let tourTimer: ReturnType<typeof setTimeout> | undefined
   watch(
     routeTour,
@@ -37,6 +39,7 @@ export function useTourAutostart() {
       // one on screen closes with its page.
       clearTimeout(tourTimer)
       tour.stop()
+      offer.value = null
       const wanted = route.query.tour === id
       if (!tour.hasTour(id)) return
       // Let the page render its widgets before pointing at them.
@@ -46,13 +49,13 @@ export function useTourAutostart() {
         if (route.query.lesson && !wanted) return
         // `?tour=<route>` asks for it explicitly (the learning centre, «Что нового»).
         if (wanted) tour.start(id)
-        else tour.autoStart(id)
+        else if (tour.shouldOffer(id)) offer.value = id
       }, 1200)
     },
     { immediate: true },
   )
   onUnmounted(() => clearTimeout(tourTimer))
-  return { tour, routeTour }
+  return { tour, routeTour, offer }
 }
 
 /**

@@ -23,3 +23,10 @@ pub fn store(number: u128) -> String {
 pub fn transaction(number: u128) -> String {
     Uuid::from_u128(TRANSACTION + number).to_string()
 }
+
+const PLAN: u128 = 0x5a4d_0004_0000_4000_8000_0000_0000_0000;
+
+/// Limits, goals and automations share one counter: they never meet in one list.
+pub fn plan(number: u128) -> String {
+    Uuid::from_u128(PLAN + number).to_string()
+}

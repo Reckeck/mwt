@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Star } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
-import { StoreNodeSelect } from '@/entities/store'
+import { StoreLeafSelect } from './store-leaf-select'
 import { formatMoney } from '@/shared/lib/format'
 import type { FormValidation } from '@/shared/lib/form'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
@@ -18,7 +18,7 @@ import { GOAL_SAVE_PCT } from '../goal-edit.constants'
 import type { GoalField, GoalRemainder } from '../goal-edit.types'
 
 /**
- * Step 2 (Money 2 · 8): where the savings lie, whether this month's remainder
+ * Where the savings lie (one wallet), by when, whether this month's remainder
  * goes in at once and a share of each salary after it; what the goal will
  * show once saved. The rare terms wait under «Ещё».
  */
@@ -36,6 +36,12 @@ const props = defineProps<{
   saved?: string | null
 }>()
 const storeIds = defineModel<string[]>('storeIds', { required: true })
+const deadline = defineModel<string>('deadline', { required: true })
+/** A goal has exactly one wallet: the list holds one id. */
+const storeId = computed({
+  get: () => storeIds.value[0] ?? '',
+  set: (id: string) => (storeIds.value = id ? [id] : []),
+})
 const fund = defineModel<boolean>('fund', { required: true })
 const autosave = defineModel<boolean>('autosave', { required: true })
 const startsAt = defineModel<string>('startsAt', { required: true })
@@ -66,13 +72,17 @@ const advanced = computed(() => Boolean(props.form.error('startsAt') || props.fo
 <template>
   <div class="grid gap-4">
     <FormField for="goal-stores" data-tour="goal-stores" :label="t('goal.where')" required :error="props.form.error('stores')">
-      <StoreNodeSelect id="goal-stores" v-model:ids="storeIds" multiple :nodes="props.nodes" :placeholder="t('goal.wherePick')" :invalid="Boolean(props.form.error('stores'))" />
+      <StoreLeafSelect id="goal-stores" v-model="storeId" :nodes="props.nodes" :placeholder="t('goal.wherePick')" :invalid="Boolean(props.form.error('stores'))" />
       <p class="text-xs text-muted-foreground">
         <i18n-t v-if="props.saved" keypath="goal.whereSaved">
           <template #saved><Money :amount="props.saved" :currency="props.currency" :decimals="0" /></template>
         </i18n-t>
         <template v-else>{{ t('goal.whereHint') }}</template>
       </p>
+    </FormField>
+
+    <FormField for="goal-deadline" :label="t('goal.deadline')" :error="props.form.error('deadline')">
+      <DateTimePicker id="goal-deadline" v-model="deadline" :placeholder="t('goal.noDeadline')" />
     </FormField>
 
     <template v-if="props.creating">

@@ -231,3 +231,22 @@ fn a_reset_brings_back_the_original_data() {
         "the vault and its lock"
     );
 }
+
+#[test]
+fn the_demo_has_limits_goals_and_automations() {
+    let dir = tempdir().unwrap();
+    let vault = SandboxDir::in_cache(dir.path()).create(today()).unwrap();
+    assert_eq!(vault.doc.budgets.len(), 3);
+    assert_eq!(vault.doc.goals.len(), 2);
+    assert_eq!(vault.doc.workflows.len(), 3);
+    // One limit is over: the demo shows the red card too.
+    let over = vault
+        .budget_status(
+            today().and_hms_opt(12, 0, 0).unwrap().and_utc().timestamp(),
+            "UTC",
+        )
+        .iter()
+        .filter(|status| status.remaining.is_negative())
+        .count();
+    assert!(over >= 1, "no limit is over");
+}
