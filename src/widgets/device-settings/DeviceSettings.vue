@@ -9,6 +9,7 @@ import { call } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 import { usePlatform } from '@/shared/lib/platform'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useVaultStore } from '@/shared/store/vault'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectItem } from '@/shared/ui/select'
@@ -20,6 +21,8 @@ import { SwitchRow } from '@/shared/ui/switch-row'
  */
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+// The sandbox must not change the system (starting with it, the tray): those switches wait for a real vault.
+const sandbox = computed(() => useVaultStore().sandbox)
 const queryClient = useQueryClient()
 const { isDesktop } = usePlatform()
 
@@ -83,15 +86,17 @@ const setAutostart = useMutation({
         id="minimize-to-tray"
         :label="t('settings.minimizeToTray')"
         :model-value="settingsStore.app?.minimize_to_tray ?? settingsStore.vault?.minimize_to_tray ?? true"
+        :disabled="sandbox"
+        :hint="sandbox ? t('sandbox.settingOff') : undefined"
         @update:model-value="(value: boolean) => void persistDevice({ minimize_to_tray: value })"
       />
       <SwitchRow
         plain
         id="device-autostart"
         :label="t('notices.autostart')"
-        :hint="t('notices.autostartHint')"
+        :hint="sandbox ? t('sandbox.settingOff') : t('notices.autostartHint')"
         :model-value="autostart.data.value ?? false"
-        :disabled="setAutostart.isPending.value"
+        :disabled="sandbox || setAutostart.isPending.value"
         @update:model-value="(value) => setAutostart.mutate(Boolean(value))"
       />
     </template>

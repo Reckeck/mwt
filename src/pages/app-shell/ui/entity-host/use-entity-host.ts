@@ -37,13 +37,25 @@ export function useEntityHost() {
   })
 
   const isTx = computed(() => top.value?.kind === 'tx')
-  /** The list's copy shows at once; the core's copy covers a link opened from an address. */
+  /**
+   * The list's copy shows at once; the core's copy replaces it as soon as it is read, so a
+   * saved edit shows its new values, and covers a link opened from an address.
+   */
   const openedTx = computed<Transaction | null>(() => {
     if (!isTx.value) return null
     const cached = txDetailsTx.value
-    if (cached && txId(cached) === top.value?.id) return cached
-    return current.value?.transaction ?? null
+    const fresh = current.value?.transaction
+    if (fresh) return fresh
+    if (cached && txId(cached) === top.value?.id && !current.value?.missing) return cached
+    return null
   })
+  /** A deleted operation has no card to show: the one under it (or the page) comes back. */
+  watch(
+    () => isTx.value && current.value?.missing === true,
+    (gone) => {
+      if (gone) nav.back()
+    },
+  )
   const tx = useLatestTx(openedTx)
   /** Ctrl K lists an operation by its comment and day («Маме до зарплаты · 20 окт»). */
   watch(tx, (shown) => {

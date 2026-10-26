@@ -1,4 +1,4 @@
-import { computed, watch } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
@@ -92,7 +92,10 @@ export function useTxKind(state: TxFormState) {
 
   /** The kind always has a value: pressing the active one again is ignored. */
   function pickKind(value: unknown) {
-    if (typeof value === 'string' && value) form.kind = value as TxKind
+    if (typeof value !== 'string' || !value) return
+    form.kind = value as TxKind
+    // Focus follows the tab: what is typed next goes to the amount (the typed one stays), not to nowhere.
+    void nextTick(() => document.getElementById('tx-amount')?.focus())
   }
 
   const verbLabel = (kind: TxKind) =>

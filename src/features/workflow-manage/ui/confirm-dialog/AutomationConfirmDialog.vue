@@ -52,7 +52,11 @@ const lead = computed(() => {
   return t('automations.confirm.lead', { date })
 })
 const from = computed(() => (money.value?.from_store ? props.storeName(money.value.from_store) : '—'))
-const to = computed(() => (money.value?.to_store ? props.storeName(money.value.to_store) : '—'))
+const to = computed(() => {
+  if (money.value?.to_store) return props.storeName(money.value.to_store)
+  // A payment goes to a category, not to a wallet.
+  return money.value?.category ? categoryKeyLabel(money.value.category, categories.data.value, t) : '—'
+})
 
 function answer(yes: boolean) {
   const id = props.entry?.wait_id

@@ -7,7 +7,7 @@ import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
 import { noticeReminderId, noticeRoute, reachable } from '@/shared/lib/notice-link'
-import { notify } from '@/shared/lib/notify'
+import { afterActionToast, notify } from '@/shared/lib/notify'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 import { rejectText } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
@@ -78,6 +78,8 @@ export function useBackendNotices() {
     const pay = reminders.find((entry) => entry.id === reminderId)?.pay
     const payNow = () =>
       openQuickAdd({ kind: 'payment', category: pay?.category ?? undefined, storeId: pay?.store_id ?? undefined })
+    // A toast with «Отменить» on screen is not pushed out by a notice: it waits its turn (it stays in the bell).
+    await afterActionToast()
     toast.info(record.title, {
       description: record.body,
       duration: reminderId ? 60_000 : 8_000,

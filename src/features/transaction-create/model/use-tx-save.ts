@@ -14,7 +14,7 @@ import { emptyForm, formToInput, formToInputs, isLinked } from '../transaction-f
 import type { TxFormState } from './use-tx-form-state'
 
 /** Every query a saved operation can show up in. */
-const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
+const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances'], ['entity-card']]
 
 /**
  * Writing the operation: one, or a linked chain when the money lands on
@@ -69,8 +69,11 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
           // A copy: the saved asset is the user's now, so a wallet whose largest position
           // changed after this save does not swap it (autofill replaces only its own value).
           asset: form.asset && { ...toRaw(form.asset) },
-          // The short form runs in series (Ctrl Enter): the date stays for the next one.
-          ...(props.compact ? { timestamp: form.timestamp } : {}),
+          // The short form runs in series (Ctrl Enter): the wallet, the category and the date
+          // stay for the next one (the toast says so, `quickAdd.kept`).
+          ...(props.compact
+            ? { timestamp: form.timestamp, storeId: form.storeId, categories: [...form.categories] }
+            : {}),
         })
       lookup.reset()
       // The first operation with a hash asks once whether it may be looked up.

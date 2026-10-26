@@ -82,7 +82,8 @@ export function statusTone(status: JournalStatus): RunTone {
 export function runMoney(entry: JournalEntry, names: Names): SumPart[] {
   const { money } = entry
   const sum = money.amount && money.currency ? cardSum(money.amount, money.currency, entry.at) : null
-  const to = money.to_store ? names.store(money.to_store) : ''
+  // Money that leaves lands in a wallet or, for a payment, in a category.
+  const to = money.to_store ? names.store(money.to_store) : money.category ? names.category(money.category) : ''
   const from = money.from_store ? names.store(money.from_store) : ''
   if (sum && to) return [sum, { text: ` → ${to}` }]
   if (sum && from) return [sum, { text: ` · ${from}` }]

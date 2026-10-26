@@ -27,13 +27,19 @@ pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, Str
     status_of(&state)
 }
 
-fn status_of(state: &AppState) -> Result<VaultStatus, String> {
-    let path = state
+pub(crate) fn status_of(state: &AppState) -> Result<VaultStatus, String> {
+    let mut path = state
         .vault_path
         .lock()
         .map_err(|_| "lock".to_string())?
         .clone();
     let guard = lock_vault(state).map_err(err_to_string)?;
+    // The sandbox keeps the real path as the "last vault"; what is open is its own file.
+    if crate::commands::sandbox::is_active(state)
+        && let Some(vault) = guard.as_ref()
+    {
+        path.clone_from(&vault.path);
+    }
     let unlocked = guard.is_some();
     let info = guard.as_ref().map(info_of);
     let encrypted = info.as_ref().map_or_else(
@@ -239,6 +245,7 @@ pub async fn set_vault_password(
     input: SetVaultPasswordInput,
     state: State<'_, AppState>,
 ) -> Result<SetVaultPasswordResult, String> {
+    crate::commands::sandbox::refuse(&state, "a vault password")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     let removed_copies = vault
@@ -256,6 +263,7 @@ pub async fn remove_vault_password(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    crate::commands::sandbox::refuse(&state, "a vault password")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     if !input.external_copy_too

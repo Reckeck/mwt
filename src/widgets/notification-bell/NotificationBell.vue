@@ -12,6 +12,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDate, formatDateTime } from '@/shared/lib/format'
 import { noticeRoute, reachable } from '@/shared/lib/notice-link'
 import { settingsQuery } from '@/shared/lib/settings-link'
+import { localDate } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
 
 /** The bell: what was told, by day, newest first; unread ones stand out. */
@@ -23,11 +24,11 @@ const open = ref(false)
 const notices = useQuery({ queryKey: ['notifications'], queryFn: () => call<NoticeRecord[]>('list_notifications') })
 const unread = computed(() => (notices.data.value ?? []).filter((record) => !record.read).length)
 
-/** Grouped by the day it was shown. */
+/** Grouped by the local day it was shown (the stamp is UTC: its date can be the day before). */
 const days = computed(() => {
   const groups = new Map<string, NoticeRecord[]>()
   for (const record of notices.data.value ?? []) {
-    const day = record.delivered_at.slice(0, 10)
+    const day = localDate(new Date(record.delivered_at))
     groups.set(day, [...(groups.get(day) ?? []), record])
   }
   return [...groups.entries()]
@@ -93,7 +94,7 @@ function openNotice(record: NoticeRecord) {
           <Button variant="outline" size="sm" @click="openSettings">{{ t('notices.openSettings') }}</Button>
         </EmptyState>
         <section v-for="[day, records] in days" :key="day" class="grid gap-1 pb-3">
-          <p class="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ formatDate(day) }}</p>
+          <p class="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{{ formatDate(records[0].delivered_at) }}</p>
           <Button
             variant="ghost"
             size="block"

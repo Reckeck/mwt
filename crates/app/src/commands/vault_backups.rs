@@ -23,6 +23,7 @@ pub async fn list_vault_backups(state: State<'_, AppState>) -> Result<Vec<VaultB
 /// Copy the vault file to a new backup now.
 #[tauri::command]
 pub async fn create_vault_backup(state: State<'_, AppState>) -> Result<VaultBackup, String> {
+    crate::commands::sandbox::refuse(&state, "a backup copy")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let file = guard
         .as_mut()
@@ -39,6 +40,7 @@ pub async fn restore_vault_backup(
     input: RestoreVaultBackupInput,
     state: State<'_, AppState>,
 ) -> Result<VaultBackup, String> {
+    crate::commands::sandbox::refuse(&state, "restoring a backup")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let safety = guard
         .as_mut()

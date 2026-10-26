@@ -935,7 +935,11 @@ amount: Amount | null,
 /**
  * Lowercase code: `usd`, `usdt`.
  */
-currency: string | null, from_store: string | null, to_store: string | null, };
+currency: string | null, from_store: string | null, to_store: string | null, 
+/**
+ * The category key a payment goes to (the «where» of money that leaves).
+ */
+category: string | null, };
 
 /**
  * «Если»: what starts it.
