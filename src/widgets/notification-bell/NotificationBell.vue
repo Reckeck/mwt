@@ -71,9 +71,10 @@ function openNotice(record: NoticeRecord) {
     <Bell class="size-4" />
     <span
       v-if="unread"
-      class="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-2xs font-semibold leading-4 text-destructive-foreground"
+      class="absolute right-2 top-2 size-2 rounded-full bg-destructive ring-2 ring-background"
+      data-bell-dot
     >
-      {{ unread > 99 ? '99+' : unread }}
+      <span class="sr-only">{{ unread }}</span>
     </span>
   </Button>
 

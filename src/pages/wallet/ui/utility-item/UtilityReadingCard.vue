@@ -127,8 +127,8 @@ const label1 = (index: number) => label(index).charAt(0).toUpperCase() + label(i
     @submit.prevent="form.submit(save.mutate, $event)"
   >
     <p class="text-sm font-medium">{{ t('utilityItem.readingFor', { month }) }}</p>
-    <div :class="cn('grid gap-2.5', values.length > 1 ? 'grid-cols-3' : props.phone ? 'grid-cols-1' : 'grid-cols-2')">
-      <div v-for="(_, index) in values" :key="index" class="grid content-start gap-1" :data-invalid="form.invalidAttr(`v${index}`)">
+    <div :class="cn('grid gap-2.5', values.length > 1 ? (props.phone ? 'grid-cols-2' : 'grid-cols-3') : props.phone ? 'grid-cols-1' : 'grid-cols-2')">
+      <div v-for="(_, index) in values" :key="index" class="grid min-w-0 content-start gap-1" :data-invalid="form.invalidAttr(`v${index}`)">
         <span class="text-sm font-medium">{{ label1(index) }} <span class="text-destructive">*</span></span>
         <span class="relative">
           <AmountInput
@@ -144,7 +144,7 @@ const label1 = (index: number) => label(index).charAt(0).toUpperCase() + label(i
         </span>
         <span v-if="values.length === 1" class="text-xs text-muted-foreground">{{ t('utilityItem.oneNumber') }}</span>
       </div>
-      <div class="grid content-start gap-1" :data-invalid="form.invalidAttr('date')">
+      <div :class="cn('grid min-w-0 content-start gap-1', props.phone && values.length > 1 && 'col-span-full')" :data-invalid="form.invalidAttr('date')">
         <span class="text-sm font-medium">{{ t('utilityItem.readDay') }}</span>
         <DateTimePicker
           v-model="date"

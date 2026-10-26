@@ -72,7 +72,7 @@ const TRIGGER =
           <ChevronDown class="size-4 shrink-0 opacity-60" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" class="flex w-[520px] max-w-[calc(100vw-2rem)] rounded-[10px] p-0" data-period-popover>
+      <PopoverContent align="start" :collision-padding="16" class="flex w-[520px] max-w-(--reka-popover-content-available-width) rounded-[10px] p-0" data-period-popover>
         <div class="flex w-[190px] shrink-0 flex-col border-r border-border p-1.5">
           <button
             v-for="preset in PERIOD_PRESETS"

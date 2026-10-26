@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery } from '@tanstack/vue-query'
-import { Check } from 'lucide-vue-next'
+import { Check, Plus, ShieldCheck, Wallet, Zap } from 'lucide-vue-next'
 
 import { StoreCreateDialog } from '@/features/store-create'
 import { call } from '@/shared/api/ipc'
@@ -26,6 +26,8 @@ const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Au
 
 const stores = computed(() => flattenStoreTree(tree.data.value ?? []))
 const txCount = computed(() => stores.value.reduce((sum, node) => sum + node.own_tx_count, 0))
+
+const ICONS = { vault: ShieldCheck, wallet: Wallet, operation: Plus, salary: Zap } as const
 
 type Step = { key: 'vault' | 'wallet' | 'operation' | 'salary'; done: boolean; hint: string }
 const steps = computed<Step[]>(() => [
@@ -76,6 +78,7 @@ function start(key: Step['key']) {
           aria-hidden="true"
         >
           <Check v-if="step.done" class="size-4" />
+          <component :is="ICONS[step.key]" v-else class="size-4 text-muted-foreground" />
         </span>
         <div class="grid min-w-0 flex-1">
           <p :class="cn('text-sm font-medium', step.done && 'text-muted-foreground line-through')">

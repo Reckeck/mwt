@@ -81,7 +81,7 @@ async function reset() {
       class="mb-3"
       @update:model-value="setOffers"
     />
-    <div data-tour="learning-center" class="grid gap-3">
+    <div data-tour="learning-center" class="grid min-w-0 grid-cols-1 gap-3">
       <ProgressBar :value="tours.length ? (doneCount / tours.length) * 100 : 0" :label="t('help.learning', { done: doneCount, total: tours.length })" />
       <p class="text-sm text-muted-foreground">
         {{ next ? t('help.nextLesson', { name: t(`tourName.${next}`) }) : t('help.allDone') }}
@@ -96,7 +96,7 @@ async function reset() {
           {{ t('tour.reset') }}
         </Button>
       </div>
-      <Collapsible class="grid gap-2" default-open>
+      <Collapsible class="grid min-w-0 gap-2" default-open>
         <CollapsibleTrigger as-child>
           <Button variant="ghost" class="w-fit">
             {{ t('help.allTours') }}
@@ -104,7 +104,7 @@ async function reset() {
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ul class="grid gap-1 @xl:grid-cols-2">
+          <ul class="grid grid-cols-1 gap-1 @xl:grid-cols-2">
             <li
               v-for="entry in tours"
               :key="entry.id"

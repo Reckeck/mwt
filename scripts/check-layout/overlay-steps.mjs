@@ -41,6 +41,15 @@ export async function pointOf(page, selector, text) {
     el.scrollIntoView({ block: 'center', inline: 'center' })
     await new Promise((done) => requestAnimationFrame(done))
     const rect = el.getBoundingClientRect()
+    // A see-through button (an openable row) can have a chip with its own action over its centre:
+    // press where the element itself is on top, as a person would.
+    const hits = (x, y) => { const top = document.elementFromPoint(x, y); return top && (top === el || el.contains(top)) }
+    for (const fx of [0.5, 0.15, 0.85, 0.3, 0.7]) {
+      for (const fy of [0.5, 0.25, 0.75]) {
+        const x = Math.round(rect.left + rect.width * fx), y = Math.round(rect.top + rect.height * fy)
+        if (hits(x, y)) return [x, y]
+      }
+    }
     return [Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2)]`)
 }
 

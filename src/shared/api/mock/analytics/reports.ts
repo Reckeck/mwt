@@ -3,6 +3,7 @@
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { flows, meta, money } from './flows'
 import type { AnalyticsMockContext, MockFlow } from './flows'
+import { mockNetWorth } from '../market'
 
 export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): CashflowReport {
   const all = flows(ctx)
@@ -126,6 +127,7 @@ export function networth(ctx: AnalyticsMockContext, months: string[], filter: Re
   // Like the core: every leg a store holds (fees too), split by the store's kind.
   const kinds = new Map(ctx.stores.map((store) => [store.id, store.kind]))
   const scope = filter.scope.store_ids
+  const current = new Date().toISOString().slice(0, 7)
   const points = months.map((month): NetworthPoint => {
     const split = { financial: 0, crypto: 0, non_financial: 0, liabilities: 0 }
     for (const tx of ctx.transactions) {
@@ -143,6 +145,20 @@ export function networth(ctx: AnalyticsMockContext, months: string[], filter: Re
       }
     }
     const net = split.financial + split.non_financial - split.liabilities
+    if (month === current && !scope.length) {
+      // Like the core: the current point is today's valuation, the one the summary shows.
+      const worth = mockNetWorth()
+      return {
+        month,
+        financial: money(Number(worth.financial)),
+        crypto: money(Math.min(split.crypto, Number(worth.financial))),
+        non_financial: money(Number(worth.non_financial)),
+        receivables: money(Number(worth.receivables)),
+        liabilities: money(Number(worth.liabilities)),
+        payables: money(Number(worth.payables)),
+        net: money(Number(worth.net)),
+      }
+    }
     return {
       month,
       financial: money(split.financial),

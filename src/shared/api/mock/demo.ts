@@ -246,7 +246,7 @@ const daysAgo = (days: number, hour: number) => {
   return date.toISOString()
 }
 
-/** The notification log of the browser mock: two read ones, so the calendar has something to show. */
+/** The notification log of the browser mock: one read and one unread (the bell's dot), so the calendar has something to show. */
 export const mockNotices: NoticeRecord[] = [
   {
     key: 'reminder:demo-salary',
@@ -266,7 +266,7 @@ export const mockNotices: NoticeRecord[] = [
     link: 'automations-alerts',
     at: daysAgo(2, 14),
     delivered_at: daysAgo(2, 14),
-    read: true,
+    read: false,
   },
 ]
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */

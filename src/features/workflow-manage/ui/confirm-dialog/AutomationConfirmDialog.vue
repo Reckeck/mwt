@@ -63,7 +63,7 @@ function answer(yes: boolean) {
     </div>
     <template #footer>
       <Button variant="outline" class="max-md:h-11" :disabled="answerWait.isPending.value" data-automation-skip @click="answer(false)">
-        {{ t('actions.cancel') }}
+        {{ t('automations.confirm.skip') }}
       </Button>
       <Button class="max-md:h-11" :disabled="answerWait.isPending.value" data-automation-yes @click="answer(true)">
         {{ t('automations.confirm.run') }}

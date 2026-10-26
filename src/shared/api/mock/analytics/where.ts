@@ -1,6 +1,6 @@
 /** «Куда ушли»: the core's `where_went` over the mock history. */
 
-import { txMeta } from '@/shared/lib/transactions'
+import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockContacts } from '../ledger/seed'
 import { flows, meta, money } from './flows'
 import type { AnalyticsMockContext } from './flows'
@@ -98,12 +98,27 @@ export function whereReport(ctx: AnalyticsMockContext, months: string[], filter:
       )
     }
   }
+  // Fees of the period (network, exchange): the core's «Потери».
+  const fees = ctx.transactions
+    .filter((tx) => inPeriod(txMeta(tx).timestamp))
+    .flatMap((tx) => txLegs(tx).filter((leg) => leg.role === 'fee'))
+  const lost = row(
+    'losses',
+    fees.map((leg) =>
+      item({
+        label: leg.asset.symbol,
+        qty: leg.amount,
+        unit: leg.asset.symbol,
+        value: priced(leg.amount, leg.asset.symbol),
+      }),
+    ),
+  )
   const spending = row(
     'spending',
     [...spent].map(([label, value]) => item({ label, value: money(value) })),
     outgoing.length,
   )
-  const rows = [spending, row('lent', lent), row('moved', moved), row('invested', invested)].filter(
+  const rows = [spending, row('lent', lent), row('moved', moved), row('invested', invested), lost].filter(
     (entry) => entry.count > 0,
   )
   return { meta: meta(ctx, months, filter), income: money(income), rows, left: money(income - Number(spending.value)) }

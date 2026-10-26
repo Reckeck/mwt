@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { DropdownMenuItem, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { ChevronDown } from 'lucide-vue-next'
 
+import { ActionSheet } from '@/shared/ui/action-menu'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { MENU_ITEM_CLASS } from '@/shared/ui/context-menu'
+import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 
 import type { RouteTabsProps } from './route-tabs.types'
@@ -19,6 +21,8 @@ const props = withDefaults(defineProps<RouteTabsProps>(), { keepQuery: false, mo
 
 const route = useRoute()
 const router = useRouter()
+const phone = useIsPhone()
+const sheetOpen = ref(false)
 const list = ref<InstanceType<typeof TabsList> | null>(null)
 
 function open(name: string) {
@@ -30,6 +34,11 @@ function open(name: string) {
 
 /** The open tab behind «More», if any: the button wears its name. */
 const openMore = computed(() => props.more.find((tab) => tab.name === route.name) ?? null)
+
+/** On a phone «More» is a sheet from below, like every other menu there. */
+const moreActions = computed(() =>
+  props.more.map((tab) => ({ id: tab.name, label: tab.label, run: () => open(tab.name) })),
+)
 
 watch(
   () => route.name,
@@ -51,7 +60,20 @@ const TAB =
       <TabsTrigger v-for="tab in props.tabs" :key="tab.name" :value="tab.name" :class="TAB">
         {{ tab.label }}
       </TabsTrigger>
-      <DropdownMenu v-if="props.more.length" align="start">
+      <button
+        v-if="props.more.length && phone"
+        type="button"
+        :class="cn(TAB, 'touch-hit')"
+        :data-state="openMore ? 'active' : 'inactive'"
+        :aria-current="openMore ? 'page' : undefined"
+        data-route-tabs-more
+        data-tour="route-tabs-more"
+        @click="sheetOpen = true"
+      >
+        {{ openMore?.label ?? props.moreLabel }}
+        <ChevronDown class="size-3.5" aria-hidden="true" />
+      </button>
+      <DropdownMenu v-else-if="props.more.length" align="start">
         <template #trigger>
           <button
             type="button"
@@ -77,4 +99,5 @@ const TAB =
       </DropdownMenu>
     </TabsList>
   </TabsRoot>
+  <ActionSheet v-if="phone && props.more.length" v-model:open="sheetOpen" :actions="moreActions" :title="props.moreLabel" />
 </template>

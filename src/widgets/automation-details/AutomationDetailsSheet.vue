@@ -48,7 +48,9 @@ function edit() {
   open.value = false
   void router.push({ name: 'workflow-edit', params: { id } })
 }
-const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-2')
+const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-3')
+/** The longest label gets a row of its own on a phone, so its text clears the edges. */
+const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-full px-3')
 </script>
 
 <template>
@@ -95,7 +97,7 @@ const footerButton = computed(() => phone.value && 'h-11 min-w-0 flex-1 px-2')
         >
           <Trash2 class="size-4 shrink-0" />
         </ConfirmButton>
-        <Button variant="outline" :class="footerButton" :disabled="details.running.value" data-automation-run-now @click="details.runNow()">
+        <Button variant="outline" :class="runButton" :disabled="details.running.value" data-automation-run-now @click="details.runNow()">
           <Play v-if="!phone" class="size-4 shrink-0" />
           {{ t('automationCard.runNow') }}
         </Button>

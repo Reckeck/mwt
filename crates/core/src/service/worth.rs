@@ -152,6 +152,13 @@ impl UnlockedVault {
     }
 
     pub fn net_worth(&self) -> NetWorth {
+        self.net_worth_with_crypto().0
+    }
+
+    /// Today's valuation plus the part of `financial` held in crypto wallets
+    /// and exchanges. The one source of the current capital: the networth
+    /// report's current point is taken from here too.
+    pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount) {
         let (base, fx) = self.base_and_fx();
         let kinds: HashMap<&str, StoreKind> = self
             .doc
@@ -175,6 +182,7 @@ impl UnlockedVault {
             base_currency: base,
             ..NetWorth::default()
         };
+        let mut crypto = Amount::ZERO;
         let mut loans: HashMap<&str, Amount> = HashMap::new();
         let slot_of = self.slot_resolver();
         let mut by_class: HashMap<Option<String>, Amount> = HashMap::new();
@@ -190,8 +198,11 @@ impl UnlockedVault {
                 Some(StoreKind::Liability) => {
                     *loans.entry(holding.store_id.as_str()).or_default() += value
                 }
-                _ => {
+                other => {
                     out.financial += value;
+                    if matches!(other, Some(StoreKind::Crypto | StoreKind::Exchange)) {
+                        crypto += value;
+                    }
                     match slot_of(holding) {
                         Slot::Fund => out.financial_fund += value,
                         Slot::Class(class) => *by_class.entry(class).or_default() += value,
@@ -239,7 +250,7 @@ impl UnlockedVault {
         out.financial_by_class = classes;
         out.net =
             out.financial + out.non_financial + out.receivables - out.liabilities - out.payables;
-        out
+        (out, crypto)
     }
 
     /// Stores that belong to at least one active goal.
