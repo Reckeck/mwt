@@ -33,6 +33,9 @@ pub struct CardMoney {
     pub currency: Option<String>,
     pub from_store: Option<String>,
     pub to_store: Option<String>,
+    /// The category key a payment goes to (the «where» of money that leaves).
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 impl CardMoney {
@@ -46,7 +49,18 @@ impl CardMoney {
             currency: main.map(|leg| leg.asset.symbol.to_lowercase()),
             from_store: out.map(|leg| leg.store_id.clone()),
             to_store: into.map(|leg| leg.store_id.clone()),
+            category: tx.meta().categories.first().cloned(),
         }
+    }
+
+    /// What the operation template says, for what the node itself leaves empty.
+    fn fill_from(&mut self, draft: &TransactionDraft) {
+        let probe = super::draft_to_transaction(draft, "", "", "");
+        let from_template = Self::of(&probe);
+        self.currency = self.currency.take().or(from_template.currency);
+        self.from_store = self.from_store.take().or(from_template.from_store);
+        self.to_store = self.to_store.take().or(from_template.to_store);
+        self.category = self.category.take().or(from_template.category);
     }
 }
 
@@ -253,6 +267,12 @@ fn action_of(graph: &Graph, node: &Node) -> CardAction {
                     _ => None,
                 }
             });
+            action.money.category = text(params, "category");
+            if let Some(draft) = text(params, "template")
+                .and_then(|raw| serde_json::from_str::<TransactionDraft>(&raw).ok())
+            {
+                action.money.fill_from(&draft);
+            }
         }
         "action.distribute" => action.money.from_store = store_of(params.get("from")),
         "action.notify" | "action.reminder" => {
@@ -318,6 +338,17 @@ fn asked_money(graph: &Graph, memo: &str) -> CardMoney {
 }
 
 impl UnlockedVault {
+    /// A run that asked «да» and was answered: the answer is a run of its own,
+    /// so the question no longer belongs in the lists.
+    fn answered_question(&self, run: &WorkflowRun) -> bool {
+        matches!(run.outcome, RunOutcome::Asking { .. })
+            && !self
+                .doc
+                .workflow_waits
+                .iter()
+                .any(|wait| wait.run_id == run.id)
+    }
+
     fn journal_entry(&self, workflow: &Workflow, run: &WorkflowRun) -> JournalEntry {
         let (status, note) = match &run.outcome {
             RunOutcome::Done => (JournalStatus::Done, String::new()),
@@ -379,7 +410,7 @@ impl UnlockedVault {
             .doc
             .workflow_runs
             .iter()
-            .filter(|run| !run.dry_run)
+            .filter(|run| !run.dry_run && !self.answered_question(run))
             .filter_map(|run| {
                 let workflow = self
                     .doc
@@ -431,7 +462,7 @@ impl UnlockedVault {
             .workflow_runs
             .iter()
             .rev()
-            .filter(|run| run.workflow_id == id && !run.dry_run)
+            .filter(|run| run.workflow_id == id && !run.dry_run && !self.answered_question(run))
             .take(CARD_RUNS)
             .map(|run| self.journal_entry(workflow, run))
             .collect();
@@ -459,6 +490,7 @@ impl UnlockedVault {
             card.schedule = Some(automation.schedule);
             card.workday = automation.workday_shift;
             card.trigger = CardTrigger::Schedule;
+            card.asks = automation.asks;
             let next = self
                 .automation_occurrences(&automation, &cal, now, until)
                 .into_iter()

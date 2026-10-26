@@ -29,10 +29,29 @@ export function errorReason(err: unknown): string {
   return anyErrorMessage(err, translate)
 }
 
+/** A toast with a button to take the action back stays long enough to reach it. */
+const ACTION_TOAST_MS = 10_000
+let actionToastUntil = 0
+
+/**
+ * Resolves once no toast with a button («Отменить») is on screen: a notice that comes
+ * in meanwhile waits, so it does not push the undo out of reach.
+ */
+export function afterActionToast(): Promise<void> {
+  const wait = actionToastUntil - Date.now()
+  return wait > 0 ? new Promise((resolve) => setTimeout(resolve, wait)) : Promise.resolve()
+}
+
 function success(keyOrText: string, opts: NotifyOptions = {}): void {
   const text = textOf(keyOrText)
   if (!fresh('success', text)) return
-  toast.success(text, { description: opts.description, action: opts.action })
+  if (opts.action) actionToastUntil = Date.now() + ACTION_TOAST_MS
+  toast.success(text, {
+    description: opts.description,
+    action: opts.action,
+    cancel: opts.cancel,
+    duration: opts.action ? ACTION_TOAST_MS : undefined,
+  })
 }
 
 /**

@@ -1325,6 +1325,28 @@ mod tests {
     }
 
     #[test]
+    fn a_run_made_days_after_its_plan_is_dated_when_it_ran() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        monthly(&mut vault, "Salary", 10, salary_draft(&card, "1"));
+        // The app was closed on the 10th: the run is caught up on the 14th.
+        let now = secs("2026-01-14T12:00:00Z");
+        let pass = vault.run_due_workflows(now, "UTC").unwrap();
+        assert_eq!(pass.created.len(), 1);
+        let tx = vault
+            .doc
+            .transactions
+            .iter()
+            .find(|tx| tx.meta().id == pass.created[0])
+            .unwrap();
+        assert_eq!(tx.meta().timestamp, "2026-01-14T12:00:00Z");
+        assert!(matches!(
+            &tx.meta().origin,
+            TxOrigin::Workflow { planned_at: Some(planned), .. } if planned == "2026-01-10T09:00:00Z"
+        ));
+    }
+
+    #[test]
     fn a_template_that_breaks_the_rules_is_refused() {
         let (_dir, mut vault) = empty_vault();
         let card = store(&mut vault, "Card", StoreKind::Bank, None);

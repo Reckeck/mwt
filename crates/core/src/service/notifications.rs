@@ -22,6 +22,29 @@ const REMINDER_STALE_SECS: i64 = 7 * 86_400;
 /// Share of a budget's limit that warns.
 const BUDGET_WARN_PERCENT: i64 = 90;
 
+/// An amount for a notice text: at most two decimals, thousands apart
+/// (`22767.9636…` is `22 767,96`, `15000` is `15 000`).
+pub(crate) fn money_text(amount: Amount, ru: bool) -> String {
+    let rounded = amount.0.round_dp(2).normalize().to_string();
+    let (sign, digits) = rounded
+        .strip_prefix('-')
+        .map_or(("", rounded.as_str()), |rest| ("-", rest));
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let mut grouped = String::new();
+    for (index, digit) in whole.chars().enumerate() {
+        if index > 0 && (whole.len() - index) % 3 == 0 {
+            grouped.push('\u{a0}');
+        }
+        grouped.push(digit);
+    }
+    let point = if ru { ',' } else { '.' };
+    if fraction.is_empty() {
+        format!("{sign}{grouped}")
+    } else {
+        format!("{sign}{grouped}{point}{fraction:0<2}")
+    }
+}
+
 /// Short titles in the user's language.
 pub fn notice_title(category: NoticeCategory, ru: bool) -> &'static str {
     use NoticeCategory::*;
@@ -220,23 +243,16 @@ impl UnlockedVault {
                 continue;
             };
             let code = status.budget.currency.to_uppercase();
+            let (spent, limit, remaining) = (
+                money_text(status.spent, ru),
+                money_text(status.budget.limit, ru),
+                money_text(status.remaining, ru),
+            );
             let body = match (level, ru) {
-                (100, true) => format!(
-                    "Лимит превышен: потрачено {} из {} {code}",
-                    status.spent, status.budget.limit
-                ),
-                (100, false) => format!(
-                    "Over the limit: {} of {} {code} spent",
-                    status.spent, status.budget.limit
-                ),
-                (_, true) => format!(
-                    "Почти исчерпан: {percent}% — осталось {} {code}",
-                    status.remaining
-                ),
-                (_, false) => format!(
-                    "Nearly used up: {percent}%, {} {code} left",
-                    status.remaining
-                ),
+                (100, true) => format!("Лимит превышен: потрачено {spent} из {limit} {code}"),
+                (100, false) => format!("Over the limit: {spent} of {limit} {code} spent"),
+                (_, true) => format!("Почти исчерпан: {percent}% — осталось {remaining} {code}"),
+                (_, false) => format!("Nearly used up: {percent}%, {remaining} {code} left"),
             };
             out.push(notice(
                 NoticeCategory::Budget,
@@ -267,6 +283,20 @@ impl UnlockedVault {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_notice_shows_money_rounded_and_grouped() {
+        let amount = |text: &str| super::Amount(text.parse().unwrap());
+        assert_eq!(
+            super::money_text(amount("22767.963690399998338875775458"), true),
+            "22\u{a0}767,96"
+        );
+        assert_eq!(super::money_text(amount("15000.00"), true), "15\u{a0}000");
+        assert_eq!(
+            super::money_text(amount("-1234.5"), false),
+            "-1\u{a0}234.50"
+        );
+    }
+
     use super::super::test_support::*;
     use super::*;
     use crate::model::notify::NoticeCategoryCfg;

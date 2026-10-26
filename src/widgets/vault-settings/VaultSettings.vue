@@ -27,7 +27,12 @@ const externalCopy = computed(() => (link.data.value?.linked ? (link.data.value.
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4">
+  <div v-if="vault.sandbox" class="grid grid-cols-1 gap-4" data-vault-sandbox>
+    <SettingsSection :title="t('sandbox.name')" :description="t('sandbox.openHintShort')">
+      <p class="text-sm text-muted-foreground">{{ t('sandbox.vaultOff') }}</p>
+    </SettingsSection>
+  </div>
+  <div v-else class="grid grid-cols-1 gap-4">
     <SettingsSection :title="t('vaultFile.title')"><VaultPlace /></SettingsSection>
     <SettingsSection
       :title="t('settings.security')"

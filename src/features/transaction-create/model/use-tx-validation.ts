@@ -21,6 +21,10 @@ const AMOUNT_FIELDS = new Set([
   'sellPrice',
 ])
 
+/** Fields that hold a wallet or a person: «Выберите кошелёк», not «Выберите значение». */
+const WALLET_FIELDS = new Set(['from', 'to', 'via'])
+const ASSET_FIELDS = new Set(['asset', 'fromAsset', 'toAsset', 'soldAsset', 'boughtAsset', 'currency'])
+
 /**
  * What the form still lacks: a message under each missing field after a save
  * was tried, the summary line under the form, and the category a top-up or a
@@ -68,6 +72,8 @@ export function useTxValidation(state: TxFormState) {
         if (AMOUNT_FIELDS.has(key)) errors[key] = positiveAmount(form[key as keyof typeof form] as string)
         else if (key === 'symbol') errors[key] = required(form.symbol)
         else if (key === 'extra') errors[key] = t('validation.splitRows')
+        else if (WALLET_FIELDS.has(key)) errors[key] = required(null, 'pickStore')
+        else if (ASSET_FIELDS.has(key)) errors[key] = required(null, 'pickAsset')
         else errors[key] = required(null, 'pick')
       }
       if (needsCategory.value && !props.template && !form.categories.length && !ruleFillsCategory.value) {

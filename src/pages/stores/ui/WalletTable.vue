@@ -9,7 +9,7 @@ import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu } from '@/shared/ui/context-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { currencySymbol, formatDayMonthShort } from '@/shared/lib/format'
+import { currencySymbol, formatDate, formatDayMonthShort } from '@/shared/lib/format'
 import { storeIcon } from '@/shared/lib/store-icons'
 import { cn } from '@/shared/lib/utils'
 
@@ -38,6 +38,9 @@ const LINK_CLASS = [
   'focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring',
 ]
 const ariaSort = (key: WalletSort) => (sort.value === key ? (key === 'name' ? 'ascending' : 'descending') : 'none')
+/** «26 окт» this year, with the year (as the full date) for any other. */
+const lastDay = (iso: string) =>
+  new Date(iso).getFullYear() === new Date().getFullYear() ? formatDayMonthShort(iso) : formatDate(iso)
 const MAX_BALANCES = 3
 
 /** One row's model: what the template shows, computed once per row. */
@@ -50,7 +53,7 @@ const items = computed(() =>
     subtitle: walletSubtitle(node.store, t),
     balances: node.balances.slice(0, MAX_BALANCES),
     more: Math.max(0, node.balances.length - MAX_BALANCES),
-    last: node.last_tx_at ? formatDayMonthShort(node.last_tx_at) : '—',
+    last: node.last_tx_at ? lastDay(node.last_tx_at) : '—',
     sum: props.shown(Number(node.subtree_base)),
   })),
 )

@@ -20,7 +20,8 @@ export function useSandboxBar() {
       await settings.loadVault()
       return info
     },
-    onSettled: () => queryClient.invalidateQueries(),
+    // Reset, not just marked stale: nothing of the old demo (or a half-read new one) stays on screen.
+    onSettled: () => queryClient.resetQueries(),
     meta: { success: 'sandbox.resetDone', error: 'sandbox.resetFailed' },
   })
 

@@ -9,7 +9,7 @@ import { automations, fail, iso, now, plannedDates, runs } from './state'
 const LOOKAHEAD_DAYS = 400
 const RUNS_ON_CARD = 5
 
-const noMoney = (): CardMoney => ({ amount: null, currency: null, from_store: null, to_store: null })
+const noMoney = (): CardMoney => ({ amount: null, currency: null, from_store: null, to_store: null, category: null })
 
 /** Where the money leaves, where it comes, how much: by what arrives, else by what leaves. */
 function moneyOf(tx: Transaction): CardMoney {
@@ -22,6 +22,7 @@ function moneyOf(tx: Transaction): CardMoney {
     currency: leg ? leg.asset.symbol.toLowerCase() : null,
     from_store: out?.store_id ?? null,
     to_store: into?.store_id ?? null,
+    category: txMeta(tx).categories[0] ?? null,
   }
 }
 
@@ -65,6 +66,7 @@ function actionOf(graph: WorkflowGraph, node: WorkflowNode): CardAction {
       amount: text(params, 'amount'),
       currency: text(params, 'asset')?.toLowerCase() ?? null,
       to_store: storeOf(params.to),
+      category: text(params, 'category'),
       from_store:
         storeOf(params.account) ?? (account?.kind === 'trigger.transaction' ? storeOf(account.params.store) : null),
     }

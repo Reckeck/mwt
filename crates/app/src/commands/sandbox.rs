@@ -202,4 +202,43 @@ mod tests {
         assert!(state.vault.lock().unwrap().is_none());
         assert!(!is_active(&state));
     }
+
+    #[test]
+    fn the_vault_actions_are_refused_in_the_sandbox_and_not_outside() {
+        let state = AppState::new();
+        for what in [
+            "a vault password",
+            "a backup copy",
+            "restoring a backup",
+            "an external copy",
+        ] {
+            assert!(refuse(&state, what).is_ok());
+        }
+        state.sandbox.store(true, Ordering::SeqCst);
+        for what in [
+            "a vault password",
+            "a backup copy",
+            "restoring a backup",
+            "an external copy",
+        ] {
+            let message = refuse(&state, what).unwrap_err();
+            assert!(
+                message.starts_with("SANDBOX: ") && message.contains(what),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_sandbox_status_names_its_own_file_not_the_real_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state_with_vault(dir.path(), true);
+        *state.vault_path.lock().unwrap() = dir.path().join("real.wallet");
+        let status = crate::commands::auth::status_of(&state).unwrap();
+        assert!(status.sandbox);
+        assert!(status.path.ends_with("some.wallet"), "{}", status.path);
+        state.sandbox.store(false, Ordering::SeqCst);
+        let real = crate::commands::auth::status_of(&state).unwrap();
+        assert!(real.path.ends_with("real.wallet"), "{}", real.path);
+    }
 }

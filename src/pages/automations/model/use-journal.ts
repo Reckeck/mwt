@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { statusTone } from '@/widgets/automation-details'
 import { call } from '@/shared/api/ipc'
-import { useStoreTree } from '@/shared/api/queries'
+import { useCategories, useStoreTree } from '@/shared/api/queries'
+import { categoryKeyLabel } from '@/shared/lib/categories'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
@@ -23,10 +24,14 @@ export function useJournal() {
   const queue = useQuery({ queryKey: WORKFLOW_KEYS.queue, queryFn: () => call<QueuedActions[]>('list_workflow_queue') })
   const queued = computed(() => !!queue.data.value?.length)
   const tree = useStoreTree()
+  const categories = useCategories()
   const stores = computed(
     () => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node.store.name])),
   )
-  const names = { store: (id: string) => stores.value.get(id) ?? '', category: (key: string) => key }
+  const names = {
+    store: (id: string) => stores.value.get(id) ?? '',
+    category: (key: string) => categoryKeyLabel(key, categories.data.value, t),
+  }
 
   const rows = computed(() =>
     (list.data.value ?? []).map((entry) => ({

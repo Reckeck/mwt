@@ -9,6 +9,7 @@ import { SettingsSection } from '@/shared/ui/settings-section'
 import { Dialog } from '@/shared/ui/dialog'
 import { call, parseError, type AppError } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
+import { useVaultStore } from '@/shared/store/vault'
 
 /**
  * The viewer is a slot, not an import: the JSON editor is a widget of its own,
@@ -17,6 +18,8 @@ import { notify } from '@/shared/lib/notify'
 defineSlots<{ viewer(): unknown }>()
 
 const { t } = useI18n()
+// The sandbox's document is demo data in a temporary file: nothing to view, dump or edit by hand.
+const vault = useVaultStore()
 
 const jsonDialogOpen = ref(false)
 
@@ -48,15 +51,15 @@ function errorText(err: AppError): string {
     <SettingsSection :title="t('settings.dev.openVault')">
       <div class="flex flex-wrap items-center gap-2">
         <Badge variant="secondary" class="text-xs">DEV</Badge>
-        <Button variant="outline" @click="viewVaultJson">
+        <Button variant="outline" :disabled="vault.sandbox" @click="viewVaultJson">
           <Braces class="size-4" />
           {{ t('settings.dev.viewVault') }}
         </Button>
-        <Button variant="outline" @click="devDumpVault">
+        <Button variant="outline" :disabled="vault.sandbox" @click="devDumpVault">
           {{ t('settings.dev.dumpVault') }}
         </Button>
       </div>
-      <p class="text-xs text-muted-foreground">{{ t('settings.dev.dumpHint') }}</p>
+      <p class="text-xs text-muted-foreground">{{ vault.sandbox ? t('sandbox.settingOff') : t('settings.dev.dumpHint') }}</p>
     </SettingsSection>
 
     <Dialog overlay="dev-tools"

@@ -24,6 +24,9 @@ use crate::workflow::types::WfValue;
 
 use super::{json_account, json_number};
 
+/// A planned moment this close to the run still dates the operation.
+const SAME_RUN_WINDOW_SECS: i64 = 24 * 3600;
+
 fn places_for(asset: &AssetRef) -> u32 {
     if asset.is_fiat() { 2 } else { 8 }
 }
@@ -117,8 +120,14 @@ impl Executor<'_> {
         // dated after a long «Подождать» would fail the future-date check,
         // which the real run (made at that later moment) passes. A planned
         // moment after the run is not taken either.
+        // A run made long after its planned day (confirmed later, started by hand,
+        // caught up) is dated when it ran: its day is the one the money moved.
         let moment = planned
-            .filter(|moment| *moment <= self.ctx.now && !self.ctx.retry)
+            .filter(|moment| {
+                *moment <= self.ctx.now
+                    && !self.ctx.retry
+                    && self.ctx.now - *moment < SAME_RUN_WINDOW_SECS
+            })
             .unwrap_or(self.ctx.now);
         meta.timestamp = crate::calendar::iso(moment);
         meta.categories = category.into_iter().collect();

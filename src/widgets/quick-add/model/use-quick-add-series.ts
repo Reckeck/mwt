@@ -17,7 +17,7 @@ const FORM_ID = 'transaction-form'
  * Enter and Ctrl Enter in the short form (OpForm-1 · 4). Enter saves and
  * closes, the toast offers «Отменить». Ctrl Enter saves and leaves the form
  * open on the same wallet and date for the next one, counting the series; its
- * toast offers «Открыть».
+ * toast offers «Открыть» and «Отменить».
  */
 export function useQuickAddSeries(close: () => void) {
   const { t } = useI18n()
@@ -59,6 +59,7 @@ export function useQuickAddSeries(close: () => void) {
     notify.success(text, {
       description: t('quickAdd.kept'),
       action: { label: t('actions.open'), onClick: () => openTxDetails(tx) },
+      cancel: { label: t('actions.undo'), onClick: () => undo.mutate(txId(tx)) },
     })
     void nextTick(() => document.getElementById('tx-amount')?.focus())
   }
