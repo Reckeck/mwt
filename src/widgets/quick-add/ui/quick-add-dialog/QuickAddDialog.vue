@@ -31,7 +31,12 @@ const phone = useIsPhone()
 const LAST_STORE_KEY = 'quick-add.store'
 
 const tree = useStoreTree()
-const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
+/** An operation is written on a sub-account, never on a group («Основной банк» holds «Карта» and «Накопления»). */
+const nodes = computed(() =>
+  flattenStoreTree(tree.data.value ?? []).filter(
+    (node) => !node.store.archived && (props.deal ? true : node.children.filter((child) => !child.store.archived).length === 0),
+  ),
+)
 
 function remembered(): string {
   try {

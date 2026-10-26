@@ -3,7 +3,9 @@ import 'driver.js/dist/driver.css'
 import { useI18n } from 'vue-i18n'
 
 import { pushBackLayer } from '@/shared/lib/back-stack'
+import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useVaultStore } from '@/shared/store/vault'
 
 import { TOURS, WORKFLOW_EDITOR_EMPTY } from './tours'
 
@@ -27,6 +29,10 @@ export function useTour() {
 
   function hasTour(id: string): boolean {
     return Boolean(TOURS[id]?.length)
+  }
+
+  function stepCount(id: string): number {
+    return TOURS[id]?.length ?? 0
   }
 
   function start(id: string): boolean {
@@ -63,7 +69,9 @@ export function useTour() {
       onDestroyed: () => {
         release()
         if (active === tour) active = null
-        if (!leaving) void markDone(id)
+        if (leaving) return
+        void markDone(id)
+        notify.info('tour.finished')
       },
     })
     active = tour
@@ -95,19 +103,38 @@ export function useTour() {
     }
   }
 
-  /** First visit of a page with a tour: start it once. */
-  function autoStart(id: string) {
-    if (!hasTour(id) || !settings.app || settings.app.completed_tours.includes(id)) return
-    start(id)
+  /**
+   * Whether a screen offers its tour on a first visit (a banner, the tour itself never
+   * opens by itself): not in the sandbox, not once seen, waved off or switched off.
+   */
+  function shouldOffer(id: string): boolean {
+    const app = settings.app
+    if (!app || !hasTour(id) || useVaultStore().sandbox || !app.tour_offers) return false
+    return !app.completed_tours.includes(id) && !app.declined_tours.includes(id)
+  }
+
+  /** «Не сейчас»: this screen does not offer again; the others still do. */
+  async function decline(id: string) {
+    const declined = settings.app?.declined_tours ?? []
+    if (declined.includes(id)) return
+    try {
+      await settings.updateApp({ declined_tours: [...declined, id] })
+    } catch {
+      // Not remembered: the offer simply comes back next time.
+    }
+  }
+
+  async function setOffers(on: boolean) {
+    await settings.updateApp({ tour_offers: on })
   }
 
   async function resetAll() {
-    await settings.updateApp({ completed_tours: [] })
+    await settings.updateApp({ completed_tours: [], declined_tours: [] })
   }
 
   function isDone(id: string): boolean {
     return Boolean(settings.app?.completed_tours.includes(id))
   }
 
-  return { hasTour, start, stop, autoStart, resetAll, isDone }
+  return { hasTour, stepCount, start, stop, shouldOffer, decline, setOffers, resetAll, isDone }
 }

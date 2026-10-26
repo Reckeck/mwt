@@ -11,6 +11,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
+import SandboxStorage from './SandboxStorage.vue'
 import VaultPlace from './VaultPlace.vue'
 
 /** The vault file as four cards (Settings-1 · 5, Full-New-Encrypt 4–5): where it lies, its password, the outside copy, backups. */
@@ -27,11 +28,7 @@ const externalCopy = computed(() => (link.data.value?.linked ? (link.data.value.
 </script>
 
 <template>
-  <div v-if="vault.sandbox" class="grid grid-cols-1 gap-4" data-vault-sandbox>
-    <SettingsSection :title="t('sandbox.name')" :description="t('sandbox.openHintShort')">
-      <p class="text-sm text-muted-foreground">{{ t('sandbox.vaultOff') }}</p>
-    </SettingsSection>
-  </div>
+  <SandboxStorage v-if="vault.sandbox" />
   <div v-else class="grid grid-cols-1 gap-4">
     <SettingsSection :title="t('vaultFile.title')"><VaultPlace /></SettingsSection>
     <SettingsSection

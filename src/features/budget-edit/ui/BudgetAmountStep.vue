@@ -15,12 +15,14 @@ import type { BudgetField, BudgetSpending } from '../budget-edit.types'
  * Step 2 (Money 1 · 4): how much, with the category's usual month and how much
  * of the new limit the period already took.
  */
-const props = defineProps<{ form: FormValidation<BudgetField>; period: BudgetPeriod; spending: BudgetSpending | null }>()
+const props = defineProps<{ form: FormValidation<BudgetField>; period: BudgetPeriod; spending: BudgetSpending | null; focus?: boolean }>()
 const limit = defineModel<string>('limit', { required: true })
 const currency = defineModel<string>('currency', { required: true })
 const warn = defineModel<boolean>('warn', { required: true })
 
 const { t } = useI18n()
+/** The dialog lands on the field marked `autofocus`: an edit goes straight to the sum. */
+const focusAttrs = computed(() => (props.focus ? { autofocus: true } : {}))
 
 /** «36 $ из 50 $ · 72 %»: only a monthly limit in the spending's own currency compares. */
 const taken = computed(() => {
@@ -30,12 +32,21 @@ const taken = computed(() => {
   const percent = Math.round((Number(spending.spent) / cap) * 100)
   return { spent: spending.spent, percent }
 })
+
+/** A limit many times the usual month is probably a slip of a digit: said softly, not forbidden. */
+const FAR_ABOVE = 5
+const farAbove = computed(() => {
+  const average = Number(props.spending?.average ?? 0)
+  const cap = Number(limit.value)
+  if (!(average > 0) || !(cap > average * FAR_ABOVE) || props.period !== 'month') return null
+  return Math.round(cap / average)
+})
 </script>
 
 <template>
   <div class="grid gap-4">
     <FormField for="budget-limit" :label="t(`budget.howMuch.${props.period}`)" required :error="props.form.error('limit') ?? props.form.error('currency')">
-      <AmountInput id="budget-limit" v-model="limit" size="lg">
+      <AmountInput id="budget-limit" v-model="limit" size="lg" v-bind="focusAttrs">
         <template #suffix>
           <CurrencyPicker id="budget-currency" v-model="currency" label="" compact :error="props.form.error('currency')" class="h-9 w-24" />
         </template>
@@ -49,6 +60,7 @@ const taken = computed(() => {
         </template>
         {{ props.spending.when }} <Money :amount="props.spending.spent" :currency="props.spending.currency" :decimals="0" />
       </p>
+      <p v-if="farAbove" class="text-xs text-warning" role="status" data-budget-far>{{ t('budget.farAbove', { times: farAbove }) }}</p>
     </FormField>
 
     <div v-if="taken" class="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm">

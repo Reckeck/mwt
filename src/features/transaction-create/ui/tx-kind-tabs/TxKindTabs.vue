@@ -13,14 +13,15 @@ import { QUICK_KINDS } from '../../transaction-form.constants'
  * groups: each is a segmented block of its own, side by side.
  */
 const { t } = useI18n()
-const { form, offered, pickKind, props } = useTxForm()
+const { form, offered, pickKind, props, editing } = useTxForm()
 
 const groups = computed(() =>
   (props.kindGroups ?? [QUICK_KINDS])
     .map((group) => group.filter((kind) => offered.value.includes(kind)))
     .filter((group) => group.length),
 )
-const shown = computed(() => groups.value.flat().length > 1)
+// An operation that exists keeps its kind: only a new one picks it.
+const shown = computed(() => !editing.value && groups.value.flat().length > 1)
 </script>
 
 <template>

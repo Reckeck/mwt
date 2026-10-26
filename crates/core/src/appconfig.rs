@@ -127,6 +127,13 @@ pub struct AppSettings {
     /// The dashboard's «Сегодня» strip is folded to one line on this screen.
     #[serde(default)]
     pub dashboard_today_collapsed: bool,
+    /// A screen offers its tour on the first visit (a banner, never a window
+    /// that opens by itself). On for everyone until «Больше не предлагать».
+    #[serde(default = "tour_offers_on")]
+    pub tour_offers: bool,
+    /// Screens whose tour offer was waved off with «Не сейчас»: not offered again.
+    #[serde(default)]
+    pub declined_tours: Vec<String>,
 }
 
 /// Vault sync preferences of this device. Everything is off until the user
@@ -175,6 +182,10 @@ fn chosen_before_the_field() -> bool {
     true
 }
 
+fn tour_offers_on() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -197,6 +208,8 @@ impl Default for AppSettings {
             display_decimals: None,
             installed_at: None,
             dashboard_today_collapsed: false,
+            tour_offers: true,
+            declined_tours: Vec::new(),
         }
     }
 }
@@ -257,6 +270,12 @@ impl AppSettings {
         }
         if let Some(interval) = patch.fx_refresh_interval_sec {
             self.fx_refresh_interval_sec = Some(interval.clamp(30, 3600));
+        }
+        if let Some(offers) = patch.tour_offers {
+            self.tour_offers = offers;
+        }
+        if let Some(tours) = &patch.declined_tours {
+            self.declined_tours = dedup(tours);
         }
         if let Some(collapsed) = patch.dashboard_today_collapsed {
             self.dashboard_today_collapsed = collapsed;
@@ -426,6 +445,12 @@ pub struct UpdateAppSettingsInput {
     pub display_decimals: Option<u32>,
     #[serde(default)]
     pub dashboard_today_collapsed: Option<bool>,
+    /// Whether screens offer their tour on the first visit.
+    #[serde(default)]
+    pub tour_offers: Option<bool>,
+    /// Replaces the list of screens whose offer was declined.
+    #[serde(default)]
+    pub declined_tours: Option<Vec<String>>,
 }
 
 /// Longest device name, characters; it is shown in a pairing dialog.
@@ -870,6 +895,8 @@ mod tests {
             display_decimals: Some(2),
             installed_at: Some("2026-10-19".into()),
             dashboard_today_collapsed: true,
+            tour_offers: false,
+            declined_tours: vec!["wallet".into()],
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
@@ -1065,6 +1092,15 @@ mod tests {
         assert!(!settings.sync.enabled);
         assert!(settings.minimize_to_tray());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn tour_offers_are_on_for_a_file_from_before_the_field() {
+        let settings: AppSettings =
+            serde_json::from_str(r#"{"theme":"auto","locale":"auto","base_currency":"usd"}"#)
+                .expect("old file");
+        assert!(settings.tour_offers);
+        assert!(settings.declined_tours.is_empty());
     }
 
     #[test]

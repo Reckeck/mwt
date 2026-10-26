@@ -2,16 +2,15 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { Money } from '@/entities/currency'
 
-import { BudgetDialog } from '@/features/budget-edit'
+import { BudgetDeleteDialog, BudgetDialog } from '@/features/budget-edit'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { ListHeader } from '@/shared/ui/list-header'
 import { Card } from '@/shared/ui/card'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { call } from '@/shared/api/ipc'
@@ -19,13 +18,11 @@ import { categoryKeyLabel } from '@/shared/lib/categories'
 import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { drillTo, localDay } from '@/shared/lib/drill'
 import { budgetEntity } from '@/shared/lib/entity-link'
-import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useCategories, useStoreTree } from '@/shared/api/queries'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
 const { t } = useI18n()
-const queryClient = useQueryClient()
 
 const budgets = useQuery({ queryKey: ['budgets'], queryFn: () => call<Budget[]>('list_budgets') })
 const statuses = useQuery({ queryKey: ['budget-status'], queryFn: () => call<BudgetStatus[]>('get_budget_status') })
@@ -70,13 +67,12 @@ function openEdit(budget: Budget) {
   dialogOpen.value = true
 }
 
-const remove = useMutation({
-  mutationFn: (id: string) => call('delete_budget', { id }),
-  onSuccess: () => {
-    for (const queryKey of PLANNING_KEYS) void queryClient.invalidateQueries({ queryKey })
-  },
-  meta: { error: 'budget.deleteFailed', success: 'budget.deleted' },
-})
+const deleting = ref<{ budget: Budget; name: string } | null>(null)
+const deleteOpen = ref(false)
+function askDelete(budget: Budget) {
+  deleting.value = { budget, name: targetText(budget.target) }
+  deleteOpen.value = true
+}
 
 const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.length)
 </script>
@@ -121,9 +117,16 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
               >
                 <Pencil class="size-4" />
               </Button>
-              <ConfirmButton :label="t('budget.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(budget.id)">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="text-destructive"
+                :title="t('budget.delete')"
+                :aria-label="t('budget.delete')"
+                @click="askDelete(budget)"
+              >
                 <Trash2 class="size-4" />
-              </ConfirmButton>
+              </Button>
             </div>
           </div>
           <div v-if="budget.active" class="grid gap-1">
@@ -149,5 +152,6 @@ const empty = computed(() => budgets.isSuccess.value && !budgets.data.value?.len
     </div>
 
     <BudgetDialog v-model:open="dialogOpen" :budget="editing" />
+    <BudgetDeleteDialog v-model:open="deleteOpen" :budget="deleting?.budget ?? null" :name="deleting?.name ?? ''" />
   </div>
 </template>

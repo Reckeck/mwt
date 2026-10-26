@@ -12,6 +12,7 @@ import { VaultUnlockDialog } from '@/features/vault-unlock'
 import { Button } from '@/shared/ui/button'
 import { useVaultStore } from '@/shared/store/vault'
 import { useTour } from '@/shared/lib/tour'
+import { TourOffer } from '@/widgets/tour-offer'
 
 const { t } = useI18n()
 const vault = useVaultStore()
@@ -23,12 +24,13 @@ const receiveOpen = ref(false)
 const receivedPath = ref<string | null>(null)
 const unlockOpen = ref(false)
 
-// The first visit shows the card, the recent vaults and the sandbox once.
+// The first visit offers a tour of the card, the recent vaults and the sandbox (a banner, never by itself).
 const tour = useTour()
+const offerTour = ref(false)
 let tourTimer: ReturnType<typeof setTimeout> | undefined
 onMounted(() => {
   tourTimer = setTimeout(() => {
-    if (!document.querySelector('[role="dialog"]')) tour.autoStart('unlock')
+    offerTour.value = !document.querySelector('[role="dialog"]') && tour.shouldOffer('unlock')
   }, 1200)
 })
 onBeforeUnmount(() => {
@@ -65,6 +67,7 @@ function onReceived(path: string) {
       </Button>
     </header>
 
+    <TourOffer v-if="offerTour" id="unlock" class="mx-4 mt-3 md:mx-6" @close="offerTour = false" />
     <div class="flex min-h-0 flex-1 items-start justify-center overflow-y-auto p-4 md:items-center md:p-6">
       <RecentVaults @create="createOpen = true" @receive="receiveOpen = true">
         <template #footer><SandboxOpenButton /></template>

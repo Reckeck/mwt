@@ -11,6 +11,7 @@ import { QuickAddDialog } from '@/widgets/quick-add'
 import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
+import { TourOffer } from '@/widgets/tour-offer'
 import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyCardHost, MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
@@ -62,7 +63,7 @@ useSyncEvents()
 useBackButton()
 
 const { summary, isOnline } = useConnectivity()
-const { tour, routeTour } = useTourAutostart()
+const { tour, routeTour, offer } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 
 /** On a wallet page the bar names the wallet; elsewhere the screen. */
@@ -124,9 +125,11 @@ const pageClass = computed(() => {
         :summary="summary.data.value"
         :online="headerOnline"
         :has-tour="tour.hasTour(routeTour)"
+        :tour-steps="tour.stepCount(routeTour)"
         :covered="vault.sandbox"
         @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
+        @all-tours="openSettings('help')"
       >
         <template #search>
           <CommandPalette @quick-add="quickAddOpen = true" @settings="openSettings()" @lock="lock" />
@@ -135,6 +138,7 @@ const pageClass = computed(() => {
 
       <div class="@container min-h-0 flex-1 scrollbar-stable" :class="pageClass">
         <SyncBanner />
+        <TourOffer v-if="offer" :id="offer" @close="offer = null" />
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
              (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->

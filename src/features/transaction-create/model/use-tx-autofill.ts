@@ -83,7 +83,10 @@ export function useTxAutofill(state: TxFormState) {
     () => [overview.data.value, overview.isSuccess.value, storeKind.value, settings.appLoaded] as const,
     ([data, loaded, kind, settingsLoaded]) => {
       if (editing.value || !loaded || !kind || kind === 'property') return
-      const main = data?.positions[0]?.asset
+      // A wallet bound to an asset («Карта» in dollars) starts with it, before whatever it holds.
+      const binding = contextStore.value?.binding
+      const bound = binding && typeof binding === 'object' && 'asset' in binding ? binding.asset : null
+      const main = bound ?? data?.positions[0]?.asset
       if (main) autoFill('asset', main)
       else if ((kind === 'bank' || kind === 'cash') && settingsLoaded) {
         const code = settings.baseCurrency.toUpperCase()

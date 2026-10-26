@@ -79,6 +79,8 @@ export const mockAppSettings: AppSettings = {
   fx_refresh_interval_sec: null,
   display_decimals: null,
   dashboard_today_collapsed: false,
+  tour_offers: true,
+  declined_tours: [],
   // An install older than the field: «Что нового» shows every entry, as after an update.
   installed_at: null,
 }

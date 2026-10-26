@@ -194,7 +194,16 @@ installed_at: string | null,
 /**
  * The dashboard's «Сегодня» strip is folded to one line on this screen.
  */
-dashboard_today_collapsed: boolean, };
+dashboard_today_collapsed: boolean, 
+/**
+ * A screen offers its tour on the first visit (a banner, never a window
+ * that opens by itself). On for everyone until «Больше не предлагать».
+ */
+tour_offers: boolean, 
+/**
+ * Screens whose tour offer was waved off with «Не сейчас»: not offered again.
+ */
+declined_tours: Array<string>, };
 
 /**
  * A batch just applied, as the UI shows it.
@@ -6005,7 +6014,15 @@ seen_whats_new: Array<string> | null,
 /**
  * An empty name goes back to the host name.
  */
-device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, dashboard_today_collapsed: boolean | null, };
+device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, dashboard_today_collapsed: boolean | null, 
+/**
+ * Whether screens offer their tour on the first visit.
+ */
+tour_offers: boolean | null, 
+/**
+ * Replaces the list of screens whose offer was declined.
+ */
+declined_tours: Array<string> | null, };
 
 type UpdateAutomationInput = { id: string, automation: AutomationInput, };
 
