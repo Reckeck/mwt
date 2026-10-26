@@ -11,6 +11,9 @@ import { useTxForm } from '../../model/use-tx-form'
 /** Recent Bybit fills of the wallet: a click fills the trade in. */
 const { t } = useI18n()
 const { form, lookup, bybitCategory, applyFill } = useTxForm()
+
+/** Bybit stamps a fill in epoch milliseconds, as text. */
+const fillTime = (raw: string) => formatDateTime(/^\d{10,}$/.test(raw) ? new Date(Number(raw)).toISOString() : raw)
 </script>
 
 <template>
@@ -40,13 +43,13 @@ const { form, lookup, bybitCategory, applyFill } = useTxForm()
         type="button"
         variant="outline"
         size="sm"
-        class="h-auto justify-between gap-2 px-2 py-1.5 text-left text-xs font-normal"
+        class="h-auto min-w-0 flex-wrap justify-between gap-x-2 gap-y-0.5 px-2 py-1.5 text-left text-xs font-normal whitespace-normal"
         @click="applyFill(exec)"
       >
         <span class="font-medium">{{ exec.symbol }}</span>
         <span :class="exec.side === 'Buy' ? 'text-success' : 'text-destructive'">{{ exec.side }}</span>
         <span class="text-muted-foreground">{{ exec.exec_qty }} @ {{ exec.exec_price }}</span>
-        <span class="text-muted-foreground">{{ formatDateTime(exec.exec_time) }}</span>
+        <span class="text-muted-foreground">{{ fillTime(exec.exec_time) }}</span>
       </Button>
     </div>
   </div>

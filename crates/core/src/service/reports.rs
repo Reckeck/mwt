@@ -929,6 +929,11 @@ impl UnlockedVault {
             .map(|month| ctx.month_end(*month))
             .collect();
         let snapshots = self.positions_at(&cutoffs);
+        let (base, _) = self.base_and_fx();
+        // The current point is today's valuation, the same function and rates
+        // as `net_worth_base`, so every screen shows one capital.
+        let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(&base))
+            .then(|| self.net_worth_with_crypto());
         ctx.months
             .iter()
             .zip(cutoffs.iter().zip(snapshots))
@@ -937,6 +942,27 @@ impl UnlockedVault {
                     month: calendar::month_key(*month),
                     ..NetworthPoint::default()
                 };
+                if let (Some((worth, crypto)), true) = (&current, *cutoff >= ctx.now) {
+                    point.financial = worth.financial;
+                    point.crypto = *crypto;
+                    point.non_financial = worth.non_financial;
+                    point.receivables = worth.receivables;
+                    point.liabilities = worth.liabilities;
+                    point.payables = worth.payables;
+                    point.net = worth.net;
+                    for value in [
+                        &mut point.financial,
+                        &mut point.crypto,
+                        &mut point.non_financial,
+                        &mut point.receivables,
+                        &mut point.liabilities,
+                        &mut point.payables,
+                        &mut point.net,
+                    ] {
+                        *value = ctx.shown(value.round(2), *month);
+                    }
+                    return point;
+                }
                 let mut loans: HashMap<&str, Amount> = HashMap::new();
                 for ((store_id, _), (asset, qty)) in &positions {
                     if !ctx.in_scope(store_id) {
@@ -2238,6 +2264,27 @@ mod tests {
         assert_eq!(point.financial, amount("1500"));
         assert_eq!(point.crypto, amount("500"));
         assert_eq!(point.net, amount("1500"));
+    }
+
+    #[test]
+    fn the_current_networth_point_equals_the_summary_net_worth() {
+        let (_dir, mut vault, card) = vault_with_card();
+        let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
+        vault
+            .add_transaction(earn(&card, "1000", "2026-05-01T10:00:00Z"))
+            .unwrap();
+        vault
+            .add_transaction(earn(&exchange, "300", "2026-06-02T10:00:00Z"))
+            .unwrap();
+        let Report::Networth(networth) =
+            run(&vault, ReportKind::Networth, &range("2026-04", "2026-06"))
+        else {
+            panic!()
+        };
+        let last = networth.points.last().unwrap();
+        assert_eq!(last.month, "2026-06");
+        assert_eq!(last.net, vault.portfolio_summary().net_worth_base.round(2));
+        assert_eq!(last.crypto, amount("300"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Check } from 'lucide-vue-next'
+import { Check, Plus } from 'lucide-vue-next'
 
 import type { DashboardWidgetDef } from '@/widgets/dashboard-registry'
 import { cn } from '@/shared/lib/utils'
@@ -19,14 +19,15 @@ const { t } = useI18n()
     :class="
       cn(
         'grid h-auto min-h-16 content-start justify-stretch gap-0.5 p-3 text-left font-normal whitespace-normal',
-        props.on && 'border-primary bg-primary/5',
+        props.on && 'border-primary bg-primary/5 ring-1 ring-primary',
       )
     "
     @click="emit('toggle')"
   >
     <span class="flex items-center gap-2 text-sm font-medium">
       <span class="flex-1">{{ t(props.def.titleKey) }}</span>
-      <Check v-if="props.on" class="size-4 text-primary" aria-hidden="true" />
+      <Check v-if="props.on" class="size-4 shrink-0 text-primary" aria-hidden="true" />
+      <Plus v-else class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </span>
     <span class="text-xs text-muted-foreground">{{ t(props.def.descriptionKey) }}</span>
   </Button>
