@@ -6,7 +6,7 @@ import { Money } from '@/entities/currency'
 import { ReportTerm } from '@/entities/report'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { formatPct } from '@/shared/lib/format'
-import { txMeta, txSides } from '@/shared/lib/transactions'
+import { txForMonthLabel, txMeta, txSides } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 import { pairRate, txBaseValue, txFlowKind, txPair } from '../lib/tx-card'
@@ -46,6 +46,7 @@ const compare = computed(() => {
   return t(delta > 0 ? 'txCard.rateAbove' : 'txCard.rateBelow', { pct })
 })
 
+const forMonth = computed(() => txForMonthLabel(props.tx))
 const flow = computed(() => txFlowKind(props.tx))
 const base = computed(() => {
   if (!props.baseCurrency) return undefined
@@ -84,6 +85,10 @@ const ROW = 'flex items-baseline justify-between gap-4 py-3'
       <dd class="min-w-0 break-words pb-1 text-right">
         <EntityLink :target="{ kind: 'contact', id: contact }" :label="context.contactName(contact)" />
       </dd>
+    </div>
+    <div v-if="forMonth" :class="ROW" data-tx-for-month>
+      <dt class="text-muted-foreground">{{ t('txCard.forMonth') }}</dt>
+      <dd class="text-right">{{ forMonth }}</dd>
     </div>
     <div v-if="base !== undefined" :class="ROW">
       <dt class="text-muted-foreground">{{ t('txCard.base') }}</dt>

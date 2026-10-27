@@ -1,6 +1,6 @@
 /** Kind-specific facts for the details view: extra fields, the fee, the debt effect. */
 
-import { formatQuantity } from '../format'
+import { formatMonthKey, formatQuantity } from '../format'
 
 import { anyBody, body, txKind, txMeta } from './access'
 
@@ -86,4 +86,20 @@ export function txAutomation(tx: Transaction): { id: string; runId: string | nul
   if ('automation' in origin) return { id: origin.automation.automation_id, runId: null }
   if ('workflow' in origin) return { id: origin.workflow.workflow_id, runId: origin.workflow.run_id }
   return null
+}
+
+/** «YYYY-MM» of the month an income is for when that is not its date's own month; `null` otherwise. */
+export function txForMonth(tx: Transaction): string | null {
+  if (txKind(tx) !== 'topup') return null
+  const month = body(tx, 'topup').details.for_month
+  if (!month) return null
+  return month === txMeta(tx).timestamp.slice(0, 7) ? null : month
+}
+
+/** The month an income is for as a name («сентябрь»), with the year when it is not its date's year; `null` if none. */
+export function txForMonthLabel(tx: Transaction): string | null {
+  const month = txForMonth(tx)
+  if (!month) return null
+  const sameYear = month.slice(0, 4) === txMeta(tx).timestamp.slice(0, 4)
+  return formatMonthKey(month, sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' })
 }

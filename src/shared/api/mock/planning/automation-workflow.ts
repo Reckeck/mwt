@@ -98,6 +98,7 @@ export function syncWorkflow(automation: Automation) {
     property_id: automation.property_id,
     time: automation.time,
     asks: automation.asks,
+    for_month_offset: automation.for_month_offset,
   }
   const workflow: Workflow = {
     id: automation.id,

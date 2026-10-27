@@ -440,7 +440,12 @@ time: string | null,
 /**
  * It asks «да» before it books the operation.
  */
-asks: boolean, };
+asks: boolean, 
+/**
+ * An income only: the month it is for, in months from the one it is
+ * planned in (-1 — the previous, 0 — this one); `None` — not set.
+ */
+for_month_offset?: number, };
 
 /**
  * The card of a scheme or a repeat.
@@ -497,7 +502,12 @@ time: string | null,
 /**
  * It asks «да» before it books the operation.
  */
-asks: boolean, };
+asks: boolean, 
+/**
+ * An income only: the month it is for, in months from the one it is
+ * planned in (-1 — the previous, 0 — this one); `None` — not set.
+ */
+for_month_offset?: number, };
 
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
 
@@ -564,7 +574,12 @@ time: string | null,
 /**
  * It asks «да» before it books the operation.
  */
-asks: boolean, };
+asks: boolean, 
+/**
+ * An income only: the month it is for, in months from the one it is
+ * planned in (-1 — the previous, 0 — this one); `None` — not set.
+ */
+for_month_offset?: number, };
 
 /**
  * What a dashboard number is measured against (plan H1, decision 57): the
@@ -2855,7 +2870,12 @@ network: Chain | null, tx_hash: string | null,
 /**
  * Cashback and bonus points: the card or account whose purchases earned them.
  */
-source_store_id?: string, };
+source_store_id?: string, 
+/**
+ * Income only: the month it is for, «YYYY-MM», when that is not the month
+ * of its date (a salary paid on the 5th for the month before).
+ */
+for_month?: string, };
 
 /**
  * What a leg represents inside its transaction.

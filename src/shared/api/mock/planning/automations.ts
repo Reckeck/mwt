@@ -4,6 +4,7 @@ import { txMeta } from '@/shared/lib/transactions'
 import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTotals } from './budget-calc'
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
 import { deleteGoal, restoreGoal } from './goal-delete'
+import { forMonthKey } from './salary-seed'
 import {
   automations,
   budgets,
@@ -50,6 +51,7 @@ export function planAutomations(
         estimate: null,
         time: input.time ?? null,
         asks: input.asks ?? false,
+        ...(input.for_month_offset == null ? {} : { for_month_offset: input.for_month_offset }),
       }
       automations.push(automation)
       syncWorkflow(automation)
@@ -71,6 +73,7 @@ export function planAutomations(
           property_id: input.automation.template.common.property_id ?? null,
           time: input.automation.time ?? null,
           asks: input.automation.asks ?? false,
+          for_month_offset: input.automation.for_month_offset,
         }),
       )
     }
@@ -94,6 +97,8 @@ export function planAutomations(
       txMeta(tx).origin = {
         workflow: { workflow_id: automation.id, run_id: runId, planned_at: iso(now()), estimated },
       }
+      if ('topup' in tx && automation.for_month_offset != null)
+        tx.topup.details.for_month = forMonthKey(iso(now()), automation.for_month_offset)
       ctx.transactions.unshift(tx)
       runs.push({
         id: runId,

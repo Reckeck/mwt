@@ -1246,6 +1246,11 @@ pub struct AutomationInput {
     /// It asks «да» before it books the operation.
     #[serde(default)]
     pub asks: bool,
+    /// An income only: the month it is for, in months from the one it is
+    /// planned in (-1 — the previous, 0 — this one); `None` — not set.
+    #[serde(default)]
+    #[ts(optional)]
+    pub for_month_offset: Option<i8>,
 }
 
 impl AutomationInput {
@@ -1273,6 +1278,7 @@ impl AutomationInput {
             property_id: self.template.property_id(),
             time: self.time.clone(),
             asks: self.asks,
+            for_month_offset: self.for_month_offset,
         })
     }
 }

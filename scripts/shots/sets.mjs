@@ -1,6 +1,7 @@
 // What `mise run shots -- <set>` photographs. See steps.mjs for the shape of a shot.
 
 import { stage5 } from './sets-stage5.mjs'
+import { salary } from './sets-salary.mjs'
 import { links } from './sets-links.mjs'
 import { money, moneyScreens } from './sets-money.mjs'
 import { encrypt } from './sets-encrypt.mjs'
@@ -696,4 +697,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges }
+export const SETS = { salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges }

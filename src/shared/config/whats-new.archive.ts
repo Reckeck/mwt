@@ -3,6 +3,34 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_ARCHIVE: WhatsNewEntry[] = [
   {
+    id: 'goalReturn',
+    date: '2026-10-21',
+    points: [
+      { key: 'return', route: 'money-plan' },
+      { key: 'manual', route: 'settings:accounting:budget' },
+    ],
+  },
+  {
+    id: 'inflationAuto',
+    date: '2026-10-21',
+    points: [
+      { key: 'auto', route: 'settings:accounting:inflation' },
+      { key: 'notices', route: 'settings:app:notifications' },
+      { key: 'keyRate' },
+    ],
+  },
+  {
+    id: 'calculator',
+    date: '2026-10-21',
+    points: [
+      { key: 'calc', route: 'money-calculator' },
+      { key: 'reverse', route: 'money-calculator' },
+      { key: 'prefill', route: 'money-calculator' },
+      { key: 'scenarios', route: 'money-calculator' },
+      { key: 'goal', route: 'money-plan' },
+    ],
+  },
+  {
     id: 'links',
     date: '2026-10-21',
     points: [{ key: 'card', route: 'transactions' }, { key: 'chips' }, { key: 'notices' }, { key: 'address' }],

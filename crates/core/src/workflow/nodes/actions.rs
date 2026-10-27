@@ -213,6 +213,18 @@ impl Executor<'_> {
         if let TxOrigin::Workflow { estimated, .. } = &mut meta.origin {
             *estimated = self.bool_param(node, "estimated");
         }
+        if let Transaction::Topup(inner) = &mut tx
+            && let Some(offset) = self.raw_param(node, "for_month_offset").as_i64()
+        {
+            let day = self.raw_param(node, "for_month_day").as_u64();
+            let cal = crate::calendar::Calendar::new(&self.ctx.zone);
+            let moment = planned.unwrap_or(self.ctx.now);
+            inner.details.for_month = Some(crate::calendar::for_month::for_month_key(
+                cal.date_of(moment),
+                day.and_then(|day| u8::try_from(day).ok()),
+                i8::try_from(offset).unwrap_or(0),
+            ));
+        }
         Ok(tx)
     }
 

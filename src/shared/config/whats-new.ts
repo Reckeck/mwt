@@ -13,6 +13,14 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'twoPayouts',
+    date: '2026-10-28',
+    points: [
+      { key: 'payouts', route: 'automations' },
+      { key: 'forMonth', route: 'transactions' },
+    ],
+  },
+  {
     id: 'homeFixes',
     date: '2026-10-28',
     points: [
@@ -261,34 +269,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [
       { key: 'essential', route: 'settings:accounting:categories' },
       { key: 'fund', route: 'wallet-settings' },
-    ],
-  },
-  {
-    id: 'goalReturn',
-    date: '2026-10-21',
-    points: [
-      { key: 'return', route: 'money-plan' },
-      { key: 'manual', route: 'settings:accounting:budget' },
-    ],
-  },
-  {
-    id: 'inflationAuto',
-    date: '2026-10-21',
-    points: [
-      { key: 'auto', route: 'settings:accounting:inflation' },
-      { key: 'notices', route: 'settings:app:notifications' },
-      { key: 'keyRate' },
-    ],
-  },
-  {
-    id: 'calculator',
-    date: '2026-10-21',
-    points: [
-      { key: 'calc', route: 'money-calculator' },
-      { key: 'reverse', route: 'money-calculator' },
-      { key: 'prefill', route: 'money-calculator' },
-      { key: 'scenarios', route: 'money-calculator' },
-      { key: 'goal', route: 'money-plan' },
     ],
   },
   ...WHATS_NEW_ARCHIVE,

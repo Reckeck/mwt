@@ -147,6 +147,11 @@ pub struct AutomationSpec {
     /// It asks «да» before it books the operation.
     #[serde(default)]
     pub asks: bool,
+    /// An income only: the month it is for, in months from the one it is
+    /// planned in (-1 — the previous, 0 — this one); `None` — not set.
+    #[serde(default)]
+    #[ts(optional)]
+    pub for_month_offset: Option<i8>,
 }
 
 /// An automation as the app shows it: a workflow built from an
@@ -184,6 +189,11 @@ pub struct Automation {
     /// It asks «да» before it books the operation.
     #[serde(default)]
     pub asks: bool,
+    /// An income only: the month it is for, in months from the one it is
+    /// planned in (-1 — the previous, 0 — this one); `None` — not set.
+    #[serde(default)]
+    #[ts(optional)]
+    pub for_month_offset: Option<i8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

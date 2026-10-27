@@ -1,26 +1,51 @@
 import { fiatRef } from '@/shared/lib/asset-ref'
 import { dateInputToIso, localDate } from '@/shared/lib/planning'
 
-/** What «Зарплата» (Auto-2 · 9) asks: where it comes from and to, how much, on which day. */
-export interface SalaryDraft {
-  category: string
-  storeId: string
+/** «За какой месяц» of a payout: the month before the one it comes in, or the same one. */
+export type SalaryForMonth = 'previous' | 'current'
+
+/** The months in the order the select lists them; the value is `for_month_offset` of the automation. */
+export const SALARY_FOR_MONTH_OFFSET: Record<SalaryForMonth, number> = { previous: -1, current: 0 }
+
+/** One payout of the month: a salary, an advance — its own name, day, month it is for and amount. */
+export interface SalaryPayout {
+  name: string
+  day: number
+  forMonth: SalaryForMonth
+  shift: WorkdayShift
   /** «Меняется — спрашивать»: the amount is asked at each confirmation, `amount` is the usual one. */
   varies: boolean
   amount: string
   currency: string
-  day: number
-  shift: WorkdayShift
+}
+
+/** What «Зарплата» (Auto-2 · 9) asks beyond the payouts: where it comes from and to. */
+export interface SalaryDraft extends SalaryPayout {
+  category: string
+  storeId: string
+}
+
+/** The two payouts a month can hold: the salary on the 5th for the month before, the advance on the 20th for this one. */
+export function defaultPayout(kind: 'salary' | 'advance', name: string, currency: string): SalaryPayout {
+  return {
+    name,
+    day: kind === 'salary' ? 5 : 20,
+    forMonth: kind === 'salary' ? 'previous' : 'current',
+    shift: 'back',
+    varies: true,
+    amount: '',
+    currency,
+  }
 }
 
 /** Part of the salary «Заплати себе первым» moves to cash after it comes. */
 export const SALARY_SHARE_PCT = 10
 
 /** The monthly top-up the template books: the salary's category, wallet and usual amount. */
-export function salaryInput(draft: SalaryDraft, name: string): AutomationInput {
+export function salaryInput(draft: SalaryDraft): AutomationInput {
   const asset = fiatRef(draft.currency)
   return {
-    name,
+    name: draft.name.trim(),
     active: true,
     preset: 'salary',
     schedule: { monthly: { day: draft.day } },
@@ -49,5 +74,6 @@ export function salaryInput(draft: SalaryDraft, name: string): AutomationInput {
     workday_shift: draft.shift,
     time: null,
     asks: false,
+    for_month_offset: SALARY_FOR_MONTH_OFFSET[draft.forMonth],
   }
 }

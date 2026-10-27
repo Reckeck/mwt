@@ -4,12 +4,20 @@ import { txMeta } from '@/shared/lib/transactions'
 import { syncWorkflow } from './automation-workflow'
 import { automations, draftOf, iso, now, runs, utilities, uuid } from './state'
 
+/** `YYYY-MM` of the month `offset` months from the one the moment falls in (the core's `for_month_key`). */
+export function forMonthKey(timestamp: string, offset: number): string {
+  const at = new Date(timestamp)
+  const month = new Date(at.getFullYear(), at.getMonth() + offset, 1)
+  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+}
+
 /** Make the transactions with this comment an automation's runs; the latest one's day is the schedule's. */
 function seedAutomation(
   transactions: Transaction[],
   comment: string,
   name: string,
   preset: AutomationPreset | null = null,
+  forMonthOffset?: number,
 ) {
   const booked = transactions
     .filter((tx) => ('topup' in tx || 'payment' in tx) && txMeta(tx).comment === comment)
@@ -32,6 +40,7 @@ function seedAutomation(
     estimate: null,
     time: null,
     asks: false,
+    ...(forMonthOffset === undefined ? {} : { for_month_offset: forMonthOffset }),
   }
   automations.push(automation)
   syncWorkflow(automation)
@@ -40,6 +49,10 @@ function seedAutomation(
     const runId = uuid()
     meta.origin = {
       workflow: { workflow_id: automation.id, run_id: runId, planned_at: meta.timestamp, estimated: false },
+    }
+    // The details object is shared between the demo's operations: a copy, not a write.
+    if ('topup' in tx && forMonthOffset !== undefined) {
+      tx.topup.details = { ...tx.topup.details, for_month: forMonthKey(meta.timestamp, forMonthOffset) }
     }
     const leg = 'topup' in tx ? tx.topup : 'payment' in tx ? tx.payment : null
     runs.push({
@@ -57,7 +70,8 @@ function seedAutomation(
 }
 
 export function seedSalaryAutomation(transactions: Transaction[]) {
-  seedAutomation(transactions, 'Зарплата', 'Зарплата', 'salary')
+  // The salary comes on the 5th for the month before: its rows carry «за <месяц>».
+  seedAutomation(transactions, 'Зарплата', 'Зарплата', 'salary', -1)
   // The flat's rent item names the automation that pays it (Wallets-2 · 10, Wallets-3 · 17).
   const rent = seedAutomation(transactions, 'Аренда квартиры', 'Аренда')
   for (const item of utilities) if (rent && 'housing' in item.kind) item.kind.housing.automation_id = rent.id

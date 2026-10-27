@@ -215,6 +215,13 @@ fn action_params(spec: &AutomationSpec) -> Map<String, Value> {
         json!(spec.amount_mode == AmountMode::Varies),
     );
     params.insert("on_shortfall".into(), json!("reject"));
+    if let Some(offset) = spec.for_month_offset {
+        // «За какой месяц» of an income, relative to the planned month.
+        params.insert("for_month_offset".into(), json!(offset));
+        if let Schedule::Monthly { day } = spec.schedule {
+            params.insert("for_month_day".into(), json!(day));
+        }
+    }
     params
 }
 

@@ -750,6 +750,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Rent".into(),
                 active: true,
                 preset: None,
@@ -768,6 +769,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Salary".into(),
                 active: true,
                 preset: None,
