@@ -9,6 +9,7 @@ import { seedMine } from './planning/mine-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
+import { seedSubAccounts } from './subaccounts-seed'
 import { mockImportRuns, mockKeyStatus } from './exchange-data'
 
 let seeded = false
@@ -38,6 +39,7 @@ export function seedMock() {
   if (tinkoff && bybit) seedMine(mockTransactionFrom(bybitTransfer(tinkoff.id, bybit.id), priceOf))
   seedGoal()
   seedLoyalty()
+  seedSubAccounts()
   seedExchangeImport()
   if (mockScenario === 'stress') seedStress()
 }

@@ -32,7 +32,8 @@ const props = defineProps<{
   includeChildren: boolean
   /** The oldest quote behind the prices, for «prices as of». */
   pricesAsOf?: string | null
-  exchange?: { children: StoreChildRow[]; ownBase: string; ownPositions: StorePosition[] } | null
+  /** An exchange's own wallet: its positions are its spot. */
+  exchange?: boolean
   hasKey: boolean
   refreshing: boolean
 }>()

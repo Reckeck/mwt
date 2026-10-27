@@ -13,6 +13,11 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'subAccountTiles',
+    date: '2026-10-28',
+    points: [{ key: 'tiles' }, { key: 'table', route: 'stores' }],
+  },
+  {
     id: 'newSettings',
     date: '2026-10-25',
     points: [
@@ -281,16 +286,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: 'links',
     date: '2026-10-21',
     points: [{ key: 'card', route: 'transactions' }, { key: 'chips' }, { key: 'notices' }, { key: 'address' }],
-  },
-  {
-    id: 'salary',
-    date: '2026-10-20',
-    points: [
-      { key: 'varies', route: 'automations' },
-      { key: 'workday', route: 'automations' },
-      { key: 'confirm', route: 'automations' },
-      { key: 'workflows', route: 'automations-workflows' },
-    ],
   },
   ...WHATS_NEW_ARCHIVE,
 ]
