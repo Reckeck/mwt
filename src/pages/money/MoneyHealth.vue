@@ -8,6 +8,7 @@ import { EmergencyFundDialog } from '@/features/emergency-fund-edit'
 import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { SectionState } from '@/shared/ui/section-state'
+import { Skeleton } from '@/shared/ui/skeleton'
 
 import { useHealth } from './model/use-health'
 import { HealthFigures } from './ui/health'
@@ -24,7 +25,14 @@ const fundOpen = ref(false)
 
 <template>
   <div class="grid grid-cols-1 gap-4">
-    <SectionState :loading="report.isPending.value" :error="report.error.value" skeleton="chart" @retry="report.refetch()">
+    <SectionState :loading="report.isPending.value" :error="report.error.value" @retry="report.refetch()">
+      <!-- The height of the loaded checkup (phrase, then three figures): the details below do not jump when it lands. -->
+      <template #loading>
+        <div class="grid gap-3">
+          <Skeleton class="h-14 w-full" />
+          <Skeleton class="h-[230px] w-full md:h-36" />
+        </div>
+      </template>
       <HealthFigures v-if="report.data.value" :report="report.data.value" @setup-fund="fundOpen = true" />
     </SectionState>
     <Collapsible v-model:open="details" class="grid gap-3">

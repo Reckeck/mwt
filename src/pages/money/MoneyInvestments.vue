@@ -15,6 +15,7 @@ import { Button } from '@/shared/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
+import { Skeleton } from '@/shared/ui/skeleton'
 
 import { useInvestments } from './model/use-investments'
 import { InvestFigures, InvestTable } from './ui/investments'
@@ -60,7 +61,14 @@ function recordPlan(plan: CalculatorPlan) {
 
 <template>
   <div class="grid grid-cols-1 gap-4">
-    <SectionState :loading="investments.isPending.value" :error="investments.error.value" skeleton="report" @retry="investments.refetch()">
+    <SectionState :loading="investments.isPending.value" :error="investments.error.value" @retry="investments.refetch()">
+      <!-- The height of the loaded figures and table: the details below do not jump when they land. -->
+      <template #loading>
+        <div class="grid gap-3">
+          <Skeleton class="h-[130px] w-full" />
+          <Skeleton class="h-[91px] w-full md:h-29" />
+        </div>
+      </template>
       <template v-if="investments.data.value?.rows.length">
         <InvestFigures
           :profit="investments.data.value.profit"
