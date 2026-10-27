@@ -1,4 +1,5 @@
 // What check-layout visits and what it measures on each view.
+import { pointOf, press } from './overlay-steps.mjs'
 import { DIALOG_RECT, INSTALL_OBSERVERS, NARROW_FIELDS, OVERFLOW, READ_OBSERVERS, RESET_OBSERVERS, ROW_RECTS, TOUCH } from './probes.mjs'
 
 export const DESKTOP = [
@@ -279,25 +280,35 @@ export async function backCloses(page) {
   return problems
 }
 
-/** Arming a confirm button keeps its width and its focus. */
+/** A confirm button opens its question beside itself: the button keeps its box and its place, the layer does not cover it, Esc closes it. */
 export async function confirmStable(page) {
   await page.eval(`${APP} await gp.$router.push('/automations/reminders'); return true`)
   await page.sleep(700)
-  const result = await page.eval(`
-    const button = [...document.querySelectorAll('[data-slot="confirm-button"]')].find((el) => el.getBoundingClientRect().width)
-    if (!button) return 'none'
-    const width = button.getBoundingClientRect().width
-    button.focus()
-    button.click()
-    await new Promise((done) => setTimeout(done, 120))
-    const after = button.isConnected ? button.getBoundingClientRect().width : -1
-    const focused = document.activeElement === button
-    button.blur()
-    return { width, after, focused }`)
-  if (result === 'none') return ['no [data-slot="confirm-button"] on /automations/reminders']
+  const at = await pointOf(page, '[data-slot="confirm-button"]')
+  if (!at) return ['no [data-slot="confirm-button"] on /automations/reminders']
+  const box = `const b = document.querySelector('[data-slot="confirm-button"][data-armed]') ?? [...document.querySelectorAll('[data-slot="confirm-button"]')].find((el) => el.getBoundingClientRect().width); const r = b.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]`
+  const before = await page.eval(box)
+  await page.mouse(at[0], at[1])
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at[0], y: at[1], button: 'left', clickCount: 1 })
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at[0], y: at[1], button: 'left', clickCount: 1 })
+  await page.sleep(500)
+  const layer = await page.eval(`
+    const el = document.querySelector('[data-overlay="confirm"]')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { box: [r.left, r.top, r.right, r.bottom], armed: Boolean(document.querySelector('[data-slot="confirm-button"][data-armed]')) }`)
+  if (!layer) return ['the confirm button did not open its question']
   const problems = []
-  if (Math.abs(result.after - result.width) > 0.5) problems.push(`confirm button changes width ${result.width} → ${result.after}`)
-  if (!result.focused) problems.push('confirm button loses focus when armed')
+  const after = await page.eval(box)
+  if (before.some((v, i) => Math.abs(v - after[i]) > 0.5)) problems.push(`confirm button moves or resizes when armed: ${before} → ${after}`)
+  if (!layer.armed) problems.push('confirm button has no data-armed while its question is open')
+  const [bl, bt, bw, bh] = after
+  const [l, t, r, b] = layer.box
+  const phone = r - l > 600 || l <= 0
+  if (!phone && l < bl + bw && r > bl && t < bt + bh && b > bt) problems.push('the question covers the button it belongs to')
+  await press(page, 'Escape')
+  await page.sleep(500)
+  if (await page.eval(`return Boolean(document.querySelector('[data-overlay="confirm"]'))`)) problems.push('Esc does not close the confirm question')
   return problems
 }
 

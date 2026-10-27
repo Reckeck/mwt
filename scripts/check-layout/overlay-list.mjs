@@ -121,6 +121,7 @@ export const OVERLAYS = [
   { id: 'reminder', route: '/automations/reminders', phone: true, open: [{ query: { new: 'reminder' } }], layer: overlay('reminder'), keys: ['new'] },
   { id: 'price-alert', route: '/automations/alerts', phone: true, open: [{ query: { new: 'alert' } }], layer: overlay('price-alert'), keys: ['new'] },
   { id: 'automation-edit', route: '/automations?edit={automation}', phone: true, fresh: true, open: [{ wait: 900 }], layer: overlay('automation-edit'), keys: ['edit'] },
+  { id: 'confirm', route: '/automations/reminders', phone: true, open: [{ click: '[data-slot="confirm-button"]' }], layer: overlay('confirm') },
   { id: 'workflow-import', route: '/automations', open: [{ click: '[data-tour="automations-import"]' }], layer: overlay('workflow-import') },
   { id: 'workflow-vars', route: '/automations', phone: true, open: [{ click: '[data-tour="workflow-vars-open"]' }], layer: overlay('workflow-vars') },
 

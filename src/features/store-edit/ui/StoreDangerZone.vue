@@ -93,7 +93,8 @@ const destroy = useMutation({
       </div>
       <ConfirmButton
         :label="t('stores.delete')"
-        :confirm-label="t('actions.confirmDelete')"
+        :confirm-label="t('stores.deleteConfirmTitle', { name: props.store.name })"
+        :description="t('stores.deleteConfirmHint')"
         :disabled="!!deleteBlocker || destroy.isPending.value"
         @confirm="destroy.mutate()"
       >

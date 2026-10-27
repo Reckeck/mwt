@@ -109,6 +109,7 @@ function runTests() {
             v-else
             :label="t('workflow.versions.restore')"
             :confirm-label="t('workflow.versions.restoreOverEdits')"
+            :action-label="t('workflow.versions.restore')"
             :disabled="actions.restoreVersion.isPending.value"
             @confirm="restore(version.saved_at)"
           >

@@ -70,6 +70,7 @@ function lastLine(peer: SyncPeerView) {
             show-label
             :label="t('sync.devices.forgetShort')"
             :confirm-label="t('sync.devices.forgetConfirm')"
+            :action-label="t('sync.devices.forgetShort')"
             :disabled="forget.isPending.value"
             @confirm="forget.mutate(peer.device_id)"
           />

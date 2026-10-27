@@ -16,7 +16,8 @@ const remove = useTransactionDelete()
 <template>
   <ConfirmButton
     :label="t('tx.delete')"
-    :confirm-label="t('actions.confirmDelete')"
+    :confirm-label="t('tx.deleteConfirm')"
+    :description="t('confirm.undoable')"
     :disabled="remove.isPending.value"
     :show-label="props.labelled"
     @confirm="remove.mutate(props.id)"
