@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
+import { assetKey } from '@/shared/lib/asset-ref'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 
 import { isFormComplete, missingFields } from '../transaction-form.model'
@@ -32,11 +33,19 @@ const ASSET_FIELDS = new Set(['asset', 'fromAsset', 'toAsset', 'soldAsset', 'bou
  */
 export function useTxValidation(state: TxFormState) {
   const { t } = useI18n()
-  const { props, form, contacts } = state
+  const { props, form, contacts, serverErrors } = state
 
   /** What is still missing, said under the form. */
   const missing = computed(() => (props.template || props.disabled ? [] : missingFields(form)))
   const valid = computed(() => !props.disabled && isFormComplete(form))
+
+  /** An exchange of a currency for itself is a transfer between wallets (core: «a conversion needs two different assets»). */
+  const sameCurrency = computed(
+    () =>
+      form.kind === 'convert' &&
+      Boolean(form.fromAsset && form.toAsset) &&
+      assetKey(form.fromAsset as AssetRef) === assetKey(form.toAsset as AssetRef),
+  )
 
   const needsCategory = computed(() => form.kind === 'topup' || form.kind === 'payment')
   const rules = useQuery({
@@ -79,6 +88,8 @@ export function useTxValidation(state: TxFormState) {
       if (needsCategory.value && !props.template && !form.categories.length && !ruleFillsCategory.value) {
         errors.categories = t('validation.category')
       }
+      if (sameCurrency.value) errors.toAsset = t('validation.sameCurrency')
+      for (const [field, text] of Object.entries(serverErrors.value)) errors[field] ??= text
       // Complete on the surface but still not an operation (e.g. an unknown kind of side).
       if (!Object.values(errors).some(Boolean) && !isFormComplete(form)) errors.form = t('validation.summary')
       return errors
@@ -86,5 +97,5 @@ export function useTxValidation(state: TxFormState) {
     { resetOn: () => form.kind },
   )
 
-  return { missing, valid, needsCategory, check }
+  return { missing, valid, needsCategory, sameCurrency, check }
 }

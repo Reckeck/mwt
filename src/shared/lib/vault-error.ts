@@ -41,7 +41,7 @@ export function appErrorMessage(err: AppError, t: Translate): string {
  * falling back to the raw message when the code has no translation.
  */
 /** Codes whose backend text carries the specifics (amounts, names) worth keeping. */
-const DETAILED_CODES = new Set(['INSUFFICIENT_FUNDS'])
+const DETAILED_CODES = new Set(['INSUFFICIENT_FUNDS', 'INVALID_INPUT'])
 
 export function codeErrorMessage(err: AppError, t: Translate): string {
   const key = `errors.${err.code}`

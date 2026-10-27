@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-vue-next'
 
-/** The square mark of a row on the phone, where the kind's word does not fit (Ops-1 · 1). */
+/** The square mark of a row's kind, PC and phone: the word did not fit its column (Ops-1 · 1). */
 export const TX_KIND_ICON: Record<TxKind, Component> = {
   payment: ArrowUpRight,
   topup: ArrowDownLeft,

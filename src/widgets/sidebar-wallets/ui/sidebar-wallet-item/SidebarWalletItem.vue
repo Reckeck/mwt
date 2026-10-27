@@ -42,7 +42,8 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
         :class="cn(props.node.store.archived && 'opacity-50')"
       >
         <RouterLink :to="{ name: 'wallet', params: { id: props.node.store.id } }" :data-entity="`store:${props.node.store.id}`">
-          <component :is="storeIcon(props.node.store)" class="store-tint" :style="{ '--store-color': props.node.store.color }" />
+          <!-- The same glyph as the wallets table, in the sidebar colour (no per-wallet tint). -->
+          <component :is="storeIcon(props.node.store)" />
           <span>{{ props.node.store.name }}</span>
         </RouterLink>
       </SidebarMenuButton>
@@ -71,7 +72,7 @@ const total = (node: StoreTreeNode) => nodeTotal(node, props.currency)
             :class="cn(child.store.archived && 'opacity-50')"
           >
             <RouterLink :to="{ name: 'wallet', params: { id: child.store.id } }" :data-entity="`store:${child.store.id}`">
-              <component :is="storeIcon(child.store)" class="store-tint" :style="{ '--store-color': child.store.color }" />
+              <component :is="storeIcon(child.store)" />
               <span class="min-w-0 flex-1 truncate">{{ child.store.name }}</span>
               <span v-if="bindingBadge(child.store)" class="shrink-0 text-2xs uppercase text-muted-foreground">
                 {{ bindingBadge(child.store) }}

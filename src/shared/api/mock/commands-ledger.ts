@@ -1,5 +1,6 @@
 /** Commands: contacts and transactions. */
 
+import { assetKey } from '@/shared/lib/asset-ref'
 import { isFiatCode } from '@/shared/lib/format'
 import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockContactBalances, mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
@@ -141,6 +142,10 @@ export const transactionsCommands: MockCommands = {
   },
   add_transaction: ({ args }) => {
     const input = args?.input as TransactionInput
+    // Like the core's rule (service/validate.rs): a conversion needs two different assets.
+    if (input.type === 'convert' && assetKey(input.from.asset as AssetRef) === assetKey(input.to.asset as AssetRef)) {
+      return Promise.reject({ code: 'INVALID_INPUT', message: 'a conversion needs two different assets' })
+    }
     const tx = mockPush(mockTransactionFrom(input, priceOf, undefined, mockBalanceOf))
     mockLinkProperty(txId(tx), input.common.property_id)
     return resolve(tx)

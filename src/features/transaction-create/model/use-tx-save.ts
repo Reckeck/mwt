@@ -1,15 +1,16 @@
-import { computed, toRaw } from 'vue'
+import { computed, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { attachStaged } from '@/entities/attachment'
-import { call } from '@/shared/api/ipc'
+import { call, parseError } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import { txChainAndHash, txId } from '@/shared/lib/transactions'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
 
+import { coreErrorField } from '../lib/form'
 import { emptyForm, formToInput, formToInputs, isLinked } from '../transaction-form.model'
 import type { TxFormState } from './use-tx-form-state'
 
@@ -25,7 +26,7 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
   const queryClient = useQueryClient()
   const settings = useSettingsStore()
   const lookup = useTradeLookupStore()
-  const { props, form, editing, attachments } = state
+  const { props, form, editing, attachments, serverErrors } = state
 
   const linked = computed(() => !props.template && isLinked(form))
 
@@ -56,11 +57,26 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
 
   const save = useMutation({
     mutationFn: async () => {
-      const tx = await write()
+      let tx: Transaction
+      try {
+        tx = await write()
+      } catch (err) {
+        // A rule the core names for one field is told under it, not in a toast.
+        const hit = coreErrorField(parseError(err).message, form.kind)
+        if (!hit) throw err
+        serverErrors.value = { [hit.field]: t(hit.key) }
+        void nextTick(() => {
+          const field = document.querySelector<HTMLElement>('#transaction-form [data-invalid]')
+          field?.querySelector<HTMLElement>('input, button, [tabindex]')?.focus()
+          field?.scrollIntoView({ block: 'nearest' })
+        })
+        return null
+      }
       await attach(tx)
       return tx
     },
     onSuccess: (tx) => {
+      if (!tx) return
       attachments.value = []
       for (const queryKey of STALE_KEYS) void queryClient.invalidateQueries({ queryKey })
       if (!editing.value)
@@ -86,14 +102,12 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
       error: 'form.saveFailed',
       // Read before `onSuccess` resets the form: the cache's handler runs first.
       // The short form's dialog says it itself, with «Открыть» or «Отменить» (OpForm-1 · 4).
-      success: () =>
-        props.compact && !editing.value
-          ? ''
-          : editing.value
-            ? t('tx.updated')
-            : linked.value
-              ? t('tx.split.saved', { count: form.extra.length + 1 })
-              : t('form.saved'),
+      success: (tx) => {
+        // Nothing saved: the core's rule was told under its field.
+        if (!tx || (props.compact && !editing.value)) return ''
+        if (editing.value) return t('tx.updated')
+        return linked.value ? t('tx.split.saved', { count: form.extra.length + 1 }) : t('form.saved')
+      },
     },
   })
 
