@@ -6049,5 +6049,12 @@
   "balance.phone.fewer": "Свернуть",
   "balance.phone.back": "Назад к «Деньги»",
   "wallet.incoming": "Пришло с {from} {date} · {amount}.",
-  "wallet.incomingFee": "Пришло с {from} {date} · {amount}, комиссия сети {fee}."
+  "wallet.incomingFee": "Пришло с {from} {date} · {amount}, комиссия сети {fee}.",
+  "confirm.undoable": "Это можно будет отменить в уведомлении.",
+  "confirm.irreversible": "Отменить это нельзя.",
+  "tx.deleteConfirm": "Удалить операцию?",
+  "goal.deleteConfirm": "Удалить цель?",
+  "automation.deleteConfirm": "Удалить автоматизацию?",
+  "workflow.discard.action": "Сбросить",
+  "sync.backup.restoreAction": "Вернуть"
 }

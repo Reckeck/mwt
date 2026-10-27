@@ -119,7 +119,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
               >
                 <Pencil class="size-4" />
               </Button>
-              <ConfirmButton :label="t('goal.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(goal.id)">
+              <ConfirmButton :label="t('goal.delete')" :confirm-label="t('goal.deleteConfirm')" :description="t('confirm.irreversible')" @confirm="remove.mutate(goal.id)">
                 <Trash2 class="size-4" />
               </ConfirmButton>
             </div>

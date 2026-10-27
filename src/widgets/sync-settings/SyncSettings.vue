@@ -122,6 +122,7 @@ const keyHint = computed(() => {
           <ConfirmButton
             :label="t('sync.backup.restore')"
             :confirm-label="t('sync.backup.restoreConfirm')"
+            :action-label="t('sync.backup.restoreAction')"
             :disabled="restore.isPending.value"
             @confirm="restore.mutate()"
           >

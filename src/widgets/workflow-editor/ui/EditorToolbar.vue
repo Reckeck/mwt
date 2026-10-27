@@ -92,6 +92,7 @@ const status = computed(() => activeStatus(active.value, props.blockers, t, plur
       v-if="canDiscard"
       :label="t('workflow.discard.button')"
       :confirm-label="t('workflow.discard.confirm')"
+      :action-label="t('workflow.discard.action')"
       data-tour="workflow-discard"
       @confirm="emit('discard')"
     >

@@ -25,7 +25,6 @@
   "long-line src/shared/ui/combobox/ComboboxList.vue": 1,
   "long-line src/shared/ui/command/CommandInput.vue": 1,
   "long-line src/shared/ui/command/CommandItem.vue": 1,
-  "long-line src/shared/ui/confirm-button/ConfirmButton.vue": 1,
   "long-line src/shared/ui/context-menu/context-menu.constants.ts": 1,
   "long-line src/shared/ui/dialog/Dialog.vue": 3,
   "long-line src/shared/ui/drawer/DrawerContent.vue": 4,

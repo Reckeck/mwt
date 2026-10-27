@@ -224,7 +224,8 @@ watch(loading, (now) => !now && emit('ready'), { immediate: true })
             </Button>
             <ConfirmButton
               :label="t('automation.delete')"
-              :confirm-label="t('actions.confirmDelete')"
+              :confirm-label="t('automation.deleteConfirm')"
+              :description="t('confirm.irreversible')"
               @confirm="remove.mutate(automation.id)"
             >
               <Trash2 class="size-4" />

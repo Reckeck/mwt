@@ -45,7 +45,7 @@
 - `dialogJump` (:208) — один раз, 1280 мышь: на `/` клик `[data-tour="quick-add"]`, пять замеров `[role="dialog"][data-state="open"]` за 0…~600 мс, центр не уходит больше чем на 2 px, закрытие Esc. Только быстрое добавление; на телефоне не гоняется.
 - `backCloses` (:256) — один раз, 390: `closeTopLayer()` закрывает окно настроек (`?settings=app`), быстрое добавление (`[data-tour="quick-add"]`), палитру (`[data-command-palette-trigger]`). Открытость — `[role="dialog"][data-state="open"], [data-command-palette][data-open="true"]`.
 - `toastOverDialog` (:299) — один раз, 1280: клик по «Undo» тоста поверх окна настроек срабатывает и окно не закрывается.
-- `confirmStable` (:283) — `ConfirmButton` не меняет ширину и фокус (это не слой, но рядом).
+- `confirmStable` (:283) — `ConfirmButton`: кнопка не двигается и не меняет размер, вопрос (`data-overlay="confirm"`, поповер на ПК / шторка на телефоне) не накрывает кнопку, Esc закрывает.
 - `listenerLeak` — не слои.
 - **Этап 6¾:** `overlays.mjs` (+ `overlay-list.mjs`, `overlay-steps.mjs`, `overlay-cross.mjs`) — каждый слой из списка открывается, замеряется и закрывается на 1280 и 390; идёт и в `--quick`. Что покрыто — раздел 7.
 
@@ -167,7 +167,7 @@
 | 77 | `workflow-vars` | `Sheet` в `pages/automations/AutomationsSection.vue:75` + `WorkflowVarDialog` | переменные | кнопка (`data-tour="workflow-vars-open"`) | `Sheet`, на телефоне экран | есть: `data-tour` (кнопка) | нет |
 | 78 | `template-dialog` | `features/workflow-template-gallery/ui/TemplateDialog.vue` | шаблон | галерея | шторка | общий | нет |
 | 79 | `source` | `features/data-source-edit/ui/SourceDialog.vue` (`data-tour="source-url"`, `source-test`), `SourceRow.vue` (`ActionMenu`) | источник данных | «Источники» | шторка / `ActionSheet` | есть: `data-tour` (поля) | нет |
-| 80 | `reminder` | `features/reminder-edit/ReminderDialog.vue` (`data-tour="reminder-repeat"`), `widgets/reminder-list/ui/ReminderRow.vue` (`DropdownMenu`) | напоминание | `?new=reminder`, список | шторка / меню | есть: `data-tour` | confirmStable (только `ConfirmButton`) |
+| 80 | `reminder` | `features/reminder-edit/ReminderDialog.vue` (`data-tour="reminder-repeat"`), `widgets/reminder-list/ui/ReminderRow.vue` (`DropdownMenu`) | напоминание | `?new=reminder`, список | шторка / меню | есть: `data-tour` | `confirm` (список) и confirmStable (только `ConfirmButton`) |
 | 81 | `price-alert` | `features/price-alert-edit/PriceAlertDialog.vue` | оповещение о цене | `?new=alert`, список, терминал, карточка актива/`alert` | шторка | общий | нет |
 | 82 | `workflow-leave` | `Dialog` в `pages/automations/WorkflowEdit.vue:96` | «Выйти без сохранения» | уход со страницы редактора (route guard) | шторка | общий | нет |
 | 83 | `workflow-toolbar-menus` | `widgets/workflow-editor/ui/EditorToolbar.vue`, `RunFromMenu.vue` (`DropdownMenu`) | команды, «Запустить с…» | кнопки панели (`data-tour="workflow-edit-commands"`, `workflow-run`) | ПК | есть: `data-tour` | нет |

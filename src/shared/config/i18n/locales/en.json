@@ -6049,5 +6049,12 @@
   "balance.phone.fewer": "Fewer",
   "balance.phone.back": "Back to Money",
   "wallet.incoming": "Received from {from} on {date} · {amount}.",
-  "wallet.incomingFee": "Received from {from} on {date} · {amount}, network fee {fee}."
+  "wallet.incomingFee": "Received from {from} on {date} · {amount}, network fee {fee}.",
+  "confirm.undoable": "You can undo this from the notification.",
+  "confirm.irreversible": "This cannot be undone.",
+  "tx.deleteConfirm": "Delete the transaction?",
+  "goal.deleteConfirm": "Delete the goal?",
+  "automation.deleteConfirm": "Delete the automation?",
+  "workflow.discard.action": "Discard",
+  "sync.backup.restoreAction": "Restore"
 }
