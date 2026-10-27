@@ -1,0 +1,3407 @@
+id,kind,old,new
+1,page,Components,00 Components
+1387,page,"Каркас: вход, сайдбар, шапка, карточки и шторки",01 Shell
+1388,caption,Заголовок ряда,Row heading
+1389,sticky,"Стикер · Обход 26 окт · S5, S10, S19, S29, S50, S","Sticky note · 26 Oct walkthrough · S5, S10, S19, S29, S50, S68"
+1391,board,Вход и каркас,"Shell 1 · Sign-in, search, notifications and navigation"
+1392,caption,Новый вариант · мок-данные 22 ,Board status note
+1393,caption,Вход и каркас,Board title
+1394,caption,"Вход, новое хранилище, поиск C",Board subtitle
+1395,caption,1. Вход: открыть хранилище,"Caption · Sign-in, open vault"
+1397,caption,Стало · светлая,Caption · Light column
+1398,caption,Стало · тёмная,Caption · Dark column
+1399,caption,Почему и как,Caption · Notes heading
+1400,notes,aside,"Notes · Sign-in, open vault"
+1414,caption,2. Вход: неверный пароль,"Caption · Sign-in, wrong password"
+1415,caption,Стало · светлая,Caption · Light column
+1416,caption,Стало · тёмная,Caption · Dark column
+1417,caption,Почему и как,Caption · Notes heading
+1418,notes,aside,"Notes · Sign-in, wrong password"
+1429,caption,3. Новое хранилище: шаг 2 из 3,"Caption · New vault, step 2 of 3"
+1430,caption,Стало · светлая,Caption · Light column
+1431,caption,Стало · тёмная,Caption · Dark column
+1432,caption,Почему и как,Caption · Notes heading
+1433,notes,aside,"Notes · New vault, step 2 of 3"
+1447,caption,4. Поиск и команды: Ctrl K,"Caption · Search and commands (Ctrl K), empty query"
+1448,caption,Стало · светлая,Caption · Light column
+1449,caption,Стало · тёмная,Caption · Dark column
+1450,caption,Почему и как,Caption · Notes heading
+1451,notes,aside,"Notes · Search and commands (Ctrl K), empty query"
+1465,caption,5. Уведомления: колокольчик,Caption · Notifications bell
+1466,caption,Стало · светлая,Caption · Light column
+1467,caption,Стало · тёмная,Caption · Dark column
+1468,caption,Почему и как,Caption · Notes heading
+1469,notes,aside,Notes · Notifications bell
+1482,caption,6. Телефон: «Ещё» в нижней пан,"Caption · Phone, More in bottom navigation"
+1483,caption,Стало · светлая,Caption · Light column
+1484,caption,Стало · тёмная,Caption · Dark column
+1485,caption,Почему и как,Caption · Notes heading
+1486,screen,div,"Phone, More in bottom navigation (placeholder) — Desktop, Light"
+1488,screen,div,"Phone, More in bottom navigation (placeholder) — Desktop, Dark"
+1490,notes,aside,"Notes · Phone, More in bottom navigation"
+1502,caption,7. Сайдбар свёрнут: узкий вари,Caption · Sidebar collapsed
+1504,caption,Стало · светлая,Caption · Light column
+1505,caption,Стало · тёмная,Caption · Dark column
+1506,caption,Почему и как,Caption · Notes heading
+1507,screen,div,"Sidebar collapsed (placeholder) — Phone, Light"
+1509,screen,div,"Sidebar collapsed (placeholder) — Phone, Dark"
+1511,notes,aside,Notes · Sidebar collapsed
+1527,screen,scr d,"Sign-in, open vault — Desktop, Light"
+1528,inner,card,Card
+1549,screen,scr p,"Sign-in, open vault — Phone, Light"
+1552,inner,logo,Logo
+1557,inner,inp on,"Input, focused"
+1568,screen,scr d,"Sign-in, open vault — Desktop, Dark"
+1569,inner,card,Card
+1590,screen,scr p,"Sign-in, open vault — Phone, Dark"
+1593,inner,logo,Logo
+1598,inner,inp on,"Input, focused"
+1609,screen,scr d,"Sign-in, wrong password — Desktop, Light"
+1610,inner,card,Card
+1632,screen,scr p,"Sign-in, wrong password — Phone, Light"
+1635,inner,logo,Logo
+1640,inner,inp err,"Input, error"
+1652,screen,scr d,"Sign-in, wrong password — Desktop, Dark"
+1653,inner,card,Card
+1675,screen,scr p,"Sign-in, wrong password — Phone, Dark"
+1678,inner,logo,Logo
+1683,inner,inp err,"Input, error"
+1695,screen,scr d,"New vault, step 2 of 3 — Desktop, Light"
+1696,inner,card,Card
+1728,screen,scr p,"New vault, step 2 of 3 — Phone, Light"
+1732,inner,on,Progress step
+1733,inner,on,Progress step
+1734,inner,div,Backdrop
+1745,inner,opt,Option card
+1748,inner,opt on,"Option card, selected"
+1751,inner,opt,Option card
+1758,screen,scr d,"New vault, step 2 of 3 — Desktop, Dark"
+1759,inner,card,Card
+1791,screen,scr p,"New vault, step 2 of 3 — Phone, Dark"
+1795,inner,on,Progress step
+1796,inner,on,Progress step
+1797,inner,div,Backdrop
+1808,inner,opt,Option card
+1811,inner,opt on,"Option card, selected"
+1814,inner,opt,Option card
+2339,screen,scr d,"Notifications bell — Desktop, Light"
+2407,inner,body,Page body
+2492,inner,drawer,Drawer
+2535,screen,scr p,"Notifications bell — Phone, Light"
+2540,inner,pbody,Page body
+2599,screen,scr d,"Notifications bell — Desktop, Dark"
+2667,inner,body,Page body
+2752,inner,drawer,Drawer
+2795,screen,scr p,"Notifications bell — Phone, Dark"
+2800,inner,pbody,Page body
+2859,screen,scr p,"Phone, More in bottom navigation — Phone, Light"
+2863,inner,icon ptop,Phone search icon
+2866,inner,pbody,Page body
+2929,inner,bnav,Bottom navigation
+2950,inner,sheet,Bottom sheet
+2978,screen,scr p,"Phone, More in bottom navigation — Phone, Dark"
+2982,inner,icon ptop,Phone search icon
+2985,inner,pbody,Page body
+3048,inner,bnav,Bottom navigation
+3069,inner,sheet,Bottom sheet
+3097,screen,scr d,"Sidebar collapsed — Desktop, Light"
+3153,inner,body,Page body
+3681,screen,scr d,"Sidebar collapsed — Desktop, Dark"
+3737,inner,body,Page body
+205296,screen,scr d,"Search and commands (Ctrl K), empty query — Desktop, Light"
+205400,inner,body,Page body
+205489,inner,cmd,Command palette
+205572,screen,scr p,"Search and commands (Ctrl K), empty query — Phone, Light"
+205575,inner,inp on,"Input, focused"
+205582,inner,div,Backdrop
+205644,screen,scr d,"Search and commands (Ctrl K), empty query — Desktop, Dark"
+205748,inner,body,Page body
+205837,inner,cmd,Command palette
+205920,screen,scr p,"Search and commands (Ctrl K), empty query — Phone, Dark"
+205923,inner,inp on,"Input, focused"
+205930,inner,div,Backdrop
+205992,screen,scr d,"Search and commands (Ctrl K), with query — Desktop, Light"
+206096,inner,body,Page body
+206185,inner,cmd,Command palette
+206269,screen,scr p,"Search and commands (Ctrl K), with query — Phone, Light"
+206272,inner,inp on,"Input, focused"
+206281,inner,div,Backdrop
+206322,screen,scr d,"Search and commands (Ctrl K), with query — Desktop, Dark"
+206426,inner,body,Page body
+206515,inner,cmd,Command palette
+206599,screen,scr p,"Search and commands (Ctrl K), with query — Phone, Dark"
+206602,inner,inp on,"Input, focused"
+206611,inner,div,Backdrop
+206652,caption,4. Поиск и команды: Ctrl K,"Caption · Search and commands (Ctrl K), with query"
+206653,caption,Стало · светлая,Caption · Light column
+206654,caption,Стало · тёмная,Caption · Dark column
+4265,page,Главная,02 Home
+4266,caption,Заголовок ряда,Row heading
+4267,sticky,"Стикер · Обход 26 окт · F1–F3, S3, S4, S6, S73. В","Sticky note · 26 Oct walkthrough · F1–F3, S3, S4, S6, S73"
+4269,board,Главная,"Home 1 · Daily view, tasks, feed, widgets and first run"
+4270,caption,Новый вариант · мок-данные 22 ,Board status note
+4271,caption,Главная,Board title
+4272,caption,"Сводка из трёх чисел, дела, «Ч",Board subtitle
+4273,caption,"1. Обычный день: три числа, де","Caption · Regular day, three numbers, tasks and feed"
+4275,caption,Стало · светлая,Caption · Light column
+4276,caption,Стало · тёмная,Caption · Dark column
+4277,caption,Почему и как,Caption · Notes heading
+4278,notes,aside,"Notes · Regular day, three numbers, tasks and feed"
+4295,caption,"2. Дела: просрочка, подтвержде","Caption · Tasks, overdue, confirmation and reminder"
+4296,caption,Стало · светлая,Caption · Light column
+4297,caption,Стало · тёмная,Caption · Dark column
+4298,caption,Почему и как,Caption · Notes heading
+4299,notes,aside,"Notes · Tasks, overdue, confirmation and reminder"
+4313,caption,3. Строка «авто» открыта,Caption · Auto row expanded
+4314,caption,Стало · светлая,Caption · Light column
+4315,caption,Стало · тёмная,Caption · Dark column
+4316,caption,Почему и как,Caption · Notes heading
+4317,notes,aside,Notes · Auto row expanded
+4329,caption,4. Виджеты: каталог,Caption · Widgets catalog
+4330,caption,Стало · светлая,Caption · Light column
+4331,caption,Стало · тёмная,Caption · Dark column
+4332,caption,Почему и как,Caption · Notes heading
+4333,notes,aside,Notes · Widgets catalog
+4346,caption,5. Первый запуск: пустая Главн,"Caption · First run, empty Home"
+4347,caption,Стало · светлая,Caption · Light column
+4348,caption,Стало · тёмная,Caption · Dark column
+4349,caption,Почему и как,Caption · Notes heading
+4350,notes,aside,"Notes · First run, empty Home"
+4363,screen,scr d,"Regular day, three numbers, tasks and feed — Desktop, Light"
+4431,inner,body,Page body
+4515,screen,scr p,"Regular day, three numbers, tasks and feed — Phone, Light"
+4519,inner,icon ptop,Phone search icon
+4522,inner,pbody,Page body
+4605,screen,scr d,"Regular day, three numbers, tasks and feed — Desktop, Dark"
+4673,inner,body,Page body
+4757,screen,scr p,"Regular day, three numbers, tasks and feed — Phone, Dark"
+4761,inner,icon ptop,Phone search icon
+4764,inner,pbody,Page body
+4847,screen,scr d,"Tasks, overdue, confirmation and reminder — Desktop, Light"
+4915,inner,body,Page body
+5019,screen,scr p,"Tasks, overdue, confirmation and reminder — Phone, Light"
+5023,inner,icon ptop,Phone search icon
+5026,inner,pbody,Page body
+5128,screen,scr d,"Tasks, overdue, confirmation and reminder — Desktop, Dark"
+5196,inner,body,Page body
+5300,screen,scr p,"Tasks, overdue, confirmation and reminder — Phone, Dark"
+5304,inner,icon ptop,Phone search icon
+5307,inner,pbody,Page body
+5409,screen,scr d,"Auto row expanded — Desktop, Light"
+5477,inner,body,Page body
+5562,inner,drawer,Drawer
+5590,screen,scr p,"Auto row expanded — Phone, Light"
+5595,inner,pbody,Page body
+5637,screen,scr d,"Auto row expanded — Desktop, Dark"
+5705,inner,body,Page body
+5790,inner,drawer,Drawer
+5818,screen,scr p,"Auto row expanded — Phone, Dark"
+5823,inner,pbody,Page body
+5865,screen,scr d,"Widgets catalog — Desktop, Light"
+5933,inner,body,Page body
+6062,screen,scr p,"Widgets catalog — Phone, Light"
+6066,inner,icon ptop,Phone search icon
+6069,inner,pbody,Page body
+6196,screen,scr d,"Widgets catalog — Desktop, Dark"
+6264,inner,body,Page body
+6393,screen,scr p,"Widgets catalog — Phone, Dark"
+6397,inner,icon ptop,Phone search icon
+6400,inner,pbody,Page body
+6527,screen,scr d,"First run, empty Home — Desktop, Light"
+6595,inner,body,Page body
+6641,screen,scr p,"First run, empty Home — Phone, Light"
+6645,inner,pbody,Page body
+6700,screen,scr d,"First run, empty Home — Desktop, Dark"
+6768,inner,body,Page body
+6814,screen,scr p,"First run, empty Home — Phone, Dark"
+6818,inner,pbody,Page body
+6873,page,Операции и форма операции,03 Operations
+6874,caption,Заголовок ряда,Row heading
+6875,sticky,"Стикер · Обход 26 окт · S30, S33, S51, S60, S63, ","Sticky note · 26 Oct walkthrough · S30, S33, S51, S60, S63, S78, S81"
+6877,sticky,"Стикер · Обход 26 окт · F9–F12, S76, S77, S80, S8","Sticky note · 26 Oct walkthrough · F9–F12, S76, S77, S80, S82–S85"
+6879,board,"Операции · 1 из 2, кадры 1–6","Operations 1 · List, filters, card, selection, calendar and contacts"
+6880,caption,Новый вариант · мок-данные 22 ,Board status note
+6881,caption,"Операции · 1 из 2, кадры 1–6",Board title
+6882,caption,"Список, фильтры, карточка опер",Board subtitle
+6883,caption,1. Список операций,Caption · Operation list
+6885,caption,Стало · светлая,Caption · Light column
+6886,caption,Стало · тёмная,Caption · Dark column
+6887,caption,Почему и как,Caption · Notes heading
+6888,notes,aside,Notes · Operation list
+6905,caption,2. Ещё фильтры раскрыты,Caption · More filters expanded
+6906,caption,Стало · светлая,Caption · Light column
+6907,caption,Стало · тёмная,Caption · Dark column
+6908,caption,Почему и как,Caption · Notes heading
+6909,notes,aside,Notes · More filters expanded
+6921,caption,3. Карточка операции,Caption · Operation card
+6922,caption,Стало · светлая,Caption · Light column
+6923,caption,Стало · тёмная,Caption · Dark column
+6924,caption,Почему и как,Caption · Notes heading
+6925,notes,aside,Notes · Operation card
+6938,caption,4. Выбор нескольких и отмена,Caption · Multi-select and cancel
+6939,caption,Стало · светлая,Caption · Light column
+6940,caption,Стало · тёмная,Caption · Dark column
+6941,caption,Почему и как,Caption · Notes heading
+6942,notes,aside,Notes · Multi-select and cancel
+6957,caption,8. Цель: шаг 2 — где копим,"Caption · New goal, one page, wallet chosen"
+6958,caption,Стало · светлая,Caption · Light column
+6959,caption,Стало · тёмная,Caption · Dark column
+6960,caption,Почему и как,Caption · Notes heading
+6961,notes,aside,"Notes · New goal, one page, wallet chosen"
+6969,caption,5. Календарь,Caption · Calendar
+6970,caption,Стало · светлая,Caption · Light column
+6971,caption,Стало · тёмная,Caption · Dark column
+6972,caption,Почему и как,Caption · Notes heading
+6973,notes,aside,Notes · Calendar
+6989,caption,6. Контакты и долги,Caption · Contacts and debts
+6990,caption,Стало · светлая,Caption · Light column
+6991,caption,Стало · тёмная,Caption · Dark column
+6992,caption,Почему и как,Caption · Notes heading
+6993,notes,aside,Notes · Contacts and debts
+7009,screen,scr d,"Operation list — Desktop, Light"
+7077,inner,body,Page body
+7199,screen,scr p,"Operation list — Phone, Light"
+7203,inner,pbody,Page body
+7298,screen,scr d,"Operation list — Desktop, Dark"
+7366,inner,body,Page body
+7488,screen,scr p,"Operation list — Phone, Dark"
+7492,inner,pbody,Page body
+7587,screen,scr d,"More filters expanded — Desktop, Light"
+7655,inner,body,Page body
+7815,screen,scr p,"More filters expanded — Phone, Light"
+7821,inner,pbody,Page body
+7892,screen,scr d,"More filters expanded — Desktop, Dark"
+7960,inner,body,Page body
+8120,screen,scr p,"More filters expanded — Phone, Dark"
+8126,inner,pbody,Page body
+8197,screen,scr d,"Operation card — Desktop, Light"
+8265,inner,body,Page body
+8382,inner,drawer,Drawer
+8423,screen,scr p,"Operation card — Phone, Light"
+8428,inner,pbody,Page body
+8483,screen,scr d,"Operation card — Desktop, Dark"
+8551,inner,body,Page body
+8668,inner,drawer,Drawer
+8709,screen,scr p,"Operation card — Phone, Dark"
+8714,inner,pbody,Page body
+8769,screen,scr d,"Multi-select and cancel — Desktop, Light"
+8837,inner,body,Page body
+9001,screen,scr p,"Multi-select and cancel — Phone, Light"
+9005,inner,pbody,Page body
+9083,screen,scr d,"Multi-select and cancel — Desktop, Dark"
+9151,inner,body,Page body
+9315,screen,scr p,"Multi-select and cancel — Phone, Dark"
+9319,inner,pbody,Page body
+9397,screen,scr d,"New goal, one page, wallet chosen — Desktop, Light"
+9465,inner,body,Page body
+9563,screen,scr p,"New goal, one page, wallet chosen — Phone, Light"
+9567,inner,pbody,Page body
+9655,screen,scr d,"New goal, one page, wallet chosen — Desktop, Dark"
+9723,inner,body,Page body
+9821,screen,scr p,"New goal, one page, wallet chosen — Phone, Dark"
+9825,inner,pbody,Page body
+9913,screen,scr d,"Calendar — Desktop, Light"
+9981,inner,body,Page body
+10131,inner,menu,Menu
+10136,screen,scr p,"Calendar — Phone, Light"
+10140,inner,pbody,Page body
+10273,screen,scr d,"Calendar — Desktop, Dark"
+10341,inner,body,Page body
+10491,inner,menu,Menu
+10496,screen,scr p,"Calendar — Phone, Dark"
+10500,inner,pbody,Page body
+10633,screen,scr d,"Contacts and debts — Desktop, Light"
+10701,inner,body,Page body
+10828,screen,scr p,"Contacts and debts — Phone, Light"
+10833,inner,pbody,Page body
+10891,screen,scr d,"Contacts and debts — Desktop, Dark"
+10959,inner,body,Page body
+11086,screen,scr p,"Contacts and debts — Phone, Dark"
+11091,inner,pbody,Page body
+11149,board,"Операции · 2 из 2, кадры 7–13","Operations 2 · Requisites, transfers and bonuses"
+11150,caption,Новый вариант · мок-данные 22 ,Board status note
+11151,caption,"Операции · 2 из 2, кадры 7–13",Board title
+11152,caption,"Список, фильтры, карточка опер",Board subtitle
+11153,caption,7. Реквизит: меню «⋯»,"Caption · Requisite, … menu"
+11154,caption,Стало · светлая,Caption · Light column
+11155,caption,Стало · тёмная,Caption · Dark column
+11156,caption,Почему и как,Caption · Notes heading
+11157,notes,aside,"Notes · Requisite, … menu"
+11171,caption,8. Новый реквизит: вставкой,"Caption · New requisite, paste"
+11172,caption,Стало · светлая,Caption · Light column
+11173,caption,Стало · тёмная,Caption · Dark column
+11174,caption,Почему и как,Caption · Notes heading
+11175,notes,aside,"Notes · New requisite, paste"
+11188,caption,9. Реквизит скопирован,Caption · Requisite copied
+11189,caption,Стало · светлая,Caption · Light column
+11190,caption,Стало · тёмная,Caption · Dark column
+11191,caption,Почему и как,Caption · Notes heading
+11192,notes,aside,Notes · Requisite copied
+11200,caption,10. Записать перевод контакту,Caption · Record transfer to contact
+11201,caption,Стало · светлая,Caption · Light column
+11202,caption,Стало · тёмная,Caption · Dark column
+11203,caption,Почему и как,Caption · Notes heading
+11204,notes,aside,Notes · Record transfer to contact
+11216,caption,11. Перевод: реквизит по номер,"Caption · Transfer, requisite by number"
+11217,caption,Стало · светлая,Caption · Light column
+11218,caption,Стало · тёмная,Caption · Dark column
+11219,caption,Почему и как,Caption · Notes heading
+11220,notes,aside,"Notes · Transfer, requisite by number"
+11233,caption,12. Бонусы и кешбэк,Caption · Bonuses and cashback
+11234,caption,Стало · светлая,Caption · Light column
+11235,caption,Стало · тёмная,Caption · Dark column
+11236,caption,Почему и как,Caption · Notes heading
+11237,notes,aside,Notes · Bonuses and cashback
+11249,caption,13. Новая программа: шаг 1 из ,"Caption · New program, step 1 of 2"
+11250,caption,Стало · светлая,Caption · Light column
+11251,caption,Стало · тёмная,Caption · Dark column
+11252,caption,Почему и как,Caption · Notes heading
+11253,notes,aside,"Notes · New program, step 1 of 2"
+11263,screen,scr d,"Requisite, … menu — Desktop, Light"
+11331,inner,body,Page body
+11473,screen,scr p,"Requisite, … menu — Phone, Light"
+11478,inner,icon mut,Muted icon
+11482,inner,pbody,Page body
+11567,screen,scr d,"Requisite, … menu — Desktop, Dark"
+11635,inner,body,Page body
+11777,screen,scr p,"Requisite, … menu — Phone, Dark"
+11782,inner,icon mut,Muted icon
+11786,inner,pbody,Page body
+11871,screen,scr d,"New requisite, paste — Desktop, Light"
+11939,inner,body,Page body
+12084,screen,scr p,"New requisite, paste — Phone, Light"
+12089,inner,icon mut,Muted icon
+12093,inner,pbody,Page body
+12196,screen,scr d,"New requisite, paste — Desktop, Dark"
+12264,inner,body,Page body
+12409,screen,scr p,"New requisite, paste — Phone, Dark"
+12414,inner,icon mut,Muted icon
+12418,inner,pbody,Page body
+12521,screen,scr d,"Requisite copied — Desktop, Light"
+12589,inner,body,Page body
+12720,screen,scr p,"Requisite copied — Phone, Light"
+12725,inner,icon mut,Muted icon
+12729,inner,pbody,Page body
+12818,screen,scr d,"Requisite copied — Desktop, Dark"
+12886,inner,body,Page body
+13017,screen,scr p,"Requisite copied — Phone, Dark"
+13022,inner,icon mut,Muted icon
+13026,inner,pbody,Page body
+13115,screen,scr d,"Record transfer to contact — Desktop, Light"
+13183,inner,body,Page body
+13353,screen,scr p,"Record transfer to contact — Phone, Light"
+13358,inner,pbody,Page body
+13456,screen,scr d,"Record transfer to contact — Desktop, Dark"
+13524,inner,body,Page body
+13694,screen,scr p,"Record transfer to contact — Phone, Dark"
+13699,inner,pbody,Page body
+13797,screen,scr d,"Transfer, requisite by number — Desktop, Light"
+13865,inner,body,Page body
+14038,screen,scr p,"Transfer, requisite by number — Phone, Light"
+14042,inner,pbody,Page body
+14191,screen,scr d,"Transfer, requisite by number — Desktop, Dark"
+14259,inner,body,Page body
+14432,screen,scr p,"Transfer, requisite by number — Phone, Dark"
+14436,inner,pbody,Page body
+14585,screen,scr d,"Bonuses and cashback — Desktop, Light"
+14653,inner,body,Page body
+14694,screen,scr p,"Bonuses and cashback — Phone, Light"
+14699,inner,pbody,Page body
+14740,screen,scr d,"Bonuses and cashback — Desktop, Dark"
+14808,inner,body,Page body
+14849,screen,scr p,"Bonuses and cashback — Phone, Dark"
+14854,inner,pbody,Page body
+14895,screen,scr d,"New program, step 1 of 2 — Desktop, Light"
+14963,inner,body,Page body
+15044,screen,scr p,"New program, step 1 of 2 — Phone, Light"
+15049,inner,pbody,Page body
+15127,screen,scr d,"New program, step 1 of 2 — Desktop, Dark"
+15195,inner,body,Page body
+15276,screen,scr p,"New program, step 1 of 2 — Phone, Dark"
+15281,inner,pbody,Page body
+15359,board,"Форма операции · 1 из 2, кадры 1–7","Operation form 1 · Payment, series, exchange and transfer"
+15360,caption,Новый вариант · мок-данные 22 ,Board status note
+15361,caption,"Форма операции · 1 из 2, кадры",Board title
+15362,caption,"Оплата, ошибка, «Ещё», Обмен, ",Board subtitle
+15363,caption,1. Оплата: открылась по Ctrl N,"Caption · Payment, opened with Ctrl N"
+15365,caption,Стало · светлая,Caption · Light column
+15366,caption,Стало · тёмная,Caption · Dark column
+15367,caption,Почему и как,Caption · Notes heading
+15368,notes,aside,"Notes · Payment, opened with Ctrl N"
+15383,caption,2. Оплата: заполнена,"Caption · Payment, filled"
+15384,caption,Стало · светлая,Caption · Light column
+15385,caption,Стало · тёмная,Caption · Dark column
+15386,caption,Почему и как,Caption · Notes heading
+15387,notes,aside,"Notes · Payment, filled"
+15395,caption,3. Оплата: ошибки при сохранен,"Caption · Payment, save errors"
+15396,caption,Стало · светлая,Caption · Light column
+15397,caption,Стало · тёмная,Caption · Dark column
+15398,caption,Почему и как,Caption · Notes heading
+15399,notes,aside,"Notes · Payment, save errors"
+15409,caption,4. Серия: Ctrl Enter,"Caption · Series, Ctrl Enter"
+15410,caption,Стало · светлая,Caption · Light column
+15411,caption,Стало · тёмная,Caption · Dark column
+15412,caption,Почему и как,Caption · Notes heading
+15413,notes,aside,"Notes · Series, Ctrl Enter"
+15421,caption,5. Оплата: «Ещё» раскрыто,"Caption · Payment, More expanded"
+15422,caption,Стало · светлая,Caption · Light column
+15423,caption,Стало · тёмная,Caption · Dark column
+15424,caption,Почему и как,Caption · Notes heading
+15425,notes,aside,"Notes · Payment, More expanded"
+15433,caption,6. Обмен: короткий,"Caption · Exchange, short"
+15434,caption,Стало · светлая,Caption · Light column
+15435,caption,Стало · тёмная,Caption · Dark column
+15436,caption,Почему и как,Caption · Notes heading
+15437,notes,aside,"Notes · Exchange, short"
+15447,caption,7. Перевод,Caption · Transfer
+15448,caption,Стало · светлая,Caption · Light column
+15449,caption,Стало · тёмная,Caption · Dark column
+15450,caption,Почему и как,Caption · Notes heading
+15451,notes,aside,Notes · Transfer
+15461,screen,scr d,"Payment, opened with Ctrl N — Desktop, Light"
+15529,inner,body,Page body
+15614,inner,dlg,Dialog
+15662,screen,scr p,"Payment, opened with Ctrl N — Phone, Light"
+15666,inner,icon ptop,Phone search icon
+15669,inner,pbody,Page body
+15792,screen,scr d,"Payment, opened with Ctrl N — Desktop, Dark"
+15860,inner,body,Page body
+15945,inner,dlg,Dialog
+15993,screen,scr p,"Payment, opened with Ctrl N — Phone, Dark"
+15997,inner,icon ptop,Phone search icon
+16000,inner,pbody,Page body
+16123,screen,scr d,"Payment, filled — Desktop, Light"
+16191,inner,body,Page body
+16276,inner,dlg,Dialog
+16324,screen,scr p,"Payment, filled — Phone, Light"
+16328,inner,icon ptop,Phone search icon
+16331,inner,pbody,Page body
+16454,screen,scr d,"Payment, filled — Desktop, Dark"
+16522,inner,body,Page body
+16607,inner,dlg,Dialog
+16655,screen,scr p,"Payment, filled — Phone, Dark"
+16659,inner,icon ptop,Phone search icon
+16662,inner,pbody,Page body
+16785,screen,scr d,"Payment, save errors — Desktop, Light"
+16853,inner,body,Page body
+16938,inner,dlg,Dialog
+16987,screen,scr p,"Payment, save errors — Phone, Light"
+16991,inner,icon ptop,Phone search icon
+16994,inner,pbody,Page body
+17118,screen,scr d,"Payment, save errors — Desktop, Dark"
+17186,inner,body,Page body
+17271,inner,dlg,Dialog
+17320,screen,scr p,"Payment, save errors — Phone, Dark"
+17324,inner,icon ptop,Phone search icon
+17327,inner,pbody,Page body
+17451,screen,scr d,"Series, Ctrl Enter — Desktop, Light"
+17519,inner,body,Page body
+17604,inner,dlg,Dialog
+17657,screen,scr p,"Series, Ctrl Enter — Phone, Light"
+17661,inner,icon ptop,Phone search icon
+17664,inner,pbody,Page body
+17792,screen,scr d,"Series, Ctrl Enter — Desktop, Dark"
+17860,inner,body,Page body
+17945,inner,dlg,Dialog
+17998,screen,scr p,"Series, Ctrl Enter — Phone, Dark"
+18002,inner,icon ptop,Phone search icon
+18005,inner,pbody,Page body
+18133,screen,scr d,"Payment, More expanded — Desktop, Light"
+18201,inner,body,Page body
+18286,inner,dlg,Dialog
+18356,screen,scr p,"Payment, More expanded — Phone, Light"
+18360,inner,icon ptop,Phone search icon
+18363,inner,pbody,Page body
+18508,screen,scr d,"Payment, More expanded — Desktop, Dark"
+18576,inner,body,Page body
+18661,inner,dlg,Dialog
+18731,screen,scr p,"Payment, More expanded — Phone, Dark"
+18735,inner,icon ptop,Phone search icon
+18738,inner,pbody,Page body
+18883,screen,scr d,"Exchange, short — Desktop, Light"
+18951,inner,body,Page body
+19036,inner,dlg,Dialog
+19093,screen,scr p,"Exchange, short — Phone, Light"
+19097,inner,icon ptop,Phone search icon
+19100,inner,pbody,Page body
+19232,screen,scr d,"Exchange, short — Desktop, Dark"
+19300,inner,body,Page body
+19385,inner,dlg,Dialog
+19442,screen,scr p,"Exchange, short — Phone, Dark"
+19446,inner,icon ptop,Phone search icon
+19449,inner,pbody,Page body
+19581,screen,scr d,"Transfer — Desktop, Light"
+19649,inner,body,Page body
+19734,inner,dlg,Dialog
+19785,screen,scr p,"Transfer — Phone, Light"
+19789,inner,icon ptop,Phone search icon
+19792,inner,pbody,Page body
+19918,screen,scr d,"Transfer — Desktop, Dark"
+19986,inner,body,Page body
+20071,inner,dlg,Dialog
+20122,screen,scr p,"Transfer — Phone, Dark"
+20126,inner,icon ptop,Phone search icon
+20129,inner,pbody,Page body
+20255,board,"Форма операции · 2 из 2, кадры 8–11","Operation form 2 · Top-up, spot, futures and DeFi"
+20256,caption,Новый вариант · мок-данные 22 ,Board status note
+20257,caption,"Форма операции · 2 из 2, кадры",Board title
+20258,caption,"Оплата, ошибка, «Ещё», Обмен, ",Board subtitle
+20259,caption,8. Пополнение,Caption · Top-up
+20260,caption,Стало · светлая,Caption · Light column
+20261,caption,Стало · тёмная,Caption · Dark column
+20262,caption,Почему и как,Caption · Notes heading
+20263,notes,aside,Notes · Top-up
+20271,caption,9. Спот: только из Bybit,"Caption · Spot, from Bybit only"
+20272,caption,Стало · светлая,Caption · Light column
+20273,caption,Стало · тёмная,Caption · Dark column
+20274,caption,Почему и как,Caption · Notes heading
+20275,notes,aside,"Notes · Spot, from Bybit only"
+20285,caption,10. Фьючерс,Caption · Futures
+20286,caption,Стало · светлая,Caption · Light column
+20287,caption,Стало · тёмная,Caption · Dark column
+20288,caption,Почему и как,Caption · Notes heading
+20289,notes,aside,Notes · Futures
+20297,caption,11. DeFi,Caption · DeFi
+20298,caption,Стало · светлая,Caption · Light column
+20299,caption,Стало · тёмная,Caption · Dark column
+20300,caption,Почему и как,Caption · Notes heading
+20301,notes,aside,Notes · DeFi
+20309,screen,scr d,"Top-up — Desktop, Light"
+20377,inner,body,Page body
+20462,inner,dlg,Dialog
+20511,screen,scr p,"Top-up — Phone, Light"
+20515,inner,icon ptop,Phone search icon
+20518,inner,pbody,Page body
+20642,screen,scr d,"Top-up — Desktop, Dark"
+20710,inner,body,Page body
+20795,inner,dlg,Dialog
+20844,screen,scr p,"Top-up — Phone, Dark"
+20848,inner,icon ptop,Phone search icon
+20851,inner,pbody,Page body
+20975,screen,scr d,"Spot, from Bybit only — Desktop, Light"
+21043,inner,body,Page body
+21083,inner,dlg,Dialog
+21148,screen,scr p,"Spot, from Bybit only — Phone, Light"
+21153,inner,icon ptop,Phone search icon
+21155,inner,pbody,Page body
+21253,screen,scr d,"Spot, from Bybit only — Desktop, Dark"
+21321,inner,body,Page body
+21361,inner,dlg,Dialog
+21426,screen,scr p,"Spot, from Bybit only — Phone, Dark"
+21431,inner,icon ptop,Phone search icon
+21433,inner,pbody,Page body
+21531,screen,scr d,"Futures — Desktop, Light"
+21599,inner,body,Page body
+21639,inner,dlg,Dialog
+21702,screen,scr p,"Futures — Phone, Light"
+21707,inner,icon ptop,Phone search icon
+21709,inner,pbody,Page body
+21805,screen,scr d,"Futures — Desktop, Dark"
+21873,inner,body,Page body
+21913,inner,dlg,Dialog
+21976,screen,scr p,"Futures — Phone, Dark"
+21981,inner,icon ptop,Phone search icon
+21983,inner,pbody,Page body
+22079,screen,scr d,"DeFi — Desktop, Light"
+22147,inner,body,Page body
+22187,inner,dlg,Dialog
+22244,screen,scr p,"DeFi — Phone, Light"
+22249,inner,icon ptop,Phone search icon
+22251,inner,pbody,Page body
+22341,screen,scr d,"DeFi — Desktop, Dark"
+22409,inner,body,Page body
+22449,inner,dlg,Dialog
+22506,screen,scr p,"DeFi — Phone, Dark"
+22511,inner,icon ptop,Phone search icon
+22513,inner,pbody,Page body
+22603,page,Кошельки и валюты,04 Wallets and currencies
+22604,caption,Заголовок ряда,Row heading
+22605,sticky,"Стикер · Обход 26 окт · F6, F10, S11, S12, S16, S","Sticky note · 26 Oct walkthrough · F6, F10, S11, S12, S16, S21, S54, S86, S89, S92"
+22607,sticky,"Стикер · Обход 26 окт · S22–S26, S34, S35. В прил","Sticky note · 26 Oct walkthrough · S22–S26, S34, S35"
+22609,board,"Кошельки · 1 из 4, кадры 1–7","Wallets 1 · Table, new wallet and wallet kinds"
+22610,caption,Новый вариант · мок-данные 22 ,Board status note
+22611,caption,"Кошельки · 1 из 4, кадры 1–7",Board title
+22612,caption,"Таблица, новый кошелёк по шага",Board subtitle
+22613,caption,1. Все кошельки таблицей,Caption · All wallets table
+22615,caption,Стало · светлая,Caption · Light column
+22616,caption,Стало · тёмная,Caption · Dark column
+22617,caption,Почему и как,Caption · Notes heading
+22618,notes,aside,Notes · All wallets table
+22632,caption,2. Новый кошелёк: шаг 1 — тип,"Caption · New wallet, step 1 kind"
+22633,caption,Стало · светлая,Caption · Light column
+22634,caption,Стало · тёмная,Caption · Dark column
+22635,caption,Почему и как,Caption · Notes heading
+22636,notes,aside,"Notes · New wallet, step 1 kind"
+22646,caption,3. Новый кошелёк: шаг 2 — назв,"Caption · New wallet, step 2 name"
+22647,caption,Стало · светлая,Caption · Light column
+22648,caption,Стало · тёмная,Caption · Dark column
+22649,caption,Почему и как,Caption · Notes heading
+22650,notes,aside,"Notes · New wallet, step 2 name"
+22658,caption,4. Новый кошелёк: шаг 3 — оста,"Caption · New wallet, step 3 balance"
+22659,caption,Стало · светлая,Caption · Light column
+22660,caption,Стало · тёмная,Caption · Dark column
+22661,caption,Почему и как,Caption · Notes heading
+22662,notes,aside,"Notes · New wallet, step 3 balance"
+22672,caption,5. Банк: Тинькофф,"Caption · Bank, Tinkoff"
+22673,caption,Стало · светлая,Caption · Light column
+22674,caption,Стало · тёмная,Caption · Dark column
+22675,caption,Почему и как,Caption · Notes heading
+22676,notes,aside,"Notes · Bank, Tinkoff"
+22687,caption,6. Крипто-кошелёк: Ledger,"Caption · Crypto wallet, Ledger"
+22688,caption,Стало · светлая,Caption · Light column
+22689,caption,Стало · тёмная,Caption · Dark column
+22690,caption,Почему и как,Caption · Notes heading
+22691,notes,aside,"Notes · Crypto wallet, Ledger"
+22702,caption,7. Биржа: Bybit,"Caption · Exchange, Bybit"
+22703,caption,Стало · светлая,Caption · Light column
+22704,caption,Стало · тёмная,Caption · Dark column
+22705,caption,Почему и как,Caption · Notes heading
+22706,notes,aside,"Notes · Exchange, Bybit"
+22717,screen,scr d,"All wallets table — Desktop, Light"
+22785,inner,body,Page body
+22934,screen,scr p,"All wallets table — Phone, Light"
+22939,inner,btn bo,Outline button
+22942,inner,pbody,Page body
+23011,screen,scr d,"All wallets table — Desktop, Dark"
+23079,inner,body,Page body
+23228,screen,scr p,"All wallets table — Phone, Dark"
+23233,inner,btn bo,Outline button
+23236,inner,pbody,Page body
+23305,screen,scr d,"New wallet, step 1 kind — Desktop, Light"
+23373,inner,body,Page body
+23567,screen,scr p,"New wallet, step 1 kind — Phone, Light"
+23572,inner,btn bo,Outline button
+23575,inner,pbody,Page body
+23686,screen,scr d,"New wallet, step 1 kind — Desktop, Dark"
+23754,inner,body,Page body
+23948,screen,scr p,"New wallet, step 1 kind — Phone, Dark"
+23953,inner,btn bo,Outline button
+23956,inner,pbody,Page body
+24067,screen,scr d,"New wallet, step 2 name — Desktop, Light"
+24135,inner,body,Page body
+24322,screen,scr p,"New wallet, step 2 name — Phone, Light"
+24327,inner,btn bo,Outline button
+24330,inner,pbody,Page body
+24436,screen,scr d,"New wallet, step 2 name — Desktop, Dark"
+24504,inner,body,Page body
+24691,screen,scr p,"New wallet, step 2 name — Phone, Dark"
+24696,inner,btn bo,Outline button
+24699,inner,pbody,Page body
+24805,screen,scr d,"New wallet, step 3 balance — Desktop, Light"
+24873,inner,body,Page body
+25051,screen,scr p,"New wallet, step 3 balance — Phone, Light"
+25056,inner,btn bo,Outline button
+25059,inner,pbody,Page body
+25156,screen,scr d,"New wallet, step 3 balance — Desktop, Dark"
+25224,inner,body,Page body
+25402,screen,scr p,"New wallet, step 3 balance — Phone, Dark"
+25407,inner,btn bo,Outline button
+25410,inner,pbody,Page body
+25507,screen,scr d,"Bank, Tinkoff — Desktop, Light"
+25575,inner,body,Page body
+25616,screen,scr p,"Bank, Tinkoff — Phone, Light"
+25621,inner,icon ptop,Phone search icon
+25623,inner,pbody,Page body
+25674,screen,scr d,"Bank, Tinkoff — Desktop, Dark"
+25742,inner,body,Page body
+25783,screen,scr p,"Bank, Tinkoff — Phone, Dark"
+25788,inner,icon ptop,Phone search icon
+25790,inner,pbody,Page body
+25841,screen,scr d,"Crypto wallet, Ledger — Desktop, Light"
+25909,inner,body,Page body
+25959,screen,scr p,"Crypto wallet, Ledger — Phone, Light"
+25964,inner,icon ptop,Phone search icon
+25966,inner,pbody,Page body
+26010,screen,scr d,"Crypto wallet, Ledger — Desktop, Dark"
+26078,inner,body,Page body
+26128,screen,scr p,"Crypto wallet, Ledger — Phone, Dark"
+26133,inner,icon ptop,Phone search icon
+26135,inner,pbody,Page body
+26179,screen,scr d,"Exchange, Bybit — Desktop, Light"
+26247,inner,body,Page body
+26286,screen,scr p,"Exchange, Bybit — Phone, Light"
+26291,inner,icon ptop,Phone search icon
+26293,inner,pbody,Page body
+26337,screen,scr d,"Exchange, Bybit — Desktop, Dark"
+26405,inner,body,Page body
+26444,screen,scr p,"Exchange, Bybit — Phone, Dark"
+26449,inner,icon ptop,Phone search icon
+26451,inner,pbody,Page body
+26495,board,"Кошельки · 2 из 4, кадры 8–13","Wallets 2 · Bybit, property and meters"
+26496,caption,Новый вариант · мок-данные 22 ,Board status note
+26497,caption,"Кошельки · 2 из 4, кадры 8–13",Board title
+26498,caption,"Таблица, новый кошелёк по шага",Board subtitle
+26499,caption,8. Bybit: импорт,Caption · Bybit import
+26500,caption,Стало · светлая,Caption · Light column
+26501,caption,Стало · тёмная,Caption · Dark column
+26502,caption,Почему и как,Caption · Notes heading
+26503,notes,aside,Notes · Bybit import
+26514,caption,9. Bybit: новый субсчёт,"Caption · Bybit, new subaccount"
+26515,caption,Стало · светлая,Caption · Light column
+26516,caption,Стало · тёмная,Caption · Dark column
+26517,caption,Почему и как,Caption · Notes heading
+26518,notes,aside,"Notes · Bybit, new subaccount"
+26528,caption,10. Имущество: Квартира и ЖКХ,"Caption · Property, apartment and utilities"
+26529,caption,Стало · светлая,Caption · Light column
+26530,caption,Стало · тёмная,Caption · Dark column
+26531,caption,Почему и как,Caption · Notes heading
+26532,notes,aside,"Notes · Property, apartment and utilities"
+26549,caption,11. Карточка счётчика: Электри,"Caption · Meter card, electricity"
+26550,caption,Стало · светлая,Caption · Light column
+26551,caption,Стало · тёмная,Caption · Dark column
+26552,caption,Почему и как,Caption · Notes heading
+26553,notes,aside,"Notes · Meter card, electricity"
+26568,caption,12. Карточка счётчика: своя фо,"Caption · Meter card, custom formula"
+26569,caption,Стало · светлая,Caption · Light column
+26570,caption,Стало · тёмная,Caption · Dark column
+26571,caption,Почему и как,Caption · Notes heading
+26572,notes,aside,"Notes · Meter card, custom formula"
+26585,caption,13. Счёт за октябрь: показания,"Caption · October bill, readings and payment"
+26586,caption,Стало · светлая,Caption · Light column
+26587,caption,Стало · тёмная,Caption · Dark column
+26588,caption,Почему и как,Caption · Notes heading
+26589,notes,aside,"Notes · October bill, readings and payment"
+26604,screen,scr d,"Bybit import — Desktop, Light"
+26672,inner,body,Page body
+26713,screen,scr p,"Bybit import — Phone, Light"
+26718,inner,pbody,Page body
+26753,screen,scr d,"Bybit import — Desktop, Dark"
+26821,inner,body,Page body
+26862,screen,scr p,"Bybit import — Phone, Dark"
+26867,inner,pbody,Page body
+26902,screen,scr d,"Bybit, new subaccount — Desktop, Light"
+26970,inner,body,Page body
+27042,screen,scr p,"Bybit, new subaccount — Phone, Light"
+27047,inner,icon ptop,Phone search icon
+27049,inner,pbody,Page body
+27123,screen,scr d,"Bybit, new subaccount — Desktop, Dark"
+27191,inner,body,Page body
+27263,screen,scr p,"Bybit, new subaccount — Phone, Dark"
+27268,inner,icon ptop,Phone search icon
+27270,inner,pbody,Page body
+27344,screen,scr d,"Property, apartment and utilities — Desktop, Light"
+27412,inner,body,Page body
+27522,screen,scr p,"Property, apartment and utilities — Phone, Light"
+27527,inner,pbody,Page body
+27612,screen,scr d,"Property, apartment and utilities — Desktop, Dark"
+27680,inner,body,Page body
+27790,screen,scr p,"Property, apartment and utilities — Phone, Dark"
+27795,inner,pbody,Page body
+27880,screen,scr d,"Meter card, electricity — Desktop, Light"
+27948,inner,body,Page body
+28060,inner,drawer,Drawer
+28145,screen,scr p,"Meter card, electricity — Phone, Light"
+28150,inner,pbody,Page body
+28232,screen,scr d,"Meter card, electricity — Desktop, Dark"
+28300,inner,body,Page body
+28412,inner,drawer,Drawer
+28497,screen,scr p,"Meter card, electricity — Phone, Dark"
+28502,inner,pbody,Page body
+28584,screen,scr d,"Meter card, custom formula — Desktop, Light"
+28652,inner,body,Page body
+28764,inner,drawer,Drawer
+28849,screen,scr p,"Meter card, custom formula — Phone, Light"
+28854,inner,pbody,Page body
+28936,screen,scr d,"Meter card, custom formula — Desktop, Dark"
+29004,inner,body,Page body
+29116,inner,drawer,Drawer
+29201,screen,scr p,"Meter card, custom formula — Phone, Dark"
+29206,inner,pbody,Page body
+29288,screen,scr d,"October bill, readings and payment — Desktop, Light"
+29356,inner,body,Page body
+29467,inner,dlg,Dialog
+29540,screen,scr p,"October bill, readings and payment — Phone, Light"
+29545,inner,pbody,Page body
+29701,screen,scr d,"October bill, readings and payment — Desktop, Dark"
+29769,inner,body,Page body
+29880,inner,dlg,Dialog
+29953,screen,scr p,"October bill, readings and payment — Phone, Dark"
+29958,inner,pbody,Page body
+30114,board,"Кошельки · 3 из 4, кадры 14–20","Wallets 3 · New article, cash, settings and reconcile"
+30115,caption,Новый вариант · мок-данные 22 ,Board status note
+30116,caption,"Кошельки · 3 из 4, кадры 14–20",Board title
+30117,caption,"Таблица, новый кошелёк по шага",Board subtitle
+30118,caption,14. Новая статья: шаг 1 — как ,"Caption · New article, step 1 how it is counted"
+30119,caption,Стало · светлая,Caption · Light column
+30120,caption,Стало · тёмная,Caption · Dark column
+30121,caption,Почему и как,Caption · Notes heading
+30122,notes,aside,"Notes · New article, step 1 how it is counted"
+30132,caption,15. Новая статья: по счётчику,"Caption · New article, by meter"
+30133,caption,Стало · светлая,Caption · Light column
+30134,caption,Стало · тёмная,Caption · Dark column
+30135,caption,Почему и как,Caption · Notes heading
+30136,notes,aside,"Notes · New article, by meter"
+30148,caption,16. Новая статья: своя формула,"Caption · New article, custom formula"
+30149,caption,Стало · светлая,Caption · Light column
+30150,caption,Стало · тёмная,Caption · Dark column
+30151,caption,Почему и как,Caption · Notes heading
+30152,notes,aside,"Notes · New article, custom formula"
+30165,caption,17. Новая статья: аренда,"Caption · New article, rent"
+30166,caption,Стало · светлая,Caption · Light column
+30167,caption,Стало · тёмная,Caption · Dark column
+30168,caption,Почему и как,Caption · Notes heading
+30169,notes,aside,"Notes · New article, rent"
+30178,caption,18. Пустой кошелёк: Наличные,"Caption · Empty wallet, Cash"
+30179,caption,Стало · светлая,Caption · Light column
+30180,caption,Стало · тёмная,Caption · Dark column
+30181,caption,Почему и как,Caption · Notes heading
+30182,notes,aside,"Notes · Empty wallet, Cash"
+30192,caption,19. Настройки кошелька,Caption · Wallet settings
+30193,caption,Стало · светлая,Caption · Light column
+30194,caption,Стало · тёмная,Caption · Dark column
+30195,caption,Почему и как,Caption · Notes heading
+30196,notes,aside,Notes · Wallet settings
+30207,caption,20. Сверить с реальностью,Caption · Reconcile with reality
+30208,caption,Стало · светлая,Caption · Light column
+30209,caption,Стало · тёмная,Caption · Dark column
+30210,caption,Почему и как,Caption · Notes heading
+30211,notes,aside,Notes · Reconcile with reality
+30221,screen,scr d,"New article, step 1 how it is counted — Desktop, Light"
+30289,inner,body,Page body
+30437,screen,scr p,"New article, step 1 how it is counted — Phone, Light"
+30442,inner,pbody,Page body
+30562,screen,scr d,"New article, step 1 how it is counted — Desktop, Dark"
+30630,inner,body,Page body
+30778,screen,scr p,"New article, step 1 how it is counted — Phone, Dark"
+30783,inner,pbody,Page body
+30903,screen,scr d,"New article, by meter — Desktop, Light"
+30971,inner,body,Page body
+31135,screen,scr p,"New article, by meter — Phone, Light"
+31140,inner,pbody,Page body
+31278,screen,scr d,"New article, by meter — Desktop, Dark"
+31346,inner,body,Page body
+31510,screen,scr p,"New article, by meter — Phone, Dark"
+31515,inner,pbody,Page body
+31653,screen,scr d,"New article, custom formula — Desktop, Light"
+31721,inner,body,Page body
+31902,screen,scr p,"New article, custom formula — Phone, Light"
+31907,inner,pbody,Page body
+32062,screen,scr d,"New article, custom formula — Desktop, Dark"
+32130,inner,body,Page body
+32311,screen,scr p,"New article, custom formula — Phone, Dark"
+32316,inner,pbody,Page body
+32471,screen,scr d,"New article, rent — Desktop, Light"
+32539,inner,body,Page body
+32701,screen,scr p,"New article, rent — Phone, Light"
+32706,inner,pbody,Page body
+32842,screen,scr d,"New article, rent — Desktop, Dark"
+32910,inner,body,Page body
+33072,screen,scr p,"New article, rent — Phone, Dark"
+33077,inner,pbody,Page body
+33213,screen,scr d,"Empty wallet, Cash — Desktop, Light"
+33281,inner,body,Page body
+33299,screen,scr p,"Empty wallet, Cash — Phone, Light"
+33304,inner,pbody,Page body
+33332,screen,scr d,"Empty wallet, Cash — Desktop, Dark"
+33400,inner,body,Page body
+33418,screen,scr p,"Empty wallet, Cash — Phone, Dark"
+33423,inner,pbody,Page body
+33451,screen,scr d,"Wallet settings — Desktop, Light"
+33519,inner,body,Page body
+33608,screen,scr p,"Wallet settings — Phone, Light"
+33613,inner,icon ptop,Phone search icon
+33615,inner,pbody,Page body
+33706,screen,scr d,"Wallet settings — Desktop, Dark"
+33774,inner,body,Page body
+33863,screen,scr p,"Wallet settings — Phone, Dark"
+33868,inner,icon ptop,Phone search icon
+33870,inner,pbody,Page body
+33961,screen,scr d,"Reconcile with reality — Desktop, Light"
+34029,inner,body,Page body
+34099,screen,scr p,"Reconcile with reality — Phone, Light"
+34104,inner,icon ptop,Phone search icon
+34106,inner,pbody,Page body
+34183,screen,scr d,"Reconcile with reality — Desktop, Dark"
+34251,inner,body,Page body
+34321,screen,scr p,"Reconcile with reality — Phone, Dark"
+34326,inner,icon ptop,Phone search icon
+34328,inner,pbody,Page body
+34405,board,"Кошельки · 4 из 4, кадры 21–21",Wallets 4 · Sell property
+34406,caption,Новый вариант · мок-данные 22 ,Board status note
+34407,caption,"Кошельки · 4 из 4, кадры 21–21",Board title
+34408,caption,"Таблица, новый кошелёк по шага",Board subtitle
+34409,caption,21. Продать имущество,Caption · Sell property
+34410,caption,Стало · светлая,Caption · Light column
+34411,caption,Стало · тёмная,Caption · Dark column
+34412,caption,Почему и как,Caption · Notes heading
+34413,notes,aside,Notes · Sell property
+34421,screen,scr d,"Sell property — Desktop, Light"
+34489,inner,body,Page body
+34528,screen,scr p,"Sell property — Phone, Light"
+34533,inner,pbody,Page body
+34589,screen,scr d,"Sell property — Desktop, Dark"
+34657,inner,body,Page body
+34696,screen,scr p,"Sell property — Phone, Dark"
+34701,inner,pbody,Page body
+34757,board,"Валюты · 1 из 2, кадры 1–7","Currencies 1 · Roles, balances, rates and exchange"
+34758,caption,Новый вариант · мок-данные 22 ,Board status note
+34759,caption,"Валюты · 1 из 2, кадры 1–7",Board title
+34760,caption,"Своя валюта, базовая и бюджета",Board subtitle
+34761,caption,"1. Три роли валюты: базовая, б",Caption · Three currency roles
+34762,caption,Стало · светлая,Caption · Light column
+34763,caption,Стало · тёмная,Caption · Dark column
+34764,caption,Почему и как,Caption · Notes heading
+34765,notes,aside,Notes · Three currency roles
+34779,caption,2. Кошельки: остаток в своей в,"Caption · Wallets, balance in own currency"
+34780,caption,Стало · светлая,Caption · Light column
+34781,caption,Стало · тёмная,Caption · Dark column
+34782,caption,Почему и как,Caption · Notes heading
+34783,notes,aside,"Notes · Wallets, balance in own currency"
+34794,caption,3. Банковский кошелёк: рубли к,"Caption · Bank wallet, rubles large"
+34795,caption,Стало · светлая,Caption · Light column
+34796,caption,Стало · тёмная,Caption · Dark column
+34797,caption,Почему и как,Caption · Notes heading
+34798,notes,aside,"Notes · Bank wallet, rubles large"
+34807,caption,4. Биржа: строка на каждую вал,"Caption · Exchange, row per currency"
+34808,caption,Стало · светлая,Caption · Light column
+34809,caption,Стало · тёмная,Caption · Dark column
+34810,caption,Почему и как,Caption · Notes heading
+34811,notes,aside,"Notes · Exchange, row per currency"
+34820,caption,5. Нажать на сумму: в чём это ,"Caption · Tap an amount, other currencies"
+34821,caption,Стало · светлая,Caption · Light column
+34822,caption,Стало · тёмная,Caption · Dark column
+34823,caption,Почему и как,Caption · Notes heading
+34824,notes,aside,"Notes · Tap an amount, other currencies"
+34836,caption,6. Обмен: курс сделки против р,"Caption · Exchange, deal rate vs market"
+34837,caption,Стало · светлая,Caption · Light column
+34838,caption,Стало · тёмная,Caption · Dark column
+34839,caption,Почему и как,Caption · Notes heading
+34840,notes,aside,"Notes · Exchange, deal rate vs market"
+34849,caption,"7. Нет курса: сохраняем, а ито","Caption · No rate, incomplete total"
+34850,caption,Стало · светлая,Caption · Light column
+34851,caption,Стало · тёмная,Caption · Dark column
+34852,caption,Почему и как,Caption · Notes heading
+34853,notes,aside,"Notes · No rate, incomplete total"
+34863,screen,scr d,"Three currency roles — Desktop, Light"
+34931,inner,body,Page body
+35016,inner,dlg,Dialog
+35101,screen,scr p,"Three currency roles — Phone, Light"
+35106,inner,pbody,Page body
+35183,screen,scr d,"Three currency roles — Desktop, Dark"
+35251,inner,body,Page body
+35336,inner,dlg,Dialog
+35421,screen,scr p,"Three currency roles — Phone, Dark"
+35426,inner,pbody,Page body
+35503,screen,scr d,"Wallets, balance in own currency — Desktop, Light"
+35571,inner,body,Page body
+35696,screen,scr p,"Wallets, balance in own currency — Phone, Light"
+35701,inner,pbody,Page body
+35773,screen,scr d,"Wallets, balance in own currency — Desktop, Dark"
+35841,inner,body,Page body
+35966,screen,scr p,"Wallets, balance in own currency — Phone, Dark"
+35971,inner,pbody,Page body
+36043,screen,scr d,"Bank wallet, rubles large — Desktop, Light"
+36111,inner,body,Page body
+36154,screen,scr p,"Bank wallet, rubles large — Phone, Light"
+36159,inner,icon ptop,Phone search icon
+36161,inner,pbody,Page body
+36212,screen,scr d,"Bank wallet, rubles large — Desktop, Dark"
+36280,inner,body,Page body
+36323,screen,scr p,"Bank wallet, rubles large — Phone, Dark"
+36328,inner,icon ptop,Phone search icon
+36330,inner,pbody,Page body
+36381,screen,scr d,"Exchange, row per currency — Desktop, Light"
+36449,inner,body,Page body
+36521,screen,scr p,"Exchange, row per currency — Phone, Light"
+36526,inner,icon ptop,Phone search icon
+36528,inner,pbody,Page body
+36582,screen,scr d,"Exchange, row per currency — Desktop, Dark"
+36650,inner,body,Page body
+36722,screen,scr p,"Exchange, row per currency — Phone, Dark"
+36727,inner,icon ptop,Phone search icon
+36729,inner,pbody,Page body
+36783,screen,scr d,"Tap an amount, other currencies — Desktop, Light"
+36851,inner,body,Page body
+36937,inner,menu,Menu
+36962,screen,scr p,"Tap an amount, other currencies — Phone, Light"
+36966,inner,icon ptop,Phone search icon
+36969,inner,pbody,Page body
+37055,inner,sheet,Bottom sheet
+37078,screen,scr d,"Tap an amount, other currencies — Desktop, Dark"
+37146,inner,body,Page body
+37232,inner,menu,Menu
+37257,screen,scr p,"Tap an amount, other currencies — Phone, Dark"
+37261,inner,icon ptop,Phone search icon
+37264,inner,pbody,Page body
+37350,inner,sheet,Bottom sheet
+37373,screen,scr d,"Exchange, deal rate vs market — Desktop, Light"
+37441,inner,body,Page body
+37526,inner,dlg,Dialog
+37586,screen,scr p,"Exchange, deal rate vs market — Phone, Light"
+37590,inner,icon ptop,Phone search icon
+37593,inner,pbody,Page body
+37728,screen,scr d,"Exchange, deal rate vs market — Desktop, Dark"
+37796,inner,body,Page body
+37881,inner,dlg,Dialog
+37941,screen,scr p,"Exchange, deal rate vs market — Phone, Dark"
+37945,inner,icon ptop,Phone search icon
+37948,inner,pbody,Page body
+38083,screen,scr d,"No rate, incomplete total — Desktop, Light"
+38151,inner,body,Page body
+38212,screen,scr p,"No rate, incomplete total — Phone, Light"
+38216,inner,pbody,Page body
+38274,screen,scr d,"No rate, incomplete total — Desktop, Dark"
+38342,inner,body,Page body
+38403,screen,scr p,"No rate, incomplete total — Phone, Dark"
+38407,inner,pbody,Page body
+38465,board,"Валюты · 2 из 2, кадры 8–10","Currencies 2 · Stale rates, base currency and converter"
+38466,caption,Новый вариант · мок-данные 22 ,Board status note
+38467,caption,"Валюты · 2 из 2, кадры 8–10",Board title
+38468,caption,"Своя валюта, базовая и бюджета",Board subtitle
+38469,caption,8. Курсы устарели или нет сети,Caption · Stale rates or offline
+38470,caption,Стало · светлая,Caption · Light column
+38471,caption,Стало · тёмная,Caption · Dark column
+38472,caption,Почему и как,Caption · Notes heading
+38473,notes,aside,Notes · Stale rates or offline
+38482,caption,9. Смена базовой валюты: что п,Caption · Change base currency
+38483,caption,Стало · светлая,Caption · Light column
+38484,caption,Стало · тёмная,Caption · Dark column
+38485,caption,Почему и как,Caption · Notes heading
+38486,notes,aside,Notes · Change base currency
+38495,caption,10. Ctrl K как конвертер,Caption · Ctrl K as converter
+38496,caption,Стало · светлая,Caption · Light column
+38497,caption,Стало · тёмная,Caption · Dark column
+38498,caption,Почему и как,Caption · Notes heading
+38499,notes,aside,Notes · Ctrl K as converter
+38508,screen,scr d,"Stale rates or offline — Desktop, Light"
+38576,inner,body,Page body
+38672,screen,scr p,"Stale rates or offline — Phone, Light"
+38676,inner,icon ptop,Phone search icon
+38679,inner,pbody,Page body
+38769,screen,scr d,"Stale rates or offline — Desktop, Dark"
+38837,inner,body,Page body
+38933,screen,scr p,"Stale rates or offline — Phone, Dark"
+38937,inner,icon ptop,Phone search icon
+38940,inner,pbody,Page body
+39030,screen,scr d,"Change base currency — Desktop, Light"
+39098,inner,body,Page body
+39183,inner,dlg,Dialog
+39297,screen,scr p,"Change base currency — Phone, Light"
+39302,inner,pbody,Page body
+39380,inner,sheet,Bottom sheet
+39407,screen,scr d,"Change base currency — Desktop, Dark"
+39475,inner,body,Page body
+39560,inner,dlg,Dialog
+39674,screen,scr p,"Change base currency — Phone, Dark"
+39679,inner,pbody,Page body
+39757,inner,sheet,Bottom sheet
+39784,screen,scr d,"Ctrl K as converter — Desktop, Light"
+39852,inner,body,Page body
+39937,inner,cmd,Command palette
+39990,screen,scr p,"Ctrl K as converter — Phone, Light"
+39993,inner,inp on,"Input, focused"
+40002,inner,div,Backdrop
+40035,screen,scr d,"Ctrl K as converter — Desktop, Dark"
+40103,inner,body,Page body
+40188,inner,cmd,Command palette
+40241,screen,scr p,"Ctrl K as converter — Phone, Dark"
+40244,inner,inp on,"Input, focused"
+40253,inner,div,Backdrop
+40286,page,"Деньги: план, лимиты, пути, период",05 Money
+40287,caption,Заголовок ряда,Row heading
+40288,sticky,"Стикер · Обход 26 окт · S41, S55, S56, S60, S61, ","Sticky note · 26 Oct walkthrough · S41, S55, S56, S60, S61, S62"
+40290,sticky,"Стикер · Обход 26 окт · S49, S59, S66. В приложен","Sticky note · 26 Oct walkthrough · S49, S59, S66"
+40292,sticky,"Стикер · Обход 26 окт · S31, S79, S81, S32. В при","Sticky note · 26 Oct walkthrough · S31, S79, S81, S32"
+40294,board,"Деньги · 1 из 4, кадры 1–7","Money 1 · Spending, limits and goal"
+40295,caption,Новый вариант · мок-данные 22 ,Board status note
+40296,caption,"Деньги · 1 из 4, кадры 1–7",Board title
+40297,caption,Траты → куда ушли → план; лими,Board subtitle
+40298,caption,1. Траты: ответ сверху,"Caption · Spending, answer on top"
+40300,caption,Стало · светлая,Caption · Light column
+40301,caption,Стало · тёмная,Caption · Dark column
+40302,caption,Почему и как,Caption · Notes heading
+40303,notes,aside,"Notes · Spending, answer on top"
+40325,caption,2. Категория открыта,Caption · Category opened
+40326,caption,Стало · светлая,Caption · Light column
+40327,caption,Стало · тёмная,Caption · Dark column
+40328,caption,Почему и как,Caption · Notes heading
+40329,notes,aside,Notes · Category opened
+40339,caption,3. Лимит: шаг 1 — на что,"Caption · Limit, step 1 which category"
+40340,caption,Стало · светлая,Caption · Light column
+40341,caption,Стало · тёмная,Caption · Dark column
+40342,caption,Почему и как,Caption · Notes heading
+40343,notes,aside,"Notes · Limit, step 1 which category"
+40353,caption,4. Лимит: шаг 2 — сколько,"Caption · Limit, step 2 how much"
+40354,caption,Стало · светлая,Caption · Light column
+40355,caption,Стало · тёмная,Caption · Dark column
+40356,caption,Почему и как,Caption · Notes heading
+40357,notes,aside,"Notes · Limit, step 2 how much"
+40366,caption,5. Траты с лимитом и отменой,Caption · Spending with limit and undo
+40367,caption,Стало · светлая,Caption · Light column
+40368,caption,Стало · тёмная,Caption · Dark column
+40369,caption,Почему и как,Caption · Notes heading
+40370,notes,aside,Notes · Spending with limit and undo
+40378,caption,6. Куда ушли деньги,Caption · Where the money went
+40379,caption,Стало · светлая,Caption · Light column
+40380,caption,Стало · тёмная,Caption · Dark column
+40381,caption,Почему и как,Caption · Notes heading
+40382,notes,aside,Notes · Where the money went
+40393,caption,7. Цель: шаг 1 — что копим,"Caption · New goal, one page"
+40394,caption,Стало · светлая,Caption · Light column
+40395,caption,Стало · тёмная,Caption · Dark column
+40396,caption,Почему и как,Caption · Notes heading
+40397,notes,aside,"Notes · New goal, one page"
+40407,screen,scr d,"Spending, answer on top — Desktop, Light"
+40475,inner,body,Page body
+40599,screen,scr p,"Spending, answer on top — Phone, Light"
+40603,inner,pbody,Page body
+40686,screen,scr d,"Spending, answer on top — Desktop, Dark"
+40754,inner,body,Page body
+40878,screen,scr p,"Spending, answer on top — Phone, Dark"
+40882,inner,pbody,Page body
+40965,screen,scr d,"Category opened — Desktop, Light"
+41033,inner,body,Page body
+41092,inner,drawer,Drawer
+41145,screen,scr p,"Category opened — Phone, Light"
+41150,inner,pbody,Page body
+41217,screen,scr d,"Category opened — Desktop, Dark"
+41285,inner,body,Page body
+41344,inner,drawer,Drawer
+41397,screen,scr p,"Category opened — Phone, Dark"
+41402,inner,pbody,Page body
+41469,screen,scr d,"Limit, step 1 which category — Desktop, Light"
+41537,inner,body,Page body
+41622,screen,scr p,"Limit, step 1 which category — Phone, Light"
+41626,inner,pbody,Page body
+41703,screen,scr d,"Limit, step 1 which category — Desktop, Dark"
+41771,inner,body,Page body
+41856,screen,scr p,"Limit, step 1 which category — Phone, Dark"
+41860,inner,pbody,Page body
+41937,screen,scr d,"Limit, step 2 how much — Desktop, Light"
+42005,inner,body,Page body
+42090,screen,scr p,"Limit, step 2 how much — Phone, Light"
+42094,inner,pbody,Page body
+42173,screen,scr d,"Limit, step 2 how much — Desktop, Dark"
+42241,inner,body,Page body
+42326,screen,scr p,"Limit, step 2 how much — Phone, Dark"
+42330,inner,pbody,Page body
+42409,screen,scr d,"Spending with limit and undo — Desktop, Light"
+42477,inner,body,Page body
+42538,screen,scr p,"Spending with limit and undo — Phone, Light"
+42542,inner,pbody,Page body
+42599,screen,scr d,"Spending with limit and undo — Desktop, Dark"
+42667,inner,body,Page body
+42728,screen,scr p,"Spending with limit and undo — Phone, Dark"
+42732,inner,pbody,Page body
+42789,screen,scr d,"Where the money went — Desktop, Light"
+42857,inner,body,Page body
+42925,screen,scr p,"Where the money went — Phone, Light"
+42929,inner,pbody,Page body
+42988,screen,scr d,"Where the money went — Desktop, Dark"
+43056,inner,body,Page body
+43124,screen,scr p,"Where the money went — Phone, Dark"
+43128,inner,pbody,Page body
+43187,screen,scr d,"New goal, one page — Desktop, Light"
+43255,inner,body,Page body
+43353,screen,scr p,"New goal, one page — Phone, Light"
+43357,inner,pbody,Page body
+43443,screen,scr d,"New goal, one page — Desktop, Dark"
+43511,inner,body,Page body
+43609,screen,scr p,"New goal, one page — Phone, Dark"
+43613,inner,pbody,Page body
+43699,board,"Деньги · 2 из 4, кадры 8–14","Money 2 · Plan, more menu, capital and investments"
+43700,caption,Новый вариант · мок-данные 22 ,Board status note
+43701,caption,"Деньги · 2 из 4, кадры 8–14",Board title
+43702,caption,Траты → куда ушли → план; лими,Board subtitle
+43703,caption,9. План: пусто,"Caption · Plan, empty"
+43704,caption,Стало · светлая,Caption · Light column
+43705,caption,Стало · тёмная,Caption · Dark column
+43706,caption,Почему и как,Caption · Notes heading
+43707,notes,aside,"Notes · Plan, empty"
+43718,caption,10. План: заполнен,"Caption · Plan, filled"
+43719,caption,Стало · светлая,Caption · Light column
+43720,caption,Стало · тёмная,Caption · Dark column
+43721,caption,Почему и как,Caption · Notes heading
+43722,notes,aside,"Notes · Plan, filled"
+43730,caption,11. Ещё: меню,Caption · More menu
+43731,caption,Стало · светлая,Caption · Light column
+43732,caption,Стало · тёмная,Caption · Dark column
+43733,caption,Почему и как,Caption · Notes heading
+43734,notes,aside,Notes · More menu
+43744,caption,12. Капитал,Caption · Capital
+43745,caption,Стало · светлая,Caption · Light column
+43746,caption,Стало · тёмная,Caption · Dark column
+43747,caption,Почему и как,Caption · Notes heading
+43748,notes,aside,Notes · Capital
+43761,caption,13. Вложения,Caption · Investments
+43762,caption,Стало · светлая,Caption · Light column
+43763,caption,Стало · тёмная,Caption · Dark column
+43764,caption,Почему и как,Caption · Notes heading
+43765,notes,aside,Notes · Investments
+43775,caption,14. Записать сделку,Caption · Record a trade
+43776,caption,Стало · светлая,Caption · Light column
+43777,caption,Стало · тёмная,Caption · Dark column
+43778,caption,Почему и как,Caption · Notes heading
+43779,notes,aside,Notes · Record a trade
+43789,screen,scr d,"Plan, empty — Desktop, Light"
+43857,inner,body,Page body
+43913,screen,scr p,"Plan, empty — Phone, Light"
+43917,inner,pbody,Page body
+43961,screen,scr d,"Plan, empty — Desktop, Dark"
+44029,inner,body,Page body
+44085,screen,scr p,"Plan, empty — Phone, Dark"
+44089,inner,pbody,Page body
+44133,screen,scr d,"Plan, filled — Desktop, Light"
+44201,inner,body,Page body
+44255,screen,scr p,"Plan, filled — Phone, Light"
+44259,inner,pbody,Page body
+44301,screen,scr d,"Plan, filled — Desktop, Dark"
+44369,inner,body,Page body
+44423,screen,scr p,"Plan, filled — Phone, Dark"
+44427,inner,pbody,Page body
+44469,screen,scr d,"More menu — Desktop, Light"
+44537,inner,body,Page body
+44589,inner,menu,Menu
+44601,screen,scr p,"More menu — Phone, Light"
+44605,inner,pbody,Page body
+44657,inner,sheet,Bottom sheet
+44684,screen,scr d,"More menu — Desktop, Dark"
+44752,inner,body,Page body
+44804,inner,menu,Menu
+44816,screen,scr p,"More menu — Phone, Dark"
+44820,inner,pbody,Page body
+44872,inner,sheet,Bottom sheet
+44899,screen,scr d,"Capital — Desktop, Light"
+44967,inner,body,Page body
+45040,screen,scr p,"Capital — Phone, Light"
+45045,inner,pbody,Page body
+45105,screen,scr d,"Capital — Desktop, Dark"
+45173,inner,body,Page body
+45246,screen,scr p,"Capital — Phone, Dark"
+45251,inner,pbody,Page body
+45311,screen,scr d,"Investments — Desktop, Light"
+45379,inner,body,Page body
+45431,screen,scr p,"Investments — Phone, Light"
+45436,inner,pbody,Page body
+45469,screen,scr d,"Investments — Desktop, Dark"
+45537,inner,body,Page body
+45589,screen,scr p,"Investments — Phone, Dark"
+45594,inner,pbody,Page body
+45627,screen,scr d,"Record a trade — Desktop, Light"
+45695,inner,body,Page body
+45792,screen,scr p,"Record a trade — Phone, Light"
+45797,inner,pbody,Page body
+45872,screen,scr d,"Record a trade — Desktop, Dark"
+45940,inner,body,Page body
+46037,screen,scr p,"Record a trade — Phone, Dark"
+46042,inner,pbody,Page body
+46117,board,"Деньги · 3 из 4, кадры 15–21","Money 3 · Balance, check-up and calculator"
+46118,caption,Новый вариант · мок-данные 22 ,Board status note
+46119,caption,"Деньги · 3 из 4, кадры 15–21",Board title
+46120,caption,Траты → куда ушли → план; лими,Board subtitle
+46121,caption,15. Сальдо: остаток месяца,"Caption · Balance, month remainder"
+46122,caption,Стало · светлая,Caption · Light column
+46123,caption,Стало · тёмная,Caption · Dark column
+46124,caption,Почему и как,Caption · Notes heading
+46125,notes,aside,"Notes · Balance, month remainder"
+46146,caption,16. Чекап,Caption · Check-up
+46147,caption,Стало · светлая,Caption · Light column
+46148,caption,Стало · тёмная,Caption · Dark column
+46149,caption,Почему и как,Caption · Notes heading
+46150,notes,aside,Notes · Check-up
+46160,caption,17. Подушка: настроить,"Caption · Cushion, set up"
+46161,caption,Стало · светлая,Caption · Light column
+46162,caption,Стало · тёмная,Caption · Dark column
+46163,caption,Почему и как,Caption · Notes heading
+46164,notes,aside,"Notes · Cushion, set up"
+46172,caption,18. Калькулятор: итог,"Caption · Calculator, result"
+46173,caption,Стало · светлая,Caption · Light column
+46174,caption,Стало · тёмная,Caption · Dark column
+46175,caption,Почему и как,Caption · Notes heading
+46176,notes,aside,"Notes · Calculator, result"
+46192,caption,19. Калькулятор: какой нужен в,"Caption · Calculator, required contribution"
+46193,caption,Стало · светлая,Caption · Light column
+46194,caption,Стало · тёмная,Caption · Dark column
+46195,caption,Почему и как,Caption · Notes heading
+46196,notes,aside,"Notes · Calculator, required contribution"
+46209,caption,20. Цель из расчёта,Caption · Goal from calculation
+46210,caption,Стало · светлая,Caption · Light column
+46211,caption,Стало · тёмная,Caption · Dark column
+46212,caption,Почему и как,Caption · Notes heading
+46213,notes,aside,Notes · Goal from calculation
+46225,caption,21. Калькулятор: снятия и инфл,"Caption · Calculator, withdrawals and inflation"
+46226,caption,Стало · светлая,Caption · Light column
+46227,caption,Стало · тёмная,Caption · Dark column
+46228,caption,Почему и как,Caption · Notes heading
+46229,notes,aside,"Notes · Calculator, withdrawals and inflation"
+46241,screen,scr d,"Balance, month remainder — Desktop, Light"
+46309,inner,body,Page body
+46554,screen,scr p,"Balance, month remainder — Phone, Light"
+46559,inner,pbody,Page body
+46635,screen,scr d,"Balance, month remainder — Desktop, Dark"
+46703,inner,body,Page body
+46948,screen,scr p,"Balance, month remainder — Phone, Dark"
+46953,inner,pbody,Page body
+47029,screen,scr d,"Check-up — Desktop, Light"
+47097,inner,body,Page body
+47131,screen,scr p,"Check-up — Phone, Light"
+47136,inner,pbody,Page body
+47177,screen,scr d,"Check-up — Desktop, Dark"
+47245,inner,body,Page body
+47279,screen,scr p,"Check-up — Phone, Dark"
+47284,inner,pbody,Page body
+47325,screen,scr d,"Cushion, set up — Desktop, Light"
+47393,inner,body,Page body
+47458,screen,scr p,"Cushion, set up — Phone, Light"
+47463,inner,pbody,Page body
+47532,screen,scr d,"Cushion, set up — Desktop, Dark"
+47600,inner,body,Page body
+47665,screen,scr p,"Cushion, set up — Phone, Dark"
+47670,inner,pbody,Page body
+47739,screen,scr d,"Calculator, result — Desktop, Light"
+47807,inner,body,Page body
+47943,screen,scr p,"Calculator, result — Phone, Light"
+47948,inner,pbody,Page body
+48006,screen,scr d,"Calculator, result — Desktop, Dark"
+48074,inner,body,Page body
+48210,screen,scr p,"Calculator, result — Phone, Dark"
+48215,inner,pbody,Page body
+48273,screen,scr d,"Calculator, required contribution — Desktop, Light"
+48341,inner,body,Page body
+48462,screen,scr p,"Calculator, required contribution — Phone, Light"
+48467,inner,pbody,Page body
+48517,screen,scr d,"Calculator, required contribution — Desktop, Dark"
+48585,inner,body,Page body
+48706,screen,scr p,"Calculator, required contribution — Phone, Dark"
+48711,inner,pbody,Page body
+48761,screen,scr d,"Goal from calculation — Desktop, Light"
+48829,inner,body,Page body
+48973,screen,scr p,"Goal from calculation — Phone, Light"
+48978,inner,pbody,Page body
+49049,screen,scr d,"Goal from calculation — Desktop, Dark"
+49117,inner,body,Page body
+49261,screen,scr p,"Goal from calculation — Phone, Dark"
+49266,inner,pbody,Page body
+49337,screen,scr d,"Calculator, withdrawals and inflation — Desktop, Light"
+49405,inner,body,Page body
+49528,screen,scr p,"Calculator, withdrawals and inflation — Phone, Light"
+49533,inner,pbody,Page body
+49578,screen,scr d,"Calculator, withdrawals and inflation — Desktop, Dark"
+49646,inner,body,Page body
+49769,screen,scr p,"Calculator, withdrawals and inflation — Phone, Dark"
+49774,inner,pbody,Page body
+49819,board,"Деньги · 4 из 4, кадры 22–23",Money 4 · Calculator comparison and trade calculator
+49820,caption,Новый вариант · мок-данные 22 ,Board status note
+49821,caption,"Деньги · 4 из 4, кадры 22–23",Board title
+49822,caption,Траты → куда ушли → план; лими,Board subtitle
+49823,caption,22. Калькулятор: сравнение рас,"Caption · Calculator, compare runs"
+49824,caption,Стало · светлая,Caption · Light column
+49825,caption,Стало · тёмная,Caption · Dark column
+49826,caption,Почему и как,Caption · Notes heading
+49827,notes,aside,"Notes · Calculator, compare runs"
+49838,caption,23. Калькулятор сделки (Bybit),Caption · Trade calculator (Bybit)
+49839,caption,Стало · светлая,Caption · Light column
+49840,caption,Стало · тёмная,Caption · Dark column
+49841,caption,Почему и как,Caption · Notes heading
+49842,notes,aside,Notes · Trade calculator (Bybit)
+49855,screen,scr d,"Calculator, compare runs — Desktop, Light"
+49923,inner,body,Page body
+50052,screen,scr p,"Calculator, compare runs — Phone, Light"
+50057,inner,pbody,Page body
+50089,screen,scr d,"Calculator, compare runs — Desktop, Dark"
+50157,inner,body,Page body
+50286,screen,scr p,"Calculator, compare runs — Phone, Dark"
+50291,inner,pbody,Page body
+50323,screen,scr d,"Trade calculator (Bybit) — Desktop, Light"
+50391,inner,body,Page body
+50502,screen,scr p,"Trade calculator (Bybit) — Phone, Light"
+50507,inner,pbody,Page body
+50600,screen,scr d,"Trade calculator (Bybit) — Desktop, Dark"
+50668,inner,body,Page body
+50779,screen,scr p,"Trade calculator (Bybit) — Phone, Dark"
+50784,inner,pbody,Page body
+50877,board,"Пути и быстрый обзор · 1 из 2, кадры 1–7","Paths 1 · Home map, quick glance, back trail and Ctrl K"
+50878,caption,Новый вариант · мок-данные 22 ,Board status note
+50879,caption,"Пути и быстрый обзор · 1 из 2,",Board title
+50880,caption,"Что нажимается: числа, имена, ",Board subtitle
+50881,caption,1. Карта: что нажимается на Гл,Caption · Map of what is clickable on Home
+50883,caption,Стало · светлая,Caption · Light column
+50884,caption,Стало · тёмная,Caption · Dark column
+50885,caption,Почему и как,Caption · Notes heading
+50886,notes,aside,Notes · Map of what is clickable on Home
+50903,caption,2. Быстрый взгляд: «Потрачено ,"Caption · Quick glance, Spent 36 $"
+50904,caption,Стало · светлая,Caption · Light column
+50905,caption,Стало · тёмная,Caption · Dark column
+50906,caption,Почему и как,Caption · Notes heading
+50907,notes,aside,"Notes · Quick glance, Spent 36 $"
+50921,caption,3. Быстрый взгляд: «Капитал»,"Caption · Quick glance, Capital"
+50922,caption,Стало · светлая,Caption · Light column
+50923,caption,Стало · тёмная,Caption · Dark column
+50924,caption,Почему и как,Caption · Notes heading
+50925,notes,aside,"Notes · Quick glance, Capital"
+50937,caption,4. Быстрый взгляд на кошелёк и,"Caption · Quick glance, wallet from an operation row"
+50938,caption,Стало · светлая,Caption · Light column
+50939,caption,Стало · тёмная,Caption · Dark column
+50940,caption,Почему и как,Caption · Notes heading
+50941,notes,aside,"Notes · Quick glance, wallet from an operation row"
+50954,caption,5. Траты → Продукты → Операции,"Caption · Spending, Groceries, Operations, back trail"
+50955,caption,Стало · светлая,Caption · Light column
+50956,caption,Стало · тёмная,Caption · Dark column
+50957,caption,Почему и как,Caption · Notes heading
+50958,notes,aside,"Notes · Spending, Groceries, Operations, back trail"
+50972,caption,6. Карточка операции: каждое з,"Caption · Operation card, every value leads on"
+50973,caption,Стало · светлая,Caption · Light column
+50974,caption,Стало · тёмная,Caption · Dark column
+50975,caption,Почему и как,Caption · Notes heading
+50976,notes,aside,"Notes · Operation card, every value leads on"
+50989,caption,7. Ctrl K без запроса: недавне,"Caption · Ctrl K empty query, recents and sections"
+50990,caption,Стало · светлая,Caption · Light column
+50991,caption,Стало · тёмная,Caption · Dark column
+50992,caption,Почему и как,Caption · Notes heading
+50993,notes,aside,"Notes · Ctrl K empty query, recents and sections"
+51005,screen,scr d,"Map of what is clickable on Home — Desktop, Light"
+51077,inner,body,Page body
+51194,screen,scr p,"Map of what is clickable on Home — Phone, Light"
+51198,inner,icon ptop,Phone search icon
+51201,inner,pbody,Page body
+51306,screen,scr d,"Map of what is clickable on Home — Desktop, Dark"
+51378,inner,body,Page body
+51495,screen,scr p,"Map of what is clickable on Home — Phone, Dark"
+51499,inner,icon ptop,Phone search icon
+51502,inner,pbody,Page body
+51607,screen,scr d,"Quick glance, Spent 36 $ — Desktop, Light"
+51675,inner,body,Page body
+51761,inner,menu,Menu
+51793,screen,scr p,"Quick glance, Spent 36 $ — Phone, Light"
+51797,inner,icon ptop,Phone search icon
+51800,inner,pbody,Page body
+51884,inner,sheet,Bottom sheet
+51912,screen,scr d,"Quick glance, Spent 36 $ — Desktop, Dark"
+51980,inner,body,Page body
+52066,inner,menu,Menu
+52098,screen,scr p,"Quick glance, Spent 36 $ — Phone, Dark"
+52102,inner,icon ptop,Phone search icon
+52105,inner,pbody,Page body
+52189,inner,sheet,Bottom sheet
+52217,screen,scr d,"Quick glance, Capital — Desktop, Light"
+52285,inner,body,Page body
+52371,inner,menu,Menu
+52400,screen,scr p,"Quick glance, Capital — Phone, Light"
+52404,inner,icon ptop,Phone search icon
+52407,inner,pbody,Page body
+52491,inner,sheet,Bottom sheet
+52523,screen,scr d,"Quick glance, Capital — Desktop, Dark"
+52591,inner,body,Page body
+52677,inner,menu,Menu
+52706,screen,scr p,"Quick glance, Capital — Phone, Dark"
+52710,inner,icon ptop,Phone search icon
+52713,inner,pbody,Page body
+52797,inner,sheet,Bottom sheet
+52829,screen,scr d,"Quick glance, wallet from an operation row — Desktop, Light"
+52897,inner,body,Page body
+53020,inner,menu,Menu
+53050,screen,scr p,"Quick glance, wallet from an operation row — Phone, Light"
+53054,inner,pbody,Page body
+53150,inner,sheet,Bottom sheet
+53180,screen,scr d,"Quick glance, wallet from an operation row — Desktop, Dark"
+53248,inner,body,Page body
+53371,inner,menu,Menu
+53401,screen,scr p,"Quick glance, wallet from an operation row — Phone, Dark"
+53405,inner,pbody,Page body
+53501,inner,sheet,Bottom sheet
+53531,screen,scr d,"Spending, Groceries, Operations, back trail — Desktop, Light"
+53599,inner,body,Page body
+53663,screen,scr p,"Spending, Groceries, Operations, back trail — Phone, Light"
+53668,inner,pbody,Page body
+53733,screen,scr d,"Spending, Groceries, Operations, back trail — Desktop, Dark"
+53801,inner,body,Page body
+53865,screen,scr p,"Spending, Groceries, Operations, back trail — Phone, Dark"
+53870,inner,pbody,Page body
+53935,screen,scr d,"Operation card, every value leads on — Desktop, Light"
+54003,inner,body,Page body
+54120,inner,drawer,Drawer
+54169,screen,scr p,"Operation card, every value leads on — Phone, Light"
+54174,inner,pbody,Page body
+54237,screen,scr d,"Operation card, every value leads on — Desktop, Dark"
+54305,inner,body,Page body
+54422,inner,drawer,Drawer
+54471,screen,scr p,"Operation card, every value leads on — Phone, Dark"
+54476,inner,pbody,Page body
+54539,screen,scr d,"Ctrl K empty query, recents and sections — Desktop, Light"
+54607,inner,body,Page body
+54692,inner,cmd,Command palette
+54775,screen,scr p,"Ctrl K empty query, recents and sections — Phone, Light"
+54778,inner,inp on,"Input, focused"
+54785,inner,div,Backdrop
+54847,screen,scr d,"Ctrl K empty query, recents and sections — Desktop, Dark"
+54915,inner,body,Page body
+55000,inner,cmd,Command palette
+55083,screen,scr p,"Ctrl K empty query, recents and sections — Phone, Dark"
+55086,inner,inp on,"Input, focused"
+55093,inner,div,Backdrop
+55155,board,"Пути и быстрый обзор · 2 из 2, кадры 8–11","Paths 2 · Ctrl K query, drill-down and actions"
+55156,caption,Новый вариант · мок-данные 22 ,Board status note
+55157,caption,"Пути и быстрый обзор · 2 из 2,",Board title
+55158,caption,"Что нажимается: числа, имена, ",Board subtitle
+55159,caption,"8. Ctrl K «прод»: открыть, пос",Caption · Ctrl K with query
+55160,caption,Стало · светлая,Caption · Light column
+55161,caption,Стало · тёмная,Caption · Dark column
+55162,caption,Почему и как,Caption · Notes heading
+55163,notes,aside,Notes · Ctrl K with query
+55176,caption,9. Куда ушли: раскрыть на мест,"Caption · Where it went, expanded in place"
+55177,caption,Стало · светлая,Caption · Light column
+55178,caption,Стало · тёмная,Caption · Dark column
+55179,caption,Почему и как,Caption · Notes heading
+55180,notes,aside,"Notes · Where it went, expanded in place"
+55192,caption,10. «авто» у операции: кто и п,Caption · Auto marker on an operation
+55193,caption,Стало · светлая,Caption · Light column
+55194,caption,Стало · тёмная,Caption · Dark column
+55195,caption,Почему и как,Caption · Notes heading
+55196,notes,aside,Notes · Auto marker on an operation
+55208,caption,"11. Действия: правый клик, «⋯»","Caption · Actions, right click, … and long press"
+55209,caption,Стало · светлая,Caption · Light column
+55210,caption,Стало · тёмная,Caption · Dark column
+55211,caption,Почему и как,Caption · Notes heading
+55212,notes,aside,"Notes · Actions, right click, … and long press"
+55226,screen,scr d,"Ctrl K with query — Desktop, Light"
+55294,inner,body,Page body
+55379,inner,cmd,Command palette
+55463,screen,scr p,"Ctrl K with query — Phone, Light"
+55466,inner,inp on,"Input, focused"
+55475,inner,div,Backdrop
+55516,screen,scr d,"Ctrl K with query — Desktop, Dark"
+55584,inner,body,Page body
+55669,inner,cmd,Command palette
+55753,screen,scr p,"Ctrl K with query — Phone, Dark"
+55756,inner,inp on,"Input, focused"
+55765,inner,div,Backdrop
+55806,screen,scr d,"Where it went, expanded in place — Desktop, Light"
+55874,inner,body,Page body
+55969,screen,scr p,"Where it went, expanded in place — Phone, Light"
+55973,inner,pbody,Page body
+56047,screen,scr d,"Where it went, expanded in place — Desktop, Dark"
+56115,inner,body,Page body
+56210,screen,scr p,"Where it went, expanded in place — Phone, Dark"
+56214,inner,pbody,Page body
+56288,screen,scr d,"Auto marker on an operation — Desktop, Light"
+56356,inner,body,Page body
+56451,inner,menu,Menu
+56472,screen,scr p,"Auto marker on an operation — Phone, Light"
+56476,inner,icon ptop,Phone search icon
+56479,inner,pbody,Page body
+56556,inner,sheet,Bottom sheet
+56578,screen,scr d,"Auto marker on an operation — Desktop, Dark"
+56646,inner,body,Page body
+56741,inner,menu,Menu
+56762,screen,scr p,"Auto marker on an operation — Phone, Dark"
+56766,inner,icon ptop,Phone search icon
+56769,inner,pbody,Page body
+56846,inner,sheet,Bottom sheet
+56868,screen,scr d,"Actions, right click, … and long press — Desktop, Light"
+56936,inner,body,Page body
+57057,inner,menu,Menu
+57089,screen,scr p,"Actions, right click, … and long press — Phone, Light"
+57093,inner,pbody,Page body
+57189,inner,sheet,Bottom sheet
+57229,screen,scr d,"Actions, right click, … and long press — Desktop, Dark"
+57297,inner,body,Page body
+57418,inner,menu,Menu
+57450,screen,scr p,"Actions, right click, … and long press — Phone, Dark"
+57454,inner,pbody,Page body
+57550,inner,sheet,Bottom sheet
+57590,board,"Период, экспорт и год данных","Period 1 · Period popover, export and year of data"
+57591,caption,Новый вариант · пример данных ,Board status note
+57592,caption,"Период, экспорт и год данных",Board title
+57593,caption,Поповер периода → траты за 12 ,Board subtitle
+57594,caption,1. Период: поповер,Caption · Period popover
+57596,caption,Стало · светлая,Caption · Light column
+57597,caption,Стало · тёмная,Caption · Dark column
+57598,caption,Почему и как,Caption · Notes heading
+57599,notes,aside,Notes · Period popover
+57614,caption,2. Траты за 12 месяцев,Caption · Spending for 12 months
+57616,caption,Стало · светлая,Caption · Light column
+57617,caption,Стало · тёмная,Caption · Dark column
+57618,caption,Почему и как,Caption · Notes heading
+57619,notes,aside,Notes · Spending for 12 months
+57634,caption,"3. Экспорт: что на экране, то ","Caption · Export, what is on screen is in the file"
+57636,caption,Стало · светлая,Caption · Light column
+57637,caption,Стало · тёмная,Caption · Dark column
+57638,caption,Почему и как,Caption · Notes heading
+57639,notes,aside,"Notes · Export, what is on screen is in the file"
+57654,caption,4. Проверка на годе данных,Caption · Check on the year of data
+57656,caption,Стало · светлая,Caption · Light column
+57657,caption,Стало · тёмная,Caption · Dark column
+57658,caption,Почему и как,Caption · Notes heading
+57659,notes,aside,Notes · Check on the year of data
+57673,screen,scr d,"Period popover — Desktop, Light"
+57741,inner,body,Page body
+57865,inner,menu,Menu
+57920,screen,scr p,"Period popover — Phone, Light"
+57924,inner,pbody,Page body
+58007,inner,div,Backdrop
+58008,inner,sheet,Bottom sheet
+58061,screen,scr d,"Period popover — Desktop, Dark"
+58129,inner,body,Page body
+58253,inner,menu,Menu
+58308,screen,scr p,"Period popover — Phone, Dark"
+58312,inner,pbody,Page body
+58395,inner,div,Backdrop
+58396,inner,sheet,Bottom sheet
+58449,screen,scr d,"Spending for 12 months — Desktop, Light"
+58517,inner,body,Page body
+59045,screen,scr p,"Spending for 12 months — Phone, Light"
+59049,inner,pbody,Page body
+59141,screen,scr d,"Spending for 12 months — Desktop, Dark"
+59209,inner,body,Page body
+59737,screen,scr p,"Spending for 12 months — Phone, Dark"
+59741,inner,pbody,Page body
+59833,screen,scr d,"Export, what is on screen is in the file — Desktop, Light"
+59901,inner,body,Page body
+60023,inner,div,Backdrop
+60024,inner,card,Card
+60065,inner,card row,Card row
+60068,screen,scr p,"Export, what is on screen is in the file — Phone, Light"
+60072,inner,pbody,Page body
+60167,inner,div,Backdrop
+60168,inner,sheet,Bottom sheet
+60185,screen,scr d,"Export, what is on screen is in the file — Desktop, Dark"
+60253,inner,body,Page body
+60375,inner,div,Backdrop
+60376,inner,card,Card
+60417,inner,card row,Card row
+60420,screen,scr p,"Export, what is on screen is in the file — Phone, Dark"
+60424,inner,pbody,Page body
+60519,inner,div,Backdrop
+60520,inner,sheet,Bottom sheet
+60537,screen,scr d,"Check on the year of data — Desktop, Light"
+60605,inner,body,Page body
+60695,screen,scr p,"Check on the year of data — Phone, Light"
+60699,inner,pbody,Page body
+60763,screen,scr d,"Check on the year of data — Desktop, Dark"
+60831,inner,body,Page body
+60921,screen,scr p,"Check on the year of data — Phone, Dark"
+60925,inner,pbody,Page body
+60989,page,Автоматизации,06 Automations
+60990,caption,Заголовок ряда,Row heading
+60991,sticky,"Стикер · Обход 26 окт · S64–S71, S72/S88. В прило","Sticky note · 26 Oct walkthrough · S64–S71, S72/S88"
+60993,board,"Автоматизации · 1 из 3, кадры 1–7","Automations 1 · My list, journal and create steps 1–2"
+60994,caption,Новый вариант · мок-данные 22 ,Board status note
+60995,caption,"Автоматизации · 1 из 3, кадры ",Board title
+60996,caption,"Мои и Журнал, карточка, подтве",Board subtitle
+60997,caption,"1. Мои: всё, что срабатывает с",Caption · My automations list
+60999,caption,Стало · светлая,Caption · Light column
+61000,caption,Стало · тёмная,Caption · Dark column
+61001,caption,Почему и как,Caption · Notes heading
+61002,notes,aside,Notes · My automations list
+61015,caption,2. Мои: пусто,"Caption · My automations, empty"
+61016,caption,Стало · светлая,Caption · Light column
+61017,caption,Стало · тёмная,Caption · Dark column
+61018,caption,Почему и как,Caption · Notes heading
+61019,notes,aside,"Notes · My automations, empty"
+61029,caption,3. Карточка автоматизации,Caption · Automation card
+61030,caption,Стало · светлая,Caption · Light column
+61031,caption,Стало · тёмная,Caption · Dark column
+61032,caption,Почему и как,Caption · Notes heading
+61033,notes,aside,Notes · Automation card
+61041,caption,4. Журнал,Caption · Journal
+61042,caption,Стало · светлая,Caption · Light column
+61043,caption,Стало · тёмная,Caption · Dark column
+61044,caption,Почему и как,Caption · Notes heading
+61045,notes,aside,Notes · Journal
+61055,caption,5. Подтвердить запуск,Caption · Confirm run
+61056,caption,Стало · светлая,Caption · Light column
+61057,caption,Стало · тёмная,Caption · Dark column
+61058,caption,Почему и как,Caption · Notes heading
+61059,notes,aside,Notes · Confirm run
+61068,caption,6. Создать: шаг 1 — что,"Caption · Create, step 1 what"
+61069,caption,Стало · светлая,Caption · Light column
+61070,caption,Стало · тёмная,Caption · Dark column
+61071,caption,Почему и как,Caption · Notes heading
+61072,notes,aside,"Notes · Create, step 1 what"
+61082,caption,7. Создать: шаг 2 — что сделат,"Caption · Create, step 2 action"
+61083,caption,Стало · светлая,Caption · Light column
+61084,caption,Стало · тёмная,Caption · Dark column
+61085,caption,Почему и как,Caption · Notes heading
+61086,notes,aside,"Notes · Create, step 2 action"
+61094,screen,scr d,"My automations list — Desktop, Light"
+61162,inner,body,Page body
+61252,screen,scr p,"My automations list — Phone, Light"
+61257,inner,btn bp,Primary button
+61260,inner,pbody,Page body
+61320,screen,scr d,"My automations list — Desktop, Dark"
+61388,inner,body,Page body
+61478,screen,scr p,"My automations list — Phone, Dark"
+61483,inner,btn bp,Primary button
+61486,inner,pbody,Page body
+61546,screen,scr d,"My automations, empty — Desktop, Light"
+61614,inner,body,Page body
+61642,screen,scr p,"My automations, empty — Phone, Light"
+61647,inner,pbody,Page body
+61697,screen,scr d,"My automations, empty — Desktop, Dark"
+61765,inner,body,Page body
+61793,screen,scr p,"My automations, empty — Phone, Dark"
+61798,inner,pbody,Page body
+61848,screen,scr d,"Automation card — Desktop, Light"
+61916,inner,body,Page body
+62007,inner,drawer,Drawer
+62043,screen,scr p,"Automation card — Phone, Light"
+62048,inner,pbody,Page body
+62099,screen,scr d,"Automation card — Desktop, Dark"
+62167,inner,body,Page body
+62258,inner,drawer,Drawer
+62294,screen,scr p,"Automation card — Phone, Dark"
+62299,inner,pbody,Page body
+62350,screen,scr d,"Journal — Desktop, Light"
+62418,inner,body,Page body
+62468,screen,scr p,"Journal — Phone, Light"
+62473,inner,pbody,Page body
+62516,screen,scr d,"Journal — Desktop, Dark"
+62584,inner,body,Page body
+62634,screen,scr p,"Journal — Phone, Dark"
+62639,inner,pbody,Page body
+62682,screen,scr d,"Confirm run — Desktop, Light"
+62750,inner,body,Page body
+62831,screen,scr p,"Confirm run — Phone, Light"
+62836,inner,pbody,Page body
+62907,screen,scr d,"Confirm run — Desktop, Dark"
+62975,inner,body,Page body
+63056,screen,scr p,"Confirm run — Phone, Dark"
+63061,inner,pbody,Page body
+63132,screen,scr d,"Create, step 1 what — Desktop, Light"
+63200,inner,body,Page body
+63345,screen,scr p,"Create, step 1 what — Phone, Light"
+63350,inner,btn bp,Primary button
+63353,inner,pbody,Page body
+63414,inner,sheet,Bottom sheet
+63466,screen,scr d,"Create, step 1 what — Desktop, Dark"
+63534,inner,body,Page body
+63679,screen,scr p,"Create, step 1 what — Phone, Dark"
+63684,inner,btn bp,Primary button
+63687,inner,pbody,Page body
+63748,inner,sheet,Bottom sheet
+63800,screen,scr d,"Create, step 2 action — Desktop, Light"
+63868,inner,body,Page body
+64020,screen,scr p,"Create, step 2 action — Phone, Light"
+64025,inner,btn bp,Primary button
+64028,inner,pbody,Page body
+64149,screen,scr d,"Create, step 2 action — Desktop, Dark"
+64217,inner,body,Page body
+64369,screen,scr p,"Create, step 2 action — Phone, Dark"
+64374,inner,btn bp,Primary button
+64377,inner,pbody,Page body
+64498,board,"Автоматизации · 2 из 3, кадры 8–14","Automations 2 · Create step 3, templates, alerts and graph"
+64499,caption,Новый вариант · мок-данные 22 ,Board status note
+64500,caption,"Автоматизации · 2 из 3, кадры ",Board title
+64501,caption,"Мои и Журнал, карточка, подтве",Board subtitle
+64502,caption,8. Создать: шаг 3 — когда,"Caption · Create, step 3 when"
+64503,caption,Стало · светлая,Caption · Light column
+64504,caption,Стало · тёмная,Caption · Dark column
+64505,caption,Почему и как,Caption · Notes heading
+64506,notes,aside,"Notes · Create, step 3 when"
+64516,caption,9. Шаблон «Зарплата»,Caption · Salary template
+64517,caption,Стало · светлая,Caption · Light column
+64518,caption,Стало · тёмная,Caption · Dark column
+64519,caption,Почему и как,Caption · Notes heading
+64520,notes,aside,Notes · Salary template
+64530,caption,10. Напоминание,Caption · Reminder
+64531,caption,Стало · светлая,Caption · Light column
+64532,caption,Стало · тёмная,Caption · Dark column
+64533,caption,Почему и как,Caption · Notes heading
+64534,notes,aside,Notes · Reminder
+64542,caption,11. Алерт цены,Caption · Price alert
+64543,caption,Стало · светлая,Caption · Light column
+64544,caption,Стало · тёмная,Caption · Dark column
+64545,caption,Почему и как,Caption · Notes heading
+64546,notes,aside,Notes · Price alert
+64554,caption,12. Заплати себе первым,Caption · Pay yourself first
+64555,caption,Стало · светлая,Caption · Light column
+64556,caption,Стало · тёмная,Caption · Dark column
+64557,caption,Почему и как,Caption · Notes heading
+64558,notes,aside,Notes · Pay yourself first
+64566,caption,13. Схема: холст узлов и выбра,"Caption · Graph canvas, selected node"
+64567,caption,Стало · светлая,Caption · Light column
+64568,caption,Стало · тёмная,Caption · Dark column
+64569,caption,Почему и как,Caption · Notes heading
+64570,notes,aside,"Notes · Graph canvas, selected node"
+64587,caption,14. Схема: добавить узел (Ctrl,"Caption · Graph, add node (Ctrl Space)"
+64588,caption,Стало · светлая,Caption · Light column
+64589,caption,Стало · тёмная,Caption · Dark column
+64590,caption,Почему и как,Caption · Notes heading
+64591,notes,aside,"Notes · Graph, add node (Ctrl Space)"
+64603,screen,scr d,"Create, step 3 when — Desktop, Light"
+64671,inner,body,Page body
+64807,screen,scr p,"Create, step 3 when — Phone, Light"
+64812,inner,btn bp,Primary button
+64815,inner,pbody,Page body
+64920,screen,scr d,"Create, step 3 when — Desktop, Dark"
+64988,inner,body,Page body
+65124,screen,scr p,"Create, step 3 when — Phone, Dark"
+65129,inner,btn bp,Primary button
+65132,inner,pbody,Page body
+65237,screen,scr d,"Salary template — Desktop, Light"
+65305,inner,body,Page body
+65450,screen,scr p,"Salary template — Phone, Light"
+65455,inner,btn bp,Primary button
+65458,inner,pbody,Page body
+65570,screen,scr d,"Salary template — Desktop, Dark"
+65638,inner,body,Page body
+65783,screen,scr p,"Salary template — Phone, Dark"
+65788,inner,btn bp,Primary button
+65791,inner,pbody,Page body
+65903,screen,scr d,"Reminder — Desktop, Light"
+65971,inner,body,Page body
+66095,screen,scr p,"Reminder — Phone, Light"
+66100,inner,btn bp,Primary button
+66103,inner,pbody,Page body
+66194,screen,scr d,"Reminder — Desktop, Dark"
+66262,inner,body,Page body
+66386,screen,scr p,"Reminder — Phone, Dark"
+66391,inner,btn bp,Primary button
+66394,inner,pbody,Page body
+66485,screen,scr d,"Price alert — Desktop, Light"
+66553,inner,body,Page body
+66678,screen,scr p,"Price alert — Phone, Light"
+66683,inner,btn bp,Primary button
+66686,inner,pbody,Page body
+66778,screen,scr d,"Price alert — Desktop, Dark"
+66846,inner,body,Page body
+66971,screen,scr p,"Price alert — Phone, Dark"
+66976,inner,btn bp,Primary button
+66979,inner,pbody,Page body
+67071,screen,scr d,"Pay yourself first — Desktop, Light"
+67139,inner,body,Page body
+67265,screen,scr p,"Pay yourself first — Phone, Light"
+67270,inner,btn bp,Primary button
+67273,inner,pbody,Page body
+67366,screen,scr d,"Pay yourself first — Desktop, Dark"
+67434,inner,body,Page body
+67560,screen,scr p,"Pay yourself first — Phone, Dark"
+67565,inner,btn bp,Primary button
+67568,inner,pbody,Page body
+67661,screen,scr d,"Graph canvas, selected node — Desktop, Light"
+67729,inner,body,Page body
+67877,screen,scr p,"Graph canvas, selected node — Phone, Light"
+67882,inner,pbody,Page body
+67955,screen,scr d,"Graph canvas, selected node — Desktop, Dark"
+68023,inner,body,Page body
+68171,screen,scr p,"Graph canvas, selected node — Phone, Dark"
+68176,inner,pbody,Page body
+68249,screen,scr d,"Graph, add node (Ctrl Space) — Desktop, Light"
+68317,inner,body,Page body
+68441,screen,scr p,"Graph, add node (Ctrl Space) — Phone, Light"
+68446,inner,pbody,Page body
+68509,screen,scr d,"Graph, add node (Ctrl Space) — Desktop, Dark"
+68577,inner,body,Page body
+68701,screen,scr p,"Graph, add node (Ctrl Space) — Phone, Dark"
+68706,inner,pbody,Page body
+68769,board,"Автоматизации · 3 из 3, кадры 15–17","Automations 3 · Graph emulation, node error and import"
+68770,caption,Новый вариант · мок-данные 22 ,Board status note
+68771,caption,"Автоматизации · 3 из 3, кадры ",Board title
+68772,caption,"Мои и Журнал, карточка, подтве",Board subtitle
+68773,caption,15. Схема: эмуляция,"Caption · Graph, emulation"
+68774,caption,Стало · светлая,Caption · Light column
+68775,caption,Стало · тёмная,Caption · Dark column
+68776,caption,Почему и как,Caption · Notes heading
+68777,notes,aside,"Notes · Graph, emulation"
+68789,caption,16. Схема: ошибка в узле,"Caption · Graph, node error"
+68790,caption,Стало · светлая,Caption · Light column
+68791,caption,Стало · тёмная,Caption · Dark column
+68792,caption,Почему и как,Caption · Notes heading
+68793,notes,aside,"Notes · Graph, node error"
+68802,caption,17. Импорт,Caption · Import
+68803,caption,Стало · светлая,Caption · Light column
+68804,caption,Стало · тёмная,Caption · Dark column
+68805,caption,Почему и как,Caption · Notes heading
+68806,notes,aside,Notes · Import
+68814,screen,scr d,"Graph, emulation — Desktop, Light"
+68882,inner,body,Page body
+69026,screen,scr p,"Graph, emulation — Phone, Light"
+69031,inner,pbody,Page body
+69093,screen,scr d,"Graph, emulation — Desktop, Dark"
+69161,inner,body,Page body
+69305,screen,scr p,"Graph, emulation — Phone, Dark"
+69310,inner,pbody,Page body
+69372,screen,scr d,"Graph, node error — Desktop, Light"
+69440,inner,body,Page body
+69565,screen,scr p,"Graph, node error — Phone, Light"
+69570,inner,pbody,Page body
+69625,screen,scr d,"Graph, node error — Desktop, Dark"
+69693,inner,body,Page body
+69818,screen,scr p,"Graph, node error — Phone, Dark"
+69823,inner,pbody,Page body
+69878,screen,scr d,"Import — Desktop, Light"
+69946,inner,body,Page body
+70066,screen,scr p,"Import — Phone, Light"
+70071,inner,btn bp,Primary button
+70074,inner,pbody,Page body
+70161,screen,scr d,"Import — Desktop, Dark"
+70229,inner,body,Page body
+70349,screen,scr p,"Import — Phone, Dark"
+70354,inner,btn bp,Primary button
+70357,inner,pbody,Page body
+70444,page,Настройки,07 Settings
+70445,caption,Заголовок ряда,Row heading
+70446,sticky,"Стикер · Обход 26 окт · S7, S57, S58, S65, S87. В","Sticky note · 26 Oct walkthrough · S7, S57, S58, S65, S87"
+70448,board,"Настройки · 1 из 3, кадры 1–7","Settings 1 · App, accounting, vault and sync"
+70449,caption,Новый вариант · мок-данные 22 ,Board status note
+70450,caption,"Настройки · 1 из 3, кадры 1–7",Board title
+70451,caption,"Пять групп: Приложение, Учёт, ",Board subtitle
+70452,caption,1. Приложение,Caption · App settings
+70454,caption,Стало · светлая,Caption · Light column
+70455,caption,Стало · тёмная,Caption · Dark column
+70456,caption,Почему и как,Caption · Notes heading
+70457,notes,aside,Notes · App settings
+70471,caption,2. Приложение: клавиши,"Caption · App settings, keys"
+70472,caption,Стало · светлая,Caption · Light column
+70473,caption,Стало · тёмная,Caption · Dark column
+70474,caption,Почему и как,Caption · Notes heading
+70475,notes,aside,"Notes · App settings, keys"
+70486,caption,3. Учёт,Caption · Accounting
+70487,caption,Стало · светлая,Caption · Light column
+70488,caption,Стало · тёмная,Caption · Dark column
+70489,caption,Почему и как,Caption · Notes heading
+70490,notes,aside,Notes · Accounting
+70500,caption,4. Учёт: категории,"Caption · Accounting, categories"
+70501,caption,Стало · светлая,Caption · Light column
+70502,caption,Стало · тёмная,Caption · Dark column
+70503,caption,Почему и как,Caption · Notes heading
+70504,notes,aside,"Notes · Accounting, categories"
+70521,caption,5. Хранилище,Caption · Vault
+70522,caption,Стало · светлая,Caption · Light column
+70523,caption,Стало · тёмная,Caption · Dark column
+70524,caption,Почему и как,Caption · Notes heading
+70525,notes,aside,Notes · Vault
+70535,caption,6. Смена пароля,Caption · Change password
+70536,caption,Стало · светлая,Caption · Light column
+70537,caption,Стало · тёмная,Caption · Dark column
+70538,caption,Почему и как,Caption · Notes heading
+70539,notes,aside,Notes · Change password
+70547,caption,7. Синхронизация,Caption · Sync
+70548,caption,Стало · светлая,Caption · Light column
+70549,caption,Стало · тёмная,Caption · Dark column
+70550,caption,Почему и как,Caption · Notes heading
+70551,notes,aside,Notes · Sync
+70564,screen,scr d,"App settings — Desktop, Light"
+70632,inner,body,Page body
+70717,inner,dlg,Dialog
+70790,screen,scr p,"App settings — Phone, Light"
+70795,inner,pbody,Page body
+70858,screen,scr d,"App settings — Desktop, Dark"
+70926,inner,body,Page body
+71011,inner,dlg,Dialog
+71084,screen,scr p,"App settings — Phone, Dark"
+71089,inner,pbody,Page body
+71152,screen,scr d,"App settings, keys — Desktop, Light"
+71220,inner,body,Page body
+71305,inner,dlg,Dialog
+71366,screen,scr p,"App settings, keys — Phone, Light"
+71371,inner,pbody,Page body
+71419,screen,scr d,"App settings, keys — Desktop, Dark"
+71487,inner,body,Page body
+71572,inner,dlg,Dialog
+71633,screen,scr p,"App settings, keys — Phone, Dark"
+71638,inner,pbody,Page body
+71686,screen,scr d,"Accounting — Desktop, Light"
+71754,inner,body,Page body
+71839,inner,dlg,Dialog
+71924,screen,scr p,"Accounting — Phone, Light"
+71929,inner,pbody,Page body
+72004,screen,scr d,"Accounting — Desktop, Dark"
+72072,inner,body,Page body
+72157,inner,dlg,Dialog
+72242,screen,scr p,"Accounting — Phone, Dark"
+72247,inner,pbody,Page body
+72322,screen,scr d,"Accounting, categories — Desktop, Light"
+72390,inner,body,Page body
+72475,inner,dlg,Dialog
+72673,screen,scr p,"Accounting, categories — Phone, Light"
+72678,inner,pbody,Page body
+72780,screen,scr d,"Accounting, categories — Desktop, Dark"
+72848,inner,body,Page body
+72933,inner,dlg,Dialog
+73131,screen,scr p,"Accounting, categories — Phone, Dark"
+73136,inner,pbody,Page body
+73238,screen,scr d,"Vault — Desktop, Light"
+73306,inner,body,Page body
+73391,inner,dlg,Dialog
+73459,screen,scr p,"Vault — Phone, Light"
+73464,inner,pbody,Page body
+73522,screen,scr d,"Vault — Desktop, Dark"
+73590,inner,body,Page body
+73675,inner,dlg,Dialog
+73743,screen,scr p,"Vault — Phone, Dark"
+73748,inner,pbody,Page body
+73806,screen,scr d,"Change password — Desktop, Light"
+73874,inner,body,Page body
+73959,inner,dlg,Dialog
+74054,screen,scr p,"Change password — Phone, Light"
+74059,inner,pbody,Page body
+74141,screen,scr d,"Change password — Desktop, Dark"
+74209,inner,body,Page body
+74294,inner,dlg,Dialog
+74389,screen,scr p,"Change password — Phone, Dark"
+74394,inner,pbody,Page body
+74476,screen,scr d,"Sync — Desktop, Light"
+74544,inner,body,Page body
+74629,inner,dlg,Dialog
+74687,screen,scr p,"Sync — Phone, Light"
+74692,inner,pbody,Page body
+74740,screen,scr d,"Sync — Desktop, Dark"
+74808,inner,body,Page body
+74893,inner,dlg,Dialog
+74951,screen,scr p,"Sync — Phone, Dark"
+74956,inner,pbody,Page body
+75004,board,"Настройки · 2 из 3, кадры 8–14","Settings 2 · Sync devices, help and developer"
+75005,caption,Новый вариант · мок-данные 22 ,Board status note
+75006,caption,"Настройки · 2 из 3, кадры 8–14",Board title
+75007,caption,"Пять групп: Приложение, Учёт, ",Board subtitle
+75008,caption,8. Синхронизация: устройства,"Caption · Sync, devices"
+75009,caption,Стало · светлая,Caption · Light column
+75010,caption,Стало · тёмная,Caption · Dark column
+75011,caption,Почему и как,Caption · Notes heading
+75012,notes,aside,"Notes · Sync, devices"
+75022,caption,9. Добавить устройство: код,"Caption · Add device, code"
+75023,caption,Стало · светлая,Caption · Light column
+75024,caption,Стало · тёмная,Caption · Dark column
+75025,caption,Почему и как,Caption · Notes heading
+75026,notes,aside,"Notes · Add device, code"
+75034,caption,10. Синхронизация: история,"Caption · Sync, history"
+75035,caption,Стало · светлая,Caption · Light column
+75036,caption,Стало · тёмная,Caption · Dark column
+75037,caption,Почему и как,Caption · Notes heading
+75038,notes,aside,"Notes · Sync, history"
+75048,caption,11. Синхронизация: передача,"Caption · Sync, transfer"
+75049,caption,Стало · светлая,Caption · Light column
+75050,caption,Стало · тёмная,Caption · Dark column
+75051,caption,Почему и как,Caption · Notes heading
+75052,notes,aside,"Notes · Sync, transfer"
+75060,caption,12. Получить хранилище,Caption · Get a vault
+75061,caption,Стало · светлая,Caption · Light column
+75062,caption,Стало · тёмная,Caption · Dark column
+75063,caption,Почему и как,Caption · Notes heading
+75064,notes,aside,Notes · Get a vault
+75072,caption,13. Помощь,Caption · Help
+75073,caption,Стало · светлая,Caption · Light column
+75074,caption,Стало · тёмная,Caption · Dark column
+75075,caption,Почему и как,Caption · Notes heading
+75076,notes,aside,Notes · Help
+75084,caption,14. Разработчик,Caption · Developer
+75085,caption,Стало · светлая,Caption · Light column
+75086,caption,Стало · тёмная,Caption · Dark column
+75087,caption,Почему и как,Caption · Notes heading
+75088,notes,aside,Notes · Developer
+75096,screen,scr d,"Sync, devices — Desktop, Light"
+75164,inner,body,Page body
+75249,inner,dlg,Dialog
+75310,screen,scr p,"Sync, devices — Phone, Light"
+75315,inner,pbody,Page body
+75366,screen,scr d,"Sync, devices — Desktop, Dark"
+75434,inner,body,Page body
+75519,inner,dlg,Dialog
+75580,screen,scr p,"Sync, devices — Phone, Dark"
+75585,inner,pbody,Page body
+75636,screen,scr d,"Add device, code — Desktop, Light"
+75704,inner,body,Page body
+75789,inner,dlg,Dialog
+75871,screen,scr p,"Add device, code — Phone, Light"
+75876,inner,pbody,Page body
+75945,screen,scr d,"Add device, code — Desktop, Dark"
+76013,inner,body,Page body
+76098,inner,dlg,Dialog
+76180,screen,scr p,"Add device, code — Phone, Dark"
+76185,inner,pbody,Page body
+76254,screen,scr d,"Sync, history — Desktop, Light"
+76322,inner,body,Page body
+76407,inner,dlg,Dialog
+76484,screen,scr p,"Sync, history — Phone, Light"
+76489,inner,pbody,Page body
+76549,screen,scr d,"Sync, history — Desktop, Dark"
+76617,inner,body,Page body
+76702,inner,dlg,Dialog
+76779,screen,scr p,"Sync, history — Phone, Dark"
+76784,inner,pbody,Page body
+76844,screen,scr d,"Sync, transfer — Desktop, Light"
+76912,inner,body,Page body
+76997,inner,dlg,Dialog
+77044,screen,scr p,"Sync, transfer — Phone, Light"
+77049,inner,pbody,Page body
+77086,screen,scr d,"Sync, transfer — Desktop, Dark"
+77154,inner,body,Page body
+77239,inner,dlg,Dialog
+77286,screen,scr p,"Sync, transfer — Phone, Dark"
+77291,inner,pbody,Page body
+77328,screen,scr d,"Get a vault — Desktop, Light"
+77396,inner,body,Page body
+77481,inner,dlg,Dialog
+77547,screen,scr p,"Get a vault — Phone, Light"
+77552,inner,pbody,Page body
+77605,screen,scr d,"Get a vault — Desktop, Dark"
+77673,inner,body,Page body
+77758,inner,dlg,Dialog
+77824,screen,scr p,"Get a vault — Phone, Dark"
+77829,inner,pbody,Page body
+77882,screen,scr d,"Help — Desktop, Light"
+77950,inner,body,Page body
+78035,inner,dlg,Dialog
+78080,screen,scr p,"Help — Phone, Light"
+78085,inner,pbody,Page body
+78120,screen,scr d,"Help — Desktop, Dark"
+78188,inner,body,Page body
+78273,inner,dlg,Dialog
+78318,screen,scr p,"Help — Phone, Dark"
+78323,inner,pbody,Page body
+78358,screen,scr d,"Developer — Desktop, Light"
+78426,inner,body,Page body
+78511,inner,dlg,Dialog
+78562,screen,scr p,"Developer — Phone, Light"
+78567,inner,pbody,Page body
+78604,screen,scr d,"Developer — Desktop, Dark"
+78672,inner,body,Page body
+78757,inner,dlg,Dialog
+78808,screen,scr p,"Developer — Phone, Dark"
+78813,inner,pbody,Page body
+78850,board,"Настройки · 3 из 3, кадры 15–15",Settings 3 · Phone group list
+78851,caption,Новый вариант · мок-данные 22 ,Board status note
+78852,caption,"Настройки · 3 из 3, кадры 15–1",Board title
+78853,caption,"Пять групп: Приложение, Учёт, ",Board subtitle
+78854,caption,15. Телефон: список групп,"Caption · Phone, group list"
+78855,caption,Стало · светлая,Caption · Light column
+78856,caption,Стало · тёмная,Caption · Dark column
+78857,caption,Почему и как,Caption · Notes heading
+78858,notes,aside,"Notes · Phone, group list"
+78866,screen,scr d,"Phone, group list — Desktop, Light"
+78934,inner,body,Page body
+79019,inner,dlg,Dialog
+79050,screen,scr p,"Phone, group list — Phone, Light"
+79055,inner,pbody,Page body
+79130,screen,scr d,"Phone, group list — Desktop, Dark"
+79198,inner,body,Page body
+79283,inner,dlg,Dialog
+79314,screen,scr p,"Phone, group list — Phone, Dark"
+79319,inner,pbody,Page body
+79394,page,"Вход и хранилище: история, без пароля, песочница (сверх холста, на одобрение)",08 Sign-in and vault
+79395,caption,Заголовок ряда,Row heading
+79396,sticky,"Стикер · Обход 26 окт · S1, S2, S8, S18, S37, S39","Sticky note · 26 Oct walkthrough · S1, S2, S8, S18, S37, S39, S40"
+79398,sticky,"Стикер · Обход 26 окт · S74, S75, S90. В приложен","Sticky note · 26 Oct walkthrough · S74, S75, S90"
+79400,board,История хранилищ,Vault history 1 · Recent vaults
+79401,caption,Сверх холста · на одобрение · ,Board status note
+79402,caption,История хранилищ · сверх холст,Board title
+79403,caption,Недавние хранилища на экране в,Board subtitle
+79404,caption,1. Недавние хранилища,Caption · Recent vaults
+79405,caption,Стало · светлая,Caption · Light column
+79406,caption,Стало · тёмная,Caption · Dark column
+79407,caption,Почему и как,Caption · Notes heading
+79408,notes,aside,Notes · Recent vaults
+79424,caption,2. Убрано из истории,Caption · Removed from history
+79425,caption,Стало · светлая,Caption · Light column
+79426,caption,Стало · тёмная,Caption · Dark column
+79427,caption,Почему и как,Caption · Notes heading
+79428,notes,aside,Notes · Removed from history
+79443,caption,3. Файл не найден,Caption · File not found
+79444,caption,Стало · светлая,Caption · Light column
+79445,caption,Стало · тёмная,Caption · Dark column
+79446,caption,Почему и как,Caption · Notes heading
+79447,notes,aside,Notes · File not found
+79462,caption,4. Хранилища в памяти приложен,Caption · Vaults in app memory
+79463,caption,Стало · светлая,Caption · Light column
+79464,caption,Стало · тёмная,Caption · Dark column
+79465,caption,Почему и как,Caption · Notes heading
+79466,notes,aside,Notes · Vaults in app memory
+79481,screen,scr d,"Recent vaults — Desktop, Light"
+79482,inner,card,Card
+79538,screen,scr p,"Recent vaults — Phone, Light"
+79541,inner,logo,Logo
+79546,inner,inp on,"Input, focused"
+79600,screen,scr d,"Recent vaults — Desktop, Dark"
+79601,inner,card,Card
+79657,screen,scr p,"Recent vaults — Phone, Dark"
+79660,inner,logo,Logo
+79665,inner,inp on,"Input, focused"
+79719,screen,scr d,"Removed from history — Desktop, Light"
+79720,inner,card,Card
+79770,inner,toast,Toast
+79775,screen,scr p,"Removed from history — Phone, Light"
+79778,inner,logo,Logo
+79783,inner,inp on,"Input, focused"
+79829,inner,toast,Toast
+79834,screen,scr d,"Removed from history — Desktop, Dark"
+79835,inner,card,Card
+79885,inner,toast,Toast
+79890,screen,scr p,"Removed from history — Phone, Dark"
+79893,inner,logo,Logo
+79898,inner,inp on,"Input, focused"
+79944,inner,toast,Toast
+79949,screen,scr d,"File not found — Desktop, Light"
+79950,inner,card,Card
+79981,screen,scr p,"File not found — Phone, Light"
+79984,inner,logo,Logo
+79987,inner,card cp,Summary card
+80002,inner,inp,Input
+80013,screen,scr d,"File not found — Desktop, Dark"
+80014,inner,card,Card
+80045,screen,scr p,"File not found — Phone, Dark"
+80048,inner,logo,Logo
+80051,inner,card cp,Summary card
+80066,inner,inp,Input
+80077,screen,scr d,"Vaults in app memory — Desktop, Light"
+80078,inner,card,Card
+80118,screen,scr p,"Vaults in app memory — Phone, Light"
+80121,inner,logo,Logo
+80126,inner,inp on,"Input, focused"
+80183,screen,scr d,"Vaults in app memory — Desktop, Dark"
+80184,inner,card,Card
+80224,screen,scr p,"Vaults in app memory — Phone, Dark"
+80227,inner,logo,Logo
+80232,inner,inp on,"Input, focused"
+80289,board,Хранилище без пароля,Passwordless vault 1 · Protection and password
+80290,caption,Сверх холста · на одобрение · ,Board status note
+80291,caption,Хранилище без пароля · сверх х,Board title
+80292,caption,Шифрование по выбору: спросить,Board subtitle
+80293,caption,1. Новое хранилище: защита,"Caption · New vault, protection"
+80294,caption,Стало · светлая,Caption · Light column
+80295,caption,Стало · тёмная,Caption · Dark column
+80296,caption,Почему и как,Caption · Notes heading
+80297,notes,aside,"Notes · New vault, protection"
+80312,caption,2. Новое хранилище: без пароля,"Caption · New vault, no password"
+80313,caption,Стало · светлая,Caption · Light column
+80314,caption,Стало · тёмная,Caption · Dark column
+80315,caption,Почему и как,Caption · Notes heading
+80316,notes,aside,"Notes · New vault, no password"
+80330,caption,3. Вход в хранилище без пароля,Caption · Open vault without password
+80331,caption,Стало · светлая,Caption · Light column
+80332,caption,Стало · тёмная,Caption · Dark column
+80333,caption,Почему и как,Caption · Notes heading
+80334,notes,aside,Notes · Open vault without password
+80348,caption,4. Хранилище: отключить пароль,"Caption · Vault, remove password"
+80349,caption,Стало · светлая,Caption · Light column
+80350,caption,Стало · тёмная,Caption · Dark column
+80351,caption,Почему и как,Caption · Notes heading
+80352,notes,aside,"Notes · Vault, remove password"
+80366,caption,5. Хранилище: задать пароль,"Caption · Vault, set password"
+80367,caption,Стало · светлая,Caption · Light column
+80368,caption,Стало · тёмная,Caption · Dark column
+80369,caption,Почему и как,Caption · Notes heading
+80370,notes,aside,"Notes · Vault, set password"
+80385,screen,scr d,"New vault, protection — Desktop, Light"
+80386,inner,card,Card
+80433,screen,scr p,"New vault, protection — Phone, Light"
+80437,inner,on,Progress step
+80438,inner,div,Backdrop
+80439,inner,div,Backdrop
+80443,inner,inp,Input
+80448,inner,opt on,"Option card, selected"
+80454,inner,opt,Option card
+80462,inner,inp on,"Input, focused"
+80478,screen,scr d,"New vault, protection — Desktop, Dark"
+80479,inner,card,Card
+80526,screen,scr p,"New vault, protection — Phone, Dark"
+80530,inner,on,Progress step
+80531,inner,div,Backdrop
+80532,inner,div,Backdrop
+80536,inner,inp,Input
+80541,inner,opt on,"Option card, selected"
+80547,inner,opt,Option card
+80555,inner,inp on,"Input, focused"
+80571,screen,scr d,"New vault, no password — Desktop, Light"
+80572,inner,card,Card
+80610,screen,scr p,"New vault, no password — Phone, Light"
+80614,inner,on,Progress step
+80615,inner,div,Backdrop
+80616,inner,div,Backdrop
+80620,inner,inp,Input
+80625,inner,opt,Option card
+80631,inner,opt on,"Option card, selected"
+80637,inner,row,Row
+80646,screen,scr d,"New vault, no password — Desktop, Dark"
+80647,inner,card,Card
+80685,screen,scr p,"New vault, no password — Phone, Dark"
+80689,inner,on,Progress step
+80690,inner,div,Backdrop
+80691,inner,div,Backdrop
+80695,inner,inp,Input
+80700,inner,opt,Option card
+80706,inner,opt on,"Option card, selected"
+80712,inner,row,Row
+80721,screen,scr d,"Open vault without password — Desktop, Light"
+80722,inner,card,Card
+80741,screen,scr p,"Open vault without password — Phone, Light"
+80744,inner,logo,Logo
+80748,inner,badge,Badge
+80758,screen,scr d,"Open vault without password — Desktop, Dark"
+80759,inner,card,Card
+80778,screen,scr p,"Open vault without password — Phone, Dark"
+80781,inner,logo,Logo
+80785,inner,badge,Badge
+80795,screen,scr d,"Vault, remove password — Desktop, Light"
+80863,inner,body,Page body
+80948,inner,dlg,Dialog
+81046,screen,scr p,"Vault, remove password — Phone, Light"
+81051,inner,pbody,Page body
+81138,screen,scr d,"Vault, remove password — Desktop, Dark"
+81206,inner,body,Page body
+81291,inner,dlg,Dialog
+81389,screen,scr p,"Vault, remove password — Phone, Dark"
+81394,inner,pbody,Page body
+81481,screen,scr d,"Vault, set password — Desktop, Light"
+81549,inner,body,Page body
+81634,inner,dlg,Dialog
+81741,screen,scr p,"Vault, set password — Phone, Light"
+81746,inner,pbody,Page body
+81842,screen,scr d,"Vault, set password — Desktop, Dark"
+81910,inner,body,Page body
+81995,inner,dlg,Dialog
+82102,screen,scr p,"Vault, set password — Phone, Dark"
+82107,inner,pbody,Page body
+82203,board,Песочница,"Sandbox 1 · Open, reset and after sign-out"
+82204,caption,Сверх холста · на одобрение · ,Board status note
+82205,caption,Песочница · сверх холста,Board title
+82206,caption,Временное хранилище с демо-дан,Board subtitle
+82207,caption,1. Вход: «Открыть песочницу»,"Caption · Sign-in, Open sandbox"
+82208,caption,Стало · светлая,Caption · Light column
+82209,caption,Стало · тёмная,Caption · Dark column
+82210,caption,Почему и как,Caption · Notes heading
+82211,notes,aside,"Notes · Sign-in, Open sandbox"
+82225,caption,2. Песочница открыта,Caption · Sandbox open
+82226,caption,Стало · светлая,Caption · Light column
+82227,caption,Стало · тёмная,Caption · Dark column
+82228,caption,Почему и как,Caption · Notes heading
+82229,notes,aside,Notes · Sandbox open
+82244,caption,3. «Сбросить песочницу?»,Caption · Reset sandbox confirmation
+82245,caption,Стало · светлая,Caption · Light column
+82246,caption,Стало · тёмная,Caption · Dark column
+82247,caption,Почему и как,Caption · Notes heading
+82248,notes,aside,Notes · Reset sandbox confirmation
+82261,caption,4. После выхода,Caption · After sign-out
+82262,caption,Стало · светлая,Caption · Light column
+82263,caption,Стало · тёмная,Caption · Dark column
+82264,caption,Почему и как,Caption · Notes heading
+82265,notes,aside,Notes · After sign-out
+82279,screen,scr d,"Sign-in, Open sandbox — Desktop, Light"
+82280,inner,card,Card
+82308,screen,scr p,"Sign-in, Open sandbox — Phone, Light"
+82311,inner,logo,Logo
+82316,inner,inp on,"Input, focused"
+82327,inner,sep,Separator
+82335,screen,scr d,"Sign-in, Open sandbox — Desktop, Dark"
+82336,inner,card,Card
+82364,screen,scr p,"Sign-in, Open sandbox — Phone, Dark"
+82367,inner,logo,Logo
+82372,inner,inp on,"Input, focused"
+82383,inner,sep,Separator
+82391,screen,scr d,"Sandbox open — Desktop, Light"
+82439,inner,row,Row
+82475,inner,body,Page body
+82597,screen,scr p,"Sandbox open — Phone, Light"
+82600,inner,row,Row
+82616,inner,pbody,Page body
+82711,screen,scr d,"Sandbox open — Desktop, Dark"
+82759,inner,row,Row
+82795,inner,body,Page body
+82917,screen,scr p,"Sandbox open — Phone, Dark"
+82920,inner,row,Row
+82936,inner,pbody,Page body
+83031,screen,scr d,"Reset sandbox confirmation — Desktop, Light"
+83079,inner,row,Row
+83115,inner,body,Page body
+83253,screen,scr p,"Reset sandbox confirmation — Phone, Light"
+83256,inner,row,Row
+83272,inner,pbody,Page body
+83382,screen,scr d,"Reset sandbox confirmation — Desktop, Dark"
+83430,inner,row,Row
+83466,inner,body,Page body
+83604,screen,scr p,"Reset sandbox confirmation — Phone, Dark"
+83607,inner,row,Row
+83623,inner,pbody,Page body
+83733,screen,scr d,"After sign-out — Desktop, Light"
+83734,inner,card,Card
+83762,inner,toast,Toast
+83767,screen,scr p,"After sign-out — Phone, Light"
+83770,inner,logo,Logo
+83775,inner,inp on,"Input, focused"
+83786,inner,toast,Toast
+83791,screen,scr d,"After sign-out — Desktop, Dark"
+83792,inner,card,Card
+83820,inner,toast,Toast
+83825,screen,scr p,"After sign-out — Phone, Dark"
+83828,inner,logo,Logo
+83833,inner,inp on,"Input, focused"
+83844,inner,toast,Toast
+83849,page,"Файлы и цели у операции (сверх холста, на одобрение)",09 Files and goals
+83850,caption,Заголовок ряда,Row heading
+83851,sticky,"Стикер · Обход 26 окт · S42–S48, S50–S52. В прило","Sticky note · 26 Oct walkthrough · S42–S48, S50–S52"
+83853,board,Файлы и ссылки у операции,Attach 1 · Files and links on an operation
+83854,caption,Сверх холста · на одобрение · ,Board status note
+83855,caption,Файлы и ссылки у операции · св,Board title
+83856,caption,"Чеки, договоры, скриншоты и сс",Board subtitle
+83857,caption,1. Карточка операции: файлы и ,"Caption · Operation card, files and links"
+83858,caption,Стало · светлая,Caption · Light column
+83859,caption,Стало · тёмная,Caption · Dark column
+83860,caption,Почему и как,Caption · Notes heading
+83861,notes,aside,"Notes · Operation card, files and links"
+83877,caption,2. Пусто и «Добавить»,"Caption · Empty, Add"
+83878,caption,Стало · светлая,Caption · Light column
+83879,caption,Стало · тёмная,Caption · Dark column
+83880,caption,Почему и как,Caption · Notes heading
+83881,notes,aside,"Notes · Empty, Add"
+83895,caption,3. Перетаскивание и загрузка,Caption · Drag and upload
+83896,caption,Стало · светлая,Caption · Light column
+83897,caption,Стало · тёмная,Caption · Dark column
+83898,caption,Почему и как,Caption · Notes heading
+83899,notes,aside,Notes · Drag and upload
+83913,caption,4. Ссылка: адрес и подпись,"Caption · Link, address and caption"
+83914,caption,Стало · светлая,Caption · Light column
+83915,caption,Стало · тёмная,Caption · Dark column
+83916,caption,Почему и как,Caption · Notes heading
+83917,notes,aside,"Notes · Link, address and caption"
+83931,caption,5. Форма операции: «Ещё» раскр,"Caption · Operation form, More expanded"
+83932,caption,Стало · светлая,Caption · Light column
+83933,caption,Стало · тёмная,Caption · Dark column
+83934,caption,Почему и как,Caption · Notes heading
+83935,notes,aside,"Notes · Operation form, More expanded"
+83949,caption,6. Список: скрепка и фильтр,"Caption · List, paperclip and filter"
+83950,caption,Стало · светлая,Caption · Light column
+83951,caption,Стало · тёмная,Caption · Dark column
+83952,caption,Почему и как,Caption · Notes heading
+83953,notes,aside,"Notes · List, paperclip and filter"
+83967,caption,7. Удаление с отменой и ошибка,Caption · Delete with undo and error
+83968,caption,Стало · светлая,Caption · Light column
+83969,caption,Стало · тёмная,Caption · Dark column
+83970,caption,Почему и как,Caption · Notes heading
+83971,notes,aside,Notes · Delete with undo and error
+83985,screen,scr d,"Operation card, files and links — Desktop, Light"
+84053,inner,body,Page body
+84170,inner,drawer,Drawer
+84258,screen,scr p,"Operation card, files and links — Phone, Light"
+84263,inner,pbody,Page body
+84362,screen,scr d,"Operation card, files and links — Desktop, Dark"
+84430,inner,body,Page body
+84547,inner,drawer,Drawer
+84635,screen,scr p,"Operation card, files and links — Phone, Dark"
+84640,inner,pbody,Page body
+84739,screen,scr d,"Empty, Add — Desktop, Light"
+84807,inner,body,Page body
+84924,inner,drawer,Drawer
+84989,screen,scr p,"Empty, Add — Phone, Light"
+84994,inner,pbody,Page body
+85087,screen,scr d,"Empty, Add — Desktop, Dark"
+85155,inner,body,Page body
+85272,inner,drawer,Drawer
+85337,screen,scr p,"Empty, Add — Phone, Dark"
+85342,inner,pbody,Page body
+85435,screen,scr d,"Drag and upload — Desktop, Light"
+85503,inner,body,Page body
+85620,inner,drawer,Drawer
+85689,screen,scr p,"Drag and upload — Phone, Light"
+85694,inner,pbody,Page body
+85778,screen,scr d,"Drag and upload — Desktop, Dark"
+85846,inner,body,Page body
+85963,inner,drawer,Drawer
+86032,screen,scr p,"Drag and upload — Phone, Dark"
+86037,inner,pbody,Page body
+86121,screen,scr d,"Link, address and caption — Desktop, Light"
+86189,inner,body,Page body
+86306,inner,drawer,Drawer
+86396,screen,scr p,"Link, address and caption — Phone, Light"
+86401,inner,pbody,Page body
+86506,screen,scr d,"Link, address and caption — Desktop, Dark"
+86574,inner,body,Page body
+86691,inner,drawer,Drawer
+86781,screen,scr p,"Link, address and caption — Phone, Dark"
+86786,inner,pbody,Page body
+86891,screen,scr d,"Operation form, More expanded — Desktop, Light"
+86959,inner,body,Page body
+87044,inner,dlg,Dialog
+87127,screen,scr p,"Operation form, More expanded — Phone, Light"
+87131,inner,icon ptop,Phone search icon
+87134,inner,pbody,Page body
+87292,screen,scr d,"Operation form, More expanded — Desktop, Dark"
+87360,inner,body,Page body
+87445,inner,dlg,Dialog
+87528,screen,scr p,"Operation form, More expanded — Phone, Dark"
+87532,inner,icon ptop,Phone search icon
+87535,inner,pbody,Page body
+87693,screen,scr d,"List, paperclip and filter — Desktop, Light"
+87761,inner,body,Page body
+87929,screen,scr p,"List, paperclip and filter — Phone, Light"
+87935,inner,pbody,Page body
+88008,screen,scr d,"List, paperclip and filter — Desktop, Dark"
+88076,inner,body,Page body
+88244,screen,scr p,"List, paperclip and filter — Phone, Dark"
+88250,inner,pbody,Page body
+88323,screen,scr d,"Delete with undo and error — Desktop, Light"
+88391,inner,body,Page body
+88508,inner,drawer,Drawer
+88594,screen,scr p,"Delete with undo and error — Phone, Light"
+88599,inner,pbody,Page body
+88699,screen,scr d,"Delete with undo and error — Desktop, Dark"
+88767,inner,body,Page body
+88884,inner,drawer,Drawer
+88970,screen,scr p,"Delete with undo and error — Phone, Dark"
+88975,inner,pbody,Page body
+89075,board,"Цель — создать, открыть, изменить, удалить","New goal 1 · Create, open, edit and delete a goal"
+89076,caption,Сверх холста · на одобрение · ,Board status note
+89077,caption,"Цель: создать, открыть, измени",Board title
+89078,caption,Исправление багов цели (валюта,Board subtitle
+89079,caption,"1. Цель, шаг 1: валюта внутри ","Caption · New goal, one page, currency select"
+89080,caption,Стало · светлая,Caption · Light column
+89081,caption,Стало · тёмная,Caption · Dark column
+89082,caption,Почему и как,Caption · Notes heading
+89083,notes,aside,"Notes · New goal, one page, currency select"
+89097,caption,"2. Цель, шаг 1: ошибки","Caption · New goal, errors under fields"
+89098,caption,Стало · светлая,Caption · Light column
+89099,caption,Стало · тёмная,Caption · Dark column
+89100,caption,Почему и как,Caption · Notes heading
+89101,notes,aside,"Notes · New goal, errors under fields"
+89115,caption,3. Карточка цели,Caption · Goal card
+89116,caption,Стало · светлая,Caption · Light column
+89117,caption,Стало · тёмная,Caption · Dark column
+89118,caption,Почему и как,Caption · Notes heading
+89119,notes,aside,Notes · Goal card
+89134,caption,4. Изменить цель — одной формо,"Caption · Edit goal, one form"
+89135,caption,Стало · светлая,Caption · Light column
+89136,caption,Стало · тёмная,Caption · Dark column
+89137,caption,Почему и как,Caption · Notes heading
+89138,notes,aside,"Notes · Edit goal, one form"
+89154,caption,5. Удалить цель,Caption · Delete goal
+89155,caption,Стало · светлая,Caption · Light column
+89156,caption,Стало · тёмная,Caption · Dark column
+89157,caption,Почему и как,Caption · Notes heading
+89158,notes,aside,Notes · Delete goal
+89172,screen,scr d,"New goal, one page, currency select — Desktop, Light"
+89240,inner,body,Page body
+89340,inner,menu,Menu
+89362,screen,scr p,"New goal, one page, currency select — Phone, Light"
+89366,inner,pbody,Page body
+89483,screen,scr d,"New goal, one page, currency select — Desktop, Dark"
+89551,inner,body,Page body
+89651,inner,menu,Menu
+89673,screen,scr p,"New goal, one page, currency select — Phone, Dark"
+89677,inner,pbody,Page body
+89794,screen,scr d,"New goal, errors under fields — Desktop, Light"
+89862,inner,body,Page body
+89964,screen,scr p,"New goal, errors under fields — Phone, Light"
+89968,inner,pbody,Page body
+90058,screen,scr d,"New goal, errors under fields — Desktop, Dark"
+90126,inner,body,Page body
+90228,screen,scr p,"New goal, errors under fields — Phone, Dark"
+90232,inner,pbody,Page body
+90322,screen,scr d,"Goal card — Desktop, Light"
+90390,inner,body,Page body
+90445,inner,drawer,Drawer
+90514,screen,scr p,"Goal card — Phone, Light"
+90519,inner,pbody,Page body
+90602,screen,scr d,"Goal card — Desktop, Dark"
+90670,inner,body,Page body
+90725,inner,drawer,Drawer
+90794,screen,scr p,"Goal card — Phone, Dark"
+90799,inner,pbody,Page body
+90882,screen,scr d,"Edit goal, one form — Desktop, Light"
+90950,inner,body,Page body
+91071,screen,scr p,"Edit goal, one form — Phone, Light"
+91075,inner,pbody,Page body
+91182,screen,scr d,"Edit goal, one form — Desktop, Dark"
+91250,inner,body,Page body
+91371,screen,scr p,"Edit goal, one form — Phone, Dark"
+91375,inner,pbody,Page body
+91482,screen,scr d,"Delete goal — Desktop, Light"
+91550,inner,body,Page body
+91617,screen,scr p,"Delete goal — Phone, Light"
+91621,inner,pbody,Page body
+91663,inner,toast,Toast
+91668,screen,scr d,"Delete goal — Desktop, Dark"
+91736,inner,body,Page body
+91803,screen,scr p,"Delete goal — Phone, Dark"
+91807,inner,pbody,Page body
+91849,inner,toast,Toast
+91854,page,Исправления по обходу 26 окт и гайд опциональный (на одобрение),10 Walkthrough fixes and guide
+91855,caption,Заголовок ряда,Row heading
+91856,board,Исправления по обходу · 1 из 4,Walkthrough fixes 1 · Goal wallet select and sandbox seed
+91857,caption,Сверх холста · на одобрение · ,Board status note
+91858,caption,Исправления по живому обходу ·,Board title
+91859,caption,Состояния идут слева направо; ,Board subtitle
+91860,caption,1. Выбор кошелька цели одним в,"Caption · Goal wallet, single select"
+91861,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+91862,caption,1 · форма цели,Caption · Step 1 form
+91863,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91867,caption,2 · список открыт,Caption · Step 2 list open
+91868,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91872,caption,3 · выбор сохранён,Caption · Step 3 choice saved
+91873,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+91874,caption,1 · форма цели,Caption · Step 1 form
+91875,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91879,caption,2 · список открыт,Caption · Step 2 list open
+91880,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91884,caption,3 · выбор сохранён,Caption · Step 3 choice saved
+91885,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+91886,caption,1 · форма цели,Caption · Step 1 form
+91887,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91891,caption,2 · шторка со списком,Caption · Step 2 list sheet
+91892,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91896,caption,3 · выбор сохранён,Caption · Step 3 choice saved
+91897,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+91898,caption,1 · форма цели,Caption · Step 1 form
+91899,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91903,caption,2 · шторка со списком,Caption · Step 2 list sheet
+91904,board-layer,icon flow,"Flow arrow · Goal wallet, single select"
+91908,caption,3 · выбор сохранён,Caption · Step 3 choice saved
+91909,board-layer,rev,"Review panel · Goal wallet, single select"
+91926,caption,2. Песочница: содержимое сида ,"Caption · Sandbox, seed contents and Settings > Vault"
+91927,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+91928,caption,"1 · песочница, Главная",Caption · Step 1 sandbox Home
+91929,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91933,caption,2 · Хранилище,Caption · Step 2 Vault tab
+91934,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91937,caption,3 · Приложение,Caption · Step 3 App tab
+91938,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+91939,caption,"1 · песочница, Главная",Caption · Step 1 sandbox Home
+91940,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91944,caption,2 · Хранилище,Caption · Step 2 Vault tab
+91945,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91948,caption,3 · Приложение,Caption · Step 3 App tab
+91949,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+91950,caption,"1 · песочница, Главная",Caption · Step 1 sandbox Home
+91951,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91955,caption,2 · Хранилище,Caption · Step 2 Vault tab
+91956,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91959,caption,3 · Приложение,Caption · Step 3 App tab
+91960,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+91961,caption,"1 · песочница, Главная",Caption · Step 1 sandbox Home
+91962,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91966,caption,2 · Хранилище,Caption · Step 2 Vault tab
+91967,board-layer,icon flow,"Flow arrow · Sandbox, seed contents and Settings > Va"
+91970,caption,3 · Приложение,Caption · Step 3 App tab
+91971,board-layer,rev,"Review panel · Sandbox, seed contents and Settings > Va"
+91988,screen,scr d,"Goal wallet, single select, 1 form — Desktop, Light"
+92060,inner,body,Page body
+92136,inner,dlg,Dialog
+92162,screen,scr d,"Goal wallet, single select, 2 list open — Desktop, Light"
+92234,inner,body,Page body
+92310,inner,dlg,Dialog
+92336,inner,menu,Menu
+92355,screen,scr d,"Goal wallet, single select, 3 choice saved — Desktop, Light"
+92427,inner,body,Page body
+92503,inner,dlg,Dialog
+92529,screen,scr d,"Goal wallet, single select, 1 form — Desktop, Dark"
+92601,inner,body,Page body
+92677,inner,dlg,Dialog
+92703,screen,scr d,"Goal wallet, single select, 2 list open — Desktop, Dark"
+92775,inner,body,Page body
+92851,inner,dlg,Dialog
+92877,inner,menu,Menu
+92896,screen,scr d,"Goal wallet, single select, 3 choice saved — Desktop, Dark"
+92968,inner,body,Page body
+93044,inner,dlg,Dialog
+93070,screen,scr p,"Goal wallet, single select, 1 form — Phone, Light"
+93074,inner,icon ptop,Phone search icon
+93077,inner,pbody,Page body
+93143,inner,bnav,Bottom navigation
+93164,inner,sheet,Bottom sheet
+93191,screen,scr p,"Goal wallet, single select, 2 list sheet — Phone, Light"
+93195,inner,icon ptop,Phone search icon
+93198,inner,pbody,Page body
+93264,inner,bnav,Bottom navigation
+93285,inner,sheet,Bottom sheet
+93307,inner,sheet,Bottom sheet
+93332,screen,scr p,"Goal wallet, single select, 3 choice saved — Phone, Light"
+93336,inner,icon ptop,Phone search icon
+93339,inner,pbody,Page body
+93405,inner,bnav,Bottom navigation
+93426,inner,sheet,Bottom sheet
+93453,screen,scr p,"Goal wallet, single select, 1 form — Phone, Dark"
+93457,inner,icon ptop,Phone search icon
+93460,inner,pbody,Page body
+93526,inner,bnav,Bottom navigation
+93547,inner,sheet,Bottom sheet
+93574,screen,scr p,"Goal wallet, single select, 2 list sheet — Phone, Dark"
+93578,inner,icon ptop,Phone search icon
+93581,inner,pbody,Page body
+93647,inner,bnav,Bottom navigation
+93668,inner,sheet,Bottom sheet
+93690,inner,sheet,Bottom sheet
+93715,screen,scr p,"Goal wallet, single select, 3 choice saved — Phone, Dark"
+93719,inner,icon ptop,Phone search icon
+93722,inner,pbody,Page body
+93788,inner,bnav,Bottom navigation
+93809,inner,sheet,Bottom sheet
+93836,screen,scr d,"Sandbox, seed contents and Settings > Vault, 1 sandbox Home — Desktop, Light"
+93908,inner,body,Page body
+93944,screen,scr d,"Sandbox, seed contents and Settings > Vault, 2 Vault tab — Desktop, Light"
+94012,inner,body,Page body
+94047,screen,scr d,"Sandbox, seed contents and Settings > Vault, 3 App tab — Desktop, Light"
+94115,inner,body,Page body
+94130,screen,scr d,"Sandbox, seed contents and Settings > Vault, 1 sandbox Home — Desktop, Dark"
+94202,inner,body,Page body
+94238,screen,scr d,"Sandbox, seed contents and Settings > Vault, 2 Vault tab — Desktop, Dark"
+94306,inner,body,Page body
+94341,screen,scr d,"Sandbox, seed contents and Settings > Vault, 3 App tab — Desktop, Dark"
+94409,inner,body,Page body
+94424,screen,scr p,"Sandbox, seed contents and Settings > Vault, 1 sandbox Home — Phone, Light"
+94428,inner,icon ptop,Phone search icon
+94431,inner,pbody,Page body
+94454,inner,bnav,Bottom navigation
+94474,screen,scr p,"Sandbox, seed contents and Settings > Vault, 2 Vault tab — Phone, Light"
+94478,inner,icon ptop,Phone search icon
+94481,inner,pbody,Page body
+94504,inner,bnav,Bottom navigation
+94524,screen,scr p,"Sandbox, seed contents and Settings > Vault, 3 App tab — Phone, Light"
+94528,inner,icon ptop,Phone search icon
+94531,inner,pbody,Page body
+94546,inner,bnav,Bottom navigation
+94566,screen,scr p,"Sandbox, seed contents and Settings > Vault, 1 sandbox Home — Phone, Dark"
+94570,inner,icon ptop,Phone search icon
+94573,inner,pbody,Page body
+94596,inner,bnav,Bottom navigation
+94616,screen,scr p,"Sandbox, seed contents and Settings > Vault, 2 Vault tab — Phone, Dark"
+94620,inner,icon ptop,Phone search icon
+94623,inner,pbody,Page body
+94646,inner,bnav,Bottom navigation
+94666,screen,scr p,"Sandbox, seed contents and Settings > Vault, 3 App tab — Phone, Dark"
+94670,inner,icon ptop,Phone search icon
+94673,inner,pbody,Page body
+94688,inner,bnav,Bottom navigation
+94708,board,Исправления по обходу · 2 из 4,Walkthrough fixes 2 · Goal save error and limit delete
+94709,caption,Сверх холста · на одобрение · ,Board status note
+94710,caption,Исправления по живому обходу ·,Board title
+94711,caption,Состояния идут слева направо; ,Board subtitle
+94712,caption,3. Ошибка сохранения цели под ,Caption · Goal save error under the field
+94713,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+94714,caption,1 · сумма 0 ₽,Caption · Step 1 amount 0 ₽
+94715,board-layer,icon flow,Flow arrow · Goal save error under the field
+94718,board-layer,key,Key hint · Goal save error under the field
+94721,caption,2 · ошибка под полем,Caption · Step 2 error under field
+94722,board-layer,icon flow,Flow arrow · Goal save error under the field
+94725,caption,3 · цель создана один раз,Caption · Step 3 goal created once
+94726,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+94727,caption,1 · сумма 0 ₽,Caption · Step 1 amount 0 ₽
+94728,board-layer,icon flow,Flow arrow · Goal save error under the field
+94731,board-layer,key,Key hint · Goal save error under the field
+94734,caption,2 · ошибка под полем,Caption · Step 2 error under field
+94735,board-layer,icon flow,Flow arrow · Goal save error under the field
+94738,caption,3 · цель создана один раз,Caption · Step 3 goal created once
+94739,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+94740,caption,1 · сумма 0 ₽,Caption · Step 1 amount 0 ₽
+94741,board-layer,icon flow,Flow arrow · Goal save error under the field
+94745,caption,2 · ошибка под полем,Caption · Step 2 error under field
+94746,board-layer,icon flow,Flow arrow · Goal save error under the field
+94749,caption,3 · цель создана один раз,Caption · Step 3 goal created once
+94750,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+94751,caption,1 · сумма 0 ₽,Caption · Step 1 amount 0 ₽
+94752,board-layer,icon flow,Flow arrow · Goal save error under the field
+94756,caption,2 · ошибка под полем,Caption · Step 2 error under field
+94757,board-layer,icon flow,Flow arrow · Goal save error under the field
+94760,caption,3 · цель создана один раз,Caption · Step 3 goal created once
+94761,board-layer,rev,Review panel · Goal save error under the field
+94777,caption,4. Удаление лимита с подтвержд,Caption · Limit delete with confirmation and undo
+94778,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+94779,caption,1 · план,Caption · Step 1 plan
+94780,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94784,caption,2 · диалог,Caption · Step 2 dialog
+94785,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94789,caption,3 · тост с «Отменить»,Caption · Step 3 toast with Undo
+94790,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+94791,caption,1 · план,Caption · Step 1 plan
+94792,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94796,caption,2 · диалог,Caption · Step 2 dialog
+94797,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94801,caption,3 · тост с «Отменить»,Caption · Step 3 toast with Undo
+94802,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+94803,caption,1 · план,Caption · Step 1 plan
+94804,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94808,caption,2 · диалог,Caption · Step 2 dialog
+94809,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94813,caption,3 · тост с «Отменить»,Caption · Step 3 toast with Undo
+94814,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+94815,caption,1 · план,Caption · Step 1 plan
+94816,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94820,caption,2 · диалог,Caption · Step 2 dialog
+94821,board-layer,icon flow,Flow arrow · Limit delete with confirmation and undo
+94825,caption,3 · тост с «Отменить»,Caption · Step 3 toast with Undo
+94826,board-layer,rev,Review panel · Limit delete with confirmation and undo
+94841,screen,scr d,"Goal save error under the field, 1 amount 0 ₽ — Desktop, Light"
+94913,inner,body,Page body
+94989,inner,dlg,Dialog
+95015,screen,scr d,"Goal save error under the field, 2 error under field — Desktop, Light"
+95087,inner,body,Page body
+95163,inner,dlg,Dialog
+95190,screen,scr d,"Goal save error under the field, 3 goal created once — Desktop, Light"
+95262,inner,body,Page body
+95346,inner,toast,Toast
+95351,screen,scr d,"Goal save error under the field, 1 amount 0 ₽ — Desktop, Dark"
+95423,inner,body,Page body
+95499,inner,dlg,Dialog
+95525,screen,scr d,"Goal save error under the field, 2 error under field — Desktop, Dark"
+95597,inner,body,Page body
+95673,inner,dlg,Dialog
+95700,screen,scr d,"Goal save error under the field, 3 goal created once — Desktop, Dark"
+95772,inner,body,Page body
+95856,inner,toast,Toast
+95861,screen,scr p,"Goal save error under the field, 1 amount 0 ₽ — Phone, Light"
+95865,inner,icon ptop,Phone search icon
+95868,inner,pbody,Page body
+95934,inner,bnav,Bottom navigation
+95955,inner,sheet,Bottom sheet
+95982,screen,scr p,"Goal save error under the field, 2 error under field — Phone, Light"
+95986,inner,icon ptop,Phone search icon
+95989,inner,pbody,Page body
+96055,inner,bnav,Bottom navigation
+96076,inner,sheet,Bottom sheet
+96104,screen,scr p,"Goal save error under the field, 3 goal created once — Phone, Light"
+96108,inner,icon ptop,Phone search icon
+96111,inner,pbody,Page body
+96186,inner,bnav,Bottom navigation
+96206,inner,toast,Toast
+96211,screen,scr p,"Goal save error under the field, 1 amount 0 ₽ — Phone, Dark"
+96215,inner,icon ptop,Phone search icon
+96218,inner,pbody,Page body
+96284,inner,bnav,Bottom navigation
+96305,inner,sheet,Bottom sheet
+96332,screen,scr p,"Goal save error under the field, 2 error under field — Phone, Dark"
+96336,inner,icon ptop,Phone search icon
+96339,inner,pbody,Page body
+96405,inner,bnav,Bottom navigation
+96426,inner,sheet,Bottom sheet
+96454,screen,scr p,"Goal save error under the field, 3 goal created once — Phone, Dark"
+96458,inner,icon ptop,Phone search icon
+96461,inner,pbody,Page body
+96536,inner,bnav,Bottom navigation
+96556,inner,toast,Toast
+96561,screen,scr d,"Limit delete with confirmation and undo, 1 plan — Desktop, Light"
+96633,inner,body,Page body
+96709,screen,scr d,"Limit delete with confirmation and undo, 2 dialog — Desktop, Light"
+96781,inner,body,Page body
+96857,inner,dlg,Dialog
+96866,screen,scr d,"Limit delete with confirmation and undo, 3 toast with Undo — Desktop, Light"
+96938,inner,body,Page body
+97000,inner,toast,Toast
+97005,screen,scr d,"Limit delete with confirmation and undo, 1 plan — Desktop, Dark"
+97077,inner,body,Page body
+97153,screen,scr d,"Limit delete with confirmation and undo, 2 dialog — Desktop, Dark"
+97225,inner,body,Page body
+97301,inner,dlg,Dialog
+97310,screen,scr d,"Limit delete with confirmation and undo, 3 toast with Undo — Desktop, Dark"
+97382,inner,body,Page body
+97444,inner,toast,Toast
+97449,screen,scr p,"Limit delete with confirmation and undo, 1 plan — Phone, Light"
+97453,inner,icon ptop,Phone search icon
+97456,inner,pbody,Page body
+97523,inner,bnav,Bottom navigation
+97543,screen,scr p,"Limit delete with confirmation and undo, 2 dialog — Phone, Light"
+97547,inner,icon ptop,Phone search icon
+97550,inner,pbody,Page body
+97616,inner,bnav,Bottom navigation
+97637,inner,dlg,Dialog
+97646,screen,scr p,"Limit delete with confirmation and undo, 3 toast with Undo — Phone, Light"
+97650,inner,icon ptop,Phone search icon
+97653,inner,pbody,Page body
+97706,inner,bnav,Bottom navigation
+97726,inner,toast,Toast
+97731,screen,scr p,"Limit delete with confirmation and undo, 1 plan — Phone, Dark"
+97735,inner,icon ptop,Phone search icon
+97738,inner,pbody,Page body
+97805,inner,bnav,Bottom navigation
+97825,screen,scr p,"Limit delete with confirmation and undo, 2 dialog — Phone, Dark"
+97829,inner,icon ptop,Phone search icon
+97832,inner,pbody,Page body
+97898,inner,bnav,Bottom navigation
+97919,inner,dlg,Dialog
+97928,screen,scr p,"Limit delete with confirmation and undo, 3 toast with Undo — Phone, Dark"
+97932,inner,icon ptop,Phone search icon
+97935,inner,pbody,Page body
+97988,inner,bnav,Bottom navigation
+98008,inner,toast,Toast
+98013,board,Исправления по обходу · 3 из 4,"Walkthrough fixes 3 · Limit edit, notifications and toast stack"
+98014,caption,Сверх холста · на одобрение · ,Board status note
+98015,caption,Исправления по живому обходу ·,Board title
+98016,caption,Состояния идут слева направо; ,Board subtitle
+98017,caption,5. Лимит изменяется одной форм,"Caption · Limit edit, one form"
+98018,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+98019,caption,1 · план,Caption · Step 1 plan
+98020,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98024,caption,2 · одна форма,Caption · Step 2 one form
+98025,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98028,board-layer,key,"Key hint · Limit edit, one form"
+98031,caption,3 · сохранено,Caption · Step 3 saved
+98032,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+98033,caption,1 · план,Caption · Step 1 plan
+98034,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98038,caption,2 · одна форма,Caption · Step 2 one form
+98039,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98042,board-layer,key,"Key hint · Limit edit, one form"
+98045,caption,3 · сохранено,Caption · Step 3 saved
+98046,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+98047,caption,1 · план,Caption · Step 1 plan
+98048,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98052,caption,2 · одна форма,Caption · Step 2 one form
+98053,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98057,caption,3 · сохранено,Caption · Step 3 saved
+98058,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+98059,caption,1 · план,Caption · Step 1 plan
+98060,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98064,caption,2 · одна форма,Caption · Step 2 one form
+98065,board-layer,icon flow,"Flow arrow · Limit edit, one form"
+98069,caption,3 · сохранено,Caption · Step 3 saved
+98070,board-layer,rev,"Review panel · Limit edit, one form"
+98086,caption,6. Уведомления с форматированн,Caption · Notifications with formatted amounts and toast stack
+98087,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+98088,caption,1 · создан лимит,Caption · Step 1 limit created
+98089,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98092,caption,2 · стопка,Caption · Step 2 toast stack
+98093,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98097,caption,3 · список уведомлений,Caption · Step 3 notification list
+98098,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+98099,caption,1 · создан лимит,Caption · Step 1 limit created
+98100,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98103,caption,2 · стопка,Caption · Step 2 toast stack
+98104,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98108,caption,3 · список уведомлений,Caption · Step 3 notification list
+98109,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+98110,caption,1 · создан лимит,Caption · Step 1 limit created
+98111,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98114,caption,2 · стопка под шапкой,Caption · Step 2 stack under header
+98115,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98119,caption,3 · список уведомлений,Caption · Step 3 notification list
+98120,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+98121,caption,1 · создан лимит,Caption · Step 1 limit created
+98122,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98125,caption,2 · стопка под шапкой,Caption · Step 2 stack under header
+98126,board-layer,icon flow,Flow arrow · Notifications with formatted amounts and
+98130,caption,3 · список уведомлений,Caption · Step 3 notification list
+98131,board-layer,rev,Review panel · Notifications with formatted amounts and
+98149,screen,scr d,"Limit edit, one form, 1 plan — Desktop, Light"
+98221,inner,body,Page body
+98297,screen,scr d,"Limit edit, one form, 2 one form — Desktop, Light"
+98369,inner,body,Page body
+98445,inner,dlg,Dialog
+98474,screen,scr d,"Limit edit, one form, 3 saved — Desktop, Light"
+98546,inner,body,Page body
+98621,inner,toast,Toast
+98626,screen,scr d,"Limit edit, one form, 1 plan — Desktop, Dark"
+98698,inner,body,Page body
+98774,screen,scr d,"Limit edit, one form, 2 one form — Desktop, Dark"
+98846,inner,body,Page body
+98922,inner,dlg,Dialog
+98951,screen,scr d,"Limit edit, one form, 3 saved — Desktop, Dark"
+99023,inner,body,Page body
+99098,inner,toast,Toast
+99103,screen,scr p,"Limit edit, one form, 1 plan — Phone, Light"
+99107,inner,icon ptop,Phone search icon
+99110,inner,pbody,Page body
+99177,inner,bnav,Bottom navigation
+99197,screen,scr p,"Limit edit, one form, 2 one form — Phone, Light"
+99201,inner,icon ptop,Phone search icon
+99204,inner,pbody,Page body
+99270,inner,bnav,Bottom navigation
+99291,inner,sheet,Bottom sheet
+99319,screen,scr p,"Limit edit, one form, 3 saved — Phone, Light"
+99323,inner,icon ptop,Phone search icon
+99326,inner,pbody,Page body
+99392,inner,bnav,Bottom navigation
+99412,inner,toast,Toast
+99417,screen,scr p,"Limit edit, one form, 1 plan — Phone, Dark"
+99421,inner,icon ptop,Phone search icon
+99424,inner,pbody,Page body
+99491,inner,bnav,Bottom navigation
+99511,screen,scr p,"Limit edit, one form, 2 one form — Phone, Dark"
+99515,inner,icon ptop,Phone search icon
+99518,inner,pbody,Page body
+99584,inner,bnav,Bottom navigation
+99605,inner,sheet,Bottom sheet
+99633,screen,scr p,"Limit edit, one form, 3 saved — Phone, Dark"
+99637,inner,icon ptop,Phone search icon
+99640,inner,pbody,Page body
+99706,inner,bnav,Bottom navigation
+99726,inner,toast,Toast
+99731,screen,scr d,"Notifications with formatted amounts and toast stack, 1 limit created — Desktop, Light"
+99803,inner,body,Page body
+99834,inner,toast,Toast
+99839,screen,scr d,"Notifications with formatted amounts and toast stack, 2 toast stack — Desktop, Light"
+99911,inner,body,Page body
+99942,inner,toast,Toast
+99947,inner,toast,Toast
+99952,screen,scr d,"Notifications with formatted amounts and toast stack, 3 notification list — Desktop, Light"
+100024,inner,body,Page body
+100055,inner,menu,Menu
+100071,screen,scr d,"Notifications with formatted amounts and toast stack, 1 limit created — Desktop, Dark"
+100143,inner,body,Page body
+100174,inner,toast,Toast
+100179,screen,scr d,"Notifications with formatted amounts and toast stack, 2 toast stack — Desktop, Dark"
+100251,inner,body,Page body
+100282,inner,toast,Toast
+100287,inner,toast,Toast
+100292,screen,scr d,"Notifications with formatted amounts and toast stack, 3 notification list — Desktop, Dark"
+100364,inner,body,Page body
+100395,inner,menu,Menu
+100411,screen,scr p,"Notifications with formatted amounts and toast stack, 1 limit created — Phone, Light"
+100415,inner,icon ptop,Phone search icon
+100418,inner,pbody,Page body
+100436,inner,bnav,Bottom navigation
+100456,inner,toast,Toast
+100461,screen,scr p,"Notifications with formatted amounts and toast stack, 2 stack under header — Phone, Light"
+100465,inner,icon ptop,Phone search icon
+100468,inner,pbody,Page body
+100486,inner,bnav,Bottom navigation
+100506,inner,toast,Toast
+100511,inner,toast,Toast
+100516,screen,scr p,"Notifications with formatted amounts and toast stack, 3 notification list — Phone, Light"
+100520,inner,icon ptop,Phone search icon
+100523,inner,pbody,Page body
+100537,inner,bnav,Bottom navigation
+100557,screen,scr p,"Notifications with formatted amounts and toast stack, 1 limit created — Phone, Dark"
+100561,inner,icon ptop,Phone search icon
+100564,inner,pbody,Page body
+100582,inner,bnav,Bottom navigation
+100602,inner,toast,Toast
+100607,screen,scr p,"Notifications with formatted amounts and toast stack, 2 stack under header — Phone, Dark"
+100611,inner,icon ptop,Phone search icon
+100614,inner,pbody,Page body
+100632,inner,bnav,Bottom navigation
+100652,inner,toast,Toast
+100657,inner,toast,Toast
+100662,screen,scr p,"Notifications with formatted amounts and toast stack, 3 notification list — Phone, Dark"
+100666,inner,icon ptop,Phone search icon
+100669,inner,pbody,Page body
+100683,inner,bnav,Bottom navigation
+100703,board,Исправления по обходу · 4 из 4,Walkthrough fixes 4 · Automation run confirmation and journal
+100704,caption,Сверх холста · на одобрение · ,Board status note
+100705,caption,Исправления по живому обходу ·,Board title
+100706,caption,Состояния идут слева направо; ,Board subtitle
+100707,caption,7. Подтверждение запуска автом,Caption · Automation run confirmation and journal
+100708,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+100709,caption,"1 · журнал, ждёт подтверждения","Caption · Step 1 journal, awaiting confirmation"
+100710,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100714,caption,2 · подтверждение,Caption · Step 2 confirmation
+100715,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100719,caption,"3 · выполнено, строки «ждёт» н","Caption · Step 3 done, no awaiting row"
+100720,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+100721,caption,"1 · журнал, ждёт подтверждения","Caption · Step 1 journal, awaiting confirmation"
+100722,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100726,caption,2 · подтверждение,Caption · Step 2 confirmation
+100727,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100731,caption,"3 · выполнено, строки «ждёт» н","Caption · Step 3 done, no awaiting row"
+100732,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+100733,caption,1 · журнал,Caption · Step 1 journal
+100734,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100738,caption,2 · подтверждение,Caption · Step 2 confirmation
+100739,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100743,caption,3 · выполнено,Caption · Step 3 done
+100744,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+100745,caption,1 · журнал,Caption · Step 1 journal
+100746,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100750,caption,2 · подтверждение,Caption · Step 2 confirmation
+100751,board-layer,icon flow,Flow arrow · Automation run confirmation and journal
+100755,caption,3 · выполнено,Caption · Step 3 done
+100756,board-layer,rev,Review panel · Automation run confirmation and journal
+100773,screen,scr d,"Automation run confirmation and journal, 1 journal, awaiting confirmation — Desktop, Light"
+100845,inner,body,Page body
+100885,screen,scr d,"Automation run confirmation and journal, 2 confirmation — Desktop, Light"
+100957,inner,body,Page body
+100998,inner,dlg,Dialog
+101017,screen,scr d,"Automation run confirmation and journal, 3 done, no awaiting row — Desktop, Light"
+101089,inner,body,Page body
+101128,inner,toast,Toast
+101133,screen,scr d,"Automation run confirmation and journal, 1 journal, awaiting confirmation — Desktop, Dark"
+101205,inner,body,Page body
+101245,screen,scr d,"Automation run confirmation and journal, 2 confirmation — Desktop, Dark"
+101317,inner,body,Page body
+101358,inner,dlg,Dialog
+101377,screen,scr d,"Automation run confirmation and journal, 3 done, no awaiting row — Desktop, Dark"
+101449,inner,body,Page body
+101488,inner,toast,Toast
+101493,screen,scr p,"Automation run confirmation and journal, 1 journal — Phone, Light"
+101497,inner,icon ptop,Phone search icon
+101500,inner,pbody,Page body
+101511,inner,bnav,Bottom navigation
+101531,screen,scr p,"Automation run confirmation and journal, 2 confirmation — Phone, Light"
+101535,inner,icon ptop,Phone search icon
+101538,inner,pbody,Page body
+101549,inner,bnav,Bottom navigation
+101570,inner,sheet,Bottom sheet
+101589,screen,scr p,"Automation run confirmation and journal, 3 done — Phone, Light"
+101593,inner,icon ptop,Phone search icon
+101596,inner,pbody,Page body
+101606,inner,bnav,Bottom navigation
+101626,inner,toast,Toast
+101631,screen,scr p,"Automation run confirmation and journal, 1 journal — Phone, Dark"
+101635,inner,icon ptop,Phone search icon
+101638,inner,pbody,Page body
+101649,inner,bnav,Bottom navigation
+101669,screen,scr p,"Automation run confirmation and journal, 2 confirmation — Phone, Dark"
+101673,inner,icon ptop,Phone search icon
+101676,inner,pbody,Page body
+101687,inner,bnav,Bottom navigation
+101708,inner,sheet,Bottom sheet
+101727,screen,scr p,"Automation run confirmation and journal, 3 done — Phone, Dark"
+101731,inner,icon ptop,Phone search icon
+101734,inner,pbody,Page body
+101744,inner,bnav,Bottom navigation
+101764,inner,toast,Toast
+101769,board,Гайд опциональный · 1 из 2,Optional guide 1 · Banner instead of tour and opt-out
+101770,caption,Сверх холста · на одобрение · ,Board status note
+101771,caption,Гайд опциональный · 1 из 2,Board title
+101772,caption,Тур не открывается сам. Предло,Board subtitle
+101773,caption,1. Плашка вместо всплывающего ,Caption · Banner instead of a pop-up tour
+101774,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+101775,caption,1 · первый вход в раздел,Caption · Step 1 first visit to a section
+101776,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101780,caption,"2 · тур, шаг 1 из 3",Caption · Step 2 tour step 1 of 3
+101781,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101785,caption,3 · тур закончен,Caption · Step 3 tour finished
+101786,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+101787,caption,1 · первый вход в раздел,Caption · Step 1 first visit to a section
+101788,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101792,caption,"2 · тур, шаг 1 из 3",Caption · Step 2 tour step 1 of 3
+101793,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101797,caption,3 · тур закончен,Caption · Step 3 tour finished
+101798,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+101799,caption,1 · первый вход в раздел,Caption · Step 1 first visit to a section
+101800,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101804,caption,"2 · тур, шаг 1 из 3",Caption · Step 2 tour step 1 of 3
+101805,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101809,caption,3 · тур закончен,Caption · Step 3 tour finished
+101810,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+101811,caption,1 · первый вход в раздел,Caption · Step 1 first visit to a section
+101812,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101816,caption,"2 · тур, шаг 1 из 3",Caption · Step 2 tour step 1 of 3
+101817,board-layer,icon flow,Flow arrow · Banner instead of a pop-up tour
+101821,caption,3 · тур закончен,Caption · Step 3 tour finished
+101822,board-layer,rev,Review panel · Banner instead of a pop-up tour
+101835,caption,2. «Не сейчас» и «Больше не пр,Caption · Not now and Never suggest again
+101836,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+101837,caption,1 · плашка,Caption · Step 1 banner
+101838,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101842,caption,2 · подсказки выключены,Caption · Step 2 hints off
+101843,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101846,caption,"3 · Настройки › Помощь, тумбле","Caption · Step 3 Settings > Help, switch off"
+101847,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+101848,caption,1 · плашка,Caption · Step 1 banner
+101849,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101853,caption,2 · подсказки выключены,Caption · Step 2 hints off
+101854,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101857,caption,"3 · Настройки › Помощь, тумбле","Caption · Step 3 Settings > Help, switch off"
+101858,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+101859,caption,1 · плашка,Caption · Step 1 banner
+101860,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101864,caption,2 · подсказки выключены,Caption · Step 2 hints off
+101865,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101868,caption,3 · Настройки › Помощь,Caption · Step 3 Settings > Help
+101869,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+101870,caption,1 · плашка,Caption · Step 1 banner
+101871,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101875,caption,2 · подсказки выключены,Caption · Step 2 hints off
+101876,board-layer,icon flow,Flow arrow · Not now and Never suggest again
+101879,caption,3 · Настройки › Помощь,Caption · Step 3 Settings > Help
+101880,board-layer,rev,Review panel · Not now and Never suggest again
+101892,screen,scr d,"Banner instead of a pop-up tour, 1 first visit to a section — Desktop, Light"
+101964,inner,body,Page body
+101994,screen,scr d,"Banner instead of a pop-up tour, 2 tour step 1 of 3 — Desktop, Light"
+102066,inner,body,Page body
+102086,inner,tour,Tour popover
+102098,screen,scr d,"Banner instead of a pop-up tour, 3 tour finished — Desktop, Light"
+102170,inner,body,Page body
+102189,inner,toast,Toast
+102194,screen,scr d,"Banner instead of a pop-up tour, 1 first visit to a section — Desktop, Dark"
+102266,inner,body,Page body
+102296,screen,scr d,"Banner instead of a pop-up tour, 2 tour step 1 of 3 — Desktop, Dark"
+102368,inner,body,Page body
+102388,inner,tour,Tour popover
+102400,screen,scr d,"Banner instead of a pop-up tour, 3 tour finished — Desktop, Dark"
+102472,inner,body,Page body
+102491,inner,toast,Toast
+102496,screen,scr p,"Banner instead of a pop-up tour, 1 first visit to a section — Phone, Light"
+102504,inner,icon ptop,Phone search icon
+102507,inner,pbody,Page body
+102537,inner,bnav,Bottom navigation
+102557,screen,scr p,"Banner instead of a pop-up tour, 2 tour step 1 of 3 — Phone, Light"
+102565,inner,icon ptop,Phone search icon
+102568,inner,pbody,Page body
+102588,inner,bnav,Bottom navigation
+102608,inner,tour,Tour popover
+102620,screen,scr p,"Banner instead of a pop-up tour, 3 tour finished — Phone, Light"
+102628,inner,icon ptop,Phone search icon
+102631,inner,pbody,Page body
+102650,inner,bnav,Bottom navigation
+102670,inner,toast,Toast
+102675,screen,scr p,"Banner instead of a pop-up tour, 1 first visit to a section — Phone, Dark"
+102683,inner,icon ptop,Phone search icon
+102686,inner,pbody,Page body
+102716,inner,bnav,Bottom navigation
+102736,screen,scr p,"Banner instead of a pop-up tour, 2 tour step 1 of 3 — Phone, Dark"
+102744,inner,icon ptop,Phone search icon
+102747,inner,pbody,Page body
+102767,inner,bnav,Bottom navigation
+102787,inner,tour,Tour popover
+102799,screen,scr p,"Banner instead of a pop-up tour, 3 tour finished — Phone, Dark"
+102807,inner,icon ptop,Phone search icon
+102810,inner,pbody,Page body
+102829,inner,bnav,Bottom navigation
+102849,inner,toast,Toast
+102854,screen,scr d,"Not now and Never suggest again, 1 banner — Desktop, Light"
+102926,inner,body,Page body
+102956,screen,scr d,"Not now and Never suggest again, 2 hints off — Desktop, Light"
+103028,inner,body,Page body
+103047,inner,toast,Toast
+103052,screen,scr d,"Not now and Never suggest again, 3 Settings > Help, switch off — Desktop, Light"
+103120,inner,body,Page body
+103157,screen,scr d,"Not now and Never suggest again, 1 banner — Desktop, Dark"
+103229,inner,body,Page body
+103259,screen,scr d,"Not now and Never suggest again, 2 hints off — Desktop, Dark"
+103331,inner,body,Page body
+103350,inner,toast,Toast
+103355,screen,scr d,"Not now and Never suggest again, 3 Settings > Help, switch off — Desktop, Dark"
+103423,inner,body,Page body
+103460,screen,scr p,"Not now and Never suggest again, 1 banner — Phone, Light"
+103468,inner,icon ptop,Phone search icon
+103471,inner,pbody,Page body
+103501,inner,bnav,Bottom navigation
+103521,screen,scr p,"Not now and Never suggest again, 2 hints off — Phone, Light"
+103529,inner,icon ptop,Phone search icon
+103532,inner,pbody,Page body
+103551,inner,bnav,Bottom navigation
+103571,inner,toast,Toast
+103576,screen,scr p,"Not now and Never suggest again, 3 Settings > Help — Phone, Light"
+103580,inner,icon ptop,Phone search icon
+103583,inner,pbody,Page body
+103620,inner,bnav,Bottom navigation
+103640,screen,scr p,"Not now and Never suggest again, 1 banner — Phone, Dark"
+103648,inner,icon ptop,Phone search icon
+103651,inner,pbody,Page body
+103681,inner,bnav,Bottom navigation
+103701,screen,scr p,"Not now and Never suggest again, 2 hints off — Phone, Dark"
+103709,inner,icon ptop,Phone search icon
+103712,inner,pbody,Page body
+103731,inner,bnav,Bottom navigation
+103751,inner,toast,Toast
+103756,screen,scr p,"Not now and Never suggest again, 3 Settings > Help — Phone, Dark"
+103760,inner,icon ptop,Phone search icon
+103763,inner,pbody,Page body
+103800,inner,bnav,Bottom navigation
+103820,board,Гайд опциональный · 2 из 2,Optional guide 2 · Help settings and manual start
+103821,caption,Сверх холста · на одобрение · ,Board status note
+103822,caption,Гайд опциональный · 2 из 2,Board title
+103823,caption,Тур не открывается сам. Предло,Board subtitle
+103824,caption,3. Настройки › Помощь: переклю,"Caption · Settings > Help, switch and tutorial"
+103825,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+103826,caption,"1 · Помощь, тумблер включён","Caption · Step 1 Help, switch on"
+103827,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103831,caption,2 · тур запущен вручную,Caption · Step 2 tour started manually
+103832,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103836,caption,3 · раздел без плашки,Caption · Step 3 section without banner
+103837,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+103838,caption,"1 · Помощь, тумблер включён","Caption · Step 1 Help, switch on"
+103839,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103843,caption,2 · тур запущен вручную,Caption · Step 2 tour started manually
+103844,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103848,caption,3 · раздел без плашки,Caption · Step 3 section without banner
+103849,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+103850,caption,1 · Помощь,Caption · Step 1 Help
+103851,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103855,caption,2 · тур запущен вручную,Caption · Step 2 tour started manually
+103856,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103859,caption,3 · раздел без плашки,Caption · Step 3 section without banner
+103860,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+103861,caption,1 · Помощь,Caption · Step 1 Help
+103862,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103866,caption,2 · тур запущен вручную,Caption · Step 2 tour started manually
+103867,board-layer,icon flow,"Flow arrow · Settings > Help, switch and tutorial"
+103870,caption,3 · раздел без плашки,Caption · Step 3 section without banner
+103871,board-layer,rev,"Review panel · Settings > Help, switch and tutorial"
+103882,caption,4. Ручной запуск из «?» и песо,Caption · Manual start from ? and sandbox
+103883,caption,ПК 1280 · светлая,"Caption · Desktop, Light row"
+103884,caption,"1 · песочница, первый вход",Caption · Step 1 sandbox first visit
+103885,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103889,caption,2 · меню «?»,Caption · Step 2 ? menu
+103890,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103894,caption,3 · тур,Caption · Step 3 tour
+103895,caption,ПК 1280 · тёмная,"Caption · Desktop, Dark row"
+103896,caption,"1 · песочница, первый вход",Caption · Step 1 sandbox first visit
+103897,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103901,caption,2 · меню «?»,Caption · Step 2 ? menu
+103902,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103906,caption,3 · тур,Caption · Step 3 tour
+103907,caption,Телефон 390 · светлая,"Caption · Phone, Light row"
+103908,caption,"1 · песочница, первый вход",Caption · Step 1 sandbox first visit
+103909,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103913,caption,2 · шторка «?»,Caption · Step 2 ? sheet
+103914,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103918,caption,3 · тур,Caption · Step 3 tour
+103919,caption,Телефон 390 · тёмная,"Caption · Phone, Dark row"
+103920,caption,"1 · песочница, первый вход",Caption · Step 1 sandbox first visit
+103921,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103925,caption,2 · шторка «?»,Caption · Step 2 ? sheet
+103926,board-layer,icon flow,Flow arrow · Manual start from ? and sandbox
+103930,caption,3 · тур,Caption · Step 3 tour
+103931,board-layer,rev,Review panel · Manual start from ? and sandbox
+103943,screen,scr d,"Settings > Help, switch and tutorial, 1 Help, switch on — Desktop, Light"
+104011,inner,body,Page body
+104048,screen,scr d,"Settings > Help, switch and tutorial, 2 tour started manually — Desktop, Light"
+104120,inner,body,Page body
+104140,inner,tour,Tour popover
+104152,screen,scr d,"Settings > Help, switch and tutorial, 3 section without banner — Desktop, Light"
+104224,inner,body,Page body
+104243,screen,scr d,"Settings > Help, switch and tutorial, 1 Help, switch on — Desktop, Dark"
+104311,inner,body,Page body
+104348,screen,scr d,"Settings > Help, switch and tutorial, 2 tour started manually — Desktop, Dark"
+104420,inner,body,Page body
+104440,inner,tour,Tour popover
+104452,screen,scr d,"Settings > Help, switch and tutorial, 3 section without banner — Desktop, Dark"
+104524,inner,body,Page body
+104543,screen,scr p,"Settings > Help, switch and tutorial, 1 Help — Phone, Light"
+104547,inner,icon ptop,Phone search icon
+104550,inner,pbody,Page body
+104587,inner,bnav,Bottom navigation
+104607,screen,scr p,"Settings > Help, switch and tutorial, 2 tour started manually — Phone, Light"
+104615,inner,icon ptop,Phone search icon
+104618,inner,pbody,Page body
+104638,inner,bnav,Bottom navigation
+104658,inner,tour,Tour popover
+104670,screen,scr p,"Settings > Help, switch and tutorial, 3 section without banner — Phone, Light"
+104678,inner,icon ptop,Phone search icon
+104681,inner,pbody,Page body
+104700,inner,bnav,Bottom navigation
+104720,screen,scr p,"Settings > Help, switch and tutorial, 1 Help — Phone, Dark"
+104724,inner,icon ptop,Phone search icon
+104727,inner,pbody,Page body
+104764,inner,bnav,Bottom navigation
+104784,screen,scr p,"Settings > Help, switch and tutorial, 2 tour started manually — Phone, Dark"
+104792,inner,icon ptop,Phone search icon
+104795,inner,pbody,Page body
+104815,inner,bnav,Bottom navigation
+104835,inner,tour,Tour popover
+104847,screen,scr p,"Settings > Help, switch and tutorial, 3 section without banner — Phone, Dark"
+104855,inner,icon ptop,Phone search icon
+104858,inner,pbody,Page body
+104877,inner,bnav,Bottom navigation
+104897,screen,scr d,"Manual start from ? and sandbox, 1 sandbox first visit — Desktop, Light"
+104969,inner,body,Page body
+104993,screen,scr d,"Manual start from ? and sandbox, 2 ? menu — Desktop, Light"
+105065,inner,body,Page body
+105089,inner,menu,Menu
+105095,screen,scr d,"Manual start from ? and sandbox, 3 tour — Desktop, Light"
+105167,inner,body,Page body
+105192,inner,tour,Tour popover
+105204,screen,scr d,"Manual start from ? and sandbox, 1 sandbox first visit — Desktop, Dark"
+105276,inner,body,Page body
+105300,screen,scr d,"Manual start from ? and sandbox, 2 ? menu — Desktop, Dark"
+105372,inner,body,Page body
+105396,inner,menu,Menu
+105402,screen,scr d,"Manual start from ? and sandbox, 3 tour — Desktop, Dark"
+105474,inner,body,Page body
+105499,inner,tour,Tour popover
+105511,screen,scr p,"Manual start from ? and sandbox, 1 sandbox first visit — Phone, Light"
+105519,inner,icon ptop,Phone search icon
+105522,inner,pbody,Page body
+105546,inner,bnav,Bottom navigation
+105566,screen,scr p,"Manual start from ? and sandbox, 2 ? sheet — Phone, Light"
+105574,inner,icon ptop,Phone search icon
+105577,inner,pbody,Page body
+105601,inner,bnav,Bottom navigation
+105622,inner,sheet,Bottom sheet
+105633,screen,scr p,"Manual start from ? and sandbox, 3 tour — Phone, Light"
+105641,inner,icon ptop,Phone search icon
+105644,inner,pbody,Page body
+105669,inner,bnav,Bottom navigation
+105689,inner,tour,Tour popover
+105701,screen,scr p,"Manual start from ? and sandbox, 1 sandbox first visit — Phone, Dark"
+105709,inner,icon ptop,Phone search icon
+105712,inner,pbody,Page body
+105736,inner,bnav,Bottom navigation
+105756,screen,scr p,"Manual start from ? and sandbox, 2 ? sheet — Phone, Dark"
+105764,inner,icon ptop,Phone search icon
+105767,inner,pbody,Page body
+105791,inner,bnav,Bottom navigation
+105812,inner,sheet,Bottom sheet
+105823,screen,scr p,"Manual start from ? and sandbox, 3 tour — Phone, Dark"
+105831,inner,icon ptop,Phone search icon
+105834,inner,pbody,Page body
+105859,inner,bnav,Bottom navigation
+105879,inner,tour,Tour popover
