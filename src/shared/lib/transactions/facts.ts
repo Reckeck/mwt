@@ -1,5 +1,7 @@
 /** Kind-specific facts for the details view: extra fields, the fee, the debt effect. */
 
+import { formatQuantity } from '../format'
+
 import { anyBody, body, txKind, txMeta } from './access'
 
 /** Kind-specific facts worth showing under a transaction, as `[i18n key, value]`. */
@@ -48,7 +50,10 @@ export function txDetails(tx: Transaction): Array<[string, string]> {
     }
     case 'adjustment': {
       for (const line of body(tx, 'adjustment').lines) {
-        out.push(['adjustment.line', `${line.asset.symbol}: ${line.before} → ${line.after}`])
+        out.push([
+          'adjustment.line',
+          `${formatQuantity(line.before)} → ${formatQuantity(line.after)} ${line.asset.symbol}`,
+        ])
       }
       break
     }

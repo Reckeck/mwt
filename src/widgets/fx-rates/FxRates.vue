@@ -3,7 +3,6 @@ import { computed, h, ref, } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { ConverterPanel } from '@/features/currency-convert'
 import { FavoriteStarButton } from '@/features/currency-favorite'
 import { Card } from '@/shared/ui/card'
 import { type ColumnDef, DataTable } from '@/shared/ui/data-table'
@@ -83,7 +82,7 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
+  <div class="grid grid-cols-1 items-start gap-4">
     <Card>
       <template #header>
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -96,13 +95,6 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
         <DataTable sticky-header container-class="max-h-[min(32rem,60dvh)]" :columns="columns" :data="rows" :get-row-id="(row) => row.currency" :empty-text="t('rates.empty')" />
       </div>
       <p class="mt-3 text-xs text-muted-foreground">{{ t('rates.hint') }}</p>
-    </Card>
-
-    <Card>
-      <template #header>
-        <h3 class="heading-card">{{ t('rates.converter') }}</h3>
-      </template>
-      <ConverterPanel />
     </Card>
   </div>
 </template>

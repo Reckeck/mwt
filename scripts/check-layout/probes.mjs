@@ -159,3 +159,34 @@ export const NARROW_FIELDS = `
   }
   return [...new Set(out)].slice(0, 12)
 `
+
+/**
+ * A day band of a list (sticky `h3` in a card) glued to, or over, the card's header above it:
+ * «Что изменилось» had its band under the title with no gap. At least 8px from the header's
+ * last element to the band (the 8/12/16 scale); measured at the top of the page, where sticky has not moved it.
+ */
+export const DAY_BAND_GAP = `
+  ${DESCRIBE}
+  const out = []
+  if (window.scrollY > 0) return out
+  for (const band of document.querySelectorAll('[data-slot="card-content"] section > h3.sticky')) {
+    const card = band.closest('[data-slot="card"]')
+    const header = card?.querySelector('[data-card-header]')
+    if (!header || !band.getClientRects().length) continue
+    const box = band.getBoundingClientRect()
+    const last = [...header.querySelectorAll('*')].filter((el) => el.getClientRects().length && el.children.length === 0 && el.textContent.trim())
+    const bottom = Math.max(0, ...last.map((el) => el.getBoundingClientRect().bottom))
+    if (bottom && box.top - bottom < 8) out.push('day band ' + Math.round(box.top - bottom) + 'px under the card header (8px at least): ' + describe(band))
+  }
+  return [...new Set(out)]
+`
+
+/** The same settings section twice on one screen (Учёт › Общее once showed «Категории» beside the «Категории» tab). */
+export const DUPLICATE_SECTIONS = `
+  const seen = new Map()
+  for (const el of document.querySelectorAll('section[data-section]')) {
+    if (!el.getClientRects().length) continue
+    seen.set(el.dataset.section, (seen.get(el.dataset.section) ?? 0) + 1)
+  }
+  return [...seen].filter(([, count]) => count > 1).map(([id, count]) => 'settings section "' + id + '" shown ' + count + ' times')
+`

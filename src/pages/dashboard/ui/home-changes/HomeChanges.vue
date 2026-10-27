@@ -70,7 +70,8 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
       compact
       @retry="txs.refetch()"
     >
-      <div class="-my-3">
+      <!-- The header keeps its 8px; pt-1 of the state makes the band start 12px under the title, and the last row sits on the card's padding. -->
+      <div class="-mb-3">
         <TransactionsList
           :transactions="visible"
           :total="visible.length"
