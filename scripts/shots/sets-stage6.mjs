@@ -31,6 +31,7 @@ export const stage6 = [
   shot('set-app', 'app', '', 'Settings-1', '1.'),
   shot('set-keys', 'app', 'quick-add', 'Settings-1', '2.'),
   shot('set-accounting', 'accounting', '', 'Settings-1', '3.'),
+  { name: 'set-money', route: at('accounting', 'budget'), steps: [{ wait: 600 }] },
   shot('set-categories', 'accounting', 'categories', 'Settings-1', '4.'),
   shot('set-vault', 'vault', '', 'Settings-1', '5.'),
   { ...shot('set-vault-password', 'vault', '', 'Settings-1', '6.'), steps: [{ wait: 600 }, { click: { text: 'Сменить пароль' } }, { wait: 600 }] },
