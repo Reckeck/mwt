@@ -141,7 +141,7 @@ pub use losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
 };
 pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
-pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceRow};
+pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceMark, MonthBalanceRow};
 pub use my_automations::{MineItem, MineKind};
 pub use notifications::{notice, notice_title};
 pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};

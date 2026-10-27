@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { Lock } from 'lucide-vue-next'
 
 import { call } from '@/shared/api/ipc'
 import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
@@ -21,6 +22,14 @@ const open = defineModel<boolean>('open', { required: true })
 const { t, locale } = useI18n()
 const vault = useVaultStore()
 const queryClient = useQueryClient()
+
+/** While the vault has no password every copy of it is plain: those are the ones «Удалить старые копии» takes away. */
+const backups = useQuery({
+  queryKey: ['vault-backups'],
+  queryFn: () => call<VaultBackup[]>('list_vault_backups'),
+  enabled: open,
+})
+const plainCount = computed(() => backups.data.value?.length ?? 0)
 
 const password = ref('')
 const repeat = ref('')
@@ -85,7 +94,7 @@ const save = useMutation({
       <div class="flex items-start gap-3">
         <Checkbox id="set-password-delete" v-model="deleteCopies" class="mt-0.5" />
         <div class="grid gap-0.5">
-          <Label for="set-password-delete">{{ t('vaultPassword.deleteCopies') }}</Label>
+          <Label for="set-password-delete">{{ t('vaultPassword.deleteCopies') }}<template v-if="plainCount"> · {{ plainCount }}</template></Label>
           <p class="text-xs text-muted-foreground">{{ t('vaultPassword.deleteCopiesHint') }}</p>
         </div>
       </div>
@@ -93,7 +102,7 @@ const save = useMutation({
     <template #footer>
       <Button variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
       <Button type="submit" form="set-password-form" :disabled="save.isPending.value" :loading="save.isPending.value">
-        {{ t('vaultPassword.setSubmit') }}
+        <Lock class="size-4" aria-hidden="true" />{{ t('vaultPassword.setSubmit') }}
       </Button>
     </template>
   </Dialog>

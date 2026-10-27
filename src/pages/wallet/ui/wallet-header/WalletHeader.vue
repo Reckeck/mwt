@@ -97,10 +97,10 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
       </span>
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span class="text-xl font-semibold tabular-nums max-md:text-[1.75rem] max-md:leading-tight" data-wallet-sum>
-          <Money :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
+          <Money glance :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
         </span>
         <span class="truncate text-caption text-muted-foreground">
-          <template v-if="props.figure.base">≈ <Money :amount="props.figure.base.amount" :decimals="2" /> · </template>
+          <template v-if="props.figure.base">≈ <Money glance :amount="props.figure.base.amount" :decimals="2" /> · </template>
           {{ subtitle }}
           <template v-if="unvalued">
             · {{ t('wallet.valueUnset') }} ·

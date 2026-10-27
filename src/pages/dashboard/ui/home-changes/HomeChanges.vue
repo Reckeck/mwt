@@ -9,6 +9,8 @@ import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { call } from '@/shared/api/ipc'
 import { hereBackQuery } from '@/shared/lib/drill'
 import { formatDayMonth } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
+import { txMeta } from '@/shared/lib/transactions'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { emptyTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
 import { Card } from '@/shared/ui/card'
@@ -24,7 +26,20 @@ const { t } = useI18n()
 
 const filter = ref<TxFilter>(emptyTxFilter({ from: props.since }))
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
-const { query: txs, rows, total } = useTxPages(filter)
+const { query: txs, rows } = useTxPages(filter)
+const phone = useIsPhone()
+/** Home shows the latest few days only (Home 1); the rest is behind «Все операции →». */
+const DAYS_SHOWN = 3
+const visible = computed(() => {
+  const days = new Set<string>()
+  const out: Transaction[] = []
+  for (const tx of rows.value) {
+    days.add(txMeta(tx).timestamp.slice(0, 10))
+    if (days.size > DAYS_SHOWN) break
+    out.push(tx)
+  }
+  return out
+})
 const rowMenu = useTxRowMenu({ duplicate: true })
 const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
 </script>
@@ -57,11 +72,11 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
     >
       <div class="-my-3">
         <TransactionsList
-          :transactions="rows"
-          :total="total"
+          :transactions="visible"
+          :total="visible.length"
           :loading-more="txs.isFetchingNextPage.value"
           openable
-          group-by-day
+          :group-by-day="!phone"
           :fx-per-usd="summary.data.value?.fx_per_usd"
           :base-currency="summary.data.value?.base_currency"
           :row-actions="rowMenu.actions"

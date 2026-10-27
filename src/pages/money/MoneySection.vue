@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { type LocationQuery, RouterView, useRoute } from 'vue-router'
+import { type LocationQuery, RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { ChevronLeft } from 'lucide-vue-next'
+
+import { useIsPhone } from '@/shared/lib/phone'
 import { RouteTabs } from '@/shared/ui/route-tabs'
 
 import {
@@ -21,8 +24,12 @@ import { MoneyToolbar } from './ui/money-toolbar'
 
 const { t } = useI18n()
 const route = useRoute()
+const phone = useIsPhone()
 
 const group = computed(() => (route.meta.group as MoneyGroup | undefined) ?? 'spending')
+/** Pages the frame draws on a phone as «‹ Title» instead of the tabs and the period bar (Money 3 · 15). */
+const PAGE_GROUPS: MoneyGroup[] = ['month']
+const page = computed(() => phone.value && PAGE_GROUPS.includes(group.value))
 const view = computed(() => flowViewOf(route.query.view))
 
 const tab = (entry: MoneyGroup, hint: boolean) => ({
@@ -45,7 +52,16 @@ const { filter, range, fallback, effective, realTerms } = useReportFilter(group)
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <RouterLink
+      v-if="page"
+      :to="{ name: GROUP_ROUTE.spending, query: keepFilter(route.query) }"
+      class="flex min-h-11 items-center gap-1 text-xl font-bold"
+      :aria-label="t('balance.phone.back')"
+      data-money-page-back
+    >
+      <ChevronLeft class="size-6 text-muted-foreground" aria-hidden="true" />{{ t(`money.tab.${group}`) }}
+    </RouterLink>
+    <div v-else class="flex flex-wrap items-center justify-between gap-3">
       <div class="w-fit max-w-full" data-tour="section-tabs">
         <RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" :keep-query="keepFilter" />
       </div>

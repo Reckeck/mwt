@@ -1,6 +1,8 @@
 import type { Component } from 'vue'
 
 import type { DashboardWidgetDef } from './dashboard-registry.types'
+import DashboardFavorite from './ui/DashboardFavorite.vue'
+import DashboardFund from './ui/DashboardFund.vue'
 
 import { CashbackBonuses } from '@/widgets/cashback-bonuses'
 import { DailyBudget } from '@/widgets/daily-budget'
@@ -61,6 +63,8 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('netWorth', NetWorthCard, [4, 6, 3, 4], { link: { name: 'money-wealth' }, periodic: true }),
   widget('fx', DashboardFx, [4, 5, 2, 4], { home: true }),
   widget('spending', DashboardSpending, [4, 6, 3, 4], { link: { name: 'transactions-calendar' }, periodic: true }),
+  widget('favorite', DashboardFavorite, [4, 4, 3, 3], { home: true }),
+  widget('fund', DashboardFund, [4, 4, 3, 3], { home: true }),
   widget('assets', DashboardAssets, [4, 7, 3, 4], { home: true }),
   widget('health', DashboardHealth, [4, 5, 3, 3], { link: { name: 'money-health' } }),
   widget('passiveIncome', DashboardPassive, [4, 5, 3, 3], { link: { name: 'money-health' } }),

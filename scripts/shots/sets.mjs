@@ -3,6 +3,7 @@
 import { stage5 } from './sets-stage5.mjs'
 import { links } from './sets-links.mjs'
 import { money, moneyScreens } from './sets-money.mjs'
+import { encrypt } from './sets-encrypt.mjs'
 import { stage6 } from './sets-stage6.mjs'
 import { GP } from './steps.mjs'
 
@@ -89,11 +90,22 @@ const before = [
 /** Stage 1: the shell, Money › Spending, the month balance, the period. */
 const MORE = [{ phone: [{ click: '[data-bottom-more]' }] }]
 const PERIOD = [{ click: '[data-period-trigger]' }]
+/** The mock keeps its settings between shots of a run: run these two as separate `--only` runs, each starts from «off» and presses the switch. */
+const CARRY_ON = [
+  { eval: `const data = await import('/src/shared/api/mock/vault-data.ts'); data.mockSettings.carry_since = null; return true` },
+  { eval: `${GP} await gp.$router.push('/'); await gp.$router.push('/money/month'); return true` },
+  { wait: 900 },
+  { click: '#carry-over' },
+  { wait: 900 },
+]
 const stage1 = [
   { name: 'home', route: '/', scenarios: ['year', 'empty'] },
   { name: 'spending', route: '/money', scenarios: ALL, canvas: { board: 'Money-1', frame: '1.' } },
   { name: 'period', route: '/money', steps: PERIOD, canvas: { board: 'Period', frame: '1.' } },
   { name: 'month', route: '/money/month', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-3', frame: '15.' } },
+  // The carry switched on with the real switch (it refreshes the queries): the line «Перенесено дальше» in «По месяцам», «всего с сентября» in the answer.
+  { name: 'month-carry', route: '/money/month', steps: [...CARRY_ON, { wait: 900 }] },
+  { name: 'spending-carry', route: '/money/month', steps: [...CARRY_ON, { eval: `${GP} await gp.$router.push('/money'); return true` }, { wait: 900 }] },
   { name: 'money-more', route: '/money', steps: [{ click: '[data-tour="route-tabs-more"]' }] },
   { name: 'automations', route: '/automations', scenarios: ['year', 'empty'] },
   { name: 'palette', route: '/money', steps: PALETTE, canvas: { board: 'Shell', frame: '4.' } },
@@ -115,7 +127,7 @@ const CATEGORY = [{ click: '[data-category-row]' }]
 const LIMIT = [{ click: '[data-category-limit]' }]
 const LIMIT_NEXT = [...LIMIT, { click: '[data-wizard-next]' }, { fill: ['#budget-limit', '300'] }]
 const GOAL = [{ click: '[data-where-goal]' }]
-const GOAL_NEXT = [...GOAL, { fill: ['#goal-name', 'Подушка безопасности'] }, { fill: ['#goal-target', '5000'] }, { click: '[data-wizard-next]' }]
+const GOAL_NEXT = [...GOAL, { fill: ['#goal-name', 'Подушка безопасности'] }, { fill: ['#goal-target', '5000'] }]
 const stage2b = [
   { name: 'category', route: '/money', steps: CATEGORY, scenarios: ['year', 'stress'], canvas: { board: 'Money-1', frame: '2.' } },
   { name: 'limit-1', route: '/money', steps: LIMIT, canvas: { board: 'Money-1', frame: '3.' } },
@@ -123,7 +135,7 @@ const stage2b = [
   { name: 'limit-saved', route: '/money', steps: [...LIMIT_NEXT, { click: '[data-wizard-save]' }], canvas: { board: 'Money-1', frame: '5.' } },
   { name: 'where', route: '/money/where', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-1', frame: '6.' } },
   { name: 'goal-1', route: '/money/where', steps: GOAL, canvas: { board: 'Money-1', frame: '7.' } },
-  { name: 'goal-1-errors', route: '/money/where', steps: [...GOAL, { click: '[data-wizard-next]' }], canvas: { board: 'Money-1', frame: '7.' } },
+  { name: 'goal-1-errors', route: '/money/where', steps: [...GOAL, { click: '[data-wizard-save]' }], canvas: { board: 'Money-1', frame: '7.' } },
   { name: 'goal-2', route: '/money/where', steps: GOAL_NEXT, canvas: { board: 'Money-2', frame: '8.' } },
   { name: 'plan', route: '/money/plan', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-2', frame: '10.' } },
   {
@@ -471,7 +483,7 @@ const stage3 = [
     ],
     canvas: ATTACH('7.'),
   },
-  { name: 'goal-new-errors', route: '/money/plan', steps: [{ click: '[data-plan-goal]' }, { wait: 300 }, { fill: ['#goal-target', '0'] }, { click: '[data-wizard-next]' }, { wait: 300 }], canvas: { board: 'New-Goal', frame: '2.' } },
+  { name: 'goal-new-errors', route: '/money/plan', steps: [{ click: '[data-plan-goal]' }, { wait: 300 }, { fill: ['#goal-target', '0'] }, { click: '[data-wizard-save]' }, { wait: 300 }], canvas: { board: 'New-Goal', frame: '2.' } },
   { name: 'goal-card', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '3.' } },
   { name: 'goal-delete', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-delete]' }, { wait: 400 }], canvas: { board: 'New-Goal', frame: '5.' } },
   { name: 'goal-edit', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-edit]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '4.' } },
@@ -567,7 +579,7 @@ const stage4 = [
       { fill: ['#sell-received', '12000'] }, { wait: 400 }],
     canvas: { board: 'Wallets-4', frame: '21.' },
   },
-  { name: 'currency-settings', route: 'settings:currencies', steps: [{ wait: 800 }], canvas: { board: 'Currency-1', frame: '1.' } },
+  { name: 'currency-settings', route: 'settings:accounting', steps: [{ wait: 800 }], canvas: { board: 'Currency-1', frame: '1.' } },
   {
     name: 'money-card',
     route: '/',
@@ -625,7 +637,7 @@ const stage4 = [
   },
   {
     name: 'base-change',
-    route: 'settings:currencies',
+    route: 'settings:accounting',
     steps: [
       { wait: 800 },
       { click: '#base-currency' },
@@ -680,4 +692,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt }

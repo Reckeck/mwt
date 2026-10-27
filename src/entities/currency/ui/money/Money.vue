@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
   bare: false,
   convert: undefined,
   at: undefined,
+  glance: false,
 })
 
 const settings = useSettingsStore()
@@ -62,7 +63,14 @@ const convertible = computed(
        in the shell) and find this sum by its data attributes, so nothing mounts here (rule 17).
        The dashed underline of a sum a click opens lives in app/styles.css: it depends on the parents. -->
   <span
-    :class="cn('money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums', tone, convertible && 'money-convertible')"
+    :class="
+      cn(
+        'money inline-flex items-baseline gap-[0.25em] whitespace-nowrap tabular-nums',
+        tone,
+        convertible && 'money-convertible',
+        convertible && props.glance && 'money-glance',
+      )
+    "
     :data-money-convertible="convertible || undefined"
     :data-money-amount="convertible ? numeric : undefined"
     :data-money-currency="convertible ? code : undefined"

@@ -3145,7 +3145,15 @@ days: Array<MonthBalanceDay>,
 /**
  * The day's allowance the forecast spends (the calendar's); `None` without one.
  */
-per_day: Amount | null, };
+per_day: Amount | null, 
+/**
+ * The month's biggest income, for the chart's label.
+ */
+income_mark: MonthBalanceMark | null, 
+/**
+ * The month's biggest spending, for the chart's label.
+ */
+spent_mark: MonthBalanceMark | null, };
 
 /**
  * One day of the period's last month: what was there at its end.
@@ -3163,6 +3171,24 @@ balance: Amount | null,
  * Where the balance goes spending the day's allowance; from today on.
  */
 forecast: Amount | null, };
+
+/**
+ * The biggest income or spending of the last month: what the chart labels
+ * («+1 575 $ зарплата», «−36 $ Продукты»).
+ */
+type MonthBalanceMark = { 
+/**
+ * `YYYY-MM-DD`.
+ */
+date: string, 
+/**
+ * Positive, in the report currency.
+ */
+amount: Amount, 
+/**
+ * The operation's first category key; empty without one.
+ */
+category: string, };
 
 /**
  * One month of the balance.

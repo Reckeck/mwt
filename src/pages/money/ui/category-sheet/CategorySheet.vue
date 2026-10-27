@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { CircleCheck, CircleHelp } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
@@ -52,6 +53,20 @@ const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioS
 const { query: txs, rows, total } = useTxPages(txFilter)
 const rowMenu = useTxRowMenu({ duplicate: true })
 
+/** What is still «Без категории» in the period (Money 1 · 2): the ones this category may be missing. */
+const loose = ref<TxFilter>(emptyTxFilter())
+watch(
+  () => [days.value.first, days.value.last] as const,
+  ([from, to]) => {
+    loose.value = emptyTxFilter({ from, to, category: '', scope: props.filter.scope })
+  },
+  { immediate: true },
+)
+const { total: looseTotal } = useTxPages(loose)
+const looseDrill = computed(() =>
+  drillTo({ from: props.filter.from ?? undefined, to: props.filter.to ?? undefined, category: '', storeIds: props.filter.scope.store_ids }),
+)
+
 const operations = (count: number) => t(`money.category.operations.${pluralForm(count, locale.value)}`, { count })
 const journal = computed(() =>
   drillTo({ from: props.filter.from ?? undefined, to: props.filter.to ?? undefined, category: props.row?.key ?? '', storeIds: props.filter.scope.store_ids }),
@@ -79,6 +94,21 @@ const journal = computed(() =>
             <template v-if="props.limit.length"> · <MoneyPhrase :parts="props.limit" /></template>
           </p>
         </section>
+        <p
+          v-if="props.row.key && looseTotal !== null"
+          class="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm"
+          data-category-similar
+        >
+          <CircleCheck v-if="looseTotal === 0" class="size-4 shrink-0 text-success" aria-hidden="true" />
+          <CircleHelp v-else class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span class="min-w-0 flex-1">
+            {{ t('money.category.similar', { count: looseTotal }) }}
+            <template v-if="looseTotal === 0"> {{ t('money.category.similarDone') }}</template>
+          </span>
+          <RouterLink v-if="looseTotal > 0" :to="looseDrill" class="shrink-0 text-primary hover:underline" @click="open = false">
+            {{ t('money.category.similarOpen') }}
+          </RouterLink>
+        </p>
         <CategoryMonths
           :title="t('money.category.byMonth', { category: props.label })"
           :cells="props.row.cells"

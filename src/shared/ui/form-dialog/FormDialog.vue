@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<FormDialogProps>(), {
   pending: false,
   phoneSubmitOnly: false,
   overlay: undefined,
+  cancelVariant: 'ghost',
 })
 const emit = defineEmits<{ 'update:open': [boolean]; submit: [Event] }>()
 
@@ -47,7 +48,7 @@ const phone = useIsPhone()
       <div class="mr-auto flex items-center gap-2">
         <slot name="footer-start" />
       </div>
-      <Button v-if="!(props.phoneSubmitOnly && phone)" variant="ghost" type="button" @click="emit('update:open', false)">{{ t('actions.cancel') }}</Button>
+      <Button v-if="!(props.phoneSubmitOnly && phone)" :variant="props.cancelVariant" type="button" @click="emit('update:open', false)">{{ t('actions.cancel') }}</Button>
       <Button
         :form="props.formId"
         type="submit"

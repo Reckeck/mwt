@@ -44,6 +44,11 @@ const vaultFile = computed(() => {
   }
 })
 
+const SCROLLER = [
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-4 @container',
+  'md:scrollbar-stable md:px-6 md:pb-6',
+  '[mask-image:linear-gradient(to_bottom,transparent,black_20px)]',
+].join(' ')
 const scroller = ref<HTMLElement | null>(null)
 const { open, isPhone, isList, activeGroup, activeTab, selectGroup, selectTab, backToList } = useSettingsNav(groups, scroller)
 
@@ -132,7 +137,11 @@ function focusPanel(event: Event) {
             :tabs="tabDefs"
             @update:model-value="onTab"
           />
-          <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-4 @container md:scrollbar-stable md:px-6 md:pb-6">
+          <!-- The first 20px fade out, so text scrolled under the tab strip does not end in a hard cut. -->
+          <div
+            ref="scroller"
+            :class="SCROLLER"
+          >
             <SettingsSections :sections="activeTab.sections" />
           </div>
         </div>

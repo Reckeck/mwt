@@ -121,6 +121,23 @@ export function useInvestCalc() {
   /** The last «Обновить из данных»: the answer compares a contribution with this income. */
   const prefilled = ref<ScenarioPrefill | null>(null)
 
+  /**
+   * The average income, for «это 28 % среднего дохода» (Money 3 · 19) before «Из данных» was ever
+   * run: the same backend answer with a zero share, read only, nothing goes into the fields.
+   */
+  const incomeHint = useQuery({
+    queryKey: computed(() => ['calc-income-hint', form.currency]),
+    queryFn: () =>
+      call<ScenarioPrefill>('calc_scenario_prefill', {
+        source: { scope: { store_ids: [], include_children: false }, income_months: 12, income_pct: '0' },
+        currency: form.currency,
+      }),
+    placeholderData: keepPreviousData,
+    enabled: computed(() => form.mode === 'contribution' && prefilled.value === null),
+  })
+  /** What the answer compares a found contribution with: the last «Обновить из данных», or the income alone. */
+  const incomeBasis = computed(() => prefilled.value ?? incomeHint.data.value ?? null)
+
   /** Put a saved input into the fields, keeping the mode the user is in. */
   function load(input: InvestInput, from: ScenarioSource | null = null, at: string | null = null) {
     Object.assign(form, fromInput(input, { mode: form.mode, target: form.target }))
@@ -171,6 +188,7 @@ export function useInvestCalc() {
     source,
     prefilledAt,
     prefilled,
+    incomeBasis,
     calculate,
     load,
     applyPrefill,

@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
 import { SpendingMonths } from '../spending'
+import MonthCarryLine from './MonthCarryLine.vue'
 
 /**
  * «По месяцам» of the month's balance (Money 3 · 15): the bars, the carry
@@ -62,7 +63,8 @@ const table = computed(() =>
       <span class="flex-1" />
       <CarryOverSwitch :carry-since="props.balance.carry_since" :from="props.balance.rows[0]?.month ?? props.month" />
     </div>
-    <SpendingMonths bare :balance="props.balance" :from="props.month" :to="props.month" @pick="emit('pick', $event)" />
+    <MonthCarryLine v-if="carries" class="max-md:hidden" :balance="props.balance" @pick="emit('pick', $event)" />
+    <SpendingMonths :class="carries && 'md:hidden'" bare :balance="props.balance" :from="props.month" :to="props.month" @pick="emit('pick', $event)" />
     <Table class="text-sm tabular-nums md:min-w-[720px]" container-class="max-md:hidden">
       <TableHeader>
         <TableRow class="text-xs">

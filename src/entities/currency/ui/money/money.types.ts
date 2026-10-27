@@ -13,4 +13,6 @@ export interface MoneyProps {
   bare?: boolean
   /** The operation's moment (RFC 3339) or a month `YYYY-MM` (its first day): the card shows the base currency at that day's rate. */
   at?: string
+  /** A quick glance the screen points at: the dotted underline is always there, not only on hover. */
+  glance?: boolean
 }

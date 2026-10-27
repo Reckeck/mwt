@@ -44,6 +44,7 @@ const monthsHint = computed(() => {
 
 <template>
   <FormDialog overlay="emergency-fund"
+    cancel-variant="outline"
     v-model:open="open"
     :title="t('emergency.dialog.title')"
     form-id="emergency-fund-form"

@@ -30,6 +30,10 @@ export interface ChartColors {
   muted: string
   /** `--primary`: the one series a chart is about. */
   primary: string
+  /** `--success` and `--destructive`: a gain and a loss labelled on a line. */
+  success: string
+  destructive: string
+  warning: string
   palette: string[]
 }
 
@@ -49,6 +53,9 @@ export function chartColors(): ChartColors {
     border: tokenColor('--border'),
     muted: tokenColor('--muted-foreground'),
     primary: tokenColor('--primary'),
+    success: tokenColor('--success'),
+    destructive: tokenColor('--destructive'),
+    warning: tokenColor('--warning'),
     palette: [1, 2, 3, 4, 5].map((index) => tokenColor(`--chart-${index}`)),
   }
 }

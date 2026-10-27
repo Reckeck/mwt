@@ -48,8 +48,8 @@ const incomeShare = computed(() => {
   if (solved.value?.unknown !== 'contribution' || !(income > 0)) return null
   const pct = formatPct((Number(solved.value.value) / income) * 100, { decimals: 0 })
   const now = props.prefilled?.monthly_contribution
-  return now
-    ? phrase('invest.answer.incomeShareNow', { pct, income: sum(income), now: sum(now, 2) })
+  return Number(now) > 0
+    ? phrase('invest.answer.incomeShareNow', { pct, income: sum(income), now: sum(now ?? 0, 2) })
     : phrase('invest.answer.incomeShare', { pct, income: sum(income) })
 })
 </script>

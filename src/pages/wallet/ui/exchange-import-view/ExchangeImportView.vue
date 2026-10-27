@@ -66,10 +66,10 @@ const ROW = 'flex items-center justify-between gap-3 py-1.5 text-sm'
           <div class="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm tabular-nums">{{ masked }}</div>
           <span class="text-xs text-muted-foreground">{{ phone ? t('exchangeImport.readOnly') : t('exchangeImport.readOnlyLong') }}</span>
         </div>
-        <div v-if="!phone" class="flex items-center gap-2">
+        <div v-if="!phone" class="flex flex-wrap items-center gap-x-3 gap-y-2 py-1.5">
           <Check class="size-4 shrink-0" :class="lastRun?.error ? 'text-destructive' : 'text-success'" />
-          <span class="min-w-0 flex-1 text-sm" :class="lastRun?.error && 'text-destructive'">{{ status }}</span>
-          <Button variant="outline" size="sm" :disabled="sync.syncNow.isPending.value" @click="sync.syncNow.mutate(props.store.id)">
+          <span class="min-w-40 flex-1 text-sm" :class="lastRun?.error && 'text-destructive'">{{ status }}</span>
+          <Button variant="outline" size="sm" class="shrink-0" :disabled="sync.syncNow.isPending.value" @click="sync.syncNow.mutate(props.store.id)">
             <RefreshCw v-if="sync.syncNow.isPending.value" class="size-4 animate-spin" />
             {{ t('exchangeImport.now') }}
           </Button>
