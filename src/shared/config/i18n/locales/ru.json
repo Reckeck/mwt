@@ -4931,7 +4931,7 @@
   "whatsNew.newPaths.palette": "Ctrl K: недавнее, переходы Alt 1…5 и взгляд справа на выбранное.",
   "whatsNew.newPaths.menu": "Одно меню у строки операции: правый клик, «⋯» или удержание на телефоне; клавиши подписаны.",
   "whatsNew.newPaths.auto": "Пометка «авто» говорит, какая автоматизация записала операцию.",
-  "filter.searchHint": "Название, сумма, комментарий",
+  "filter.searchHint": "Название или сумма",
   "filter.period": "Период",
   "filter.chip.thisMonth": "Этот месяц",
   "filter.chip.lastMonth": "Прошлый",

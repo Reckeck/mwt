@@ -53,7 +53,7 @@ function heat(block: CategoryGroupBlock, value: string): string {
       <template #header>
         <p class="font-medium">{{ t('report.categories.top') }}</p>
       </template>
-      <ol class="grid gap-2.5 text-sm">
+      <ol class="grid gap-3 text-sm">
         <li v-for="(row, index) in props.report.top" :key="row.key" class="grid gap-1">
           <div class="flex items-center gap-3">
             <span class="w-4 text-muted-foreground">{{ index + 1 }}</span>

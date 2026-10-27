@@ -190,3 +190,46 @@ export const DUPLICATE_SECTIONS = `
   }
   return [...seen].filter(([, count]) => count > 1).map(([id, count]) => 'settings section "' + id + '" shown ' + count + ' times')
 `
+
+/**
+ * Visible siblings of one container that cover each other (by more than 2px both ways): a block
+ * pushed under its neighbour. Left out on purpose: out-of-flow boxes (absolute / fixed badges,
+ * popovers), sticky bands, transformed or invisible ones, grid items placed by hand,
+ * and whatever lives in a canvas, an svg or the flow editor.
+ */
+export const SIBLING_OVERLAP = `
+  ${DESCRIBE}
+  const out = []
+  const skipTag = /^(SCRIPT|STYLE|TEMPLATE|SVG|CANVAS|BR|WBR|INPUT|OPTION)$/i
+  const inFlow = (el, cs) => {
+    if (skipTag.test(el.tagName) || el.hasAttribute('aria-hidden') || el.closest('[data-layout-ignore], [data-sonner-toaster], .vue-flow, [data-radix-popper-content-wrapper]')) return false
+    if (cs.display === 'none' || cs.display === 'contents' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false
+    if (cs.position === 'absolute' || cs.position === 'fixed' || cs.position === 'sticky' || cs.transform !== 'none' || cs.pointerEvents === 'none') return false
+    if (/sr-only/.test(el.className)) return false
+    return true
+  }
+  const placed = (cs) => [cs.gridRowStart, cs.gridColumnStart].some((value) => value !== 'auto')
+  for (const parent of (window.__scope ?? document.body).querySelectorAll('*')) {
+    if (parent.children.length < 2 || skipTag.test(parent.tagName)) continue
+    const pcs = getComputedStyle(parent)
+    if (pcs.display === 'none' || pcs.display === 'contents' || pcs.display === 'inline' || parent.closest('[data-layout-ignore], svg, canvas, .vue-flow')) continue
+    const boxes = []
+    for (const child of parent.children) {
+      const cs = getComputedStyle(child)
+      if (!inFlow(child, cs) || (pcs.display.includes('grid') && placed(cs)) || cs.display.startsWith('inline') && !child.children.length) continue
+      const rect = child.getBoundingClientRect()
+      if (rect.width < 4 || rect.height < 4) continue
+      boxes.push({ child, rect })
+    }
+    for (let a = 0; a < boxes.length; a++) {
+      for (let b = a + 1; b < boxes.length; b++) {
+        const one = boxes[a].rect
+        const two = boxes[b].rect
+        const across = Math.min(one.right, two.right) - Math.max(one.left, two.left)
+        const down = Math.min(one.bottom, two.bottom) - Math.max(one.top, two.top)
+        if (across > 2 && down > 2) out.push('blocks overlap by ' + Math.round(across) + 'x' + Math.round(down) + ': ' + describe(boxes[a].child) + ' and ' + describe(boxes[b].child))
+      }
+    }
+  }
+  return [...new Set(out)].slice(0, 12)
+`

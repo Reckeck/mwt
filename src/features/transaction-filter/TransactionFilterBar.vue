@@ -116,7 +116,7 @@ function clear() {
           v-model="search"
           type="search"
           class="w-full pl-9"
-          :placeholder="phone ? t('filter.search') : t('filter.searchHint')"
+          :placeholder="t('filter.searchHint')"
           :aria-label="t('filter.search')"
         />
       </div>

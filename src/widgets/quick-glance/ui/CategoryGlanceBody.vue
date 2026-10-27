@@ -38,7 +38,7 @@ const payments = computed(() => glancePayments(glance.payments.value, { side: co
 </script>
 
 <template>
-  <div class="flex flex-col gap-2.5 text-sm" data-category-glance>
+  <div class="flex flex-col gap-3 text-sm" data-category-glance>
     <span class="text-xs text-muted-foreground">{{ t('glance.title') }}</span>
     <div class="flex flex-col gap-0.5">
       <span class="text-xs text-muted-foreground">{{ t('home.figures.spent', { when: monthIn(props.month) }) }}</span>

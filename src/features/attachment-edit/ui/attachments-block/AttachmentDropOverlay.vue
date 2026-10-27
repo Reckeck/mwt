@@ -13,7 +13,7 @@ const { t } = useI18n()
 
 <template>
   <div
-    class="pointer-events-none absolute inset-2 z-sticky flex flex-col items-center justify-center gap-2.5
+    class="pointer-events-none absolute inset-2 z-sticky flex flex-col items-center justify-center gap-3
       rounded-xl border-2 border-dashed border-primary bg-background p-6 text-center"
     data-attachment-drop
   >

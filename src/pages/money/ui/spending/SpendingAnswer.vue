@@ -61,7 +61,7 @@ const carrySince = computed(() => props.balance.carry_since)
 </script>
 
 <template>
-  <section class="grid gap-2.5 rounded-xl border bg-card p-4 shadow-sm" data-tour="spending-answer">
+  <section class="grid gap-3 rounded-xl border bg-card p-4 shadow-sm" data-tour="spending-answer">
     <h2 class="text-xl font-semibold text-balance first-letter:uppercase"><i18n-t :keypath="headline.key">
         <template #when>{{ when }}</template>
         <template #spent><Money :amount="props.balance.total.spent" :currency="props.balance.currency" :decimals="0" /></template>

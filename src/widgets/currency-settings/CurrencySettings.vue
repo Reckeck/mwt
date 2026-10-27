@@ -94,7 +94,7 @@ function openRates() {
             @update:model-value="(value) => saveBudget(String(value))"
           />
         </FormField>
-        <p class="flex items-start gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-sm" data-currency-note>
+        <p class="flex items-start gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm" data-currency-note>
           <Info class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span>{{ t('currencySettings.note') }}</span>
         </p>

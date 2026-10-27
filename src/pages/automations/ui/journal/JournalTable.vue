@@ -24,8 +24,9 @@ const opens = (entry: JournalEntry) => entry.kind === 'scheme' || entry.kind ===
 
 <template>
   <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm" data-journal-table>
-    <Table>
-      <TableHeader>
+    <!-- Fixed height: a long journal scrolls inside its card, the header stays. -->
+    <Table container-class="max-h-[34rem] overscroll-contain">
+      <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_var(--border)]">
         <TableRow>
           <TableHead :class="TH">{{ t('automations.journal.col.when') }}</TableHead>
           <TableHead :class="TH">{{ t('automations.journal.col.name') }}</TableHead>

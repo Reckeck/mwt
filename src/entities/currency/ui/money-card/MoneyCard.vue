@@ -39,7 +39,7 @@ const mainRate = computed(() => (props.at ? card.atMomentRate.value : card.nowRa
 </script>
 
 <template>
-  <div class="flex flex-col gap-2.5 text-sm" data-money-card>
+  <div class="flex flex-col gap-3 text-sm" data-money-card>
     <div class="flex flex-col gap-0.5">
       <span class="text-xs text-muted-foreground">{{ title }}</span>
       <span class="text-lg font-semibold tabular-nums">{{ size }}</span>

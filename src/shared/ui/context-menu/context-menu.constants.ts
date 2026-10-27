@@ -10,7 +10,7 @@ export const MENU_ITEM_DESTRUCTIVE_CLASS =
 export const MENU_ITEM_ICON_CLASS = 'size-4 shrink-0 text-muted-foreground group-data-[highlighted]/item:text-current'
 
 export const MENU_CONTENT_CLASS =
-  'z-50 min-w-48 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md'
+  'z-50 max-h-96 min-w-48 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md'
 
 /** Visible actions, with separators only between non-empty groups. */
 export function visibleActions<T extends { hidden?: boolean }>(actions: T[]): T[] {

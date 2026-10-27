@@ -36,11 +36,11 @@ const line = computed(() => {
 </script>
 
 <template>
-  <div class="flex min-h-11 min-w-0 items-center gap-2.5" data-attachment-row>
+  <div class="flex min-h-11 min-w-0 items-center gap-3" data-attachment-row>
     <Button
       variant="ghost"
       size="block"
-      class="min-w-0 flex-1 gap-2.5 px-0 hover:bg-transparent"
+      class="min-w-0 flex-1 gap-3 px-0 hover:bg-transparent"
       :title="props.item.kind === 'link' ? props.item.url ?? undefined : props.item.title"
       @click="emit('open')"
     >

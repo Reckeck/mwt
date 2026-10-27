@@ -27,7 +27,7 @@ const start = (starter: MineStarter) => void router.push({ query: { ...route.que
 <template>
   <SectionState :loading="list.isPending.value" :error="list.error.value" skeleton="list" :rows="5">
     <MineEmpty v-if="!list.data.value?.length" @pick="start" />
-    <div v-else class="grid gap-4 max-sm:gap-3" data-tour="automations-mine">
+    <div v-else class="grid gap-4" data-tour="automations-mine">
       <div class="flex items-center gap-3">
         <MineChips v-model="filter" />
         <span class="ml-auto text-sm text-muted-foreground max-md:hidden">{{ t('automations.mine.hint') }}</span>

@@ -4,6 +4,7 @@ import { useEventListener } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 
 import { installLayerFocus } from '@/shared/lib/layer-focus'
+import { installToastClearance } from '@/shared/lib/toast-clearance'
 import { useIsPhone } from '@/shared/lib/phone'
 import { Sonner } from '@/shared/ui/sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
@@ -20,15 +21,18 @@ const settingsStore = useSettingsStore()
 
 const { resolved: theme } = useTheme()
 const phone = useIsPhone()
-/** Under the status bar and a full-screen layer's header (the way out stays uncovered). */
-const PHONE_TOAST_TOP = 'calc(var(--safe-top) + 3.75rem)'
 useLocale()
 // Layers over layers hand the focus back to what is left under them (shared/lib/layer-focus).
 let stopLayerFocus = () => {}
+let stopToastClearance = () => {}
 onMounted(() => {
   stopLayerFocus = installLayerFocus()
+  stopToastClearance = installToastClearance()
 })
-onBeforeUnmount(() => stopLayerFocus())
+onBeforeUnmount(() => {
+  stopLayerFocus()
+  stopToastClearance()
+})
 
 // Loaded before any vault work: the theme and language follow the user, not the
 // vault, so they must be readable on the unlock screen — the first thing
@@ -93,12 +97,10 @@ watch(
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <!-- On a phone the toasts drop from the top, below the status bar and the 3.5 rem header of a full-screen
-       sheet or the settings window (its «×» and «‹» stay reachable), clear of the bottom navigation. -->
+  <!-- The toasts sit at the bottom (Attach 7): above the phone's bottom bar and the footer of an open sheet,
+       the height comes from `--toast-bottom` (shared/lib/toast-clearance, styles.css). -->
   <Sonner
-    :position="phone ? 'top-center' : 'bottom-right'"
-    :offset="phone ? PHONE_TOAST_TOP : undefined"
-    :mobile-offset="{ top: PHONE_TOAST_TOP }"
+    :position="phone ? 'bottom-center' : 'bottom-right'"
     :theme="theme"
     rich-colors
     close-button

@@ -36,8 +36,8 @@ const starters = (): readonly WizardStarter[] => (phone.value ? WIZARD_PHONE_STA
 </script>
 
 <template>
-  <div class="grid gap-3.5 max-md:gap-0" data-wizard-what>
-    <div class="grid gap-2.5 md:grid-cols-2 max-md:gap-0">
+  <div class="grid gap-4 max-md:gap-0" data-wizard-what>
+    <div class="grid gap-3 md:grid-cols-2 max-md:gap-0">
       <WizardOption
         v-for="entry in WIZARD_TYPES"
         :key="entry"
@@ -51,7 +51,7 @@ const starters = (): readonly WizardStarter[] => (phone.value ? WIZARD_PHONE_STA
       />
     </div>
     <p class="mt-1 text-sm font-semibold max-md:mt-3.5">{{ t('automationWizard.starters') }}</p>
-    <div class="grid gap-2.5 md:grid-cols-2 max-md:gap-0">
+    <div class="grid gap-3 md:grid-cols-2 max-md:gap-0">
       <WizardOption
         v-for="entry in starters()"
         :key="entry"

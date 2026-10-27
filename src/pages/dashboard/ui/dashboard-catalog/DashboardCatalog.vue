@@ -46,7 +46,7 @@ function toggle(def: DashboardWidgetDef) {
 <template>
   <Dialog overlay="dashboard-catalog" v-model:open="open" :title="t('dashboard.catalog.title')" :description="t('dashboard.catalog.description')">
     <div class="grid gap-4">
-      <div class="grid gap-2.5 sm:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-2">
         <CatalogOption v-for="def in main" :key="def.id" :def="def" :on="isOn(def)" @toggle="toggle(def)" />
       </div>
       <AdvancedFields v-if="more.length && (exchanges.length || moreOpen)" :label="t('dashboard.catalog.more')" :default-open="moreOpen">
@@ -58,7 +58,7 @@ function toggle(def: DashboardWidgetDef) {
         >
           <SelectItem v-for="exchange in exchanges" :key="exchange.id" :value="exchange.id">{{ exchange.name }}</SelectItem>
         </Select>
-        <div class="grid gap-2.5 sm:grid-cols-2">
+        <div class="grid gap-3 sm:grid-cols-2">
           <CatalogOption v-for="def in more" :key="def.id" :def="def" :on="isOn(def)" @toggle="toggle(def)" />
         </div>
       </AdvancedFields>

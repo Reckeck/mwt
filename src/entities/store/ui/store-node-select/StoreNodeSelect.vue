@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
+import StoreNodeChecklist from './StoreNodeChecklist.vue'
 import StoreNodeMultiSelect from './StoreNodeMultiSelect.vue'
 
 import type { StoreNodeSelectProps } from './store-node-select.types'
@@ -35,8 +36,9 @@ const options = computed(() =>
 </script>
 
 <template>
+  <StoreNodeChecklist v-if="props.multiple && props.inline" v-model="ids" :options="options" :empty-label="props.emptyLabel" />
   <StoreNodeMultiSelect
-    v-if="props.multiple"
+    v-else-if="props.multiple"
     v-model="ids"
     :options="options"
     :empty-label="props.emptyLabel"

@@ -85,7 +85,7 @@ const TRIGGER =
             <Check v-if="active === preset" class="size-4" />
           </button>
         </div>
-        <div class="grid min-w-0 flex-1 gap-2.5 px-3.5 py-3">
+        <div class="grid min-w-0 flex-1 gap-3 px-3.5 py-3">
           <MonthPanel v-model="draft" />
           <div class="flex items-center gap-2 border-t border-border pt-2.5 text-sm">
             <Button variant="ghost" size="sm" class="text-muted-foreground" @click="reset">{{ t('period.reset') }}</Button>

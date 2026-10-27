@@ -55,7 +55,7 @@ function enterRate() {
 
 <template>
   <section
-    class="flex items-center gap-2.5 rounded-xl border border-warning bg-card px-3.5 py-2.5 text-sm shadow-sm max-md:flex-col max-md:items-stretch max-md:gap-2 max-md:px-3"
+    class="flex items-center gap-3 rounded-xl border border-warning bg-card px-3.5 py-2.5 text-sm shadow-sm max-md:flex-col max-md:items-stretch max-md:gap-2 max-md:px-3"
     data-spending-incomplete
   >
     <Info class="size-4 shrink-0 text-warning max-md:hidden" aria-hidden="true" />

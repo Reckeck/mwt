@@ -23,7 +23,7 @@ const rows = computed(() => [
 </script>
 
 <template>
-  <dl class="flex flex-col gap-3.5" data-automation-facts>
+  <dl class="flex flex-col gap-4" data-automation-facts>
     <div v-for="row in rows" :key="row.key" class="flex justify-between gap-3 py-1.5 text-sm" :data-automation-fact="row.key">
       <dt class="shrink-0 text-muted-foreground">{{ t(`automationCard.row.${row.key}`) }}</dt>
       <dd class="min-w-0 text-end">

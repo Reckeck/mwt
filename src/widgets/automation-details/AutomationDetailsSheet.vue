@@ -55,7 +55,7 @@ const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-
 
 <template>
   <Sheet v-model:open="open">
-    <SheetContent overlay="entity-automation" side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[460px]" data-automation-card
+    <SheetContent overlay="entity-automation" side="right" :hide-close="phone" class="flex w-full flex-col gap-0 p-0 max-sm:overflow-y-auto sm:max-w-[480px]" data-automation-card
       :data-entity-card="props.automationId ? `automation:${props.automationId}` : undefined"
     >
       <header :class="cn('flex shrink-0 items-center gap-1', phone ? 'h-14 px-2' : 'px-6 pt-5 pb-3 pe-12')">
@@ -70,7 +70,7 @@ const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-
 
       <EntityBack class="mx-4 mb-1" />
       <SectionState :loading="details.card.isPending.value" :error="details.card.error.value" :empty="false" @retry="details.card.refetch()">
-        <div v-if="card" class="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain px-6 pt-1 pb-4 max-sm:flex-none max-sm:overflow-visible max-sm:px-4">
+        <div v-if="card" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 pt-1 pb-4 max-sm:flex-none max-sm:overflow-visible max-sm:px-4">
           <div class="flex items-center gap-2">
             <Badge variant="secondary">{{ t(`automations.mine.kind.${card.kind}`) }}</Badge>
             <Switch v-model="active" class="ms-auto" :aria-label="t('automations.mine.toggle', { name: card.name })" data-automation-switch />
@@ -83,7 +83,7 @@ const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-
 
       <footer
         v-if="card"
-        :class="cn('flex shrink-0 items-center gap-2.5 border-t px-6 pt-3.5 pb-[max(0.875rem,var(--safe-bottom,0px))]', phone && 'flex-wrap border-t-0 px-4 pt-0')"
+        :class="cn('flex shrink-0 flex-wrap items-center gap-3 border-t px-6 pt-3.5 pb-[max(0.875rem,var(--safe-bottom,0px))]', phone && 'border-t-0 px-4 pt-0')"
         data-automation-card-actions
       >
         <ConfirmButton

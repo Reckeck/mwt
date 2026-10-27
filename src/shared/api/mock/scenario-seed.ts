@@ -11,6 +11,7 @@ import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
 import { seedSubAccounts } from './subaccounts-seed'
 import { mockImportRuns, mockKeyStatus } from './exchange-data'
+import { mockSettings } from './vault-data'
 
 let seeded = false
 
@@ -41,7 +42,16 @@ export function seedMock() {
   seedLoyalty()
   seedSubAccounts()
   seedExchangeImport()
+  seedPinnedWallets()
   if (mockScenario === 'stress') seedStress()
+}
+
+/** Two wallets pinned under the sidebar's rule (Shell · 7 «Избранные»): the bank and the exchange. */
+function seedPinnedWallets() {
+  const pinned = ['Тинькофф', 'Bybit']
+    .map((name) => mockStores.find((store) => store.name === name && !store.parent_id))
+    .filter((store) => store !== undefined)
+  mockSettings.pinned = pinned.map((store) => ({ type: 'entity', target: { kind: 'store', id: store.id } }))
 }
 
 /** Bybit connected, with one import behind it (Wallets-2 · 8): 1 trade, 2 transfers, 3 duplicates. */

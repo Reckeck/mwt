@@ -407,6 +407,11 @@ body .driver-popover,
 body .driver-overlay {
   pointer-events: auto;
 }
+/* Above the bottom bar and the footer of the open layer (shared/lib/toast-clearance); on a phone the
+   library adds the system inset again, which that height already holds. */
+[data-sonner-toaster][data-y-position='bottom'] {
+  bottom: var(--toast-bottom, 1rem) !important;
+}
 /* Two buttons («Отложить», «Выполнено») squeezed the text into a column of syllables:
    such a toast wraps, the text takes the whole width and the buttons go under it. */
 [data-sonner-toast][data-styled='true']:has([data-cancel]) {

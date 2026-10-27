@@ -70,7 +70,7 @@ const archiveLabel = computed(() => (props.category.archived ? t('stores.unarchi
 
   <div
     v-else
-    class="grid min-h-11.5 items-center gap-x-2.5 border-b md:grid-cols-[minmax(0,1fr)_9.5rem_10rem_5rem]"
+    class="grid min-h-11.5 items-center gap-x-3 border-b md:grid-cols-[minmax(0,1fr)_9.5rem_10rem_5rem]"
     :class="category.archived && 'opacity-60'"
     data-category-row
   >

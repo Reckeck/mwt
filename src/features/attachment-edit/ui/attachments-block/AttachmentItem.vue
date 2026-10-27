@@ -46,7 +46,7 @@ const actions = computed<UiAction[]>(() => [
 </script>
 
 <template>
-  <div v-if="renaming" class="flex min-h-11 items-center gap-2.5">
+  <div v-if="renaming" class="flex min-h-11 items-center gap-3">
     <AttachmentIcon :look="attachmentLook(props.item)" />
     <Input
       ref="field"

@@ -20,7 +20,7 @@ const { from, to, amount, priceIn, priceOut, feePct, impliedRate } = props.calc
 </script>
 
 <template>
-  <div class="grid gap-3.5">
+  <div class="grid gap-4">
     <div class="grid grid-cols-2 items-start gap-3">
       <AssetInput v-model="from" :label="t('calc.from')" :placeholder="t('asset.searchPlaceholder')" />
       <AssetInput v-model="to" :label="t('calc.to')" :placeholder="t('asset.searchPlaceholder')" />

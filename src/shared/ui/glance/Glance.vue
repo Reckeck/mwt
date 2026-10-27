@@ -59,7 +59,7 @@ function onKey(event: KeyboardEvent) {
       :overlay="props.overlay"
       @keydown="onKey"
     >
-      <div class="flex flex-col gap-2.5 p-3.5 text-sm">
+      <div class="flex flex-col gap-3 p-3.5 text-sm">
         <slot name="body" />
         <p v-if="props.openTo" class="flex gap-3 text-xs text-muted-foreground">
           <span><Kbd>Enter</Kbd> {{ t('glance.open') }}</span>
@@ -81,7 +81,7 @@ function onKey(event: KeyboardEvent) {
     </DrawerTrigger>
     <DrawerContent class="gap-3 px-4 pt-2 pb-5" data-glance :layer="props.overlay">
       <DrawerTitle class="sr-only">{{ props.title }}</DrawerTitle>
-      <div class="flex flex-col gap-2.5 text-sm"><slot name="body" /></div>
+      <div class="flex flex-col gap-3 text-sm"><slot name="body" /></div>
       <div v-if="props.openTo || $slots.actions" class="grid auto-cols-fr grid-flow-col gap-2 [&_button]:h-11">
         <slot name="actions" />
         <Button v-if="props.openTo" data-glance-open @click="go">{{ props.openLabel }}</Button>

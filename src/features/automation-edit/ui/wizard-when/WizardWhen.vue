@@ -36,7 +36,7 @@ const setShift = (value: unknown) => {
 </script>
 
 <template>
-  <div class="@container grid gap-3.5" data-wizard-when>
+  <div class="@container grid gap-4" data-wizard-when>
     <div class="grid gap-2">
       <Label>{{ t('automationWizard.frequency') }}</Label>
       <ToggleGroup type="single" variant="segmented" :spacing="1" class="w-full md:w-fit" :model-value="frequency" @update:model-value="setFrequency">

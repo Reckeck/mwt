@@ -28,9 +28,13 @@ const filter = ref<TxFilter>(emptyTxFilter({ from: props.since }))
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const { query: txs, rows } = useTxPages(filter)
 const phone = useIsPhone()
-/** Home shows the latest few days only (Home 1); the rest is behind «Все операции →». */
+/**
+ * The desktop card has a fixed height and scrolls inside it, so every day since the visit is there;
+ * the phone scrolls the page, so it shows the latest few days and the rest is behind «Все операции».
+ */
 const DAYS_SHOWN = 3
 const visible = computed(() => {
+  if (!phone.value) return rows.value
   const days = new Set<string>()
   const out: Transaction[] = []
   for (const tx of rows.value) {
@@ -71,7 +75,7 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
       @retry="txs.refetch()"
     >
       <!-- The header keeps its 8px; pt-1 of the state makes the band start 12px under the title, and the last row sits on the card's padding. -->
-      <div class="-mb-3">
+      <div class="-mb-3 md:-mx-4 md:max-h-96 md:overflow-y-auto md:overscroll-contain md:px-4" data-scroll-list>
         <TransactionsList
           :transactions="visible"
           :total="visible.length"
