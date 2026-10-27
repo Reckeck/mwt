@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { FormField } from '@/shared/ui/form-field'
 import { call, parseError } from '@/shared/api/ipc'
 import { required, useFormValidation } from '@/shared/lib/form'
@@ -74,7 +75,9 @@ async function save(shortcut: string | null) {
       <h3 class="heading-card">{{ t('quickAdd.settingsTitle') }}</h3>
       <p class="text-sm text-muted-foreground">{{ t('quickAdd.settingsHint') }}</p>
     </template>
-    <div v-if="support.data.value && !support.data.value.global_keys" class="grid gap-2">
+    <!-- Until the platform answers, neither variant: the wrong one would swap places and move the section below. -->
+    <Skeleton v-if="support.isPending.value" class="h-44 w-full md:h-30" />
+    <div v-else-if="support.data.value && !support.data.value.global_keys" class="grid gap-2">
       <p class="text-sm">{{ t('quickAdd.waylandHint') }}</p>
       <code class="block overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs">{{ binding }}</code>
       <div class="flex flex-wrap items-center gap-2">
