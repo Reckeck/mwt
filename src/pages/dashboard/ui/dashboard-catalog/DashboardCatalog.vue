@@ -21,9 +21,9 @@ const emit = defineEmits<{ add: [def: DashboardWidgetDef, storeId: string | null
 const { t } = useI18n()
 
 const offered = computed(() => DASHBOARD_WIDGETS.filter((def) => !def.requires || props.exchanges.length))
-const main = computed(() => offered.value.filter((def) => def.home))
-const more = computed(() => offered.value.filter((def) => !def.home))
 const isOn = (def: DashboardWidgetDef) => props.placed.includes(def.id)
+const main = computed(() => offered.value.filter((def) => def.home))
+const more = computed(() => offered.value.filter((def) => !def.home && (def.requires || isOn(def))))
 /** «Ещё» opens by itself when one of its widgets is already on Home. */
 const moreOpen = computed(() => more.value.some(isOn))
 
@@ -49,7 +49,7 @@ function toggle(def: DashboardWidgetDef) {
       <div class="grid gap-2.5 sm:grid-cols-2">
         <CatalogOption v-for="def in main" :key="def.id" :def="def" :on="isOn(def)" @toggle="toggle(def)" />
       </div>
-      <AdvancedFields v-if="more.length" :label="t('dashboard.catalog.more')" :default-open="moreOpen">
+      <AdvancedFields v-if="more.length && (exchanges.length || moreOpen)" :label="t('dashboard.catalog.more')" :default-open="moreOpen">
         <Select
           v-if="exchanges.length > 1"
           v-model="exchangeId"

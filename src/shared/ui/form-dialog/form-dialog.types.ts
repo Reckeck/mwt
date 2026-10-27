@@ -13,6 +13,8 @@ export interface FormDialogProps {
   pending?: boolean
   /** On a phone: no Cancel (the sheet has its ×), one full-width save button (Wallets-2 · 13, Wallets-3 · 20). */
   phoneSubmitOnly?: boolean
+  /** Cancel's look: bare by default, `outline` where the frame draws a bordered button (Money-2 · 14, Money-3 · 17). */
+  cancelVariant?: 'ghost' | 'outline'
   /** Name of the layer for `data-overlay`. */
   overlay?: string
 }

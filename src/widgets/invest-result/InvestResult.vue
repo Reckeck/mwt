@@ -84,7 +84,7 @@ const comparing = computed(() => !outcome.value?.solved && Number(outcome.value?
           :outcome="outcome"
           :currency="currency"
           :target="props.calc.form.target"
-          :prefilled="props.calc.prefilled.value"
+          :prefilled="props.calc.incomeBasis.value"
           :safe-withdrawal="extras.safeWithdrawal.value"
           @accept="props.calc.acceptSolved"
           @goal="emit('goal')"

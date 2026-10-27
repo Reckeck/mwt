@@ -44,10 +44,13 @@ export interface FlowPortLinks {
   links: Array<{ edgeId: string; title: string }>
 }
 
-/** How a wire looks: a thick neutral line for the flow, a coloured one for data. */
+/** How a wire looks: a thick orange line for the flow, a dashed one in the port's colour for data. */
 export function edgeStyle(type: PortType): Pick<EditorEdge, 'style' | 'animated' | 'class'> {
   return {
-    style: { stroke: portStroke(type), strokeWidth: type === 'flow' ? 2.5 : 1.5 },
+    style:
+      type === 'flow'
+        ? { stroke: 'var(--wire-flow)', strokeWidth: 2.5 }
+        : { stroke: portStroke(type), strokeWidth: 1.75, strokeDasharray: '5 4' },
     animated: false,
     class: type === 'flow' ? 'wf-edge-flow' : 'wf-edge-data',
   }

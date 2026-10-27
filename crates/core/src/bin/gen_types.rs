@@ -419,6 +419,7 @@ fn main() {
         trade_core::service::MonthBalance,
         trade_core::service::MonthBalanceRow,
         trade_core::service::MonthBalanceDay,
+        trade_core::service::MonthBalanceMark,
         trade_core::service::MineItem,
         trade_core::service::MineKind,
         trade_core::service::AutomationCard,

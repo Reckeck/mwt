@@ -71,7 +71,7 @@ function correct() {
     :title="automation?.name ?? t('glance.auto.title')"
     :open-to="toAutomation"
     :open-label="automation ? t('glance.auto.automation') : t('glance.auto.scheme')"
-    trigger-class="rounded-md border border-primary/40 px-1.5 text-xs leading-5"
+    trigger-class="rounded-md border border-primary/40 px-1.5 text-xs leading-5 no-underline [border-bottom-style:dotted]"
     kind="auto"
     :entity="entityKey({ kind: automation ? 'automation' : 'workflow', id: props.automationId })"
   >

@@ -8,13 +8,16 @@ import { formatMonthKey } from '@/shared/lib/format'
 import { shiftMonth } from '@/shared/lib/period'
 import { SectionState } from '@/shared/ui/section-state'
 
-import { MonthBalanceCard, MonthDaysChart, MonthNow } from './ui/month-balance'
+import { useIsPhone } from '@/shared/lib/phone'
+
+import { MonthBalanceCard, MonthDaysChart, MonthNow, MonthPhone } from './ui/month-balance'
 
 /** «Остаток месяца» (Money 3 · 15): the month in a sentence, day by day, then the twelve months with the carry. */
 const props = defineProps<{ filter: ReportFilter }>()
 
 const { t } = useI18n()
 const route = useRoute()
+const phone = useIsPhone()
 const router = useRouter()
 const month = computed(() => props.filter.to ?? '')
 const year = computed<ReportFilter>(() => ({ ...props.filter, from: shiftMonth(month.value, -11), to: month.value }))
@@ -33,7 +36,8 @@ function pick(key: string) {
 
 <template>
   <SectionState :loading="balance.isPending.value" :error="balance.error.value" skeleton="figure" @retry="balance.refetch()">
-    <div v-if="data && row" class="grid grid-cols-1 gap-4 md:grid-cols-[330px_minmax(0,1fr)]">
+    <MonthPhone v-if="data && row && phone" :balance="data" :row="row" :month="month" @pick="pick" />
+    <div v-else-if="data && row" class="grid grid-cols-1 gap-4 md:grid-cols-[330px_minmax(0,1fr)]">
       <MonthNow :balance="data" :row="row" />
       <MonthDaysChart :balance="data" :title="daysTitle" />
       <MonthBalanceCard :balance="data" :month="month" class="md:col-span-2" @pick="pick" />

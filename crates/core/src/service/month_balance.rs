@@ -45,6 +45,18 @@ pub struct MonthBalanceDay {
     pub forecast: Option<Amount>,
 }
 
+/// The biggest income or spending of the last month: what the chart labels
+/// («+1 575 $ зарплата», «−36 $ Продукты»).
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct MonthBalanceMark {
+    /// `YYYY-MM-DD`.
+    pub date: String,
+    /// Positive, in the report currency.
+    pub amount: Amount,
+    /// The operation's first category key; empty without one.
+    pub category: String,
+}
+
 /// The months of a period with what each left and what carried over.
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MonthBalance {
@@ -62,7 +74,20 @@ pub struct MonthBalance {
     pub days: Vec<MonthBalanceDay>,
     /// The day's allowance the forecast spends (the calendar's); `None` without one.
     pub per_day: Option<Amount>,
+    /// The month's biggest income, for the chart's label.
+    #[serde(default)]
+    pub income_mark: Option<MonthBalanceMark>,
+    /// The month's biggest spending, for the chart's label.
+    #[serde(default)]
+    pub spent_mark: Option<MonthBalanceMark>,
 }
+
+type BalanceDays = (
+    Vec<MonthBalanceDay>,
+    Option<Amount>,
+    Option<MonthBalanceMark>,
+    Option<MonthBalanceMark>,
+);
 
 impl UnlockedVault {
     /// The balance of the filter's months (the last twelve by default). The
@@ -142,9 +167,9 @@ impl UnlockedVault {
             total.total = last.total;
             total.current = last.current;
         }
-        let (days, per_day) = match rows.last() {
+        let (days, per_day, income_mark, spent_mark) = match rows.last() {
             Some(last) => self.balance_days(&ctx, last)?,
-            None => (Vec::new(), None),
+            None => (Vec::new(), None, None, None),
         };
         Ok(MonthBalance {
             currency: cash.meta.currency,
@@ -154,28 +179,35 @@ impl UnlockedVault {
             total,
             days,
             per_day,
+            income_mark,
+            spent_mark,
         })
     }
 
     /// The month's balance day by day from the same flows as its row, counted back
     /// from its `total` so the last real day ends exactly there. Ahead, the
     /// calendar's day allowance is spent each day (when it is in the same currency).
-    fn balance_days(
-        &self,
-        ctx: &Ctx,
-        row: &MonthBalanceRow,
-    ) -> Result<(Vec<MonthBalanceDay>, Option<Amount>)> {
+    fn balance_days(&self, ctx: &Ctx, row: &MonthBalanceRow) -> Result<BalanceDays> {
         let first = calendar::parse_month(&row.month)
             .ok_or_else(|| Error::InvalidInput(format!("month {}: expected YYYY-MM", row.month)))?;
         let (from, to) = ctx.cal.month_bounds(first);
         let mut net: BTreeMap<NaiveDate, Amount> = BTreeMap::new();
+        let mut income_mark: Option<MonthBalanceMark> = None;
+        let mut spent_mark: Option<MonthBalanceMark> = None;
         for flow in self.report_flows(ctx, from, to) {
             let value = ctx.shown(flow.value, first);
-            let sign = match flow.class {
-                FlowClass::Income => value,
-                FlowClass::Fixed | FlowClass::Daily => -value,
+            let (sign, mark) = match flow.class {
+                FlowClass::Income => (value, &mut income_mark),
+                FlowClass::Fixed | FlowClass::Daily => (-value, &mut spent_mark),
                 _ => continue,
             };
+            if mark.as_ref().is_none_or(|best| value.abs() > best.amount) {
+                *mark = Some(MonthBalanceMark {
+                    date: flow.date.format("%Y-%m-%d").to_string(),
+                    amount: value.abs(),
+                    category: flow.categories.first().cloned().unwrap_or_default(),
+                });
+            }
             *net.entry(flow.date).or_default() += sign;
         }
         let per_day = if row.current {
@@ -214,7 +246,7 @@ impl UnlockedVault {
                 },
             })
             .collect();
-        Ok((days, per_day))
+        Ok((days, per_day, income_mark, spent_mark))
     }
 
     /// Carry the unspent over from `month` (`YYYY-MM`), or stop carrying (`None`).
@@ -332,6 +364,14 @@ mod tests {
         assert_eq!(balance_on(5), Some(amount("1000")));
         assert_eq!(balance_on(15), Some(report.total.total));
         assert_eq!(balance_on(16), None);
+        // The chart labels the biggest income and the biggest spending.
+        let income = report.income_mark.as_ref().expect("an income mark");
+        assert_eq!(income.amount, amount("1000"));
+        assert_eq!(income.date, "2026-06-05");
+        assert_eq!(
+            report.spent_mark.as_ref().map(|mark| mark.amount),
+            Some(amount("100"))
+        );
         let forecast: Vec<Amount> = report.days.iter().filter_map(|day| day.forecast).collect();
         // A forecast exists only with an allowance; it never rises.
         assert!(report.per_day.is_some() || forecast.is_empty());

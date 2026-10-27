@@ -12,6 +12,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { ExchangeAccounts } from '../exchange-accounts'
 import { WalletAssets } from '../wallet-assets'
 import { WalletExtras } from '../wallet-extras'
+import { WalletIncoming } from '../wallet-incoming'
 
 /**
  * The positions tab: an exchange by its sub-accounts and its spot by
@@ -83,6 +84,8 @@ function openPosition(position: StorePosition) {
       :prices-as-of="props.pricesAsOf"
       @open="openPosition"
     />
+
+    <WalletIncoming v-if="props.store.kind === 'crypto'" :store-id="props.storeId" />
 
     <!-- Futures positions: shown, never counted in the totals. -->
     <StorePositions

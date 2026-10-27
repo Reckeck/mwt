@@ -7,6 +7,7 @@ import { Money } from '@/entities/currency'
 import { useCategories } from '@/shared/api/queries'
 import { categoryKeyLabel } from '@/shared/lib/categories'
 import { formatMonthKey, signClass } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { currentMonth } from '@/shared/lib/period'
 
 import type { SpendingCategory } from '../../model/use-spending'
@@ -28,6 +29,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const route = useRoute()
+const phone = useIsPhone()
 const categories = useCategories()
 const monthName = (key: string, form: 'in' | 'since') => t(`period.${form}.${key.slice(5, 7)}`)
 
@@ -72,21 +74,40 @@ const carrySince = computed(() => props.balance.carry_since)
           <template #average><Money :amount="props.average" :currency="props.balance.currency" :decimals="0" /></template>
         </i18n-t>
       </span>
-      <span class="text-muted-foreground">{{ t('money.answer.income') }}</span>
-      <b class="whitespace-nowrap"><Money :amount="props.balance.total.income" :currency="props.balance.currency" :decimals="0" /></b>
-      <span class="text-muted-foreground">· {{ t('money.answer.left') }}</span>
-      <b :class="['whitespace-nowrap', signClass(props.balance.total.left)]">
-        <Money :amount="props.balance.total.left" :currency="props.balance.currency" :decimals="0" />
-      </b>
-      <template v-if="carrySince">
-        <span class="text-muted-foreground">· {{ t('money.answer.since', { month: monthName(carrySince, 'since') }) }}</span>
-        <b class="whitespace-nowrap border-b border-dashed border-current text-primary">
-          <Money :amount="props.balance.total.total" :currency="props.balance.currency" :decimals="0" />
+      <template v-if="!phone">
+        <span class="text-muted-foreground">{{ t('money.answer.income') }}</span>
+        <b class="whitespace-nowrap"><Money :amount="props.balance.total.income" :currency="props.balance.currency" :decimals="0" /></b>
+        <span class="text-muted-foreground">· {{ t('money.answer.left') }}</span>
+        <b :class="['whitespace-nowrap', signClass(props.balance.total.left)]">
+          <Money :amount="props.balance.total.left" :currency="props.balance.currency" :decimals="0" />
         </b>
+        <template v-if="carrySince">
+          <span class="text-muted-foreground">· {{ t('money.answer.since', { month: monthName(carrySince, 'since') }) }}</span>
+          <b class="whitespace-nowrap text-primary">
+            <Money glance :amount="props.balance.total.total" :currency="props.balance.currency" :decimals="0" />
+          </b>
+        </template>
       </template>
       <RouterLink :to="{ name: 'money-month', query: route.query }" class="font-medium whitespace-nowrap text-primary hover:underline">
         {{ t('money.tab.month') }} →
       </RouterLink>
     </p>
+    <!-- On a phone the two figures are cards under the phrase (Money 1 · 1). -->
+    <div v-if="phone" class="grid grid-cols-2 gap-2" data-spending-cards>
+      <div class="rounded-lg border p-3">
+        <p class="text-xs text-muted-foreground">{{ t('money.answer.income') }}</p>
+        <p class="text-xl font-semibold"><Money :amount="props.balance.total.income" :currency="props.balance.currency" :decimals="0" /></p>
+      </div>
+      <div class="rounded-lg border p-3">
+        <p class="text-xs text-muted-foreground">{{ t('money.answer.leftCard') }}</p>
+        <p :class="['text-xl font-semibold', signClass(props.balance.total.left)]">
+          <Money :amount="props.balance.total.left" :currency="props.balance.currency" :decimals="0" />
+        </p>
+        <p v-if="carrySince" class="text-xs text-muted-foreground">
+          {{ t('money.answer.since', { month: monthName(carrySince, 'since') }) }}
+          <Money glance :amount="props.balance.total.total" :currency="props.balance.currency" :decimals="0" />
+        </p>
+      </div>
+    </div>
   </section>
 </template>

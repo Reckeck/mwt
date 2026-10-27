@@ -142,6 +142,8 @@
   --syntax-selection: oklch(0.546 0.245 262.881 / 18%);
   /* Workflow editor: a colour per port type and per node group. */
   --port-flow: oklch(0.45 0.02 286);
+  /* The wire of the flow (Auto-2 · 13): orange; data wires keep their port's colour, dashed. */
+  --wire-flow: oklch(0.7 0.16 58);
   --port-any: oklch(0.6 0.01 286);
   --port-number: oklch(0.6 0.15 250);
   --port-money: oklch(0.6 0.16 150);
@@ -216,6 +218,7 @@
   --syntax-selection: oklch(1 0 0 / 16%);
   /* Workflow editor, dark. */
   --port-flow: oklch(0.85 0.01 286);
+  --wire-flow: oklch(0.78 0.15 65);
   --port-any: oklch(0.7 0.01 286);
   --port-number: oklch(0.75 0.15 250);
   --port-money: oklch(0.75 0.16 150);
@@ -479,6 +482,24 @@ body .driver-overlay {
 :is(a, button, label, [role='button'], [role='menuitem'], [role='option'], [role='tab']) .money-convertible {
   cursor: inherit;
   text-decoration: none;
+}
+
+/* A glance the screen points at (the «≈ N $» of a header, «всего с сентября»): one dotted line, always. */
+.money-glance.money-convertible {
+  text-decoration: underline dotted color-mix(in oklch, var(--primary) 70%, transparent) 1.5px;
+  text-underline-offset: 5px;
+}
+:is(a, button, label, [role='button'], [role='menuitem'], [role='option'], [role='tab']) .money-glance.money-convertible {
+  text-decoration: none;
+}
+
+/* A sum inside a glance trigger takes the trigger's dashed line: an inline-flex child does not
+   inherit the parent's decoration by itself. */
+[data-glance-trigger] .money.money-convertible {
+  text-decoration: inherit;
+  text-decoration-color: inherit;
+  text-underline-offset: inherit;
+  cursor: inherit;
 }
 
 /* The mark of a sum on a filled button (a primary «Направить остаток 558 $ в цель»): the muted

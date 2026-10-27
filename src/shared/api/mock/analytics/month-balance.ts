@@ -62,7 +62,9 @@ export function mockMonthBalance(
     total: end?.total ?? '0',
     current: end?.current ?? false,
   }
-  const { days, perDay } = end ? balanceDays(end, ctx) : { days: [], perDay: null }
+  const { days, perDay, incomeMark, spentMark } = end
+    ? balanceDays(end, ctx)
+    : { days: [], perDay: null, incomeMark: null, spentMark: null }
   return {
     currency: cash.meta.currency,
     carry_since: carrySince,
@@ -71,17 +73,28 @@ export function mockMonthBalance(
     total,
     days,
     per_day: perDay === null ? null : money(perDay),
+    income_mark: incomeMark,
+    spent_mark: spentMark,
   }
 }
 
 /** The last month day by day from the same flows as its row, counted back from its total (as the backend does). */
 function balanceDays(row: MonthBalanceRow, ctx: AnalyticsMockContext) {
   const net = new Map<string, number>()
+  let incomeMark: MonthBalanceMark | null = null
+  let spentMark: MonthBalanceMark | null = null
   for (const flow of flows(ctx)) {
     if (flow.month !== row.month) continue
     const income = flow.incoming && flow.group === 'income'
     const spent = !flow.incoming && flow.group !== 'service'
-    if (income || spent) net.set(flow.date, (net.get(flow.date) ?? 0) + (income ? flow.value : -flow.value))
+    if (!income && !spent) continue
+    net.set(flow.date, (net.get(flow.date) ?? 0) + (income ? flow.value : -flow.value))
+    const best = income ? incomeMark : spentMark
+    if (!best || flow.value > Number(best.amount)) {
+      const mark = { date: flow.date, amount: money(flow.value), category: flow.key }
+      if (income) incomeMark = mark
+      else spentMark = mark
+    }
   }
   const allowance = mockCalendar(row.month, ctx).allowance
   const perDay = row.current && allowance !== null ? Number(allowance) : null
@@ -105,5 +118,5 @@ function balanceDays(row: MonthBalanceRow, ctx: AnalyticsMockContext) {
         ? money(Number(row.total) - perDay * (index - lastReal))
         : null,
   }))
-  return { days, perDay }
+  return { days, perDay, incomeMark, spentMark }
 }
