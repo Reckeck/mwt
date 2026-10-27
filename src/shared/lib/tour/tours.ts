@@ -127,6 +127,7 @@ export const TOURS: Record<string, TourStep[]> = {
   wallet: [
     { target: 'wallet-actions', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-gear', key: 'wallet.settings', side: 'bottom' },
+    { target: 'wallet-sub-accounts', key: 'wallet.subAccounts', side: 'bottom' },
     { target: 'wallet-all-operations', key: 'wallet.allOperations', side: 'bottom' },
     { target: 'wallet-relations', key: 'wallet.relations', side: 'top' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },

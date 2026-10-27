@@ -9,14 +9,13 @@ import { StorePositions } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 
-import { ExchangeAccounts } from '../exchange-accounts'
 import { WalletAssets } from '../wallet-assets'
 import { WalletExtras } from '../wallet-extras'
 import { WalletIncoming } from '../wallet-incoming'
 
 /**
- * The positions tab: an exchange by its sub-accounts and its spot by
- * currency (Wallets-1 · 7), any other wallet its assets as a table
+ * The positions tab: an exchange's spot by currency (its sub-accounts are
+ * the tiles above the tabs; Wallets-1 · 7), any other wallet its assets as a table
  * (Wallets-1 · 6); a property keeps its revaluation. Losses and exchange
  * balances follow under them.
  */
@@ -28,8 +27,8 @@ const props = defineProps<{
   base: string
   decimals: number
   pricesAsOf?: string | null
-  /** An exchange's own wallet, with its sub-accounts and own spot. */
-  exchange?: { children: StoreChildRow[]; ownBase: string; ownPositions: StorePosition[] } | null
+  /** An exchange's own wallet: the list is its spot by currency. */
+  exchange?: boolean
   hasKey: boolean
 }>()
 const emit = defineEmits<{ operation: [] }>()
@@ -45,16 +44,6 @@ function openPosition(position: StorePosition) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <ExchangeAccounts
-      v-if="props.exchange && props.exchange.children.length"
-      :store="props.store"
-      :children="props.exchange.children"
-      :own-base="props.exchange.ownBase"
-      :own-positions="props.exchange.ownPositions"
-      :base="props.base"
-      :decimals="props.decimals"
-    />
-
     <EmptyState v-if="props.positions.length === 0" :title="t('wallet.empty')" :description="t('wallet.emptyHint')">
       <Button :disabled="props.store.archived" @click="emit('operation')">
         <Plus class="size-4" />
@@ -80,7 +69,7 @@ function openPosition(position: StorePosition) {
       :positions="props.positions"
       :base="props.base"
       :decimals="props.decimals"
-      :spot="Boolean(props.exchange)"
+      :spot="props.exchange"
       :prices-as-of="props.pricesAsOf"
       @open="openPosition"
     />

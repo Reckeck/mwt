@@ -22,11 +22,13 @@ const FULL_AT = new Set(['1280x720', '1024x640', '768x800', '560x860', '390x844'
 
 const PHONE_AT = new Set(['390x844', '360x740'])
 
-const MAIN_ROUTES = ['/', '/stores', '/transactions', '/money/where', '/automations/reminders', 'settings:app:app', 'settings:accounting:currencies']
+const MAIN_ROUTES = ['/', '/stores', 'stores:unfolded', '/transactions', '/money/where', '/automations/reminders', 'settings:app:app', 'settings:accounting:currencies']
 
 const STATIC_ROUTES = [
   '/',
   '/stores',
+  // The wallets table with every wallet that has sub-accounts unfolded.
+  'stores:unfolded',
   '/transactions',
   '/transactions/contacts',
   '/transactions/calendar',
@@ -146,7 +148,19 @@ export async function views(page, size) {
 async function openOnce(page, view) {
   const target = view.startsWith('settings:')
     ? `{ path: '/', query: { settings: '${view.split(':')[1]}', section: '${view.split(':')[2]}' } }`
-    : `'${view}'`
+    : view === 'stores:unfolded'
+      ? `'/stores'`
+      : `'${view}'`
+  // Unfolded wallets are a setting of the device: set for this view, cleared for every other.
+  await page.eval(`${APP}
+    const { call } = await import('/src/shared/api/ipc.ts')
+    const open = '${view}' === 'stores:unfolded'
+      ? (await call('get_store_tree')).filter((node) => node.children.length).map((node) => node.store.id)
+      : []
+    localStorage.setItem('wallets-expanded', JSON.stringify(open))
+    // The table reads the setting when it mounts: leave the page it is on first.
+    if (gp.$route.path === '/stores') await gp.$router.push('/')
+    return true`)
   // The new route's own first frames are what the click asked for: a browser leaves shifts
   // within 500 ms of input out of CLS. Counted is what moves after that — data landing.
   await page.eval(`${APP}

@@ -21,13 +21,12 @@ import { VehicleCard } from '@/widgets/vehicle-card'
 import { isHome, useStoreOverview } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { SectionState } from '@/shared/ui/section-state'
-import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { walletFigure } from './lib/wallet-figure'
 import { type WalletTabsKind, useWalletScope, useWalletTabs } from './model/use-wallet-view'
-import { SubAccountsCard } from './ui/sub-accounts-card'
+import { SubAccountTiles } from './ui/sub-account-tiles'
 import { WalletEmpty } from './ui/wallet-empty'
 import { WalletHeader } from './ui/wallet-header'
 import { WalletTabs } from './ui/wallet-tabs'
@@ -80,10 +79,6 @@ const figure = computed(() => {
   return rollUp.value
     ? walletFigure(data.subtree_positions, data.subtree_base, base.value)
     : walletFigure(data.positions, data.own_base, base.value)
-})
-const exchange = computed(() => {
-  const data = overview.data.value
-  return isExchangeNode.value && data ? { children: data.children, ownBase: data.own_base, ownPositions: data.positions } : null
 })
 /** The header's buttons: an exchange opens «Сделка», any other wallet the short form on its kind. */
 function act(kind: TxKind) {
@@ -176,22 +171,18 @@ function openWallet(created: Store) {
       <WalletEmpty v-if="isEmpty" :store="store" @balance="adjustOpen = true" />
 
       <template v-else>
-        <!-- A wallet with sub-accounts chooses its scope; an exchange lists them as cards instead. -->
-        <div v-if="hasChildren && !isExchangeNode" class="flex justify-end">
-          <ToggleGroup v-model="scopeValue" type="single" variant="outline" size="sm" :aria-label="t('stores.scope')">
-            <ToggleGroupItem value="all" class="px-2.5">{{ t('stores.withChildren') }}</ToggleGroupItem>
-            <ToggleGroupItem value="own" class="px-2.5">{{ t('stores.onlyThis') }}</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-
-        <SubAccountsCard
-          v-if="hasChildren && !isExchangeNode"
+        <!-- Sub-accounts as tiles; a wallet (not an exchange) also chooses its scope here. -->
+        <SubAccountTiles
+          v-if="hasChildren"
+          v-model:scope="scopeValue"
           :store="store"
           :children="children"
           :own-base="overview.data.value.own_base"
           :own-share="ownShare"
-          :currency="base"
+          :own-positions="overview.data.value.positions"
+          :base="base"
           :can-add-child="canAddChild"
+          :scoped="!isExchangeNode"
           @add="subWalletOpen = true"
         />
 
@@ -209,13 +200,13 @@ function openWallet(created: Store) {
           :store-id="storeId"
           :tabs="tabs"
           :more="more"
-          :positions="exchange ? exchange.ownPositions : positions"
+          :positions="isExchangeNode ? overview.data.value.positions : positions"
           :open-positions="overview.data.value.open_positions"
           :base="base"
           :decimals="decimals"
           :include-children="rollUp"
           :prices-as-of="overview.data.value.prices_as_of"
-          :exchange="exchange"
+          :exchange="isExchangeNode"
           :has-key="bybitHasKey"
           :refreshing="priceRefresh.isPending.value"
           @operation="openTransaction"

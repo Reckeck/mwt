@@ -9,23 +9,28 @@ import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu } from '@/shared/ui/context-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { currencySymbol, formatDate, formatDayMonthShort } from '@/shared/lib/format'
+import { currencySymbol, formatDate, formatDayMonthShort, formatPct } from '@/shared/lib/format'
 import { storeIcon } from '@/shared/lib/store-icons'
 import { cn } from '@/shared/lib/utils'
 
 import { walletSubtitle } from '@/entities/store'
 import { useWalletActions } from '../model/use-wallet-actions'
+import { useWalletExpansion } from '../model/use-wallet-expansion'
 import type { WalletRowEvents, WalletSort } from '../stores.types'
+import WalletExpand from './WalletExpand.vue'
 
 /**
  * The wallets as a table (Wallets-1 · 1, Currency-1 · 2): the star, the wallet
  * with its kind, what it holds in its own currencies, the last operation, the
  * sum. The name and the sum headers order the rows; a click on a row opens it.
+ * A wallet with sub-accounts has a chevron: unfolded, they follow as indented
+ * rows (28 px icon, the share in place of the last operation, no star or menu).
  */
 const props = defineProps<{ rows: StoreTreeNode[]; currency: string; shown: (amount: number) => number | null }>()
 const emit = defineEmits<WalletRowEvents>()
 const sort = defineModel<WalletSort>('sort', { required: true })
 const { t } = useI18n()
+const expansion = useWalletExpansion()
 const { actions, pinned, togglePin } = useWalletActions(
   (store) => emit('toggleArchive', store),
   (store) => emit('delete', store),
@@ -45,15 +50,19 @@ const MAX_BALANCES = 3
 
 /** One row's model: what the template shows, computed once per row. */
 const items = computed(() =>
-  props.rows.map((node) => ({
+  expansion.lines(props.rows).map(({ node, depth, share }) => ({
     node,
+    depth,
+    nested: depth > 0,
+    foldable: node.children.length > 0,
+    open: expansion.isOpen(node.store.id),
     store: node.store,
     actions: actions(node),
     pinned: pinned(node.store),
     subtitle: walletSubtitle(node.store, t),
     balances: node.balances.slice(0, MAX_BALANCES),
     more: Math.max(0, node.balances.length - MAX_BALANCES),
-    last: node.last_tx_at ? lastDay(node.last_tx_at) : '—',
+    last: share !== null ? formatPct(share * 100, { decimals: 0 }) : node.last_tx_at ? lastDay(node.last_tx_at) : '—',
     sum: props.shown(Number(node.subtree_base)),
   })),
 )
@@ -87,6 +96,7 @@ const items = computed(() =>
           <TableRow :class="cn('relative', row.store.archived && 'opacity-60')" :data-store="row.store.id">
             <TableCell class="px-3 py-2.5">
               <Button
+                v-if="!row.nested"
                 variant="ghost"
                 size="icon-sm"
                 :class="cn('relative z-10', row.pinned ? 'text-warning' : 'text-border hover:text-muted-foreground')"
@@ -98,8 +108,15 @@ const items = computed(() =>
               </Button>
             </TableCell>
             <TableCell class="max-w-0 px-3 py-2.5">
-              <div class="flex items-center gap-3">
-                <span class="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground">
+              <div class="flex items-center gap-3" :style="row.nested ? { paddingInlineStart: `${row.depth * 1.5}rem` } : undefined">
+                <span
+                  :class="
+                    cn(
+                      'flex shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground',
+                      row.nested ? 'size-7' : 'size-8',
+                    )
+                  "
+                >
                   <component :is="storeIcon(row.store)" class="size-4" />
                 </span>
                 <span class="min-w-0">
@@ -111,8 +128,9 @@ const items = computed(() =>
                   >
                     {{ row.store.name }}
                   </RouterLink>
-                  <span class="block truncate text-xs text-muted-foreground">{{ row.subtitle }}</span>
+                  <span v-if="!row.nested" class="block truncate text-xs text-muted-foreground">{{ row.subtitle }}</span>
                 </span>
+                <WalletExpand v-if="row.foldable" :name="row.store.name" :open="row.open" @toggle="expansion.toggle(row.store.id)" />
               </div>
             </TableCell>
             <TableCell class="px-3 py-2.5 whitespace-nowrap tabular-nums">
@@ -128,7 +146,7 @@ const items = computed(() =>
               <span v-else class="font-normal text-muted-foreground" :title="t('stores.table.noRate')">—</span>
             </TableCell>
             <TableCell class="px-3 py-2.5">
-              <ActionMenu class="relative z-10" :actions="row.actions" :label="t('stores.actions', { name: row.store.name })" />
+              <ActionMenu v-if="!row.nested" class="relative z-10" :actions="row.actions" :label="t('stores.actions', { name: row.store.name })" />
             </TableCell>
           </TableRow>
         </ContextMenu>
