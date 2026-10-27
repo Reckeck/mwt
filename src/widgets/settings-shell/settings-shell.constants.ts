@@ -76,9 +76,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           section('currencies', 'currencies'),
           section('direction', 'direction'),
           section('rates', 'ratesTable'),
-          section('budget', 'budget'),
-          section('inflation', 'inflation'),
         ],
+      },
+      {
+        id: 'money',
+        titleKey: 'settingsShell.tab.money',
+        sections: [section('budget', 'budget'), section('inflation', 'inflation')],
       },
       { id: 'categories', titleKey: 'settingsShell.tab.categories', sections: [section('categories', 'categories')] },
       {

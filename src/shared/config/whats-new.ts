@@ -268,14 +268,14 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: '2026-10-21',
     points: [
       { key: 'return', route: 'money-plan' },
-      { key: 'manual', route: 'settings:accounting' },
+      { key: 'manual', route: 'settings:accounting:budget' },
     ],
   },
   {
     id: 'inflationAuto',
     date: '2026-10-21',
     points: [
-      { key: 'auto', route: 'settings:accounting' },
+      { key: 'auto', route: 'settings:accounting:inflation' },
       { key: 'notices', route: 'settings:app:notifications' },
       { key: 'keyRate' },
     ],
