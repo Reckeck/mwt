@@ -18,7 +18,9 @@ const asset = defineModel<AssetRef | null>({ default: null })
 
 const open = ref(false)
 // A pick closes the popover: the chip shows it right away.
-watch(asset, () => (open.value = false))
+watch(asset, (value) => {
+  if (value) open.value = false
+})
 </script>
 
 <template>

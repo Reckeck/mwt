@@ -31,7 +31,11 @@ const filter = defineModel<TxFilter>({ required: true })
 const { t, locale } = useI18n()
 const phone = useIsPhone()
 const open = ref(false)
-const { draft, total, apply } = useFilterDraft(filter, open)
+/** Filters edited in the row, not in the panel: «Показать» must not overwrite them. A phone has only the search there. */
+const ROW_KEYS: (keyof TxFilter)[] = ['text', 'flow_id', 'with_fee', 'realized']
+const { draft, total, apply } = useFilterDraft(filter, open, () =>
+  phone.value ? ROW_KEYS : [...ROW_KEYS, 'kinds', ...(props.fixedScope ? [] : (['scope'] as const))],
+)
 
 // Typing does not refetch on every key.
 const search = ref(filter.value.text ?? '')
@@ -77,9 +81,19 @@ const applyLabelFull = computed(() =>
 function reset() {
   filter.value = emptyTxFilter(kept())
 }
-/** «Сбросить» in the panel clears the draft, not the list: «Показать» still applies it. */
+/**
+ * «Сбросить» in the panel clears the draft at once, and the count under «Показать» follows. A computer
+ * also applies it: the list behind the panel updates. A phone waits for «Показать», which closes the screen.
+ */
 function clear() {
-  draft.value = emptyTxFilter({ ...kept(), text: draft.value.text })
+  draft.value = emptyTxFilter({
+    ...(phone.value ? kept() : { scope: filter.value.scope, kinds: filter.value.kinds }),
+    text: filter.value.text,
+    flow_id: filter.value.flow_id,
+    with_fee: filter.value.with_fee,
+    realized: filter.value.realized,
+  })
+  if (!phone.value) apply()
 }
 </script>
 

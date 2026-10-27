@@ -15,6 +15,7 @@ import { Label } from '@/shared/ui/label'
 import { hitToRef, resolveTicker } from '../../lib/resolve-ticker'
 import type { AssetInputProps } from './asset-input.types'
 import { useAssetSearch } from './model/use-asset-search'
+import { useAssetSubtitle } from './model/use-asset-subtitle'
 
 /** Fiat rows shown at most; the full catalog is one more letter away. */
 const FIAT_LIMIT = 6
@@ -43,7 +44,7 @@ const open = ref(false)
 const { hits, loading, schedule, clear } = useAssetSearch()
 const favorites = useFavoriteCurrencies()
 
-/** Typing clears the model; that clear must not wipe what is being typed. */
+/** Emptying the field clears the model; that must not wipe the text. */
 let clearedByTyping = false
 
 // Immediate: an asset handed in up front (an edit, a default) shows right away.
@@ -60,11 +61,7 @@ watch(
   { immediate: true },
 )
 
-/**
- * Fiat comes from the currency catalog, not from CoinGecko: a coin that happens
- * to be called USD or RUB is not the dollar, and has no FX rate, so fees and
- * losses in it could not be counted.
- */
+/** Fiat comes from the currency catalog, not CoinGecko: a coin called USD is not the dollar and has no FX rate. */
 const { filter: filterFiat } = useCurrencyOptions(['fiat'], [])
 const fiatCodes = computed(() => new Set(settings.fiatCurrencies))
 
@@ -83,16 +80,24 @@ const fiatHits = computed(() => {
     .slice(0, FIAT_LIMIT)
 })
 
-/** A dialog focuses its first field: opening on that focus would cover the rest of the form. */
-function onFocus() {
+/** A dialog focuses its first field: opening on that focus would cover the form. */
+function onFocus(event: FocusEvent) {
+  // The current code is selected: typing replaces it instead of continuing it.
+  ;(event.target as HTMLInputElement | null)?.select()
   if (props.openOnFocus) open.value = true
   if (!settings.currencies) void settings.loadCurrencies().catch(() => {})
 }
 
+// Closing without a pick restores the chosen code (not on blur: pressing a row blurs the input first).
+watch(open, (isOpen) => {
+  if (!isOpen && asset.value) query.value = asset.value.symbol
+})
+
 function onInput(value: string) {
   query.value = value
   open.value = true
-  if (asset.value !== null) {
+  // Typing only filters: the chosen asset stays until another is picked or the field is emptied.
+  if (asset.value !== null && !value.trim()) {
     clearedByTyping = true
     asset.value = null
   }
@@ -153,13 +158,7 @@ const hasRows = computed(
   () => favoriteRows.value.length > 0 || fiatHits.value.length > 0 || hits.value.length > 0 || canOfferFiat.value,
 )
 
-const subtitle = (value: AssetRef) => {
-  if (value.chain === 'fiat') {
-    const name = filterFiat(value.symbol).find((row) => row.code.toUpperCase() === value.symbol)?.name
-    return name ? `${name} · ${t('currency.kind.fiat')}` : t('currency.kind.fiat')
-  }
-  return value.chain ? `${value.name} · ${CHAIN_LABELS[value.chain]}` : value.name
-}
+const subtitle = useAssetSubtitle(filterFiat)
 </script>
 
 <template>
