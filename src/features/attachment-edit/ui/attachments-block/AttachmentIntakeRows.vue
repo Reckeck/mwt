@@ -18,7 +18,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div v-for="row in props.pending" :key="`p${row.key}`" class="flex min-h-13 items-center gap-2.5" data-attachment-pending>
+  <div v-for="row in props.pending" :key="`p${row.key}`" class="flex min-h-13 items-center gap-3" data-attachment-pending>
     <AttachmentIcon look="image" />
     <span class="grid min-w-0 flex-1 gap-1">
       <span class="flex min-w-0 items-center gap-1.5 text-sm">
@@ -41,7 +41,7 @@ const { t } = useI18n()
       <X class="size-4" />
     </Button>
   </div>
-  <div v-for="row in props.failed" :key="`f${row.key}`" class="flex min-h-11 items-center gap-2.5" role="alert" data-attachment-failed>
+  <div v-for="row in props.failed" :key="`f${row.key}`" class="flex min-h-11 items-center gap-3" role="alert" data-attachment-failed>
     <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/12 text-destructive">
       <FileWarning class="size-4" />
     </span>

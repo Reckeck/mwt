@@ -45,7 +45,7 @@ const delta = computed(() => (props.bill.delta_pct === null ? null : Number(prop
 </script>
 
 <template>
-  <div class="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4 shadow-sm max-md:gap-2" data-utility-bill>
+  <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm" data-utility-bill>
     <div class="flex flex-wrap items-end gap-x-5 gap-y-3">
       <div class="flex min-w-0 flex-col gap-0.5">
         <span class="text-sm text-muted-foreground">{{ title }}</span>

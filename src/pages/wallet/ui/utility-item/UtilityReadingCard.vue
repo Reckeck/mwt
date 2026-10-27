@@ -122,12 +122,12 @@ const label1 = (index: number) => label(index).charAt(0).toUpperCase() + label(i
 
 <template>
   <form
-    class="flex flex-col gap-2.5 rounded-xl border border-primary bg-card p-3"
+    class="flex flex-col gap-3 rounded-xl border border-primary bg-card p-3"
     data-utility-reading
     @submit.prevent="form.submit(save.mutate, $event)"
   >
     <p class="text-sm font-medium">{{ t('utilityItem.readingFor', { month }) }}</p>
-    <div :class="cn('grid gap-2.5', values.length > 1 ? (props.phone ? 'grid-cols-2' : 'grid-cols-3') : props.phone ? 'grid-cols-1' : 'grid-cols-2')">
+    <div :class="cn('grid gap-3', values.length > 1 ? (props.phone ? 'grid-cols-2' : 'grid-cols-3') : props.phone ? 'grid-cols-1' : 'grid-cols-2')">
       <div v-for="(_, index) in values" :key="index" class="grid min-w-0 content-start gap-1" :data-invalid="form.invalidAttr(`v${index}`)">
         <span class="text-sm font-medium">{{ label1(index) }} <span class="text-destructive">*</span></span>
         <span class="relative">

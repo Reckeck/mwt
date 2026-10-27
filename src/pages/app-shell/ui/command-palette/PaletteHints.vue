@@ -44,7 +44,7 @@ const hints = computed(() => {
   <p v-if="props.phone" class="border-t px-4 py-2.5 text-xs text-muted-foreground" data-palette-hints>
     {{ t(props.converting ? 'palette.hint.phoneConvert' : 'palette.hint.phone') }}
   </p>
-  <div v-else class="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t px-3.5 py-2 text-xs text-muted-foreground" data-palette-hints>
+  <div v-else class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3.5 py-2 text-xs text-muted-foreground" data-palette-hints>
     <span v-for="hint in hints" :key="hint.key" class="whitespace-nowrap"><Kbd>{{ hint.key }}</Kbd> {{ hint.label }}</span>
   </div>
 </template>

@@ -54,7 +54,7 @@ function pick(value: unknown) {
     <FormField v-if="withMargin" :label="t('exchangeSub.margin')" required :error="form.error('margin')">
       <AssetSelect v-model="margin" :assets="MARGIN_COINS" :invalid="Boolean(form.error('margin'))" />
     </FormField>
-    <p class="flex gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-caption">
+    <p class="flex gap-3 rounded-lg bg-muted px-3 py-2.5 text-caption">
       <Check class="mt-0.5 size-3.5 shrink-0" />
       {{ t('exchangeSub.hint', { exchange: props.parent?.name ?? '' }) }}
     </p>

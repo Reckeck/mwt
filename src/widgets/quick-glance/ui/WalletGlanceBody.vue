@@ -43,7 +43,7 @@ const icon = computed(() => (glance.store.value ? storeIcon(glance.store.value) 
 </script>
 
 <template>
-  <div class="flex items-start gap-2.5">
+  <div class="flex items-start gap-3">
     <span class="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
       <component :is="icon" class="size-4" aria-hidden="true" />
     </span>

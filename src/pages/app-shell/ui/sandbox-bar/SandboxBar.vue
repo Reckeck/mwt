@@ -26,7 +26,7 @@ function confirmReset() {
 
 <template>
   <div
-    class="box-content flex min-h-11 shrink-0 items-center gap-2.5 border-b border-warning/40 bg-warning/15 px-3 pt-safe md:min-h-10 md:px-6"
+    class="box-content flex min-h-11 shrink-0 items-center gap-3 border-b border-warning/40 bg-warning/15 px-3 pt-safe md:min-h-10 md:px-6"
     role="status"
     data-sandbox-bar
   >

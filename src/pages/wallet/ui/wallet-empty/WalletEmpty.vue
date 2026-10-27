@@ -38,7 +38,7 @@ const BUTTON = 'max-md:h-11 max-md:w-full'
   <div
     :class="
       cn(
-        'flex flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-border text-center text-muted-foreground',
+        'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border text-center text-muted-foreground',
         phone ? 'px-4 py-8' : 'min-h-[max(22rem,calc(100dvh-10.5rem))] p-12',
       )
     "

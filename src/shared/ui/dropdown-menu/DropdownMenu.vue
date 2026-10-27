@@ -21,7 +21,7 @@ const aligns = dropdownMenuAligns
 
     <DropdownMenuPortal>
       <DropdownMenuContent
-        class="z-50 min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+        class="z-50 max-h-96 min-w-40 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
         :align="aligns[props.align ?? 'end']"
         :side-offset="4"
       >

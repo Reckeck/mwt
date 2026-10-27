@@ -13,7 +13,7 @@ const emit = defineEmits<{ open: [target: EntityRef] }>()
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-2.5 overflow-y-auto p-3.5 text-sm" data-palette-peek>
+  <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-3.5 text-sm" data-palette-peek>
     <CategoryGlanceBody
       v-if="props.item.target.kind === 'category'"
       :category="props.item.target.id"

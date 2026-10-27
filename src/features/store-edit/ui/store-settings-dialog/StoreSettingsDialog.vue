@@ -72,7 +72,7 @@ function leave(event: 'adjust' | 'more') {
     phone-submit-only
     @submit="form.submit(save, $event)"
   >
-    <div class="grid gap-3.5 @md:grid-cols-2">
+    <div class="grid gap-4 @md:grid-cols-2">
       <FormField for="store-settings-name" :label="t('stores.name')" required :error="form.error('name')">
         <Input id="store-settings-name" v-model="name" />
       </FormField>
@@ -89,7 +89,7 @@ function leave(event: 'adjust' | 'more') {
 
     <template v-if="purposeEditable">
       <Separator />
-      <fieldset class="grid gap-3.5" data-tour="wallet-purpose">
+      <fieldset class="grid gap-4" data-tour="wallet-purpose">
         <legend class="mb-3.5 text-sm font-semibold">{{ t('purpose.title') }}</legend>
         <RadioGroup v-model="purpose" class="grid grid-cols-2 gap-3">
           <label

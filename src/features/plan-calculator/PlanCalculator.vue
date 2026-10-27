@@ -68,7 +68,7 @@ defineExpose({ apply })
 </script>
 
 <template>
-  <div class="flex flex-col gap-3.5" data-trade-calc>
+  <div class="flex flex-col gap-4" data-trade-calc>
     <Tabs :model-value="mode" :tabs="tabs" @update:model-value="pickMode">
       <template #position>
         <PositionFields :calc="calc" :amount-error="form.error('amount')" :price-error="form.error('priceIn')" />

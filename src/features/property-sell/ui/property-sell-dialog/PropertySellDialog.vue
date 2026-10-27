@@ -50,7 +50,7 @@ const decimalsOf = (value: string) => (Number(value) % 1 ? 2 : 0)
         <template #suffix><Badge variant="secondary" class="me-3">{{ currency.toUpperCase() }}</Badge></template>
       </AmountInput>
     </FormField>
-    <div class="grid gap-3.5 @md:grid-cols-2">
+    <div class="grid gap-4 @md:grid-cols-2">
       <FormField for="sell-to" :label="t('propertySell.to')" required :error="form.error('proceedsTo')">
         <StoreNodeSelect id="sell-to" v-model="proceedsTo" flat :nodes="nodes" :placeholder="t('propertySell.pickWallet')" :invalid="Boolean(form.error('proceedsTo'))" />
       </FormField>

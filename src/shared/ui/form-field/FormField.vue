@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUpdated, useId, useSlots, useTemplateRef, watch } from 'vue'
+import { onMounted, onUpdated, useId, useSlots, useTemplateRef, watch } from 'vue'
 
 import { Field, FieldDescription, FieldError } from '@/shared/ui/field'
 import { Label } from '@/shared/ui/label'
@@ -29,7 +29,8 @@ const props = withDefaults(defineProps<FormFieldProps>(), {
  * under it — a screen reader reads «Сумма, обязательно, введите сумму».
  */
 const slots = useSlots()
-const hasHint = computed(() => Boolean(props.hint) || Boolean(slots.hint))
+/** A function, not a computed: slots are not reactive, and a hint slot may come and go (`<template v-if #hint>`). */
+const hasHint = () => Boolean(props.hint) || Boolean(slots.hint)
 const messageId = useId()
 const root = useTemplateRef<{ $el: HTMLElement }>('root')
 const CONTROL = 'input:not([type="hidden"]), textarea, select, [role="combobox"], button[aria-haspopup]'
@@ -41,7 +42,7 @@ function link() {
   if (!control) return
   if (props.error) control.setAttribute('aria-invalid', 'true')
   else control.removeAttribute('aria-invalid')
-  if (props.error || hasHint.value) control.setAttribute('aria-describedby', messageId)
+  if (props.error || hasHint()) control.setAttribute('aria-describedby', messageId)
   else if (control.getAttribute('aria-describedby') === messageId) control.removeAttribute('aria-describedby')
 }
 onMounted(link)
@@ -55,6 +56,6 @@ watch(() => [props.error, props.hint], link, { flush: 'post' })
     <slot name="label" />
     <slot />
     <FieldError v-if="props.error" :id="messageId" class="text-xs">{{ props.error }}</FieldError>
-    <FieldDescription v-else-if="hasHint" :id="messageId" class="text-xs"><slot name="hint">{{ props.hint }}</slot></FieldDescription>
+    <FieldDescription v-else-if="hasHint()" :id="messageId" class="text-xs"><slot name="hint">{{ props.hint }}</slot></FieldDescription>
   </Field>
 </template>

@@ -32,7 +32,7 @@ const open = useSandboxOpen()
       <FlaskConical class="size-4" aria-hidden="true" />
       {{ t('sandbox.open') }}
     </Button>
-    <div v-else class="flex items-start gap-2.5">
+    <div v-else class="flex items-start gap-3">
       <FlaskConical class="mt-2 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div class="grid min-w-0 flex-1 justify-items-start gap-0.5">
         <Button

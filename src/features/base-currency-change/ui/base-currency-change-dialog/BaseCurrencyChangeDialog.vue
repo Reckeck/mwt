@@ -34,7 +34,7 @@ const pickBudget = (value: unknown) => {
     :pending="save.isPending.value"
     @submit="save.mutate()"
   >
-    <div class="flex items-center gap-2.5" data-base-change>
+    <div class="flex items-center gap-3" data-base-change>
       <Badge variant="secondary" class="h-7 text-sm font-normal">{{ from.toUpperCase() }}</Badge>
       <ArrowRight class="size-4 text-muted-foreground" aria-hidden="true" />
       <Badge variant="outline" class="h-7 border-primary text-sm font-normal text-primary">{{ to.toUpperCase() }}</Badge>

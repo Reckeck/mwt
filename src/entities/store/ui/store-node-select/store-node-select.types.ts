@@ -9,6 +9,8 @@ export interface StoreNodeSelectProps {
   flat?: boolean
   /** Several nodes at once (a filter), bound with `v-model:ids`; none picked = `emptyLabel`. */
   multiple?: boolean
+  /** With `multiple`: the checklist itself, without the field and popover (inside a filter panel). */
+  inline?: boolean
   /** Offer only nodes with this purpose (the emergency fund takes savings accounts only). */
   purpose?: Purpose
   /** Offer bonus programmes too; they are hidden from account lists unless already picked. */

@@ -697,4 +697,15 @@ const stage4 = [
   },
 ]
 
-export const SETS = { salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges }
+const ALL_SETS = { stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, subaccounts, 'home-changes': homeChanges }
+/** The last batch of the canvas reconciliation (#217): the states it touched, from the other sets, without canvas pairs. */
+const BATCH3_NAMES = [
+  'home', 'home-changes', 'spending', 'money-more', 'month', 'month-carry', 'wallet-utility-zones', 'deal-spot', 'auto-card', 'auto-confirm',
+  'set-help', 'auto-alert', 'limit-saved', 'ops', 'sidebar-collapsed', 'attach-remove', 'wallet-exchange-import', 'stores',
+]
+const batch3 = BATCH3_NAMES.flatMap((name) => {
+  const found = Object.values(ALL_SETS).flat().find((shot) => shot.name === name && (shot.scenarios ?? ['year']).includes('year'))
+  return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
+})
+
+export const SETS = { salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3 }

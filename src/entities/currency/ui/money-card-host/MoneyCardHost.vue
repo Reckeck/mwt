@@ -158,7 +158,7 @@ function onKey(event: KeyboardEvent) {
       @open-auto-focus="focusCard"
       @keydown="onKey"
     >
-      <div class="flex flex-col gap-2.5 p-3.5">
+      <div class="flex flex-col gap-3 p-3.5">
         <MoneyCard :key="`${sum.currency}:${sum.amount}:${sum.at}`" v-bind="sum" />
         <p class="flex gap-3 text-xs text-muted-foreground">
           <span><Kbd>C</Kbd> {{ t('moneyCard.copy') }}</span>

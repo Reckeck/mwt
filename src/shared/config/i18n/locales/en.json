@@ -4931,7 +4931,7 @@
   "whatsNew.newPaths.palette": "Ctrl K: recent items, Alt 1…5 jumps and a glance at the selection on the right.",
   "whatsNew.newPaths.menu": "One menu on an operation row: right click, «⋯» or a long press on a phone; keys are shown.",
   "whatsNew.newPaths.auto": "The «auto» mark says which automation recorded the operation.",
-  "filter.searchHint": "Name, amount, comment",
+  "filter.searchHint": "Name or amount",
   "filter.period": "Period",
   "filter.chip.thisMonth": "This month",
   "filter.chip.lastMonth": "Last",

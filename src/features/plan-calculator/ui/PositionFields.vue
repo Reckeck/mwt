@@ -25,7 +25,7 @@ const coin = computed(() => asset.value?.symbol.toUpperCase() ?? '—')
 </script>
 
 <template>
-  <div class="grid gap-3.5">
+  <div class="grid gap-4">
     <AssetInput v-model="asset" :label="t('calc.asset')" :placeholder="t('asset.searchPlaceholder')" data-calc-asset />
     <div class="grid grid-cols-2 items-start gap-3 @max-sm:grid-cols-1">
       <FormField for="calc-amount" :label="t('calc.from')" required :error="props.amountError ?? undefined">

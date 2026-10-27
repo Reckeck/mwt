@@ -17,7 +17,7 @@ const phone = useIsPhone()
 </script>
 
 <template>
-  <div v-if="!phone" class="flex flex-col items-start gap-2.5 rounded-xl border border-dashed border-border px-5 py-5" data-mine-empty data-tour="automations-starts">
+  <div v-if="!phone" class="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-5 py-5" data-mine-empty data-tour="automations-starts">
     <h2 class="text-base font-semibold">{{ t('automations.mine.empty.title') }}</h2>
     <p class="text-caption text-muted-foreground">{{ t('automations.mine.empty.text') }}</p>
     <div class="grid w-full grid-cols-4 gap-3">

@@ -8,6 +8,7 @@ import { ChartCurrencySwitch, CurrencyPicker } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { ReportExportButton } from '@/features/report-export'
 import { useStoreTree } from '@/shared/api/queries'
+import { useIsPhone } from '@/shared/lib/phone'
 import type { MonthRange } from '@/shared/lib/period'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -20,6 +21,8 @@ import { Switch } from '@/shared/ui/switch'
 /**
  * The tab row's right side (the canvas toolbar): ‹ period ›, the wallets, the
  * rare filters behind one button, the export. One filter for the whole section.
+ * On a phone it is one row: the period, one filters button that holds the wallets too,
+ * and «⋯» with the export.
  * Where the tab asks for it, the budget currency or the base one sits before the
  * period (Currency-1 · 7: «₽ | $»).
  */
@@ -35,6 +38,7 @@ const filter = defineModel<ReportFilter>({ required: true })
 const range = defineModel<MonthRange>('range', { required: true })
 
 const { t } = useI18n()
+const phone = useIsPhone()
 const route = useRoute()
 const tree = useStoreTree()
 const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
@@ -55,19 +59,21 @@ const shownCurrency = computed({
   },
 })
 /** Set filters behind the button: a dot shows that something narrows the tab. */
-const extras = computed(() => (filter.value.currency ? 1 : 0) + (props.realTerms && filter.value.real_terms ? 1 : 0))
+const extras = computed(
+  () => (filter.value.currency ? 1 : 0) + (props.realTerms && filter.value.real_terms ? 1 : 0) + (phone.value && storeIds.value.length ? 1 : 0),
+)
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-wrap items-center gap-2" data-tour="report-filter">
+  <div :class="phone ? 'flex w-full min-w-0 items-center gap-2' : 'flex min-w-0 flex-wrap items-center gap-2'" data-tour="report-filter">
     <div v-if="props.currencySwitch" class="max-md:hidden" data-tour="spending-currency">
       <ChartCurrencySwitch v-model="shownCurrency" :options="currencies" />
     </div>
-    <div data-tour="period-picker" class="min-w-0 max-md:basis-full">
+    <div data-tour="period-picker" class="min-w-0 max-md:flex-1">
       <PeriodPicker v-model="range" :default-range="props.fallback" trigger-class="w-[170px] max-md:flex-1" />
     </div>
     <StoreNodeSelect
-      v-if="props.wallets"
+      v-if="props.wallets && !phone"
       id="money-scope"
       v-model:ids="storeIds"
       multiple
@@ -84,6 +90,12 @@ const extras = computed(() => (filter.value.currency ? 1 : 0) + (props.realTerms
         </Button>
       </PopoverTrigger>
       <PopoverContent overlay="money-wallets-filter" align="end" class="grid w-[min(18rem,100vw-2rem)] gap-4">
+        <div v-if="phone" class="grid gap-1.5">
+          <Label>{{ t('report.filter.scope') }}</Label>
+          <div class="grid max-h-44 overflow-y-auto">
+            <StoreNodeSelect v-model:ids="storeIds" multiple inline :nodes="nodes" :empty-label="t('report.filter.allWallets')" />
+          </div>
+        </div>
         <div class="grid gap-1.5">
           <Label for="money-currency">{{ t('report.filter.currency') }}</Label>
           <CurrencyPicker

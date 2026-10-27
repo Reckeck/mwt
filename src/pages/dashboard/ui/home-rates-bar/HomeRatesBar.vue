@@ -42,7 +42,7 @@ const detail = computed(() =>
 <template>
   <section
     v-if="shown"
-    class="flex items-center gap-2.5 rounded-xl border border-warning bg-card px-3.5 py-2.5 text-sm shadow-sm max-md:gap-2 max-md:py-0.5 max-md:pr-1 max-md:pl-3"
+    class="flex items-center gap-3 rounded-xl border border-warning bg-card px-3.5 py-2.5 text-sm shadow-sm max-md:gap-2 max-md:py-0.5 max-md:pr-1 max-md:pl-3"
     data-rates-bar
   >
     <component :is="rates.offline.value ? WifiOff : TriangleAlert" class="size-4 shrink-0 text-warning" aria-hidden="true" />

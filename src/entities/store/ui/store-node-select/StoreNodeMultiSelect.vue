@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, useAttrs, useId } from 'vue'
+import { computed, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { cn } from '@/shared/lib/utils'
-import { Checkbox } from '@/shared/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+
+import StoreNodeChecklist from './StoreNodeChecklist.vue'
 
 /** The list behind `StoreNodeSelect multiple`: a checkbox per node, by its path. */
 const props = defineProps<{ options: { id: string; label: string }[]; emptyLabel?: string; placeholder?: string }>()
@@ -16,7 +17,6 @@ defineOptions({ inheritAttrs: false })
 const { t } = useI18n()
 /** The caller's class wins over the trigger's own width and height. */
 const attrs = useAttrs()
-const uid = useId()
 
 const summary = computed(() => {
   const picked = props.options.filter((option) => ids.value.includes(option.id))
@@ -24,10 +24,6 @@ const summary = computed(() => {
   if (picked.length === 1) return picked[0].label
   return t('store.pickedCount', { count: picked.length })
 })
-
-function toggle(id: string, on: boolean) {
-  ids.value = on ? [...ids.value, id] : ids.value.filter((entry) => entry !== id)
-}
 </script>
 
 <template>
@@ -46,27 +42,7 @@ function toggle(id: string, on: boolean) {
       <ChevronDown class="size-4 shrink-0 opacity-50" />
     </PopoverTrigger>
     <PopoverContent overlay="store-multiselect" align="start" class="max-h-80 w-(--reka-popover-trigger-width) min-w-[min(14rem,calc(100vw-2rem))] overflow-y-auto p-1">
-      <label
-        v-if="props.emptyLabel"
-        :for="`${uid}-all`"
-        class="touch-hit flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-      >
-        <Checkbox :id="`${uid}-all`" :model-value="!ids.length" @update:model-value="ids = []" />
-        {{ props.emptyLabel }}
-      </label>
-      <label
-        v-for="option in props.options"
-        :key="option.id"
-        :for="`${uid}-${option.id}`"
-        class="touch-hit flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-      >
-        <Checkbox
-          :id="`${uid}-${option.id}`"
-          :model-value="ids.includes(option.id)"
-          @update:model-value="(on) => toggle(option.id, on === true)"
-        />
-        <span class="truncate">{{ option.label }}</span>
-      </label>
+      <StoreNodeChecklist v-model="ids" :options="props.options" :empty-label="props.emptyLabel" />
     </PopoverContent>
   </Popover>
 </template>

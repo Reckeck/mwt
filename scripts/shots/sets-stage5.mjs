@@ -163,7 +163,7 @@ export const stage5 = [
   {
     name: 'auto-alert',
     route: '/automations?new=alert',
-    steps: [{ wait: 600 }, { type: ['#price-alert-form input', 'btc'] }, { press: 'Enter' }, { fill: ['#alert-price', '90000'] }, { wait: 800 }],
+    steps: [{ wait: 600 }, { type: ['#price-alert-form input', 'btc'] }, { wait: 900 }, { click: '[role="option"]' }, { wait: 500 }, { fill: ['#alert-price', '90000'] }, { wait: 800 }],
     canvas: { board: 'Auto-2', frame: '11.' },
   },
 ]

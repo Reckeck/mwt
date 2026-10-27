@@ -30,8 +30,8 @@ function pick(action: WizardAction) {
 </script>
 
 <template>
-  <div class="@container grid gap-3.5" data-wizard-do>
-    <div class="grid gap-2.5 md:grid-cols-3">
+  <div class="@container grid gap-4" data-wizard-do>
+    <div class="grid gap-3 md:grid-cols-3">
       <WizardOption
         v-for="entry in WIZARD_ACTIONS"
         :key="entry"

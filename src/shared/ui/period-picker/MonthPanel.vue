@@ -44,7 +44,7 @@ const dayText = (iso: string) => iso.split('-').reverse().join('.')
 </script>
 
 <template>
-  <div class="grid gap-2.5">
+  <div class="grid gap-3">
     <div class="flex items-center gap-2">
       <Button variant="outline" size="icon-sm" class="size-7" :aria-label="t('period.prevYear')" @click="year -= 1">‹</Button>
       <b class="flex-1 text-center text-sm">{{ year }}</b>

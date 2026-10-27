@@ -14,7 +14,8 @@
 const overlay = (id) => `[data-overlay="${id}"]`
 
 /** A sum that is not inside a button or a link: a click on it opens the money card. */
-const PLAIN_SUM = '[data-money-convertible]:not(a *, button *, label *, [role="button"] *, [role="tab"] *)'
+// The sidebar's pinned wallets carry sums too, laid over their links: not a plain sum.
+const PLAIN_SUM = '[data-money-convertible]:not(a *, button *, label *, [role="button"] *, [role="tab"] *, [data-slot="sidebar"] *)'
 const ADD = '[data-tour="quick-add"]'
 /** Sets a field of a pinia store. */
 const PINIA = (name, assign) => `const store = document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('${name}'); store.${assign}; return true`
@@ -87,7 +88,8 @@ export const OVERLAYS = [
   { id: 'dashboard-catalog', route: '/', phone: true, open: [{ click: '[data-tour="dashboard-add"]' }], layer: overlay('dashboard-catalog') },
 
   // 3.3 Transactions
-  { id: 'store-multiselect', route: '/money', phone: true, open: [{ click: 'button[aria-label="Кошельки"]' }], layer: overlay('store-multiselect') },
+  // On a phone the wallets are a list inside the filters panel (money-wallets-filter), not a field of their own.
+  { id: 'store-multiselect', route: '/money', open: [{ click: 'button[aria-label="Кошельки"]' }], layer: overlay('store-multiselect') },
   { id: 'tx-save-filter', route: '/transactions?kind=payment', open: [{ click: '[data-tour="tx-save-filter"]' }], layer: overlay('tx-save-filter') },
   { id: 'contact-edit', route: '/transactions/contacts', phone: true, open: [{ click: '[data-tour="contact-quick-create"]' }], layer: overlay('contact-edit') },
   { id: 'bonus-program', route: '/transactions/bonuses', phone: true, open: [{ click: '[data-tour="bonuses-add"]' }], layer: overlay('bonus-program') },
