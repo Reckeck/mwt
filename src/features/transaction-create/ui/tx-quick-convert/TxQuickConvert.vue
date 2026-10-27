@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AssetChip } from '@/entities/asset'
 import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
 import { formatAsOf, formatPct } from '@/shared/lib/format'
 import { toIsoTimestamp } from '@/shared/lib/datetime'
@@ -13,6 +14,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
+import { convertAsTransfer } from '../../lib/form'
 import { AvailableHint } from '../available-hint'
 
 /**
@@ -22,7 +24,7 @@ import { AvailableHint } from '../available-hint'
  * time (Currency-1 · 6); P2P, several accounts and a typed rate stay in the full editor.
  */
 const { t } = useI18n()
-const { form, check, preview } = useTxForm()
+const { form, check, preview, sameCurrency } = useTxForm()
 const settings = useSettingsStore()
 const fromStore = computed(() => accountStoreId(form.from))
 
@@ -56,7 +58,15 @@ const market = computed(() => {
   }
 })
 const giveError = computed(() => (check.error('fromAmount') ? t('form.amountError') : check.error('fromAsset')))
-const getError = computed(() => (check.error('toAmount') ? t('form.amountError') : check.error('toAsset')))
+// Shown as soon as both currencies are chosen, not only after a save was tried.
+const getError = computed(() =>
+  check.error('toAmount') ? t('form.amountError') : sameCurrency.value ? t('validation.sameCurrency') : check.error('toAsset'),
+)
+/** Same currency is a move between wallets: the form goes on as «Перевод» with what was typed. */
+function recordAsTransfer() {
+  convertAsTransfer(form)
+  void nextTick(() => document.getElementById('tx-amount')?.focus())
+}
 </script>
 
 <template>
@@ -69,13 +79,22 @@ const getError = computed(() => (check.error('toAmount') ? t('form.amountError')
       </AmountInput>
       <AvailableHint :store-id="fromStore" :asset="form.fromAsset" @max="(quantity) => (form.fromAmount = quantity)" />
     </FormField>
-    <FormField for="tx-to-amount" :label="t('tx.field.receive')" required :error="getError">
-      <AmountInput id="tx-to-amount" v-model="form.toAmount" size="lg" :placeholder="t('form.amountZero')">
-        <template #suffix>
-          <AssetChip v-model="form.toAsset" :label="t('form.asset')" :invalid="Boolean(check.error('toAsset'))" />
-        </template>
-      </AmountInput>
-    </FormField>
+    <div class="grid content-start gap-1.5">
+      <FormField for="tx-to-amount" :label="t('tx.field.receive')" required :error="getError">
+        <AmountInput id="tx-to-amount" v-model="form.toAmount" size="lg" :placeholder="t('form.amountZero')">
+          <template #suffix>
+            <AssetChip
+              v-model="form.toAsset"
+              :label="t('form.asset')"
+              :invalid="sameCurrency || Boolean(check.error('toAsset'))"
+            />
+          </template>
+        </AmountInput>
+      </FormField>
+      <Button v-if="sameCurrency" type="button" variant="link" size="sm" class="justify-self-start px-0" data-tx-as-transfer @click="recordAsTransfer">
+        {{ t('tx.quick.recordAsTransfer') }}
+      </Button>
+    </div>
   </div>
 
   <div class="grid items-start gap-3 @md:grid-cols-2">

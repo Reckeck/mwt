@@ -73,6 +73,10 @@ export function useTxFormState(props: TransactionFormProps) {
   /** Files and links of a new operation (Attach 5): attached once it is saved, dropped with the form. */
   const attachments = ref<StagedAttachment[]>([])
 
+  /** What the backend rejected, by field («Выберите другой кошелёк»): shown under it until the form is edited. */
+  const serverErrors = ref<Record<string, string>>({})
+  watch(form, () => (serverErrors.value = {}), { deep: true })
+
   /** Every live store but the one the money leaves, for AssetSell proceeds. */
   const proceedsStores = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.id !== props.storeId),
@@ -94,6 +98,7 @@ export function useTxFormState(props: TransactionFormProps) {
     contacts,
     proceedsStores,
     attachments,
+    serverErrors,
   }
 }
 

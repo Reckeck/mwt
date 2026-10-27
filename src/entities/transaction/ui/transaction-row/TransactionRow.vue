@@ -114,17 +114,17 @@ const phoneLine = computed(() => {
         <Check v-if="props.selected" class="size-3.5" />
       </span>
     </span>
+    <!-- One grey icon for every kind, PC and phone: a word mark («Корректировка») overflowed its column.
+         The colour of the amount already tells in from out; the kind's name is in the title. -->
     <span
-      v-else-if="phone"
-      class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+      v-else
+      class="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground"
       :title="t(`tx.kindNoun.${kind}`)"
+      data-tx-kind
     >
-      <component :is="TX_KIND_ICON[kind]" class="size-4" />
+      <component :is="TX_KIND_ICON[kind]" class="size-4" aria-hidden="true" />
+      <span class="sr-only">{{ t(`tx.kindNoun.${kind}`) }}</span>
     </span>
-    <!-- One grey mark for every kind: the colour of the amount already tells in from out. -->
-    <div v-else class="w-22 shrink-0">
-      <Badge variant="secondary" class="mt-0.5">{{ t(`tx.kindNoun.${kind}`) }}</Badge>
-    </div>
 
     <!-- An openable row opens from a see-through button over its body; the wallet names sit above it. -->
     <div class="relative min-w-0 flex-1" :class="!phone && 'basis-56'">

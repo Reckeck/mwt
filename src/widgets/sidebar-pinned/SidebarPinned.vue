@@ -6,6 +6,9 @@ import { Filter, PinOff } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { usePins } from '@/shared/api/pins'
+import { useStoreTree } from '@/shared/api/queries'
+import { storeIcon } from '@/shared/lib/store-icons'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { ENTITY_ICONS } from '@/shared/ui/entity-link'
 import {
@@ -35,7 +38,14 @@ const pins = usePins()
 
 const nameOf = (view: PinnedView) =>
   view.title || (view.pin.type === 'entity' ? t(`entity.kind.${view.pin.target.kind}`) : '')
-const iconOf = (view: PinnedView) => (view.pin.type === 'entity' ? ENTITY_ICONS[view.pin.target.kind] : Filter)
+const tree = useStoreTree()
+const stores = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node.store])))
+/** A pinned wallet wears its own kind's icon, as in the wallets table; other entities their kind's. */
+const iconOf = (view: PinnedView) => {
+  if (view.pin.type !== 'entity') return Filter
+  const store = view.pin.target.kind === 'store' ? stores.value.get(view.pin.target.id) : undefined
+  return store ? storeIcon(store) : ENTITY_ICONS[view.pin.target.kind]
+}
 const keyOf = (view: PinnedView, index: number) =>
   view.pin.type === 'entity' ? `${view.pin.target.kind}:${view.pin.target.id}` : `filter:${view.pin.id || index}`
 const actionsOf = (index: number): UiAction[] => [

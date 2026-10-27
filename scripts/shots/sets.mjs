@@ -5,6 +5,7 @@ import { links } from './sets-links.mjs'
 import { money, moneyScreens } from './sets-money.mjs'
 import { encrypt } from './sets-encrypt.mjs'
 import { stage6 } from './sets-stage6.mjs'
+import { samecur } from './sets-samecur.mjs'
 import { GP } from './steps.mjs'
 
 /** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
@@ -692,4 +693,4 @@ const stage4 = [
   },
 ]
 
-export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt }
+export const SETS = { before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur }
