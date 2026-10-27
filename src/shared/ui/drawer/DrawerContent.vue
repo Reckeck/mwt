@@ -2,8 +2,9 @@
 import type { DrawerContentEmits, DrawerContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
-import { DrawerContent, DrawerHandle, DrawerPortal, useForwardPropsEmits } from 'reka-ui'
+import { DrawerContent, DrawerHandle, DrawerPortal, injectDrawerRootContext, useForwardPropsEmits } from 'reka-ui'
 
+import { useLatePortal } from '@/shared/lib/late-portal'
 import { cn } from '@/shared/lib/utils'
 
 import DrawerOverlay from './DrawerOverlay.vue'
@@ -23,10 +24,11 @@ const props = withDefaults(defineProps<DrawerContentProps & { class?: HTMLAttrib
 const emits = defineEmits<DrawerContentEmits>()
 const delegatedProps = reactiveOmit(props, 'class', 'overlay', 'layer')
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalled = useLatePortal(injectDrawerRootContext().open)
 </script>
 
 <template>
-  <DrawerPortal>
+  <DrawerPortal v-if="portalled">
     <DrawerOverlay v-if="props.overlay" />
     <DrawerContent
       data-slot="drawer-content"

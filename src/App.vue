@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 
+import { installLayerFocus } from '@/shared/lib/layer-focus'
 import { useIsPhone } from '@/shared/lib/phone'
 import { Sonner } from '@/shared/ui/sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
@@ -22,6 +23,12 @@ const phone = useIsPhone()
 /** Under the status bar and a full-screen layer's header (the way out stays uncovered). */
 const PHONE_TOAST_TOP = 'calc(var(--safe-top) + 3.75rem)'
 useLocale()
+// Layers over layers hand the focus back to what is left under them (shared/lib/layer-focus).
+let stopLayerFocus = () => {}
+onMounted(() => {
+  stopLayerFocus = installLayerFocus()
+})
+onBeforeUnmount(() => stopLayerFocus())
 
 // Loaded before any vault work: the theme and language follow the user, not the
 // vault, so they must be readable on the unlock screen — the first thing
