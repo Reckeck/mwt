@@ -438,25 +438,6 @@ Co-authored-by: <Инструмент> <email>
 | `performance-optimization` | заметные тормоза, регресс `check-layout`, тяжёлые списки и графики |
 | `graphify` | вопросы об устройстве кода и связях файлов, если собран `graphify-out/` |
 
-Подключены из реестров, но **в этом проекте не загружать** (повторяют
-проектный скилл или противоречат правилам выше):
-
-| Skill | Почему не нужен |
-|---|---|
-| `git-workflow-and-versioning` | учит `git commit/add` и веткам — здесь запрещено, вместо него `jj-workflow` |
-| `ci-cd-and-automation` | GitHub Actions; CI здесь GitLab — `gitlab-ci-generator`, `gitlab-ci-validator`, `glab` |
-| `browser-testing-with-devtools` | нужен MCP Chrome DevTools, его нет; есть `mise run shots` и `check-layout` (CDP) |
-| `frontend-ui-engineering` | общий, с примерами React; проектные `ui-design-system`, `frontend-feature`, `shadcn-vue` строже |
-| `api-and-interface-design` | REST/GraphQL; контракт здесь — Tauri IPC по `ipc-command` |
-| `spec-driven-development` | спецификация уже есть: холст и файл плана; второй PRD — дубль |
-| `constraint-driven-development` | заводит `CONSTRAINTS.md`; планка проекта — этот файл, DoD и базы `check-*` |
-| `interview-me`, `idea-refine` | расспрос по вопросу за раз и придумывание вариантов; решения уже приняты, этапы идут без остановок |
-| `using-agent-skills` | маршрутизация дублирует эту таблицу; «стоп и жди ответа» спорит с работой без подтверждений |
-| `documentation-and-adrs` | ADR в проекте не ведутся; какие docs обновлять — в DoD |
-| `observability-and-instrumentation` | метрики и алерты продакшена; приложение офлайн, телеметрии нет |
-| `shipping-and-launch` | выкатка на сервер, флаги, мониторинг; выпуск — по `docs/workflow.md` |
-| `deprecation-and-migration` | миграции БД продакшена; vault — `vault-crypto`, старые пути интерфейса не поддерживаются |
-
 ### Управление скиллами
 
 Скиллы ставятся и обновляются утилитой `skills` (npm-пакет `skills`,
@@ -509,6 +490,13 @@ pnpm dlx skills list                             # что установлено
 отчёт — только планировщик, после своей проверки диффа, проверок и снимков.
 Один исполнитель за раз в рабочей копии, если подзадачи делят файлы или
 Vite. Бриф, запуск, проверка, возврат на доработку — скилл `subtask-pipeline`.
+
+План и список задач — **не в репозитории**: `planning-and-task-breakdown` и
+`spec-driven-development` по умолчанию пишут `tasks/plan.md` и `tasks/todo.md`,
+здесь это запрещено. План этапа — файл в `~/.claude/plans/` (в OpenCode и
+Codex — их каталог планов вне репозитория), подзадачи — список задач сессии
+(TaskCreate/TaskUpdate), номер `#<N>` из него идёт в бриф. Каталог `tasks/`
+в рабочей копии не создавай; появился — удали до коммита.
 
 ## Definition of Done
 
