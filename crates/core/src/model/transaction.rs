@@ -277,6 +277,11 @@ pub struct KindDetails {
     #[serde(default)]
     #[ts(optional)]
     pub source_store_id: Option<String>,
+    /// Income only: the month it is for, «YYYY-MM», when that is not the month
+    /// of its date (a salary paid on the 5th for the month before).
+    #[serde(default)]
+    #[ts(optional)]
+    pub for_month: Option<String>,
 }
 
 impl KindDetails {

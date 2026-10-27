@@ -10,6 +10,7 @@ import { EntityLink } from '@/shared/ui/entity-link'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
+import { txForMonthLabel } from '@/shared/lib/transactions'
 import {
   amountClass,
   txAutomation,
@@ -63,6 +64,8 @@ const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 const debt = computed(() => txDebt(props.tx))
 const automation = computed(() => txAutomation(props.tx))
 const fee = computed(() => txFee(props.tx))
+/** «за сентябрь»: an income recorded for a month other than its date's. */
+const forMonth = computed(() => txForMonthLabel(props.tx))
 /** Brought in from an exchange; a correction has no categories, so it gets the mark here. */
 const imported = computed(() => {
   const origin = meta.value.origin
@@ -153,6 +156,7 @@ const phoneLine = computed(() => {
         <Badge v-for="key in meta.categories" :key="key" variant="outline" class="pointer-events-auto relative min-w-0">
           <EntityLink :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" plain :menu="false" />
         </Badge>
+        <Badge v-if="forMonth" variant="outline" class="shrink-0" data-tx-for-month>{{ t('tx.forMonth', { month: forMonth }) }}</Badge>
         <Badge v-if="imported" variant="outline" class="shrink-0">{{ t('tx.imported') }}</Badge>
         <span v-if="automation" class="pointer-events-auto relative shrink-0" data-tx-auto>
           <slot name="origin" :tx="props.tx" :automation-id="automation.id" :run-id="automation.runId">

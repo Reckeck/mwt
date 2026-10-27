@@ -70,6 +70,7 @@ impl From<VaultDocV2> for VaultDoc {
             let spec = AutomationSpec {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 preset: automation.preset,
                 schedule: automation.schedule,
                 starts_at: automation.starts_at.clone(),

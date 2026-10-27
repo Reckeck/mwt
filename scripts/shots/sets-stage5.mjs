@@ -45,7 +45,7 @@ export const stage5 = [
   {
     name: 'auto-salary',
     route: '/automations?new=salary',
-    steps: [{ wait: 500 }, { fill: ['#salary-amount', '1575'] }, { wait: 300 }],
+    steps: [{ wait: 500 }, { fill: ['#salary-0-amount', '1575'] }, { wait: 300 }],
     canvas: { board: 'Auto-2', frame: '9.' },
   },
   {

@@ -72,6 +72,7 @@ fn topup() -> TopupTx {
             network: Some(Chain::Ethereum),
             tx_hash: Some("0xabc".into()),
             source_store_id: Some("card".into()),
+            for_month: Some("2026-09".into()),
         },
         price: stamp(),
     }
@@ -269,6 +270,7 @@ pub fn full_doc() -> VaultDoc {
             let spec = AutomationSpec {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 preset: (index == 0).then_some(AutomationPreset::Salary),
                 schedule: *schedule,
                 starts_at: "2026-01-01T09:00:00Z".into(),

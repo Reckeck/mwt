@@ -48,6 +48,7 @@ pub struct AutomationDraft {
     pub property_id: Option<String>,
     pub time: Option<String>,
     pub asks: bool,
+    pub for_month_offset: Option<i8>,
 }
 
 impl AutomationDraft {
@@ -62,6 +63,7 @@ impl AutomationDraft {
             property_id: self.property_id.clone(),
             time: self.time.clone(),
             asks: self.asks,
+            for_month_offset: self.for_month_offset,
         }
     }
 }
@@ -77,6 +79,7 @@ fn spec_of(automation: &Automation) -> AutomationSpec {
         property_id: automation.property_id.clone(),
         time: automation.time.clone(),
         asks: automation.asks,
+        for_month_offset: automation.for_month_offset,
     }
 }
 
@@ -263,6 +266,7 @@ impl UnlockedVault {
             property_id: spec.property_id.clone(),
             time: spec.time.clone(),
             asks: spec.asks,
+            for_month_offset: spec.for_month_offset,
         })
     }
 
@@ -907,6 +911,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: name.into(),
                 active: true,
                 preset: None,
@@ -970,6 +975,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Later".into(),
                 active: true,
                 preset: None,
@@ -1073,6 +1079,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Fortnight".into(),
                 active: true,
                 preset: None,
@@ -1162,6 +1169,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Pocket money".into(),
                 active: true,
                 preset: None,
@@ -1358,6 +1366,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Bill".into(),
                 active: true,
                 preset: None,
@@ -1377,6 +1386,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "Advance".into(),
                 active: true,
                 preset: Some(AutomationPreset::Salary),
@@ -1398,6 +1408,62 @@ mod tests {
             .find(|tx| tx.meta().id == pass.created[0])
             .unwrap()
             .clone()
+    }
+
+    fn salary_for_month(
+        vault: &mut UnlockedVault,
+        card: &str,
+        day: u8,
+        offset: i8,
+        starts_at: &str,
+    ) -> Automation {
+        vault
+            .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
+                for_month_offset: Some(offset),
+                name: format!("Pay {day}"),
+                active: true,
+                preset: Some(AutomationPreset::Salary),
+                schedule: Schedule::Monthly { day },
+                starts_at: starts_at.into(),
+                template: salary_draft(card, "1000"),
+                amount_mode: AmountMode::Fixed,
+                workday_shift: WorkdayShift::Back,
+                property_id: None,
+            })
+            .unwrap()
+    }
+
+    /// «За какой месяц»: the advance of Sunday July 20, 2025 comes on Friday
+    /// the 18th and is for July; the salary of the 5th, a Sunday in Oct 2025
+    /// (paid on Friday the 3rd), is for the month before. The shift changes
+    /// neither.
+    #[test]
+    fn an_income_made_by_an_automation_carries_its_for_month() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        let advance = salary_for_month(&mut vault, &card, 20, 0, "2025-07-01T00:00:00Z");
+        assert_eq!(advance.for_month_offset, Some(0));
+        let pass = vault
+            .run_due_workflows(secs("2025-07-18T12:00:00Z"), "UTC")
+            .unwrap();
+        let Transaction::Topup(july) = made(&vault, &pass) else {
+            panic!("a top-up")
+        };
+        assert_eq!(july.meta.timestamp, "2025-07-18T09:00:00Z");
+        assert_eq!(july.details.for_month.as_deref(), Some("2025-07"));
+        vault.delete_automation(&advance.id).unwrap();
+
+        salary_for_month(&mut vault, &card, 5, -1, "2025-10-01T00:00:00Z");
+        let pass = vault
+            .run_due_workflows(secs("2025-10-03T12:00:00Z"), "UTC")
+            .unwrap();
+        let Transaction::Topup(october) = made(&vault, &pass) else {
+            panic!("a top-up")
+        };
+        assert_eq!(october.meta.timestamp, "2025-10-03T09:00:00Z");
+        assert_eq!(october.details.for_month.as_deref(), Some("2025-09"));
     }
 
     /// The advance of July 20, 2025, a Sunday, comes on Friday the 18th at the
@@ -1494,6 +1560,7 @@ mod tests {
         let mut changed = AutomationDraft {
             time: None,
             asks: false,
+            for_month_offset: None,
             name: "Advance".into(),
             active: true,
             preset: Some(AutomationPreset::Salary),
@@ -1538,6 +1605,7 @@ mod tests {
             .create_automation(AutomationDraft {
                 time: None,
                 asks: false,
+                for_month_offset: None,
                 name: "DCA".into(),
                 active: true,
                 preset: None,
@@ -1559,6 +1627,7 @@ mod tests {
         let draft = AutomationDraft {
             time: Some("18:30".into()),
             asks: true,
+            for_month_offset: None,
             name: "Asks".into(),
             active: true,
             preset: None,

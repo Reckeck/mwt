@@ -4,6 +4,7 @@
 //! in (the OS zone unless the user picked one); an empty or unknown name
 //! means UTC.
 
+pub mod for_month;
 pub mod period;
 pub mod workdays;
 

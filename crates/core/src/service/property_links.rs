@@ -301,6 +301,7 @@ mod tests {
         let draft = |property_id: Option<String>| AutomationDraft {
             time: None,
             asks: false,
+            for_month_offset: None,
             name: "Rent".into(),
             active: true,
             preset: None,
