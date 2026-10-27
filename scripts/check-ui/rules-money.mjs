@@ -148,4 +148,13 @@ export const MONEY_RULES = [
       ),
     say: 'formatMoney in a slice’s lib/model returns a string a template prints as is — return { amount, currency, at } and draw <Money>, or mark `money: plain — <reason>`',
   },
+  {
+    // «Можно потратить сегодня» had `:convert="false"`: the figure did not open the currency card.
+    id: 'money-home-figure',
+    vueOnly: true,
+    skip: (file) => !/^src\/pages\/dashboard\/ui\/home-[^/]+\//.test(file),
+    find: (text, _file, source) =>
+      [...text.matchAll(/<Money\b[^>]*:convert="false"/g)].filter((match) => !labelled(source, match.index)),
+    say: 'a sum on Home with :convert="false" does not open the currency card — drop it, or mark why with `money: plain — <reason>`',
+  },
 ]

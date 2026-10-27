@@ -3,6 +3,11 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_ARCHIVE: WhatsNewEntry[] = [
   {
+    id: 'links',
+    date: '2026-10-21',
+    points: [{ key: 'card', route: 'transactions' }, { key: 'chips' }, { key: 'notices' }, { key: 'address' }],
+  },
+  {
     id: 'salary',
     date: '2026-10-20',
     points: [

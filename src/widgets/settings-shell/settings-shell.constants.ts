@@ -75,7 +75,6 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         sections: [
           section('currencies', 'currencies'),
           section('direction', 'direction'),
-          section('categories-summary', 'categories'),
           section('rates', 'ratesTable'),
           section('budget', 'budget'),
           section('inflation', 'inflation'),

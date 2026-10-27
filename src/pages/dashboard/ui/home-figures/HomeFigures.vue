@@ -69,9 +69,9 @@ const limitLine = computed(() => {
       <p class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capital') }}</p>
       <p :class="cn('value', props.home.fresh.value && 'text-muted-foreground')">
         <CapitalGlance v-if="!props.home.fresh.value">
-          <Money :amount="props.home.summary.data.value?.net_worth_base ?? '0'" :currency="props.home.summary.data.value?.base_currency" :convert="false" />
+          <Money :amount="props.home.summary.data.value?.net_worth_base ?? '0'" :currency="props.home.summary.data.value?.base_currency" />
         </CapitalGlance>
-        <Money v-else :amount="'0'" :currency="props.home.summary.data.value?.base_currency" :convert="false" />
+        <Money v-else :amount="'0'" :currency="props.home.summary.data.value?.base_currency" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.capitalEmpty') }}</p>
       <Badge v-if="!props.home.fresh.value && ratesDay" variant="warning" class="h-5 justify-self-start md:hidden" data-rates-badge>
@@ -93,9 +93,9 @@ const limitLine = computed(() => {
       </p>
       <p :class="cn('value', props.home.fresh.value && 'text-muted-foreground')">
         <SpentGlance v-if="!props.home.fresh.value" :month="props.home.month" :back-label="t('nav.dashboard')">
-          <Money :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
+          <Money :amount="spent" :currency="spentCurrency" :decimals="0" />
         </SpentGlance>
-        <Money v-else :amount="spent" :currency="spentCurrency" :decimals="0" :convert="false" />
+        <Money v-else :amount="spent" :currency="spentCurrency" :decimals="0" />
       </p>
       <p v-if="props.home.fresh.value" class="text-xs text-muted-foreground md:text-sm">{{ t('home.figures.spentEmpty') }}</p>
       <p v-else-if="limitLine" class="text-xs text-muted-foreground tabular-nums md:text-sm">
@@ -128,7 +128,7 @@ const limitLine = computed(() => {
       </p>
       <p v-if="noIncome" class="value big text-muted-foreground">—</p>
       <p v-else :class="cn('value big', Number(daily?.left_today) < 0 && 'text-destructive')">
-        <Money :amount="daily?.left_today ?? '0'" :currency="daily?.currency" :decimals="0" :convert="false" />
+        <Money :amount="daily?.left_today ?? '0'" :currency="daily?.currency" :decimals="0" />
       </p>
       <p v-if="noIncome" class="text-xs text-muted-foreground md:text-sm">
         <span class="max-md:hidden">{{ t('home.figures.needIncome') }}</span>

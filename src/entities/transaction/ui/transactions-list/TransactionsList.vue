@@ -66,6 +66,8 @@ const context = provideTxContext()
 /** Without grouping: one day-less group, so the template has one shape. */
 /** Picking on a phone: one flat list, each row names its day (Ops-1 · 4). */
 const picking = computed(() => phone.value && Boolean(props.selection?.active.value))
+/** The day totals are in the base currency: they wait for its code and its rate. */
+const ratesReady = computed(() => Boolean(props.baseCurrency) && props.fxPerUsd !== null && props.fxPerUsd !== undefined)
 const grouped = computed(() => props.groupByDay && !picking.value)
 const days = computed<TxDay[]>(() =>
   grouped.value
@@ -174,7 +176,8 @@ function showMore() {
             </span>
             {{ dayLabel(`${day.date}T12:00:00`) }}
           </span>
-          <span class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
+          <!-- No total until the summary brought the base code and rate: a USD sum under «₽» would be a lie. -->
+          <span v-if="ratesReady" class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
             <Money :amount="day.totalBase" :currency="props.baseCurrency" :decimals="2" signed />
             <template v-if="day.partial">*</template>
           </span>

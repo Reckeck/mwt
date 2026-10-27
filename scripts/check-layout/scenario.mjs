@@ -1,6 +1,6 @@
 // What check-layout visits and what it measures on each view.
 import { pointOf, press } from './overlay-steps.mjs'
-import { DIALOG_RECT, INSTALL_OBSERVERS, NARROW_FIELDS, OVERFLOW, READ_OBSERVERS, RESET_OBSERVERS, ROW_RECTS, TOUCH } from './probes.mjs'
+import { DAY_BAND_GAP, DUPLICATE_SECTIONS, DIALOG_RECT, INSTALL_OBSERVERS, NARROW_FIELDS, OVERFLOW, READ_OBSERVERS, RESET_OBSERVERS, ROW_RECTS, TOUCH } from './probes.mjs'
 
 export const DESKTOP = [
   [1920, 1080],
@@ -186,7 +186,7 @@ export async function open(page, view) {
 }
 
 export async function measureView(page, touch) {
-  const problems = [...(await page.eval(OVERFLOW)), ...(await page.eval(NARROW_FIELDS))]
+  const problems = [...(await page.eval(OVERFLOW)), ...(await page.eval(NARROW_FIELDS)), ...(await page.eval(DAY_BAND_GAP)), ...(await page.eval(DUPLICATE_SECTIONS))]
   const seen = await page.eval(READ_OBSERVERS)
   if (seen.cls > 0.01) problems.push(`layout shift ${seen.cls.toFixed(3)}: ${seen.shifts.slice(0, 3).join(', ')}`)
   const long = seen.long.filter((ms) => ms > 500)
