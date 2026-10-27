@@ -5,6 +5,7 @@ import { OVERLAYS } from './overlay-list.mjs'
 import { APP, LAYER, FIND, PAGE, closeLayer, differs, openLayer, press, step } from './overlay-steps.mjs'
 import { login } from './scenario.mjs'
 import { crossLayers } from './overlay-cross.mjs'
+import { nestedLayers } from './overlay-nested.mjs'
 import { OVERFLOW, TOUCH } from './probes.mjs'
 
 export { OVERLAYS }
@@ -92,6 +93,7 @@ export async function overlays(page, { touch, label, only }) {
   const wanted = OVERLAYS.filter((entry) => (!only?.length || only.includes(entry.id)) && (entry.phone === 'only' ? touch : !touch || entry.phone))
   for (const entry of wanted.filter((item) => !item.locked)) problems.push(...(await runGuarded(page, entry, touch, label)))
   problems.push(...(await crossLayers(page, { touch, label, only })))
+  problems.push(...(await nestedLayers(page, { touch, label, only })))
   const locked = wanted.filter((item) => item.locked)
   if (locked.length) {
     await page.eval(`${APP} await gp.$pinia._s.get('vault').lock(); return true`)
