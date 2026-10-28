@@ -2514,3 +2514,272 @@ pub struct SyncDecisionInput {
     pub session_id: String,
     pub accept: bool,
 }
+
+// -- shared events (посиделки) ----------------------------------------------------
+
+/// Everything a shared event is made of that the user types in its dialog.
+/// `participants` is read on create only; later people come and go through
+/// their own commands.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedEventDraft {
+    pub title: String,
+    #[serde(default)]
+    pub note: String,
+    /// `YYYY-MM-DD`; a day, or the first day of a range.
+    #[serde(default)]
+    pub starts_on: Option<String>,
+    /// `YYYY-MM-DD`; the last day of a range.
+    #[serde(default)]
+    pub ends_on: Option<String>,
+    /// Empty: the base currency.
+    #[serde(default)]
+    pub currency: String,
+    /// One of 0.01, 1, 10, 50, 100; empty: 1.
+    #[serde(default)]
+    pub rounding_step: Option<Amount>,
+    #[serde(default)]
+    pub category_id: Option<String>,
+    /// `me` (or empty) or a participant id.
+    #[serde(default)]
+    pub organizer: String,
+    pub i_participate: bool,
+    #[serde(default)]
+    pub participants: Vec<SharedParticipantDraft>,
+}
+
+impl Default for SharedEventDraft {
+    fn default() -> Self {
+        Self {
+            title: String::new(),
+            note: String::new(),
+            starts_on: None,
+            ends_on: None,
+            currency: String::new(),
+            rounding_step: None,
+            category_id: None,
+            organizer: String::new(),
+            i_participate: true,
+            participants: Vec::new(),
+        }
+    }
+}
+
+/// A person to add: a contact (`contact_id`) or a guest (a name, maybe details).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedParticipantDraft {
+    /// The client may pick the id (to name this person as the organizer in the
+    /// same call); empty: the vault makes one.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// A guest's name; a contact's own name is used when empty.
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub contact_id: Option<String>,
+    #[serde(default)]
+    pub details: Option<crate::model::shared_event::GuestDetails>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateSharedEventInput {
+    pub id: String,
+    pub event: SharedEventDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedEventFilter {
+    #[serde(default)]
+    pub include_archived: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedParticipantInput {
+    pub event_id: String,
+    pub participant: SharedParticipantDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateSharedParticipantInput {
+    pub event_id: String,
+    pub participant_id: String,
+    pub participant: SharedParticipantDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedParticipantRef {
+    pub event_id: String,
+    pub participant_id: String,
+}
+
+/// An item of the list: planned, or added as it was bought.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedItemDraft {
+    pub title: String,
+    /// «шт», «кг», «л», «уп» or any text; empty: «шт».
+    #[serde(default)]
+    pub unit: String,
+    #[serde(default)]
+    pub category_id: Option<String>,
+    #[serde(default)]
+    pub plan: Option<crate::model::shared_event::ItemPlan>,
+    #[serde(default)]
+    pub cancelled: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedItemInput {
+    pub event_id: String,
+    pub item: SharedItemDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateSharedItemInput {
+    pub event_id: String,
+    pub item_id: String,
+    pub item: SharedItemDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedItemRef {
+    pub event_id: String,
+    pub item_id: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetSharedItemSplitInput {
+    pub event_id: String,
+    pub item_id: String,
+    pub split: crate::model::shared_event::ItemSplit,
+}
+
+/// A real purchase. Without `item_id` a new item is made from `new_item_title`.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedPurchaseDraft {
+    #[serde(default)]
+    pub item_id: Option<String>,
+    #[serde(default)]
+    pub new_item_title: Option<String>,
+    #[serde(default)]
+    pub new_item_unit: Option<String>,
+    /// `me` (or empty) or a participant id.
+    #[serde(default)]
+    pub buyer: String,
+    pub qty: Amount,
+    /// Per unit or in total, see `price_mode`.
+    pub amount: Amount,
+    /// Empty: the event currency.
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub price_mode: crate::model::shared_event::PriceMode,
+    /// Typed in by hand; empty: taken from the rate cache at `at`.
+    #[serde(default)]
+    pub rate_to_event: Option<Amount>,
+    /// RFC3339 or `YYYY-MM-DD`; empty: now.
+    #[serde(default)]
+    pub at: Option<String>,
+    /// The wallet the payment comes from; required when I am the buyer.
+    #[serde(default)]
+    pub store_id: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AddSharedPurchaseInput {
+    pub event_id: String,
+    pub purchase: SharedPurchaseDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateSharedPurchaseInput {
+    pub event_id: String,
+    pub purchase_id: String,
+    pub purchase: SharedPurchaseDraft,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedPurchaseRef {
+    pub event_id: String,
+    pub purchase_id: String,
+}
+
+/// Take a payment that is already in the vault as a purchase of the event.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AttachPaymentInput {
+    pub event_id: String,
+    pub tx_id: String,
+    #[serde(default)]
+    pub item_id: Option<String>,
+    #[serde(default)]
+    pub new_item_title: Option<String>,
+    /// Units bought; empty: 1.
+    #[serde(default)]
+    pub qty: Option<Amount>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetShareOverrideInput {
+    pub event_id: String,
+    pub participant_id: String,
+    /// `None` takes the hand-set total back.
+    #[serde(default)]
+    pub total: Option<Amount>,
+}
+
+/// Money (or a set-off) between a participant and the organizer.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SettleSharedInput {
+    pub event_id: String,
+    /// `me` or a participant id; never the organizer.
+    pub participant_id: String,
+    pub direction: crate::model::shared_event::SettleDirection,
+    pub amount: Amount,
+    /// My wallet the money went to or came from. Empty: a set-off without an
+    /// operation (the only way to settle with a guest).
+    #[serde(default)]
+    pub store_id: Option<String>,
+    /// RFC3339 or `YYYY-MM-DD`; empty: now.
+    #[serde(default)]
+    pub at: Option<String>,
+}
+
+/// Write off, or put on the others, what a participant has not returned.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedRemainderInput {
+    pub event_id: String,
+    pub participant_id: String,
+    /// Empty: the whole rest.
+    #[serde(default)]
+    pub amount: Option<Amount>,
+    /// `reassign` only: who takes it; empty: everybody else.
+    #[serde(default)]
+    pub to: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedSettlementRef {
+    pub event_id: String,
+    pub settlement_id: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SetSharedDueInput {
+    pub event_id: String,
+    pub participant_id: String,
+    /// `YYYY-MM-DD`; empty clears the term.
+    #[serde(default)]
+    pub due_at: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ArchiveSharedEventInput {
+    pub id: String,
+    pub archived: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SharedShareTextInput {
+    pub event_id: String,
+    /// `ru` or `en`; empty: `ru`.
+    #[serde(default)]
+    pub locale: String,
+}

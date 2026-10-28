@@ -24,6 +24,7 @@
 | `manual_prices` | `Vec<ManualPrice>` | ручная оценка имущества |
 | `envelopes` | `Vec<Envelope>` | конверты (см. выше) |
 | `debt_terms` | `Vec<DebtTerms>` | срок и заметка долга с контактом по активу; сумма долга — из операций с `debt` |
+| `shared_events` | `Vec<SharedEvent>` | `serde(default)`: совместные траты (см. «Совместные события»); доли, сальдо и статус не хранятся |
 | `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | планирование. Автоматизации с v3 — схемы (`workflows`) с `Workflow.automation: AutomationSpec { preset, schedule, starts_at, template, amount_mode (fixed/varies), workday_shift (none/back/forward) }`: граф строится из формы (`workflow::automation`), запуски — `workflow_runs`; `Automation`/`AutomationRun` — только представления для IPC. `preset` — готовый шаблон кошелька (зарплата, DCA, платёж по кредиту…); `UtilityItem.property_id` — ЖКХ всегда принадлежит объекту имущества; `PriceAlert.store_id` (`serde(default)`) — биржа, в терминале которой живёт алерт, `None` — общий. v2: `Reminder.repeat` (каждые N дней/недель/месяцев/лет), `Reminder.source` (авто-напоминание и его источник), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (день месяца, `None` = конец месяца) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: показанные уведомления (ключ «источник + вхождение», чтобы не повторять после перезапуска), не больше 500 |
 | `sync` | `SyncState` | `serde(default)`: штампы изменений, tombstone'ы, доверенные устройства, пачки для отмены, передачи хранилища на новые устройства (`transfers`) — синхронизация устройств (`docs/sync.md`); в TS не экспортируется, копия из JSON-редактора игнорируется |
@@ -289,6 +290,46 @@ Realized PnL: продажей считается только исходяща�
 - Долги — `TransferTx.debt`: `lend` (дал в долг), `collect` (мне вернули),
   `borrow` (взял), `repay` (вернул). `contact_balances()` — «мне должны / я
   должен» по контакту и активу. Долги не доход и не расход.
+
+## Совместные события
+
+`SharedEvent { id, title, created_at, note, archived, starts_on?, ends_on?, currency, rounding_step, category_id?, organizer, i_participate, participants, items, settlements, adjustments }`
+(`model/shared_event.rs`). Даты — строки `YYYY-MM-DD` (конец не раньше начала, равный концу
+сводится к одному дню). `organizer`, `Purchase.buyer`, `Settlement.participant_id`,
+`ShareOverride.participant_id` — `"me"` (владелец vault) или id участника.
+
+| Структура | Поля |
+|---|---|
+| `Participant` | `id`, `name`, `contact_id?` (нет — гость), `details?: GuestDetails { phone, messenger, requisites: ContactAccount[], note }` — только у гостя |
+| `EventItem` | `id`, `title`, `unit`, `category_id?`, `plan?: ItemPlan { qty, price, price_mode }`, `purchases`, `cancelled`, `split: Equal { among } \| ByUnits { units }` (пустой `among` — все) |
+| `Purchase` | `id`, `buyer`, `qty`, `amount` (за единицу или всего — `price_mode`), `currency`, `rate_to_event` (на дату покупки, не пересчитывается), `rate_manual`, `tx_id?` (мой `Payment`), `tx_owned` (событие создало платёж, значит и удалит), `at` |
+| `Settlement` | `id`, `kind` (transfer \| offset \| write_off \| reassign), `participant_id`, `direction`, `amount`, `at`, `tx_id?` (перевод с `DebtEffect`), `to` (кто взял, для reassign) |
+
+Схема аддитивная (`serde(default)`), `VAULT_FORMAT_VERSION` не менялась; старый vault без
+`shared_events` читается в JSON и MessagePack (тест `an_old_vault_without_shared_events…`).
+Синхронизация: коллекция `records("shared_events", ID)`.
+
+**Операции не помечаются.** Связь «платёж/перевод → событие» живёт только в событии
+(`Purchase.tx_id`, `Settlement.tx_id`), а не в `TxMeta`: v1-файлы bincode читаются по позиции
+полей, и новое поле в `TxMeta` их сломало бы (тот же довод, что у `TxOrigin::Workflow.estimated`).
+Обратный индекс строит `shared_tx_links()`. Удалили операцию мимо события — покупка/расчёт
+остаются с `payment_missing`.
+
+Что считается (`service/shared_events/split.rs`), всё в валюте события:
+- покупка = `amount (× qty при per_unit) × rate_to_event`, округление до копеек;
+- доля позиции — поровну между кругом или по единицам, округление до `rounding_step`, остаток
+  округления берёт покупатель позиции (самая крупная покупка), если он делит позицию, иначе первый
+  участник круга — сумма долей равна сумме покупок до копейки;
+- ручной итог (`adjustments`) фиксирует человека, остаток делят остальные пропорционально;
+- `reassign` уменьшает долю должника и поровну увеличивает доли `to`;
+- сальдо человека = доля − заплатил − отдано ведущему − списано; сальдо ведущего — минус сумма
+  остальных (все расчёты идут через него);
+- статус: нет покупок — `planning`; покупки без расчётов — `in_progress`; есть расчёты и висят
+  долги — `settling`; всё сведено — `closed`;
+- долг контакта (`contact_balances`) = переводы с `debt` **плюс** сальдо событий со мной; переводы
+  события в эту сумму не входят; события без моего участия невидимы;
+- аналитика: платёж события — на мою долю покупки, чужая покупка — моя доля с даты покупки,
+  списание — расход в категории события, возвраты расходом не считаются.
 
 ## Категории
 

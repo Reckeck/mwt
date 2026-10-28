@@ -233,6 +233,42 @@ Frontend парсит код и показывает локализованно�
 | `list_debt_terms` | `contactId?` | `DebtTerms[] { id, contact_id, asset, due_at?, note }` — только срок и заметка, суммы в них нет |
 | `set_debt_terms` | `DebtTermsDraft { contact_id, asset, due_at?, note }` | `DebtTerms \| null` — заменяет условия долга контакта в этом активе; пустые срок и заметка удаляют их. Просроченный и близкий срок попадает в `get_upcoming` (`kind: debt`) |
 
+### shared events (совместные траты, посиделки)
+
+Событие — живой список позиций; доли, сальдо, статус и долги **считаются** из него и не хранятся. Все мутации отвечают свежим `SharedEventView { event, status (planning|in_progress|settling|closed), totals { planned, spent, diff }, people[{ id, name, kind (me|contact|guest), contact_id?, has_details, is_organizer, share, paid, moved, written_off, saldo, due_at? }], items[{ item_id, cost, qty, plan_total?, plan_qty?, diff_money, diff_qty, bought, shares }], purchases[{ item_id, purchase_id, event_amount, my_part, payment_missing }], settlements[{ settlement_id, payment_missing }], plan[{ from, to, amount }], mine? { paid, share, owed_to_me, returned, i_owe, written_off, over_share, pay_to? } }`. `me` — id владельца в любом поле «кто» (покупатель, ведущий, доля); `saldo` > 0 — должен ведущему, < 0 — ему должны. Суммы — в валюте события, курс покупки хранится в ней и не пересчитывается. Даты — строки `YYYY-MM-DD`. Поля DTO с `serde(default)` в TS обязательны (`string | null`).
+
+| Команда | Вход | Выход |
+|---|---|---|
+| `list_shared_events` | `filter?: { include_archived }` | `SharedEventSummary[] { id, title, starts_on?, ends_on?, currency, status, archived, i_participate, people_count, organizer_name, organizer_is_me, planned, spent, owed_to_me, i_owe }` — по дате события (`starts_on`, иначе день создания), новые сверху |
+| `get_shared_event` | `id` | `SharedEventView` |
+| `create_shared_event` | `SharedEventDraft { title, note, starts_on?, ends_on?, currency, rounding_step?, category_id?, organizer, i_participate, participants[] }` | `SharedEventView`. `currency` пусто — базовая; `rounding_step` ∈ 0.01, 1, 10, 50, 100 (пусто — 1); `organizer` пусто или `me` — я, иначе id участника (можно назначить своим `id` в `participants[]`). Коды: `INVALID_INPUT` (нет названия, конец раньше начала, конец без начала, неверный шаг, дубль контакта), `MISSING` (нет контакта, категории, события, участника) |
+| `update_shared_event` | `UpdateSharedEventInput { id, event: SharedEventDraft }` | `SharedEventView`; `participants` игнорируется. Нельзя: сменить валюту после покупок, сменить ведущего после расчётов, выйти из события (`i_participate: false`), если я платил или рассчитывался |
+| `delete_shared_event` | `id` | `()` — удаляет и платежи/переводы, которые событие создало; привязанные уже существующие платежи остаются |
+| `archive_shared_event` | `{ id, archived }` | `()` — в архив только закрытое (или без покупок) |
+| `add_shared_participant` | `{ event_id, participant: SharedParticipantDraft { id?, name, contact_id?, details? } }` | `SharedEventView` — контакт (`contact_id`) или гость (имя + `GuestDetails { phone, messenger, requisites: ContactAccount[], note }`) |
+| `update_shared_participant` | `{ event_id, participant_id, participant }` | `SharedEventView` — переименовать гостя, поправить контакты, привязать к контакту (долги переедут в его карточку) |
+| `remove_shared_participant` | `{ event_id, participant_id }` | `SharedEventView` — `INVALID_INPUT`, если он ведёт, платил, рассчитывался или у него ручной итог |
+| `make_shared_participant_contact` | `{ event_id, participant_id }` | `Contact` — «Сделать контактом»: телефон и мессенджер становятся реквизитами, заметка — заметкой, участник привязан |
+| `add_shared_item` | `{ event_id, item: SharedItemDraft { title, unit, category_id?, plan? { qty, price, price_mode (per_unit|total) }, cancelled } }` | `SharedEventView` |
+| `update_shared_item` | `{ event_id, item_id, item }` | `SharedEventView` — позицию с покупками отменить нельзя |
+| `delete_shared_item` | `{ event_id, item_id }` | `SharedEventView` — только без покупок |
+| `set_shared_item_split` | `{ event_id, item_id, split: { equal: { among[] } } \| { by_units: { units: { id: qty } } } }` | `SharedEventView` — пустой `among` = все |
+| `add_shared_purchase` | `{ event_id, purchase: SharedPurchaseDraft { item_id?, new_item_title?, new_item_unit?, buyer, qty, amount, currency, price_mode, rate_to_event?, at?, store_id? } }` | `SharedEventView`. Моя покупка (`buyer` пусто/`me`) требует `store_id` и создаёт `Payment` (категория позиции → события → `other`); чужая счета не трогает. Курс `currency` → валюта события берётся из кэша на `at` или `rate_to_event` вручную; нет курса — `FX_MISSING`. Дата по умолчанию — сейчас, если она до конца диапазона события, иначе первый день |
+| `update_shared_purchase` | `{ event_id, purchase_id, purchase }` | `SharedEventView` — платёж события следует за правкой; у привязанного платежа меняется только `qty` |
+| `delete_shared_purchase` | `{ event_id, purchase_id }` | `SharedEventView` — созданный событием платёж удаляется, привязанный остаётся |
+| `attach_payment_to_shared_event` | `{ event_id, tx_id, item_id?, new_item_title?, qty? }` | `SharedEventView` — готовый `Payment` в валюте становится моей покупкой; один платёж — одно событие |
+| `set_shared_share_override` | `{ event_id, participant_id, total? }` | `SharedEventView` — ручной итог человека, остаток раскидывается на остальных; `null` снимает |
+| `settle_shared` | `SettleSharedInput { event_id, participant_id, direction (to_organizer|from_organizer), amount, store_id?, at? }` | `SharedEventView` — «Получил»/«Отдал»/«Оплатить долю»/«Зачесть». С `store_id` создаётся перевод с долгом (`Collect`/`Repay`) с контактом; без — зачёт без операции (единственный способ с гостем и в событии, где меня нет). Больше долга — `INVALID_INPUT` |
+| `write_off_shared` | `SharedRemainderInput { event_id, participant_id, amount? }` | `SharedEventView` — «Списать остаток»: ведёт только я; сумма — мой расход в категории события |
+| `reassign_shared` | `SharedRemainderInput { event_id, participant_id, amount?, to[] }` | `SharedEventView` — «Переложить на других»: поровну на `to` (пусто — на всех остальных) |
+| `delete_shared_settlement` | `{ event_id, settlement_id }` | `SharedEventView` — для «Отменить»; перевод удаляется |
+| `set_shared_due` | `{ event_id, participant_id, due_at? }` | `DebtTerms \| null` — срок долга контакта (обычные `DebtTerms`, актив — валюта события) |
+| `get_shared_event_share_text` | `{ event_id, locale (ru|en) }` | `String` — «Поделиться расчётом»: покупки, доли, кто кому, реквизиты ведущего (контакт или гость с реквизитами) |
+| `get_contact_shared_events` | `contact_id` | `ContactEventBalance[] { event_id, title, starts_on?, ends_on?, currency, status, amount (> 0 — мне должны), due_at? }` — блок «Общие события» в карточке |
+| `list_shared_tx_links` | — | `SharedTxLink[] { tx_id, event_title, link { event_id, purchase_id?, settlement_id? } }` — какие операции создало или усыновило событие (в самой операции пометки нет: старые файлы читаются без миграции) |
+
+Долги: `get_contact_balances` к переводам с `debt` **прибавляет** сальдо событий со мной (я веду — сальдо каждого участника-контакта; ведёт он — моё сальдо ему со знаком); переводы, созданные событием, в сумму не входят — событие их уже учло. В аналитике (бюджеты, «Куда ушли», отчёты) платёж события считается на мою долю, чужая покупка — моей долей с даты покупки, списание — расходом; `Repay`/`Collect` расходом не считаются.
+
 ### pricing
 | `search_assets` | `query` | `Vec<AssetSearchHit { symbol, name, coingecko_id?, chain?, contract?, rank }>` |
 | `refresh_all` | — | `RefreshResult { prices, fx, restamped, updated_at }` + событие; `restamped` — сколько сторон операций получили цену |

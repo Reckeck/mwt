@@ -69,6 +69,7 @@ mod peer_sync;
 mod saving;
 mod scenarios;
 mod search;
+mod shared_events;
 mod sync_journal;
 mod vehicle;
 mod where_went;
@@ -164,6 +165,11 @@ pub use scenarios::{
     CalcScenarioDeleted, CalcScenarioDraft, INCOME_MONTHS, ScenarioPrefill, planned_balance,
 };
 pub use search::{PINNED_CAP, PinnedView, SEARCH_TX_CAP, SearchEntry};
+pub use shared_events::{
+    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonKind, PersonView,
+    PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
+    SharedTxLink,
+};
 pub use store_change::{
     StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
 };

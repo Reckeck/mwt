@@ -19,6 +19,7 @@ pub mod pricing;
 pub mod rates;
 pub mod sandbox;
 pub mod settings;
+pub mod shared_events;
 pub mod sources;
 pub mod stores;
 pub mod sync;

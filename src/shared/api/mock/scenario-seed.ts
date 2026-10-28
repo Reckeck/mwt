@@ -9,6 +9,7 @@ import { seedMine } from './planning/mine-seed'
 import { seedSalaryAutomation } from './planning/salary-seed'
 import { mockScenario } from './scenario'
 import { seedLoyalty } from './loyalty-seed'
+import { seedSharedEvents } from './shared-events/state'
 import { seedSubAccounts } from './subaccounts-seed'
 import { mockImportRuns, mockKeyStatus } from './exchange-data'
 import { mockSettings } from './vault-data'
@@ -42,6 +43,7 @@ export function seedMock() {
   seedLoyalty()
   seedSubAccounts()
   seedExchangeImport()
+  seedSharedEvents()
   seedPinnedWallets()
   if (mockScenario === 'stress') seedStress()
 }

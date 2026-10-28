@@ -263,7 +263,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn category_group(&self, tx: &Transaction) -> Option<CategoryGroup> {
+    pub(super) fn category_group(&self, tx: &Transaction) -> Option<CategoryGroup> {
         tx.meta().categories.iter().find_map(|key| {
             self.doc
                 .categories
@@ -289,7 +289,7 @@ impl UnlockedVault {
     }
 
     /// A spending flow by its category, `Daily` when it has none.
-    fn spending(group: Option<CategoryGroup>) -> FlowClass {
+    pub(super) fn spending(group: Option<CategoryGroup>) -> FlowClass {
         match group {
             Some(CategoryGroup::Fixed) => FlowClass::Fixed,
             Some(CategoryGroup::Savings) => FlowClass::Savings,
