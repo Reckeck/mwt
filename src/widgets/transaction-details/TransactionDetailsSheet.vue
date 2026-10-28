@@ -8,16 +8,16 @@ import { AttachmentsBlock } from '@/features/attachment-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
 import { TransactionDelete } from '@/features/transaction-delete'
 import { TransactionEditButton } from '@/features/transaction-edit'
+import { useTxTitle } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { EntityBack } from '@/shared/ui/entity-link'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { call } from '@/shared/api/ipc'
 import { formatDayMonthShort } from '@/shared/lib/format'
-import { txId, txMeta, txStoreId } from '@/shared/lib/transactions'
+import { txId, txMeta, txRouteSides, txStoreId } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
-import { txTitle } from './lib/tx-card'
 import { useSimilarTxs } from './model/use-similar-txs'
 import { useTxNeighbors } from './model/use-tx-neighbors'
 import type { TransactionDetailsSheetProps } from './transaction-details.types'
@@ -41,6 +41,7 @@ defineSlots<{
 
 const { t } = useI18n()
 const context = useTxContext()
+const titleOf = useTxTitle()
 
 const summary = useQuery({
   queryKey: ['summary'],
@@ -53,13 +54,21 @@ const similar = useSimilarTxs(() => props.tx, open)
 
 const meta = computed(() => (props.tx ? txMeta(props.tx) : null))
 const duplicateOpen = ref(false)
+/** A comment that is the card's title or one of its sides («Кому · Пятёрочка») already is said once. */
+const showComment = computed(() => {
+  const comment = meta.value?.comment.trim()
+  if (!comment || !props.tx) return Boolean(comment)
+  const { from, to } = txRouteSides(props.tx)
+  const said = [titleOf(props.tx).text, context.sideLabel(from), context.sideLabel(to)]
+  return !said.some((text) => text.trim().toLowerCase() === comment.toLowerCase())
+})
 
 /** The whole card is where a dragged file lands; «к операции RUB → USDT · 21 окт» says which one. */
 const cardBody = ref<HTMLElement | null>(null)
 const owner = computed<EntityRef>(() => ({ kind: 'tx', id: props.tx ? txId(props.tx) : '' }))
 const ownerLabel = computed(() =>
   props.tx && meta.value
-    ? t('attachments.dropOwner', { title: txTitle(props.tx, context.categoryName), date: formatDayMonthShort(meta.value.timestamp) })
+    ? t('attachments.dropOwner', { title: titleOf(props.tx).text, date: formatDayMonthShort(meta.value.timestamp) })
     : '',
 )
 </script>
@@ -90,11 +99,11 @@ const ownerLabel = computed(() =>
               <template #side="slotProps"><slot name="side" v-bind="slotProps">{{ slotProps.label }}</slot></template>
             </TxFacts>
 
-            <div v-if="meta.categories.length || meta.comment" class="grid gap-1.5 text-sm">
+            <div v-if="meta.categories.length || showComment" class="grid gap-1.5 text-sm">
               <div v-if="meta.categories.length" class="flex flex-wrap gap-x-3 gap-y-1">
                 <EntityLink v-for="key in meta.categories" :key="key" :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" />
               </div>
-              <p v-if="meta.comment" class="text-muted-foreground">{{ meta.comment }}</p>
+              <p v-if="showComment" class="text-muted-foreground">{{ meta.comment }}</p>
             </div>
 
             <AttachmentsBlock :owner="owner" :owner-label="ownerLabel" :drop-target="cardBody" :active="open" />

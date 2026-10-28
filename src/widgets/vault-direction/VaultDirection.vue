@@ -21,9 +21,9 @@ const cryptoWallets = computed(
   () => (tree.data.value ?? []).filter((node) => !node.store.archived && isCryptoKind(node.store.kind)).length,
 )
 
-/** «Выключено: … Скроется: 2» — one line of the canvas: what the switch does and how many wallets it touches. */
+/** «Если выключить: … Скроется: 2» when on, «Выключено: … Скрыто: 2» when off — one line of the canvas: what the switch does and how many wallets it touches. */
 const hint = computed(() => {
-  const base = t('settings.direction.cryptoHint')
+  const base = t(crypto.value ? 'settings.direction.cryptoHintOn' : 'settings.direction.cryptoHint')
   if (!cryptoWallets.value) return base
   return `${base} ${t(crypto.value ? 'settings.direction.willHide' : 'settings.direction.hiddenNow', { count: cryptoWallets.value })}`
 })

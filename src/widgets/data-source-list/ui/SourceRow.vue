@@ -83,7 +83,7 @@ const actions = computed(() => [
         </template>
       </div>
       <div class="flex justify-end">
-        <ConfirmButton :label="t('sources.delete')" :confirm-label="t('sources.deleteConfirm')" @confirm="emit('remove')" />
+        <ConfirmButton :label="t('sources.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: source.name })" @confirm="emit('remove')" />
       </div>
     </div>
   </Card>

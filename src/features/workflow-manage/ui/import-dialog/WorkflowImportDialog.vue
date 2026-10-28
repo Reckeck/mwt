@@ -75,7 +75,7 @@ useEventListener(zone, 'drop', (event: DragEvent) => {
           <p>
             {{ t('workflow.import.found', { name: found.name }) }} —
             {{ t(`workflow.import.steps.${pluralForm(found.steps, locale)}`, { count: found.steps }) }}.
-            <template v-for="entry in missing" :key="entry.id">{{ ' ' + t('workflow.import.missing', { name: entry.name }) }}</template>
+            <template v-for="entry in missing" :key="entry.id">{{ ` ${t('workflow.import.missing', { name: entry.name })}` }}</template>
           </p>
         </AlertDescription>
       </Alert>
@@ -87,7 +87,14 @@ useEventListener(zone, 'drop', (event: DragEvent) => {
         required
         :error="form.error(`store-${entry.id}`)"
       >
-        <StoreNodeSelect :id="`import-store-${entry.id}`" v-model="stores[entry.id]" :nodes="nodes" class="w-full" />
+        <StoreNodeSelect
+          :id="`import-store-${entry.id}`"
+          v-model="stores[entry.id]"
+          :nodes="nodes"
+          :placeholder="t('validation.pickStore')"
+          :invalid="Boolean(form.error(`store-${entry.id}`))"
+          class="w-full"
+        />
       </FormField>
     </form>
     <template #footer>

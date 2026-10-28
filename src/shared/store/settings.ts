@@ -28,6 +28,8 @@ export const useSettingsStore = defineStore('settings', {
     app: null as AppSettings | null,
     /** Vault-scoped preferences, stored encrypted inside it. */
     vault: null as Settings | null,
+    /** The last `loadVault()` was refused: screens waiting for the settings stop showing a placeholder. */
+    vaultFailed: false,
     /** Currency catalog for the pickers; null until `loadCurrencies()` runs. */
     currencies: null as SupportedCurrencies | null,
     /** `builtin` | `cached` | null — see `CurrencyCatalogOutput.notice`. */
@@ -80,7 +82,13 @@ export const useSettingsStore = defineStore('settings', {
     },
 
     async loadVault() {
-      this.vault = await call<Settings>('get_settings')
+      try {
+        this.vault = await call<Settings>('get_settings')
+        this.vaultFailed = false
+      } catch (err) {
+        this.vaultFailed = true
+        throw err
+      }
     },
 
     /**

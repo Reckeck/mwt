@@ -20,11 +20,14 @@ import { AvailableHint } from '../available-hint'
  * unstaking, claims and pool ids stay in the full editor.
  */
 const { t } = useI18n()
-const { form, check, props, contextStore } = useTxForm()
+const { form, check, props, contextStore, overAvailable } = useTxForm()
 
 if (!QUICK_DEFI_ACTIONS.includes(form.defiAction)) form.defiAction = 'stake'
 const protocolHint = computed(() => (contextStore.value ? `${contextStore.value.name} Earn` : ''))
-const amountError = computed(() => (check.error('amount') ? t('form.amountError') : check.error('asset')))
+const amountError = computed(() => {
+  if (!check.error('amount')) return check.error('asset')
+  return overAvailable.value || t('form.amountError')
+})
 </script>
 
 <template>

@@ -6,6 +6,7 @@ import { useMoneyChartTooltip, Money } from '@/entities/currency'
 import { axisNumber, chartColors } from '@/shared/lib/chart-theme'
 import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { formatMonthKey } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 
 import { STACKED, type WealthGroup, groupValue } from '@/entities/report'
 
@@ -16,6 +17,7 @@ import { STACKED, type WealthGroup, groupValue } from '@/entities/report'
 const props = defineProps<{ points: NetworthPoint[]; currency: string }>()
 
 const { t } = useI18n()
+const phone = useIsPhone()
 const tooltip = useMoneyChartTooltip(computed(() => props.currency))
 const OPACITY: Record<string, number> = { property: 0.3, crypto: 0.8, bank: 0.15 }
 
@@ -30,6 +32,8 @@ const option = computed<ChartOption>(() => ({
   xAxis: {
     type: 'category',
     boundaryGap: false,
+    // On a phone every second month, counted back from the last, so the current one is named.
+    axisLabel: { interval: (index: number) => !phone.value || (props.points.length - 1 - index) % 2 === 0 },
     data: props.points.map((point) => formatMonthKey(point.month, { month: 'short' }).replace('.', '')),
   },
   yAxis: { type: 'value', axisLabel: { formatter: axisNumber } },

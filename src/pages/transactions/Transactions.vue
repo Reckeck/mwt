@@ -4,13 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { CircleCheck } from 'lucide-vue-next'
+import { CircleCheck, Search } from 'lucide-vue-next'
 
 import { TransactionsExportButton } from '@/features/report-export'
 import { TransactionBulkBar } from '@/features/transaction-bulk'
-import { SaveFilterButton, TransactionFilterBar } from '@/features/transaction-filter'
+import { SaveFilterButton, TransactionFilterBar, useFilterChips } from '@/features/transaction-filter'
 import { TxRowMenuHost, useTxRowMenu } from '@/features/transaction-row-menu'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
+import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
@@ -18,7 +19,7 @@ import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { openTxDetails } from '@/shared/lib/tx-details'
 import { backFromQuery } from '@/shared/lib/drill'
 import { useIsPhone } from '@/shared/lib/phone'
-import { activeFilterCount } from '@/shared/lib/tx-filter'
+import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
 import { useSelection } from '@/shared/lib/selection'
 import { txId } from '@/shared/lib/transactions'
 import { BackChip } from '@/shared/ui/back-chip'
@@ -48,6 +49,19 @@ const losses = useQuery({
 
 const openDetails = openTxDetails
 
+/** Nothing kept: what narrowed it (the search, the filters by name) and one button that takes both off. */
+const chipsOf = useFilterChips()
+const narrowed = computed(() => {
+  const text = filter.value.text?.trim() ?? ''
+  const filters = chipsOf(filter.value)
+    .map((chip) => chip.label)
+    .join(', ')
+  if (text && filters) return { hint: t('filter.emptyBoth', { text, filters }), reset: t('filter.resetBoth') }
+  if (text) return { hint: t('filter.emptySearch', { text }), reset: t('filter.resetSearch') }
+  if (filters) return { hint: t('filter.emptyFilter', { filters }), reset: t('filter.resetFilter') }
+  return null
+})
+
 /**
  * New rates change the day totals (their rate comes with the summary). The rows
  * themselves change only when operations got prices stamped (`restamped`), and
@@ -72,17 +86,8 @@ function rowActions(tx: Transaction): UiAction[] {
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div v-if="back || activeFilterCount(filter)" class="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <BackChip v-if="back" :to="back.to" :label="back.label" />
-      <FilterTotal
-        v-if="!txs.isPending.value"
-        class="ms-auto"
-        :rows="rows"
-        :total="total"
-        :kinds="filter.kinds"
-        :fx-per-usd="summary.data.value?.fx_per_usd"
-        :base-currency="summary.data.value?.base_currency"
-      />
+    <div v-if="back" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <BackChip :to="back.to" :label="back.label" />
     </div>
     <div data-tour="tx-filter">
       <TransactionFilterBar v-model="filter">
@@ -92,7 +97,19 @@ function rowActions(tx: Transaction): UiAction[] {
           <SaveFilterButton v-if="activeFilterCount(filter)" :filter="filter" />
         </template>
         <template #trail>
-          <FilterCount v-if="!txs.isPending.value" :filter="filter" :total="total" />
+          <!-- One counter: with a filter it also carries the net of what is kept. -->
+          <template v-if="!txs.isPending.value">
+            <FilterTotal
+              v-if="activeFilterCount(filter)"
+              :filter="filter"
+              :rows="rows"
+              :total="total"
+              :kinds="filter.kinds"
+              :fx-per-usd="summary.data.value?.fx_per_usd"
+              :base-currency="summary.data.value?.base_currency"
+            />
+            <FilterCount v-else :filter="filter" :total="total" />
+          </template>
         </template>
       </TransactionFilterBar>
     </div>
@@ -105,10 +122,14 @@ function rowActions(tx: Transaction): UiAction[] {
         :error="txs.error.value"
         :empty="!rows.length"
         :empty-title="t('filter.empty')"
-        :empty-description="t('ui.noDataHint')"
+        :empty-description="narrowed?.hint ?? t('ui.noDataHint')"
+        :empty-icon="narrowed ? Search : undefined"
         compact
         @retry="txs.refetch()"
       >
+        <template v-if="narrowed" #empty>
+          <Button variant="outline" class="touch-min" data-filter-empty-reset @click="filter = emptyTxFilter()">{{ narrowed.reset }}</Button>
+        </template>
         <div class="-my-3">
           <TransactionsList
             :transactions="rows"

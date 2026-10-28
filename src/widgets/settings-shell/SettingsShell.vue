@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { useVaultStore } from '@/shared/store/vault'
 import { Tabs } from '@/shared/ui/tabs'
 import { usePlatform } from '@/shared/lib/platform'
+import { useCoarsePointer } from '@/shared/lib/phone'
 import { useTour } from '@/shared/lib/tour'
 import { keepOpenOnToast } from '@/shared/lib/toast-outside'
 import { cn } from '@/shared/lib/utils'
@@ -21,13 +22,15 @@ const { t } = useI18n()
 
 const isDev = import.meta.env.DEV
 const { isDesktop } = usePlatform()
+/** A finger as the main pointer: no keys to set or list, even in a browser window the size of a phone. */
+const coarse = useCoarsePointer()
 /** Sections that exist only on a desktop drop out on a phone, and the tabs and groups left empty with them. */
 const groups = computed(() =>
   SETTINGS_GROUPS.filter((group) => !group.devOnly || isDev)
     .map((group) => ({
       ...group,
       tabs: group.tabs
-        .map((tab) => ({ ...tab, sections: tab.sections.filter((item) => !item.desktopOnly || isDesktop.value) }))
+        .map((tab) => ({ ...tab, sections: tab.sections.filter((item) => !item.desktopOnly || (isDesktop.value && !coarse.value)) }))
         .filter((tab) => tab.sections.length > 0),
     }))
     .filter((group) => group.tabs.length > 0),
@@ -50,7 +53,7 @@ const SCROLLER = [
   '[mask-image:linear-gradient(to_bottom,transparent,black_20px)]',
 ].join(' ')
 const scroller = ref<HTMLElement | null>(null)
-const { open, isPhone, isList, activeGroup, activeTab, selectGroup, selectTab, backToList } = useSettingsNav(groups, scroller)
+const { open, isList, activeGroup, activeTab, selectGroup, selectTab, backToList } = useSettingsNav(groups, scroller)
 
 // The window's tour starts from Help only; it closes with the window.
 const tour = useTour()
@@ -61,7 +64,7 @@ watch(open, (isOpen) => {
 const tabDefs = computed(() =>
   activeGroup.value.tabs.map((tab) => ({
     value: tab.id,
-    label: t(isPhone.value && tab.shortKey ? tab.shortKey : tab.titleKey),
+    label: t(tab.titleKey),
   })),
 )
 function onTab(id: string) {
@@ -82,7 +85,7 @@ function focusPanel(event: Event) {
       <DialogOverlay class="fixed inset-0 z-overlay bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
         :class="cn(
-          'fixed inset-0 z-overlay flex overflow-hidden bg-card text-card-foreground focus:outline-none',
+          'fixed inset-0 z-overlay flex overflow-clip bg-card text-card-foreground focus:outline-none',
           'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
           'max-md:flex-col max-md:pt-safe max-md:pb-safe',
           'md:settings-window md:max-h-175 md:max-w-230 md:rounded-xl md:border md:border-border md:shadow-lg',

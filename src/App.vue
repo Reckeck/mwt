@@ -97,14 +97,15 @@ watch(
 
   <!-- Mounted here, not in AppShell: `/unlock` is a sibling route, and its
        settings dialog reports saves through toasts. -->
-  <!-- The toasts sit at the bottom (Attach 7): above the phone's bottom bar and the footer of an open sheet,
-       the height comes from `--toast-bottom` (shared/lib/toast-clearance, styles.css). -->
+  <!-- Desktop: the toasts sit at the bottom right, above the footer of an open dialog (`--toast-bottom`,
+       shared/lib/toast-clearance). Phone: one toast at the top, a new one replaces the old; sheets, forms
+       and selects at the bottom stay uncovered. -->
   <Sonner
-    :position="phone ? 'bottom-center' : 'bottom-right'"
+    :position="phone ? 'top-center' : 'bottom-right'"
     :theme="theme"
     rich-colors
     close-button
-    expand
-    :visible-toasts="4"
+    :expand="!phone"
+    :visible-toasts="phone ? 1 : 4"
   />
 </template>

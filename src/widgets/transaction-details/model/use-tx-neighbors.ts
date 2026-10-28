@@ -21,7 +21,7 @@ export function useTxNeighbors(tx: MaybeRefOrGetter<Transaction | null>, open: M
 
   function go(step: -1 | 1) {
     const target = step < 0 ? prev.value : next.value
-    if (target) openTxDetails(target, txDetailsList.value)
+    if (target) openTxDetails(target, txDetailsList.value, 'replace')
   }
 
   const listener = (event: KeyboardEvent) => {

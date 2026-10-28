@@ -12,11 +12,12 @@ export const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
+      /** On a touch screen the text sizes and `icon` are at least 40px tall (rule 16; Button · Size 40px). */
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
+        default: 'h-9 px-4 py-2 touch-min',
+        sm: 'h-8 rounded-md px-3 text-xs touch-min',
         lg: 'h-10 rounded-md px-8',
-        icon: 'size-9',
+        icon: 'size-9 touch-min-square',
         'icon-sm': 'size-8 touch-hit-lg',
         /** A small «×» or icon inside a chip or a list row. */
         'icon-xs': 'size-6 rounded-sm touch-hit-lg',
@@ -25,6 +26,8 @@ export const buttonVariants = cva(
           'h-auto justify-start whitespace-normal rounded-md px-2 py-1.5 text-left font-normal pointer-coarse:min-h-10',
       },
     },
+    /** A link inside a sentence keeps the line height: its `touch-hit` area is the target. */
+    compoundVariants: [{ variant: 'link', class: 'pointer-coarse:min-h-0' }],
     defaultVariants: { variant: 'default', size: 'default' },
   },
 )

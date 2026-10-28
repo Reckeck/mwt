@@ -75,7 +75,9 @@ watch(
       <div class="grid gap-4">
         <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
           <div class="flex flex-wrap items-start gap-3">
+            <!-- On a touch screen the switch steps off the card's edge, so its hit area fits inside. -->
             <Switch
+              class="pointer-coarse:my-2.5"
               :model-value="workflow.active"
               :aria-label="t('workflow.active')"
               :disabled="actions.setActive.isPending.value"
@@ -111,10 +113,19 @@ watch(
               >
                 <Play class="size-4" />
               </Button>
-              <Button variant="ghost" size="icon" :aria-label="t('workflow.list.export')" @click="actions.exportFile.mutate(workflow.id)">
+              <Button
+                variant="ghost"
+                size="icon"
+                :aria-label="t('workflow.list.export')"
+                @click="actions.exportFile.mutate(workflow.id)"
+              >
                 <Copy class="size-4" />
               </Button>
-              <ConfirmButton :label="t('workflow.list.delete')" :confirm-label="t('workflow.list.deleteConfirm')" @confirm="actions.remove.mutate(workflow.id)">
+              <ConfirmButton
+                :label="t('workflow.list.delete')"
+                :confirm-label="t('actions.confirmDeleteNamed', { name: workflow.name })"
+                @confirm="actions.remove.mutate(workflow.id)"
+              >
                 <Trash2 class="size-4" />
               </ConfirmButton>
             </div>

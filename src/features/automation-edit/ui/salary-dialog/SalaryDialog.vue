@@ -52,6 +52,7 @@ const incomes = computed(() => (categories.data.value ?? []).filter((entry) => e
 const options = computed<ComboboxOption[]>(() => incomes.value.map((entry) => ({ value: entry.key, label: categoryLabel(entry, t) })))
 const shown = computed(() => payouts.value.slice(0, count.value))
 
+let autoCurrency = settings.baseCurrency
 watch(
   open,
   (isOpen) => {
@@ -60,13 +61,27 @@ watch(
     storeId.value = flat.value.find((node) => node.store.kind === 'bank' && !node.store.archived)?.store.id ?? flat.value[0]?.store.id ?? ''
     share.value = true
     count.value = 1
+    autoCurrency = walletCurrency(storeId.value)
     payouts.value = [
-      defaultPayout('salary', t('salary.title'), settings.baseCurrency),
-      defaultPayout('advance', t('salary.advance'), settings.baseCurrency),
+      defaultPayout('salary', t('salary.title'), autoCurrency),
+      defaultPayout('advance', t('salary.advance'), autoCurrency),
     ]
   },
   { immediate: true },
 )
+
+/** What the wallet mostly holds: the usual amount is in that currency until the user picks another. */
+function walletCurrency(id: string) {
+  const held = [...(flat.value.find((node) => node.store.id === id)?.balances ?? [])].sort(
+    (left, right) => Number(right.value_base) - Number(left.value_base),
+  )
+  return held[0]?.asset.symbol.toLowerCase() ?? settings.baseCurrency
+}
+watch(storeId, (id) => {
+  const next = walletCurrency(id)
+  payouts.value = payouts.value.map((payout) => (payout.currency === autoCurrency ? { ...payout, currency: next } : payout))
+  autoCurrency = next
+})
 
 const form = useFormValidation(
   () => {

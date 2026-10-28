@@ -66,6 +66,5 @@
   "row-repeat-call src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
   "row-repeat-call src/widgets/analytics-reports/ui/month-table/MonthTable.vue": 3,
   "row-repeat-call src/widgets/onboarding-checklist/OnboardingChecklist.vue": 1,
-  "row-repeat-call src/widgets/workflow-editor/ui/WorkflowHistoryPanel.vue": 1,
   "to-fixed src/features/utility-bill/UtilityBillDialog.vue": 1
 }

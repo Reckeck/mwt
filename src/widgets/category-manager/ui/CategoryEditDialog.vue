@@ -75,7 +75,7 @@ function done(action: () => void) {
         </Button>
         <ConfirmButton
           :label="t('categories.manage.delete')"
-          :confirm-label="t('actions.confirmDelete')"
+          :confirm-label="t('actions.confirmDeleteNamed', { name: name })"
           @confirm="done(() => withCategory((item) => actions.remove.mutate(item.key)))"
         >
           <Trash2 class="size-4" />

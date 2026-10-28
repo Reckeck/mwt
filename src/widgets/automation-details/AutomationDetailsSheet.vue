@@ -88,7 +88,7 @@ const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-
       >
         <ConfirmButton
           :label="t('actions.delete')"
-          :confirm-label="t('automationCard.deleteConfirm')"
+          :confirm-label="t('actions.confirmDeleteNamed', { name: card.name })"
           show-label
           :disabled="details.removing.value"
           :class="footerButton"

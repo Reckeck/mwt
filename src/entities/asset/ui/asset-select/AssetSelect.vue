@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import { useFavoriteCurrencies } from '@/entities/currency'
 import { Select, SelectItem } from '@/shared/ui/select'
@@ -17,7 +16,6 @@ const props = defineProps<AssetSelectProps>()
 
 const asset = defineModel<AssetRef | null>({ required: true })
 
-const { t } = useI18n()
 const favorites = useFavoriteCurrencies()
 
 /** Favourites first, in the user's order and starred; the rest keep the order given. */
@@ -48,8 +46,8 @@ const selected = computed({
 <template>
   <Select v-model="selected" :invalid="props.invalid" :placeholder="props.placeholder">
     <SelectItem v-for="option in options" :key="option.key" :value="option.key">
-      <span v-if="option.favorite" aria-hidden="true" class="text-warning">★</span>
-      <span v-if="option.favorite" class="sr-only">{{ t('currency.favoriteMark') }}</span>
+      <!-- The trigger shows the item's plain text, so a hidden «favourite» word would print there. -->
+      <span v-if="option.favorite" class="text-warning">★</span>
       {{ option.label }}
     </SelectItem>
   </Select>

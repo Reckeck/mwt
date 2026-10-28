@@ -14,7 +14,7 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
 import { mockScratchJson } from './exchange-data'
-import { analyticsContext, mockFlows, mockFxTable, mockLossOf, mockSummary } from './market'
+import { analyticsContext, mockFlows, mockFxTable, mockLossOf } from './market'
 import { mockCandles } from './market-assets'
 import { mockEntityCard } from './relations'
 import { mockPinned, mockSearchIndex, mockSearchTransactions, mockSetPinned } from './search'
@@ -76,7 +76,7 @@ export const devReportCommands: MockCommands = {
   },
   get_net_worth_trend: ({ args }) => {
     const period = (args?.period as DashPeriod | undefined) ?? mockSettings.dashboard_period
-    return resolve(mockNetWorthTrend(period, Number(mockSummary.total_base), analyticsContext().currency))
+    return resolve(mockNetWorthTrend(period, analyticsContext()))
   },
   get_entity_card: ({ args }) => {
     return resolve(mockEntityCard(args?.target as EntityRef))

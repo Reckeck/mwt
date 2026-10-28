@@ -110,7 +110,7 @@ function onPaid() {
           >
             <Pencil class="size-4" />
           </Button>
-          <ConfirmButton :label="t('utilities.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate()">
+          <ConfirmButton :label="t('utilities.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: props.item.name })" @confirm="remove.mutate()">
             <Trash2 class="size-4" />
           </ConfirmButton>
         </div>

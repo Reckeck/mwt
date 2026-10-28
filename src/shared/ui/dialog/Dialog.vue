@@ -68,8 +68,9 @@ function focusFirstField(event: Event) {
     >
       <header class="flex items-start gap-3 border-b border-border px-4 pt-2 pb-3">
         <div class="min-w-0 flex-1">
-          <DrawerTitle class="truncate">{{ props.title }}</DrawerTitle>
-          <DrawerDescription v-if="props.description" class="mt-0.5">{{ props.description }}</DrawerDescription>
+          <!-- A 40px line, the height of the «×»: the title sits on its axis. -->
+          <DrawerTitle class="truncate py-2.5 leading-5">{{ props.title }}</DrawerTitle>
+          <DrawerDescription v-if="props.description" class="-mt-2">{{ props.description }}</DrawerDescription>
         </div>
         <DrawerClose
           class="-mr-1 flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -79,7 +80,7 @@ function focusFirstField(event: Event) {
         </DrawerClose>
       </header>
 
-      <div data-dialog-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+      <div v-if="$slots.default" data-dialog-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         <slot />
       </div>
 
@@ -93,7 +94,7 @@ function focusFirstField(event: Event) {
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
-        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
+        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-clip rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
         :class="widths[props.size]"
         :data-overlay="props.overlay"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"
@@ -116,11 +117,11 @@ function focusFirstField(event: Event) {
           </DialogClose>
         </header>
 
-        <div data-dialog-body class="min-h-0 flex-1 overflow-y-auto p-4">
+        <div v-if="$slots.default" data-dialog-body class="min-h-0 flex-1 overflow-y-auto p-4">
           <slot />
         </div>
 
-        <footer v-if="$slots.footer" class="flex items-center justify-end gap-2 border-t border-border p-4">
+        <footer v-if="$slots.footer" class="flex flex-wrap items-center justify-end gap-2 border-t border-border p-4">
           <slot name="footer" />
         </footer>
       </DialogContent>

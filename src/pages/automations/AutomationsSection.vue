@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Plus, Variable } from 'lucide-vue-next'
+import { Download, Plus, Variable } from 'lucide-vue-next'
 
 import { WorkflowImportDialog } from '@/features/workflow-manage'
 import { WorkflowVars } from '@/widgets/workflow-vars'
@@ -36,7 +36,7 @@ const more = computed(() =>
   MORE_TABS.map((tab) => ({ name: TAB_ROUTE[tab], label: label(tab), hint: t(`automations.hint.${tab}`) })),
 )
 const phone = useIsPhone()
-/** «Импорт» and «Создать» belong to «Мои» (Auto-1 · 1); the empty one offers only «Создать» (Auto-1 · 2). */
+/** «Импорт» and «Создать» belong to «Мои» (Auto-1 · 1), on a phone too; the empty one offers only «Создать» (Auto-1 · 2). */
 const onMine = computed(() => route.name === TAB_ROUTE.mine)
 const mine = useQuery({ queryKey: MINE_KEY, queryFn: () => call<MineItem[]>('list_my_automations'), enabled: onMine })
 const importOpen = ref(false)
@@ -51,18 +51,28 @@ const varsOpen = computed({
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <!-- A phone (Auto-1 · 1, 390): the actions line up under the title, 44 px, the tabs below them. -->
+    <div :class="phone ? 'flex flex-col-reverse gap-3' : 'flex flex-wrap items-center justify-between gap-3'">
       <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
-      <div class="flex items-center gap-2">
-        <Button variant="outline" size="sm" :aria-label="t('workflow.tab.vars')" data-tour="workflow-vars-open" @click="varsOpen = true">
+      <div class="flex items-center gap-2" :class="phone && 'justify-end'">
+        <Button variant="outline" size="sm" :class="phone && 'size-11'" :aria-label="t('workflow.tab.vars')" data-tour="workflow-vars-open" @click="varsOpen = true">
           <Variable class="size-4" />
           <span v-if="!phone">{{ t('workflow.tab.vars') }}</span>
         </Button>
         <template v-if="onMine">
-          <Button v-if="mine.data.value?.length && !phone" variant="outline" size="sm" data-mine-import data-tour="automations-import" @click="importOpen = true">
+          <Button
+            v-if="mine.data.value?.length"
+            variant="outline"
+            size="sm"
+            :class="phone && 'h-11 px-4'"
+            data-mine-import
+            data-tour="automations-import"
+            @click="importOpen = true"
+          >
+            <Download class="size-4" />
             {{ t('automations.mine.import') }}
           </Button>
-          <Button size="sm" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
+          <Button size="sm" :class="phone && 'size-11'" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
             <Plus class="size-4" />
             <span v-if="!phone">{{ t('automations.mine.create') }}</span>
           </Button>

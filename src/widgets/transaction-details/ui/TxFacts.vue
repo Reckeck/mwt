@@ -6,7 +6,7 @@ import { Money } from '@/entities/currency'
 import { ReportTerm } from '@/entities/report'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { formatPct } from '@/shared/lib/format'
-import { txForMonthLabel, txMeta, txSides } from '@/shared/lib/transactions'
+import { txForMonthLabel, txMeta, txRouteSides } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
 import { pairRate, txBaseValue, txFlowKind, txPair } from '../lib/tx-card'
@@ -29,7 +29,7 @@ defineSlots<{ side?(props: { side: AccountRef; label: string }): unknown }>()
 const { t } = useI18n()
 const context = useTxContext()
 
-const sides = computed(() => txSides(props.tx))
+const sides = computed(() => txRouteSides(props.tx))
 const contact = computed(() => txMeta(props.tx).contact_id)
 const at = computed(() => txMeta(props.tx).timestamp)
 
@@ -54,19 +54,23 @@ const base = computed(() => {
   return value === null ? null : { amount: value, currency: props.baseCurrency }
 })
 
+/** A wallet is «Из кошелька / В кошелёк»; a person or free text is who paid or who gets it. */
+const fromLabel = computed(() => t(sides.value.from && 'store' in sides.value.from ? 'txCard.from' : 'txCard.payer'))
+const toLabel = computed(() => t(sides.value.to && 'store' in sides.value.to ? 'txCard.to' : 'txCard.payee'))
+
 const ROW = 'flex items-baseline justify-between gap-4 py-3'
 </script>
 
 <template>
   <dl class="grid divide-y divide-border border-y px-0 text-sm" data-tx-facts>
     <div v-if="sides.from" :class="ROW">
-      <dt class="text-muted-foreground">{{ t('txCard.from') }}</dt>
+      <dt class="text-muted-foreground">{{ fromLabel }}</dt>
       <dd class="min-w-0 break-words pb-1 text-right">
         <slot name="side" :side="sides.from" :label="context.sideLabel(sides.from)">{{ context.sideLabel(sides.from) }}</slot>
       </dd>
     </div>
     <div v-if="sides.to" :class="ROW">
-      <dt class="text-muted-foreground">{{ t('txCard.to') }}</dt>
+      <dt class="text-muted-foreground">{{ toLabel }}</dt>
       <dd class="min-w-0 break-words pb-1 text-right">
         <slot name="side" :side="sides.to" :label="context.sideLabel(sides.to)">{{ context.sideLabel(sides.to) }}</slot>
       </dd>

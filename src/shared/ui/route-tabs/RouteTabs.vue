@@ -37,7 +37,7 @@ const openMore = computed(() => props.more.find((tab) => tab.name === route.name
 
 /** On a phone «More» is a sheet from below, like every other menu there. */
 const moreActions = computed(() =>
-  props.more.map((tab) => ({ id: tab.name, label: tab.label, run: () => open(tab.name) })),
+  props.more.map((tab) => ({ id: tab.name, label: tab.label, hint: tab.hint, opens: true, run: () => open(tab.name) })),
 )
 
 watch(
@@ -99,5 +99,5 @@ const TAB =
       </DropdownMenu>
     </TabsList>
   </TabsRoot>
-  <ActionSheet v-if="phone && props.more.length" v-model:open="sheetOpen" :actions="moreActions" :title="props.moreLabel" />
+  <ActionSheet v-if="phone && props.more.length" v-model:open="sheetOpen" :actions="moreActions" :title="props.moreTitle || props.moreLabel" />
 </template>

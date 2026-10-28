@@ -66,15 +66,23 @@ export function wealthChange(points: NetworthPoint[]): WealthChange | null {
   }
 }
 
-/** The group that moved capital most over the last month: «Выросло в основном за счёт Крипты». */
-export function wealthDriver(points: NetworthPoint[]): { group: WealthGroup; delta: number } | null {
+/**
+ * The group that moved capital most over the last month, in the direction capital
+ * itself moved: «Выросло в основном за счёт Крипты». Only groups the breakdown shows.
+ */
+export function wealthDriver(points: NetworthPoint[]): { group: WealthGroup; delta: number; up: boolean } | null {
   const last = points.at(-1)
   const before = points.at(-2)
   if (!last || !before) return null
-  const moves = (['property', 'crypto', 'bank', 'owed', 'debts'] as const).map((group) => ({
-    group,
-    delta: groupValue(last, group) - groupValue(before, group),
-  }))
+  const total = Number(last.net) - Number(before.net)
+  if (total === 0) return null
+  const up = total > 0
+  const shown = new Set(wealthRows(last).map((row) => row.group))
+  const moves = (['property', 'crypto', 'bank', 'owed', 'debts'] as const)
+    .filter((group) => shown.has(group))
+    .map((group) => ({ group, delta: groupValue(last, group) - groupValue(before, group) }))
+    .filter((move) => (up ? move.delta > 0 : move.delta < 0))
+  if (!moves.length) return null
   const top = moves.reduce((best, move) => (Math.abs(move.delta) > Math.abs(best.delta) ? move : best))
-  return top.delta === 0 ? null : top
+  return { ...top, up }
 }

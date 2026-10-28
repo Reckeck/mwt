@@ -5,6 +5,7 @@ import { mockCategories, mockContactBalances } from './ledger'
 import { mockStores, mockTransactions, priceOf } from './demo'
 import { MOCK_PER_USD } from './fx-rates'
 import { mockAppSettings, mockSettings } from './vault-data'
+import { ledgerWorth } from './analytics/worth-split'
 import { mockScenario } from './scenario'
 
 /** When the FX rows were taken: `stress` has rates from two days ago, 18:05 (Currency-2 · 8); `null` is now. */
@@ -244,21 +245,23 @@ export const mockSummary: PortfolioSummary = {
 }
 
 export function mockNetWorth(): NetWorth {
-  const financial = Number(mockSummary.total_base)
+  // The ledger's own sum, so the figure, its groups and the report's last point agree.
+  const split = ledgerWorth(analyticsContext(), null)
   const receivables = mockContactBalances(mockTransactions).reduce(
     (acc, row) => acc + Number(row.receivable) * priceOf(row.asset.symbol),
     0,
   )
+  const liabilities = Math.max(0, split.liabilities)
   return {
     base_currency: 'usd',
-    financial: String(financial),
-    non_financial: '0',
+    financial: String(split.financial),
+    non_financial: String(split.non_financial),
     receivables: String(receivables),
-    liabilities: '0',
+    liabilities: String(liabilities),
     liabilities_by_kind: [],
     payables: '0',
-    net: String(financial + receivables),
-    financial_by_class: [{ class_id: null, amount: String(financial) }],
+    net: String(split.financial + split.non_financial + receivables - liabilities),
+    financial_by_class: [{ class_id: null, amount: String(split.financial) }],
     financial_fund: '0',
   }
 }

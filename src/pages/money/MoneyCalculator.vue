@@ -7,12 +7,14 @@ import { ScenarioBar } from '@/features/calc-scenario-manage'
 import { GoalDialog, type GoalFromCalc } from '@/features/goal-edit'
 import { COMPARE_FACTOR, InvestCalculatorForm, useInvestCalc } from '@/features/invest-calculator'
 import { formatPct } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { type CompareLine, CompareMenu, InvestResult, useCompareLines } from '@/widgets/invest-result'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const calc = useInvestCalc()
+const phone = useIsPhone()
 
 /** The open scenario is in the address (`?scenario=`), so a goal card can link straight to it. */
 const scenarioId = computed<string | null>({
@@ -73,6 +75,7 @@ function openGoal(draft: GoalInput) {
       ref="bar"
       v-model:scenario-id="scenarioId"
       :snapshot="calc.snapshot"
+      :goal-button="!phone"
       @load="load"
       @goal="openGoal"
       @want-goal="wantGoal"
@@ -81,8 +84,8 @@ function openGoal(draft: GoalInput) {
     </ScenarioBar>
     <div class="grid items-start gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <InvestCalculatorForm :calc="calc" />
-      <!-- The answer is what the page is for: on a phone it comes before the fields. -->
-      <InvestResult :calc="calc" :compare="compare" class="@max-4xl:order-first" @goal="wantGoal" @open="openCompared" />
+      <!-- On a phone the fields come first, then the answer and «Создать цель» under it (Money 3 · 18). -->
+      <InvestResult :calc="calc" :compare="compare" @goal="wantGoal" @open="openCompared" />
     </div>
     <GoalDialog v-model:open="goalOpen" :draft="goalDraft" :from-calc="goalFrom" />
   </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ShoppingBag } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
@@ -14,6 +15,10 @@ import { PICK_CARD_CLASS } from '../../store-create.constants'
  */
 const { t } = useI18n()
 const { isSub, kind, creatableKinds, subTypes, pickKind, pickSubType, goNext } = useStoreCreate()
+
+/** A programme reads as «Лояльность и бонусы» with a bag here (Wallets-1 · 2); elsewhere it stays «Бонусы». */
+const label = (value: StoreKind) => t(value === 'loyalty' ? 'storeWizard.kindLoyalty' : `stores.kind.${value}`)
+const icon = (value: StoreKind) => (value === 'loyalty' ? ShoppingBag : getStoreIcon(value))
 
 function choose(value: StoreKind) {
   if (kind.value === value) goNext()
@@ -35,8 +40,8 @@ function choose(value: StoreKind) {
           @click="choose(info.kind)"
         >
           <span class="flex items-center gap-2 text-sm font-medium">
-            <component :is="getStoreIcon(info.kind)" class="size-4 shrink-0" />
-            {{ t(`stores.kind.${info.kind}`) }}
+            <component :is="icon(info.kind)" class="size-4 shrink-0" />
+            {{ label(info.kind) }}
           </span>
           <span class="text-xs font-normal text-muted-foreground">{{ t(`stores.kindHint.${info.kind}`) }}</span>
         </Button>

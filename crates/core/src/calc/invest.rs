@@ -1023,6 +1023,34 @@ mod tests {
     }
 
     #[test]
+    fn contributions_go_on_after_the_withdrawals_ran_out() {
+        // 100 + 10 a month against 30 a month: the pot is empty in month 4, the
+        // withdrawals stop, and the contributions rebuild the balance to the term's end.
+        let input = InvestInput {
+            stages: vec![monthly("10")],
+            withdrawal: Some(Withdrawal {
+                amount: amt("30"),
+                from_month: 1,
+                ..Withdrawal::default()
+            }),
+            ..base("100", "0", 12)
+        };
+        let res = simulate(&input).unwrap();
+        assert_eq!(res.depleted_at, Some(5));
+        // Everything that was there is withdrawn once, nothing after.
+        assert_amt(res.withdrawn, "150");
+        let last = res
+            .years
+            .last()
+            .and_then(|year| year.months.last())
+            .unwrap();
+        assert_eq!(last.month, 12);
+        assert_amt(last.withdrawn, "0");
+        // Seven more contributions after the empty month.
+        assert_amt(res.final_nominal, "70");
+    }
+
+    #[test]
     fn safe_withdrawal_lasts_the_term() {
         let rule = |amount: &str| Withdrawal {
             amount: amt(amount),

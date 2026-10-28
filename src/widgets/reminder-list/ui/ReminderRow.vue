@@ -105,7 +105,7 @@ function pay() {
       >
         <Pencil class="size-4" />
       </Button>
-      <ConfirmButton :label="t('reminder.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="emit('remove')">
+      <ConfirmButton :label="t('reminder.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: props.reminder.text })" @confirm="emit('remove')">
         <Trash2 class="size-4" />
       </ConfirmButton>
     </div>

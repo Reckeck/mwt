@@ -34,7 +34,7 @@ const props = withDefaults(defineProps<SectionStateProps>(), {
 })
 const emit = defineEmits<{ retry: [] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const SKELETON_DELAY_MS = 200
 const showSkeleton = ref(false)
@@ -55,8 +55,13 @@ watch(
 )
 onBeforeUnmount(() => clearTimeout(timer))
 
+/** The wording of the error's code; a code without one gets a plain sentence, not the backend's raw text. */
 function errorText(err: unknown): string {
-  return codeErrorMessage(parseError(err), t)
+  const parsed = parseError(err)
+  return te(`errors.${parsed.code}`) ? codeErrorMessage(parsed, t) : t('ui.loadErrorHint')
+}
+function errorDetail(err: unknown): string {
+  return parseError(err).message
 }
 </script>
 
@@ -95,7 +100,7 @@ function errorText(err: unknown): string {
     <CircleAlert />
     <AlertTitle>{{ t('ui.loadError') }}</AlertTitle>
     <AlertDescription class="flex flex-col items-start gap-2">
-      <span>{{ errorText(props.error) }}</span>
+      <span :title="errorDetail(props.error)">{{ errorText(props.error) }}</span>
       <Button variant="outline" size="sm" @click="emit('retry')">{{ t('actions.retry') }}</Button>
     </AlertDescription>
   </Alert>

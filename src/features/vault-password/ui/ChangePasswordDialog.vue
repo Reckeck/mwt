@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation } from '@tanstack/vue-query'
 
@@ -7,7 +7,9 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { NewPasswordFields } from '@/shared/ui/new-password-fields'
+import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
+import { MIN_VAULT_PASSWORD } from '@/shared/lib/vault-password'
 import { call } from '@/shared/api/ipc'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -24,12 +26,11 @@ watch(open, () => {
   repeat.value = ''
 })
 
-const mismatch = computed(() => repeat.value !== '' && repeat.value !== next.value)
 const form = useFormValidation(
   () => ({
     current: required(current.value),
-    next: required(next.value),
-    repeat: required(repeat.value) ?? (mismatch.value ? t('vault.password.mismatch') : null),
+    next: firstError(required(next.value), minLength(next.value, MIN_VAULT_PASSWORD)),
+    repeat: required(repeat.value) ?? (next.value === repeat.value ? null : t('vault.password.mismatch')),
   }),
   { resetOn: open },
 )
@@ -56,19 +57,14 @@ const change = useMutation({
       <FormField for="password-current" :label="t('vault.password.current')" required :error="form.error('current')">
         <Input id="password-current" v-model="current" type="password" autocomplete="current-password" />
       </FormField>
-      <FormField for="password-new" :label="t('vault.password.new')" required :error="form.error('next')">
-        <Input id="password-new" v-model="next" type="password" autocomplete="new-password" />
-      </FormField>
-      <FormField for="password-repeat" :label="t('vault.password.repeat')" required :error="form.error('repeat')">
-        <Input
-          id="password-repeat"
-          v-model="repeat"
-          type="password"
-          autocomplete="new-password"
-          :aria-invalid="mismatch"
-        />
-        <p v-if="mismatch && !form.error('repeat')" class="text-xs text-destructive">{{ t('vault.password.mismatch') }}</p>
-      </FormField>
+      <NewPasswordFields
+        id="change-password"
+        v-model:password="next"
+        v-model:repeat="repeat"
+        :label="t('vault.password.new')"
+        :error="form.error('next')"
+        :repeat-error="form.error('repeat')"
+      />
       <p class="text-xs text-muted-foreground">{{ t('vault.password.hint') }}</p>
     </form>
     <template #footer>

@@ -33,7 +33,7 @@ const TAB =
   >
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <TabsList :class="cn('scrollbar-none inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[0.625rem] bg-muted p-[3px]', props.fill && 'w-full')">
-        <TabsTrigger v-for="tab in props.tabs" :key="tab.value" :value="tab.value" :class="cn(TAB, props.fill && 'flex-1 justify-center pointer-coarse:h-10')">
+        <TabsTrigger v-for="tab in props.tabs" :key="tab.value" :value="tab.value" :class="cn(TAB, props.fill && 'flex-1 justify-center max-md:px-2 pointer-coarse:h-10')">
           {{ tab.label }}
         </TabsTrigger>
         <DropdownMenu v-if="props.more.length" align="start">

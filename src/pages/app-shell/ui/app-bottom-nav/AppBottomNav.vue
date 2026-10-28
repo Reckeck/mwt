@@ -96,7 +96,10 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
       <div class="grid px-4 pb-[calc(1.5rem+var(--safe-bottom))]">
         <Button v-for="item in rest" :key="item.name" variant="ghost" :class="ROW" @click="pick(() => router.push({ name: item.name }))">
           <component :is="item.icon" class="size-5 text-muted-foreground" />
-          <span class="flex-1">{{ t(item.key) }}</span>
+          <span class="grid min-w-0 flex-1 gap-0.5 py-1.5">
+            <span class="truncate">{{ t(item.key) }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ t(`nav.moreItem.${item.name}`) }}</span>
+          </span>
           <span v-if="item.name === 'stores' && walletCount" class="text-muted-foreground">
             {{ t('nav.walletCount', { count: walletCount }) }}
           </span>
@@ -104,12 +107,18 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
         </Button>
         <Button variant="ghost" :class="ROW" @click="pick(() => emit('openSettings'))">
           <Settings class="size-5 text-muted-foreground" />
-          <span class="flex-1">{{ t('settingsShell.title') }}</span>
+          <span class="grid min-w-0 flex-1 gap-0.5 py-1.5">
+            <span class="truncate">{{ t('settingsShell.title') }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ t('nav.moreItem.settings') }}</span>
+          </span>
           <ChevronRight class="size-4 text-muted-foreground" />
         </Button>
         <Button v-if="vault.encrypted" variant="ghost" :class="ROW" @click="pick(() => emit('lock'))">
           <Lock class="size-5 text-muted-foreground" />
-          <span class="flex-1">{{ t('auth.lock') }}</span>
+          <span class="grid min-w-0 flex-1 gap-0.5 py-1.5">
+            <span class="truncate">{{ t('auth.lock') }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ t('nav.moreItem.lock') }}</span>
+          </span>
         </Button>
       </div>
     </DrawerContent>

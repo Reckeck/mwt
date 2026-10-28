@@ -30,7 +30,7 @@ export function seedMine(transfer: Transaction) {
   due.setHours(9, 0, 0, 0)
   reminders.push({
     id: uuid(),
-    text: 'Сегодня должна прийти зарплата',
+    text: 'Должна прийти зарплата',
     due_at: iso(due),
     done: false,
     repeat: null,

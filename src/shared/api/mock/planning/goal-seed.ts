@@ -84,7 +84,8 @@ export function seedGoal() {
     store_id: cash.id,
     name: goal.name,
     asset: USD,
-    allocated: '1539',
+    // What the three deposits put into the wallet, so the envelope never holds more than the wallet.
+    allocated: String(deposits.length * 157.5),
     target: goal.target_amount,
     goal_id: goal.id,
     created_at: created,

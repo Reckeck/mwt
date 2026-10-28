@@ -7,13 +7,12 @@ export function pairRate(pair: TxPair): number {
   return pair.into.amount ? pair.out.amount / pair.into.amount : 0
 }
 
-/** The card's title: «RUB → USDT» for an exchange, else the comment or the asset. */
-export function txTitle(tx: Transaction, categoryName: (key: string) => string): string {
+/** What «Все такие» names: the pair of an exchange, else the category the filter follows. */
+export function similarTitle(tx: Transaction, categoryName: (key: string) => string): string {
   const pair = txPair(tx)
   if (pair) return `${pair.out.symbol} → ${pair.into.symbol}`
-  const meta = txMeta(tx)
-  const first = meta.categories[0]
-  return meta.comment || (first ? categoryName(first) : '') || txPrincipalLegs(tx)[0]?.asset.symbol || ''
+  const first = txMeta(tx).categories[0]
+  return first ? categoryName(first) : ''
 }
 
 /** Net money of the operation in the base currency; `null` when a leg has no price. */

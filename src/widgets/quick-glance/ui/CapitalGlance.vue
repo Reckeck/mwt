@@ -38,7 +38,7 @@ const why = computed(() => {
   const driver = glance.driver.value
   if (!driver) return null
   return {
-    key: driver.delta > 0 ? 'glance.capital.grew' : 'glance.capital.fell',
+    key: driver.up ? 'glance.capital.grew' : 'glance.capital.fell',
     group: t(`money.wealth.group.${driver.group}Of`),
     delta: driver.delta,
   }

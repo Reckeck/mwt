@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { assetKey } from '@/shared/lib/asset-ref'
+import { parseDecimal } from '@/shared/lib/decimal'
+import { formatQuantity } from '@/shared/lib/format'
 import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
 
 import { isFormComplete, missingFields } from '../transaction-form.model'
@@ -33,7 +35,7 @@ const ASSET_FIELDS = new Set(['asset', 'fromAsset', 'toAsset', 'soldAsset', 'bou
  */
 export function useTxValidation(state: TxFormState) {
   const { t } = useI18n()
-  const { props, form, contacts, serverErrors } = state
+  const { props, form, contacts, serverErrors, overview, editing } = state
 
   /** What is still missing, said under the form. */
   const missing = computed(() => (props.template || props.disabled ? [] : missingFields(form)))
@@ -46,6 +48,17 @@ export function useTxValidation(state: TxFormState) {
       Boolean(form.fromAsset && form.toAsset) &&
       assetKey(form.fromAsset as AssetRef) === assetKey(form.toAsset as AssetRef),
   )
+
+  /** Staking or a pool pays out of this wallet: more than it holds is refused here, not by the backend. */
+  const overAvailable = computed(() => {
+    if (form.kind !== 'defi' || editing.value || !form.asset || !overview.data.value) return ''
+    const amount = Number(parseDecimal(form.amount) ?? Number.NaN)
+    if (!(amount > 0)) return ''
+    const key = assetKey(form.asset)
+    const held = overview.data.value.positions.find((position) => assetKey(position.asset) === key)?.quantity ?? '0'
+    if (amount <= Number(held)) return ''
+    return t('validation.overAvailable', { amount: `${formatQuantity(held)} ${form.asset.symbol.toUpperCase()}` })
+  })
 
   const needsCategory = computed(() => form.kind === 'topup' || form.kind === 'payment')
   const rules = useQuery({
@@ -88,6 +101,7 @@ export function useTxValidation(state: TxFormState) {
       if (needsCategory.value && !props.template && !form.categories.length && !ruleFillsCategory.value) {
         errors.categories = t('validation.category')
       }
+      if (overAvailable.value && !errors.amount) errors.amount = overAvailable.value
       if (sameCurrency.value) errors.toAsset = t('validation.sameCurrency')
       for (const [field, text] of Object.entries(serverErrors.value)) errors[field] ??= text
       // Complete on the surface but still not an operation (e.g. an unknown kind of side).
@@ -97,5 +111,5 @@ export function useTxValidation(state: TxFormState) {
     { resetOn: () => form.kind },
   )
 
-  return { missing, valid, needsCategory, sameCurrency, check }
+  return { missing, valid, needsCategory, sameCurrency, overAvailable, check }
 }

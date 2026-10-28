@@ -46,7 +46,7 @@ const remove = useMutation({
   >
     <component :is="props.contact.archived ? ArchiveRestore : Archive" class="size-4" />
   </Button>
-  <ConfirmButton :label="t('contacts.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate()">
+  <ConfirmButton :label="t('contacts.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: props.contact.name })" @confirm="remove.mutate()">
     <Trash2 class="size-4" />
   </ConfirmButton>
 </template>
