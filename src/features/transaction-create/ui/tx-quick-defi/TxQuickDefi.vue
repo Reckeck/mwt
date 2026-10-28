@@ -20,7 +20,7 @@ import { AvailableHint } from '../available-hint'
  * unstaking, claims and pool ids stay in the full editor.
  */
 const { t } = useI18n()
-const { form, check, props, contextStore, overAvailable } = useTxForm()
+const { form, check, props, contextStore, overAvailable, noteExpression } = useTxForm()
 
 if (!QUICK_DEFI_ACTIONS.includes(form.defiAction)) form.defiAction = 'stake'
 const protocolHint = computed(() => (contextStore.value ? `${contextStore.value.name} Earn` : ''))
@@ -53,7 +53,7 @@ const amountError = computed(() => {
       <Input id="tx-protocol" v-model="form.protocol" autocomplete="off" :placeholder="protocolHint" />
     </FormField>
     <FormField for="tx-amount" :label="t('form.sum')" required :error="amountError">
-      <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountZero')">
+      <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="form.amount" :placeholder="t('form.amountZero')">
         <template #suffix>
           <AssetChip v-model="form.asset" :label="t('form.asset')" :invalid="Boolean(check.error('asset'))" />
         </template>

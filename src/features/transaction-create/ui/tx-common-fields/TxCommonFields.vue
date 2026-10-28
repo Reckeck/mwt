@@ -25,7 +25,7 @@ import { useTxForm } from '../../model/use-tx-form'
  * under «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, properties, isProperty } =
+const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, properties, isProperty, noteExpression } =
   useTxForm()
 
 // The network fills in by itself from the asset, so only what the user set opens the section.
@@ -42,7 +42,7 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
   <div class="grid items-start gap-3 @xl:grid-cols-2">
     <div class="grid gap-1.5">
       <Label for="tx-fee">{{ t('form.fee') }}</Label>
-      <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0" />
+      <AmountInput id="tx-fee" @expression="noteExpression('tx-fee', $event)" v-model="form.feeAmount" placeholder="0" />
     </div>
     <div v-if="!props.template" class="grid min-w-0 gap-1.5">
       <Label for="tx-date">{{ t('form.date') }}</Label>

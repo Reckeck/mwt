@@ -13,19 +13,19 @@ import { AvailableHint } from '../available-hint'
 
 /** Spot trade: sell one asset, buy another on an exchange. */
 const { t } = useI18n()
-const { form, check, props } = useTxForm()
+const { form, check, props, noteExpression } = useTxForm()
 </script>
 
 <template>
   <div class="grid gap-3 @xl:grid-cols-2">
     <AssetInput v-model="form.soldAsset" required :error="check.error('soldAsset')" :label="t('form.sellAsset')" />
     <FormField for="tx-sold" :label="t('form.sellQty')" required :error="check.error('soldQty')">
-      <AmountInput id="tx-sold" v-model="form.soldQty" />
+      <AmountInput id="tx-sold" @expression="noteExpression('tx-sold', $event)" v-model="form.soldQty" />
       <AvailableHint :store-id="props.storeId" :asset="form.soldAsset" @max="(quantity) => (form.soldQty = quantity)" />
     </FormField>
     <AssetInput v-model="form.boughtAsset" required :error="check.error('boughtAsset')" :label="t('form.buyAsset')" />
     <FormField for="tx-bought" :label="t('form.buyQty')" required :error="check.error('boughtQty')">
-      <AmountInput id="tx-bought" v-model="form.boughtQty" />
+      <AmountInput id="tx-bought" @expression="noteExpression('tx-bought', $event)" v-model="form.boughtQty" />
     </FormField>
   </div>
   <div class="grid gap-3 @xl:grid-cols-2">

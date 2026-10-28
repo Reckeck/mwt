@@ -11,7 +11,7 @@ import { useTxForm } from '../../model/use-tx-form'
 
 /** Futures: open or close a position on a contract. */
 const { t } = useI18n()
-const { form, check } = useTxForm()
+const { form, check, noteExpression } = useTxForm()
 </script>
 
 <template>
@@ -34,14 +34,14 @@ const { form, check } = useTxForm()
       </Select>
     </div>
     <FormField for="tx-qty" :label="t('tx.field.quantity')" required :error="check.error('quantity')">
-      <AmountInput id="tx-qty" v-model="form.quantity" />
+      <AmountInput id="tx-qty" @expression="noteExpression('tx-qty', $event)" v-model="form.quantity" />
     </FormField>
     <FormField for="tx-fill" :label="t('tx.field.price')" required :error="check.error('fillPrice')">
-      <AmountInput id="tx-fill" v-model="form.fillPrice" />
+      <AmountInput id="tx-fill" @expression="noteExpression('tx-fill', $event)" v-model="form.fillPrice" />
     </FormField>
     <div class="grid gap-1.5">
       <Label for="tx-leverage">{{ t('tx.field.leverage') }}</Label>
-      <AmountInput id="tx-leverage" v-model="form.leverage" />
+      <AmountInput id="tx-leverage" @expression="noteExpression('tx-leverage', $event)" v-model="form.leverage" />
     </div>
     <AssetInput v-model="form.settle" :label="t('tx.field.settle')" />
     <div class="grid gap-1.5">
@@ -53,7 +53,7 @@ const { form, check } = useTxForm()
     </div>
     <div v-if="form.action === 'close'" class="grid gap-1.5">
       <Label for="tx-pnl">{{ t('tx.field.closedPnl') }}</Label>
-      <AmountInput id="tx-pnl" v-model="form.closedPnl" />
+      <AmountInput id="tx-pnl" @expression="noteExpression('tx-pnl', $event)" v-model="form.closedPnl" />
     </div>
   </div>
 </template>

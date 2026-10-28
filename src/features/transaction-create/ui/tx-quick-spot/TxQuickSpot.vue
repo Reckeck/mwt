@@ -23,7 +23,7 @@ type Side = 'buy' | 'sell'
  * keeps the order id and maker or taker.
  */
 const { t } = useI18n()
-const { form, check } = useTxForm()
+const { form, check, noteExpression } = useTxForm()
 
 const side = ref<Side>('buy')
 /** A calculator plan or the previous trade of a series leaves its pair: bought base for the sold quote. */
@@ -109,17 +109,17 @@ const priceError = computed(() =>
       <PairInput id="tx-pair" v-model="pair" placeholder="BTC / USDT" />
     </FormField>
     <FormField for="tx-amount" :label="t('tx.field.quantity')" required :error="quantityError">
-      <AmountInput id="tx-amount" v-model="quantity" placeholder="0">
+      <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="quantity" placeholder="0">
         <template v-if="parsed" #suffix><Badge variant="secondary">{{ parsed.base }}</Badge></template>
       </AmountInput>
     </FormField>
     <FormField for="tx-spot-price" :label="t('tx.field.price')" required :error="priceError">
-      <AmountInput id="tx-spot-price" v-model="price" placeholder="0">
+      <AmountInput id="tx-spot-price" @expression="noteExpression('tx-spot-price', $event)" v-model="price" placeholder="0">
         <template v-if="parsed" #suffix><Badge variant="secondary">{{ parsed.quote }}</Badge></template>
       </AmountInput>
     </FormField>
     <FormField for="tx-fee" :label="t('form.fee')" :error="check.error('feeAmount')">
-      <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0">
+      <AmountInput id="tx-fee" @expression="noteExpression('tx-fee', $event)" v-model="form.feeAmount" placeholder="0">
         <template v-if="parsed" #suffix><Badge variant="secondary">{{ parsed.quote }}</Badge></template>
       </AmountInput>
     </FormField>

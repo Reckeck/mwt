@@ -17,7 +17,7 @@ import { AvailableHint } from '../available-hint'
 
 /** Transfer: one asset between two places, possibly a debt. */
 const { t } = useI18n()
-const { form, check, swapSides, debts, debtValue } = useTxForm()
+const { form, check, swapSides, debts, debtValue, noteExpression } = useTxForm()
 const fromStore = computed(() => accountStoreId(form.from))
 </script>
 
@@ -25,7 +25,7 @@ const fromStore = computed(() => accountStoreId(form.from))
   <div class="grid gap-3 @xl:grid-cols-2">
     <AssetInput v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
     <FormField for="tx-amount" :label="t('form.amount')" required :error="check.error('amount')">
-      <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
+      <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="form.amount" :placeholder="t('form.amountHint')" />
       <AvailableHint :store-id="fromStore" :asset="form.asset" @max="(quantity) => (form.amount = quantity)" />
     </FormField>
   </div>

@@ -22,7 +22,7 @@ import { useTxForm } from '../../model/use-tx-form'
  * backend's preview; closing a position stays in the full editor.
  */
 const { t } = useI18n()
-const { form, check, preview } = useTxForm()
+const { form, check, preview, noteExpression } = useTxForm()
 
 form.action = 'open'
 if (!form.leverage) form.leverage = '5'
@@ -81,17 +81,17 @@ const marginError = computed(() => (margin.value ? undefined : check.error('quan
       <PairInput id="tx-symbol" v-model="form.symbol" kind="futures" placeholder="BTCUSDT" />
     </FormField>
     <FormField for="tx-leverage" :label="t('tx.field.leverage')" :error="check.error('leverage')">
-      <AmountInput id="tx-leverage" v-model="form.leverage" placeholder="1">
+      <AmountInput id="tx-leverage" @expression="noteExpression('tx-leverage', $event)" v-model="form.leverage" placeholder="1">
         <template #suffix><span class="px-2 text-sm text-muted-foreground">×</span></template>
       </AmountInput>
     </FormField>
     <FormField for="tx-amount" :label="t('tx.quick.margin')" required :error="marginError">
-      <AmountInput id="tx-amount" v-model="margin" placeholder="0">
+      <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="margin" placeholder="0">
         <template #suffix><Badge variant="secondary">{{ settle }}</Badge></template>
       </AmountInput>
     </FormField>
     <FormField for="tx-fill" :label="t('tx.quick.entryPrice')" required :error="check.error('fillPrice')">
-      <AmountInput id="tx-fill" v-model="form.fillPrice" placeholder="0">
+      <AmountInput id="tx-fill" @expression="noteExpression('tx-fill', $event)" v-model="form.fillPrice" placeholder="0">
         <template #suffix><Badge variant="secondary">{{ settle }}</Badge></template>
       </AmountInput>
     </FormField>
