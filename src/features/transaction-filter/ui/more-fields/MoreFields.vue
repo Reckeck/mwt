@@ -2,11 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { ContactPicker } from '@/entities/contact'
 import { useCategories, useContacts } from '@/shared/api/queries'
 import { categoryOptions } from '@/shared/lib/categories'
 import { Combobox } from '@/shared/ui/combobox'
 import { Label } from '@/shared/ui/label'
-import { Select, SelectItem } from '@/shared/ui/select'
 
 import { AmountField } from '../amount-field'
 import { PeriodField } from '../period-field'
@@ -53,10 +53,13 @@ const contactId = computed({
   </div>
   <div class="grid min-w-0 content-start gap-1.5">
     <Label :for="`${props.idPrefix}-contact`">{{ t('filter.contact') }}</Label>
-    <Select :id="`${props.idPrefix}-contact`" v-model="contactId" :disabled="!contacts.data.value?.length">
-      <SelectItem value="">{{ t('filter.allContacts') }}</SelectItem>
-      <SelectItem v-for="contact in contacts.data.value" :key="contact.id" :value="contact.id">{{ contact.name }}</SelectItem>
-    </Select>
+    <ContactPicker
+      :id="`${props.idPrefix}-contact`"
+      v-model="contactId"
+      no-create
+      :empty-label="t('filter.allContacts')"
+      :disabled="!contacts.data.value?.length"
+    />
   </div>
   <AmountField v-model="filter" :id-prefix="props.idPrefix" />
 </template>

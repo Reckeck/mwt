@@ -7,7 +7,8 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, Pencil, ScrollTe
 
 import { ContactAccounts, ContactEditDialog } from '@/features/contact-edit'
 import { DebtTermsPopover } from '@/features/debt-manage'
-import { ContactTurnoverTable, accountCounts, contactNets } from '@/entities/contact'
+import { ContactTurnoverTable, accountCounts, contactNets, isQuickContact } from '@/entities/contact'
+import { Badge } from '@/shared/ui/badge'
 import { Money, useConversions } from '@/entities/currency'
 import { TransactionsList } from '@/entities/transaction'
 import { ActionMenu } from '@/shared/ui/action-menu'
@@ -134,7 +135,10 @@ const menu = computed<UiAction[]>(() => {
           <User class="size-5" />
         </span>
         <div class="min-w-0 flex-1">
-          <h2 :class="cn('truncate font-semibold', props.phone ? 'text-base' : 'text-xl')">{{ props.contact.name }}</h2>
+          <h2 :class="cn('flex items-center gap-2 font-semibold', props.phone ? 'text-base' : 'text-xl')">
+            <span class="truncate">{{ props.contact.name }}</span>
+            <Badge v-if="isQuickContact(props.contact)" variant="outline" class="shrink-0 font-normal">{{ t('contacts.quick.badge') }}</Badge>
+          </h2>
           <p v-if="!props.phone" class="truncate text-sm text-muted-foreground">{{ subtitle }}</p>
           <p v-else class="truncate text-sm">
             <ContactDebtPhrase :nets="nets" :empty="t('contacts.debt.none')" />

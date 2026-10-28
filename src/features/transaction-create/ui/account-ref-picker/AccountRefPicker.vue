@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { Check, ChevronDown, Plus } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import {
@@ -15,6 +15,7 @@ import {
   ComboboxViewport,
 } from '@/shared/ui/combobox'
 import { Input } from '@/shared/ui/input'
+import { useContactCreator } from '@/shared/lib/contact-create'
 
 import type { AccountOption, AccountRefPickerProps } from './account-ref-picker.types'
 import { NONE, RAW, encode, iconOf, useAccountOptions } from './use-account-options'
@@ -39,6 +40,9 @@ const side = defineModel<AccountRef | null>({ default: null })
 const { t } = useI18n()
 const generatedId = useId()
 const triggerId = computed(() => props.id || generatedId)
+
+/** Value of the «create a contact» row; never stored. */
+const CREATE = 'create-contact'
 
 const rawText = ref(side.value && 'raw' in side.value ? side.value.raw : '')
 const choice = ref(encode(side.value))
@@ -84,6 +88,21 @@ const groups = computed(() => {
   for (const row of shown.value) out.set(row.group, [...(out.get(row.group) ?? []), row])
   return [...out.entries()]
 })
+
+const creator = useContactCreator()
+/** Nothing called like the typed text: offer a new contact with that name (only where contacts are offered). */
+const createName = computed(() => {
+  const text = search.value.trim()
+  if (!props.contacts || !creator || !text) return ''
+  const exact = allOptions.value.some((row) => !row.parent && row.value.startsWith('contact:') && row.title.toLowerCase() === text.toLowerCase())
+  return exact ? '' : text
+})
+async function startCreate() {
+  const name = createName.value
+  open.value = false
+  const contact = await creator?.(name)
+  if (contact) choice.value = `contact:${contact.id}`
+}
 
 const current = computed(() => allOptions.value.find((row) => row.value === choice.value) ?? null)
 </script>
@@ -148,7 +167,16 @@ const current = computed(() => allOptions.value.find((row) => row.value === choi
               </span>
             </ComboboxItem>
           </ComboboxGroup>
-          <p v-if="!shown.length" class="px-2 py-3 text-center text-xs text-muted-foreground">{{ t('tx.side.noMatches') }}</p>
+          <ComboboxItem
+            v-if="createName"
+            :value="CREATE"
+            class="w-full cursor-pointer text-primary"
+            @select.prevent="startCreate"
+          >
+            <Plus class="size-3.5" aria-hidden="true" />
+            <span class="truncate">{{ t('contactPicker.create', { name: createName }) }}</span>
+          </ComboboxItem>
+          <p v-if="!shown.length && !createName" class="px-2 py-3 text-center text-xs text-muted-foreground">{{ t('tx.side.noMatches') }}</p>
         </ComboboxViewport>
       </ComboboxList>
     </ComboboxRoot>

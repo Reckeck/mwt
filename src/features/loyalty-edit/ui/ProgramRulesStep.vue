@@ -2,13 +2,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { ContactPicker } from '@/entities/contact'
 import { StoreNodeSelect } from '@/entities/store'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { Select, SelectItem } from '@/shared/ui/select'
-import { useContacts } from '@/shared/api/queries'
 
 import type { LoyaltyInfoState } from '../model/use-loyalty-info'
 import type { ProgramField } from '../loyalty-edit.types'
@@ -25,7 +24,6 @@ const props = defineProps<{
 }>()
 const contactId = defineModel<string>('contactId', { required: true })
 const { t } = useI18n()
-const contacts = useContacts()
 const others = computed(() => props.state.cards.value.filter((node) => node.store.id !== props.wallet))
 </script>
 
@@ -52,16 +50,7 @@ const others = computed(() => props.state.cards.value.filter((node) => node.stor
         <p class="text-xs text-muted-foreground">{{ t('loyalty.loginHint') }}</p>
       </FormField>
       <FormField for="program-contact" :label="t('stores.contact')">
-        <Select id="program-contact" v-model="contactId" :aria-label="t('stores.contact')">
-          <SelectItem value="">{{ t('stores.contactNone') }}</SelectItem>
-          <SelectItem
-            v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)"
-            :key="contact.id"
-            :value="contact.id"
-          >
-            {{ contact.name }}
-          </SelectItem>
-        </Select>
+        <ContactPicker id="program-contact" v-model="contactId" :aria-label="t('stores.contact')" :empty-label="t('stores.contactNone')" />
       </FormField>
       <FormField for="loyalty-expires" :label="t('loyalty.expiresAt')">
         <DateTimePicker id="loyalty-expires" v-model="props.state.expiresAt.value" />

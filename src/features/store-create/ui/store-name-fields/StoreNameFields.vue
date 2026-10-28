@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { ContactPicker } from '@/entities/contact'
 import { CurrencyPicker } from '@/entities/currency'
-import { useContacts } from '@/shared/api/queries'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
 import { useStoreCreate } from '../../model/use-store-create-state'
@@ -18,8 +16,6 @@ import { useStoreCreate } from '../../model/use-store-create-state'
 const { t } = useI18n()
 const { kind, name, nameTouched, withCard, cardCurrency, openingCurrency, contactId, offersBudget, inBudget, form } =
   useStoreCreate()
-const contacts = useContacts(computed(() => kind.value === 'bank'))
-const banks = computed(() => (contacts.data.value ?? []).filter((contact) => !contact.archived))
 </script>
 
 <template>
@@ -45,10 +41,7 @@ const banks = computed(() => (contacts.data.value ?? []).filter((contact) => !co
   </FormField>
 
   <FormField v-if="kind === 'bank'" for="store-contact" :label="t('storeWizard.bank')" :hint="t('storeWizard.bankHint')">
-    <Select id="store-contact" v-model="contactId">
-      <SelectItem value="">{{ t('stores.contactNone') }}</SelectItem>
-      <SelectItem v-for="contact in banks" :key="contact.id" :value="contact.id">{{ contact.name }}</SelectItem>
-    </Select>
+    <ContactPicker id="store-contact" v-model="contactId" :empty-label="t('stores.contactNone')" />
   </FormField>
   </div>
 

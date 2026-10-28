@@ -214,6 +214,7 @@ export const TOURS: Record<string, TourStep[]> = {
   'transactions-contacts': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },
     { target: 'contact-quick-create', key: 'directory.create', side: 'bottom' },
+    { target: 'contact-quick-filter', key: 'directory.quick', side: 'right' },
     { target: 'contact-groups', key: 'directory.groups', side: 'right' },
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-accounts', key: 'directory.accounts', side: 'top' },

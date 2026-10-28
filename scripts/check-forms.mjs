@@ -26,6 +26,8 @@
 // - an `<Input>` typed into a symbol, pair, ticker or contract → `PairInput`
 //   or `AssetInput`; a field that is not an asset says so with
 //   `data-picker-ok`.
+// - a `<SelectItem>` / `<option>` / `<ComboboxItem>` per contact (`v-for="contact in …"`) →
+//   `ContactPicker` (search, «Создать «Петя»» on the spot); a pick-only filter says `no-create`.
 // The components themselves (PICKERS) are where such lists live.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -48,7 +50,7 @@ function walk(dir, out = []) {
 const lineOf = (text, index) => text.slice(0, index).split('\n').length
 
 /** The ready pickers: the only places a list of wallets, assets or currencies is drawn by hand. */
-const PICKERS = /(?:StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker|ChartCurrencySwitch|PairInput)\.vue$/
+const PICKERS = /(?:ContactPicker|StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker|ChartCurrencySwitch|PairInput)\.vue$/
 
 for (const file of walk(join(root, 'src'))) {
   const text = readFileSync(file, 'utf8')
@@ -80,6 +82,13 @@ for (const file of walk(join(root, 'src'))) {
         errors.push(`${where(match.index)}: an asset list by hand («${list}») — use AssetSelect or AssetInput (rule 14)`)
       } else if (/^(?:code|currency)$/i.test(item) && /(?:codes|currencies)$/i.test(list) && !rest.includes('data-picker-ok')) {
         errors.push(`${where(match.index)}: a currency list by hand («${list}») — use CurrencyPicker (rule 14)`)
+      }
+    }
+    // Quoted attributes may hold `>` (`(entry) => …`), so the tag is read quote by quote.
+    for (const match of text.matchAll(/<(?:SelectItem|option|ComboboxItem)\b(?:[^>"]|"[^"]*")*/g)) {
+      const loop = match[0].match(/v-for="\s*\(?\s*(\w+)[^"]*?\bin\s+([^"]+)"/)
+      if (loop && (/contact/i.test(loop[1]) || /\bcontacts?\b/i.test(loop[2]))) {
+        errors.push(`${where(match.index)}: a contact list by hand («${loop[2].trim()}») — use ContactPicker (rule 14)`)
       }
     }
     for (const match of text.matchAll(/<ToggleGroupItem\b[^>]*v-for="\s*\(?\s*(code|currency)\b[^"]*"/gs)) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useRoute, useRouter } from 'vue-router'
@@ -7,7 +7,7 @@ import { Plus } from 'lucide-vue-next'
 
 import { ContactEditDialog } from '@/features/contact-edit'
 import { TransactionCreateDialog } from '@/features/transaction-create'
-import { contactNets, filterContacts } from '@/entities/contact'
+import { contactNets, filterContacts, isQuickContact, quickContacts } from '@/entities/contact'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
@@ -35,12 +35,18 @@ const balances = useQuery({ queryKey: ['contacts', 'balances'], queryFn: () => c
 const tree = useStoreTree()
 
 const search = ref('')
+const quickOnly = ref(false)
+const quickCount = computed(() => quickContacts(contacts.data.value ?? []).length)
+watch(quickCount, (count) => {
+  if (!count) quickOnly.value = false
+})
 /** Who owes or is owed comes first: that is why the page is opened. Waits for the debts so the order does not jump. */
 const list = computed(() => {
   if (balances.isPending.value) return []
   const rows = balances.data.value ?? []
   const owing = new Set(rows.map((row) => row.contact_id).filter((id) => contactNets(rows, id).length))
-  return filterContacts(contacts.data.value ?? [], search.value).sort(
+  const found = filterContacts(contacts.data.value ?? [], search.value)
+  return (quickOnly.value ? found.filter((contact) => !contact.archived && isQuickContact(contact)) : found).sort(
     (left, right) => Number(left.archived) - Number(right.archived) || Number(owing.has(right.id)) - Number(owing.has(left.id)),
   )
 })
@@ -115,6 +121,8 @@ function back() {
   <div v-else-if="phone" class="grid gap-3">
     <ContactList
       v-model:search="search"
+      v-model:quick-only="quickOnly"
+      :quick-count="quickCount"
       :contacts="list"
       :total="contacts.data.value?.length ?? 0"
       :balances="balances.data.value ?? []"
@@ -131,6 +139,8 @@ function back() {
   <div v-else class="grid items-start gap-4 @container @2xl:grid-cols-[17.5rem_1fr]">
     <ContactList
       v-model:search="search"
+      v-model:quick-only="quickOnly"
+      :quick-count="quickCount"
       :contacts="list"
       :total="contacts.data.value?.length ?? 0"
       :balances="balances.data.value ?? []"

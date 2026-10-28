@@ -5,6 +5,7 @@ import { useEventListener } from '@vueuse/core'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { ContactEditDialog, useContactCreation } from '@/features/contact-edit'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
 import { QuickAddDialog } from '@/widgets/quick-add'
@@ -21,6 +22,7 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
+import { provideContactCreator } from '@/shared/lib/contact-create'
 import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
@@ -50,6 +52,9 @@ import { useStoreTree } from '@/shared/api/queries'
  */
 // Every list of operations below makes a wallet's name and «авто» a glance.
 provideTxGlances({ wallet: WalletGlance, automation: AutomationGlance })
+// A contact typed into any picker is made in one form hosted here, over whatever is open.
+const contactCreation = useContactCreation()
+provideContactCreator(contactCreation.create)
 const { t } = useI18n()
 const route = useRoute()
 const settingsStore = useSettingsStore()
@@ -155,6 +160,11 @@ const pageClass = computed(() => {
     <QuickAddDialog v-model:open="quickAddOpen" />
     <EntityHost />
     <ConverterDialog />
+    <ContactEditDialog
+      v-model:open="contactCreation.open.value"
+      :initial-name="contactCreation.name.value"
+      @saved="contactCreation.saved"
+    />
     <WhatsNewDialog />
     <SyncPairingDialog />
     <SyncPlanDialog />

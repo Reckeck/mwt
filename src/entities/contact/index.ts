@@ -1,3 +1,5 @@
 export * from './lib/contact-list'
 export * from './lib/contact-account'
 export * from './ui/contact-turnover'
+export * from './lib/quick-contact'
+export * from './ui/contact-picker'

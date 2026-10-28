@@ -31,7 +31,7 @@ const group = ref('')
 const note = ref('')
 watch(open, (now) => {
   if (!now) return
-  name.value = props.contact?.name ?? ''
+  name.value = props.contact?.name ?? props.initialName?.trim() ?? ''
   kind.value = props.contact?.kind ?? 'person'
   group.value = props.contact?.group ?? ''
   note.value = props.contact?.note ?? ''
@@ -58,7 +58,10 @@ const save = useMutation({
     open.value = false
     emit('saved', contact)
   },
-  meta: { success: () => (props.contact ? 'contacts.saved' : 'contacts.created'), error: 'contacts.saveFailed' },
+  meta: {
+    success: (data) => (props.contact ? t('contacts.saved') : t('contacts.createdNamed', { name: (data as Contact).name })),
+    error: 'contacts.saveFailed',
+  },
 })
 function onDeleted() {
   open.value = false
@@ -95,6 +98,8 @@ function onDeleted() {
     <FormField for="contact-edit-note" :label="t('stores.note')">
       <Textarea id="contact-edit-note" v-model="note" rows="2" :placeholder="t('contacts.notePlaceholder')" />
     </FormField>
+
+    <p v-if="!props.contact" class="text-xs text-muted-foreground">{{ t('contacts.requisitesLater') }}</p>
 
     <template v-if="props.contact" #footer-start>
       <ContactArchive :contact="props.contact" @deleted="onDeleted" />

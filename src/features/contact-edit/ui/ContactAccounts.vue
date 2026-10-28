@@ -125,6 +125,17 @@ async function pasteFromClipboard() {
       @submit="submit"
       @cancel="editing = null"
     />
+    <!-- A quick contact (made by name only): the first requisite is one tap away. -->
+    <div
+      v-else-if="!props.contact.accounts.length"
+      class="grid justify-items-start gap-2 rounded-lg border border-dashed p-4"
+      data-contact-no-accounts
+    >
+      <p class="text-sm text-muted-foreground">{{ t('contacts.quick.noAccounts') }}</p>
+      <Button size="sm" data-contact-add-accounts @click="open()">
+        <Plus class="size-4" />{{ t('contacts.quick.addAccounts') }}
+      </Button>
+    </div>
     <Button
       v-else
       variant="outline"

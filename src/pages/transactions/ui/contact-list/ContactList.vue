@@ -2,7 +2,8 @@
 import { useI18n } from 'vue-i18n'
 import { Building2, ChevronRight, Repeat, Search, User } from 'lucide-vue-next'
 
-import { contactNets } from '@/entities/contact'
+import { contactNets, isQuickContact } from '@/entities/contact'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { ContextMenu, type UiAction } from '@/shared/ui/context-menu'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -25,9 +26,13 @@ const props = defineProps<{
   actionsOf: (contact: Contact) => UiAction[]
   /** On a phone a row opens a screen of its own: an icon tile and a chevron, rows divided. */
   phone?: boolean
+  /** How many live contacts still lack requisites: the «Дозаполнить» chip shows while there are any. */
+  quickCount?: number
 }>()
 const emit = defineEmits<{ select: [id: string] }>()
 const search = defineModel<string>('search', { required: true })
+/** Show only the contacts that still lack requisites. */
+const quickOnly = defineModel<boolean>('quickOnly', { default: false })
 
 const { t } = useI18n()
 
@@ -43,6 +48,18 @@ const emptyText = (contact: Contact) =>
       <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input v-model="search" class="h-9 pl-8" :placeholder="t('contacts.search')" :aria-label="t('contacts.search')" />
     </div>
+
+    <Button
+      v-if="props.quickCount || quickOnly"
+      :variant="quickOnly ? 'secondary' : 'outline'"
+      size="sm"
+      class="w-fit"
+      :aria-pressed="quickOnly"
+      data-tour="contact-quick-filter"
+      @click="quickOnly = !quickOnly"
+    >
+      {{ t('contacts.quick.filter', { count: props.quickCount ?? 0 }) }}
+    </Button>
 
     <EmptyState
       v-if="props.loaded && !props.contacts.length"
@@ -73,7 +90,10 @@ const emptyText = (contact: Contact) =>
             </span>
             <component :is="ICONS[contact.kind]" v-else class="size-4 shrink-0 text-muted-foreground" />
             <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-sm font-medium">{{ contact.name }}</span>
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="truncate text-sm font-medium">{{ contact.name }}</span>
+                <Badge v-if="isQuickContact(contact)" variant="outline" class="shrink-0 font-normal">{{ t('contacts.quick.badge') }}</Badge>
+              </span>
               <span class="truncate text-xs text-muted-foreground">
                 <ContactDebtPhrase :nets="contactNets(props.balances, contact.id)" :empty="emptyText(contact)" />
               </span>
