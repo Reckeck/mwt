@@ -24,7 +24,7 @@ import { AvailableHint } from '../available-hint'
  * time (Currency-1 · 6); P2P, several accounts and a typed rate stay in the full editor.
  */
 const { t } = useI18n()
-const { form, check, preview, sameCurrency } = useTxForm()
+const { form, check, preview, sameCurrency, noteExpression } = useTxForm()
 const settings = useSettingsStore()
 const fromStore = computed(() => accountStoreId(form.from))
 
@@ -71,7 +71,7 @@ function recordAsTransfer() {
 <template>
   <div class="grid items-start gap-3 @md:grid-cols-2">
     <FormField for="tx-amount" :label="t('tx.field.give')" required :error="giveError">
-      <AmountInput id="tx-amount" v-model="form.fromAmount" size="lg" :placeholder="t('form.amountZero')">
+      <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="form.fromAmount" size="lg" :placeholder="t('form.amountZero')">
         <template #suffix>
           <AssetChip v-model="form.fromAsset" :label="t('form.asset')" :invalid="Boolean(check.error('fromAsset'))" />
         </template>
@@ -80,7 +80,7 @@ function recordAsTransfer() {
     </FormField>
     <div class="grid content-start gap-1.5">
       <FormField for="tx-to-amount" :label="t('tx.field.receive')" required :error="getError" :hint="sameHint">
-        <AmountInput id="tx-to-amount" v-model="form.toAmount" size="lg" :placeholder="t('form.amountZero')">
+        <AmountInput id="tx-to-amount" @expression="noteExpression('tx-to-amount', $event)" v-model="form.toAmount" size="lg" :placeholder="t('form.amountZero')">
           <template #suffix>
             <AssetChip
               v-model="form.toAsset"

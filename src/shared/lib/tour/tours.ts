@@ -159,6 +159,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'tx-filter', key: 'transactions.filter', side: 'bottom' },
     { target: 'tx-save-filter', key: 'transactions.saveFilter', side: 'bottom' },
     { target: 'section-content', key: 'transactions.list', side: 'top' },
+    // Inside the operation dialog: shown when it is open, skipped otherwise.
+    { target: 'tx-amount', key: 'transactions.calc', side: 'bottom' },
   ],
   'transactions-calendar': [
     { target: 'section-tabs', key: 'transactions.tabs', side: 'bottom' },

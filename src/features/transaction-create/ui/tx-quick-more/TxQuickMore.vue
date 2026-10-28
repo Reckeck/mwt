@@ -21,7 +21,7 @@ import { AccountRefPicker } from '../account-ref-picker'
  * nothing hides behind a vague «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments } = useTxForm()
+const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments, noteExpression } = useTxForm()
 
 const showSide = computed(() => form.kind === 'payment' || form.kind === 'topup')
 const showProperty = computed(
@@ -71,7 +71,7 @@ const feeSuffix = computed(() => {
         <DateTimePicker id="tx-date" v-model="form.timestamp" mode="datetime" :placeholder="t('form.dateNow')" class="min-w-0 px-2" />
       </FormField>
       <FormField v-if="showFee" for="tx-fee" :label="t('form.fee')" :error="check.error('feeAmount')">
-        <AmountInput id="tx-fee" v-model="form.feeAmount" placeholder="0">
+        <AmountInput id="tx-fee" @expression="noteExpression('tx-fee', $event)" v-model="form.feeAmount" placeholder="0">
           <template v-if="feeSuffix" #suffix>
             <span class="px-2 text-xs font-medium text-muted-foreground">{{ feeSuffix }}</span>
           </template>

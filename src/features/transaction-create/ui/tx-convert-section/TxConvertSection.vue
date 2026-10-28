@@ -19,7 +19,7 @@ import { AvailableHint } from '../available-hint'
 
 /** Convert: give one asset, receive another — straight or through someone (P2P), to one account or several. */
 const { t } = useI18n()
-const { form, check, props, swapSides, pickConvertMode, receivedTotal, toAccount, impliedRate } = useTxForm()
+const { form, check, props, swapSides, pickConvertMode, receivedTotal, toAccount, impliedRate, noteExpression } = useTxForm()
 const fromStore = computed(() => accountStoreId(form.from))
 </script>
 
@@ -47,7 +47,7 @@ const fromStore = computed(() => accountStoreId(form.from))
     </FormField>
     <AssetInput v-model="form.fromAsset" required :error="check.error('fromAsset')" :label="t('form.asset')" />
     <FormField for="tx-from-amount" :label="t('form.amount')" required :error="check.error('fromAmount')">
-      <AmountInput id="tx-from-amount" v-model="form.fromAmount" />
+      <AmountInput id="tx-from-amount" @expression="noteExpression('tx-from-amount', $event)" v-model="form.fromAmount" />
       <AvailableHint :store-id="fromStore" :asset="form.fromAsset" @max="(quantity) => (form.fromAmount = quantity)" />
     </FormField>
   </div>
@@ -71,7 +71,7 @@ const fromStore = computed(() => accountStoreId(form.from))
     </FormField>
     <AssetInput v-model="form.toAsset" required :error="check.error('toAsset')" :label="t('form.asset')" />
     <FormField for="tx-to-amount" :label="t('form.amount')" required :error="check.error('toAmount')">
-      <AmountInput id="tx-to-amount" v-model="form.toAmount" />
+      <AmountInput id="tx-to-amount" @expression="noteExpression('tx-to-amount', $event)" v-model="form.toAmount" />
     </FormField>
   </div>
   <div v-if="!props.template" class="grid gap-2" data-tour="tx-split">
@@ -88,7 +88,7 @@ const fromStore = computed(() => accountStoreId(form.from))
   </p>
   <div class="grid gap-1.5">
     <Label for="tx-rate">{{ t('tx.field.rate') }}</Label>
-    <AmountInput id="tx-rate" v-model="form.rate" :placeholder="impliedRate" />
+    <AmountInput id="tx-rate" @expression="noteExpression('tx-rate', $event)" v-model="form.rate" :placeholder="impliedRate" />
     <p class="text-xs text-muted-foreground">{{ impliedRate || t('tx.field.rateHint') }}</p>
   </div>
 </template>

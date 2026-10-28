@@ -3,6 +3,7 @@ import { type InjectionKey, inject, provide } from 'vue'
 import type { TransactionFormProps } from '../transaction-form.types'
 import { useTxAutofill } from './use-tx-autofill'
 import { useTxBudget } from './use-tx-budget'
+import { useTxCalcNote } from './use-tx-calc-note'
 import { useTxFills } from './use-tx-fills'
 import { useTxFormState } from './use-tx-form-state'
 import { useTxKind } from './use-tx-kind'
@@ -26,6 +27,7 @@ function setup(props: TransactionFormProps, onSaved: (tx: Transaction) => void) 
     ...useTxFills(state),
     ...useTxPricing(state),
     ...useTxBudget(state),
+    ...useTxCalcNote(state),
     ...useTxPreview(state),
     ...useTxSave(state, onSaved),
     ...useTxValidation(state),

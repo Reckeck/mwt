@@ -18,6 +18,11 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [{ key: 'create' }, { key: 'fillIn', route: 'transactions-contacts' }],
   },
   {
+    id: 'amountCalculator',
+    date: '2026-10-29',
+    points: [{ key: 'field', route: 'transactions' }, { key: 'note' }],
+  },
+  {
     id: 'appIcon',
     date: '2026-10-29',
     points: [{ key: 'icon' }],

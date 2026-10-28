@@ -11,7 +11,7 @@ import { useTxForm } from '../../model/use-tx-form'
 
 /** Selling property: what, how many units, at what price, and where the money goes. */
 const { t } = useI18n()
-const { form, check, heldAssets, proceedsStores } = useTxForm()
+const { form, check, heldAssets, proceedsStores, noteExpression } = useTxForm()
 </script>
 
 <template>
@@ -26,10 +26,10 @@ const { form, check, heldAssets, proceedsStores } = useTxForm()
       />
     </FormField>
     <FormField for="tx-sell-qty" :label="t('tx.field.units')" required :error="check.error('sellQty')">
-      <AmountInput id="tx-sell-qty" v-model="form.sellQty" />
+      <AmountInput id="tx-sell-qty" @expression="noteExpression('tx-sell-qty', $event)" v-model="form.sellQty" />
     </FormField>
     <FormField for="tx-sell-price" :label="t('tx.field.unitPrice')" required :error="check.error('sellPrice')">
-      <AmountInput id="tx-sell-price" v-model="form.sellPrice" />
+      <AmountInput id="tx-sell-price" @expression="noteExpression('tx-sell-price', $event)" v-model="form.sellPrice" />
     </FormField>
     <AssetInput v-model="form.currency" required :error="check.error('currency')" :label="t('tx.field.currency')" />
   </div>

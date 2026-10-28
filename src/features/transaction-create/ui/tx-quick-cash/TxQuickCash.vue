@@ -23,7 +23,7 @@ import { AvailableHint } from '../available-hint'
 defineSlots<{ store?: () => unknown }>()
 
 const { t } = useI18n()
-const { form, check, props, needsCategory } = useTxForm()
+const { form, check, props, needsCategory, noteExpression } = useTxForm()
 const categories = useCategories()
 
 /** One category here; more than one stays possible in the full editor. */
@@ -53,7 +53,7 @@ const categoryError = computed(() =>
 
 <template>
   <FormField for="tx-amount" :label="t('form.sum')" required :error="amountError">
-    <AmountInput id="tx-amount" v-model="form.amount" size="lg" :placeholder="t('form.amountZero')">
+    <AmountInput id="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="form.amount" size="lg" :placeholder="t('form.amountZero')">
       <template #suffix>
         <AssetChip v-model="form.asset" :label="t('form.asset')" :invalid="Boolean(check.error('asset'))" />
       </template>

@@ -16,7 +16,7 @@ import { AvailableHint } from '../available-hint'
 
 /** Top-up, payment and DeFi: one asset on this wallet. */
 const { t } = useI18n()
-const { form, check, props, isProperty, propertyName, overruns } = useTxForm()
+const { form, check, props, isProperty, propertyName, overruns, noteExpression } = useTxForm()
 </script>
 
 <template>
@@ -26,8 +26,14 @@ const { form, check, props, isProperty, propertyName, overruns } = useTxForm()
       <Input id="tx-property" v-model="propertyName" :placeholder="t('tx.field.propertyHint')" />
     </div>
     <AssetInput v-else v-model="form.asset" required :error="check.error('asset')" :label="t('form.asset')" />
-    <FormField for="tx-amount" :label="isProperty ? t('tx.field.units') : t('form.amount')" required :error="check.error('amount')">
-      <AmountInput id="tx-amount" v-model="form.amount" :placeholder="t('form.amountHint')" />
+    <FormField
+      for="tx-amount"
+      :label="isProperty ? t('tx.field.units') : t('form.amount')"
+      required
+      :error="check.error('amount')"
+      :hint="t('amount.calc.fieldHint')"
+    >
+      <AmountInput id="tx-amount" data-tour="tx-amount" @expression="noteExpression('tx-amount', $event)" v-model="form.amount" :placeholder="t('form.amountHint')" />
       <AvailableHint
         v-if="form.kind === 'payment'"
         :store-id="props.storeId"
@@ -47,7 +53,7 @@ const { form, check, props, isProperty, propertyName, overruns } = useTxForm()
   </p>
   <div v-if="isProperty && form.kind === 'topup'" class="grid gap-1.5">
     <Label for="tx-unit-price">{{ t('tx.field.unitPrice') }}</Label>
-    <AmountInput id="tx-unit-price" v-model="form.unitPrice" />
+    <AmountInput id="tx-unit-price" @expression="noteExpression('tx-unit-price', $event)" v-model="form.unitPrice" />
     <p class="text-xs text-muted-foreground">{{ t('tx.field.unitPriceHint') }}</p>
   </div>
   <div v-if="form.kind === 'defi'" class="grid gap-3 @xl:grid-cols-3">
