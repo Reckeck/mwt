@@ -18,6 +18,8 @@ const ROW_KEYS: { key: string; ctrl?: boolean; action: string }[] = [
 
 /** How long a finger holds a row before its actions come up. */
 const HOLD_MS = 500
+/** The click a lifting finger sends comes within this long after the lift. */
+const LIFT_CLICK_MS = 500
 
 /**
  * The row menu beyond the right click (Paths 2 · 11): a long press on a phone
@@ -33,7 +35,8 @@ export function useRowMenu(options: {
 }) {
   const coarse = useCoarsePointer()
   const sheetTx = ref<Transaction | null>(null)
-  let heldAt = 0
+  /** 0: no hold to swallow a click for; Infinity: the finger is still down; else when it lifted. */
+  let liftedAt = 0
 
   const rowOf = (target: EventTarget | null) => {
     const id = (target as Element | null)?.closest<HTMLElement>('[data-tx-row]')?.dataset.txRow
@@ -46,17 +49,29 @@ export function useRowMenu(options: {
       if (!coarse.value || !options.enabled()) return
       const tx = rowOf(event.target)
       if (!tx) return
-      heldAt = Date.now()
+      liftedAt = Number.POSITIVE_INFINITY
       sheetTx.value = tx
     },
     { delay: HOLD_MS, modifiers: { stop: false } },
   )
-  // The finger lifting after a hold is not a tap: the row must not open too.
+  // The finger lifting after a hold is not a tap: neither the row nor the sheet that came up under
+  // the finger (an item at that very spot) may take the click that follows.
   useEventListener(
-    options.root,
+    window,
+    ['pointerup', 'pointercancel'],
+    () => {
+      if (liftedAt === Number.POSITIVE_INFINITY) liftedAt = Date.now()
+    },
+    { capture: true },
+  )
+  useEventListener(
+    window,
     'click',
     (event: MouseEvent) => {
-      if (Date.now() - heldAt > 800) return
+      if (!liftedAt) return
+      const swallow = liftedAt === Number.POSITIVE_INFINITY || Date.now() - liftedAt < LIFT_CLICK_MS
+      if (liftedAt !== Number.POSITIVE_INFINITY) liftedAt = 0
+      if (!swallow) return
       event.preventDefault()
       event.stopPropagation()
     },

@@ -6,6 +6,7 @@ import { fiatRef, tickerRef } from '@/shared/lib/asset-ref'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { uniqueName } from '../lib/unique-name'
 import { DEFAULT_STORE_COLOR, KIND_COLORS } from '../store-create.constants'
 import type { StoreCreateDialogProps, StoreCreateStep } from '../store-create.types'
 import { useStoreTree } from '@/shared/api/queries'
@@ -30,9 +31,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const kind = ref<StoreKind>('bank')
   const subType = ref<SubType | null>(null)
   const creatableKinds = computed(() =>
-    (catalog.data.value?.kinds ?? []).filter(
-      (info) => info.user_creatable && info.kind !== 'loyalty' && (settings.cryptoEnabled || !info.crypto),
-    ),
+    (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable && (settings.cryptoEnabled || !info.crypto)),
   )
   const subTypes = computed(() =>
     props.parent ? (kindInfo(catalog.data.value, props.parent.kind)?.sub_types ?? []) : [],
@@ -113,7 +112,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     () => !openingAmountValue.value || (Number(openingAmountValue.value) > 0 && openingAsset.value !== null),
   )
 
-  const properties = useStoreTree(computed(() => open.value && kind.value === 'liability'))
+  const properties = useStoreTree(computed(() => open.value && (kind.value === 'liability' || isSub.value)))
   const propertyRoots = computed(() =>
     (properties.data.value ?? []).filter((node) => node.store.kind === 'property' && !node.store.archived),
   )
@@ -125,7 +124,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     if (subInfo.value?.shape === 'pair' && pair.value) return `${pair.value.base}${pair.value.quote}`
     const current = binding.value
     const symbol = current && typeof current === 'object' && 'asset' in current ? current.asset.symbol : ''
-    return symbol ? `${label} ${symbol}` : label
+    return uniqueName(symbol ? `${label} ${symbol}` : label, properties.data.value ?? [], props.parent?.id)
   })
   watch(suggestedName, (value) => {
     if (!nameTouched.value) name.value = value
@@ -191,7 +190,8 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   })
 
   const exchange = useExchangeSub(props, open, step, subType)
-  const wizard = useWizardSteps(step, isSub, offersOpening, () => Boolean(props.kind), exchange.exchangeSub)
+  const toBonuses = () => !isSub.value && kind.value === 'loyalty'
+  const wizard = useWizardSteps(step, isSub, offersOpening, () => Boolean(props.kind), exchange.exchangeSub, toBonuses)
 
   const exchangeRoot = computed(() => !isSub.value && kind.value === 'exchange')
   /** Key and secret go together: one without the other cannot connect. */

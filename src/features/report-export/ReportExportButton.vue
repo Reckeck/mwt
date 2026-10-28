@@ -38,7 +38,7 @@ const exportCsv = useMutation({
 </script>
 
 <template>
-  <ActionMenu v-if="phone" :actions="actions" :label="t('report.export')" />
+  <ActionMenu v-if="phone" class="size-10 border border-input bg-background shadow-xs" :actions="actions" :label="t('report.export')" :sheet="{ title: t('report.export') }" />
   <!-- Outside the desktop app the reason is in the tooltip of the disabled button. -->
   <span v-else class="inline-flex flex-wrap items-center gap-2">
     <DropdownMenu v-if="props.kinds.length > 1" align="end">

@@ -2,13 +2,14 @@
 import { computed, toRef } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Check, RefreshCw } from 'lucide-vue-next'
+import { Check, Download, RefreshCw } from 'lucide-vue-next'
 
-import { useExchangeKeyStatus } from '@/features/exchange-key'
+import { useExchangeDisconnect, useExchangeKeyStatus } from '@/features/exchange-key'
 import { PendingImports, useExchangeSync } from '@/features/pending-imports'
 import { ExchangeBalances } from '@/widgets/exchange-balances'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { Switch } from '@/shared/ui/switch'
 import { useIsPhone } from '@/shared/lib/phone'
@@ -18,9 +19,10 @@ import { HOURLY, useExchangeImport } from '../../model/use-exchange-import'
 
 /**
  * The exchange's import (Wallets-2 · 8): the connection on the left — the key,
- * read only, its status, «Импортировать сейчас», the hourly import — and on the
- * right what the last import brought and how it avoids duplicates. What waits
- * for confirmation and the balances check follow below.
+ * read only, its status, the hourly import, then one «Импортировать сейчас» and
+ * «Отключить» on their own row — and on the right what the last import brought
+ * and how it avoids duplicates. What waits for confirmation and the balances
+ * check follow below.
  */
 const props = defineProps<{ store: Store; hasKey: boolean }>()
 const { t } = useI18n()
@@ -31,6 +33,8 @@ const { hint } = useExchangeKeyStatus(
   computed(() => props.hasKey),
 )
 const { lastRun, lastOk, interval, toggle, saving } = useExchangeImport(toRef(props, 'store'))
+const disconnect = useExchangeDisconnect(computed(() => props.store.id))
+const importNow = () => sync.syncNow.mutate(props.store.id)
 
 /** «•••• 7Q2f»: the key's last four, never the key. */
 const masked = computed(() => `•••• ${hint.value.replace(/^.*…/, '').slice(-4)}`)
@@ -45,6 +49,10 @@ const autoLabel = computed(() =>
   interval.value === 0 || interval.value === HOURLY
     ? t('exchangeImport.hourly')
     : t('exchangeImport.every', { count: Math.round(interval.value / 60) }),
+)
+/** The schedule runs the very import the button does: one action, not two. */
+const autoHint = computed(() =>
+  t(interval.value === 0 || interval.value === HOURLY ? 'exchangeImport.hourlyHint' : 'exchangeImport.everyHint'),
 )
 /** A run from before the split counted only `staged`: all of it reads as trades. */
 const counts = computed(() => {
@@ -66,26 +74,35 @@ const ROW = 'flex items-center justify-between gap-3 py-1.5 text-sm'
           <div class="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm tabular-nums">{{ masked }}</div>
           <span class="text-xs text-muted-foreground">{{ phone ? t('exchangeImport.readOnly') : t('exchangeImport.readOnlyLong') }}</span>
         </div>
-        <div v-if="!phone" class="flex flex-wrap items-center gap-x-3 gap-y-2 py-1.5">
+        <div class="flex items-center gap-3 py-1.5" data-import-status>
           <Check class="size-4 shrink-0" :class="lastRun?.error ? 'text-destructive' : 'text-success'" />
-          <span class="min-w-40 flex-1 text-sm" :class="lastRun?.error && 'text-destructive'">{{ status }}</span>
-          <Button variant="outline" size="sm" class="shrink-0" :disabled="sync.syncNow.isPending.value" @click="sync.syncNow.mutate(props.store.id)">
+          <span class="min-w-0 flex-1 text-sm" :class="lastRun?.error && 'text-destructive'">{{ status }}</span>
+        </div>
+        <div class="grid gap-1">
+          <div class="flex items-center justify-between gap-3 text-sm max-md:min-h-11">
+            <label for="exchange-auto-import">{{ autoLabel }}</label>
+            <Switch id="exchange-auto-import" :model-value="interval > 0" :disabled="saving" @update:model-value="toggle" />
+          </div>
+          <span class="text-xs text-muted-foreground">{{ autoHint }}</span>
+        </div>
+        <div class="flex gap-2" :class="phone && 'flex-col'" data-import-actions>
+          <Button :class="phone && 'h-11 w-full'" :disabled="sync.syncNow.isPending.value" data-import-now @click="importNow">
             <RefreshCw v-if="sync.syncNow.isPending.value" class="size-4 animate-spin" />
+            <Download v-else class="size-4" />
             {{ t('exchangeImport.now') }}
           </Button>
+          <ConfirmButton
+            show-label
+            :class="phone && 'h-11 w-full'"
+            :label="t('exchangeImport.disconnect')"
+            :confirm-label="t('exchangeImport.disconnectConfirm')"
+            :description="t('exchangeImport.disconnectHint')"
+            :action-label="t('exchangeImport.disconnect')"
+            :disabled="disconnect.isPending.value"
+            data-import-disconnect
+            @confirm="disconnect.mutate()"
+          />
         </div>
-        <div class="flex items-center justify-between gap-3 text-sm">
-          <label for="exchange-auto-import">{{ autoLabel }}</label>
-          <Switch id="exchange-auto-import" :model-value="interval > 0" :disabled="saving" @update:model-value="toggle" />
-        </div>
-        <Button
-          v-if="phone"
-          class="h-11 w-full"
-          :disabled="sync.syncNow.isPending.value"
-          @click="sync.syncNow.mutate(props.store.id)"
-        >
-          {{ t('exchangeImport.now') }}
-        </Button>
       </component>
 
       <Card class="flex flex-col gap-1">

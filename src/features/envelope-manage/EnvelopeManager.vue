@@ -120,7 +120,7 @@ const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbo
           </span>
           <ConfirmButton
             :label="t('envelope.delete')"
-            :confirm-label="t('actions.confirmDelete')"
+            :confirm-label="t('actions.confirmDeleteNamed', { name: view.envelope.name })"
             @confirm="remove.mutate(view.envelope.id)"
           >
             <Trash2 class="size-4" />

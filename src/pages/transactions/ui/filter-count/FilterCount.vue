@@ -21,11 +21,15 @@ const period = computed(() => {
   }
   return `${formatDay(from)} – ${formatDay(to)}`
 })
-const count = computed(() => t(`filter.operations.${pluralForm(props.total, locale.value)}`, { count: props.total }))
+const count = computed(() =>
+  props.payments
+    ? t(`tx.filterTotal.payments.${pluralForm(props.total, locale.value)}`, { count: props.total })
+    : t(`filter.operations.${pluralForm(props.total, locale.value)}`, { count: props.total }),
+)
 </script>
 
 <template>
   <span class="text-sm text-muted-foreground tabular-nums">
-    {{ period ? t('filter.countOver', { count, period }) : count }}
+    {{ period ? t('filter.countOver', { count, period }) : count }}<slot />
   </span>
 </template>

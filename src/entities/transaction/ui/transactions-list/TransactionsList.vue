@@ -163,7 +163,7 @@ function showMore() {
         <h3
           v-if="day.date"
           class="sticky top-0 z-[1] flex items-baseline justify-between gap-2 py-1.5 text-xs text-muted-foreground"
-          :class="phone ? 'bg-card pt-3' : '-mx-4 bg-muted px-4'"
+          :class="phone ? 'border-b-0 bg-card pt-3' : '-mx-4 bg-muted px-4'"
         >
           <span class="flex items-center gap-3">
             <span v-if="props.selection && !phone" class="flex w-4 shrink-0">

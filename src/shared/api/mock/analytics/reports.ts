@@ -1,9 +1,9 @@
 /** Cash flow, year, category and net worth reports. */
 
-import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { flows, meta, money } from './flows'
 import type { AnalyticsMockContext, MockFlow } from './flows'
 import { mockNetWorth } from '../market'
+import { ledgerWorth } from './worth-split'
 
 export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): CashflowReport {
   const all = flows(ctx)
@@ -125,25 +125,10 @@ export function categories(ctx: AnalyticsMockContext, months: string[], filter: 
 
 export function networth(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): NetworthReport {
   // Like the core: every leg a store holds (fees too), split by the store's kind.
-  const kinds = new Map(ctx.stores.map((store) => [store.id, store.kind]))
   const scope = filter.scope.store_ids
   const current = new Date().toISOString().slice(0, 7)
   const points = months.map((month): NetworthPoint => {
-    const split = { financial: 0, crypto: 0, non_financial: 0, liabilities: 0 }
-    for (const tx of ctx.transactions) {
-      if (txMeta(tx).timestamp.slice(0, 7) > month) continue
-      for (const leg of txLegs(tx)) {
-        if (leg.asset.contract?.startsWith('perp:') || (scope.length && !scope.includes(leg.store_id))) continue
-        const value = Number(leg.amount) * ctx.priceOf(leg.asset.symbol)
-        const kind = kinds.get(leg.store_id)
-        if (kind === 'property' || kind === 'loyalty') split.non_financial += value
-        else if (kind === 'liability') split.liabilities -= value
-        else {
-          split.financial += value
-          if (kind === 'crypto' || kind === 'exchange') split.crypto += value
-        }
-      }
-    }
+    const split = ledgerWorth(ctx, month, scope)
     const net = split.financial + split.non_financial - split.liabilities
     if (month === current && !scope.length) {
       // Like the core: the current point is today's valuation, the one the summary shows.

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { Check } from 'lucide-vue-next'
 
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
@@ -7,7 +8,7 @@ import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { Button } from '@/shared/ui/button'
 
-/** With nothing selected: the workflow's own settings and its problems. */
+/** With nothing selected: the workflow's own settings and one «Проверка» block (problems, then tests). */
 const props = defineProps<{
   issues: GraphIssue[]
   base: string
@@ -65,7 +66,12 @@ const issueText = (issue: GraphIssue) => (locale.value.startsWith('ru') ? issue.
           </Button>
         </li>
       </ul>
-      <p v-else class="text-xs text-muted-foreground">{{ t('workflow.settings.noIssues') }}</p>
+      <p v-else class="flex items-center gap-2 text-sm">
+        <Check class="size-4 shrink-0 text-success" />
+        {{ t('workflow.settings.noIssues') }}
+      </p>
+      <!-- A saved workflow's tests: the same check, run by emulation. -->
+      <slot />
       <Button v-if="props.redundant" variant="outline" size="sm" class="justify-self-start" @click="emit('dropRedundant')">
         {{ t('workflow.settings.dropRedundant', { count: props.redundant }) }}
       </Button>

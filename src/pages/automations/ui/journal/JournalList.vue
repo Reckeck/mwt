@@ -8,7 +8,7 @@ import type { JournalRow } from './journal.types'
 
 /**
  * The journal on a phone (Auto-1 · 4): the name, «когда · что сделала» under
- * it, the outcome on the right. A tap on a run waiting for «да» confirms it.
+ * it, the outcome on the right. A run waiting for «да» has its own «Подтвердить».
  */
 defineProps<{ rows: JournalRow[] }>()
 const emit = defineEmits<{ confirm: [entry: JournalEntry] }>()
@@ -30,17 +30,19 @@ const { t } = useI18n()
           <MoneyPhrase :parts="row.did" />
         </span>
       </div>
-      <Button
-        v-if="row.entry.wait_id"
-        variant="link"
-        class="h-auto min-h-10 shrink-0 px-0 text-sm font-normal text-warning no-underline after:absolute after:inset-0"
-        :aria-label="t('automations.journal.confirmName', { name: row.entry.name })"
-        data-journal-confirm
-        data-tour="journal-confirm"
-        @click="emit('confirm', row.entry)"
-      >
-        {{ row.status }}
-      </Button>
+      <div v-if="row.entry.wait_id" class="flex shrink-0 items-center gap-2">
+        <span class="sr-only">{{ row.status }}</span>
+        <Button
+          size="sm"
+          class="after:absolute after:inset-0"
+          :aria-label="t('automations.journal.confirmName', { name: row.entry.name })"
+          data-journal-confirm
+          data-tour="journal-confirm"
+          @click="emit('confirm', row.entry)"
+        >
+          {{ t('automations.journal.confirm') }}
+        </Button>
+      </div>
       <span v-else class="shrink-0 text-sm" :class="row.tone">{{ row.status }}</span>
     </li>
   </ul>

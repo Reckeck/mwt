@@ -74,8 +74,9 @@ const label = computed(() => {
       <span v-if="income" class="truncate text-xs tabular-nums text-success">
         +<Money :amount="props.day.income" :decimals="0" :currency="props.currency" />
       </span>
-      <span v-if="spent || (props.day.tx_count && !income)" class="truncate text-xs tabular-nums text-muted-foreground">
-        <template v-if="spent">−</template><Money :amount="props.day.spent" :currency="props.currency" />
+      <!-- A day of own transfers alone spent nothing: the kind's chip says what happened, no «0,00» as an expense. -->
+      <span v-if="spent" class="truncate text-xs tabular-nums text-muted-foreground">
+        −<Money :amount="props.day.spent" :currency="props.currency" />
       </span>
       <span v-if="isToday && props.leftToday !== null" class="truncate text-xs font-medium text-primary">
         {{ t('calendar.canToday') }} <Money :amount="props.leftToday" :decimals="0" :currency="props.currency" />

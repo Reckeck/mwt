@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { Money, MoneyPhrase } from '@/entities/currency'
 import type { CalcOutcome } from '@/features/invest-calculator'
-import { formatPct } from '@/shared/lib/format'
+import { formatPct, pluralForm } from '@/shared/lib/format'
 import { composeSums, type Sum, type SumPart } from '@/shared/lib/money-parts'
 import { Button } from '@/shared/ui/button'
 
@@ -21,6 +21,8 @@ const props = defineProps<{
   target: string
   prefilled: ScenarioPrefill | null
   safeWithdrawal: string | null
+  /** The card around it turns red itself (a phone): no red frame of its own. */
+  unframed?: boolean
 }>()
 const emit = defineEmits<{ accept: []; goal: []; withdraw: [amount: string] }>()
 
@@ -41,6 +43,13 @@ function phrase(key: string, values: Record<string, unknown>): SumPart[] {
 
 const depletedAt = computed(() => (input.value.withdrawal ? result.value.depleted_at : null))
 const withdrawal = computed(() => input.value.withdrawal)
+/** «Деньги закончатся через 6 мес.» / «in 6 months»: under a year the months take the plural form; longer — «через 2 года 3 мес.». */
+const runsOut = computed(() => {
+  const months = depletedAt.value ?? 0
+  return months < 12
+    ? t(`invest.answer.runsOutMonths.${pluralForm(months, locale.value)}`, { n: months })
+    : t('invest.answer.runsOut', { term: termText(months, t, locale.value) })
+})
 
 /** «это 28 % среднего дохода 1 575 $; сейчас откладываете 157,50 $» — only after «Из данных». */
 const incomeShare = computed(() => {
@@ -56,13 +65,21 @@ const incomeShare = computed(() => {
 
 <template>
   <!-- A found value stands out as the answer to the question asked (Money 3 · 19). -->
-  <div class="grid gap-1" :class="solved && 'rounded-lg border border-primary/40 bg-primary/5 p-4'" data-calc-answer>
+  <!-- Money that runs out is a warning: the answer is framed in red (Money 3 · 21). -->
+  <div
+    class="grid gap-1"
+    :class="[
+      solved && 'rounded-lg border border-primary/40 bg-primary/5 p-4',
+      depletedAt !== null && withdrawal && !props.unframed && 'rounded-lg border border-destructive/60 p-4',
+    ]"
+    data-calc-answer
+  >
     <template v-if="depletedAt !== null && withdrawal">
       <p class="text-sm text-muted-foreground">
         <MoneyPhrase :parts="phrase('invest.answer.withdrawing', { amount: sum(withdrawal.amount), freq: t(`invest.freqShort.${withdrawal.freq}`) })" />
       </p>
-      <p class="text-2xl font-semibold text-destructive">
-        {{ t('invest.answer.runsOut', { term: termText(depletedAt, t, locale) }) }}
+      <p class="text-2xl font-semibold text-destructive max-md:text-xl">
+        {{ runsOut }}
       </p>
       <p class="text-sm text-muted-foreground">
         {{ planMonth(input.start, depletedAt) }}

@@ -10,7 +10,7 @@ const model = defineModel<boolean>({ required: true })
 </script>
 
 <template>
-  <div :class="['flex items-center justify-between gap-3', !props.plain && 'rounded-md border border-border px-3 py-2']">
+  <div :class="['flex items-center justify-between gap-3 touch-min', !props.plain && 'rounded-md border border-border px-3 py-2']">
     <div class="grid min-w-0 gap-0.5">
       <Label :for="props.id">{{ props.label }}</Label>
       <p v-if="props.hint" class="text-xs text-muted-foreground">{{ props.hint }}</p>

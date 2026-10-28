@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, Check } from 'lucide-vue-next'
+import { CalendarDays, ChevronDown, Check } from 'lucide-vue-next'
 
 import { formatMonthKey } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
@@ -18,7 +18,8 @@ import type { PeriodPickerProps } from './period-picker.types'
  * The period chip of a section: ‹ «Октябрь 2026» ›. The arrows step by the
  * period's own length; the chip opens the quick periods and the month grid (a
  * popover on a computer, a bottom sheet on a phone). The grid edits a draft,
- * «Готово» applies it; a quick period applies at once.
+ * «Готово» applies it; a quick period applies at once. On a phone the chip
+ * alone, 40px tall with a calendar mark (Money 1 · 1): the sheet picks the period.
  */
 const props = defineProps<PeriodPickerProps>()
 const range = defineModel<MonthRange>({ required: true })
@@ -60,7 +61,7 @@ const TRIGGER =
 
 <template>
   <div class="flex min-w-0 items-center gap-2" data-period-picker>
-    <Button variant="outline" size="icon-sm" :aria-label="t('period.prev')" @click="range = stepRange(range, -1)">‹</Button>
+    <Button v-if="!phone" variant="outline" size="icon-sm" :aria-label="t('period.prev')" @click="range = stepRange(range, -1)">‹</Button>
     <Popover v-if="!phone" v-model:open="open">
       <PopoverTrigger as-child>
         <button
@@ -96,9 +97,9 @@ const TRIGGER =
       </PopoverContent>
     </Popover>
     <template v-else>
-      <button type="button" class="flex h-10 min-w-0 flex-1 items-center justify-center gap-1 text-sm" data-period-trigger @click="open = true">
+      <button type="button" :class="cn(TRIGGER, 'h-10')" data-period-trigger @click="open = true">
+        <CalendarDays class="size-4 shrink-0 text-muted-foreground" />
         <span class="truncate">{{ label(range) }}</span>
-        <ChevronDown class="size-4 shrink-0 opacity-60" />
       </button>
       <Drawer v-model:open="open">
         <DrawerContent class="gap-3 px-4 pt-2 pb-5" data-period-popover>
@@ -122,6 +123,6 @@ const TRIGGER =
         </DrawerContent>
       </Drawer>
     </template>
-    <Button variant="outline" size="icon-sm" :aria-label="t('period.next')" :disabled="atEnd" @click="range = stepRange(range, 1)">›</Button>
+    <Button v-if="!phone" variant="outline" size="icon-sm" :aria-label="t('period.next')" :disabled="atEnd" @click="range = stepRange(range, 1)">›</Button>
   </div>
 </template>

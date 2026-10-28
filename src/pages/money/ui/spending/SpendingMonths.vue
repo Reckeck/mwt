@@ -33,6 +33,15 @@ const span = computed(() => {
   return `${long(rows[0].month)} — ${long(rows[rows.length - 1].month)}`
 })
 const inPeriod = (key: string) => key >= props.from && key <= props.to
+/** «ноя», «дек»: three letters fit a phone's column (Intl's «нояб.», «сент.» do not). */
+const monthShort = (key: string) => formatMonthKey(key, { month: 'short' }).replace('.', '').slice(0, 3)
+/**
+ * On a phone one month shown names every other column back from the last one
+ * (Money 1 · 1), and the picked one; a longer period names all twelve, smaller.
+ */
+const single = computed(() => props.from === props.to)
+const named = (index: number, key: string) =>
+  !single.value || inPeriod(key) || (props.balance.rows.length - 1 - index) % 2 === 0
 </script>
 
 <template>
@@ -65,7 +74,7 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
       />
       <component
         :is="phone ? 'div' : Button"
-        v-for="row in props.balance.rows"
+        v-for="(row, index) in props.balance.rows"
         :key="row.month"
         v-bind="phone ? {} : { variant: 'ghost', onClick: () => emit('pick', row.month) }"
         :class="cn('group flex h-auto min-w-0 flex-col items-center gap-0 rounded-md px-0 pt-2 pb-1 font-normal', inPeriod(row.month) && 'bg-accent/50')"
@@ -75,8 +84,16 @@ const inPeriod = (key: string) => key >= props.from && key <= props.to
           <span class="absolute bottom-0 w-[70%] max-w-[46px] rounded-[3px] bg-border" :style="{ height: height(row.income) }" />
           <span class="relative w-[34%] max-w-[22px] rounded-[2px] bg-primary" :style="{ height: height(row.spent) }" />
         </span>
-        <span :class="cn('mt-1 text-xs whitespace-nowrap text-muted-foreground', inPeriod(row.month) && 'font-semibold text-foreground')">
-          <span class="md:hidden">{{ formatMonthKey(row.month, { month: 'narrow' }) }}</span>
+        <span
+          :class="
+            cn(
+              'mt-1 text-xs whitespace-nowrap text-muted-foreground',
+              !single && 'max-md:text-[10px] max-md:tracking-tight',
+              inPeriod(row.month) && 'font-semibold text-foreground',
+            )
+          "
+        >
+          <span class="md:hidden" :class="!named(index, row.month) && 'invisible'">{{ monthShort(row.month) }}</span>
           <span class="max-md:hidden">{{ formatMonthKey(row.month, { month: 'short' }).replace('.', '') }}</span>
           <span v-if="row.current" class="max-lg:hidden">· {{ t('balance.running') }}</span>
         </span>

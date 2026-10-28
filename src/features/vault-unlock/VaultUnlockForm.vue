@@ -33,7 +33,7 @@ const { currency, asked } = baseCurrency
 const form = useFormValidation(() => ({
   // The file is gone: the button still answers, with the reason under the field.
   file: props.disabled ? t('auth.missing') : null,
-  password: props.plain ? null : required(password.value),
+  password: props.plain || props.disabled ? null : required(password.value),
   currency: asked.value ? required(currency.value) : null,
 }))
 
@@ -48,7 +48,7 @@ watch(
 
 <template>
   <form class="grid gap-3" data-unlock-form @submit.prevent="form.submit(submit, $event)">
-    <FormField v-if="!plain" for="unlock-card-password" :label="t('auth.password')" :error="form.error('password')">
+    <FormField v-if="!plain && !props.disabled" for="unlock-card-password" :label="t('auth.password')" :error="form.error('password')">
       <Input id="unlock-card-password" v-model="password" type="password" autocomplete="current-password" />
     </FormField>
 

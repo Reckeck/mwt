@@ -76,7 +76,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       >
         <ArrowLeftRight />
         <span class="min-w-0 flex-1 truncate tabular-nums">{{ typed }} = {{ row.text }}</span>
-        <span v-if="position === 0" class="shrink-0 text-xs text-muted-foreground">{{ t('palette.convert.copy') }}</span>
+        <span v-if="position === 0" class="shrink-0 text-xs text-muted-foreground pointer-coarse:hidden">{{ t('palette.convert.copy') }}</span>
         <span class="sr-only">{{ filterState.search }}</span>
       </CommandItem>
     </CommandGroup>

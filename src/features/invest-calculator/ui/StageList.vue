@@ -30,7 +30,7 @@ function addStage() {
   <fieldset class="grid gap-2" data-tour="calc-stages">
     <div class="flex items-center justify-between gap-2">
       <legend class="text-sm font-medium">{{ t('invest.stages') }}</legend>
-      <Button variant="link" size="sm" class="h-auto px-0" @click="addStage">
+      <Button variant="link" size="sm" class="h-auto px-0 touch-hit-xl" @click="addStage">
         <Plus class="size-3.5" />{{ t('invest.addStageShort') }}
       </Button>
     </div>

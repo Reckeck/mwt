@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -29,11 +30,20 @@ const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ created: [store: Store] }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const state = provideStoreCreate(props, open)
-const { step, steps, stepNumber, isLast, isSub, kind, name, nameTouched, title, canGoBack, goBack, goNext, form, exchangeSub } = state
+const { step, steps, stepNumber, isLast, isSub, kind, name, nameTouched, title, canGoBack, goBack, goNext, form, exchangeSub, programOpen } = state
 const createStore = useCreateStore(state, (store) => emit('created', store))
 
 const stepTitles = computed(() => steps.value.map((entry) => t(`storeWizard.step.${isSub.value && entry === 'pick' ? 'subType' : entry}`)))
+
+/** «Лояльность и бонусы»: the Bonuses wizard (name, card, point value) takes over from step 1, on its own page. */
+watch(programOpen, (handed) => {
+  if (!handed) return
+  programOpen.value = false
+  open.value = false
+  void router.push({ name: 'transactions-bonuses', query: { new: 'program' } })
+})
 
 /** Each step checks its own fields: «Далее» moves on, the last one creates. */
 function submit(event?: Event) {

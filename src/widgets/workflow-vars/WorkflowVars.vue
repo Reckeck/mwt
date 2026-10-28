@@ -62,7 +62,7 @@ const empty = computed(() => vars.isSuccess.value && !(vars.data.value ?? []).le
         <Button variant="ghost" size="icon" :aria-label="t('workflow.vars.edit')" @click="open(variable)"><Pencil class="size-4" /></Button>
         <ConfirmButton
           :label="t('workflow.vars.delete')"
-          :confirm-label="t('workflow.vars.deleteConfirm')"
+          :confirm-label="t('actions.confirmDeleteNamed', { name: variable.name })"
           @confirm="actions.deleteVar.mutate({ scope: variable.scope, name: variable.name })"
         >
           <Trash2 class="size-4" />

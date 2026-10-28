@@ -2,6 +2,8 @@
 
 import { flows, money } from './flows'
 import type { AnalyticsMockContext } from './flows'
+import { mockNetWorth } from '../market'
+import { ledgerWorth } from './worth-split'
 
 const isoDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -61,19 +63,26 @@ export function mockMonthPace(ctx: AnalyticsMockContext, savingsRate: number): M
   }
 }
 
-export function mockNetWorthTrend(period: DashPeriod, total: number, currency: string): NetWorthTrend {
+/**
+ * Like the core: the figure now against the end of the month before the period
+ * (the capital report's previous point), so the tile and the report give one change.
+ */
+export function mockNetWorthTrend(period: DashPeriod, ctx: AnalyticsMockContext): NetWorthTrend {
   const now = new Date()
+  const total = Number(mockNetWorth().net)
   const steps = period === 'month' ? now.getDate() : period === 'quarter' ? 13 : now.getMonth() + 1
   const firstMonth =
     period === 'year' ? 0 : period === 'quarter' ? now.getMonth() - (now.getMonth() % 3) : now.getMonth()
-  const series = Array.from({ length: steps }, (_unused, index) =>
-    money(total * (0.92 + (0.08 * (index + 1)) / steps + Math.sin(index) * 0.01)),
-  )
+  const before = new Date(now.getFullYear(), firstMonth - 1, 1)
+  const key = `${before.getFullYear()}-${String(before.getMonth() + 1).padStart(2, '0')}`
+  const opening = ledgerWorth(ctx, key)
+  const base = opening.financial + opening.non_financial - Math.max(0, opening.liabilities)
+  const series = Array.from({ length: steps }, (_unused, index) => money(base + ((total - base) * (index + 1)) / steps))
   return {
-    currency,
+    currency: ctx.currency,
     period,
     start: isoDate(new Date(now.getFullYear(), firstMonth, 1)),
-    change: compare(total, total * 0.92),
+    change: compare(total, base),
     series,
   }
 }

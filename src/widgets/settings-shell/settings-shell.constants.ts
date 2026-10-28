@@ -15,8 +15,6 @@ export interface SettingsSection {
 export interface SettingsTab {
   id: string
   titleKey: string
-  /** A shorter name for a phone, where the strip of tabs is narrow. */
-  shortKey?: string
   sections: SettingsSection[]
 }
 
@@ -59,7 +57,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       {
         id: 'keys',
         titleKey: 'settingsShell.tab.keys',
-        sections: [section('quick-add', 'quickAdd', true), section('hotkeys', 'hotkeys')],
+        sections: [section('quick-add', 'quickAdd', true), section('hotkeys', 'hotkeys', true)],
       },
     ],
   },
@@ -87,7 +85,6 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       {
         id: 'rules',
         titleKey: 'settingsShell.tab.rules',
-        shortKey: 'settingsShell.tab.rulesShort',
         sections: [section('rules', 'rules')],
       },
     ],

@@ -9,6 +9,8 @@ import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/empty-state'
+import { ActionSheet } from '@/shared/ui/action-menu'
+import type { UiAction } from '@/shared/ui/context-menu'
 import { SectionState } from '@/shared/ui/section-state'
 import { useIsPhone } from '@/shared/lib/phone'
 
@@ -43,6 +45,16 @@ watch(
 )
 
 const createOpen = ref(false)
+/** `?new=program`: the wallet wizard handed over «Лояльность и бонусы»; the query is dropped once open. */
+watch(
+  () => route.query.new,
+  (value) => {
+    if (value !== 'program') return
+    createOpen.value = true
+    void router.replace({ query: { ...route.query, new: undefined } })
+  },
+  { immediate: true },
+)
 const points = ref<{ store: Store; mode: PointsMode } | null>(null)
 const pointsOpen = computed({
   get: () => points.value !== null,
@@ -50,6 +62,20 @@ const pointsOpen = computed({
     if (!value) points.value = null
   },
 })
+/** «Начислить» on a phone: straight to the one programme that counts points, else a pick of them. */
+const creditable = computed(() => rows.value.filter((row) => row.store.loyalty))
+const pickOpen = ref(false)
+const creditActions = computed<UiAction[]>(() =>
+  creditable.value.map((row) => ({ id: row.store.id, label: row.store.name, hint: row.points, run: () => credit(row.store) })),
+)
+function credit(store: Store) {
+  points.value = { store, mode: 'credit' }
+}
+function creditAny() {
+  const [only, ...more] = creditable.value
+  if (only && !more.length) credit(only.store)
+  else pickOpen.value = true
+}
 function openSettings(store: Store) {
   void router.push({ name: 'wallet-settings', params: { id: store.id }, query: { tab: 'loyalty' } })
 }
@@ -68,7 +94,7 @@ function openSettings(store: Store) {
         <Button size="sm" @click="createOpen = true"><Plus class="size-4" />{{ t('bonuses.addShort') }}</Button>
       </EmptyState>
       <div v-else class="grid grid-cols-1 gap-4" data-tour="bonuses-list">
-        <Card v-if="!phone" data-tour="bonuses-total">
+        <Card data-tour="bonuses-total">
           <div class="flex flex-col gap-1">
             <span class="text-xs text-muted-foreground">{{ t('bonuses.total') }}</span>
             <span class="text-2xl font-bold tabular-nums">≈ <Money :amount="total" :currency="baseCurrency" :decimals="0" /></span>
@@ -78,6 +104,7 @@ function openSettings(store: Store) {
         <ProgramList
           v-if="phone"
           :rows="rows"
+          :base-currency="baseCurrency"
           :highlighted="highlighted"
           @points="(store, mode) => (points = { store, mode })"
           @settings="openSettings"
@@ -92,9 +119,15 @@ function openSettings(store: Store) {
         />
       </div>
     </SectionState>
-    <Button v-if="phone && rows.length" variant="outline" class="h-12 w-full" data-tour="bonuses-add" @click="createOpen = true">
-      <Plus class="size-4" />{{ t('bonuses.addShort') }}
-    </Button>
+    <div v-if="phone && rows.length" class="grid grid-cols-2 gap-2">
+      <Button variant="outline" class="h-11" :disabled="!creditable.length" data-bonuses-credit @click="creditAny">
+        {{ t('loyalty.credit') }}
+      </Button>
+      <Button variant="outline" class="h-11" data-tour="bonuses-add" @click="createOpen = true">
+        <Plus class="size-4" />{{ t('bonuses.addShort') }}
+      </Button>
+    </div>
+    <ActionSheet v-if="phone" v-model:open="pickOpen" :actions="creditActions" :title="t('loyalty.credit')" />
     <ProgramCreateDialog v-model:open="createOpen" />
     <PointsDialog v-if="points" v-model:open="pointsOpen" :store="points.store" :mode="points.mode" />
   </section>

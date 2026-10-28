@@ -360,6 +360,20 @@
     }
   }
 }
+/* A finger needs ~40px it can see, too: on a touch screen a button, a chip, a switch row is at
+   least 40px tall (Button · Size 40px on the canvas), the mouse layout keeps 32-36px. In the
+   components layer, so a screen's own `min-h-11` still wins over it (rule 16). */
+@layer components {
+  @media (pointer: coarse) {
+    .touch-min {
+      min-height: 2.5rem;
+    }
+    .touch-min-square {
+      min-height: 2.5rem;
+      min-width: 2.5rem;
+    }
+  }
+}
 /* «Подробно», «Ещё поля»: a row that folds is a full-width tap target on a touch screen. */
 @media (pointer: coarse) {
   [data-slot='collapsible-trigger'] {
@@ -411,6 +425,14 @@ body .driver-overlay {
    library adds the system inset again, which that height already holds. */
 [data-sonner-toaster][data-y-position='bottom'] {
   bottom: var(--toast-bottom, 1rem) !important;
+}
+/* A phone: the one toast sits at the top, under the status bar and the notch (App.vue). */
+[data-sonner-toaster][data-y-position='top'] {
+  top: calc(var(--safe-top, 0px) + 0.5rem) !important;
+}
+/* An open sheet keeps its «×» in the top corner: the toast goes under the sheet's title row. */
+body:has([data-slot='sheet-content'][data-state='open']) [data-sonner-toaster][data-y-position='top'] {
+  top: calc(var(--safe-top, 0px) + 3.5rem) !important;
 }
 /* Two buttons («Отложить», «Выполнено») squeezed the text into a column of syllables:
    such a toast wraps, the text takes the whole width and the buttons go under it. */

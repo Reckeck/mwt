@@ -104,9 +104,14 @@ const limitLine = computed(() => {
           <template #left><Money :amount="limitLine.left" :currency="limitLine.currency" :decimals="0" /></template>
         </i18n-t>
       </p>
-      <p v-else class="text-xs md:text-sm">
+      <!-- A phone: a 44px link whose extra height spills into the card's padding, the card keeps its height. -->
+      <p v-else class="text-sm">
         <span class="text-muted-foreground max-md:hidden">{{ t('home.figures.noLimit') }} · </span>
-        <RouterLink :to="{ name: 'money-plan', query: { new: 'limit' } }" class="text-primary hover:underline">
+        <RouterLink
+          :to="{ name: 'money-plan', query: { new: 'limit' } }"
+          class="inline-flex items-center text-primary hover:underline max-md:-my-3 max-md:min-h-11"
+          data-home-set-limit
+        >
           <span class="max-md:hidden">{{ t('home.figures.setLimit') }}</span>
           <span class="md:hidden">{{ t('home.figures.setLimitLong') }}</span>
         </RouterLink>

@@ -8,6 +8,10 @@ export interface UiAction {
   id: string
   label: string
   icon?: Component
+  /** A muted line under the label in the phone sheet: what the item is for. */
+  hint?: string
+  /** It opens a page: the phone sheet ends the row with a chevron. */
+  opens?: boolean
   /** Shown on the right, e.g. `Ctrl+E`. */
   shortcut?: string
   /** Red text and icon; such items go last, after a separator. */

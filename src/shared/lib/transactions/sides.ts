@@ -2,6 +2,7 @@
 
 import { body, txKind, txMeta } from './access'
 import { accountContactId, accountStoreId, txPrincipalLegs } from './legs'
+import { txPair } from './pair'
 
 /** The two ends of a movement, when the kind has them. */
 export function txSides(tx: Transaction): { from: AccountRef | null; to: AccountRef | null } {
@@ -23,6 +24,18 @@ export function txSides(tx: Transaction): { from: AccountRef | null; to: Account
   }
 }
 
+/**
+ * The two ends as a route reads them, «Тинькофф → Пятёрочка»: a payment leaves its own wallet and a
+ * top-up lands in it, so that end is named too (`txSides` keeps only the far end, the one the form asks for).
+ */
+export function txRouteSides(tx: Transaction): { from: AccountRef | null; to: AccountRef | null } {
+  const sides = txSides(tx)
+  const kind = txKind(tx)
+  if (kind === 'payment' && sides.to) return { from: { store: body(tx, 'payment').store_id }, to: sides.to }
+  if (kind === 'topup' && sides.from) return { from: sides.from, to: { store: body(tx, 'topup').store_id } }
+  return sides
+}
+
 /** Every contact the transaction names. */
 export function txContactIds(tx: Transaction): string[] {
   const { from, to } = txSides(tx)
@@ -41,6 +54,17 @@ export function txIsInternal(tx: Transaction, rootOf: (id: string) => string): b
   const left = accountStoreId(from)
   const right = accountStoreId(to)
   return Boolean(left && right && rootOf(left) === rootOf(right))
+}
+
+/**
+ * One asset moved between the user's own wallets: a transfer, or a «conversion» that gives and gets
+ * the same asset (USD → USD). It reads as «Перевод», not as an exchange, and is neither in nor out.
+ */
+export function txIsMove(tx: Transaction): boolean {
+  const kind = txKind(tx)
+  if (kind !== 'transfer' && !(kind === 'convert' && !txPair(tx))) return false
+  const { from, to } = txSides(tx)
+  return Boolean(accountStoreId(from) && accountStoreId(to))
 }
 
 /** Whether no principal leg carries a price yet (the list marks it). */

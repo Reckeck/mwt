@@ -103,7 +103,8 @@ export function entityLocation(target: EntityRef, query: LocationQuery): RouteLo
   return { query: withOpenStack(query, [...stack, target]) }
 }
 
-type Opener = (target: EntityRef) => void
+/** `replace`: the card takes the place of the top one (‹ › between neighbours) instead of stacking over it. */
+type Opener = (target: EntityRef, mode?: 'replace') => void
 let opener: Opener | null = null
 
 /** The shell registers how to open a card, for code outside components. */
@@ -115,9 +116,9 @@ export function registerEntityOpener(open: Opener): () => void {
 }
 
 /** Open the card of `target` from anywhere; `false` before the shell is up. */
-export function openEntity(target: EntityRef): boolean {
+export function openEntity(target: EntityRef, mode?: 'replace'): boolean {
   if (!opener) return false
-  opener(target)
+  opener(target, mode)
   return true
 }
 
@@ -128,7 +129,11 @@ export function useEntityNav() {
   const stack = computed(() => openStack(route.query))
   const top = computed(() => stack.value.at(-1) ?? null)
 
-  function open(target: EntityRef) {
+  function open(target: EntityRef, mode?: 'replace') {
+    if (mode === 'replace' && stack.value.length) {
+      void router.replace({ query: withOpenStack(route.query, [...stack.value.slice(0, -1), target]) })
+      return
+    }
     void router.push(entityLocation(target, route.query))
   }
   /** Drop the top card: the one under it shows again. */

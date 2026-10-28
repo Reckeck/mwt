@@ -103,7 +103,7 @@ const archiveLabel = computed(() => (props.category.archived ? t('stores.unarchi
       <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :title="archiveLabel" :aria-label="archiveLabel" @click="actions.archive.mutate(category)">
         <component :is="category.archived ? ArchiveRestore : Archive" class="size-4" />
       </Button>
-      <ConfirmButton :label="t('categories.manage.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="actions.remove.mutate(category.key)">
+      <ConfirmButton :label="t('categories.manage.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: label })" @confirm="actions.remove.mutate(category.key)">
         <Trash2 class="size-4" />
       </ConfirmButton>
     </div>

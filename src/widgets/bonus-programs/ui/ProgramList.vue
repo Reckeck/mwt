@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Gift, Minus, Plus, Settings2 } from 'lucide-vue-next'
+import { ChevronRight, Gift, Minus, Plus, Settings2 } from 'lucide-vue-next'
 
-import { MoneyPhrase } from '@/entities/currency'
+import { Money, MoneyPhrase } from '@/entities/currency'
 import { partsText } from '@/shared/lib/money-parts'
 import { ActionSheet } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
@@ -12,8 +12,11 @@ import { cn } from '@/shared/lib/utils'
 
 import type { PointsMode, ProgramRow } from '../bonus-programs.types'
 
-/** The programmes on a phone (Ops-2 · 12): a list of records; a tap brings up what can be done. */
-const props = defineProps<{ rows: ProgramRow[]; highlighted: string }>()
+/**
+ * The programmes on a phone (Ops-2 · 12): a list of records with the balance and
+ * what it comes to, as the desktop table has; a tap brings up what can be done.
+ */
+const props = defineProps<{ rows: ProgramRow[]; baseCurrency: string; highlighted: string }>()
 const emit = defineEmits<{ points: [store: Store, mode: PointsMode]; settings: [store: Store] }>()
 const { t } = useI18n()
 
@@ -62,7 +65,11 @@ const actions = computed<UiAction[]>(() => {
           </template>
         </span>
       </span>
-      <span class="shrink-0 text-sm font-semibold tabular-nums">{{ row.points }}</span>
+      <span class="grid shrink-0 justify-items-end gap-0.5">
+        <span class="text-sm font-semibold tabular-nums">{{ row.points }}</span>
+        <span class="text-xs text-muted-foreground tabular-nums">≈ <Money :amount="row.valueBase" :currency="props.baseCurrency" :decimals="0" /></span>
+      </span>
+      <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
     </Button>
   </div>
   <ActionSheet

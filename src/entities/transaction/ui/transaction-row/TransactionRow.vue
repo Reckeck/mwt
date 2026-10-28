@@ -21,18 +21,19 @@ import {
   txHasNoPrice,
   txId,
   txIsInternal,
+  txIsMove,
   txKind,
   txLegForStore,
   txMeta,
   txPrincipalLegs,
-  txSides,
 } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 import { useIsPhone } from '@/shared/lib/phone'
 
 import { dayLabel } from '../../lib/day-label'
 import { TX_KIND_ICON } from '../../lib/kind-icon'
-import { sideRoute, sideRouteText } from '../../lib/side-route'
+import { routeRepeats, sideRoute, sideRouteText } from '../../lib/side-route'
+import { useTxTitle } from '../../lib/tx-title'
 
 import type { TransactionRowProps } from './transaction-row.types'
 
@@ -56,7 +57,14 @@ const { t } = useI18n()
 const context = useTxContext()
 const phone = useIsPhone()
 
-const kind = computed(() => txKind(props.tx))
+/** Money moved between the user's own wallets is neither earned nor spent: no green or red, one sum. */
+const ownMove = computed(() => txIsMove(props.tx))
+/** A same-asset «conversion» looks like the transfer it is. */
+const kind = computed(() => (ownMove.value ? 'transfer' : txKind(props.tx)))
+const titleOf = useTxTitle()
+/** «Зарплата», «Мама», «RUB → USDT», «Перевод»: the currency stays with the sum. */
+const title = computed(() => titleOf(props.tx))
+const badges = computed(() => meta.value.categories.filter((key) => key !== title.value.category))
 const meta = computed(() => txMeta(props.tx))
 const legs = computed(() => txPrincipalLegs(props.tx))
 const attached = computed(() => context.attachmentCount(txId(props.tx)))
@@ -76,17 +84,12 @@ const imported = computed(() => {
 const routeParts = computed(() => sideRoute(props.tx, context.sideLabel))
 const route = computed(() => sideRouteText(routeParts.value))
 
-/** In a wallet's history only its own side; in the full list every principal leg. */
-const shownLegs = computed(() =>
-  props.storeId ? [txLegForStore(props.tx, props.storeId)].filter(Boolean) : legs.value,
-)
-const explorer = computed(() => txExplorerUrl(props.tx))
-
-/** Money moved between the user's own wallets is neither earned nor spent: no green or red. */
-const ownMove = computed(() => {
-  const { from, to } = txSides(props.tx)
-  return kind.value === 'transfer' && Boolean(from && to && 'store' in from && 'store' in to)
+/** In a wallet's history only its own side; in the full list every principal leg, a move's once. */
+const shownLegs = computed(() => {
+  if (props.storeId) return [txLegForStore(props.tx, props.storeId)].filter(Boolean)
+  return ownMove.value ? legs.value.filter((leg) => Number(leg.amount) > 0).slice(0, 1) : legs.value
 })
+const explorer = computed(() => txExplorerUrl(props.tx))
 
 function openExplorer() {
   if (explorer.value) void call('open_explorer', { url: explorer.value })
@@ -94,15 +97,17 @@ function openExplorer() {
 
 /** «Курс сделки 93,75 · через skycapital»: the facts and the comment on one line. */
 const notes = computed(() =>
-  [...txDetails(props.tx).map(([key, value]) => `${t(key)} ${value}`), meta.value.comment].filter(Boolean).join(' · '),
+  [...txDetails(props.tx).map(([key, value]) => `${t(key)} ${value}`), commentNotInRoute.value].filter(Boolean).join(' · '),
 )
 
+const commentNotInRoute = computed(() => (routeRepeats(routeParts.value, meta.value.comment, where.value, title.value.text) ? '' : meta.value.comment))
 const where = computed(() => context.storeName(shownLegs.value[0]?.store_id ?? ''))
 /** The phone's one line: the comment first, then where; picking, the day instead of where. */
 const phoneLine = computed(() => {
   const place = route.value || where.value
-  if (props.selected === null) return [meta.value.comment, place]
-  return meta.value.comment ? [meta.value.comment, dayLabel(meta.value.timestamp)] : [dayLabel(meta.value.timestamp), place]
+  const comment = commentNotInRoute.value
+  if (props.selected === null) return [comment, place]
+  return comment ? [comment, dayLabel(meta.value.timestamp)] : [dayLabel(meta.value.timestamp), place]
 })
 </script>
 
@@ -142,7 +147,7 @@ const phoneLine = computed(() => {
         @click="emit('open', props.tx)"
       />
       <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span class="font-medium">{{ legs.map((leg) => leg.asset.symbol).join(' → ') }}</span>
+        <span class="font-medium" data-tx-title>{{ title.text }}</span>
         <span
           v-if="attached"
           class="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"
@@ -153,7 +158,7 @@ const phoneLine = computed(() => {
           <Paperclip class="size-3" aria-hidden="true" />{{ attached }}
         </span>
         <!-- Links sit above the see-through button; the row's own menu lists them (no menu of their own). -->
-        <Badge v-for="key in meta.categories" :key="key" variant="outline" class="pointer-events-auto relative min-w-0">
+        <Badge v-for="key in badges" :key="key" variant="outline" class="pointer-events-auto relative min-w-0">
           <EntityLink :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" plain :menu="false" />
         </Badge>
         <Badge v-if="forMonth" variant="outline" class="shrink-0" data-tx-for-month>{{ t('tx.forMonth', { month: forMonth }) }}</Badge>
@@ -210,7 +215,7 @@ const phoneLine = computed(() => {
         class="whitespace-nowrap font-medium tabular-nums"
         :class="ownMove ? 'text-foreground' : amountClass(leg.amount)"
       >
-        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" signed />
+        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" :signed="!ownMove || Boolean(props.storeId)" />
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {{ t('tx.fee') }} <Money :amount="fee.amount" :currency="fee.asset" />

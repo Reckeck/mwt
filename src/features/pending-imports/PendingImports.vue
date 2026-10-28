@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Check, Download, X } from 'lucide-vue-next'
+import { Check, X } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -54,16 +54,6 @@ const allIds = computed(() =>
         <Badge v-if="pendingCount" variant="secondary">{{ pendingCount }}</Badge>
       </p>
       <div class="flex gap-2">
-        <Button
-          v-if="props.storeId && !props.compact"
-          variant="outline"
-          size="sm"
-          :disabled="busy"
-          @click="sync.syncNow.mutate(props.storeId)"
-        >
-          <Download class="size-4" />
-          {{ t('import.syncNow') }}
-        </Button>
         <Button
           v-if="pendingCount"
           size="sm"

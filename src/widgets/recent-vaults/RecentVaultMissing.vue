@@ -45,12 +45,12 @@ function name(): string {
   </Card>
   <div v-else class="grid gap-2" data-recents-missing>
     <p role="alert" class="text-xs text-destructive">{{ t('vaultForget.missingError') }}</p>
-    <div class="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" class="gap-1.5" :loading="finding" data-recents-find @click="emit('find')">
+    <div class="flex gap-2">
+      <Button variant="outline" size="sm" class="min-w-0 flex-1 gap-1.5 px-2" :loading="finding" data-recents-find @click="emit('find')">
         <FolderSearch class="size-4" />
         {{ t('vaultForget.find') }}
       </Button>
-      <Button variant="outline" size="sm" class="gap-1.5" data-recents-drop @click="emit('forget')">
+      <Button variant="outline" size="sm" class="min-w-0 flex-1 gap-1.5 px-2" data-recents-drop @click="emit('forget')">
         <X class="size-4" />
         {{ t('vaultForget.remove') }}
       </Button>

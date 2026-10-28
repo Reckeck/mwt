@@ -73,7 +73,10 @@ const remove = useMutation({
       <div v-if="props.externalCopy" class="grid gap-1.5">
         <div class="flex items-start gap-3">
           <Checkbox id="remove-password-copy" v-model="copyAgreed" class="mt-0.5" :aria-invalid="!!form.error('copy')" />
-          <Label for="remove-password-copy">{{ t('vaultPassword.removeCopyAgree') }}</Label>
+          <div class="grid gap-0.5">
+            <Label for="remove-password-copy">{{ t('vaultPassword.removeCopyAgree') }}</Label>
+            <p class="text-xs text-muted-foreground">{{ t('vaultPassword.removeCopyAgreeHint') }}</p>
+          </div>
         </div>
         <p v-if="form.error('copy')" class="text-xs text-destructive">{{ form.error('copy') }}</p>
       </div>

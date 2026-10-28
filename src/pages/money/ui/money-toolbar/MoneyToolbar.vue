@@ -69,9 +69,10 @@ const extras = computed(
     <div v-if="props.currencySwitch" class="max-md:hidden" data-tour="spending-currency">
       <ChartCurrencySwitch v-model="shownCurrency" :options="currencies" />
     </div>
-    <div data-tour="period-picker" class="min-w-0 max-md:flex-1">
+    <div data-tour="period-picker" class="min-w-0">
       <PeriodPicker v-model="range" :default-range="props.fallback" trigger-class="w-[170px] max-md:flex-1" />
     </div>
+    <span v-if="phone" class="flex-1" />
     <StoreNodeSelect
       v-if="props.wallets && !phone"
       id="money-scope"
@@ -84,7 +85,7 @@ const extras = computed(
     />
     <Popover v-if="props.wallets">
       <PopoverTrigger as-child>
-        <Button variant="outline" size="icon" class="relative" :aria-label="t('money.moreFilters')" :title="t('money.moreFilters')">
+        <Button variant="outline" size="icon" class="relative max-md:size-10" :aria-label="t('money.moreFilters')" :title="t('money.moreFilters')">
           <SlidersHorizontal />
           <span v-if="extras" class="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
         </Button>

@@ -63,7 +63,7 @@ const { filter, range, fallback, effective, realTerms } = useReportFilter(group)
     </RouterLink>
     <div v-else class="flex flex-wrap items-center justify-between gap-3">
       <div class="w-fit max-w-full" data-tour="section-tabs">
-        <RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" :keep-query="keepFilter" />
+        <RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" :more-title="t('money.moreTitle')" :keep-query="keepFilter" />
       </div>
       <MoneyToolbar
         v-if="!UNFILTERED_GROUPS.includes(group)"

@@ -58,10 +58,9 @@ const market = computed(() => {
   }
 })
 const giveError = computed(() => (check.error('fromAmount') ? t('form.amountError') : check.error('fromAsset')))
-// Shown as soon as both currencies are chosen, not only after a save was tried.
-const getError = computed(() =>
-  check.error('toAmount') ? t('form.amountError') : sameCurrency.value ? t('validation.sameCurrency') : check.error('toAsset'),
-)
+const getError = computed(() => (check.error('toAmount') ? t('form.amountError') : check.error('toAsset')))
+/** One currency on both sides is not a mistake, it is a transfer: a plain hint as soon as both are chosen (red only after a save was tried). */
+const sameHint = computed(() => (sameCurrency.value ? t('validation.sameCurrency') : undefined))
 /** Same currency is a move between wallets: the form goes on as «Перевод» with what was typed. */
 function recordAsTransfer() {
   convertAsTransfer(form)
@@ -80,18 +79,18 @@ function recordAsTransfer() {
       <AvailableHint :store-id="fromStore" :asset="form.fromAsset" @max="(quantity) => (form.fromAmount = quantity)" />
     </FormField>
     <div class="grid content-start gap-1.5">
-      <FormField for="tx-to-amount" :label="t('tx.field.receive')" required :error="getError">
+      <FormField for="tx-to-amount" :label="t('tx.field.receive')" required :error="getError" :hint="sameHint">
         <AmountInput id="tx-to-amount" v-model="form.toAmount" size="lg" :placeholder="t('form.amountZero')">
           <template #suffix>
             <AssetChip
               v-model="form.toAsset"
               :label="t('form.asset')"
-              :invalid="sameCurrency || Boolean(check.error('toAsset'))"
+              :invalid="Boolean(check.error('toAsset'))"
             />
           </template>
         </AmountInput>
       </FormField>
-      <Button v-if="sameCurrency" type="button" variant="link" size="sm" class="justify-self-start px-0" data-tx-as-transfer @click="recordAsTransfer">
+      <Button v-if="sameCurrency" type="button" variant="link" class="touch-min h-auto justify-self-start px-0 py-0" data-tx-as-transfer @click="recordAsTransfer">
         {{ t('tx.quick.recordAsTransfer') }}
       </Button>
     </div>
@@ -106,7 +105,8 @@ function recordAsTransfer() {
     </FormField>
   </div>
 
-  <div v-if="rate" class="grid gap-1.5 rounded-md bg-muted px-3 py-2.5 text-sm" data-tx-rate>
+  <!-- One currency has no rate: «1,00 THB за THB» says nothing. -->
+  <div v-if="rate && !sameCurrency" class="grid gap-1.5 rounded-md bg-muted px-3 py-2.5 text-sm" data-tx-rate>
     <p class="flex justify-between gap-3">
       <span>{{ t('tx.quick.dealRate') }}</span><i18n-t keypath="tx.quick.dealPrice" tag="b" class="font-semibold tabular-nums">
         <template #price><Money :amount="rate.price" :currency="rate.currency" /></template>

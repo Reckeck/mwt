@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { ChevronRight } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 import { visibleActions } from '@/shared/ui/context-menu'
@@ -48,7 +49,12 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none px-1 text-l
             @click="pick(action)"
           >
             <component :is="action.icon" v-if="action.icon" class="size-5 opacity-70" />
-            <span class="flex-1">{{ action.label }}</span>
+            <span v-if="action.hint" class="grid min-w-0 flex-1 gap-0.5 py-1.5">
+              <span class="truncate">{{ action.label }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ action.hint }}</span>
+            </span>
+            <span v-else class="flex-1">{{ action.label }}</span>
+            <ChevronRight v-if="action.opens" class="size-4 shrink-0 text-muted-foreground" />
           </Button>
         </template>
       </div>

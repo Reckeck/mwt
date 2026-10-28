@@ -33,6 +33,8 @@ defineSlots<{
   switches?(): unknown
   actions?(): unknown
   trail?(): unknown
+  /** Under the row: a phone's chips of the set filters. */
+  below?(): unknown
 }>()
 const open = defineModel<boolean>('open', { default: false })
 
@@ -61,9 +63,9 @@ function apply() {
         @click="open = true"
       >
         <ListFilter class="size-4" />
-        <Badge v-if="props.active" class="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 text-[10px] tabular-nums">
-          {{ props.active }}
-        </Badge>
+        <!-- A dot, not a count: the chips under the row name what is set. -->
+        <span v-if="props.active" class="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive ring-2 ring-background" data-filter-dot />
+        <span v-if="props.active" class="sr-only">{{ t('filter.activeCount', { count: props.active }) }}</span>
       </Button>
       <slot v-if="phone && props.folds" name="actions" />
 
@@ -82,6 +84,8 @@ function apply() {
         <div class="ms-auto flex-1 basis-24 text-right"><slot name="trail" /></div>
       </template>
     </div>
+
+    <slot name="below" />
 
     <!-- A computer: the folded filters open under the row, not over the list. -->
     <div v-if="!phone && open && $slots.more" class="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-xs" data-filter-panel>

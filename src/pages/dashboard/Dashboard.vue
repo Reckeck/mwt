@@ -145,7 +145,7 @@ const actionsById = useWidgetActions({
       <HomeChanges :since="since" />
     </template>
   <div ref="container" class="relative" data-tour="dashboard-grid">
-    <div v-if="!hydrated || !containerWidth" class="grid grid-cols-1 gap-4 md:grid-cols-12">
+    <div v-if="(!hydrated || !containerWidth) && !settings.vaultFailed" class="grid grid-cols-1 gap-4 md:grid-cols-12">
       <Skeleton class="h-40 md:col-span-6" />
       <Skeleton class="h-40 md:col-span-6" />
       <Skeleton class="h-56 md:col-span-12" />

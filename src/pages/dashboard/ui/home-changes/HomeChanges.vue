@@ -81,7 +81,7 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
           :total="visible.length"
           :loading-more="txs.isFetchingNextPage.value"
           openable
-          :group-by-day="!phone"
+          group-by-day
           :fx-per-usd="summary.data.value?.fx_per_usd"
           :base-currency="summary.data.value?.base_currency"
           :row-actions="rowMenu.actions"

@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import { Money } from '@/entities/currency'
 import { groupByDay } from '@/entities/transaction'
-import { pluralForm } from '@/shared/lib/format'
 import { useTxContext } from '@/shared/lib/tx-context'
+
+import { FilterCount } from '../filter-count'
 
 /**
  * «3 оплаты · 36 $» (Paths 1 · 5): how many operations the filter keeps and
  * their net in the base currency, once every page of them is loaded.
  */
 const props = defineProps<{
+  filter: TxFilter
   rows: Transaction[]
   total: number
   kinds: TxKind[]
@@ -19,15 +20,9 @@ const props = defineProps<{
   baseCurrency?: string
 }>()
 
-const { t, locale } = useI18n()
 const context = useTxContext()
 
 const payments = computed(() => props.kinds.length === 1 && props.kinds[0] === 'payment')
-const count = computed(() => {
-  const noun = payments.value ? 'payments' : 'ops'
-  return t(`tx.filterTotal.${noun}.${pluralForm(props.total, locale.value)}`, { count: props.total })
-})
-
 const sum = computed(() => {
   if (!props.baseCurrency || props.rows.length < props.total) return null
   const days = groupByDay(props.rows, Number(props.fxPerUsd ?? 1), context.rootOf)
@@ -39,7 +34,7 @@ const sum = computed(() => {
 </script>
 
 <template>
-  <span class="text-sm whitespace-nowrap text-muted-foreground tabular-nums" data-filter-total>
-    {{ count }}<template v-if="sum"> · <b class="font-semibold text-foreground"><Money :amount="sum.amount" :currency="sum.currency" :signed="!payments" /></b></template>
-  </span>
+  <FilterCount :filter="filter" :total="total" :payments="payments" data-filter-total>
+    <template v-if="sum"> · <b class="font-semibold text-foreground"><Money :amount="sum.amount" :currency="sum.currency" :signed="!payments" /></b></template>
+  </FilterCount>
 </template>

@@ -17,7 +17,8 @@ import ScenarioNameDialog from './ui/ScenarioNameDialog.vue'
  * into a goal. A saved one keeps up with the form by itself. The form lives in
  * the page, so the bar reads it through `snapshot` and hands loads back via `load`.
  */
-const props = defineProps<{ snapshot: () => ScenarioBody }>()
+/** `goalButton: false`: the page puts «Создать цель» under the answer itself (a phone). */
+const props = withDefaults(defineProps<{ snapshot: () => ScenarioBody; goalButton?: boolean }>(), { goalButton: true })
 const scenarioId = defineModel<string | null>('scenarioId', { required: true })
 const emit = defineEmits<{
   load: [scenario: CalcScenario]
@@ -133,7 +134,7 @@ const picked = computed({
     <span class="text-xs text-muted-foreground" aria-live="polite" data-calc-saved>
       {{ !current ? t('invest.scenario.notSaved') : saving ? t('invest.scenario.saving') : t('invest.scenario.autosaved') }}
     </span>
-    <!-- Three buttons do not fit a phone in a row: two side by side, the goal under them. -->
+    <!-- Three buttons do not fit a phone in a row: two side by side, the goal under them (or under the answer). -->
     <div class="ms-auto flex items-center gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2">
       <!-- What the page adds to the run's actions: «Сравнить» lives with the chart it draws on. -->
       <slot name="actions" />
@@ -142,6 +143,7 @@ const picked = computed({
       </Button>
       <ActionMenu v-if="current" :actions="actions" :label="t('actions.more')" />
       <Button
+        v-if="props.goalButton"
         class="max-sm:col-span-2"
         :disabled="goalDraft.isPending.value || save.isPending.value"
         data-calc-goal

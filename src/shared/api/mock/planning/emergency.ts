@@ -2,7 +2,7 @@
 
 import { txLegs } from '@/shared/lib/transactions'
 import { currentMonth, money, monthTotals } from './budget-calc'
-import { fail } from './state'
+import { fail, now } from './state'
 import type { PlanningMockContext } from './state'
 
 const MAX_FUND_MONTHS = 24
@@ -40,6 +40,25 @@ export function storeValue(storeId: string, ctx: PlanningMockContext): number {
     .reduce((sum, leg) => sum + Number(leg.amount) * ctx.priceOf(leg.asset.symbol), 0)
 }
 
+/**
+ * Like the core: the mean of fixed and obligatory spending over the last finished
+ * months (`avg_months` of them) that had any; the current month only while there is no other.
+ */
+function essentialAverage(ctx: PlanningMockContext): { essential: number; months: number } {
+  const today = now()
+  const totals = Array.from({ length: fund.avg_months }, (_unused, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - fund.avg_months + index, 1)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const month = monthTotals(ctx, key)
+    return month.fixed + month.essentialDaily
+  }).filter((value) => value > 0)
+  if (totals.length)
+    return { essential: totals.reduce((sum, value) => sum + value, 0) / totals.length, months: totals.length }
+  const month = monthTotals(ctx, currentMonth())
+  const essential = month.fixed + month.essentialDaily
+  return { essential, months: essential ? 1 : 0 }
+}
+
 export function emergencyStatus(ctx: PlanningMockContext): EmergencyStatus {
   const stores: EmergencyStore[] = fund.scope.store_ids.map((id) => ({
     store_id: id,
@@ -51,8 +70,7 @@ export function emergencyStatus(ctx: PlanningMockContext): EmergencyStatus {
     goal_ids: [],
   }))
   const total = stores.reduce((sum, store) => sum + Number(store.value), 0)
-  const month = monthTotals(ctx, currentMonth())
-  const essential = month.fixed + month.essentialDaily
+  const { essential, months: essentialMonths } = essentialAverage(ctx)
   const target = essential * fund.target_months
   const hasFund = stores.length > 0
   return {
@@ -61,7 +79,7 @@ export function emergencyStatus(ctx: PlanningMockContext): EmergencyStatus {
     stores,
     total: money(total),
     e_mand: essential ? money(essential) : null,
-    e_mand_months: essential ? 1 : 0,
+    e_mand_months: essentialMonths,
     months_covered: hasFund && essential ? money(Math.round((total / essential) * 10) / 10) : null,
     target_amount: essential ? money(target) : null,
     surplus: hasFund && essential && total > target ? money(total - target) : null,

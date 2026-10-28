@@ -56,7 +56,8 @@ const expectedReturn = ref('')
 const storeIds = ref<string[]>([])
 const active = ref(true)
 const scenarioId = ref<string | null>(null)
-const fund = ref(true)
+// Off until picked: moving the month's remainder is a choice, not a default.
+const fund = ref(false)
 const autosave = ref(false)
 
 watch(open, (isOpen) => {
@@ -74,7 +75,7 @@ watch(open, (isOpen) => {
   storeIds.value = goal?.scope.store_ids.length ? [...goal.scope.store_ids] : props.storeId ? [props.storeId] : []
   active.value = goal?.active ?? true
   scenarioId.value = goal?.scenario_id ?? null
-  fund.value = true
+  fund.value = false
   autosave.value = false
 })
 
@@ -124,7 +125,7 @@ const save = useMutation({
     try {
       const home = storeIds.value[0]
       const remainder = props.remainder
-      if (fund.value && remainder && remainder.currency.toLowerCase() === input.currency.toLowerCase()) {
+      if (fund.value && home && remainder && remainder.currency.toLowerCase() === input.currency.toLowerCase()) {
         await call('fund_goal', { input: { goal_id: goal.id, store_id: home, amount: remainder.amount } })
       }
       if (autosave.value) {

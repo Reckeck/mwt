@@ -120,7 +120,7 @@ const create = useMutation({
         <Button variant="ghost" size="icon-sm"  :title="t('rules.down')" :aria-label="t('rules.down')" @click="move(index, 1)">
           <ArrowDown class="size-4" />
         </Button>
-        <ConfirmButton :label="t('rules.delete')" :confirm-label="t('actions.confirmDelete')" @confirm="remove.mutate(rule.id)">
+        <ConfirmButton :label="t('rules.delete')" :confirm-label="t('actions.confirmDeleteNamed', { name: rule.pattern })" @confirm="remove.mutate(rule.id)">
           <Trash2 class="size-4" />
         </ConfirmButton>
       </div>

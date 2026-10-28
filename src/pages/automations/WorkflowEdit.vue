@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { type RouteLocationRaw, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -39,6 +39,11 @@ const leaveOpen = computed({
   },
 })
 const keeping = ref(false)
+
+// A navigation that did not come through the guard (replace, redirect) settles the question.
+watch(() => route.fullPath, () => {
+  leaveTo.value = null
+})
 
 onBeforeRouteLeave((to) => {
   if (leaving || !editor.value?.dirty) return true
@@ -97,12 +102,12 @@ function throwAway() {
       v-model:open="leaveOpen"
       :title="editor?.canDraft ? t('workflow.leave.title') : t('workflow.leave.newTitle')"
       :description="editor?.canDraft ? t('workflow.leave.body') : t('workflow.leave.newHint')"
-      size="sm"
+      size="form"
     >
       <template #footer>
-        <Button variant="ghost" @click="leaveOpen = false">{{ t('workflow.leave.stay') }}</Button>
-        <Button variant="outline" @click="throwAway">{{ t('workflow.leave.discard') }}</Button>
-        <Button v-if="editor?.canDraft" :disabled="keeping" @click="keepDraft">{{ t('workflow.leave.draft') }}</Button>
+        <Button variant="outline" class="max-md:w-full" @click="leaveOpen = false">{{ t('workflow.leave.stay') }}</Button>
+        <Button variant="outline" class="max-md:w-full" @click="throwAway">{{ t('workflow.leave.discard') }}</Button>
+        <Button v-if="editor?.canDraft" class="max-md:w-full" :disabled="keeping" @click="keepDraft">{{ t('workflow.leave.draft') }}</Button>
       </template>
     </Dialog>
   </div>

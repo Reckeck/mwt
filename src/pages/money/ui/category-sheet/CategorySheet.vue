@@ -117,6 +117,8 @@ const journal = computed(() =>
           :currency="props.currency"
           :to="props.filter.to ?? ''"
         />
+        <!-- min-w-0: a grid cell is as wide as its widest row otherwise, and the amount is cut by the sheet's edge. -->
+        <div class="min-w-0">
         <SectionState :loading="txs.isPending.value" :error="txs.error.value" skeleton="list" :rows="3" compact @retry="txs.refetch()">
           <TransactionsList
             :transactions="rows"
@@ -130,6 +132,7 @@ const journal = computed(() =>
             @more="txs.fetchNextPage()"
           />
         </SectionState>
+        </div>
       </div>
       <SheetFooter class="flex-row justify-between gap-2 border-t px-6 py-3 max-md:px-4">
         <RouterLink :to="journal" :class="buttonVariants({ variant: 'outline', class: 'max-md:h-11' })" @click="open = false">

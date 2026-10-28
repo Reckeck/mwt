@@ -45,14 +45,20 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
       header: t('rates.currency'),
       accessorKey: 'currency',
       cell: ({ row }) =>
-        h('span', { class: 'inline-flex items-baseline gap-1.5' }, [
-          h(
-            'span',
-            { class: cn('uppercase', row.original.tracked ? 'font-medium' : 'text-muted-foreground') },
-            row.original.currency,
-          ),
-          row.original.crypto
-            ? h('span', { class: 'text-2xs uppercase text-muted-foreground' }, t('currency.kind.crypto'))
+        h('span', { class: 'block' }, [
+          h('span', { class: 'inline-flex items-baseline gap-1.5' }, [
+            h(
+              'span',
+              { class: cn('uppercase', row.original.tracked ? 'font-medium' : 'text-muted-foreground') },
+              row.original.currency,
+            ),
+            row.original.crypto
+              ? h('span', { class: 'text-2xs uppercase text-muted-foreground' }, t('currency.kind.crypto'))
+              : null,
+          ]),
+          // On a phone the «Updated» column is dropped; its date moves under the code.
+          row.original.updated_at
+            ? h('span', { class: 'block text-2xs text-muted-foreground md:hidden' }, formatDateTime(row.original.updated_at))
             : null,
         ]),
     },
@@ -75,7 +81,7 @@ const columns = computed<ColumnDef<FxRow>[]>(() => {
       header: t('rates.updated'),
       accessorFn: (row) => row.updated_at ?? '',
       cell: ({ row }) => (row.original.updated_at ? formatDateTime(row.original.updated_at) : '—'),
-      meta: { align: 'right', class: 'text-xs text-muted-foreground' },
+      meta: { align: 'right', class: 'text-xs text-muted-foreground max-md:hidden' },
     },
   ]
 })

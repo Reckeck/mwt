@@ -2,7 +2,7 @@
 
 import { mockNetWorthTrend } from '../analytics/dashboard-tiles'
 import { MOCK_PER_USD } from '../fx-rates'
-import { mockSummary } from '../market'
+import { analyticsContext } from '../market'
 import { dailyBudget, money, upcoming } from './budget-calc'
 import { scenarios } from './calculator'
 import { capitalHealth } from './health'
@@ -64,7 +64,7 @@ function todos(ctx: PlanningMockContext, settings: Settings, currency: string): 
 }
 
 function dashboardToday(ctx: PlanningMockContext, settings: Settings, period: DashPeriod): DashboardToday {
-  const trend = mockNetWorthTrend(period, Number(mockSummary.total_base), mockSummary.base_currency)
+  const trend = mockNetWorthTrend(period, analyticsContext())
   const budget = dailyBudget(ctx, settings.daily_budget_mode, Number(settings.savings_rate))
   const all = todos(ctx, settings, budget.currency)
   return {

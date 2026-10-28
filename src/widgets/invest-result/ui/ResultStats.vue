@@ -47,7 +47,8 @@ const earnedMore = computed(() => Number(result.value.interest) > Number(result.
     <div v-if="withdrawing" class="grid min-w-0 gap-0.5">
       <dt class="text-xs text-muted-foreground">{{ t('invest.stat.left') }}</dt>
       <dd class="text-base font-semibold tabular-nums"><Money :amount="result.final_nominal" :currency="props.currency" :decimals="0" /></dd>
-      <dd class="text-xs text-muted-foreground">{{ planMonth(input.start, lastMonth) }}</dd>
+      <!-- The balance at the end of the term: contributions go on after the withdrawals ran out. -->
+      <dd class="text-xs text-muted-foreground">{{ planMonth(input.start, input.term_months) }}</dd>
     </div>
     <div v-else-if="props.outcome.solved" class="grid min-w-0 gap-0.5">
       <dt class="text-xs text-muted-foreground">{{ t('invest.stat.final') }}</dt>

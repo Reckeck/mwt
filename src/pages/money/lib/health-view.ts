@@ -92,12 +92,18 @@ function savingsFigure(report: HealthReport, t: Translate): HealthFigure {
   const month = lastSavings(report)
   if (!month) return { key: 'savings', value: text('—'), tone: 'muted', hint: text(t('money.health.savingsNone')) }
   const saved = Number(month.saved_pct)
-  const tone = saved < 0 ? 'destructive' : saved < Number(report.savings_target_pct) ? 'warning' : 'success'
+  // The «below plan» reason is about the average of the last months: the card says so too, not «all fine».
+  const below = report.reasons.some((reason) => reason.code === 'savings_below_plan' && reason.level !== 'green')
+  const tone = saved < 0 ? 'destructive' : below || saved < Number(report.savings_target_pct) ? 'warning' : 'success'
   return {
     key: 'savings',
     value: text(pct(month.saved_pct)),
     tone,
-    hint: text(t('money.health.savingsHint', { month: monthOf(month.month) })),
+    hint: text(
+      below && report.savings_avg_pct !== null
+        ? t('money.health.savingsHintAvg', { month: monthOf(month.month), pct: pct(report.savings_avg_pct) })
+        : t('money.health.savingsHint', { month: monthOf(month.month) }),
+    ),
   }
 }
 

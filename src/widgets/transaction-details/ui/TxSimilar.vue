@@ -13,7 +13,7 @@ import { txFilterToQuery } from '@/shared/lib/tx-filter'
 import { txId, txKind, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
 import { useTxContext } from '@/shared/lib/tx-context'
 
-import { pairRate, txPair, txTitle } from '../lib/tx-card'
+import { pairRate, similarTitle, txPair } from '../lib/tx-card'
 
 /** «Похожие · 2» (Paths 1 · 6): two earlier ones like this and a way to all of them. */
 const props = defineProps<{ tx: Transaction; items: Transaction[]; filter: TxFilter }>()
@@ -24,7 +24,7 @@ const context = useTxContext()
 
 const SHOWN = 2
 
-const title = computed(() => txTitle(props.tx, context.categoryName))
+const title = computed(() => similarTitle(props.tx, context.categoryName))
 const allLabel = computed(() => {
   const kind = txKind(props.tx)
   return kind === 'payment' ? t('txCard.allSimilar.payment', { name: title.value }) : t(`txCard.allSimilar.${kind}`, { pair: title.value })

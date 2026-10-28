@@ -2,16 +2,16 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { watchDebounced } from '@vueuse/core'
-import { Link2, Search, X } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 
 import { pluralForm } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
 import { activeFilterCount, emptyTxFilter } from '@/shared/lib/tx-filter'
-import { Button } from '@/shared/ui/button'
 import { FilterBar } from '@/shared/ui/filter-bar'
 import { Input } from '@/shared/ui/input'
 
 import { useFilterDraft } from './model/use-filter-draft'
+import { FilterChips } from './ui/filter-chips'
 import { FilterSwitches } from './ui/filter-switches'
 import { KindField } from './ui/kind-field'
 import { MoreFields } from './ui/more-fields'
@@ -125,30 +125,12 @@ function clear() {
     <ScopeField v-if="!props.fixedScope" v-model="filter" :id-prefix="props.idPrefix" bare />
     <KindField v-model="filter" :id-prefix="props.idPrefix" bare />
     <!-- What a report opened the list with: each is a chip that takes itself off. -->
-    <Button v-if="filter.kinds.length > 1" variant="secondary" class="shrink-0" @click="filter = { ...filter, kinds: [] }">
-      {{ t('filter.kindsCount', { n: filter.kinds.length }) }}
-      <X class="size-3.5" />
-    </Button>
-    <Button v-if="filter.with_fee" variant="secondary" class="shrink-0" @click="filter = { ...filter, with_fee: false }">
-      {{ t('filter.withFee') }}
-      <X class="size-3.5" />
-    </Button>
-    <Button v-if="filter.realized" variant="secondary" class="shrink-0" @click="filter = { ...filter, realized: false }">
-      {{ t('filter.realized') }}
-      <X class="size-3.5" />
-    </Button>
-    <Button
-      v-if="filter.flow_id"
-      variant="secondary"
-      class="shrink-0"
-      :title="t('filter.clearFlow')"
-      @click="filter = { ...filter, flow_id: null }"
-    >
-      <Link2 class="size-4" />
-      {{ t('filter.flow') }}
-      <X class="size-3.5" />
-    </Button>
+    <FilterChips v-model="filter" :fixed-scope="props.fixedScope" />
 
+    <!-- A phone: every set filter under the search, «С файлами ×», and «Сбросить» (the search stays). -->
+    <template v-if="phone" #below>
+      <FilterChips v-model="filter" :fixed-scope="props.fixedScope" @reset="filter = emptyTxFilter({ ...kept(), text: filter.text })" />
+    </template>
     <template #more>
       <MoreFields v-model="draft" :id-prefix="`${props.idPrefix}-more`">
         <!-- A phone has no row for them: they follow the period on the «Фильтры» screen. -->

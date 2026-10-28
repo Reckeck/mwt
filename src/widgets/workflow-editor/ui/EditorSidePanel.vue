@@ -9,6 +9,7 @@ import LessonPanel from './LessonPanel.vue'
 import NodeInspector from './NodeInspector.vue'
 import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
 import WorkflowSettingsPanel from './WorkflowSettingsPanel.vue'
+import WorkflowTests from './WorkflowTests.vue'
 
 /**
  * Beside the canvas: the lesson's task, then the selected node's inspector or,
@@ -83,7 +84,9 @@ function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
         :base="props.base"
         @focus="props.editor.focusNode"
         @drop-redundant="props.redundant.removeAll"
-      />
+      >
+        <WorkflowTests v-if="workflow.data.value" :workflow="workflow.data.value" :dirty="dirty" />
+      </WorkflowSettingsPanel>
       <WorkflowHistoryPanel
         v-if="!selectedNode && workflow.data.value"
         class="mt-4 border-t border-border pt-4"
