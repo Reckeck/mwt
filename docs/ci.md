@@ -12,7 +12,7 @@
 | Стадия | Job | Что делает |
 |---|---|---|
 | .pre | `ci:image` | только когда меняются входы образов: собирает и пушит CI-образы (см. ниже) |
-| check | `frontend:check` | `mise run lint`, `typecheck`, `check-onboarding`, `check-forms` |
+| check | `frontend:check` | `mise run lint`, `typecheck`, `test-frontend`, `check-onboarding`, `check-forms` |
 | check | `rust:fmt` | `cargo fmt --check` — без компиляции, секунды |
 | check | `rust:clippy` | `mise run clippy` |
 | check | `rust:test` | `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |

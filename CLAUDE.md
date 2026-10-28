@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Точечный запуск тестов
 
 Тесты Rust — инлайн-модули `#[cfg(test)]` внутри `crates/core/src/**` (отдельной
-папки `tests/` нет). Фронтенд-тестов нет; проверка фронта = Biome + vue-tsc.
+папки `tests/` нет). Тесты фронта — vitest, проект `unit`: `*.test.ts` рядом с кодом, `mise run test-frontend`
+(`pnpm exec vitest run --project unit <часть имени файла>` — точечно). `call()`/`onEvent` и
+i18n (реальная ru-локаль) замоканы в `src/test/setup.ts`; остальная проверка фронта = Biome + vue-tsc.
 
 ```bash
 cargo test -p trade-core                      # только ядро
