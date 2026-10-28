@@ -252,7 +252,10 @@ impl UnlockedVault {
         to: i64,
     ) -> Vec<Flow> {
         let book = self.rate_book();
-        self.doc
+        // A payment made for a shared event counts for my part of it only.
+        let shared = self.shared_payment_ratios();
+        let mut flows: Vec<Flow> = self
+            .doc
             .transactions
             .iter()
             .filter_map(|tx| {
@@ -264,7 +267,10 @@ impl UnlockedVault {
                 if class == FlowClass::Ignored {
                     return None;
                 }
-                let (value, missing) = Self::flow_value(&book, tx, class, currency);
+                let (mut value, missing) = Self::flow_value(&book, tx, class, currency);
+                if let Some(ratio) = shared.get(&tx.meta().id) {
+                    value = value * *ratio;
+                }
                 Some(Flow {
                     date: cal.date_of(secs),
                     class,
@@ -275,7 +281,9 @@ impl UnlockedVault {
                     missing,
                 })
             })
-            .collect()
+            .collect();
+        flows.extend(self.shared_extra_flows(&book, cal, currency, from, to));
+        flows
     }
 
     /// Operations the budget could not value in its currency: a side had no

@@ -10,6 +10,9 @@ import { attachmentCommands } from './commands-attachments'
 import { bulkCommands } from './commands-bulk'
 import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
+import { sharedEventCommands } from './commands-shared-events'
+import { sharedMoneyCommands } from './commands-shared-money'
+import { sharedSettleCommands } from './commands-shared-settle'
 import { ratesCommands } from './commands-rates'
 import { sourcesCommands } from './commands-sources'
 import { storeTreeCommands } from './commands-store-tree'
@@ -53,6 +56,9 @@ const MOCK_COMMANDS: MockCommands = {
   ...valuationCommands,
   ...overviewCommands,
   ...loyaltyDepositCommands,
+  ...sharedEventCommands,
+  ...sharedSettleCommands,
+  ...sharedMoneyCommands,
   ...ratesCommands,
   ...sourcesCommands,
   ...exchangeAccountsCommands,

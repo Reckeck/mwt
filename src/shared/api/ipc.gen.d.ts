@@ -28,6 +28,8 @@ type AddLinkedTransactionsInput = { transactions: Array<TransactionInput>,
  */
 flow_id: string | null, };
 
+type AddSharedPurchaseInput = { event_id: string, purchase: SharedPurchaseDraft, };
+
 /**
  * Credit (positive) or spend (negative) points of a programme.
  */
@@ -214,6 +216,8 @@ type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary
  */
 transferred_to: string | null, };
 
+type ArchiveSharedEventInput = { id: string, archived: boolean, };
+
 /**
  * One currency a wallet holds: how much of it, and its worth in the base.
  */
@@ -364,6 +368,15 @@ price_base: Amount, value_base: Amount,
  * Change of the price over the last 24 hours, percent, when the provider said it.
  */
 change_24h_pct: Amount | null, };
+
+/**
+ * Take a payment that is already in the vault as a purchase of the event.
+ */
+type AttachPaymentInput = { event_id: string, tx_id: string, item_id: string | null, new_item_title: string | null, 
+/**
+ * Units bought; empty: 1.
+ */
+qty: Amount | null, };
 
 /**
  * One file or link of an entity.
@@ -1207,6 +1220,15 @@ type ContactDraft = { name: string, kind: ContactKind, note: string, accounts: A
  */
 group: string, };
 
+/**
+ * What one event does to one contact's debt with me.
+ */
+type ContactEventBalance = { event_id: string, title: string, starts_on: string | null, ends_on: string | null, currency: string, status: SharedEventStatus, 
+/**
+ * Positive: the contact owes me; negative: I owe them.
+ */
+amount: Amount, due_at: string | null, };
+
 type ContactKind = "person" | "company" | "exchanger";
 
 type ContactTurnover = { contact_id: string, account_id: string | null, base_currency: string, rows: Array<TurnoverRow>, 
@@ -1899,6 +1921,18 @@ pct: number | null,
  */
 short: boolean, };
 
+type EventItem = { id: string, title: string, 
+/**
+ * «шт», «кг», «л», «уп» or free text.
+ */
+unit: string, category_id: string | null, plan: ItemPlan | null, purchases: Array<Purchase>, cancelled: boolean, split: ItemSplit, };
+
+type EventTotals = { planned: Amount, spent: Amount, 
+/**
+ * `spent - planned`.
+ */
+diff: Amount, };
+
 /**
  * A Bybit account (`FUND`, `UNIFIED`, `EARN`) and the sub-account standing for it.
  */
@@ -2277,6 +2311,15 @@ column: number,
 value: Amount, flow_id: string | null, internal: boolean, comment: string, };
 
 type GraphVersion = { saved_at: string, graph: string, };
+
+/**
+ * What a guest (a participant without a contact) is reachable by.
+ */
+type GuestDetails = { phone: string, messenger: string, 
+/**
+ * Same shape as a contact's saved accounts.
+ */
+requisites: Array<ContactAccount>, note: string, };
 
 /**
  * The capital checkup's light (plan C4), worst first in `Ord` terms last.
@@ -2809,6 +2852,36 @@ type Investments = { base_currency: string, invested: Amount, value: Amount, pro
 type IssueLevel = "error" | "warning";
 
 /**
+ * What was meant to be bought. The price is in the event currency.
+ */
+type ItemPlan = { qty: Amount, price: Amount, price_mode: PriceMode, };
+
+type ItemShareView = { participant_id: string, amount: Amount, };
+
+/**
+ * Who shares an item.
+ */
+type ItemSplit = { "equal": { among: Array<string>, } } | { "by_units": { units: { [key: string]: Amount }, } };
+
+type ItemView = { item_id: string, 
+/**
+ * Bought, in the event currency.
+ */
+cost: Amount, 
+/**
+ * Bought, in units.
+ */
+qty: Amount, plan_total: Amount | null, plan_qty: Amount | null, 
+/**
+ * `cost - plan_total`; zero without a plan or a purchase.
+ */
+diff_money: Amount, 
+/**
+ * `qty - plan_qty`; zero without a plan or a purchase.
+ */
+diff_qty: Amount, bought: boolean, shares: Array<ItemShareView>, };
+
+/**
  * One row of the journal: a run or a notice shown.
  */
 type JournalEntry = { 
@@ -3333,6 +3406,31 @@ type MoveEnvelopeInput = { from: string, to: string, amount: Amount, };
  */
 type MoveStoreInput = { id: string, parent_id: string | null, };
 
+/**
+ * «Моя позиция».
+ */
+type MyPosition = { paid: Amount, share: Amount, 
+/**
+ * Still owed to me.
+ */
+owed_to_me: Amount, 
+/**
+ * Money already returned to me (net of what I gave back).
+ */
+returned: Amount, 
+/**
+ * Still owed by me (to the organizer, or to people who paid for me).
+ */
+i_owe: Amount, written_off: Amount, 
+/**
+ * Out of pocket beyond my share: `owed_to_me - i_owe + written_off`.
+ */
+over_share: Amount, 
+/**
+ * The organizer I owe my share to, when it is not me.
+ */
+pay_to: string | null, };
+
 type NamedValue = { label: string, value_usd: Amount, value_base: Amount, pct: number, };
 
 /**
@@ -3561,6 +3659,16 @@ required: boolean, };
  */
 type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "source" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
+/**
+ * A person in the event: a contact of the directory, or a guest (no
+ * `contact_id`). The owner is not listed; they are [`ME`].
+ */
+type Participant = { id: string, name: string, contact_id: string | null, 
+/**
+ * Only a guest keeps details here.
+ */
+details: GuestDetails | null, };
+
 type PassiveIncome = { 
 /**
  * The budget currency every amount is in.
@@ -3762,6 +3870,45 @@ closed_pnl: Amount | null, kind: ImportKind,
  */
 from_account: string | null, to_account: string | null, };
 
+type PersonKind = "me" | "contact" | "guest";
+
+/**
+ * One row of the people table.
+ */
+type PersonView = { 
+/**
+ * `me` or a participant id.
+ */
+id: string, 
+/**
+ * Empty for me (the UI says «Я»).
+ */
+name: string, kind: PersonKind, contact_id: string | null, 
+/**
+ * A guest with phone, messenger, requisites or a note.
+ */
+has_details: boolean, is_organizer: boolean, 
+/**
+ * What the person's part comes to.
+ */
+share: Amount, 
+/**
+ * What they paid themselves.
+ */
+paid: Amount, 
+/**
+ * Net money handed to the organizer so far (negative: got from them).
+ */
+moved: Amount, written_off: Amount, 
+/**
+ * Still to pay (positive) or to receive (negative), through the organizer.
+ */
+saldo: Amount, 
+/**
+ * The term set for this person's debt, if any (contacts only).
+ */
+due_at: string | null, };
+
 /**
  * A vault file chosen in the system dialog.
  */
@@ -3800,6 +3947,11 @@ pct: Amount | null,
  * The entity is gone (deleted, or pinned on another vault).
  */
 missing: boolean, };
+
+/**
+ * One payment of the plan «who pays whom».
+ */
+type PlannedPayment = { from: string, to: string, amount: Amount, };
 
 type PnlLeg = { ts: string, 
 /**
@@ -3928,6 +4080,8 @@ source: string | null,
  * RFC3339 moment the price is from; `None` for a hand-set price or the peg.
  */
 at: string | null, };
+
+type PriceMode = "per_unit" | "total";
 
 /**
  * The kind of price a position is valued at.
@@ -4083,6 +4237,55 @@ change: Amount | null, change_pct: Amount | null,
  * The same against the purchase price grown by inflation since.
  */
 real_change_pct: Amount | null, };
+
+/**
+ * One real purchase of an item.
+ */
+type Purchase = { id: string, 
+/**
+ * [`ME`] or a participant id.
+ */
+buyer: string, qty: Amount, 
+/**
+ * As entered: per unit or in total, see `price_mode`.
+ */
+amount: Amount, 
+/**
+ * Lower-case currency code the amount was paid in.
+ */
+currency: string, price_mode: PriceMode, 
+/**
+ * Event-currency units per unit of `currency` at the purchase date. Taken
+ * once from the rate cache (or typed in) and never recalculated.
+ */
+rate_to_event: Amount, rate_manual: boolean, 
+/**
+ * My payment in the vault, when the buyer is me.
+ */
+tx_id: string | null, 
+/**
+ * The event created that payment (so it also deletes it); false when an
+ * existing payment was only linked.
+ */
+tx_owned: boolean, 
+/**
+ * RFC3339.
+ */
+at: string, };
+
+type PurchaseView = { item_id: string, purchase_id: string, 
+/**
+ * In the event currency.
+ */
+event_amount: Amount, 
+/**
+ * The part of it that is my expense.
+ */
+my_part: Amount, 
+/**
+ * The linked payment is gone from the vault.
+ */
+payment_missing: boolean, };
 
 /**
  * What the money in a wallet is for. Replaces the old «count in budget»
@@ -4607,6 +4810,20 @@ type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: st
  */
 type SetMyAutomationActiveInput = { kind: MineKind, id: string, active: boolean, };
 
+type SetShareOverrideInput = { event_id: string, participant_id: string, 
+/**
+ * `None` takes the hand-set total back.
+ */
+total: Amount | null, };
+
+type SetSharedDueInput = { event_id: string, participant_id: string, 
+/**
+ * `YYYY-MM-DD`; empty clears the term.
+ */
+due_at: string | null, };
+
+type SetSharedItemSplitInput = { event_id: string, item_id: string, split: ItemSplit, };
+
 /**
  * Set a password on the open vault that has none.
  */
@@ -4714,6 +4931,218 @@ onboarding_checklist_hidden: boolean,
  * answers it from the wallets it already has.
  */
 crypto: boolean | null, };
+
+/**
+ * Which way the money of a settlement went, relative to the organizer.
+ */
+type SettleDirection = "to_organizer" | "from_organizer";
+
+/**
+ * Money (or a set-off) between a participant and the organizer.
+ */
+type SettleSharedInput = { event_id: string, 
+/**
+ * `me` or a participant id; never the organizer.
+ */
+participant_id: string, direction: SettleDirection, amount: Amount, 
+/**
+ * My wallet the money went to or came from. Empty: a set-off without an
+ * operation (the only way to settle with a guest).
+ */
+store_id: string | null, 
+/**
+ * RFC3339 or `YYYY-MM-DD`; empty: now.
+ */
+at: string | null, };
+
+type Settlement = { id: string, kind: SettlementKind, 
+/**
+ * [`ME`] or a participant id; never the organizer.
+ */
+participant_id: string, direction: SettleDirection, amount: Amount, 
+/**
+ * RFC3339.
+ */
+at: string, 
+/**
+ * The debt transfer in the vault, if the settlement moved money of mine.
+ */
+tx_id: string | null, 
+/**
+ * `Reassign`: who took the amount.
+ */
+to: Array<string>, };
+
+type SettlementKind = "transfer" | "offset" | "write_off" | "reassign";
+
+type SettlementView = { settlement_id: string, payment_missing: boolean, };
+
+/**
+ * A person's total fixed by hand; the rest is spread over the others.
+ */
+type ShareOverride = { participant_id: string, total: Amount, };
+
+type SharedEvent = { id: string, title: string, created_at: string, note: string, archived: boolean, 
+/**
+ * `YYYY-MM-DD`: the day, or the first day of a range.
+ */
+starts_on: string | null, 
+/**
+ * `YYYY-MM-DD`: the last day of a range; empty or equal to `starts_on`
+ * is a single day.
+ */
+ends_on: string | null, 
+/**
+ * Lower-case currency code the event is settled in.
+ */
+currency: string, 
+/**
+ * One of [`ROUNDING_STEPS`].
+ */
+rounding_step: Amount, category_id: string | null, 
+/**
+ * [`ME`] or a participant id; debts are settled through them.
+ */
+organizer: string, i_participate: boolean, participants: Array<Participant>, items: Array<EventItem>, settlements: Array<Settlement>, adjustments: Array<ShareOverride>, };
+
+/**
+ * Everything a shared event is made of that the user types in its dialog.
+ * `participants` is read on create only; later people come and go through
+ * their own commands.
+ */
+type SharedEventDraft = { title: string, note: string, 
+/**
+ * `YYYY-MM-DD`; a day, or the first day of a range.
+ */
+starts_on: string | null, 
+/**
+ * `YYYY-MM-DD`; the last day of a range.
+ */
+ends_on: string | null, 
+/**
+ * Empty: the base currency.
+ */
+currency: string, 
+/**
+ * One of 0.01, 1, 10, 50, 100; empty: 1.
+ */
+rounding_step: Amount | null, category_id: string | null, 
+/**
+ * `me` (or empty) or a participant id.
+ */
+organizer: string, i_participate: boolean, participants: Array<SharedParticipantDraft>, };
+
+type SharedEventFilter = { include_archived: boolean, };
+
+/**
+ * Where an event stands; worked out, never stored.
+ */
+type SharedEventStatus = "planning" | "in_progress" | "settling" | "closed";
+
+/**
+ * A row of the list of events.
+ */
+type SharedEventSummary = { id: string, title: string, starts_on: string | null, ends_on: string | null, currency: string, status: SharedEventStatus, archived: boolean, i_participate: boolean, people_count: number, organizer_name: string, organizer_is_me: boolean, planned: Amount, spent: Amount, owed_to_me: Amount, i_owe: Amount, };
+
+type SharedEventView = { event: SharedEvent, status: SharedEventStatus, totals: EventTotals, people: Array<PersonView>, items: Array<ItemView>, purchases: Array<PurchaseView>, settlements: Array<SettlementView>, plan: Array<PlannedPayment>, 
+/**
+ * Absent when I do not take part.
+ */
+mine: MyPosition | null, };
+
+/**
+ * An item of the list: planned, or added as it was bought.
+ */
+type SharedItemDraft = { title: string, 
+/**
+ * «шт», «кг», «л», «уп» or any text; empty: «шт».
+ */
+unit: string, category_id: string | null, plan: ItemPlan | null, cancelled: boolean, };
+
+type SharedItemInput = { event_id: string, item: SharedItemDraft, };
+
+type SharedItemRef = { event_id: string, item_id: string, };
+
+/**
+ * The link from a vault payment or debt transfer back to the event that made
+ * (or adopted) it.
+ */
+type SharedLink = { event_id: string, purchase_id: string | null, settlement_id: string | null, };
+
+/**
+ * A person to add: a contact (`contact_id`) or a guest (a name, maybe details).
+ */
+type SharedParticipantDraft = { 
+/**
+ * The client may pick the id (to name this person as the organizer in the
+ * same call); empty: the vault makes one.
+ */
+id: string | null, 
+/**
+ * A guest's name; a contact's own name is used when empty.
+ */
+name: string, contact_id: string | null, details: GuestDetails | null, };
+
+type SharedParticipantInput = { event_id: string, participant: SharedParticipantDraft, };
+
+type SharedParticipantRef = { event_id: string, participant_id: string, };
+
+/**
+ * A real purchase. Without `item_id` a new item is made from `new_item_title`.
+ */
+type SharedPurchaseDraft = { item_id: string | null, new_item_title: string | null, new_item_unit: string | null, 
+/**
+ * `me` (or empty) or a participant id.
+ */
+buyer: string, qty: Amount, 
+/**
+ * Per unit or in total, see `price_mode`.
+ */
+amount: Amount, 
+/**
+ * Empty: the event currency.
+ */
+currency: string, price_mode: PriceMode, 
+/**
+ * Typed in by hand; empty: taken from the rate cache at `at`.
+ */
+rate_to_event: Amount | null, 
+/**
+ * RFC3339 or `YYYY-MM-DD`; empty: now.
+ */
+at: string | null, 
+/**
+ * The wallet the payment comes from; required when I am the buyer.
+ */
+store_id: string | null, };
+
+type SharedPurchaseRef = { event_id: string, purchase_id: string, };
+
+/**
+ * Write off, or put on the others, what a participant has not returned.
+ */
+type SharedRemainderInput = { event_id: string, participant_id: string, 
+/**
+ * Empty: the whole rest.
+ */
+amount: Amount | null, 
+/**
+ * `reassign` only: who takes it; empty: everybody else.
+ */
+to: Array<string>, };
+
+type SharedSettlementRef = { event_id: string, settlement_id: string, };
+
+type SharedShareTextInput = { event_id: string, 
+/**
+ * `ru` or `en`; empty: `ru`.
+ */
+locale: string, };
+
+/**
+ * A payment or debt transfer of the vault that an event made or adopted.
+ */
+type SharedTxLink = { tx_id: string, event_title: string, link: SharedLink, };
 
 /**
  * Whether the «+ Операция» key can be registered by the app, and the command
@@ -6146,6 +6575,14 @@ manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_
  */
 crypto: boolean | null, };
 
+type UpdateSharedEventInput = { id: string, event: SharedEventDraft, };
+
+type UpdateSharedItemInput = { event_id: string, item_id: string, item: SharedItemDraft, };
+
+type UpdateSharedParticipantInput = { event_id: string, participant_id: string, participant: SharedParticipantDraft, };
+
+type UpdateSharedPurchaseInput = { event_id: string, purchase_id: string, purchase: SharedPurchaseDraft, };
+
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**
  * `None` keeps the current value.
@@ -6517,7 +6954,11 @@ deposit_rate_sources: Array<DepositRateSource>,
 /**
  * Files and links of operations and goals (Full-New-Attach).
  */
-attachments: Array<Attachment>, };
+attachments: Array<Attachment>, 
+/**
+ * Shared events: things bought together and split between people.
+ */
+shared_events: Array<SharedEvent>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, 
 /**

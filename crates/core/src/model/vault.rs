@@ -695,6 +695,9 @@ pub struct VaultDoc {
     #[serde(default)]
     #[ts(skip)]
     pub attachment_keys: Vec<crate::model::attachment::AttachmentKey>,
+    /// Shared events: things bought together and split between people.
+    #[serde(default)]
+    pub shared_events: Vec<crate::model::shared_event::SharedEvent>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -758,6 +761,7 @@ impl Default for VaultDoc {
             deposit_rate_sources: Vec::new(),
             attachments: Vec::new(),
             attachment_keys: Vec::new(),
+            shared_events: Vec::new(),
             sync: crate::sync::SyncState::default(),
         }
     }

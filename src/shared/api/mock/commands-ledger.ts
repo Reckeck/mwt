@@ -3,8 +3,9 @@
 import { assetKey } from '@/shared/lib/asset-ref'
 import { isFiatCode } from '@/shared/lib/format'
 import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
-import { mockContactBalances, mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
+import { mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
 import { mockDebtTerms } from './catalog'
+import { contactBalancesWithEvents } from './shared-events/view'
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -107,7 +108,7 @@ export const contactsCommands: MockCommands = {
     return resolve(terms)
   },
   get_contact_balances: (_call) => {
-    return resolve(mockContactBalances(mockTransactions))
+    return resolve(contactBalancesWithEvents(mockTransactions))
   },
   get_net_worth: (_call) => {
     return resolve(mockNetWorth())

@@ -136,6 +136,7 @@ pub static COLLECTIONS: &[Collection] = &[
     records("manual_prices", &["asset_key"]),
     records("envelopes", ID),
     records("debt_terms", ID),
+    records("shared_events", ID),
     records("key_rates", &["date"]),
     log(
         "notification_log",

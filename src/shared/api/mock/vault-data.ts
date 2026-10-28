@@ -5,6 +5,7 @@ import { mockDebtTerms, mockEnvelopes } from './catalog'
 import { mockStores, mockTransactions } from './demo'
 import { fund } from './planning/emergency'
 import { mockPropertyLinks } from './property-links'
+import { mockSharedEvents } from './shared-events/state'
 
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
 export const mockStatus: { value: VaultStatus } = {
@@ -127,6 +128,7 @@ export function mockVaultDoc(): VaultDoc {
     manual_prices: [],
     envelopes: mockEnvelopes,
     debt_terms: mockDebtTerms,
+    shared_events: mockSharedEvents,
     key_rates: [],
     notification_log: [],
     workflows: [],

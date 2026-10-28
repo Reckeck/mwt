@@ -89,7 +89,7 @@ impl UnlockedVault {
         named_by_tx || named_by_store
     }
 
-    fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
+    pub(super) fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
         accounts
             .into_iter()
             .map(|mut account| {
@@ -266,8 +266,20 @@ impl UnlockedVault {
         self.contact_balances_until(i64::MAX)
     }
 
-    /// Personal debts from debt transfers made up to `secs`.
+    /// Personal debts from debt transfers made up to `secs`. Looking at the
+    /// present (`i64::MAX`) the open shared events add their balances, and the
+    /// transfers they made are left out: the event already counts them.
     pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance> {
+        let live = secs == i64::MAX;
+        // The transfers a shared event made are already in the event's balance.
+        let in_events: std::collections::HashSet<String> = if live {
+            self.shared_tx_links()
+                .into_iter()
+                .map(|link| link.tx_id)
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
         let mut balances: BTreeMap<(String, String), ContactBalance> = BTreeMap::new();
         for tx in self
             .doc
@@ -281,6 +293,9 @@ impl UnlockedVault {
             let Some(effect) = inner.debt else {
                 continue;
             };
+            if in_events.contains(&inner.meta.id) {
+                continue;
+            }
             let Some(contact_id) = inner.from.contact_id().or(inner.to.contact_id()) else {
                 continue;
             };
@@ -296,6 +311,24 @@ impl UnlockedVault {
                 DebtEffect::Collect => entry.receivable -= inner.amount,
                 DebtEffect::Borrow => entry.payable += inner.amount,
                 DebtEffect::Repay => entry.payable -= inner.amount,
+            }
+        }
+        if live {
+            for debt in self.shared_debts() {
+                let code = debt.currency.to_uppercase();
+                let asset = AssetRef::fiat(&code, &code);
+                let entry = balances
+                    .entry((debt.contact_id.clone(), asset.key()))
+                    .or_insert_with(|| ContactBalance {
+                        contact_id: debt.contact_id.clone(),
+                        asset,
+                        ..ContactBalance::default()
+                    });
+                if debt.amount.is_positive() {
+                    entry.receivable += debt.amount;
+                } else {
+                    entry.payable += -debt.amount;
+                }
             }
         }
         balances
