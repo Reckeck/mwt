@@ -9,6 +9,7 @@ import { stage6 } from './sets-stage6.mjs'
 import { samecur } from './sets-samecur.mjs'
 import { subaccounts } from './sets-subaccounts.mjs'
 import { homeChanges } from './sets-home-changes.mjs'
+import { login } from './sets-recents.mjs'
 import { GP } from './steps.mjs'
 
 
@@ -708,4 +709,14 @@ const batch3 = BATCH3_NAMES.flatMap((name) => {
   return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
 })
 
-export const SETS = { salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3 }
+/** Task 216 · the report: the key screens next to their frames in templates/MWT-canvas.figcraft, year scenario, no canvas pairs. */
+const REPORT_NAMES = [
+  'home', 'spending', 'where', 'plan', 'ops', 'opform-pay', 'ops-calendar', 'tx-card', 'stores', 'table-open', 'wallet-exchange',
+  'auto-mine', 'auto-salary', 'set-money', 'login-recents', 'palette-empty',
+]
+const report = REPORT_NAMES.flatMap((name) => {
+  const found = Object.values({ ...ALL_SETS, login }).flat().find((shot) => shot.name === name && (shot.scenarios ?? ['year']).includes('year'))
+  return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
+})
+
+export const SETS = { salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
