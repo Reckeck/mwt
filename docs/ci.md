@@ -167,8 +167,18 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
 
 ## Платформы — особенности
 
+- **Иконки.** Исходники — SVG в `crates/app/icons/src/`; `mise run icons`
+  (`scripts/icons.sh`, нужны `rsvg-convert` и `magick`) собирает PNG/ICO/ICNS
+  двух каналов в `crates/app/icons/prod/` и `dev/` и `public/favicon.svg`;
+  PNG коммитятся, CI ничего не рисует. `tauri.conf.json` указывает на `dev/`,
+  оверлей `tauri-config.sh` / `build-windows.ps1` — на папку канала
+  (`app_icons` в `channel.sh`). 32 px и меньше — из `*-small.svg` (без задних
+  рёбер куба), у dev — оранжевая полоса DEV.
+
 - **Android.** Gradle-проект (`crates/app/gen/android`) генерируется в CI
-  (`tauri android init`) и не коммитится; иконки — `tauri icon`.
+  (`tauri android init`) и не коммитится; адаптивная иконка (фон, передний
+  план, монохромный слой) — `tauri icon` по манифесту
+  `crates/app/icons/<канал>/android/manifest.json`.
   Идентификатор — `mwt.app` в релизе, `dev.mwt.app` в dev
   (`crates/app/tauri.android.conf.json`), десктопный — `mwt.desktop` /
   `dev.mwt.desktop` (от него зависит путь к vault); см. «Каналы».

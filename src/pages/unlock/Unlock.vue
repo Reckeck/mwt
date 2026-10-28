@@ -9,6 +9,7 @@ import { SandboxOpenButton } from '@/features/sandbox-open'
 import { VaultCreateDialog } from '@/features/vault-create'
 import { ReceiveVaultDialog } from '@/features/vault-transfer'
 import { VaultUnlockDialog } from '@/features/vault-unlock'
+import { BrandMark } from '@/shared/ui/brand-mark'
 import { Button } from '@/shared/ui/button'
 import { useVaultStore } from '@/shared/store/vault'
 import { useTour } from '@/shared/lib/tour'
@@ -51,9 +52,7 @@ function onReceived(path: string) {
          carries its own header — otherwise the settings would be unreachable
          before a vault is open. -->
     <header class="box-content flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 pt-safe md:px-6">
-      <div class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-        M
-      </div>
+      <BrandMark class="size-7" />
       <span class="truncate text-sm font-semibold">{{ t('app.title') }}</span>
       <Button
         variant="ghost"

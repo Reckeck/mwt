@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from '@/shared/ui/sidebar'
 import { hotkeyLabel } from '@/shared/lib/hotkeys'
+import { BrandMark } from '@/shared/ui/brand-mark'
 import { useVaultStore } from '@/shared/store/vault'
 
 import { NAV_ITEMS, type NavItem } from '../../app-shell.constants'
@@ -62,12 +63,7 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
         <SidebarMenuItem>
           <SidebarMenuButton as-child size="lg" :tooltip="vaultPath || t('app.title')">
             <RouterLink :to="{ name: 'dashboard' }">
-              <div
-                class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground"
-                aria-hidden="true"
-              >
-                M
-              </div>
+              <BrandMark class="size-8" />
               <div class="grid flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{{ t('app.title') }}</span>
                 <span class="truncate text-xs text-muted-foreground" :title="vaultPath">{{ vaultFile }}</span>

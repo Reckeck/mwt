@@ -47,7 +47,7 @@ done
 for channel in dev prod; do
   (
     RELEASE_CHANNEL="$channel" source scripts/ci/channel.sh
-    for value in "'$app_id'" "'$app_name'" "'$app_bin'"; do
+    for value in "'$app_id'" "'$app_name'" "'$app_bin'" "'$app_icons'"; do
       grep -qF "$value" scripts/ci/build-windows.ps1 ||
         { echo "scripts/ci/build-windows.ps1 lacks $value of channel $channel (channel.sh)" >&2; exit 1; }
     done
@@ -56,6 +56,8 @@ for channel in dev prod; do
       grep -qF "\"${pair%%:*}\": \"${pair#*:}\"" crates/app/tauri.conf.json ||
         { echo "crates/app/tauri.conf.json: ${pair%%:*} is not the dev channel's ${pair#*:} (channel.sh)" >&2; exit 1; }
     done
+    grep -qF "\"$app_icons/icon.png\"" crates/app/tauri.conf.json ||
+      { echo "crates/app/tauri.conf.json: bundle.icon is not the dev channel's $app_icons (channel.sh)" >&2; exit 1; }
     grep -qF "\"identifier\": \"$app_android_id\"" crates/app/tauri.android.conf.json ||
       { echo "crates/app/tauri.android.conf.json: identifier is not $app_android_id (channel.sh)" >&2; exit 1; }
   ) || failed=1
