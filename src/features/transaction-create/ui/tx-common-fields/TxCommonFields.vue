@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { TxCategorySelect } from '../tx-category-select'
+import { ContactPicker } from '@/entities/contact'
 import { Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
@@ -24,7 +25,7 @@ import { useTxForm } from '../../model/use-tx-form'
  * under «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, contacts, properties, isProperty } =
+const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, properties, isProperty } =
   useTxForm()
 
 // The network fills in by itself from the asset, so only what the user set opens the section.
@@ -115,12 +116,8 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
     </div>
     <div class="grid gap-1.5">
       <Label for="tx-contact">{{ t('tx.field.contact') }}</Label>
-      <Select id="tx-contact" v-model="form.contactId">
-        <SelectItem value="">{{ t('tx.side.unspecified') }}</SelectItem>
-        <SelectItem v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)" :key="contact.id" :value="contact.id">
-          {{ contact.name }}
-        </SelectItem>
-      </Select>
+      <ContactPicker id="tx-contact" v-model="form.contactId" :empty-label="t('tx.side.unspecified')" />
+      <p class="text-xs text-muted-foreground">{{ t('contactPicker.hint') }}</p>
     </div>
   </AdvancedFields>
 </template>

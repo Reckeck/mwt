@@ -6119,5 +6119,20 @@
   "filter.emptyFilter": "Filter “{filters}”",
   "filter.resetBoth": "Reset search and filter",
   "filter.resetSearch": "Reset search",
-  "filter.resetFilter": "Reset filter"
+  "filter.resetFilter": "Reset filter",
+  "contactPicker.placeholder": "Start typing a name…",
+  "contactPicker.empty": "No matching contacts",
+  "contactPicker.create": "Create «{name}»",
+  "contactPicker.hint": "Not in the list? Type a name — the contact is created on the spot, requisites can wait.",
+  "contacts.createdNamed": "Contact «{name}» created",
+  "contacts.quick.badge": "quick",
+  "contacts.quick.filter": "To fill in {count}",
+  "contacts.quick.noAccounts": "This contact was made by name: no requisites yet. A card, phone or address helps when you transfer.",
+  "contacts.quick.addAccounts": "Add requisites",
+  "tour.directory.quick.title": "To fill in",
+  "tour.directory.quick.body": "Contacts created by name right in an operation form are marked «quick». The filter keeps only them — open one and add its requisites.",
+  "whatsNew.quickContacts.title": "Quick contacts",
+  "whatsNew.quickContacts.create": "Type a name in a contact field: when nobody matches, «Create «Petya»» opens the contact form over the operation. Once saved the contact is already picked and what you entered in the operation stays. Same in transfers, wallets and programmes.",
+  "whatsNew.quickContacts.fillIn": "Contacts without requisites are marked «quick». The «To fill in» filter and the counter on the «Contacts and debts» tab show who still lacks a card or an address.",
+  "contacts.requisitesLater": "Requisites can wait: add a card, phone or address later in the contact's card."
 }

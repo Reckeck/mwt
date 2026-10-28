@@ -5,6 +5,8 @@ export interface ContactArchiveProps {
 export interface ContactEditDialogProps {
   /** The contact to change; none creates a new one. */
   contact?: Contact | null
+  /** A name to start a new contact from (what was typed in a picker). */
+  initialName?: string
 }
 
 export interface ContactAccountRowProps {

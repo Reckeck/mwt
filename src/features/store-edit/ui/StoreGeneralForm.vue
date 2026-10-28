@@ -2,11 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { ContactPicker } from '@/entities/contact'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
@@ -15,7 +15,6 @@ import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
 import StoreEmergencySwitch from './StoreEmergencySwitch.vue'
 import type { StoreFormProps } from '../store-edit.types'
-import { useContacts } from '@/shared/api/queries'
 
 const props = defineProps<StoreFormProps>()
 const { t } = useI18n()
@@ -35,7 +34,6 @@ const isRoot = computed(() => !props.store.parent_id)
 /** A loan's purpose is fixed: it is never everyday money. */
 const purposeEditable = computed(() => props.store.kind !== 'liability')
 
-const contacts = useContacts(isRoot)
 
 watch(
   () => props.store,
@@ -109,16 +107,7 @@ function submit() {
 
     <div v-if="isRoot" class="grid gap-1.5">
       <Label for="store-contact">{{ t('stores.contact') }}</Label>
-      <Select id="store-contact" v-model="contactId">
-        <SelectItem value="">{{ t('stores.contactNone') }}</SelectItem>
-        <SelectItem
-          v-for="contact in (contacts.data.value ?? []).filter((entry) => !entry.archived)"
-          :key="contact.id"
-          :value="contact.id"
-        >
-          {{ contact.name }}
-        </SelectItem>
-      </Select>
+      <ContactPicker id="store-contact" v-model="contactId" :empty-label="t('stores.contactNone')" />
     </div>
 
     <div class="grid gap-1.5">
