@@ -1,7 +1,9 @@
 // A minimal Chrome DevTools Protocol driver: headless Chromium, one page,
 // evaluate, mouse, viewport and media emulation. No dependencies.
+// `launch` starts a browser and drives it (check-layout, check-links); the vitest e2e
+// project starts it once in globalSetup (`spawnBrowser`) and every test file `attach`es.
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,7 +17,8 @@ export function findChromium() {
   return CANDIDATES.find((path) => existsSync(path)) ?? null
 }
 
-export async function launch(binary, port) {
+/** Start headless Chromium with remote debugging on `port`; resolves once its page target answers. */
+export async function spawnBrowser(binary, port) {
   const profile = mkdtempSync(join(tmpdir(), 'check-layout-'))
   const browser = spawn(
     binary,
@@ -42,9 +45,28 @@ export async function launch(binary, port) {
       await sleep(150)
     }
   }
-  if (!targets) throw new Error('chromium did not start')
-  const page = targets.find((target) => target.type === 'page')
-  const ws = new WebSocket(page.webSocketDebuggerUrl)
+  if (!targets) {
+    browser.kill()
+    throw new Error('chromium did not start')
+  }
+  const stop = async () => {
+    const exited = new Promise((done) => browser.once('exit', done))
+    browser.kill()
+    await Promise.race([exited, sleep(3000)])
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    } catch {
+      // A leftover temp profile is harmless.
+    }
+  }
+  return { stop }
+}
+
+/** Connect to the first page of a running browser. `close()` only drops the connection. */
+export async function attach(port) {
+  const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
+  const target = targets.find((item) => item.type === 'page')
+  const ws = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((done, fail) => {
     ws.addEventListener('open', done)
     ws.addEventListener('error', fail)
@@ -71,7 +93,7 @@ export async function launch(binary, port) {
   await send('Page.enable')
   await send('Runtime.enable')
 
-  const page$ = {
+  return {
     send,
     sleep,
     /** Run `code` (an async function body) in the page and return its JSON value; throws on a page error. */
@@ -100,20 +122,21 @@ export async function launch(binary, port) {
     },
     async shot(path) {
       const res = await send('Page.captureScreenshot', { format: 'png' })
-      const { writeFileSync } = await import('node:fs')
       writeFileSync(path, Buffer.from(res.result.data, 'base64'))
     },
     async close() {
       ws.close()
-      const exited = new Promise((done) => browser.once('exit', done))
-      browser.kill()
-      await Promise.race([exited, sleep(3000)])
-      try {
-        rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
-      } catch {
-        // A leftover temp profile is harmless.
-      }
     },
   }
-  return page$
+}
+
+export async function launch(binary, port) {
+  const browser = await spawnBrowser(binary, port)
+  const page = await attach(port)
+  const detach = page.close
+  page.close = async () => {
+    await detach()
+    await browser.stop()
+  }
+  return page
 }

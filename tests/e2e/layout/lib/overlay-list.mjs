@@ -107,7 +107,7 @@ export const OVERLAYS = [
   { id: 'store-menu', route: '/stores', open: [{ click: '[aria-label^="Действия с"]' }], layer: '[role="menu"]' },
   { id: 'tx-edit', route: '/transactions', open: [{ context: '[data-tx-row]' }, { click: '[role="menuitem"]', text: 'Изменить' }], layer: overlay('tx-edit') },
 
-  { id: 'contact-menu', route: '/transactions/contacts', open: [{ context: '[data-tour="contact-groups"] li button' }], layer: '[data-context-menu]' },
+  { id: 'contact-menu', route: '/transactions/contacts', open: [{ context: '[data-tour="contact-groups"] button' }], layer: '[data-context-menu]' },
 
   // 3.5 Money
   { id: 'category-sheet', route: '/money', phone: true, open: [{ query: { category: 'groceries' } }], layer: overlay('category-sheet'), keys: ['category'] },

@@ -11,7 +11,7 @@
 // `desktop` / `phone` steps run only there (`{ desktop: [...] }`, `{ phone: [...] }`).
 import { pathToFileURL } from 'node:url'
 
-import { login, mounted, setTheme } from '../check-layout/scenario.mjs'
+import { login, mounted, setTheme } from '../../tests/e2e/layout/lib/scenario.mjs'
 
 /** Page code: wait for the app to mount (a Vite reload may be under way), then `gp` is its global properties. */
 export const GP = `

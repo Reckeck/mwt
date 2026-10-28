@@ -13,8 +13,8 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { findChromium, launch } from './check-layout/cdp.mjs'
-import { login, mounted, setTheme } from './check-layout/scenario.mjs'
+import { findChromium, launch } from '../tests/e2e/harness/cdp.mjs'
+import { login, mounted, setTheme } from '../tests/e2e/layout/lib/scenario.mjs'
 import { freePort, startVite } from './shots/serve.mjs'
 import { canvasShot, ensureReady, freshStart, pairShot, runSteps, settle } from './shots/steps.mjs'
 import { SETS } from './shots/sets.mjs'

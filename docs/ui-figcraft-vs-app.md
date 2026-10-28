@@ -234,7 +234,7 @@
 
 ## Живая проверка слоёв (Esc, назад, фокус, край экрана)
 
-Скрипт `walk/overlays-live.mjs` (вне репозитория) берёт список слоёв из `scripts/check-layout/overlay-list.mjs` (56 записей из `docs/ui-overlays.md`), открывает каждый шагами списка, ждёт, закрывает: на ПК Esc, на телефоне `closeTopLayer()` (то, что делает «Назад» на Android), затем отдельно системный `history.back()`. Мок `year`, 1280×800 и 390×844.
+Скрипт `walk/overlays-live.mjs` (вне репозитория) берёт список слоёв из `tests/e2e/layout/lib/overlay-list.mjs` (56 записей из `docs/ui-overlays.md`), открывает каждый шагами списка, ждёт, закрывает: на ПК Esc, на телефоне `closeTopLayer()` (то, что делает «Назад» на Android), затем отдельно системный `history.back()`. Мок `year`, 1280×800 и 390×844.
 
 - Телефон: открыто 21, закрылись Back 21, обрезанных нет. Остальные 14 не открылись: часть шагов списка рассчитана на ПК (нет `data-tour="stores-create"`, `wallet-gear`, `plan-goals`, `calc-compare`, `bonuses-add`, `workflow-vars-open` на телефоне — на телефоне эти кнопки живут в другом месте), часть упала после перезагрузки страницы Vite (`Cannot read properties of undefined (reading 'config')`); это замечания к скрипту, не к приложению.
 - `history.back()` на телефоне: слой не закрывается у `quick-add`, `palette`, `converter`, `whats-new`, `bottom-more`, `money-card`, `sandbox-reset`, `sync-pairing`, `sync-plan`, `enrichment-consent` (адрес не меняется или уходит на предыдущую страницу, слой остаётся); у `settings` адрес меняется `?settings=app` → `?settings=list`. Класс: недоработка (в браузерной сборке системное «назад» не закрывает слой; в Tauri/Android закрывает `useBackButton`, `docs/ui-overlays.md` §1).

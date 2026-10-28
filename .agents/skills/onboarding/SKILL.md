@@ -94,6 +94,6 @@ wallet: [
 mise run check-onboarding   # экран без тура, шаг без элемента, нет текста — ошибка
 ```
 
-Скрипт статический (`scripts/check-onboarding.mjs`): читает маршруты, `TOURS`,
+Скрипт статический (`tests/checks/onboarding.check.ts`): читает маршруты, `TOURS`,
 `WHATS_NEW`, `data-tour` в `.vue` и оба локаля. `data-tour`, не попавший ни в
 один тур, — только предупреждение.

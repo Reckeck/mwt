@@ -129,7 +129,7 @@ secret_detection:
   rules:
     - *full
     - changes:
-        paths: [src/**/*, index.html, package.json, pnpm-lock.yaml, "*.ts", "*.json", scripts/*.mjs, scripts/*.json, scripts/check-ui/**/*, scripts/check-layout/**/*, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
+        paths: [src/**/*, index.html, package.json, pnpm-lock.yaml, "*.ts", "*.json", scripts/*.mjs, scripts/*.json, tests/**/*, .gitlab-ci.yml, scripts/ci/**/*, mise.toml]
         compare_to: refs/heads/development
 
 .ci-rules:
@@ -227,7 +227,9 @@ frontend:check:
     - mise run lint
     - mise run typecheck
     - mise run test-frontend
+    - mise run test-e2e
     - mise run check-onboarding
+    - mise run check-routes
     - mise run check-forms
     - mise run check-ui
     - mise run check-fsd
@@ -235,7 +237,7 @@ frontend:check:
   artifacts:
     when: on_failure
     expire_in: 1 week
-    paths: [.cache/check-layout/]
+    paths: [.cache/check-layout/, .cache/e2e/]
 
 ci:lint:
   extends: [.node, .ci-rules]

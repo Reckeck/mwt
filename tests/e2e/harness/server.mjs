@@ -1,8 +1,8 @@
-// Shared by the browser gates (check-layout, check-links): a free port and a Vite dev server on it.
+// Shared by the browser gates (e2e, check-layout, check-links): a free port and a Vite dev server on it.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 
-const root = new URL('../..', import.meta.url).pathname
+const root = new URL('../../..', import.meta.url).pathname
 
 export const freePort = () =>
   new Promise((done) => {

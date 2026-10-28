@@ -23,6 +23,7 @@
 | `mise run format` | `pnpm exec biome check --write .` — автофикс Biome |
 | `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
 | `mise run gen-types` | пересоздать `src/shared/api/ipc.gen.d.ts` из Rust (ts-rs) |
+| `mise run test-e2e` | `vitest run --project e2e`: сквозные сценарии (`tests/e2e/flows/*.e2e.ts`) — приложение на моке в headless Chromium; Vite и браузер поднимаются один раз (`tests/e2e/harness/`); снимок упавшего теста — `.cache/e2e/` |
 | `mise run check-onboarding` | у каждого экрана есть тур, тексты обучения и «Что нового» есть в обоих локалях (правило 12) |
 | `mise run check-ui` | общие компоненты вместо своей разметки, токены вместо сырых цветов, `<Money>` вместо строки из `formatMoney` в шаблоне и в lib/model слайсов (`money-text`, `money-lib`), `meta` с исходом у каждой мутации, лимит размера файлов (правило 15); `dvh` вместо `vh`, `*-safe` у `fixed` по краю, широкие ширины только с префиксом, раскрытие по наведению только с `pointer-fine:` (правило 16); слушатели без очистки, монтирование по наведению, подмена кнопок, запросы без `placeholderData`, `RouterView :key`, `backdrop-blur`, фиксированные треки сетки, шкалы `z-*`/размеров, `--container-*` в `@theme` (правило 17) |
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
@@ -31,7 +32,7 @@
 | `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах») |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check-layout` | приложение на мок-бэкенде в headless Chromium на 1920…720 и 390/360, тёмная и светлая тема: нет переполнения и прокрутки вбок, наведение и загрузка ничего не сдвигают, диалог открывается на месте, слушатели не копятся, «Назад» закрывает слой, цели касания ≥ 40 px, соседние блоки одного контейнера не налезают друг на друга (правило 17); `--quick` — 1280 и 390, `--report` — без падения; скриншоты в `.cache/check-layout/` |
-| `mise run check` | lint + typecheck + test-frontend + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
+| `mise run check` | lint + typecheck + test-frontend + test-e2e + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
