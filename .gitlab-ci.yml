@@ -226,6 +226,7 @@ frontend:check:
   script:
     - mise run lint
     - mise run typecheck
+    - mise run test-frontend
     - mise run check-onboarding
     - mise run check-forms
     - mise run check-ui

@@ -18,6 +18,7 @@
 |---|---|
 | `mise run test` | `cargo test --workspace` |
 | `mise run typecheck` | `vue-tsc --noEmit` |
+| `mise run test-frontend` | `vitest run --project unit`: юнит-тесты фронта (`src/**/*.test.ts`, happy-dom, `call()`/`onEvent` и i18n замоканы в `src/test/setup.ts`) |
 | `mise run lint` | `pnpm exec biome check .` (линт + формат, Biome) |
 | `mise run format` | `pnpm exec biome check --write .` — автофикс Biome |
 | `mise run clippy` | `cargo clippy --workspace --all-targets -- -D warnings` |
@@ -30,7 +31,7 @@
 | `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах») |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check-layout` | приложение на мок-бэкенде в headless Chromium на 1920…720 и 390/360, тёмная и светлая тема: нет переполнения и прокрутки вбок, наведение и загрузка ничего не сдвигают, диалог открывается на месте, слушатели не копятся, «Назад» закрывает слой, цели касания ≥ 40 px, соседние блоки одного контейнера не налезают друг на друга (правило 17); `--quick` — 1280 и 390, `--report` — без падения; скриншоты в `.cache/check-layout/` |
-| `mise run check` | lint + typecheck + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
+| `mise run check` | lint + typecheck + test-frontend + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
@@ -362,7 +363,7 @@ mise run check-platforms   # linux, windows (cargo-xwin), android (NDK или о
 
 | Изменения | Команда |
 |---|---|
-| `src/**` (фронтенд) | `mise run lint && mise run typecheck` |
+| `src/**` (фронтенд) | `mise run lint && mise run typecheck && mise run test-frontend` |
 | `crates/core/**`, `crates/app/**` | `mise run test && mise run clippy` |
 | DTO, модели, `ipc_contract.rs` | `mise run test && mise run gen-types` — обязательно диффай `src/shared/api/ipc.gen.d.ts`, он должен измениться |
 | финальный, перед коммитом | `mise run check` |
