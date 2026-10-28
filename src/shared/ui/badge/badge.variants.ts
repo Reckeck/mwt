@@ -11,6 +11,8 @@ export const badgeVariants = cva(
         outline: 'text-foreground',
         /** A figure to read with care (an old rate, a guess): the warning colour, its own border. */
         warning: 'border-current font-medium text-warning',
+        /** A settled state (paid, returned): the success colour, its own border. */
+        success: 'border-current font-medium text-success',
       },
     },
     defaultVariants: { variant: 'default' },

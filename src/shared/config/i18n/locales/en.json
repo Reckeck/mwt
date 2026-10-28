@@ -2370,6 +2370,8 @@
   "ui.pick.date": "Pick a date",
   "ui.pick.datetime": "Pick a date and time",
   "ui.pick.month": "Pick a month",
+  "ui.pick.dateRange": "Pick dates",
+  "ui.copy": "Copy",
   "ui.time": "Time",
   "ui.timePlaceholder": "HH:MM",
   "ui.month": "Month",

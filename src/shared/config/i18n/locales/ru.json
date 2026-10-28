@@ -2370,6 +2370,8 @@
   "ui.pick.date": "Выберите дату",
   "ui.pick.datetime": "Выберите дату и время",
   "ui.pick.month": "Выберите месяц",
+  "ui.pick.dateRange": "Выберите даты",
+  "ui.copy": "Копировать",
   "ui.time": "Время",
   "ui.timePlaceholder": "ЧЧ:ММ",
   "ui.month": "Месяц",
