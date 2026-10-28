@@ -53,7 +53,7 @@ description: >
 Критерии приёмки (все проверяемые):
 - [ ] ...
 - [ ] быстрые проверки зелёные: pnpm biome check --write src scripts;
-      pnpm vue-tsc --noEmit; node scripts/check-ui.mjs; node scripts/check-fsd.mjs
+      pnpm vue-tsc --noEmit; mise run check-ui; mise run check-fsd
       (+ cargo test -p trade-core <модуль>, если менялся core)
 
 Нельзя: коммитить (jj describe/new/commit), git commit/add/stash, трогать

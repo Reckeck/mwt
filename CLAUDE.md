@@ -12,7 +12,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Тесты Rust — инлайн-модули `#[cfg(test)]` внутри `crates/core/src/**` (отдельной
 папки `tests/` нет). Тесты фронта — vitest, проект `unit`: `*.test.ts` рядом с кодом, `mise run test-frontend`
 (`pnpm exec vitest run --project unit <часть имени файла>` — точечно). `call()`/`onEvent` и
-i18n (реальная ru-локаль) замоканы в `src/test/setup.ts`; остальная проверка фронта = Biome + vue-tsc.
+i18n (реальная ru-локаль) замоканы в `src/test/setup.ts`. Сквозные сценарии — проект `e2e`
+(`tests/e2e/flows/*.e2e.ts`, `mise run test-e2e`, фикстура `app` из `tests/e2e/harness/app.ts`: `unlock()`,
+`at(route, {width, theme})`, `waitFor`, `screenshot`; упавший тест оставляет снимок в `.cache/e2e/`).
+Статические проверки (onboarding, routes, forms, ui, fsd) — проект `checks`, `tests/checks/*.check.ts`
+(правило = `describe`/`it`, нарушение = упавший тест со строкой `error: файл:строка: …`); правила ui —
+`tests/checks/rules/ui/`. Запуск `mise run check-<имя>` (`-- --update` у ui и fsd переписывает базу
+`scripts/check-*.baseline.json`) или всем набором `pnpm exec vitest run --project checks`.
+`mise run check-layout` и `check-links` — проект `layout` (`tests/e2e/layout/`, `tests/e2e/links/`, зонды в
+`lib/`), флаги `--quick`, `--report`, `--update`, `--overlays=id` через `scripts/run-browser-check.mjs`;
+запускай их отдельными процессами (касание в layout необратимо для указателя в том же браузере).
 
 ```bash
 cargo test -p trade-core                      # только ядро
@@ -67,7 +76,7 @@ mise артефакты окажутся в `target/`, и сборка пойд�
 
 Правило 12 из `AGENTS.md`: видимая пользователю фича выходит с туром,
 подсказками и пунктом «Что нового». Перед правкой UI загружай скилл
-`onboarding`; гейт проверяет это скриптом `scripts/check-onboarding.mjs`.
+`onboarding`; гейт проверяет это проектом `checks` (`tests/checks/onboarding.check.ts`, `mise run check-onboarding`).
 
 ## Интерфейс: общие компоненты и исход каждого действия
 
@@ -75,8 +84,7 @@ mise артефакты окажутся в `target/`, и сборка пойд�
 (каталог компонентов, справочник `references/`). Уведомления показывает
 `MutationCache` в `src/app/providers/query` по `meta` мутации — `toast` в
 компоненте не вызывается. `mise run check-ui` держит базу старых долгов
-(`scripts/check-ui.baseline.json`): исправил — `node scripts/check-ui.mjs
---update`.
+(`scripts/check-ui.baseline.json`): исправил — `mise run check-ui -- --update`.
 
 ## Рабочая копия в Claude Code
 

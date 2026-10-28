@@ -1,5 +1,5 @@
 //! Names of the UI routes the backend links to (notices, the tray). The UI
-//! router owns the list; `scripts/check-routes.mjs` checks each name here
+//! router owns the list; `tests/checks/routes.check.ts` checks each name here
 //! against `src/app/providers/router`, so a renamed route fails `mise run check`.
 
 macro_rules! routes {

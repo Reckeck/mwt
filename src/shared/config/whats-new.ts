@@ -6,7 +6,7 @@
  * `whatsNew.<id>.<point>` in both locales.
  */
 import type { WhatsNewEntry } from './whats-new.types'
-// The extension lets scripts/check-onboarding.mjs load this file with Node's type stripping.
+// The extension lets tests/checks/onboarding.check.ts load this file.
 import { WHATS_NEW_ARCHIVE } from './whats-new.archive.ts'
 import { WHATS_NEW_AUTUMN } from './whats-new.autumn.ts'
 

@@ -1,4 +1,4 @@
-// FSD rules for `mise run check-fsd` (scripts/check-fsd.mjs keeps the baseline).
+// FSD rules for `mise run check-fsd` (tests/checks/fsd.check.ts keeps the baseline).
 import fsd from '@feature-sliced/steiger-plugin'
 import { defineConfig } from 'steiger'
 

@@ -10,6 +10,7 @@
     "includes": [
       "src/**/*.ts",
       "src/**/*.vue",
+      "tests/**/*.ts",
       "src/i18n/locales/*.json",
       "*.ts",
       "*.json",
