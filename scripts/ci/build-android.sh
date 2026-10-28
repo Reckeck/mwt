@@ -16,13 +16,15 @@ icons="$(mktemp -d)" && chmod 755 "$icons"
 cp -a crates/app/icons/. "$icons/"
 trap 'rm -rf crates/app/icons && mv "$icons" crates/app/icons' EXIT
 
+source scripts/ci/channel.sh
 config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh --android)"
 # The Gradle project is generated, not committed (crates/app/gen/android).
 # Its Java package is the channel's identifier: a project left by the other
 # channel would build both, so it starts over.
 rm -rf crates/app/gen/android
 pnpm tauri android init --ci --config "$config"
-pnpm tauri icon crates/app/icons/icon.png
+# The adaptive icon of the channel: background, foreground, monochrome.
+pnpm tauri icon "crates/app/$app_icons/android/manifest.json"
 # shellcheck disable=SC2086  # a space-separated list of ABIs
 pnpm tauri android build --ci --apk --aab --target ${ANDROID_TARGETS:-aarch64 armv7 x86_64} --config "$config"
 scripts/ci/sign-android.sh "$version" "$out"

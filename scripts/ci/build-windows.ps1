@@ -90,11 +90,12 @@ $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
 $tauriConfig = Join-Path $cache 'tauri-ci.json'
 # The channel's names, as scripts/ci/channel.sh has them.
 if ($env:RELEASE_CHANNEL -eq 'prod') {
-  $appId = 'mwt.desktop'; $appName = 'Multi Wallet Tracker'; $appBin = 'multi-wallet-tracker'
+  $appId = 'mwt.desktop'; $appName = 'Multi Wallet Tracker'; $appBin = 'multi-wallet-tracker'; $appIcons = 'icons/prod'
 } else {
-  $appId = 'dev.mwt.desktop'; $appName = 'Multi Wallet Tracker Dev'; $appBin = 'multi-wallet-tracker-dev'
+  $appId = 'dev.mwt.desktop'; $appName = 'Multi Wallet Tracker Dev'; $appBin = 'multi-wallet-tracker-dev'; $appIcons = 'icons/dev'
 }
-$overlay = '{"version":"' + $version + '","identifier":"' + $appId + '","productName":"' + $appName + '","mainBinaryName":"' + $appBin + '","bundle":{"android":{"versionCode":' + $versionCode + '}}}'
+$icons = (@('32x32.png', '128x128.png', '128x128@2x.png', 'icon.icns', 'icon.ico', 'icon.png') | ForEach-Object { '"' + $appIcons + '/' + $_ + '"' }) -join ','
+$overlay = '{"version":"' + $version + '","identifier":"' + $appId + '","productName":"' + $appName + '","mainBinaryName":"' + $appBin + '","bundle":{"icon":[' + $icons + '],"android":{"versionCode":' + $versionCode + '}}}'
 [System.IO.File]::WriteAllText($tauriConfig, $overlay)
 # Quoted: a bare a,b in a PowerShell command line is an array, and tauri
 # would get 'nsis msi'.

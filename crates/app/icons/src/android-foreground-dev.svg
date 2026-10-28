@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- Android adaptive foreground, dev channel: smaller mark above the band. -->
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B3FD8"/><stop offset="1" stop-color="#19C3B3"/></linearGradient>
+<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/><stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+<filter id="lift" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0B0F3D" flood-opacity="0.3"/></filter>
+<clipPath id="plate"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+</defs>
+<g transform="translate(512 452) scale(0.8) translate(-512 -496)"><path d="M512 496 L287 626 M512 496 L737 626 M512 496 L512 236" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M512 631 L620 694 L512 756 L404 694Z" fill="#1E1B4B" fill-opacity="0.28"/><g filter="url(#lift)"><path d="M512 371 L620 434 L512 496 L404 434Z" fill="#FFE08A"/><path d="M404 434 L512 496 L512 621 L404 558Z" fill="#F59E0B"/><path d="M512 496 L620 434 L620 558 L512 621Z" fill="#C2410C"/><path d="M404 434 L512 371 L620 434" fill="none" stroke="#FFF7D6" stroke-opacity="0.9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M512 236 L737 366 L512 496 L287 366Z" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="34" stroke-linejoin="round"/><path d="M287 366 L512 496 L512 756 L287 626Z" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="34" stroke-linejoin="round"/><path d="M512 496 L737 366 L737 626 L512 756Z" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="34" stroke-linejoin="round"/></g></g><rect x="0" y="716" width="1024" height="308" fill="#FF6900"/><text x="512" y="806" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="76" letter-spacing="8" fill="#FFFFFF">DEV</text>
+</svg>
