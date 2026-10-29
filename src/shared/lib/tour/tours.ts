@@ -1,3 +1,5 @@
+import { TOGETHER_TOURS } from './tours.together.ts'
+
 /** One stop of a tour: the element (by `data-tour`) and the i18n keys of its popover. */
 export interface TourStep {
   target: string
@@ -69,6 +71,7 @@ export const WORKFLOW_EDITOR_EMPTY: TourStep[] = [
  * `check-onboarding` gate says so (see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
+  ...TOGETHER_TOURS,
   'automations-workflows': workflows([
     { target: 'workflow-lessons', key: 'workflows.lessons', side: 'bottom' },
     { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
@@ -263,14 +266,6 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'calc-overlay', key: 'planningCalculator.overlay', side: 'top' },
     { target: 'calc-table', key: 'planningCalculator.table', side: 'top' },
   ]),
-  // The event screen: the next stream adds the plan and the purchases above the settlement.
-  'money-together-event': [
-    { target: 'shared-settlement-summary', key: 'sharedEvents.summary', side: 'bottom' },
-    { target: 'shared-my-position', key: 'sharedEvents.myPosition', side: 'bottom' },
-    { target: 'shared-settlement', key: 'sharedEvents.settlement', side: 'top' },
-    { target: 'shared-pay-share', key: 'sharedEvents.payShare', side: 'bottom' },
-    { target: 'shared-share', key: 'sharedEvents.share', side: 'bottom' },
-  ],
   'automations-reminders': planning([
     { target: 'section-content', key: 'planningReminders.content', side: 'top' },
     { target: 'reminder-filter', key: 'planningReminders.filter', side: 'bottom' },

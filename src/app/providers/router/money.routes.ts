@@ -2,7 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 const page = () => import('@/pages/money')
 
-/** «Money»: spending, where it went and the plan, then five behind «More». */
+/** «Money»: spending, where it went, the plan and the shared events, then five behind «More». */
 export const moneyRoutes: RouteRecordRaw = {
   path: 'money',
   component: () => page().then((module) => module.MoneySection),
@@ -56,10 +56,16 @@ export const moneyRoutes: RouteRecordRaw = {
       meta: { i18n: 'nav.money', group: 'calculator' },
     },
     {
+      path: 'together',
+      name: 'money-together',
+      component: () => import('@/pages/money-together').then((module) => module.MoneyTogether),
+      meta: { i18n: 'nav.money', group: 'together' },
+    },
+    {
       path: 'together/:id',
       name: 'money-together-event',
       component: () => import('@/pages/money-together-event').then((module) => module.MoneyTogetherEvent),
-      meta: { i18n: 'nav.money', group: 'plan' },
+      meta: { i18n: 'nav.money', group: 'together', tab: 'money-together' },
     },
   ],
 }

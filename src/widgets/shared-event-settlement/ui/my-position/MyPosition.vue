@@ -9,7 +9,7 @@ import { StatCard } from '@/shared/ui/stat-card'
 
 /**
  * «Моя позиция»: what I paid, my share and what that leaves — owed to me, or to pay the
- * organizer. Returned, written off and out-of-pocket-beyond-share show only when they are not zero.
+ * organizer. The fourth card (returned, written off) is always there, so the grid has no empty slot.
  */
 const props = defineProps<{ mine: MyPosition; currency: string; decimals: number; organizerName: string }>()
 const { t } = useI18n()
@@ -22,10 +22,9 @@ const headline = computed(() => {
   return { label: t('sharedEvents.mine.owedToMe'), amount: props.mine.owed_to_me, tone: owed ? ('positive' as const) : ('neutral' as const) }
 })
 
-/** «Вернули» is negative when I paid the organizer: then it reads «Я отдал». «Сверх доли» only when it adds to the headline. */
+/** «Вернули» is negative when I paid the organizer: then it reads «Я отдал». Both rows always show, zeros included. */
 const details = computed(() => {
   const returned = props.mine.returned
-  const over = props.mine.over_share
   return [
     {
       id: 'returned',
@@ -33,12 +32,7 @@ const details = computed(() => {
       amount: absolute(returned),
     },
     { id: 'written', label: t('sharedEvents.mine.writtenOff'), amount: props.mine.written_off },
-    {
-      id: 'over',
-      label: t('sharedEvents.mine.overShare'),
-      amount: sign(over) > 0 && over !== headline.value.amount ? over : '0',
-    },
-  ].filter((row) => sign(row.amount) !== 0)
+  ]
 })
 </script>
 
@@ -53,7 +47,7 @@ const details = computed(() => {
     <StatCard :label="headline.label" :tone="headline.tone">
       <Money :amount="headline.amount" :currency="props.currency" :decimals="props.decimals" :convert="false" />
     </StatCard>
-    <Card v-if="details.length" size="sm">
+    <Card size="sm">
       <dl class="grid gap-1 text-xs">
         <div v-for="row in details" :key="row.id" class="flex items-baseline justify-between gap-2">
           <dt class="truncate text-muted-foreground">{{ row.label }}</dt>

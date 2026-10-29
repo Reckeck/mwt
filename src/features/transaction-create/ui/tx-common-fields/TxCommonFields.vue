@@ -16,6 +16,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
+import { TxEventField } from '../tx-event-field'
 import { categoryGroupsFor } from '../../transaction-form.model'
 import { useTxForm } from '../../model/use-tx-form'
 
@@ -92,6 +93,8 @@ const hasAdvanced = computed(() => Boolean(form.txHash || form.contactId))
     />
     <p class="text-xs text-muted-foreground">{{ t('tx.field.linkPropertyHint') }}</p>
   </div>
+
+  <TxEventField />
 
   <div class="grid gap-1.5">
     <Label for="tx-comment">{{ t('form.comment') }}</Label>

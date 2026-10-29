@@ -104,7 +104,13 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
     totals: {
       planned: fmt(split.planned),
       spent: fmt(split.spent),
-      diff: fmt(split.spent - split.planned),
+      diff: fmt(
+        split.items.reduce(
+          (total, row) =>
+            total + (row.plan_total !== null && (row.cost > 0n || row.qty > 0n) ? row.cost - row.plan_total : 0n),
+          0n,
+        ),
+      ),
     },
     people,
     items,

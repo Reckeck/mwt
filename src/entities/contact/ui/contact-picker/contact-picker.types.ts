@@ -7,4 +7,9 @@ export interface ContactPickerProps {
   /** Pick only: no «Создать «Петя»» row (filters). */
   noCreate?: boolean
   disabled?: boolean
+  /**
+   * A second row «Добавить гостем «Оля»» next to «Создать»: picking it emits `guest`
+   * with the typed name and picks nobody (events: a person without a contact).
+   */
+  guestLabel?: string
 }

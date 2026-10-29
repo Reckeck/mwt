@@ -760,14 +760,35 @@ mod tests {
             .items[0]
             .id
             .clone();
+        // Not bought yet: in the plan, but not in the difference.
+        setup
+            .vault
+            .add_shared_item(
+                &setup.event,
+                SharedItemDraft {
+                    title: "Соус".into(),
+                    plan: Some(ItemPlan {
+                        qty: amount("2"),
+                        price: amount("400"),
+                        price_mode: PriceMode::Total,
+                    }),
+                    ..SharedItemDraft::default()
+                },
+            )
+            .unwrap();
         let mut draft = buy(&setup, Some(&item), "", "1800");
         draft.qty = amount("8");
-        let view = setup
+        setup
             .vault
             .add_shared_purchase(&setup.event, draft)
             .unwrap();
-        assert_eq!(view.totals.planned, amount("1200"));
-        assert_eq!(view.totals.spent, amount("1800"));
+        // Off the plan: spent, but not in the difference either.
+        let view = setup
+            .vault
+            .add_shared_purchase(&setup.event, buy(&setup, None, "", "500"))
+            .unwrap();
+        assert_eq!(view.totals.planned, amount("1600"));
+        assert_eq!(view.totals.spent, amount("2300"));
         assert_eq!(view.totals.diff, amount("600"));
         assert_eq!(view.items[0].diff_money, amount("600"));
         assert_eq!(view.items[0].diff_qty, amount("2"));

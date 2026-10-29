@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, ChevronDown, Plus, X } from 'lucide-vue-next'
+import { Check, ChevronDown, Plus, UserRound, X } from 'lucide-vue-next'
 import {
   ComboboxAnchor,
   ComboboxContent,
@@ -17,13 +17,14 @@ import {
 import type { ComboboxOption, ComboboxProps } from './combobox.types'
 
 const props = defineProps<ComboboxProps>()
-const emit = defineEmits<{ create: [text: string] }>()
+const emit = defineEmits<{ create: [text: string]; guest: [text: string] }>()
 
 /** A string in single mode, a list in `multiple` mode. */
 const model = defineModel<string | string[]>({ required: true })
 
 /** Value of the synthetic "create" item; never stored in the model. */
 const CREATE_VALUE = '\u0000create'
+const GUEST_VALUE = '\u0000guest'
 
 const open = ref(false)
 const search = ref('')
@@ -64,21 +65,20 @@ const groups = computed(() => {
   return out
 })
 
-const canCreate = computed(
-  () =>
-    Boolean(props.createLabel) &&
-    needle.value.length > 0 &&
-    !props.options.some((option) => option.label.toLowerCase() === needle.value),
+const noExactMatch = computed(
+  () => needle.value.length > 0 && !props.options.some((option) => option.label.toLowerCase() === needle.value),
 )
+const canCreate = computed(() => Boolean(props.createLabel) && noExactMatch.value)
+const canGuest = computed(() => Boolean(props.guestLabel) && noExactMatch.value)
 
 /** Reka hands back whatever it holds; the create sentinel is filtered out. */
 function onPick(value: unknown) {
   if (props.multiple) {
     const values = (Array.isArray(value) ? value : []).filter(
-      (entry): entry is string => typeof entry === 'string' && entry !== CREATE_VALUE,
+      (entry): entry is string => typeof entry === 'string' && entry !== CREATE_VALUE && entry !== GUEST_VALUE,
     )
     model.value = values
-  } else if (typeof value === 'string' && value !== CREATE_VALUE) {
+  } else if (typeof value === 'string' && value !== CREATE_VALUE && value !== GUEST_VALUE) {
     model.value = value
     open.value = false
   }
@@ -90,6 +90,14 @@ function create() {
   if (!text) return
   emit('create', text)
   search.value = ''
+}
+
+function guest() {
+  const text = search.value.trim()
+  if (!text) return
+  emit('guest', text)
+  search.value = ''
+  open.value = false
 }
 
 function remove(value: string) {
@@ -194,8 +202,19 @@ function onBackspace() {
             <span class="truncate">{{ props.createLabel(search.trim()) }}</span>
           </ComboboxItem>
 
+          <ComboboxItem
+            v-if="canGuest && props.guestLabel"
+            :value="GUEST_VALUE"
+            :text-value="search"
+            class="flex cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-sm text-primary outline-none data-[highlighted]:bg-accent"
+            @select.prevent="guest"
+          >
+            <UserRound class="size-3.5 shrink-0" aria-hidden="true" />
+            <span class="truncate">{{ props.guestLabel(search.trim()) }}</span>
+          </ComboboxItem>
+
           <p
-            v-if="matches.length === 0 && !canCreate"
+            v-if="matches.length === 0 && !canCreate && !canGuest"
             class="px-2 py-3 text-center text-xs text-muted-foreground"
           >
             {{ props.emptyLabel }}

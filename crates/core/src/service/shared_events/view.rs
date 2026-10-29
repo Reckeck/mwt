@@ -98,7 +98,8 @@ pub struct PlannedPayment {
 pub struct EventTotals {
     pub planned: Amount,
     pub spent: Amount,
-    /// `spent - planned`.
+    /// Overspend on what was bought: the sum of the items' `diff_money`.
+    /// Items not bought yet and purchases off the plan do not count.
     pub diff: Amount,
 }
 
@@ -253,7 +254,7 @@ impl UnlockedVault {
                 }
             })
             .collect();
-        let items = computed
+        let items: Vec<ItemView> = computed
             .items
             .iter()
             .map(|row| {
@@ -323,13 +324,16 @@ impl UnlockedVault {
                 amount: line.amount,
             })
             .collect();
+        let diff = items
+            .iter()
+            .fold(Amount::ZERO, |total, item| total + item.diff_money);
         SharedEventView {
             event: event.clone(),
             status: split::status(event, computed),
             totals: EventTotals {
                 planned: computed.planned,
                 spent: computed.spent,
-                diff: computed.spent - computed.planned,
+                diff,
             },
             people,
             items,

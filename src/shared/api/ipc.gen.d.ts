@@ -1929,7 +1929,8 @@ unit: string, category_id: string | null, plan: ItemPlan | null, purchases: Arra
 
 type EventTotals = { planned: Amount, spent: Amount, 
 /**
- * `spent - planned`.
+ * Overspend on what was bought: the sum of the items' `diff_money`.
+ * Items not bought yet and purchases off the plan do not count.
  */
 diff: Amount, };
 
