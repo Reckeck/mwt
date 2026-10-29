@@ -121,7 +121,7 @@ async fn android(ctx: &Ctx) -> Outcome {
     android_in_container(ctx).await
 }
 
-fn image_tag(root: &Path) -> Option<String> {
+pub fn image_tag(root: &Path) -> Option<String> {
     let text = std::fs::read_to_string(root.join(".gitlab-ci.yml")).ok()?;
     text.lines().find_map(|line| {
         let rest = line.strip_prefix("  CI_IMAGE_TAG: \"")?;
@@ -174,7 +174,7 @@ async fn android_in_container(ctx: &Ctx) -> Outcome {
         Ok(None) => return Outcome::Cancelled,
         Err(error) => return Outcome::Fail(format!("{error:#}")),
     }
-    // Same volumes as build-all.sh, so the compiled crates are reused.
+    // Same volumes as `cargo xtask build`, so the compiled crates are reused.
     let checkout = checkout_hash(&ctx.root);
     let network = std::env::var("CONTAINER_NETWORK").unwrap_or_else(|_| "host".into());
     let cmd = Cmd::new(&engine)
@@ -199,6 +199,7 @@ async fn android_in_container(ctx: &Ctx) -> Outcome {
             "-e",
             "CI_SKIP_GUI_LIBS=1",
         ])
+        .args(crate::sccache::container_mount())
         .args([image.as_str(), "bash", "-c", IN_CONTAINER]);
     finish(ctx, cmd).await
 }
@@ -210,8 +211,8 @@ export CC_aarch64_linux_android="$bin/aarch64-linux-android24-clang" AR_aarch64_
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings"#;
 
-/// First 8 hex digits of the sha256 of the root path, as `build-all.sh` names its volumes.
-fn checkout_hash(root: &Path) -> String {
+/// First 8 hex digits of the sha256 of the root path, as `cargo xtask build` names its volumes.
+pub fn checkout_hash(root: &Path) -> String {
     use std::process::{Command, Stdio};
     let mut child = match Command::new("sha256sum")
         .stdin(Stdio::piped())
@@ -232,7 +233,7 @@ fn checkout_hash(root: &Path) -> String {
     out.chars().take(8).collect()
 }
 
-const MAC_EXCLUDES: [&str; 11] = [
+pub const MAC_EXCLUDES: [&str; 11] = [
     ".git",
     ".jj",
     ".rust-target",

@@ -11,10 +11,13 @@ version="$1"
 out="$2"
 # `tauri icon` writes the Android icons into the generated project, and
 # rewrites (and adds to) the committed desktop icons on the way: put the
-# folder back as it was.
-icons="$(mktemp -d)" && chmod 755 "$icons"
-cp -a crates/app/icons/. "$icons/"
-trap 'rm -rf crates/app/icons && mv "$icons" crates/app/icons' EXIT
+# folder back as it was. (cargo xtask build mounts a private copy of the
+# folder and sets MWT_ICONS_ISOLATED: other builds read the real one meanwhile.)
+if [[ -z "${MWT_ICONS_ISOLATED:-}" ]]; then
+  icons="$(mktemp -d)" && chmod 755 "$icons"
+  cp -a crates/app/icons/. "$icons/"
+  trap 'rm -rf crates/app/icons && mv "$icons" crates/app/icons' EXIT
+fi
 
 source scripts/ci/channel.sh
 config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh --android)"

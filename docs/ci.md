@@ -56,6 +56,19 @@
   (`.cache/sccache`, ключ на job и `CI_IMAGE_TAG`) и возвращаются через
   `RUSTC_WRAPPER=sccache`, в том числе на Windows. Скачанные крейты —
   `.cache/cargo-registry`.
+- **sccache локально.** `cargo xtask` (`mise run check`, `check-platforms`)
+  ставит `RUSTC_WRAPPER=sccache` всем cargo-задачам на хосте и запускает
+  сервер до графа; кэш один на машину: `~/.cache/sccache/host` (16 GB,
+  все рабочие копии). Контейнеры Android и `build:all` получают
+  `~/.cache/sccache/containers` (4 GB) как `/sccache`; каталоги раздельные,
+  потому что ключи не пересекаются, а два сервера в одном каталоге вычищали
+  бы записи друг друга. Заданные `RUSTC_WRAPPER`/`SCCACHE_DIR` не
+  перетираются; без sccache в PATH сборка идёт как раньше и пишет подсказку
+  (`mise use -g sccache`); `XTASK_SCCACHE=0` выключает его везде. В конце
+  прогона xtask печатает `sccache: N requests, H hits, M misses`.
+  Инкрементальные крейты воркспейса sccache не кэширует, только зависимости.
+  В GitLab CI ничего не меняется: `setup-linux.sh` берёт `SCCACHE_DIR` из
+  окружения, а по умолчанию остаётся `.cache/sccache`.
 - **Кэш пишет только `main`.** В MR, ветках и тегах кэш только читается
   (`CACHE_POLICY`), поэтому они не тратят время на выгрузку.
 - **Тесты быстрые.** KDF vault (Argon2id, 64 MiB × 3) идёт на каждом
@@ -240,19 +253,33 @@ mise run check-platforms -- windows android # выборочно
 
 ### Все платформы: `mise run build:all`
 
-`scripts/local/build-all.sh` собирает бандлы тем же кодом, что CI
+`cargo xtask build` собирает бандлы тем же кодом, что CI
 (`scripts/ci/build-*.sh`), в тех же образах — на машине нужен только podman
 (или docker: `CONTAINER_ENGINE=docker`). Канал — `--channel dev` (по
 умолчанию) или `prod` (см. «Каналы»). Результат — в
-`.cache/build-all/builds/<канал>/`, логи — в
-`.cache/build-all/<платформа>.log`, в конце — таблица OK/SKIP/FAIL.
+`.cache/build-all/builds/<канал>/`, лог каждой задачи — в
+`.cache/xtask/build-<платформа>.log`, в конце — таблица OK/SKIP/FAIL/CANCELLED
+со временем и список файлов. Граф и поведение те же, что у `mise run check`:
+первая ошибка гасит остальные сборки (контейнеры останавливаются), второй
+такой же запуск подключается к первому, другая команда ждёт его конца.
 
 ```bash
 mise run build:all                         # всё
 mise run build:all -- linux android        # выборочно
 mise run build:all -- --version 0.2.0-1 windows
 mise run build:all -- --channel prod       # релизное приложение (mwt.*)
+mise run build:all -- --heavy 1            # одна тяжёлая сборка за раз (по умолчанию 2)
+mise run build:all -- --list linux pacman  # граф задач без запуска
 ```
+
+Граф: `build:frontend` (`pnpm build` на хосте, один раз, в `dist/`) →
+`android`, `windows`, `linux` (тяжёлые, не больше `--heavy` за раз) →
+`pacman`, `flatpak` (после `linux`); `macos` не ждёт никого. Платформенные
+`tauri build` не запускают фронт повторно: `tauri-config.sh` при
+`MWT_PREBUILT_FRONTEND=1` кладёт в overlay пустой `beforeBuildCommand`
+(GitLab CI переменную не задаёт). `pacman` и `flatpak` без `linux` в списке
+берут tarball из папки результата, а если его там нет — ошибка до начала
+сборки («build it first»).
 
 | Платформа | Где собирается | Что получится |
 |---|---|---|
@@ -261,7 +288,7 @@ mise run build:all -- --channel prod       # релизное приложени
 | `flatpak` | `archlinux:base-devel` `--privileged`, после `linux` | `.flatpak` |
 | `android` | образ `ci-android` | APK и AAB; без `ANDROID_KEYSTORE_*` — тестовый ключ, суффикс `-testkey` |
 | `windows` | `ci-linux` + `cargo-xwin` (`scripts/local/windows-cross.Dockerfile`) | NSIS `-setup.exe`, portable `.zip`; MSI нет — WiX работает только на Windows, его делает CI |
-| `macos` | на Mac — сразу; с Linux — на `MACOS_BUILD_HOST=user@mac` по ssh (rsync туда и обратно) | `.dmg`, `.app.tar.gz`; без Mac — SKIP |
+| `macos` | на Mac — сразу; с Linux — на `MACOS_BUILD_HOST=user@mac` по ssh (rsync туда и обратно, фронт собирает сам Mac) | `.dmg`, `.app.tar.gz`; без Mac — SKIP |
 
 - Образы берутся из Container Registry проекта по `CI_IMAGE_TAG` (публичные),
   если их там нет — собираются из `scripts/ci/ci.Dockerfile`.
@@ -271,6 +298,10 @@ mise run build:all -- --channel prod       # релизное приложени
   `node_modules`, `/root`): хостовые `.rust-target` и `node_modules` не
   трогаются, повторная сборка идёт инкрементально. Начать с нуля —
   `podman volume rm $(podman volume ls -q | grep mwt-build-)`.
+- Сборки идут рядом, поэтому у каждой свой overlay tauri
+  (`.cache/tauri-ci-<платформа>.json`, переменная `TAURI_CI_CONFIG`), а Android
+  работает на личной копии `crates/app/icons` (`MWT_ICONS_ISOLATED=1`): `tauri
+  icon` переписывает иконки, пока linux и windows их читают.
 - Версия по умолчанию — из `tauri.conf.json` (`scripts/ci/version.sh`).
 - Первый `windows` дольше: строится образ с `cargo-xwin`, а тот скачивает
   Windows SDK (кэш в томе `mwt-build-<копия>-windows-home`).

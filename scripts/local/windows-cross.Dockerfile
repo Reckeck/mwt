@@ -4,7 +4,7 @@
 # cargo-xwin (fetches the Windows SDK and CRT on first use) and the Rust
 # target. Ubuntu 22.04 ships NSIS 3.08, whose includes lack
 # Win/RestartManager.nsh that the tauri installer needs: taken from 3.11.
-# Only scripts/local/build-all.sh uses it; CI builds on Windows.
+# Only `cargo xtask build` uses it; CI builds on Windows.
 ARG BASE
 FROM ${BASE}
 RUN apt-get update -qq \

@@ -66,7 +66,7 @@ export CARGO_TARGET_DIR="$CI_PROJECT_DIR/.rust-target"
 # Compiled crates come back from the GitLab cache through sccache.
 if command -v sccache >/dev/null; then
   export RUSTC_WRAPPER=sccache
-  export SCCACHE_DIR="$CI_PROJECT_DIR/.cache/sccache"
+  export SCCACHE_DIR="${SCCACHE_DIR:-$CI_PROJECT_DIR/.cache/sccache}"
   export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-3G}"
   export CARGO_INCREMENTAL=0
   sccache --start-server >/dev/null 2>&1 || true

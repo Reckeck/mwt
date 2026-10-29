@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Linux bundles (deb, rpm, AppImage) and the portable tarball, under release
 # names. Runs in build:linux after setup-linux.sh, and in the ci-linux image
-# for a local build (scripts/local/build-all.sh).
+# for a local build (cargo xtask build).
 #
 #   scripts/ci/build-linux.sh <version> <out-dir>
 set -euo pipefail

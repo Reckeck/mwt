@@ -34,7 +34,7 @@
 | `mise run check-layout` | приложение на мок-бэкенде в headless Chromium на 1920…720 и 390/360, тёмная и светлая тема: нет переполнения и прокрутки вбок, наведение и загрузка ничего не сдвигают, диалог открывается на месте, слушатели не копятся, «Назад» закрывает слой, цели касания ≥ 40 px, соседние блоки одного контейнера не налезают друг на друга (правило 17); `--quick` — 1280 и 390, `--report` — без падения; скриншоты в `.cache/check-layout/` |
 | `mise run check` | `cargo xtask check`: lint + typecheck + test-frontend + статические проверки (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + платформы параллельно, затем по одной test-e2e, layout и links (`--quick`); fail-fast — первая ошибка гасит остальное; логи в `.cache/xtask/<задача>.log`; `--list` — граф, имена задач — фильтр; второй запуск в той же рабочей копии подключается к идущему |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
-| `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
+| `mise run build:all` | `cargo xtask build`: бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, фронт один раз, fail-fast, `--channel prod`, в `.cache/build-all/builds/<канал>/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
 | `pnpm dev` | Vite-фронтенд без Tauri |
 
@@ -85,7 +85,7 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
 mise.toml             # tools + env + tasks
 .gitlab-ci.yml        # CI/CD: проверки, сборки Linux/Windows/Android, Flatpak/pacman, релиз (docs/ci.md)
 scripts/ci/           # логика CI-job'ов (bootstrap, сбор бандлов, подпись Android, релиз, AUR)
-scripts/local/        # build-all.sh: локальная сборка всех платформ тем же кодом, что CI
+crates/xtask/         # cargo xtask: гейт (check, check-platforms) и сборка бандлов (build)
 packaging/            # flatpak/ (манифест + metainfo), aur/ (PKGBUILD.in + render.sh), linux/ (postrm deb/rpm)
 docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor, ci
 ```

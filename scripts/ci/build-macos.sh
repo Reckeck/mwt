@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # macOS universal (Apple Silicon + Intel) .dmg and a tarball of the .app, on a
-# Mac: the build:macos job (GitLab macOS runner) or scripts/local/build-all.sh
+# Mac: the build:macos job (GitLab macOS runner) or cargo xtask build
 # (here or over ssh). Tauri cannot build for macOS from another OS.
 #
 #   scripts/ci/build-macos.sh <version> <out-dir>

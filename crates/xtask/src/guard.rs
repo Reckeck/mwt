@@ -37,7 +37,7 @@ impl SchemasGuard {
     }
 }
 
-fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
+pub fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
     let _ = std::fs::remove_dir_all(to);
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
