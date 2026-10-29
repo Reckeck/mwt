@@ -10,6 +10,7 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
+import { Select, SelectItem } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { ITEM_UNITS } from '../shared-item-edit.constants'
@@ -25,6 +26,10 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 const title = ref('')
 const unit = ref('шт')
+// An item saved with a unit outside the list keeps it as a choice.
+const unitOptions = computed<string[]>(() =>
+  !unit.value || (ITEM_UNITS as readonly string[]).includes(unit.value) ? [...ITEM_UNITS] : [...ITEM_UNITS, unit.value],
+)
 const qty = ref('')
 const price = ref('')
 const mode = ref<PriceMode>('per_unit')
@@ -96,8 +101,9 @@ function save() {
         <AmountInput id="item-qty" v-model="qty" :calculator="false" />
       </FormField>
       <FormField for="item-unit" :label="t('sharedEvents.item.unit')">
-        <Input id="item-unit" v-model="unit" list="item-units" autocomplete="off" />
-        <datalist id="item-units"><option v-for="entry in ITEM_UNITS" :key="entry" :value="entry" /></datalist>
+        <Select id="item-unit" v-model="unit">
+          <SelectItem v-for="entry in unitOptions" :key="entry" :value="entry">{{ entry }}</SelectItem>
+        </Select>
       </FormField>
     </div>
     <FormField for="item-price" :label="t('sharedEvents.item.price')" :error="form.error('price')">
