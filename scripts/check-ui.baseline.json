@@ -3,7 +3,6 @@
   "file-size src/entities/transaction/ui/transactions-list/TransactionsList.vue": 253,
   "long-line src/entities/asset/ui/asset-input/AssetInput.vue": 1,
   "long-line src/entities/asset/ui/pair-input/PairInput.vue": 1,
-  "long-line src/entities/report/ui/report-term/ReportTerm.vue": 1,
   "long-line src/entities/store/ui/store-card/StoreCard.vue": 1,
   "long-line src/entities/store/ui/store-node-select/StoreNodeMultiSelect.vue": 1,
   "long-line src/entities/workflow/ui/lesson-list/LessonList.vue": 1,

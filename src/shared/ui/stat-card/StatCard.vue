@@ -18,7 +18,9 @@ const props = withDefaults(defineProps<StatCardProps>(), {
 <template>
   <Card size="sm" class="min-w-0">
     <div class="flex min-w-0 flex-col gap-1">
-      <p class="truncate text-xs text-muted-foreground">{{ props.label }}</p>
+      <p class="truncate text-xs text-muted-foreground">
+        <slot name="label">{{ props.label }}</slot>
+      </p>
       <Skeleton v-if="props.loading" class="h-7 w-28" />
       <p v-else :class="cn('figure truncate', SIGN_TONE_CLASS[props.tone])">
         <slot>{{ props.value }}</slot>

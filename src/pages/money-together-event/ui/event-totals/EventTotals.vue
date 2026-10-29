@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
 import { diffTone, sumDecimals } from '@/entities/shared-event'
 import { StatCard } from '@/shared/ui/stat-card'
+import { TapHint } from '@/shared/ui/tap-hint'
 
 /**
  * «Запланировано / Потрачено / Разница» and the shares in one line. Overspending is red
@@ -30,7 +31,10 @@ const TONE_CLASS = { over: 'text-destructive', under: 'text-success', even: '' }
       <StatCard :label="t('sharedEvents.totals.spent')">
         <Money :amount="props.view.totals.spent" :currency="currency" :decimals="decimals" :convert="false" />
       </StatCard>
-      <StatCard :label="t('sharedEvents.totals.diff')" :title="t('sharedEvents.totals.diffHint')">
+      <StatCard :label="t('sharedEvents.totals.diff')">
+        <template #label>
+          <TapHint :label="t('sharedEvents.totals.diff')" :hint="t('sharedEvents.totals.diffHint')" />
+        </template>
         <Money
           :amount="diff"
           :currency="currency"

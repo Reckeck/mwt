@@ -121,7 +121,7 @@ const CARD = 'grid gap-3 rounded-xl border border-border p-3 has-[[data-state=ch
     :pending="mutation.isPending.value"
     @submit="form.submit(save, $event)"
   >
-    <RadioGroup v-model="mode" class="grid gap-3" data-tour="shared-split-modes">
+    <RadioGroup v-model="mode" class="grid gap-3">
       <div :class="CARD">
         <Label for="split-all" :class="HEAD">
           <RadioGroupItem id="split-all" value="all" class="mt-0.5" />

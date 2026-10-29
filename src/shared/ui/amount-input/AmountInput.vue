@@ -134,6 +134,11 @@ function fromKeypad(text: string) {
   model.value = next.canonical
 }
 
+/** On a touch screen a truncated result has no hover title: tapping it opens the keypad, which shows it in full. */
+function openKeypadFromHint() {
+  if (phone.value && props.calculator && !props.disabled) keypadOpen.value = true
+}
+
 const hint = calc.outcome
 const hintText = computed(() => {
   if (!hint.value) return ''
@@ -175,6 +180,7 @@ const hintText = computed(() => {
       @blur="calc.onBlur"
     />
     <!-- Inside the border, between the text and the suffix: it appears without moving anything around the field (rule 17). -->
+    <!-- biome-ignore lint/a11y/useKeyWithClickEvents: a touch shortcut; the calculator button next to it is the keyboard path -->
     <span
       v-if="hint"
       class="max-w-[55%] shrink-0 truncate pr-2 text-xs tabular-nums"
@@ -182,6 +188,8 @@ const hintText = computed(() => {
       :title="hintText"
       role="status"
       data-amount-hint
+      @pointerdown.prevent
+      @click="openKeypadFromHint"
     >{{ hintText }}</span>
     <Button
       v-if="phone && props.calculator && !props.disabled"

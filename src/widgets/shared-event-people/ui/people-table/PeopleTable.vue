@@ -11,6 +11,7 @@ import { cn } from '@/shared/lib/utils'
 import { ActionMenu } from '@/shared/ui/action-menu'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { TapHint } from '@/shared/ui/tap-hint'
 
 /**
  * Everybody in the event with their share, what they bought and the saldo (green: they are owed,
@@ -72,7 +73,9 @@ const netClass = (person: PersonView) =>
         </TableCell>
         <TableCell class="text-right text-sm">
           <span class="inline-flex items-center justify-end gap-1">
-            <Pin v-if="isFixed(person.id)" class="size-3.5 text-muted-foreground" :aria-label="t('sharedEvents.people.fixed')" />
+            <TapHint v-if="isFixed(person.id)" :hint="t('sharedEvents.people.fixed')" :aria-label="t('sharedEvents.people.fixed')">
+              <Pin class="size-3.5 text-muted-foreground" />
+            </TapHint>
             <Money :amount="person.share" :currency="props.currency" :decimals="props.decimals" :convert="false" />
           </span>
         </TableCell>

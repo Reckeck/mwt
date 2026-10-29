@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Phone } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { TapHint } from '@/shared/ui/tap-hint'
 
 import type { PersonNameProps } from './person-name.types'
 
@@ -25,11 +26,9 @@ const shown = computed(() => props.name || t('sharedEvents.me'))
       <span class="truncate font-medium">{{ shown }}</span>
       <Badge v-if="props.kind === 'guest'" variant="outline" class="font-normal">{{ t('sharedEvents.guest') }}</Badge>
       <Badge v-else-if="props.quick" variant="outline" class="font-normal">{{ t('sharedEvents.quick') }}</Badge>
-      <Phone
-        v-if="props.hasDetails"
-        class="size-4 shrink-0 text-muted-foreground"
-        :aria-label="t('sharedEvents.hasDetails')"
-      />
+      <TapHint v-if="props.hasDetails" :hint="t('sharedEvents.hasDetails')" :aria-label="t('sharedEvents.hasDetails')">
+        <Phone class="size-4 shrink-0 text-muted-foreground" />
+      </TapHint>
     </span>
   </div>
 </template>

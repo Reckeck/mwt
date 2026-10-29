@@ -76,7 +76,7 @@ const TONE_CLASS = { over: 'text-destructive font-semibold', under: 'text-succes
             <span v-else class="text-muted-foreground">—</span>
           </TableCell>
           <TableCell class="whitespace-normal text-xs text-muted-foreground max-md:hidden">
-            <span class="flex flex-wrap items-center gap-x-2 gap-y-1" :aria-label="row.summary || undefined">
+            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Badge :variant="STATE_BADGE[row.fact.state].variant" :class="STATE_BADGE[row.fact.state].class">{{ t(`sharedEvents.items.state.${row.fact.state}`) }}</Badge>
               <template v-if="row.fact.state === 'bought' || row.fact.state === 'unplanned'">
                 <span>{{ qtyText(row.fact, row.item.unit, formatQuantity) }}</span>
