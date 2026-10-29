@@ -21,7 +21,7 @@ use super::split::{self, Split};
 use super::view::SharedEventView;
 
 fn tolerance() -> Amount {
-    Amount::new(rust_decimal::Decimal::new(5, 3))
+    split::settle_tolerance()
 }
 
 fn moment(raw: Option<&str>) -> Result<String> {
@@ -154,7 +154,7 @@ impl UnlockedVault {
         self.find_shared_event_mut(&input.event_id)?
             .settlements
             .push(settlement);
-        self.persist()?;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 
@@ -203,7 +203,7 @@ impl UnlockedVault {
                 tx_id: None,
                 to: Vec::new(),
             });
-        self.persist()?;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 
@@ -212,7 +212,7 @@ impl UnlockedVault {
     pub fn reassign_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView> {
         let event = self.find_shared_event(&input.event_id)?;
         let amount = Self::open_rest(event, &input.participant_id, input.amount)?;
-        let people = split::people_ids(event);
+        let people = split::sharer_pool(event);
         let targets: Vec<String> = if input.to.is_empty() {
             people
                 .into_iter()
@@ -244,7 +244,7 @@ impl UnlockedVault {
                 tx_id: None,
                 to: targets,
             });
-        self.persist()?;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 
@@ -265,7 +265,7 @@ impl UnlockedVault {
             self.drop_shared_tx(tx_id);
             self.recompute_holdings();
         }
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 

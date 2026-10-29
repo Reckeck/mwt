@@ -266,20 +266,15 @@ impl UnlockedVault {
         self.contact_balances_until(i64::MAX)
     }
 
-    /// Personal debts from debt transfers made up to `secs`. Looking at the
-    /// present (`i64::MAX`) the open shared events add their balances, and the
-    /// transfers they made are left out: the event already counts them.
+    /// Personal debts from debt transfers made up to `secs`, plus what the
+    /// shared events stood at then. The transfers an event made are left out
+    /// of the first part: the event's balance already counts them.
     pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance> {
-        let live = secs == i64::MAX;
-        // The transfers a shared event made are already in the event's balance.
-        let in_events: std::collections::HashSet<String> = if live {
-            self.shared_tx_links()
-                .into_iter()
-                .map(|link| link.tx_id)
-                .collect()
-        } else {
-            std::collections::HashSet::new()
-        };
+        let in_events: std::collections::HashSet<String> = self
+            .shared_tx_links()
+            .into_iter()
+            .map(|link| link.tx_id)
+            .collect();
         let mut balances: BTreeMap<(String, String), ContactBalance> = BTreeMap::new();
         for tx in self
             .doc
@@ -313,8 +308,8 @@ impl UnlockedVault {
                 DebtEffect::Repay => entry.payable -= inner.amount,
             }
         }
-        if live {
-            for debt in self.shared_debts() {
+        {
+            for debt in self.shared_debts(secs) {
                 let code = debt.currency.to_uppercase();
                 let asset = AssetRef::fiat(&code, &code);
                 let entry = balances

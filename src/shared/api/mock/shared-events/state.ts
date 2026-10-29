@@ -3,6 +3,7 @@
 import { txId } from '@/shared/lib/transactions'
 import { mockContacts, mockTransactionFrom } from '../ledger'
 import { mockPush, mockStores, priceOf } from '../demo'
+import { SCALE, dec, divRound, fmt } from './dec'
 import { ME } from './engine'
 
 export const mockSharedEvents: SharedEvent[] = []
@@ -41,8 +42,10 @@ export function mockEventPayment(
       },
       store_id: storeId,
       asset: { ...RUB, symbol: purchase.currency.toUpperCase(), name: purchase.currency.toUpperCase() },
-      amount: String(
-        purchase.price_mode === 'per_unit' ? Number(purchase.qty) * Number(purchase.amount) : purchase.amount,
+      amount: fmt(
+        purchase.price_mode === 'per_unit'
+          ? divRound(dec(purchase.qty) * dec(purchase.amount), SCALE)
+          : dec(purchase.amount),
       ),
       fee: null,
       to: null,

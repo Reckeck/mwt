@@ -6,6 +6,7 @@ import { txContactIds, txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockContacts, mockKindsFor, mockTransactionFrom, mockTurnover } from './ledger'
 import { mockDebtTerms } from './catalog'
 import { contactBalancesWithEvents } from './shared-events/view'
+import { applySharedEdit, cascadeSharedDelete, planSharedTxEdit } from './shared-events/ledger-sync'
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -186,15 +187,22 @@ export const transactionsCommands: MockCommands = {
     const index = mockTransactions.findIndex((tx) => txId(tx) === input.id)
     if (index < 0) throw { code: 'MISSING', message: 'transaction' }
     const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin }
-    mockTransactions[index] = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
+    const next = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
       mockBalanceOf(storeId, symbol, input.id),
     )
+    const followed = planSharedTxEdit(input.id, mockTransactions[index], next)
+    if (typeof followed === 'string') return Promise.reject({ code: 'INVALID_INPUT', message: followed })
+    mockTransactions[index] = next
+    if (followed) applySharedEdit(followed)
     mockLinkProperty(input.id, input.transaction.common.property_id)
     return resolve(mockTransactions[index])
   },
   delete_transaction: ({ args }) => {
     const idx = mockTransactions.findIndex((tx) => txId(tx) === String(args?.id))
-    if (idx >= 0) mockTransactions.splice(idx, 1)
+    if (idx >= 0) {
+      mockTransactions.splice(idx, 1)
+      cascadeSharedDelete(String(args?.id))
+    }
     mockLinkProperty(String(args?.id), null)
     return resolve({})
   },

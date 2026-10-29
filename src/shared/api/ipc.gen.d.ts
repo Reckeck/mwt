@@ -5048,7 +5048,11 @@ type SharedEventView = { event: SharedEvent, status: SharedEventStatus, totals: 
 /**
  * Absent when I do not take part.
  */
-mine: MyPosition | null, };
+mine: MyPosition | null, 
+/**
+ * The hand-set totals no longer fit what was bought and are ignored.
+ */
+overrides_invalid: boolean, };
 
 /**
  * An item of the list: planned, or added as it was bought.

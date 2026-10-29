@@ -7,7 +7,8 @@ import { mockTransactionFrom } from './ledger'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { eventOrFail, viewOf } from './commands-shared-events'
-import { ME, computeSplit, toCents } from './shared-events/engine'
+import { dec, fmt } from './shared-events/dec'
+import { ME, SETTLE_TOLERANCE, computeSplit, sharerPool } from './shared-events/engine'
 import { fail } from './shared-events/state'
 
 const bad = (message: string) => fail(message.startsWith('participant') ? 'MISSING' : 'INVALID_INPUT', message)
@@ -29,16 +30,18 @@ export const sharedMoneyCommands: MockCommands = {
     const event = eventOrFail(input.event_id)
     if (event instanceof Promise) return event
     const row = computeSplit(event).people.find((entry) => entry.id === input.participant_id)
-    if (!row || input.participant_id === event.organizer) return bad('the organizer settles with the others')
+    if (input.participant_id === event.organizer)
+      return bad('the organizer settles with the others, not with themselves')
+    if (!row) return bad(`participant ${input.participant_id}`)
+    if (!(dec(input.amount) > 0n)) return bad('the amount must be positive')
     const owed = input.direction === 'to_organizer' ? row.saldo : -row.saldo
-    if (!(Number(input.amount) > 0) || toCents(input.amount) > owed + 1)
-      return bad('this is more than is owed in that direction')
+    if (dec(input.amount) > owed + SETTLE_TOLERANCE) return bad('this is more than is owed in that direction')
     const settlement: Settlement = {
       id: crypto.randomUUID(),
       kind: 'offset',
       participant_id: input.participant_id,
       direction: input.direction,
-      amount: input.amount,
+      amount: fmt(dec(input.amount)),
       at: moment(input.at),
       tx_id: null,
       to: [],
@@ -134,20 +137,30 @@ function remainder(input: SharedRemainderInput, kind: 'write_off' | 'reassign') 
   }
   const split = computeSplit(event)
   const row = split.people.find((entry) => entry.id === input.participant_id)
-  if (!row || input.participant_id === event.organizer) return bad('the organizer settles with the others')
-  if (row.saldo <= 0) return bad('nothing is owed here')
-  const cents = input.amount ? toCents(input.amount) : row.saldo
-  if (cents <= 0 || cents > row.saldo + 1) return bad('the amount must be positive and at most what is owed')
-  const everyone = split.people.map((entry) => entry.id).filter((id) => id !== input.participant_id)
+  if (input.participant_id === event.organizer) return bad('the organizer settles with the others, not with themselves')
+  if (!row) return bad(`participant ${input.participant_id}`)
+  if (row.saldo <= 0n) return bad('nothing is owed here')
+  const wanted = input.amount ? dec(input.amount) : row.saldo
+  if (wanted <= 0n || wanted > row.saldo + SETTLE_TOLERANCE) {
+    return bad('the amount must be positive and at most what is owed')
+  }
+  const pool = sharerPool(event)
+  let targets: string[] = []
+  if (kind === 'reassign') {
+    const unknown = input.to.find((id) => !pool.includes(id))
+    if (unknown) return bad(`participant ${unknown}`)
+    targets = (input.to.length ? input.to : pool).filter((id) => id !== input.participant_id)
+    if (targets.length === 0) return bad('there is nobody to put it on')
+  }
   event.settlements.push({
     id: crypto.randomUUID(),
     kind,
     participant_id: input.participant_id,
     direction: 'to_organizer',
-    amount: String(Math.min(cents, row.saldo) / 100),
+    amount: fmt(wanted < row.saldo ? wanted : row.saldo),
     at: new Date().toISOString(),
     tx_id: null,
-    to: kind === 'reassign' ? (input.to.length ? input.to : everyone) : [],
+    to: targets,
   })
   return viewOf(event)
 }

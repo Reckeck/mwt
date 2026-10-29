@@ -3,7 +3,8 @@
 import { txId } from '@/shared/lib/transactions'
 import { mockContactBalances } from '../ledger'
 import { mockDebtTerms } from '../catalog'
-import { ME, type Split, computeSplit, eventStatus, fromCents } from './engine'
+import { abs, dec, fmt } from './dec'
+import { ME, type Split, computeSplit, eventStatus, isSettled } from './engine'
 import { mockSharedEvents } from './state'
 
 const nameOf = (event: SharedEvent, id: string) =>
@@ -18,42 +19,42 @@ function termOf(event: SharedEvent, person: Participant | undefined): string | n
 function minePosition(event: SharedEvent, split: Split): MyPosition | null {
   const mine = split.people.find((row) => row.id === ME)
   if (!event.i_participate || !mine) return null
-  let owed = 0
-  let owe = 0
-  let returned = 0
-  let off = 0
+  let owed = 0n
+  let owe = 0n
+  let returned = 0n
+  let off = 0n
   if (event.organizer === ME) {
     for (const row of split.people.filter((entry) => entry.id !== ME)) {
-      if (row.saldo > 0) owed += row.saldo
+      if (row.saldo > 0n) owed += row.saldo
       else owe -= row.saldo
       returned += row.moved
       off += row.written_off
     }
   } else {
-    if (mine.saldo > 0) owe = mine.saldo
+    if (mine.saldo > 0n) owe = mine.saldo
     else owed = -mine.saldo
     returned = -mine.moved
   }
   return {
-    paid: fromCents(mine.paid),
-    share: fromCents(mine.share),
-    owed_to_me: fromCents(owed),
-    returned: fromCents(returned),
-    i_owe: fromCents(owe),
-    written_off: fromCents(off),
-    over_share: fromCents(owed - owe + off),
-    pay_to: event.organizer !== ME && mine.saldo > 0 ? event.organizer : null,
+    paid: fmt(mine.paid),
+    share: fmt(mine.share),
+    owed_to_me: fmt(owed),
+    returned: fmt(returned),
+    i_owe: fmt(owe),
+    written_off: fmt(off),
+    over_share: fmt(owed - owe + off),
+    pay_to: event.organizer !== ME && mine.saldo > 0n ? event.organizer : null,
   }
 }
 
 /** Who pays whom through the organizer. */
 function paymentPlan(event: SharedEvent, split: Split): PlannedPayment[] {
   return split.people
-    .filter((row) => row.id !== event.organizer && Math.abs(row.saldo) >= 1)
+    .filter((row) => row.id !== event.organizer && !isSettled(row.saldo))
     .map((row) =>
-      row.saldo > 0
-        ? { from: row.id, to: event.organizer, amount: fromCents(row.saldo) }
-        : { from: event.organizer, to: row.id, amount: fromCents(-row.saldo) },
+      row.saldo > 0n
+        ? { from: row.id, to: event.organizer, amount: fmt(row.saldo) }
+        : { from: event.organizer, to: row.id, amount: fmt(-row.saldo) },
     )
 }
 
@@ -70,28 +71,28 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
         person?.details && (person.details.phone || person.details.messenger || person.details.note),
       ),
       is_organizer: row.id === event.organizer,
-      share: fromCents(row.share),
-      paid: fromCents(row.paid),
-      moved: fromCents(row.moved),
-      written_off: fromCents(row.written_off),
-      saldo: fromCents(row.saldo),
+      share: fmt(row.share),
+      paid: fmt(row.paid),
+      moved: fmt(row.moved),
+      written_off: fmt(row.written_off),
+      saldo: fmt(row.saldo),
       due_at: termOf(event, person),
     }
   })
   const items: ItemView[] = split.items.map((row) => {
-    const bought = row.cost > 0 || row.qty > 0
+    const bought = row.cost > 0n || row.qty > 0n
     return {
       item_id: row.item_id,
-      cost: fromCents(row.cost),
-      qty: String(row.qty),
-      plan_total: row.plan_total === null ? null : fromCents(row.plan_total),
-      plan_qty: row.plan_qty === null ? null : String(row.plan_qty),
-      diff_money: fromCents(row.plan_total !== null && bought ? row.cost - row.plan_total : 0),
-      diff_qty: String(row.plan_qty !== null && bought ? row.qty - row.plan_qty : 0),
+      cost: fmt(row.cost),
+      qty: fmt(row.qty),
+      plan_total: row.plan_total === null ? null : fmt(row.plan_total),
+      plan_qty: row.plan_qty === null ? null : fmt(row.plan_qty),
+      diff_money: fmt(row.plan_total !== null && bought ? row.cost - row.plan_total : 0n),
+      diff_qty: fmt(row.plan_qty !== null && bought ? row.qty - row.plan_qty : 0n),
       bought,
       shares: Object.entries(row.shares).map(([participant_id, amount]) => ({
         participant_id,
-        amount: fromCents(amount),
+        amount: fmt(amount),
       })),
     }
   })
@@ -101,9 +102,9 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
     event: structuredClone(event),
     status: eventStatus(event, split),
     totals: {
-      planned: fromCents(split.planned),
-      spent: fromCents(split.spent),
-      diff: fromCents(split.spent - split.planned),
+      planned: fmt(split.planned),
+      spent: fmt(split.spent),
+      diff: fmt(split.spent - split.planned),
     },
     people,
     items,
@@ -112,8 +113,8 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
       return {
         item_id: line.item_id,
         purchase_id: line.purchase_id,
-        event_amount: fromCents(line.amount),
-        my_part: fromCents(line.my_part),
+        event_amount: fmt(line.amount),
+        my_part: fmt(line.my_part),
         payment_missing: Boolean(tx) && !txExists(tx as string),
       }
     }),
@@ -123,6 +124,7 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
     })),
     plan: paymentPlan(event, split),
     mine: minePosition(event, split),
+    overrides_invalid: split.overrides_invalid,
   }
 }
 
@@ -141,8 +143,8 @@ export function eventSummary(event: SharedEvent): SharedEventSummary {
     people_count: split.people.length,
     organizer_name: nameOf(event, event.organizer),
     organizer_is_me: event.organizer === ME,
-    planned: fromCents(split.planned),
-    spent: fromCents(split.spent),
+    planned: fmt(split.planned),
+    spent: fmt(split.spent),
     owed_to_me: mine?.owed_to_me ?? '0',
     i_owe: mine?.i_owe ?? '0',
   }
@@ -160,10 +162,10 @@ export function listSummaries(includeArchived: boolean): SharedEventSummary[] {
 }
 
 /** Debts with contacts that involve me: positive means the contact owes me (cents). */
-function eventDebts(event: SharedEvent): Array<[string, number]> {
+function eventDebts(event: SharedEvent): Array<[string, bigint]> {
   if (!event.i_participate) return []
   const split = computeSplit(event)
-  const out: Array<[string, number]> = []
+  const out: Array<[string, bigint]> = []
   if (event.organizer === ME) {
     for (const row of split.people) {
       const contact = event.participants.find((person) => person.id === row.id)?.contact_id
@@ -174,7 +176,7 @@ function eventDebts(event: SharedEvent): Array<[string, number]> {
     const mine = split.people.find((row) => row.id === ME)
     if (contact && mine) out.push([contact, -mine.saldo])
   }
-  return out.filter(([, cents]) => Math.abs(cents) >= 1)
+  return out.filter(([, value]) => !isSettled(value))
 }
 
 /** The event balances to add to `get_contact_balances`. */
@@ -196,14 +198,12 @@ export function sharedBalances(): ContactBalance[] {
         row = { contact_id: contact, asset, receivable: '0', payable: '0' }
         rows.push(row)
       }
-      const key = cents > 0 ? 'receivable' : 'payable'
-      row[key] = fromCents(toNumber(row[key]) + Math.abs(cents))
+      const key = cents > 0n ? 'receivable' : 'payable'
+      row[key] = fmt(dec(row[key]) + abs(cents))
     }
   }
   return rows
 }
-
-const toNumber = (raw: string) => Math.round(Number(raw) * 100)
 
 export function contactEvents(contactId: string): ContactEventBalance[] {
   return mockSharedEvents.flatMap((event) =>
@@ -216,7 +216,7 @@ export function contactEvents(contactId: string): ContactEventBalance[] {
         ends_on: event.ends_on,
         currency: event.currency,
         status: eventStatus(event, computeSplit(event)),
-        amount: fromCents(cents),
+        amount: fmt(cents),
         due_at: termOf(
           event,
           event.participants.find((person) => person.contact_id === contactId),
@@ -247,7 +247,7 @@ export function txLinks(): SharedTxLink[] {
 }
 
 const NBSP = ' '
-const money = (cents: number) => `${fromCents(cents).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP)}${NBSP}₽`
+const money = (value: bigint) => `${fmt(value).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP)}${NBSP}₽`
 
 /** A short chat text in the shape of the core one (ru only here). */
 export function shareText(event: SharedEvent): string {
@@ -259,8 +259,7 @@ export function shareText(event: SharedEvent): string {
   if (plan.length === 0) lines.push('Все рассчитались')
   else {
     lines.push('Кто кому:')
-    for (const line of plan)
-      lines.push(`• ${label(line.from)} → ${label(line.to, true)}: ${money(toNumber(line.amount))}`)
+    for (const line of plan) lines.push(`• ${label(line.from)} → ${label(line.to, true)}: ${money(dec(line.amount))}`)
   }
   return lines.join('\n')
 }
@@ -273,8 +272,8 @@ export function contactBalancesWithEvents(txs: Transaction[]): ContactBalance[] 
     const row = rows.find((entry) => entry.contact_id === extra.contact_id && entry.asset.symbol === extra.asset.symbol)
     if (!row) rows.push(extra)
     else {
-      row.receivable = fromCents(toNumber(row.receivable) + toNumber(extra.receivable))
-      row.payable = fromCents(toNumber(row.payable) + toNumber(extra.payable))
+      row.receivable = fmt(dec(row.receivable) + dec(extra.receivable))
+      row.payable = fmt(dec(row.payable) + dec(extra.payable))
     }
   }
   return rows

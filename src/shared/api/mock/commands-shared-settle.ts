@@ -1,11 +1,12 @@
 /** Commands: shared events, items, purchases and settling. */
 
 import { txId } from '@/shared/lib/transactions'
+import { SCALE, dec, divRound, fmt, roundTo } from './shared-events/dec'
 import { mockPrices } from './demo'
 import { mockStores, mockTransactions } from './demo'
 import type { MockCommands } from './core'
 import { eventOrFail, viewOf } from './commands-shared-events'
-import { ME } from './shared-events/engine'
+import { ME, computeSplit, overridesFit, sharerPool } from './shared-events/engine'
 import { fail, mockEventPayment } from './shared-events/state'
 
 const bad = (message: string) => fail(message.startsWith('participant') ? 'MISSING' : 'INVALID_INPUT', message)
@@ -21,11 +22,11 @@ function dropTx(id: string | null) {
   if (index >= 0) mockTransactions.splice(index, 1)
 }
 
-/** Event-currency units per unit of `currency`, from the mock's USD prices. */
-function mockRate(event: SharedEvent, currency: string): number | null {
-  const from = mockPrices[currency.toUpperCase()]
-  const to = mockPrices[event.currency.toUpperCase()]
-  return from && to ? from / to : null
+/** Event-currency units per unit of `currency`, from the mock's USD prices, to six places like the cache rate. */
+function mockRate(event: SharedEvent, currency: string): bigint | null {
+  const from = dec(String(mockPrices[currency.toUpperCase()] ?? 0))
+  const to = dec(String(mockPrices[event.currency.toUpperCase()] ?? 0))
+  return from > 0n && to > 0n ? roundTo(divRound(from * SCALE, to), 100n) : null
 }
 
 function findPurchase(event: SharedEvent, purchaseId: string) {
@@ -42,13 +43,20 @@ function purchaseFrom(event: SharedEvent, draft: SharedPurchaseDraft, id: string
   if (buyer === ME ? !event.i_participate : !event.participants.some((person) => person.id === buyer)) {
     return buyer === ME ? 'you do not take part in this event' : `participant ${buyer}`
   }
-  if (!(Number(draft.qty) > 0)) return 'the quantity must be positive'
-  if (!(Number(draft.amount) > 0)) return 'the amount must be positive'
+  if (!(dec(draft.qty) > 0n)) return 'the quantity must be positive'
+  if (!(dec(draft.amount) > 0n)) return 'the amount must be positive'
   const currency = draft.currency.trim().toLowerCase() || event.currency
-  let rate = 1
-  if (currency !== event.currency)
-    rate = Number(draft.rate_to_event) > 0 ? Number(draft.rate_to_event) : (mockRate(event, currency) ?? 0)
-  if (!rate) return `FX_MISSING ${currency.toUpperCase()}`
+  const foreign = currency !== event.currency.toLowerCase()
+  const typed = draft.rate_to_event !== null && draft.rate_to_event !== undefined
+  let rate = SCALE
+  if (foreign && typed) {
+    if (!(dec(draft.rate_to_event) > 0n)) return 'the rate must be positive'
+    rate = dec(draft.rate_to_event)
+  } else if (foreign) {
+    const found = mockRate(event, currency)
+    if (found === null) return `FX_MISSING ${currency.toUpperCase()}`
+    rate = found
+  }
   if (buyer === ME && !draft.store_id) return 'choose the wallet the payment comes from'
   return {
     id,
@@ -57,8 +65,8 @@ function purchaseFrom(event: SharedEvent, draft: SharedPurchaseDraft, id: string
     amount: draft.amount,
     currency,
     price_mode: draft.price_mode,
-    rate_to_event: String(rate),
-    rate_manual: Number(draft.rate_to_event) > 0 && currency !== event.currency,
+    rate_to_event: fmt(rate),
+    rate_manual: foreign && typed,
     tx_id: null,
     tx_owned: false,
     at: moment(draft.at),
@@ -205,8 +213,13 @@ export const sharedSettleCommands: MockCommands = {
     const input = body as AttachPaymentInput
     const event = eventOrFail(input.event_id)
     if (event instanceof Promise) return event
+    if (!event.i_participate) return bad('you do not take part in this event')
     const tx = mockTransactions.find((entry) => txId(entry) === input.tx_id)
     if (!tx || !('payment' in tx)) return bad('only a payment can be a purchase of an event')
+    if (tx.payment.asset.chain !== 'fiat') return bad('a purchase is paid in a currency, not in an asset')
+    const currency = tx.payment.asset.symbol.toLowerCase()
+    const rate = currency === event.currency.toLowerCase() ? SCALE : mockRate(event, currency)
+    if (rate === null) return fail('FX_MISSING', `no exchange rate for ${currency.toUpperCase()}`)
     if (event.items.some((entry) => entry.purchases.some((purchase) => purchase.tx_id === input.tx_id))) {
       return bad('this payment belongs to an event already')
     }
@@ -216,11 +229,11 @@ export const sharedSettleCommands: MockCommands = {
     item.purchases.push({
       id: crypto.randomUUID(),
       buyer: ME,
-      qty: input.qty ?? '1',
+      qty: input.qty && dec(input.qty) > 0n ? input.qty : '1',
       amount: payment.amount,
-      currency: payment.asset.symbol.toLowerCase(),
+      currency,
       price_mode: 'total',
-      rate_to_event: String(mockRate(event, payment.asset.symbol) ?? 1),
+      rate_to_event: fmt(rate),
       rate_manual: false,
       tx_id: input.tx_id,
       tx_owned: false,
@@ -232,8 +245,19 @@ export const sharedSettleCommands: MockCommands = {
     const input = body as SetShareOverrideInput
     const event = eventOrFail(input.event_id)
     if (event instanceof Promise) return event
-    event.adjustments = event.adjustments.filter((fix) => fix.participant_id !== input.participant_id)
-    if (input.total !== null) event.adjustments.push({ participant_id: input.participant_id, total: input.total })
+    const pool = sharerPool(event)
+    if (!pool.includes(input.participant_id)) return bad(`participant ${input.participant_id}`)
+    const adjustments = event.adjustments.filter((fix) => fix.participant_id !== input.participant_id)
+    if (input.total !== null) {
+      if (dec(input.total) < 0n) return bad('a total cannot be negative')
+      adjustments.push({ participant_id: input.participant_id, total: input.total })
+    }
+    const spent = computeSplit({ ...event, adjustments: [] }).spent
+    const fixed = adjustments.map((fix): [string, bigint] => [fix.participant_id, dec(fix.total)])
+    if (!overridesFit(fixed, pool, spent)) {
+      return bad('the fixed totals must not exceed what was bought, and must add up to it when everybody is fixed')
+    }
+    event.adjustments = adjustments
     return viewOf(event)
   },
 }

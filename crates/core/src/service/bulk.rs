@@ -67,6 +67,7 @@ impl UnlockedVault {
             for id in ids {
                 let index = vault.tx_index(id)?;
                 let property_id = vault.property_of_tx(id).map(str::to_string);
+                vault.cascade_shared_delete(id);
                 let transaction = vault.doc.transactions.remove(index);
                 vault.set_property_link(id, None);
                 out.push(DeletedTransaction {
