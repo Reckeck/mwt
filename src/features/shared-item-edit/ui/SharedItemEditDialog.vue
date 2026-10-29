@@ -17,7 +17,7 @@ import { ITEM_UNITS } from '../shared-item-edit.constants'
 import type { SharedItemEditDialogProps } from '../shared-item-edit.types'
 
 /**
- * «Добавить позицию» and «Изменить»: a name, a unit and an optional plan — how many and the price
+ * `Add an item` and `Edit`: a name, a unit and an optional plan — how many and the price
  * of one or of all. Without a plan the item is just a name that gets bought later.
  */
 const props = defineProps<SharedItemEditDialogProps>()

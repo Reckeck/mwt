@@ -6,7 +6,7 @@ import { useStoreTree } from '@/shared/api/queries'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 /**
- * The goal's progress, the automation that fills it and the wallet «Пополнить»
+ * The goal's progress, the automation that fills it and the wallet `Top up`
  * sends from: the first everyday wallet outside the goal.
  */
 export function useGoalDetails(

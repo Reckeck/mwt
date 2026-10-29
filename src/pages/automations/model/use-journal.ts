@@ -14,7 +14,7 @@ import { TONE_CLASS, journalDid, journalWhen } from '../lib/journal-view'
 /** Under `workflows`: a run, an answer or a switch refreshes the journal. */
 export const JOURNAL_KEY = [...WORKFLOW_KEYS.list, 'journal']
 
-/** The journal (Auto-1 · 4): what ran, the newest first, and the run that waits for «да» to confirm. */
+/** The journal (Auto-1 · 4): what ran, the newest first, and the run that waits for `Yes` to confirm. */
 export function useJournal() {
   const { t } = useI18n()
   const list = useQuery({

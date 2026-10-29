@@ -89,7 +89,7 @@ pub struct AppSettings {
     /// `None` = not asked yet.
     #[serde(default)]
     pub enrichment_opt_in: Option<bool>,
-    /// System-wide key combination that opens «+ Операция», in the
+    /// System-wide key combination that opens "+ Transaction", in the
     /// `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
     /// window manager's own bindings unless the user asks for it.
     #[serde(default)]
@@ -97,7 +97,7 @@ pub struct AppSettings {
     /// Guided tours already shown (by page), so a tour starts by itself only once.
     #[serde(default)]
     pub completed_tours: Vec<String>,
-    /// «Что нового» entries already shown after an update.
+    /// "What's new" entries already shown after an update.
     #[serde(default)]
     pub seen_whats_new: Vec<String>,
     /// This installation's id for vault sync; made once by [`Self::ensure_device_id`].
@@ -120,18 +120,18 @@ pub struct AppSettings {
     /// Decimal places balances render with on this screen; `None` = not taken over yet.
     #[serde(default)]
     pub display_decimals: Option<u32>,
-    /// Day this installation first ran (`YYYY-MM-DD`): «Что нового» skips what
+    /// Day this installation first ran (`YYYY-MM-DD`): "What's new" skips what
     /// came before it. `None` for installs older than the field.
     #[serde(default)]
     pub installed_at: Option<String>,
-    /// The dashboard's «Сегодня» strip is folded to one line on this screen.
+    /// The dashboard's "Today" strip is folded to one line on this screen.
     #[serde(default)]
     pub dashboard_today_collapsed: bool,
     /// A screen offers its tour on the first visit (a banner, never a window
-    /// that opens by itself). On for everyone until «Больше не предлагать».
+    /// that opens by itself). On for everyone until "Don't offer again".
     #[serde(default = "tour_offers_on")]
     pub tour_offers: bool,
-    /// Screens whose tour offer was waved off with «Не сейчас»: not offered again.
+    /// Screens whose tour offer was waved off with "Not now": not offered again.
     #[serde(default)]
     pub declined_tours: Vec<String>,
 }
@@ -429,7 +429,7 @@ pub struct UpdateAppSettingsInput {
     /// Replaces the list of tours already shown; `[]` shows them all again.
     #[serde(default)]
     pub completed_tours: Option<Vec<String>>,
-    /// Replaces the list of «Что нового» entries already shown.
+    /// Replaces the list of "What's new" entries already shown.
     #[serde(default)]
     pub seen_whats_new: Option<Vec<String>>,
     /// An empty name goes back to the host name.

@@ -20,9 +20,9 @@ import { MoneyCard } from '../money-card'
  * The one sum card for every `<Money>` on screen (Currency-1 · 5): a click on a
  * sum — a tap on a phone — shows it in the base currency at the operation's
  * rate and today's, and in the favourites. A card by the sum on a computer, a
- * sheet on a phone. C copies the number, Esc closes, «Все курсы» opens the
- * rates in Настройки › Деньги. A sum inside a button or a link keeps its click:
- * a hold opens the card there (and the row menu's «Сумма в других валютах»);
+ * sheet on a phone. C copies the number, Esc closes, `All rates` opens the
+ * rates in Settings › Money. A sum inside a button or a link keeps its click:
+ * a hold opens the card there (and the row menu's `Amount in other currencies`);
  * the hover tooltip is `MoneyTooltipHost`'s.
  */
 const { t } = useI18n()
@@ -72,7 +72,7 @@ useEventListener(
 )
 
 // A finger has no hover: a sum in a button or a link opens its card on a hold. A row with
-// its own hold (a history row) lists it in its menu instead, «Сумма в других валютах».
+// its own hold (a history row) lists it in its menu instead, `Amount in other currencies`.
 let holdTimer: ReturnType<typeof setTimeout> | undefined
 let holdFrom = { x: 0, y: 0 }
 let held: HTMLElement | null = null
@@ -129,7 +129,7 @@ function allRates() {
   void router.push({ query: settingsQuery(route.query, 'accounting', 'rates') })
 }
 
-/** The card takes focus itself, not its first button: C and Esc work at once, no ring on «Все курсы». */
+/** The card takes focus itself, not its first button: C and Esc work at once, no ring on `All rates`. */
 function focusCard(event: Event) {
   event.preventDefault()
   // In a popover Reka aims the event at the positioning wrapper around the card, which cannot take focus.

@@ -30,9 +30,9 @@ const props = defineProps<{
   canAddChild: boolean
   hasChildren: boolean
   refreshing: boolean
-  /** A property has no kind buttons yet: «+ Операция» waits here. */
+  /** A property has no kind buttons yet: `+ Operation` waits here. */
   operation: boolean
-  /** A phone has no «Продать» button in the header: it waits here. */
+  /** A phone has no `Sell` button in the header: it waits here. */
   sell?: boolean
 }>()
 const emit = defineEmits<{

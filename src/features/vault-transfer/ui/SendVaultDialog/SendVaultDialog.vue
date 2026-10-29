@@ -15,7 +15,7 @@ import SendVaultCode from './SendVaultCode.vue'
 import SendVaultPick from './SendVaultPick.vue'
 
 /**
- * «Передать на новое устройство»: pick the device waiting nearby, type the
+ * `Send to a new device`: pick the device waiting nearby, type the
  * vault password again, then the code its screen shows. Every transfer is
  * recorded and announced on all linked devices.
  */

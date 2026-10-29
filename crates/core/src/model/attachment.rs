@@ -43,7 +43,7 @@ pub struct Attachment {
     #[serde(default)]
     pub sha256: Option<String>,
     pub created_at: String,
-    /// Removed, waiting for «Отменить»: hidden from every list, its file kept
+    /// Removed, waiting for "Undo": hidden from every list, its file kept
     /// until the vault is opened next.
     #[serde(default)]
     pub removed_at: Option<String>,

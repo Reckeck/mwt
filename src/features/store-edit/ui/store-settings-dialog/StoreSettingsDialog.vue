@@ -16,9 +16,9 @@ import { cn } from '@/shared/lib/utils'
 import { useStoreSettings } from '../../model/use-store-settings'
 
 /**
- * «Настройки · <кошелёк>» (Wallets-3 · 19): the four tabs of settings in one
+ * `Settings · <wallet>` (Wallets-3 · 19): the four tabs of settings in one
  * screen — name and kind, budget, favourite, what the money is for, reconcile
- * and archive. The rarer settings stay on the page behind «Все настройки».
+ * and archive. The rarer settings stay on the page behind `All settings`.
  */
 const props = defineProps<{
   store: Store

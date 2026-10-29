@@ -4,7 +4,7 @@ import type { ResultChartStyle, ResultChartTexts, ScenarioLine } from './result-
 
 const num = (value: string) => Number(value)
 
-/** One run alone: «вложено» and «доход» stacked, the real balance dashed, the marks on the first series. */
+/** One run alone: `Invested` and `Income` stacked, the real balance dashed, the marks on the first series. */
 export function areaSeries(
   result: InvestResult,
   marks: { xAxis: string; name: string }[],
@@ -76,7 +76,7 @@ export function compareSeries(
       // A shorter plan stops where it ends; a longer one is cut at this run's last year.
       data: result.years.map((_row, year) => line.balances[year] ?? null),
       cursor: 'pointer',
-      // «Щелчок по линии открывает расчёт»: the line itself, not only its points.
+      // `Clicking a line opens the calculation`: the line itself, not only its points.
       triggerLineEvent: true,
     })),
   ]

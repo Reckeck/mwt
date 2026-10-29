@@ -18,9 +18,9 @@ import { useAutomationGlance } from '../model/use-automation-glance'
 import type { AutomationGlanceProps } from '../quick-glance.types'
 
 /**
- * «авто» in an operation row (Paths 2 · 10): which automation booked it, by
- * what rule and when it runs next; «Изменить сумму» corrects this very record,
- * «Журнал →» and «Автоматизация →» lead on. A workflow's record says so too.
+ * `Auto` in an operation row (Paths 2 · 10): which automation booked it, by
+ * what rule and when it runs next; `Change amount` corrects this very record,
+ * `Journal →` and `Automation →` lead on. A workflow's record says so too.
  */
 const props = defineProps<AutomationGlanceProps>()
 const { t } = useI18n()
@@ -48,7 +48,7 @@ const next = computed(() => {
   return item ? formatDayMonthShort(item.date) : '—'
 })
 
-/** «Автоматизация →» opens its card over this screen; a workflow's record leads to the workflow. */
+/** `Automation →` opens its card over this screen; a workflow's record leads to the workflow. */
 const toAutomation = computed(() =>
   entityLocation({ kind: automation.value ? 'automation' : 'workflow', id: props.automationId }, route.query),
 )

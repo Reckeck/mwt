@@ -1,4 +1,4 @@
-/** Older «Что нового» entries, before the capital work; `whats-new.ts` puts them after the new ones. */
+/** Older `What's new` entries, before the capital work; `whats-new.ts` puts them after the new ones. */
 import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_ARCHIVE: WhatsNewEntry[] = [

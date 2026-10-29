@@ -46,7 +46,7 @@ pub struct MonthBalanceDay {
 }
 
 /// The biggest income or spending of the last month: what the chart labels
-/// («+1 575 $ зарплата», «−36 $ Продукты»).
+/// ("+1 575 $ Salary", "−36 $ Groceries").
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MonthBalanceMark {
     /// `YYYY-MM-DD`.

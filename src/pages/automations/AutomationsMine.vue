@@ -10,7 +10,7 @@ import { useMine } from './model/use-mine'
 import { MineChips, MineEmpty, MineList, MineTable } from './ui/mine'
 
 /**
- * «Мои» (Auto-1 · 1–2): everything that fires on its own in one list —
+ * `Mine` (Auto-1 · 1–2): everything that fires on its own in one list —
  * repeats, schemes, reminders, price alerts — the soonest first. Empty, it
  * offers four ready-made starts.
  */

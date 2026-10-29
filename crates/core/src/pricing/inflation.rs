@@ -1,7 +1,7 @@
 //! Monthly inflation from the statistics offices, all public and keyless.
 //!
-//! - RUB: Bank of Russia `hd_base/infl` — an HTML table «Дата | Ключевая
-//!   ставка | Инфляция, % г/г | Цель», newest month first, decimal comma.
+//! - RUB: Bank of Russia `hd_base/infl` — an HTML table "Date | Key
+//!   rate | Inflation, % y/y | Target", newest month first, decimal comma.
 //! - USD: BLS CPI-U all items (`CUUR0000SA0`), JSON; the index level, so the
 //!   annual rate is the index against the same month a year before.
 //! - EUR: Eurostat HICP annual rate of change for the euro area

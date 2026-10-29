@@ -97,7 +97,7 @@ export function useReportFilter(group: Ref<MoneyGroup>) {
     if (key === 'store' || key === 'cur') return !ALL_WALLETS_GROUPS.includes(group.value)
     return true
   }
-  /** How many fields narrow this tab: «Сбросить (2)» shows when any. */
+  /** How many fields narrow this tab: `Reset (2)` shows when any. */
   const narrowed = computed(() => KEYS.filter((key) => applies(key) && one(key)).length)
   function reset() {
     Object.assign(filter, empty())

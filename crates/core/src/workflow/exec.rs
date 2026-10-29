@@ -3,11 +3,11 @@
 //!
 //! - A flow output leads to its targets in the order the wires were drawn.
 //! - A data input is computed when a node asks for it, once per run (a pure
-//!   data node is computed again on each pass of «Для каждого»).
+//!   data node is computed again on each pass of "For each").
 //! - A wire into an input wins over the field of the same name.
 //! - An action with no flow wire into it runs after the actions it takes
 //!   data from (data order), once each of them has run in this pass.
-//! - A failing node takes its «Ошибка» way if it has one wired. Otherwise,
+//! - A failing node takes its "Error" way if it has one wired. Otherwise,
 //!   inside one of several branches, only that branch is undone and the others
 //!   go on (the run ends «partly»); on the main line the whole run fails and
 //!   nothing it did is kept.
@@ -33,9 +33,9 @@ use super::types::{PortType, WfValue};
 pub const MAX_STEPS: usize = 500;
 /// Most operation-making nodes one run executes.
 pub const MAX_ACTIONS: usize = 20;
-/// Most items «Для каждого» goes through.
+/// Most items "For each" goes through.
 pub const MAX_ITEMS: usize = 200;
-/// How deep «Вызвать схему» may nest.
+/// How deep "Call scheme" may nest.
 pub const MAX_CALL_DEPTH: u32 = 5;
 
 /// Nodes that change what data nodes read (variables, balances): the values
@@ -47,7 +47,7 @@ const WRITES: [&str; 4] = [
     "action.distribute",
 ];
 
-/// Nodes that may stand apart from the flow: with no wire into «Вход» they
+/// Nodes that may stand apart from the flow: with no wire into "Sign in" they
 /// still run, once, after the rest of the run.
 pub const FREE_RUNNING: [&str; 5] = [
     "var.set",
@@ -74,7 +74,7 @@ pub enum StepStatus {
     Skipped,
     /// Its operations went to the confirmation queue.
     Queued,
-    /// Failed; the run went on by the «Ошибка» way or stopped.
+    /// Failed; the run went on by the "Error" way or stopped.
     Error,
     Stopped,
     Waiting,
@@ -96,7 +96,7 @@ pub struct TraceStep {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resume {
     pub node_id: String,
-    /// The output it goes on from: «Дальше», or «Да»/«Нет» after a question.
+    /// The output it goes on from: "Next", or "Yes"/"No" after a question.
     pub port: String,
     pub memo: String,
 }
@@ -118,15 +118,15 @@ pub struct RunContext {
     /// Most one run may move, in the base currency.
     pub max_amount: Option<Amount>,
     pub resume: Option<Resume>,
-    /// How many «Вызвать схему» deep this run is.
+    /// How many "Call scheme" deep this run is.
     pub call_depth: u32,
-    /// Emulation only: answers already given to «Ждать подтверждения»
+    /// Emulation only: answers already given to "Wait for confirmation"
     /// nodes, by node id. A question without an answer pauses the emulation.
     pub answers: BTreeMap<String, bool>,
-    /// Every firing of the trigger gathered for «Очередь», each one's trigger
+    /// Every firing of the trigger gathered for "Queue", each one's trigger
     /// values; empty — just this one (`trigger_values`).
     pub batch: Vec<BTreeMap<String, WfValue>>,
-    /// «Повторить» of a refused run: operations are dated now, the money
+    /// "Retry" of a refused run: operations are dated now, the money
     /// checked now, while they still name the moment they were planned for.
     pub retry: bool,
 }
@@ -159,7 +159,7 @@ impl RunContext {
     }
 }
 
-/// An event a run sent with «Отправить событие».
+/// An event a run sent with "Send event".
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct EmittedEvent {
     pub name: String,
@@ -190,8 +190,8 @@ pub struct RunReport {
     pub edge_values: BTreeMap<String, String>,
 }
 
-/// A «Ждать подтверждения» question for the trace, in both languages: the
-/// user's own text, or «Продолжить?» / «Go on?» when the node asks nothing.
+/// A "Wait for confirmation" question for the trace, in both languages: the
+/// user's own text, or "Continue" / «Go on?» when the node asks nothing.
 pub(crate) fn asked(question: &str) -> (String, String) {
     if question.trim().is_empty() {
         ("Продолжить?".into(), "Go on?".into())
@@ -206,18 +206,18 @@ pub(crate) enum Halt {
     Stop(String),
     Fail(String),
     Wait(Box<WorkflowWait>),
-    /// «Вернуть значение»: a called workflow ends with this value.
+    /// "Return value": a called workflow ends with this value.
     Return(Box<WfValue>),
-    /// «Прервать цикл»: the nearest loop goes on to its «Готово».
+    /// "Break loop": the nearest loop goes on to its "Done".
     Break,
-    /// «Создать операцию» set to refuse found the money short.
+    /// "Create transaction" set to refuse found the money short.
     Reject(Box<crate::model::planning::RejectReason>),
 }
 
 /// How a node can fail.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Fault {
-    /// The node's own failure: the «Ошибка» way, if it has one.
+    /// The node's own failure: the "Error" way, if it has one.
     Error(String),
     /// The run ends.
     Halt(Halt),
@@ -284,7 +284,7 @@ pub(crate) struct Executor<'run> {
     pub notices: Vec<NoticeRecord>,
     pub events: Vec<EmittedEvent>,
     pub reminders: Vec<Reminder>,
-    /// Emulation only: seconds «Подождать» has moved the clock forward, so
+    /// Emulation only: seconds "Wait" has moved the clock forward, so
     /// the nodes after it see the moment the real run would go on at.
     clock_shift: i64,
     trace: Vec<TraceStep>,
@@ -885,8 +885,8 @@ impl Executor<'_> {
         self.follow(&node.id, "done")
     }
 
-    /// «Очередь»: the gathered firings, one by one, each with its own trigger
-    /// values; «Независимо» undoes only the firing that fails.
+    /// "Queue": the gathered firings, one by one, each with its own trigger
+    /// values; "Independently" undoes only the firing that fails.
     fn queue(&mut self, node: &Node, def: &NodeDef) -> Result<(), Halt> {
         let ctx = self.ctx;
         let items = if ctx.batch.is_empty() {
@@ -926,7 +926,7 @@ impl Executor<'_> {
                 (other, _) => other?,
             }
         }
-        // «Готово» sees the first firing, as the nodes before the queue did.
+        // "Done" sees the first firing, as the nodes before the queue did.
         if let Some(first) = items.first() {
             for (port, value) in first {
                 self.memo
@@ -948,7 +948,7 @@ impl Executor<'_> {
     }
 
     /// One pass of a loop: its outputs set, its «each» way run. `false` when
-    /// «Прервать цикл» ended the loop.
+    /// "Break loop" ended the loop.
     fn loop_pass(
         &mut self,
         node: &Node,
@@ -972,7 +972,7 @@ impl Executor<'_> {
         }
     }
 
-    /// «Повторить N раз», «Цикл по числам», «Пока условие да».
+    /// "Repeat N times", "Loop over numbers", "While the condition is yes".
     fn run_loop(&mut self, node: &Node, def: &NodeDef) -> Result<(), Halt> {
         let number = |value: i64| WfValue::Number(Amount::new(rust_decimal::Decimal::from(value)));
         match node.kind.as_str() {

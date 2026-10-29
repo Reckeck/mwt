@@ -1,4 +1,4 @@
-//! The dashboard's «Сегодня» strip and the calculator-scenario widget
+//! The dashboard's "Today" strip and the calculator-scenario widget
 //! (plan H4–H5): one request each, built from what the other widgets show.
 
 use std::collections::BTreeMap;
@@ -28,7 +28,7 @@ const TODAY_HORIZON_DAYS: u32 = 14;
 pub enum TodayTodoKind {
     /// A payment the accounts will not cover by its date.
     Shortfall,
-    /// An automation run that failed and waits for «Повторить / Пропустить».
+    /// An automation run that failed and waits for "Retry / Skip".
     RejectedRun,
     /// An operation booked with an approximate amount, waiting for the real one.
     UnconfirmedRun,
@@ -70,7 +70,7 @@ pub struct DashboardToday {
     pub net_worth: Comparison,
     /// The checkup's light; `None` when the checkup cannot be built.
     pub health: Option<HealthColor>,
-    /// «Можно тратить сегодня», in `budget_currency`.
+    /// "Safe to spend today", in `budget_currency`.
     pub left_today: Amount,
     pub budget_currency: String,
     /// Up to three, the earliest first.
@@ -121,7 +121,7 @@ impl UnlockedVault {
         self.rate_book().convert(usd, "usd", currency, now)
     }
 
-    /// Plan against fact for one saved scenario: the fact is its «Из данных»
+    /// Plan against fact for one saved scenario: the fact is its "From your data"
     /// wallets, or else the wallets of the goal that follows it.
     pub fn scenario_status(&self, id: &str, now: i64, zone: &str) -> Result<ScenarioStatus> {
         let scenario = self
@@ -301,7 +301,7 @@ impl UnlockedVault {
         todos
     }
 
-    /// Everything «Сегодня» shows, in one request (plan H5).
+    /// Everything "Today" shows, in one request (plan H5).
     pub fn dashboard_today(
         &self,
         period: DashPeriod,

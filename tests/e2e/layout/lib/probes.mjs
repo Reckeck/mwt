@@ -162,7 +162,7 @@ export const NARROW_FIELDS = `
 
 /**
  * A day band of a list (sticky `h3` in a card) glued to, or over, the card's header above it:
- * «Что изменилось» had its band under the title with no gap. At least 8px from the header's
+ * `What changed` had its band under the title with no gap. At least 8px from the header's
  * last element to the band (the 8/12/16 scale); measured at the top of the page, where sticky has not moved it.
  */
 export const DAY_BAND_GAP = `
@@ -181,7 +181,7 @@ export const DAY_BAND_GAP = `
   return [...new Set(out)]
 `
 
-/** The same settings section twice on one screen (Учёт › Общее once showed «Категории» beside the «Категории» tab). */
+/** The same settings section twice on one screen (Accounting › General once showed `Categories` beside the `Categories` tab). */
 export const DUPLICATE_SECTIONS = `
   const seen = new Map()
   for (const el of document.querySelectorAll('section[data-section]')) {

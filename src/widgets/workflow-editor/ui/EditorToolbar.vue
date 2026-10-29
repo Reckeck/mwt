@@ -22,8 +22,8 @@ import RunFromMenu from './RunFromMenu.vue'
 import { activeStatus } from '../model/node-problem'
 
 /**
- * The editor's top row (Auto-2 · 13): «Автоматизации ›», the name, on/off,
- * undo and redo, then the simple mode, the emulation and «Сохранить». The
+ * The editor's top row (Auto-2 · 13): `Automations ›`, the name, on/off,
+ * undo and redo, then the simple mode, the emulation and `Save`. The
  * rest — run now, duplicate, copy, paste, a note, the keys — sits under «⋯».
  */
 const props = defineProps<{
@@ -57,7 +57,7 @@ const simple = defineModel<boolean>('simple', { required: true })
 const hotkeysOpen = defineModel<boolean>('hotkeys', { required: true })
 
 const { t, locale } = useI18n()
-/** «Автоматизации ›» leads to where the editor was opened from (a wallet, a card, Home), else to «Мои». */
+/** `Automations ›` leads to where the editor was opened from (a wallet, a card, Home), else to `Mine`. */
 const cameFrom = useCameFrom({ name: 'automations' }, 'nav.automations')
 const status = computed(() => activeStatus(active.value, props.blockers, t, pluralForm(props.blockers, locale.value)))
 </script>

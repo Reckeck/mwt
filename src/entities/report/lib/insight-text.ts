@@ -12,7 +12,7 @@ export interface InsightTextContext {
   category: (key: string) => string
 }
 
-/** «март 2026» from `YYYY-MM`. */
+/** `March 2026` from `YYYY-MM`. */
 export function monthName(key: string, locale: string): string {
   return formatMonthKey(key, { month: 'long', year: 'numeric' }, locale)
 }

@@ -24,7 +24,7 @@ const scenarioId = computed<string | null>({
   },
 })
 
-/** «Сравнить»: the variants follow the form, the saved scenarios run with their own parameters. */
+/** `Compare`: the variants follow the form, the saved scenarios run with their own parameters. */
 const compare = useCompareLines(
   () => scenarioId.value,
   () => calc.outcome.data.value?.input ?? null,
@@ -84,7 +84,7 @@ function openGoal(draft: GoalInput) {
     </ScenarioBar>
     <div class="grid items-start gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <InvestCalculatorForm :calc="calc" />
-      <!-- On a phone the fields come first, then the answer and «Создать цель» under it (Money 3 · 18). -->
+      <!-- On a phone the fields come first, then the answer and `Create goal` under it (Money 3 · 18). -->
       <InvestResult :calc="calc" :compare="compare" @goal="wantGoal" @open="openCompared" />
     </div>
     <GoalDialog v-model:open="goalOpen" :draft="goalDraft" :from-calc="goalFrom" />

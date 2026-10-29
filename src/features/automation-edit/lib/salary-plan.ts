@@ -1,7 +1,7 @@
 import { fiatRef } from '@/shared/lib/asset-ref'
 import { dateInputToIso, localDate } from '@/shared/lib/planning'
 
-/** «За какой месяц» of a payout: the month before the one it comes in, or the same one. */
+/** `For which month` of a payout: the month before the one it comes in, or the same one. */
 export type SalaryForMonth = 'previous' | 'current'
 
 /** The months in the order the select lists them; the value is `for_month_offset` of the automation. */
@@ -13,13 +13,13 @@ export interface SalaryPayout {
   day: number
   forMonth: SalaryForMonth
   shift: WorkdayShift
-  /** «Меняется — спрашивать»: the amount is asked at each confirmation, `amount` is the usual one. */
+  /** `Varies — ask`: the amount is asked at each confirmation, `amount` is the usual one. */
   varies: boolean
   amount: string
   currency: string
 }
 
-/** What «Зарплата» (Auto-2 · 9) asks beyond the payouts: where it comes from and to. */
+/** What `Salary` (Auto-2 · 9) asks beyond the payouts: where it comes from and to. */
 export interface SalaryDraft extends SalaryPayout {
   category: string
   storeId: string
@@ -38,7 +38,7 @@ export function defaultPayout(kind: 'salary' | 'advance', name: string, currency
   }
 }
 
-/** Part of the salary «Заплати себе первым» moves to cash after it comes. */
+/** Part of the salary `Pay yourself first` moves to cash after it comes. */
 export const SALARY_SHARE_PCT = 10
 
 /** The monthly top-up the template books: the salary's category, wallet and usual amount. */

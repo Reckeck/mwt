@@ -55,7 +55,7 @@ export interface SplitCaption {
   parts: string[]
 }
 
-/** The line under the item: nothing for everybody, «только Петя, Вася» or «по штукам · Петя 3, Вася 5». */
+/** The line under the item: nothing for everybody, `only Pete, Vasya` or `by units · Pete 3, Vasya 5`. */
 export function splitCaption(
   split: ItemSplit,
   nameOf: (id: string) => string,

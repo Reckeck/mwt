@@ -1,4 +1,4 @@
-/** Shapes of the «Что нового» list in `whats-new.ts`. */
+/** Shapes of the `What's new` list in `whats-new.ts`. */
 export interface WhatsNewPoint {
   /** i18n key under `whatsNew.<entry id>.`. */
   key: string

@@ -8,7 +8,7 @@ import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { formatMonthKey } from '@/shared/lib/format'
 
 /**
- * «Перенесено дальше» as a line over the months (Money 3 · 15), shown while the
+ * `Carried on` as a line over the months (Money 3 · 15), shown while the
  * carry is on: a month that went into the red is an orange dot, the running month
  * is shaded. A click on a point opens that month.
  */

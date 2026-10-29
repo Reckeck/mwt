@@ -27,7 +27,7 @@ export interface CalcOutcome {
 const DEBOUNCE_MS = 300
 const MAX_YEARS = 100
 const MAX_RATE = 200
-// The same steps as core's «Что выгоднее» rows.
+// The same steps as core's `Which pays more` rows.
 
 /**
  * The calculator's state: the fields, their checks, and a live result that
@@ -115,14 +115,14 @@ export function useInvestCalc() {
     validation.submit(() => undefined, event)
   }
 
-  /** Where «Из данных» took the numbers from; saved with the scenario. */
+  /** Where `From your data` took the numbers from; saved with the scenario. */
   const source = ref<ScenarioSource | null>(null)
   const prefilledAt = ref<string | null>(null)
-  /** The last «Обновить из данных»: the answer compares a contribution with this income. */
+  /** The last `Refresh from data`: the answer compares a contribution with this income. */
   const prefilled = ref<ScenarioPrefill | null>(null)
 
   /**
-   * The average income, for «это 28 % среднего дохода» (Money 3 · 19) before «Из данных» was ever
+   * The average income, for `that is 28 % of average income` (Money 3 · 19) before `From your data` was ever
    * run: the same backend answer with a zero share, read only, nothing goes into the fields.
    */
   const incomeHint = useQuery({
@@ -135,7 +135,7 @@ export function useInvestCalc() {
     placeholderData: keepPreviousData,
     enabled: computed(() => form.mode === 'contribution' && prefilled.value === null),
   })
-  /** What the answer compares a found contribution with: the last «Обновить из данных», or the income alone. */
+  /** What the answer compares a found contribution with: the last `Refresh from data`, or the income alone. */
   const incomeBasis = computed(() => prefilled.value ?? incomeHint.data.value ?? null)
 
   /** Put a saved input into the fields, keeping the mode the user is in. */
@@ -146,7 +146,7 @@ export function useInvestCalc() {
     prefilled.value = null
   }
 
-  /** «Обновить из данных»: the balance, the deposit terms and a share of the income go into the fields. */
+  /** `Refresh from data`: the balance, the deposit terms and a share of the income go into the fields. */
   function applyPrefill(from: ScenarioSource, data: ScenarioPrefill) {
     form.initial = data.initial
     if (data.rate_pct !== null) form.rate = data.rate_pct
@@ -160,25 +160,25 @@ export function useInvestCalc() {
     prefilled.value = data
   }
 
-  /** The found value written back into the fields, so «Сохранить» keeps what the user sees. */
+  /** The found value written back into the fields, so `Save` keeps what the user sees. */
   function acceptSolved() {
     const data = outcome.data.value
     if (!data?.solved) return
     Object.assign(form, fromInput(data.input, { mode: 'result', target: '' }))
   }
 
-  /** «Подставить» in «Что выгоднее»: the same change the row was computed with. */
+  /** `Use it` in `Which pays more`: the same change the row was computed with. */
   function applyCompare(kind: CompareKind) {
     if (kind === 'more_rate') form.rate = bumpAmount(form.rate, kind)
     if (kind === 'more_contribution') for (const stage of form.stages) stage.amount = bumpAmount(stage.amount, kind)
   }
 
-  /** «Подставить» the withdrawal that lasts the whole term. */
+  /** `Use it` the withdrawal that lasts the whole term. */
   function applyWithdrawal(amount: string) {
     form.withdrawal.amount = amount
   }
 
-  /** What «Сохранить» stores: the fields as the engine reads them and the «Из данных» source. */
+  /** What `Save` stores: the fields as the engine reads them and the `From your data` source. */
   const snapshot = () => ({ input: toInput(form), source: source.value, prefilledAt: prefilledAt.value })
 
   return {

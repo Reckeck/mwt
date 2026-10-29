@@ -56,14 +56,14 @@ const netInBase = computed(() => {
 })
 const showBase = computed(() => nets.value.some((row) => row.symbol.toLowerCase() !== settings.baseCurrency.toLowerCase()))
 
-/** «Вернули долг» when they owe, «Вернуть долг» when you do: the next thing a debt asks for. */
+/** `Debt returned` when they owe, `Repay debt` when you do: the next thing a debt asks for. */
 const settle = computed<DebtEffect | null>(() => {
   const first = nets.value[0]
   if (!first) return null
   return first.net > 0 ? 'collect' : 'repay'
 })
 
-/** «Человек · Семья · 3 реквизита». */
+/** `Person · Family · 3 requisites`. */
 const subtitle = computed(() => {
   const { active } = accountCounts(props.contact.accounts)
   return [

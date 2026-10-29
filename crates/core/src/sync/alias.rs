@@ -1,5 +1,5 @@
 //! A friendly name for a device, as LocalSend makes them: an adjective and
-//! a fruit («Сочный Апельсин», «Swift Mango»). Other devices see it in the
+//! a fruit ("Juicy Orange", «Swift Mango»). Other devices see it in the
 //! list of devices nearby and while pairing; the user can change it.
 
 use rand::Rng;

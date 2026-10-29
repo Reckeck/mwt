@@ -11,7 +11,7 @@ import { Money } from '@/entities/currency'
 import { wealthChange } from '@/entities/report'
 
 /**
- * «Капитал 42 052,50 $» with what the month and the period changed, and the
+ * `Capital 42,052.50 $` with what the month and the period changed, and the
  * spans one compares over (Money 2 · 12). The chart goes in the slot.
  */
 const props = defineProps<{ points: NetworthPoint[]; currency: string; range: { from: string; to: string } }>()

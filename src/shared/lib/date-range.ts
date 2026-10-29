@@ -14,7 +14,7 @@ function parse(value: string | null | undefined): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
 }
 
-/** «2 ноя» (ru: the first three letters of the genitive month), «2 Nov» in other languages. */
+/** `2 Nov` in English (ru: the first three letters of the genitive month). */
 function dayMonth(date: Date, locale: string): { day: string; month: string } {
   const day = String(date.getDate())
   if (locale.startsWith('ru')) {
@@ -26,7 +26,7 @@ function dayMonth(date: Date, locale: string): { day: string; month: string } {
 }
 
 /**
- * How a range reads in a button: «2 ноя», «2–4 ноя», «30 окт – 2 ноя»; a span across
+ * How a range reads in a button: `Nov 2`, `Nov 2–4`, `Oct 30 – Nov 2`; a span across
  * years adds the year to both ends. Empty for no start.
  */
 export function formatDateRange(range: DateRange | null | undefined, locale: string): string {

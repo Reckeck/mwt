@@ -48,7 +48,7 @@ export function useTxBudget(state: TxFormState) {
     },
     enabled: computed(() => !props.template && form.kind === 'payment' && Boolean(budgetStatus.data.value?.length)),
   })
-  /** «Лимит на месяц будет превышен на 120 $», one per budget the sum does not fit: the parts of each. */
+  /** `The monthly limit will be exceeded by 120 $`, one per budget the sum does not fit: the parts of each. */
   const overruns = computed(() =>
     (overLimits.data.value ?? []).map(({ status, over }) => ({
       id: status.budget.id,

@@ -8,7 +8,7 @@ import { Select, SelectItem } from '@/shared/ui/select'
 
 import type { FilterFieldProps } from '../../transaction-filter.types'
 
-/** «Вид»: one kind at a time; several (from a report) show as a chip in the row instead. */
+/** `Kind`: one kind at a time; several (from a report) show as a chip in the row instead. */
 const props = defineProps<FilterFieldProps>()
 const filter = defineModel<TxFilter>({ required: true })
 

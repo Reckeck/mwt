@@ -11,12 +11,12 @@ import { cn } from '@/shared/lib/utils'
 
 import type { PointsMode, ProgramRow } from '../bonus-programs.types'
 
-/** The programmes as a table (Ops-2 · 12): «Начислить» on the row, the rest in «⋯». */
+/** The programmes as a table (Ops-2 · 12): `Credit` on the row, the rest in «⋯». */
 const props = defineProps<{ rows: ProgramRow[]; baseCurrency: string; highlighted: string }>()
 const emit = defineEmits<{ points: [store: Store, mode: PointsMode]; settings: [store: Store] }>()
 const { t, te } = useI18n()
 
-/** «В долларах», «В рублях»; other bases by their code. */
+/** `In dollars`, `In roubles`; other bases by their code. */
 const inBase = (code: string) =>
   te(`bonuses.inBase.${code}`) ? t(`bonuses.inBase.${code}`) : t('bonuses.inBase.other', { code: code.toUpperCase() })
 

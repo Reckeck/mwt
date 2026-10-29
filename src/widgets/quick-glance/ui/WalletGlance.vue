@@ -12,8 +12,8 @@ import WalletGlanceBody from './WalletGlanceBody.vue'
 
 /**
  * A wallet's name in an operation row opened on the spot (Paths 1 · 4): its
- * value, the sub-accounts and the last three operations; then «Перевести»,
- * «Обменять» or «Открыть кошелёк →». The list under it stays where it was.
+ * value, the sub-accounts and the last three operations; then `Transfer`,
+ * `Exchange` or `Open wallet →`. The list under it stays where it was.
  */
 const props = defineProps<WalletGlanceProps>()
 const { t } = useI18n()

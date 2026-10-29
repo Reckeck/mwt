@@ -1,6 +1,6 @@
 import { GP } from './steps.mjs'
 
-/** «Вместе» (shared events): the first event, plan and purchases, how to split. `mise run shots -- together`. */
+/** `Together` (shared events): the first event, plan and purchases, how to split. `mise run shots -- together`. */
 
 const EVENT = '/money/together/mock-event-skewers'
 /** The list and the event are TanStack queries: calls made straight through `call` leave them stale. */
@@ -33,7 +33,7 @@ const FILL_EVENT = [
   { wait: 300 },
 ]
 
-/** A fresh planned event with five people and an empty list: «Шашлыки 2», for the «created» frame. */
+/** A fresh planned event with five people and an empty list: `Barbecue 2`, for the «created» frame. */
 const CREATE_EMPTY = `
   ${GP} ${wait}
   const { call } = await import('/src/shared/api/ipc.ts')

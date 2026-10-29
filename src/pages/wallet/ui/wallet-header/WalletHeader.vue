@@ -30,7 +30,7 @@ const props = defineProps<{
   /** The sub-accounts card offers a new one already. */
   hasChildren: boolean
   refreshing: boolean
-  /** An exchange's own wallet: its buttons open «Сделка». */
+  /** An exchange's own wallet: its buttons open `Trade`. */
   exchange?: boolean
   /** Nothing in it yet (Wallets-3 · 18): the first step below replaces the buttons; a phone keeps only the title. */
   empty?: boolean
@@ -53,7 +53,7 @@ const { t } = useI18n()
 const phone = useIsPhone()
 const router = useRouter()
 
-/** The way up: «Кошельки ›», then the wallets above this one; a top-level wallet ends with its own name. */
+/** The way up: `Wallets ›`, then the wallets above this one; a top-level wallet ends with its own name. */
 const crumbs = computed<PageCrumb[]>(() => [
   { label: t('nav.stores'), to: { name: 'stores' } },
   ...props.ancestors.map((parent) => ({ label: parent.name, to: { name: 'wallet', params: { id: parent.id } } })),
@@ -63,9 +63,9 @@ const crumbs = computed<PageCrumb[]>(() => [
 const rootOnPhone = computed(() => phone.value && !props.ancestors.length)
 
 const actions = computed(() => walletActions(props.store, Boolean(props.exchange)))
-/** Property (Wallets-2 · 10): «стоимость не задана · Оценить» until it has one, and «Продать». */
+/** Property (Wallets-2 · 10): `value not set · Estimate` until it has one, and `Sell`. */
 const property = computed(() => props.store.kind === 'property' && !props.store.parent_id)
-/** «курс 93,75 ₽ · Банк · в бюджете» or «Биржа · BTC, USDT»; a phone drops the rate, property its asset's code. */
+/** `rate 93.75 ₽ · Bank · in the budget` or `Exchange · BTC, USDT`; a phone drops the rate, property its asset's code. */
 // money: plain — an exchange rate, a price of one unit rather than a sum to convert
 const subtitle = computed(() => {
   const own = props.figure.base

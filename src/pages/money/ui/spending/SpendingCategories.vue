@@ -20,7 +20,7 @@ import { CategorySheet } from '../category-sheet'
 /**
  * The period's categories (Money 1 · 1, 2, 5): the sum, the bar (against the
  * biggest, or against the limit), the usual month, the limit. A row opens the
- * category; «Задать лимит» opens the limit wizard. On a phone each is a card.
+ * category; `Set a limit` opens the limit wizard. On a phone each is a card.
  */
 const props = defineProps<{ rows: SpendingCategory[]; currency: string; filter: ReportFilter; months: string[] }>()
 
@@ -51,7 +51,7 @@ function limitOf(row: SpendingCategory): { text: SumPart[]; hint: SumPart[] | nu
   }
 }
 
-/** The limit's words for the category sheet: «Лимит: …». */
+/** The limit's words for the category sheet: `Limit…`. */
 function sheetLimit(item: (typeof view.value)[number] | null): SumPart[] {
   if (!item?.row.budget) return words(t('money.category.noLimit'))
   const { mark, parts } = composeSums()
@@ -86,7 +86,7 @@ function show(item: (typeof view.value)[number]) {
   sheet.value = true
 }
 
-/** `?category=` — «Открыть в Тратах» from Ctrl K (Paths 2 · 8) opens that category once its row is in. */
+/** `?category=` — `Open in Spending` from Ctrl K (Paths 2 · 8) opens that category once its row is in. */
 const route = useRoute()
 const router = useRouter()
 watch(

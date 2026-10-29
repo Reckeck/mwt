@@ -20,7 +20,7 @@ const DTI_HIGH = 50
 /** Whole percents without «,0», a fraction with one place. */
 const pct = (value: string | null) => formatPct(value, { decimals: Number.isInteger(Number(value)) ? 0 : 1 })
 
-/** «октября»: the month as it reads after «от дохода», genitive where the language has one. */
+/** `October`: the month as it reads after `of income`, genitive where the language has one. */
 function monthOf(key: string): string {
   const date = new Date(`${key.slice(0, 7)}-01T12:00`)
   const parts = dateFormat({ day: 'numeric', month: 'long' }).formatToParts(date)

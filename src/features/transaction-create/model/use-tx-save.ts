@@ -125,7 +125,7 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
     meta: {
       error: 'form.saveFailed',
       // Read before `onSuccess` resets the form: the cache's handler runs first.
-      // The short form's dialog says it itself, with «Открыть» or «Отменить» (OpForm-1 · 4).
+      // The short form's dialog says it itself, with `Open` or `Undo` (OpForm-1 · 4).
       success: (tx) => {
         // Nothing saved: the core's rule was told under its field.
         if (!tx || (props.compact && !editing.value)) return ''

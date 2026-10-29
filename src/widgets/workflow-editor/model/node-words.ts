@@ -1,8 +1,8 @@
 import { nodeSummary } from './fields'
 
 /**
- * A node's value in words for its card (Auto-2 · 13): «пополнение на
- * Тинькофф», «сумма × 10 %», «спросить «Перевести?»», «Перевод → Наличные».
+ * A node's value in words for its card (Auto-2 · 13): `top-up to
+ * Tinkoff`, `amount × 10 %`, `ask `Transfer``, `Transfer → Cash`.
  * Wallets and categories by name, a wired input by the port it comes from.
  */
 export interface WordsNames {
@@ -24,7 +24,7 @@ function optionLabel(def: NodeDef, name: string, raw: unknown, ru: boolean): str
   return option ? (ru ? option[1].ru : option[1].en) : String(raw ?? '')
 }
 
-/** «B % от A» with A and B named: a wire by its port, a field by its value. */
+/** `B % of A` with A and B named: a wire by its port, a field by its value. */
 function operands(def: NodeDef, params: Record<string, unknown>, wired: WiredInputs, ru: boolean): string {
   const left = wired.a ?? 'A'
   const right = wired.b ?? String(params.b ?? 'B')

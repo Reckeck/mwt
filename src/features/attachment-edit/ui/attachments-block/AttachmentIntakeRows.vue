@@ -9,7 +9,7 @@ import type { FailedFile, PendingFile } from '../../attachment-edit.types'
 
 /**
  * Files on their way in (Attach 3) and the ones that did not make it
- * (Attach 7): a bar with «Отменить», or the reason in red with «Убрать».
+ * (Attach 7): a bar with `Undo`, or the reason in red with `Remove`.
  */
 const props = defineProps<{ pending: PendingFile[]; failed: FailedFile[] }>()
 const emit = defineEmits<{ cancel: [key: number]; dismiss: [key: number] }>()

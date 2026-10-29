@@ -4,6 +4,6 @@
  */
 export const isQuickContact = (contact: Contact): boolean => contact.accounts.length === 0
 
-/** Live quick contacts: the «Дозаполнить» filter and the counter. */
+/** Live quick contacts: the `To fill in` filter and the counter. */
 export const quickContacts = (contacts: Contact[]): Contact[] =>
   contacts.filter((contact) => !contact.archived && isQuickContact(contact))

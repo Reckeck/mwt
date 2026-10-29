@@ -14,9 +14,9 @@ import { SectionState } from '@/shared/ui/section-state'
 import type { SharedEventShareProps } from '../shared-event-share.types'
 
 /**
- * «Поделиться расчётом»: the text for the event's chat — purchases, shares, who pays whom and the
+ * `Share the settlement`: the text for the event's chat — purchases, shares, who pays whom and the
  * organizer's requisites — read-only. A computer copies it to the clipboard; a phone also offers
- * the system «Поделиться» when there is one.
+ * the system `Share` when there is one.
  */
 const props = defineProps<SharedEventShareProps>()
 const open = defineModel<boolean>('open', { required: true })

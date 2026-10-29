@@ -11,8 +11,8 @@ use super::types::PortType;
 
 /// Current graph format.
 ///
-/// - 2: «Ждать подтверждения» answers with «Да»/«Нет» instead of one «Дальше»;
-///   a wire from its old «Дальше» now leaves «Да».
+/// - 2: "Wait for confirmation" answers with "Yes"/"No" instead of one "Next";
+///   a wire from its old "Next" now leaves "Yes".
 /// - 3: data sets the order: an action with no flow wire into it runs after
 ///   the actions it takes data from. A node that this would bring to life in
 ///   an older graph (it never ran there) is switched off, so nothing changes.

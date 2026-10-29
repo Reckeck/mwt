@@ -25,7 +25,7 @@ export function useManualInflation() {
     { immediate: true, deep: true },
   )
 
-  /** `quiet`: the caller reports the change itself (a removal offers «Отменить»). */
+  /** `quiet`: the caller reports the change itself (a removal offers `Undo`). */
   async function persist(quiet = false) {
     const clean: Record<string, string> = {}
     for (const [code, rate] of Object.entries(table.value)) {

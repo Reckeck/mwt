@@ -13,8 +13,8 @@ import { SectionState } from '@/shared/ui/section-state'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
 /**
- * Trusted devices: this one first (marked «главное» when it is), then the paired
- * ones (forget one), and «Добавить устройство»: one device nearby is paired at once (the code
+ * Trusted devices: this one first (marked `main` when it is), then the paired
+ * ones (forget one), and `Add a device`: one device nearby is paired at once (the code
  * dialog follows), several or none are listed under the button.
  */
 const { t } = useI18n()

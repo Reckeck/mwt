@@ -1090,7 +1090,7 @@ pub struct CachedPrice {
     pub ts: String,
 }
 
-/// Whether the «+ Операция» key can be registered by the app, and the command
+/// Whether the "+ Transaction" key can be registered by the app, and the command
 /// a compositor binding runs instead when it cannot (Wayland).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct ShortcutSupport {
@@ -1143,7 +1143,7 @@ pub struct AdjustPointsInput {
     pub timestamp: Option<String>,
 }
 
-/// Set or clear the interest terms of a savings account, deposit or ПДС.
+/// Set or clear the interest terms of a savings account, deposit or PDS (a Russian long-term savings programme).
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetDepositTermsInput {
     pub store_id: String,
@@ -1243,7 +1243,7 @@ pub struct AutomationInput {
     /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
     #[serde(default)]
     pub time: Option<String>,
-    /// It asks «да» before it books the operation.
+    /// It asks "yes" before it books the operation.
     #[serde(default)]
     pub asks: bool,
     /// An income only: the month it is for, in months from the one it is
@@ -1411,7 +1411,7 @@ pub struct ReminderInput {
     /// `None` = once.
     #[serde(default)]
     pub repeat: Option<crate::model::planning::ReminderRepeat>,
-    /// «Оплатить» in the reminder; `None` — no button.
+    /// "Pay" in the reminder; `None` — no button.
     #[serde(default)]
     #[ts(optional)]
     pub pay: Option<crate::model::planning::ReminderPay>,
@@ -1650,7 +1650,7 @@ pub struct UpdateSettingsInput {
     /// What to be told about and how far ahead.
     #[serde(default)]
     pub notifications: Option<crate::model::notify::NotificationSettings>,
-    /// Replaces the list of checklist steps marked «Не нужно».
+    /// Replaces the list of checklist steps marked "Not needed".
     #[serde(default)]
     pub onboarding_skipped: Option<Vec<String>>,
     /// Usual monthly income while there is no history; zero clears it.
@@ -2126,7 +2126,7 @@ pub struct SetWorkflowActiveInput {
     pub active: bool,
 }
 
-/// The «Вкл.» switch of a «Мои» row.
+/// The "On" switch of a "Mine" row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetMyAutomationActiveInput {
     pub kind: crate::service::MineKind,
@@ -2144,7 +2144,7 @@ pub struct DryRunWorkflowInput {
     /// The trigger to start from; a manual one, else the first, by default.
     #[serde(default)]
     pub trigger_node: Option<String>,
-    /// Answers to «Ждать подтверждения» given so far, by node id; a question
+    /// Answers to "Wait for confirmation" given so far, by node id; a question
     /// without one pauses the emulation (outcome `asking`).
     #[serde(default)]
     #[ts(optional)]
@@ -2161,7 +2161,7 @@ pub struct SaveWorkflowDraftInput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct AnswerWorkflowWaitInput {
     pub id: String,
-    /// «Да» (true) or «Нет» (false).
+    /// "Yes" (true) or "No" (false).
     pub yes: bool,
 }
 
@@ -2303,7 +2303,7 @@ pub struct SyncStatus {
     /// `memory` (gone after a restart: pairing again).
     pub key_storage: String,
     pub sessions: Vec<SyncSessionView>,
-    /// A backup from before a sync exists («Восстановить до синхронизации»).
+    /// A backup from before a sync exists ("Restore from before the sync").
     pub has_backup: bool,
     /// Sync goes on in the background here (Android: a foreground service).
     pub background_supported: bool,
@@ -2357,7 +2357,7 @@ pub enum TransferPhase {
     /// Receiving: visible nearby, no request yet. Sending: waiting for the
     /// other device to accept.
     Waiting,
-    /// Receiving: a device asks to hand its vault over («Принять / Отклонить»).
+    /// Receiving: a device asks to hand its vault over ("Accept / Decline").
     Request,
     /// Receiving: showing the code. Sending: asking for it.
     Code,
@@ -2414,7 +2414,7 @@ pub struct TransferNearby {
     pub kind: String,
 }
 
-/// «Передать»: to whom, and the vault password typed again.
+/// "Send": to whom, and the vault password typed again.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct TransferSendInput {
     pub id: String,
@@ -2425,7 +2425,7 @@ pub struct TransferSendInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncCutReason {
-    /// It paused the exchange with this device («Отклонить» there).
+    /// It paused the exchange with this device ("Decline" there).
     Paused,
     /// It forgot this device.
     Forgotten,
@@ -2457,7 +2457,7 @@ pub struct SyncPeerView {
     pub paired_at: String,
     pub last_synced_at: Option<String>,
     pub online: bool,
-    /// The user declined its list of changes: no exchange until «Продолжить».
+    /// The user declined its list of changes: no exchange until "Resume".
     #[serde(default)]
     pub paused: bool,
     /// The device refused this one on purpose and told so.
@@ -2500,7 +2500,7 @@ pub struct SyncPairingEvent {
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncConfirmReason {
-    /// «Спрашивать перед синхронизацией» is on: the first batch of a session.
+    /// "Ask before syncing" is on: the first batch of a session.
     #[default]
     First,
     /// Just paired: the first sync with this device.
@@ -2556,7 +2556,7 @@ pub struct SyncDecisionInput {
     pub accept: bool,
 }
 
-// -- shared events (посиделки) ----------------------------------------------------
+// -- shared events (shared sit-down events) ----------------------------------------------------
 
 /// Everything a shared event is made of that the user types in its dialog.
 /// `participants` is read on create only; later people come and go through
@@ -2656,7 +2656,7 @@ pub struct SharedParticipantRef {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SharedItemDraft {
     pub title: String,
-    /// «шт», «кг», «л», «уп» or any text; empty: «шт».
+    /// "pcs", "kg", "l", "pack" or any text; empty: "pcs".
     #[serde(default)]
     pub unit: String,
     #[serde(default)]

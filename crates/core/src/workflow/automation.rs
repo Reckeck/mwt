@@ -1,6 +1,6 @@
 //! An automation is a workflow the app builds from the automation form
-//! ([`AutomationSpec`]): «По расписанию» → «Создать операцию», with
-//! «Средняя сумма прошлых операций» in between when the amount differs every
+//! ([`AutomationSpec`]): "on schedule" → "Create transaction", with
+//! "Average of past transactions" in between when the amount differs every
 //! time. The form stays the place to edit it; the graph is rebuilt on save.
 
 use serde_json::{Map, Value, json};
@@ -17,7 +17,7 @@ pub const TRIGGER: &str = "t";
 pub const AVERAGE: &str = "avg";
 pub const ACTION: &str = "tx";
 pub const ASK: &str = "ask";
-/// How long «да» is waited for before the run gives up.
+/// How long "yes" is waited for before the run gives up.
 const ASK_HOURS: u32 = 72;
 /// How many latest corrected amounts make the estimate.
 pub const ESTIMATE_OF: usize = 3;
@@ -50,7 +50,7 @@ pub fn fire_time(time: Option<&str>) -> String {
     )
 }
 
-/// The schedule's parameters, as «По расписанию» reads them.
+/// The schedule's parameters, as "on schedule" reads them.
 pub fn schedule_params(spec: &AutomationSpec) -> Map<String, Value> {
     when_params(&When {
         schedule: spec.schedule,
@@ -69,7 +69,7 @@ pub struct When<'a> {
     pub time: Option<&'a str>,
 }
 
-/// «По расписанию» parameters of a [`When`].
+/// "on schedule" parameters of a [`When`].
 pub fn when_params(when: &When<'_>) -> Map<String, Value> {
     let time = fire_time(when.time);
     let mut params = match when.schedule {
@@ -93,7 +93,7 @@ pub fn when_params(when: &When<'_>) -> Map<String, Value> {
 }
 
 /// The first `count` dates a schedule fires on after `now`, not before its
-/// start: «Ближайшие: 2 ноя (пн), 1 дек (вт), 31 дек (чт)» under the form.
+/// start: "Next: 2 Nov (Mon), 1 Dec (Tue), 31 Dec (Thu)" under the form.
 pub fn upcoming(
     when: &When<'_>,
     cal: &crate::calendar::Calendar,
@@ -146,7 +146,7 @@ fn account(account: &AccountRef) -> Value {
     serde_json::to_value(account).unwrap_or(Value::Null)
 }
 
-/// The readable fields of «Создать операцию» for a template: what the editor
+/// The readable fields of "Create transaction" for a template: what the editor
 /// shows. The operation itself comes from `template`, fee and all.
 fn action_params(spec: &AutomationSpec) -> Map<String, Value> {
     let template = &spec.template;
@@ -216,7 +216,7 @@ fn action_params(spec: &AutomationSpec) -> Map<String, Value> {
     );
     params.insert("on_shortfall".into(), json!("reject"));
     if let Some(offset) = spec.for_month_offset {
-        // «За какой месяц» of an income, relative to the planned month.
+        // "For which month" of an income, relative to the planned month.
         params.insert("for_month_offset".into(), json!(offset));
         if let Schedule::Monthly { day } = spec.schedule {
             params.insert("for_month_day".into(), json!(day));
@@ -257,7 +257,7 @@ pub fn automation_graph(spec: &AutomationSpec) -> Graph {
     ];
     let mut edges = vec![edge(TRIGGER, "at", ACTION, "date")];
     if spec.asks {
-        // «Спрашивать «да» перед записью»: the operation waits for the answer.
+        // "Ask yes before booking": the operation waits for the answer.
         let mut params = Map::new();
         params.insert("timeout_hours".into(), json!(ASK_HOURS));
         let mut ask = node(ASK, "action.confirm", params, 1.0);

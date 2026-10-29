@@ -22,7 +22,7 @@ import WalletTable from './ui/WalletTable.vue'
 import WalletsHeader from './ui/WalletsHeader.vue'
 
 /**
- * Кошельки (Wallets-1 · 1, Currency-1 · 2): one total over a table — each wallet
+ * Wallets (Wallets-1 · 1, Currency-1 · 2): one total over a table — each wallet
  * in its own currency, the sum in the base (or the budget's currency), what the
  * wallets hold per currency under it. A phone gets a list.
  */

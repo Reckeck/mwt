@@ -14,7 +14,7 @@ import type { DraftPerson } from '../shared-event-edit.types'
 import { hasGuestDetails } from '../model/guest-details'
 
 /**
- * «Участники · N»: the people typed in so far — me first when I take part — as a short table that
+ * `Participants · N`: the people typed in so far — me first when I take part — as a short table that
  * scrolls inside itself (header pinned, the scroll lane reserved). Add by name or contact; a name
  * nobody has can become a contact on the spot or stay a guest.
  */

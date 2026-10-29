@@ -1,4 +1,4 @@
-// The forms gate (AGENTS.md rules 13 and 14, skill `ui-design-system` → «Формы»): a form is never
+// The forms gate (AGENTS.md rules 13 and 14, skill `ui-design-system` → "Forms"): a form is never
 // saved by guessing why a button is grey. Its save button stays enabled; pressing it with a missing
 // or wrong field shows the message under that field (`useFormValidation` + `FormField`).
 // Static: reads the `.vue` sources, runs nothing.

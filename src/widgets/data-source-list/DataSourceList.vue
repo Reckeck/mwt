@@ -13,7 +13,7 @@ import { SectionState } from '@/shared/ui/section-state'
 
 import SourceRow from './ui/SourceRow.vue'
 
-/** «Источники» (plan I2): the user's own pages, answers and files read on a schedule, and where their values go. */
+/** `Sources` (plan I2): the user's own pages, answers and files read on a schedule, and where their values go. */
 const { t } = useI18n()
 const sources = useDataSources()
 const tree = useStoreTree()

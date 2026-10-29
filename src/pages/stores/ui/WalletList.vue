@@ -14,7 +14,7 @@ import WalletExpand from './WalletExpand.vue'
 
 /**
  * The wallets on a phone (Currency-1 · 2): the name and kind on the left; on the
- * right what it holds in its own currency (or «2 валюты») and ≈ the sum. A wallet
+ * right what it holds in its own currency (or `2 currencies`) and ≈ the sum. A wallet
  * with sub-accounts has a chevron; unfolded, they follow indented, under the name
  * «RUB · 55 %».
  */

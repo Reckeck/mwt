@@ -12,7 +12,7 @@ import { useSharedEventSync } from './use-shared-event-sync'
 
 const translate = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
 
-/** «Отменить» for anything that added a settlement: delete the one the answer ends with. */
+/** `Undo` for anything that added a settlement: delete the one the answer ends with. */
 function undoLast(eventId: string) {
   return (data: unknown) => {
     const settlementId = lastSettlementId(data as SharedEventView)
@@ -23,7 +23,7 @@ function undoLast(eventId: string) {
   }
 }
 
-/** «Получил» / «Отдал» / «Оплатить долю» / «Зачесть»: a transfer with a wallet, or a set-off without one. */
+/** `received` / `Gave` / `Pay my share` / `Set off`: a transfer with a wallet, or a set-off without one. */
 export function useSettleShared() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -47,7 +47,7 @@ export function useSettleShared() {
   })
 }
 
-/** «Списать остаток» (my expense) and «Переложить на других» (shared among the rest). */
+/** `Write off the remainder` (my expense) and `Move onto the others` (shared among the rest). */
 export function useSettleRemainder() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -69,7 +69,7 @@ export function useSettleRemainder() {
   })
 }
 
-/** «Срок возврата»: the term of the person's debt (the contact's usual debt term). */
+/** `Due date`: the term of the person's debt (the contact's usual debt term). */
 export function useSharedDue() {
   const sync = useSharedEventSync()
   return useMutation({

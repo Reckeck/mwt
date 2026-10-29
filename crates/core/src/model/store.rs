@@ -133,14 +133,14 @@ pub enum SubType {
     CreditCard,
     /// One token on one network.
     Token,
-    /// Программа долгосрочных сбережений: savings with state co-financing.
+    /// Long-term savings programme (ПДС): savings with state co-financing.
     Pds,
     Spot,
     Futures,
     Earn,
     /// A trading pair such as BTCUSDT: holds both sides, converts both ways.
     Pair,
-    /// An exchange's funding account (Bybit «Финансовый счёт»): deposits,
+    /// An exchange's funding account (Bybit "Funding account"): deposits,
     /// withdrawals, P2P, transfers between accounts — coins only.
     Funding,
     /// A unified trading account (Bybit UTA): spot and derivatives together.
@@ -361,7 +361,7 @@ impl CarInfo {
     }
 }
 
-/// What a programme's points are called on screen: «1 240 баллов», «2 купона».
+/// What a programme's points are called on screen: "1 240 points", "2 coupons".
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
 )]
@@ -647,7 +647,7 @@ pub struct ImportAccountRoute {
 /// wallet → sub-account.
 pub const MAX_STORE_DEPTH: usize = 1;
 
-/// A "store"/"platform" (хранилище) — a portfolio container.
+/// A "store"/"platform" (a vault-level container) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Store {
@@ -763,7 +763,7 @@ impl StoreScope {
     }
 }
 
-/// A position of one asset inside one store (хранилище !== актив).
+/// A position of one asset inside one store (a store is not an asset).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Holding {
     pub id: String,

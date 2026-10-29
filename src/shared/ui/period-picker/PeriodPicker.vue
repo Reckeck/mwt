@@ -15,10 +15,10 @@ import MonthPanel from './MonthPanel.vue'
 import type { PeriodPickerProps } from './period-picker.types'
 
 /**
- * The period chip of a section: ‹ «Октябрь 2026» ›. The arrows step by the
+ * The period chip of a section: ‹ `October 2026` ›. The arrows step by the
  * period's own length; the chip opens the quick periods and the month grid (a
  * popover on a computer, a bottom sheet on a phone). The grid edits a draft,
- * «Готово» applies it; a quick period applies at once. On a phone the chip
+ * `Done` applies it; a quick period applies at once. On a phone the chip
  * alone, 40px tall with a calendar mark (Money 1 · 1): the sheet picks the period.
  */
 const props = defineProps<PeriodPickerProps>()
@@ -34,7 +34,7 @@ watch(open, (value) => {
 
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 const short = (key: string) => formatMonthKey(key, { month: 'short', year: 'numeric' })
-/** «Октябрь 2026», a quick period's name, or «ноя 2025 — окт 2026». */
+/** `October 2026`, a quick period's name, or `Nov 2025 — Oct 2026`. */
 function label(value: MonthRange): string {
   if (value.from === value.to) return capital(formatMonthKey(value.from, { month: 'long', year: 'numeric' }).replace(/\s*г\.$/, ''))
   const preset = presetOf(value)

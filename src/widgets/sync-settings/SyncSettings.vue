@@ -17,7 +17,7 @@ import SyncNetwork from './SyncNetwork.vue'
 import SyncStatusLine from './SyncStatusLine.vue'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
-/** This device's sync switches: on/off, its name, «спрашивать», «главное». */
+/** This device's sync switches: on/off, its name, `ask`, `main`. */
 const { t } = useI18n()
 const vault = useVaultStore()
 const { status } = useSyncStatus()

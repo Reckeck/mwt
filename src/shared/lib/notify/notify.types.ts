@@ -17,9 +17,9 @@ export interface MutationNotice extends Record<string, unknown> {
   error?: string
   /** Why this mutation reports nothing itself (it shows the result on screen, or a richer toast). */
   silent?: string
-  /** Offers "Отменить" in the success toast; runs this to put things back. */
+  /** Offers `Undo` in the success toast; runs this to put things back. */
   undo?: (data: unknown, variables: unknown) => Promise<unknown> | unknown
-  /** A button in the success toast that is not an undo («Открыть снова»); `undo` wins when both are set. */
+  /** A button in the success toast that is not an undo (`Open again`); `undo` wins when both are set. */
   action?: (data: unknown, variables: unknown) => { label: string; onClick: () => void }
 }
 
@@ -32,9 +32,9 @@ export interface NoticeText {
 export interface NotifyOptions {
   /** A second, muted line. */
   description?: string
-  /** A button in the toast ("Отменить", "Открыть"). */
+  /** A button in the toast (`Undo`, `Open`). */
   action?: { label: string; onClick: () => void }
-  /** A second, quieter button ("Выйти без сохранения"). */
+  /** A second, quieter button (`Quit without saving`). */
   cancel?: { label: string; onClick: () => void }
   /** Stays until the user acts: a problem that does not go away by itself. */
   sticky?: boolean

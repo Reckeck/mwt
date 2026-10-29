@@ -4,12 +4,12 @@ import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
-/** «25 сен, 10:00». */
+/** `Sep 25, 10:00`. */
 export function journalWhen(iso: string): string {
   return formatDayMonthShort(iso, ', ')
 }
 
-/** «+1 575 $ на Тинькофф», «157,50 $ → Наличные», «уведомление». */
+/** `+1,575 $ to Tinkoff`, `157.50 $ → Cash`, `a notice`. */
 export function journalDid(entry: JournalEntry, names: Names, t: Translate): SumPart[] {
   if (entry.status === 'shown') return [{ text: t('automations.journal.notice') }]
   const { money } = entry

@@ -18,9 +18,9 @@ import { useSpentGlance } from '../model/use-spent-glance'
 import type { SpentGlanceProps } from '../quick-glance.types'
 
 /**
- * «Потрачено в октябре 36 $» opened on the spot (Paths 1 · 2): against the month
- * before, the categories' shares and the last three payments; then «Задать лимит»
- * or «Открыть в Тратах →». A category opens its operations with the way back.
+ * `Spent in October 36 $` opened on the spot (Paths 1 · 2): against the month
+ * before, the categories' shares and the last three payments; then `Set a limit`
+ * or `Open in Spending →`. A category opens its operations with the way back.
  */
 const props = defineProps<SpentGlanceProps>()
 const { t } = useI18n()

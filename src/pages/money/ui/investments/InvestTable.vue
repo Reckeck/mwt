@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { investMoney } from '../../lib/invest-view'
 
-/** «Актив · Количество · Вложено · Прибыль» (Money 2 · 13); on a phone the asset over «количество · вложено», the profit on the right. */
+/** `Asset · Quantity · Invested · Profit` (Money 2 · 13); on a phone the asset over `quantity · invested`, the profit on the right. */
 const props = defineProps<{ rows: InvestmentRow[]; currency: string }>()
 
 const { t } = useI18n()

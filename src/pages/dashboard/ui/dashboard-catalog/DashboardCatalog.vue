@@ -12,8 +12,8 @@ import type { DashboardCatalogProps } from './dashboard-catalog.types'
 import CatalogOption from './CatalogOption.vue'
 
 /**
- * «Виджеты на Главной» (Home 4): each widget is a card that is on or off.
- * The few made for Home come first; the ones that repeat «Деньги» wait folded.
+ * `Widgets on Home` (Home 4): each widget is a card that is on or off.
+ * The few made for Home come first; the ones that repeat `Money` wait folded.
  */
 const props = defineProps<DashboardCatalogProps>()
 const open = defineModel<boolean>('open', { required: true })
@@ -24,7 +24,7 @@ const offered = computed(() => DASHBOARD_WIDGETS.filter((def) => !def.requires |
 const isOn = (def: DashboardWidgetDef) => props.placed.includes(def.id)
 const main = computed(() => offered.value.filter((def) => def.home))
 const more = computed(() => offered.value.filter((def) => !def.home && (def.requires || isOn(def))))
-/** «Ещё» opens by itself when one of its widgets is already on Home. */
+/** `More` opens by itself when one of its widgets is already on Home. */
 const moreOpen = computed(() => more.value.some(isOn))
 
 /** Which exchange a trading widget will show; the first one until the user picks another. */

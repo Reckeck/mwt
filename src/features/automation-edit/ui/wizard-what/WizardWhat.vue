@@ -17,7 +17,7 @@ import { WizardOption } from '../wizard-option'
 
 /**
  * Step 1 (Auto-1 · 6): what should happen — four kinds, two in a row; a click
- * picks, a second one or «Далее» moves on. Below, ready-made starts. A phone
+ * picks, a second one or `Next` moves on. Below, ready-made starts. A phone
  * lists them, and a tap moves on at once.
  */
 const { t } = useI18n()

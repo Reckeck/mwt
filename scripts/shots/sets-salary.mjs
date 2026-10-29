@@ -1,4 +1,4 @@
-/** Task 219 · «Зарплата» as a superset form: one payout a month or two, and «за <месяц>» on the income's row. */
+/** Task 219 · `Salary` as a superset form: one payout a month or two, and `for <month>` on the income's row. */
 
 const SCROLL_TO_BADGE = `document.querySelector('[data-tx-for-month]')?.scrollIntoView({ block: 'center' }); return true`
 const OPEN_BADGED = `const badge = document.querySelector('[data-tx-for-month]'); badge?.scrollIntoView({ block: 'center' }); badge?.closest('.min-w-0.flex-1')?.querySelector('[data-tx-open]')?.click(); return true`

@@ -13,7 +13,7 @@ import { flattenStoreTree, withoutLoyalty } from '@/shared/lib/store-tree'
 const PAY_GROUPS: CategoryGroup[] = ['fixed', 'daily', 'savings']
 
 /**
- * «Кнопка в напоминании» (Auto-2 · 10): «Оплатить «Квартира › ЖКХ»» opens the
+ * `Button in the reminder` (Auto-2 · 10): `Pay "Apartment › Utilities"` opens the
  * payment form filled with this category and wallet. `null` — no button.
  */
 const pay = defineModel<ReminderPay | null>({ required: true })

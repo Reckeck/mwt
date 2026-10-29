@@ -28,14 +28,14 @@ const { form, check, preview, sameCurrency, noteExpression } = useTxForm()
 const settings = useSettingsStore()
 const fromStore = computed(() => accountStoreId(form.from))
 
-/** «Курс сделки 93,75 ₽ за USDT»: the price of one received unit in the given currency. */
+/** `Deal rate 93.75 ₽ per USDT`: the price of one received unit in the given currency. */
 const rate = computed(() => {
   const give = Number(form.fromAmount.replace(/\s/g, '').replace(',', '.'))
   const got = Number(form.toAmount.replace(/\s/g, '').replace(',', '.'))
   if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return null
   return { price: give / got, currency: form.fromAsset.symbol, unit: form.toAsset.symbol }
 })
-/** «Рынок 21 окт. 14:00 · 92,10 ₽» and «Переплата обменнику 805 ₽ · 8,60 $ · 1,8 %», from the core. */
+/** `Market Oct 21 14:00 · 92.10 ₽` and `Overpaid to the exchanger 805 ₽ · 8.60 $ · 1.8 %`, from the core. */
 const market = computed(() => {
   const convert = preview.data.value?.convert
   if (!rate.value || !convert || !form.fromAsset) return null
@@ -61,7 +61,7 @@ const giveError = computed(() => (check.error('fromAmount') ? t('form.amountErro
 const getError = computed(() => (check.error('toAmount') ? t('form.amountError') : check.error('toAsset')))
 /** One currency on both sides is not a mistake, it is a transfer: a plain hint as soon as both are chosen (red only after a save was tried). */
 const sameHint = computed(() => (sameCurrency.value ? t('validation.sameCurrency') : undefined))
-/** Same currency is a move between wallets: the form goes on as «Перевод» with what was typed. */
+/** Same currency is a move between wallets: the form goes on as `Transfer` with what was typed. */
 function recordAsTransfer() {
   convertAsTransfer(form)
   void nextTick(() => document.getElementById('tx-amount')?.focus())
@@ -105,7 +105,7 @@ function recordAsTransfer() {
     </FormField>
   </div>
 
-  <!-- One currency has no rate: «1,00 THB за THB» says nothing. -->
+  <!-- One currency has no rate: `1.00 THB per THB` says nothing. -->
   <div v-if="rate && !sameCurrency" class="grid gap-1.5 rounded-md bg-muted px-3 py-2.5 text-sm" data-tx-rate>
     <p class="flex justify-between gap-3">
       <span>{{ t('tx.quick.dealRate') }}</span><i18n-t keypath="tx.quick.dealPrice" tag="b" class="font-semibold tabular-nums">

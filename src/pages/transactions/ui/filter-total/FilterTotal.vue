@@ -8,7 +8,7 @@ import { useTxContext } from '@/shared/lib/tx-context'
 import { FilterCount } from '../filter-count'
 
 /**
- * «3 оплаты · 36 $» (Paths 1 · 5): how many operations the filter keeps and
+ * `3 payments · 36 $` (Paths 1 · 5): how many operations the filter keeps and
  * their net in the base currency, once every page of them is loaded.
  */
 const props = defineProps<{

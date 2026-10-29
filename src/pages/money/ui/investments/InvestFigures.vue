@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 
 import { investMoney } from '../../lib/invest-view'
 
-/** «Прибыль · Комиссии · Вложено» (all three on a phone too), «Посчитать сделку» (Money 4 · 23) and «Записать сделку» (Money 2 · 13). */
+/** `Profit · Fees · Invested` (all three on a phone too), `Work out a trade` (Money 4 · 23) and `Record a trade` (Money 2 · 13). */
 const props = defineProps<{ profit: string; fees: string; invested: string; currency: string }>()
 const emit = defineEmits<{ record: []; calc: [] }>()
 

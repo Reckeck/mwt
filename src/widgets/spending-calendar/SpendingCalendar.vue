@@ -36,7 +36,7 @@ const calendar = useQuery({
   placeholderData: keepPreviousData,
   queryFn: () => call<CalendarMonth>('get_calendar', { month: month.value }),
 })
-/** Today's «можно», the same number as on Home. */
+/** Today's `can spend`, the same number as on Home. */
 const daily = useQuery({ queryKey: ['daily-budget'], queryFn: () => call<DailyBudget>('get_daily_budget') })
 
 const selected = ref<string | null>(isPhone.value ? today : null)
@@ -50,7 +50,7 @@ function shift(delta: number) {
   selected.value = isPhone.value && month.value === today.slice(0, 7) ? today : null
 }
 
-// «октябрь 2026 г.» → «октябрь 2026», as on the canvas.
+// `October 2026 y.` → `October 2026`, as on the canvas.
 const title = computed(() => formatMonthKey(month.value, { month: 'long', year: 'numeric' }).replace(/\s*г\.$/, ''))
 
 /** Monday-first weekday names in the active language. */

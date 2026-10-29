@@ -9,7 +9,7 @@ import { FormField } from '@/shared/ui/form-field'
 
 import type { SharedDueDialogProps } from '../shared-remainder.types'
 
-/** «Срок возврата»: the date the person promised to return the rest by; empty removes the term. */
+/** `Due date`: the date the person promised to return the rest by; empty removes the term. */
 const props = defineProps<SharedDueDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 

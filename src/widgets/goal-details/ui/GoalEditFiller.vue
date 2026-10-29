@@ -6,7 +6,7 @@ import { RouterLink } from 'vue-router'
 import { FormField } from '@/shared/ui/form-field'
 
 /**
- * «Пополнение» in «Изменить цель» (New-Goal 4): what fills the goal is an
+ * `Top-up` in `Edit goal` (New-Goal 4): what fills the goal is an
  * automation, so it is changed there, not in the goal's form.
  */
 const props = defineProps<{ filler: RelationItem | null }>()

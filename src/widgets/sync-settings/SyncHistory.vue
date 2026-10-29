@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import SyncPendingChanges from './SyncPendingChanges.vue'
 
 /**
- * «История»: the changes waiting for an answer, then the journal of what came from
+ * `History`: the changes waiting for an answer, then the journal of what came from
  * (or went to) the other devices: when, which device, what, how it ended. A phone gets a list.
  */
 const { t } = useI18n()

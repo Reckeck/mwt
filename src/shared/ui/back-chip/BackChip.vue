@@ -8,7 +8,7 @@ import type { BackChipProps } from './back-chip.types'
 import { useBackKeys } from './use-back-keys'
 
 /**
- * «← Траты · октябрь» (Paths 1 · 5): the way back to the screen a list was
+ * `← Spending · October` (Paths 1 · 5): the way back to the screen a list was
  * opened from. Esc and Alt ← do the same while nothing floats over the page.
  */
 const props = defineProps<BackChipProps>()

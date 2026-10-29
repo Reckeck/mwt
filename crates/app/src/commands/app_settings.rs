@@ -137,7 +137,7 @@ pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::Shortcut
     })
 }
 
-/// Set or clear the system-wide «+ Операция» key. The combination is
+/// Set or clear the system-wide "+ Transaction" key. The combination is
 /// registered first and saved only if that worked, so the settings never
 /// claim a shortcut the system refused (`SHORTCUT_FAILED`).
 #[tauri::command]

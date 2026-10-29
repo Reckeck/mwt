@@ -1,6 +1,6 @@
 //! Several operations at once (Ops-1 · 4): delete, set the category, move to
 //! another wallet. Each call is all or nothing and returns what an undo needs,
-//! so the list offers «Отменить» instead of asking «Вы уверены?».
+//! so the list offers "Undo" instead of asking "Are you sure?".
 
 use serde::{Deserialize, Serialize};
 

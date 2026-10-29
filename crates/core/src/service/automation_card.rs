@@ -21,7 +21,7 @@ use super::UnlockedVault;
 use super::my_automations::MineKind;
 
 const LOOKAHEAD_DAYS: i64 = 400;
-/// «Последние запуски» on the card.
+/// "Last runs" on the card.
 const CARD_RUNS: usize = 5;
 
 /// The money of one operation, made or about to be made.
@@ -64,11 +64,11 @@ impl CardMoney {
     }
 }
 
-/// «Если»: what starts it.
+/// "If": what starts it.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CardTrigger {
-    /// Only the time: nothing more to say than «Когда».
+    /// Only the time: nothing more to say than "When".
     Schedule,
     /// An operation arrives: `tx_kind` as the node has it (`any`, `topup` …),
     /// a category key and a wallet when set.
@@ -84,7 +84,7 @@ pub enum CardTrigger {
     },
 }
 
-/// «Сделать»: one action of it.
+/// "Do": one action of it.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct CardAction {
     /// The operation kind (`transfer`, `payment` …), `distribute`, `notify`,
@@ -102,14 +102,14 @@ pub struct CardAction {
 #[serde(rename_all = "snake_case")]
 pub enum JournalStatus {
     Done,
-    /// Waits for «да».
+    /// Waits for "yes".
     Asking,
-    /// Asleep at «Подождать».
+    /// Asleep at "Wait".
     Waiting,
     Partial,
     Failed,
     Stopped,
-    /// Not enough money: waits for «Повторить» or «Пропустить».
+    /// Not enough money: waits for "Retry" or "Skip".
     Rejected,
     Skipped,
     /// A reminder or an alert that was shown.
@@ -130,7 +130,7 @@ pub struct JournalEntry {
     pub status: JournalStatus,
     /// What it did, or what it asks to do.
     pub money: CardMoney,
-    /// For «Подтвердить» in the row.
+    /// For "Confirm" in the row.
     pub wait_id: Option<String>,
     /// The reason or the error, as the run wrote it.
     pub note: String,
@@ -144,11 +144,11 @@ pub struct AutomationCard {
     pub name: String,
     pub description: String,
     pub active: bool,
-    /// «Когда»; for a scheme on an income, the schedule of the repeat that
+    /// "When"; for a scheme on an income, the schedule of the repeat that
     /// books it (see `follows`).
     pub schedule: Option<Schedule>,
     pub workday: WorkdayShift,
-    /// The repeat whose schedule «Когда» borrows.
+    /// The repeat whose schedule "When" borrows.
     pub follows: Option<String>,
     pub trigger: CardTrigger,
     pub actions: Vec<CardAction>,
@@ -183,7 +183,7 @@ fn workday_of(params: &Map<String, Value>) -> WorkdayShift {
     }
 }
 
-/// «По расписанию» read back as the form's schedule.
+/// "on schedule" read back as the form's schedule.
 fn schedule_of(params: &Map<String, Value>) -> Option<Schedule> {
     let clamp = |value: i64, low: i64, high: i64| value.clamp(low, high);
     match text(params, "every").as_deref()? {
@@ -232,7 +232,7 @@ fn source<'a>(graph: &'a Graph, node: &str, port: &str) -> Option<(&'a Node, &'a
     Some((from, edge.from_port.as_str()))
 }
 
-/// The share a «Математика» node set to percent takes.
+/// The share a "Math" node set to percent takes.
 fn percent_of(graph: &Graph, node: &Node) -> Option<(Amount, String)> {
     let (math, _) = source(graph, &node.id, "amount")?;
     if math.kind != "logic.math" || text(&math.params, "op").as_deref() != Some("percent") {
@@ -338,7 +338,7 @@ fn asked_money(graph: &Graph, memo: &str) -> CardMoney {
 }
 
 impl UnlockedVault {
-    /// A run that asked «да» and was answered: the answer is a run of its own,
+    /// A run that asked "yes" and was answered: the answer is a run of its own,
     /// so the question no longer belongs in the lists.
     fn answered_question(&self, run: &WorkflowRun) -> bool {
         matches!(run.outcome, RunOutcome::Asking { .. })
@@ -545,8 +545,8 @@ impl UnlockedVault {
         Ok(card)
     }
 
-    /// A scheme on an income fires when that income comes: «Когда» and
-    /// «Следующий раз» follow the soonest repeat that books its category.
+    /// A scheme on an income fires when that income comes: "When" and
+    /// "Next time" follow the soonest repeat that books its category.
     fn follow_income(
         &self,
         card: &mut AutomationCard,

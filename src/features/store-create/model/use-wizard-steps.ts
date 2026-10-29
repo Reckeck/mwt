@@ -7,7 +7,7 @@ import type { StoreCreateStep } from '../store-create.types'
  * called → what is there now; one without an opening balance (property, a
  * loan) and a sub-account stop after the second. An exchange's sub-account is
  * one step: its type is a field there (Wallets-2 · 9). A bonus programme
- * is made by the Bonuses wizard: «Далее» on step 1 hands over to it.
+ * is made by the Bonuses wizard: `Next` on step 1 hands over to it.
  */
 export function useWizardSteps(
   step: Ref<StoreCreateStep>,

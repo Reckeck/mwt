@@ -12,7 +12,7 @@ import { useSandboxBar } from './use-sandbox-bar'
 /**
  * Full-New-Sandbox 2: a bar above the header while the sandbox is open, on every
  * screen. The warning token of the theme; the top inset is its own (the header
- * below it drops it). A phone says only «Песочница».
+ * below it drops it). A phone says only `Sandbox`.
  */
 const { t } = useI18n()
 const isPhone = useIsPhone()

@@ -47,7 +47,7 @@ export function useTourAutostart() {
         if (routeTour.value !== id || document.querySelector('[role="dialog"]')) return
         // A lesson guides on its own: the general tour of the screen would talk over it.
         if (route.query.lesson && !wanted) return
-        // `?tour=<route>` asks for it explicitly (the learning centre, «Что нового»).
+        // `?tour=<route>` asks for it explicitly (the learning centre, `What's new`).
         if (wanted) tour.start(id)
         else if (tour.shouldOffer(id)) offer.value = id
       }, 1200)

@@ -11,7 +11,7 @@ export interface ContactEditDialogProps {
 
 export interface ContactAccountRowProps {
   account: ContactAccount
-  /** «Записать перевод сюда» is off for an archived contact or without a wallet. */
+  /** `Record a transfer here` is off for an archived contact or without a wallet. */
   transferDisabled?: boolean | string
 }
 
@@ -27,6 +27,6 @@ export interface ContactAccountFormProps {
 
 export interface ContactAccountsProps {
   contact: Contact
-  /** Why «Записать перевод сюда» cannot run (no wallet yet), or `true` to just disable it. */
+  /** Why `Record a transfer here` cannot run (no wallet yet), or `true` to just disable it. */
   transferDisabled?: boolean | string
 }

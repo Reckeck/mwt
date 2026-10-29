@@ -3,18 +3,18 @@ export interface GoalDialogProps {
   goal?: Goal | null
   /** A new goal filled in advance: a goal made from a calculator scenario. */
   draft?: GoalInput | null
-  /** A wallet the new goal's savings sit in («Сделать цель» from a wallet). */
+  /** A wallet the new goal's savings sit in (`Make a goal` from a wallet). */
   storeId?: string
-  /** What is left of a month, offered to go straight into the new goal («Куда ушли»). */
+  /** What is left of a month, offered to go straight into the new goal (`Where it went`). */
   remainder?: GoalRemainder | null
   /** The goal comes from a calculator run: one page instead of two steps (Money 3 · 20). */
   fromCalc?: GoalFromCalc | null
-  /** What an edited goal already holds, formatted: «Уже лежит 1 539 $» under its wallet (New-Goal 4). */
+  /** What an edited goal already holds, formatted: `Already holds 1,539 $` under its wallet (New-Goal 4). */
   saved?: string | null
 }
 
 export interface GoalFromCalc {
-  /** The scenario's name, for «Заполнено из расчёта «…»». */
+  /** The scenario's name, for `Filled in from the calculation "…"`. */
   scenario: string
   /** The run's starting sum: what the goal already has. */
   initial: string

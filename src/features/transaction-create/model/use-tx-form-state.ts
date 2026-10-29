@@ -21,7 +21,7 @@ export function useTxFormState(props: TransactionFormProps) {
   const cashbackSources = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.kind === 'bank'),
   )
-  /** Live property an operation can belong to (the «Объект» field). */
+  /** Live property an operation can belong to (the `Property` field). */
   const properties = computed(() =>
     nodes.value.filter((node) => !node.store.archived && node.store.kind === 'property'),
   )
@@ -86,7 +86,7 @@ export function useTxFormState(props: TransactionFormProps) {
   /** Files and links of a new operation (Attach 5): attached once it is saved, dropped with the form. */
   const attachments = ref<StagedAttachment[]>([])
 
-  /** What the backend rejected, by field («Выберите другой кошелёк»): shown under it until the form is edited. */
+  /** What the backend rejected, by field (`Pick another wallet`): shown under it until the form is edited. */
   const serverErrors = ref<Record<string, string>>({})
   watch(form, () => (serverErrors.value = {}), { deep: true })
 

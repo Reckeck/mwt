@@ -15,9 +15,9 @@ import { useCapitalGlance } from '../model/use-capital-glance'
 import type { CapitalGlanceProps } from '../quick-glance.types'
 
 /**
- * «Капитал 42 052,50 $» opened on the spot (Paths 1 · 3): the month's change, the
+ * `Capital 42,052.50 $` opened on the spot (Paths 1 · 3): the month's change, the
  * year's line, what it is made of and one sentence on what moved it; then
- * «Кошельки →» or «Открыть Капитал →».
+ * `Wallets →` or `Open Capital →`.
  */
 const props = defineProps<CapitalGlanceProps>()
 const { t } = useI18n()
@@ -33,7 +33,7 @@ const change = computed(() => {
   return { month: value.month, tail: `${pct} ${t('money.wealth.perMonth')}` }
 })
 const tone = computed(() => ((glance.change.value?.month ?? 0) < 0 ? 'text-destructive' : 'text-success'))
-/** «Выросло в основном за счёт Крипты: +312 $ за месяц». */
+/** `Grew mostly because of Crypto: +312 $ over the month`. */
 const why = computed(() => {
   const driver = glance.driver.value
   if (!driver) return null

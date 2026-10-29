@@ -6,7 +6,7 @@ import { MoneyPhrase } from '@/entities/currency'
 
 import { cardDo, cardIf, cardNext, cardWhen } from '../lib/card-view'
 
-/** «Когда», «Если», «Сделать», «Спрашивать «да»», «Следующий раз» (Auto-1 · 3). */
+/** `When`, `If`, `Do`, `Ask `Yes``, `Next time` (Auto-1 · 3). */
 const props = defineProps<{
   card: AutomationCard
   names: { store: (id: string) => string; category: (key: string) => string }

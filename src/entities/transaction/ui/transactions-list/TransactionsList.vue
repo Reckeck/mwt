@@ -36,7 +36,7 @@ const props = withDefaults(defineProps<TransactionsListProps>(), {
   selection: null,
 })
 const emit = defineEmits<{ open: [tx: Transaction, list: Transaction[]]; more: [] }>()
-/** A side's name in a row («Тинькофф → Bybit») and «авто», handed down to each row. */
+/** A side's name in a row (`Tinkoff → Bybit`) and `Auto`, handed down to each row. */
 const slots = defineSlots<{
   side?(props: { side: AccountRef; label: string }): unknown
   origin?(props: { tx: Transaction; automationId: string; runId: string | null }): unknown
@@ -48,7 +48,7 @@ const glances = useTxGlances()
 
 /**
  * A long history renders a page at a time: rows differ in height (badges,
- * comments, fees), so a fixed-height virtual list would jump; «Показать ещё»
+ * comments, fees), so a fixed-height virtual list would jump; `Show more`
  * adds the next page. A new filter starts from the first page again.
  */
 const PAGE = 100
@@ -105,7 +105,7 @@ function actionsFor(tx: Transaction): UiAction[] {
 const listRoot = ref<HTMLElement | null>(null)
 const menuTx = ref<Transaction | null>(null)
 const menuActions = computed(() => (menuTx.value ? actionsFor(menuTx.value) : []))
-/** Outside a row (a day header, «Показать ещё») there is nothing to act on: no menu. */
+/** Outside a row (a day header, `Show more`) there is nothing to act on: no menu. */
 function onContextMenu(event: MouseEvent) {
   // A finger holds for the sheet instead (useRowMenu); no floating menu under it.
   if (rowMenu.coarse.value) {

@@ -12,7 +12,7 @@ function monthOf(route: RouteLocationNormalizedLoaded): string | null {
 }
 
 /**
- * What a recent place reads in Ctrl K (Paths 1 · 7): «Деньги › Траты · октябрь»
+ * What a recent place reads in Ctrl K (Paths 1 · 7): `Money › Spending · October`
  * — the section, its tab and the month it was filtered to.
  */
 export function placeTitle(route: RouteLocationNormalizedLoaded, title: string, t: Translate): string {

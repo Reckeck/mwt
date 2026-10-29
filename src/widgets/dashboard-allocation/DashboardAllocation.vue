@@ -19,14 +19,14 @@ import { AllocationPie } from '@/widgets/allocation-pie'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
 /**
- * «Распределение» (plan H2: «по сетям» and «по кошелькам» in one): wallets,
+ * `Allocation` (plan H2: `by network` and `By wallet` in one): wallets,
  * chains or asset classes against their target shares (plan F).
  */
 const props = withDefaults(defineProps<DashboardAllocationProps>(), { by: 'store' })
 
 const { t } = useI18n()
 const settings = useSettingsStore()
-/** «По сетям» is about crypto: without it the widget offers wallets and classes. */
+/** `By network` is about crypto: without it the widget offers wallets and classes. */
 const axes = computed(() => ALLOCATION_AXES.filter((item) => settings.cryptoEnabled || item !== 'chain'))
 const chosenAxis = ref<AllocationAxis>(props.by)
 const axis = computed(() => (axes.value.includes(chosenAxis.value) ? chosenAxis.value : 'store'))

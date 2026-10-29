@@ -10,7 +10,7 @@ export interface MetricTileProps {
   /** Change against the base, percent; `null` when there is no base yet. */
   deltaPct?: number | string | null
   goodWhen?: MetricGoodWhen
-  /** What the change is against: «к прошлой неделе», «к плану». */
+  /** What the change is against: `vs last week`, `vs plan`. */
   baseLabel?: string
   /** Trend for the sparkline (shown from «M»). */
   series?: Array<number | string>

@@ -1,5 +1,5 @@
 /**
- * «Нажми и посмотри» (Paths 1 · 1): a blue dash under a figure or a name. The grey
+ * `Tap and look` (Paths 1 · 1): a blue dash under a figure or a name. The grey
  * dotted underline stays for «what the word means», the arrow link for «go elsewhere».
  */
 export const GLANCE_TRIGGER_CLASS =

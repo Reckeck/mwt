@@ -14,7 +14,7 @@ import MonthCarryLine from './MonthCarryLine.vue'
 import MonthDaysChart from './MonthDaysChart.vue'
 
 /**
- * «Остаток месяца» as a phone page (Money 3 · 15): what is left now with the month
+ * `Month's balance` as a phone page (Money 3 · 15): what is left now with the month
  * or the twelve months under it, what it is made of in three rows, and the last
  * months with a link to all twelve.
  */

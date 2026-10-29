@@ -83,7 +83,7 @@ export function useTxAutofill(state: TxFormState) {
     () => [overview.data.value, overview.isSuccess.value, storeKind.value, settings.appLoaded, form.kind] as const,
     ([data, loaded, kind, settingsLoaded, formKind]) => {
       if (editing.value || !loaded || !kind || kind === 'property') return
-      // A wallet bound to an asset («Карта» in dollars) starts with it, before whatever it holds.
+      // A wallet bound to an asset (`Card` in dollars) starts with it, before whatever it holds.
       const binding = contextStore.value?.binding
       const bound = binding && typeof binding === 'object' && 'asset' in binding ? binding.asset : null
       // Staking and pools start with the dollar stablecoin held, like a spot trade, not whatever is listed first.

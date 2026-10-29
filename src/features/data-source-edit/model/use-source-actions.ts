@@ -6,7 +6,7 @@ import { call } from '@/shared/api/ipc'
 /** What follows a source's value: the list itself and the inflation table that may read it. */
 const FOLLOWS_SOURCES = [DATA_SOURCES_KEY, ['inflation-overview']] as const
 
-/** Save, delete, refresh and confirm a data source; the page preview and «Проверить» of the form. */
+/** Save, delete, refresh and confirm a data source; the page preview and `Test` of the form. */
 export function useSourceActions() {
   const queryClient = useQueryClient()
   const settle = () => {

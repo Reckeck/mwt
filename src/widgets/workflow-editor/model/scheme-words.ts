@@ -1,10 +1,10 @@
 import type { WordsNames } from './node-words'
 
 /**
- * «Словами» over the canvas (Auto-2 · 13): «когда добавлено пополнение на
- * Тинькофф в категории Зарплата → спросить «Перевести?» → перевести 10 %
- * суммы на Наличные». Events and actions in the order the wires lead, the
- * values bold. The same words a card and «Мои» use for a scheme.
+ * `In words` over the canvas (Auto-2 · 13): `when a top-up is added to
+ * Tinkoff in the category Salary → ask `Transfer` → transfer 10 %
+ * of the amount to Cash`. Events and actions in the order the wires lead, the
+ * values bold. The same words a card and `Mine` use for a scheme.
  */
 export type WordPart = { text: string; strong?: boolean }
 

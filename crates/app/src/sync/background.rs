@@ -19,7 +19,7 @@ const POLL_EVERY: Duration = Duration::from_secs(2);
 struct State {
     /// Sync runs.
     armed: bool,
-    /// «Остановить» was pressed: sync starts again when the app comes back.
+    /// "Stop" was pressed: sync starts again when the app comes back.
     paused: bool,
     polling: bool,
     /// In the background since.
@@ -64,12 +64,8 @@ pub fn arm(app: &AppHandle, on: bool) {
 
 /// The notification's texts, in the app's language.
 fn texts(app: &AppHandle, armed: bool, linked: usize) -> Background {
-    // «Как в системе» stays Russian, the app's first language.
-    let english = matches!(
-        crate::commands::app_settings::current_settings(app).locale,
-        trade_core::appconfig::Locale::En
-    );
-    let pick = |ru: &str, en: &str| if english { en } else { ru }.to_string();
+    let ru = crate::scheduler::russian(app);
+    let pick = |ru_text: &str, en_text: &str| crate::scheduler::pick(ru, ru_text, en_text);
     let text = if linked == 0 {
         pick(
             "Ищу устройства с этим vault",

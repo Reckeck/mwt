@@ -1,6 +1,6 @@
 export interface EntityLinkProps {
   target: EntityRef
-  /** The name to show; empty falls back to the kind («Операция»). */
+  /** The name to show; empty falls back to the kind (`operation`). */
   label?: string
   /** Archived or switched off: the link is dimmed, still opens. */
   archived?: boolean

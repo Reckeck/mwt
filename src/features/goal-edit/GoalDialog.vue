@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<GoalDialogProps>(), {
 })
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [goal: Goal] }>()
-/** An edited goal's own rows (what fills it, its files) and actions («Удалить цель») come from the card. */
+/** An edited goal's own rows (what fills it, its files) and actions (`Delete goal`) come from the card. */
 defineSlots<{ extras?(): unknown; actions?(): unknown }>()
 
 const { t } = useI18n()

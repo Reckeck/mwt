@@ -7,7 +7,7 @@ import { AccountRefPicker } from '@/features/transaction-create'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 
-/** «Распределить»: where the money goes and how much of it, row by row. */
+/** `Distribute`: where the money goes and how much of it, row by row. */
 interface Target {
   account: AccountRef | null
   share: string

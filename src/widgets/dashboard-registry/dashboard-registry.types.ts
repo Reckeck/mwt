@@ -20,11 +20,11 @@ export interface DashboardWidgetDef {
   requires?: 'exchange'
   /** Where the frame's title leads: the full screen behind the widget. */
   link?: RouteLocationRaw
-  /** Shows a period: gets `period` and offers «Период» in its menu (plan H1). */
+  /** Shows a period: gets `period` and offers `Period` in its menu (plan H1). */
   periodic?: boolean
-  /** Follows a calculator scenario: gets `scenarioId` and offers «Сценарий» in its menu (plan H4). */
+  /** Follows a calculator scenario: gets `scenarioId` and offers `Scenario` in its menu (plan H4). */
   scenario?: boolean
-  /** One of the few Home offers first (Home 4); the rest repeat «Деньги» and wait under «Ещё». */
+  /** One of the few Home offers first (Home 4); the rest repeat `Money` and wait under `More`. */
   home?: boolean
 }
 

@@ -18,8 +18,8 @@ import { PersonDebt } from '../person-debt'
 import { STATUS_BADGE } from './settlement-table.constants'
 
 /**
- * «Кто кому»: everyone's share, what they bought and what is left between them and the organizer.
- * A row has its main button («Получил» / «Отдал» / «Оплатить долю») and «⋯» for the rest.
+ * `Who owes whom`: everyone's share, what they bought and what is left between them and the organizer.
+ * A row has its main button (`received` / `Gave` / `Pay my share`) and «⋯» for the rest.
  * The organizer's own row is left out when it is me: everything is counted against me.
  */
 const props = defineProps<{

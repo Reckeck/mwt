@@ -91,7 +91,7 @@ after: Amount, price: PriceStamp, };
 type AdjustmentLineInput = { asset: AssetIdent, actual: Amount, };
 
 /**
- * «Синхронизация с реальностью»: the balances of one account set to what is
+ * "Reality sync": the balances of one account set to what is
  * really there. `before` is worked out from the ledger when it is saved.
  */
 type AdjustmentTx = { meta: TxMeta, store_id: string, lines: Array<AdjustmentLine>, 
@@ -111,7 +111,7 @@ type AnalyticsReport = { "cashflow": CashflowReport } | { "year": YearReport } |
 
 type AnswerWorkflowWaitInput = { id: string, 
 /**
- * «Да» (true) or «Нет» (false).
+ * "Yes" (true) or "No" (false).
  */
 yes: boolean, };
 
@@ -149,7 +149,7 @@ inflation: { [key: string]: Amount },
  */
 enrichment_opt_in: boolean | null, 
 /**
- * System-wide key combination that opens «+ Операция», in the
+ * System-wide key combination that opens "+ Transaction", in the
  * `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
  * window manager's own bindings unless the user asks for it.
  */
@@ -159,7 +159,7 @@ quick_add_shortcut: string | null,
  */
 completed_tours: Array<string>, 
 /**
- * «Что нового» entries already shown after an update.
+ * "What's new" entries already shown after an update.
  */
 seen_whats_new: Array<string>, 
 /**
@@ -189,21 +189,21 @@ fx_refresh_interval_sec: number | null,
  */
 display_decimals: number | null, 
 /**
- * Day this installation first ran (`YYYY-MM-DD`): «Что нового» skips what
+ * Day this installation first ran (`YYYY-MM-DD`): "What's new" skips what
  * came before it. `None` for installs older than the field.
  */
 installed_at: string | null, 
 /**
- * The dashboard's «Сегодня» strip is folded to one line on this screen.
+ * The dashboard's "Today" strip is folded to one line on this screen.
  */
 dashboard_today_collapsed: boolean, 
 /**
  * A screen offers its tour on the first visit (a banner, never a window
- * that opens by itself). On for everyone until «Больше не предлагать».
+ * that opens by itself). On for everyone until "Don't offer again".
  */
 tour_offers: boolean, 
 /**
- * Screens whose tour offer was waved off with «Не сейчас»: not offered again.
+ * Screens whose tour offer was waved off with "Not now": not offered again.
  */
 declined_tours: Array<string>, };
 
@@ -407,7 +407,7 @@ size: number,
  */
 sha256: string | null, created_at: string, 
 /**
- * Removed, waiting for «Отменить»: hidden from every list, its file kept
+ * Removed, waiting for "Undo": hidden from every list, its file kept
  * until the vault is opened next.
  */
 removed_at: string | null, };
@@ -451,7 +451,7 @@ property_id: string | null,
  */
 time: string | null, 
 /**
- * It asks «да» before it books the operation.
+ * It asks "yes" before it books the operation.
  */
 asks: boolean, 
 /**
@@ -465,12 +465,12 @@ for_month_offset?: number, };
  */
 type AutomationCard = { kind: MineKind, id: string, name: string, description: string, active: boolean, 
 /**
- * «Когда»; for a scheme on an income, the schedule of the repeat that
+ * "When"; for a scheme on an income, the schedule of the repeat that
  * books it (see `follows`).
  */
 schedule: Schedule | null, workday: WorkdayShift, 
 /**
- * The repeat whose schedule «Когда» borrows.
+ * The repeat whose schedule "When" borrows.
  */
 follows: string | null, trigger: CardTrigger, actions: Array<CardAction>, asks: boolean, 
 /**
@@ -513,7 +513,7 @@ workday_shift: WorkdayShift,
  */
 time: string | null, 
 /**
- * It asks «да» before it books the operation.
+ * It asks "yes" before it books the operation.
  */
 asks: boolean, 
 /**
@@ -585,7 +585,7 @@ property_id: string | null,
  */
 time: string | null, 
 /**
- * It asks «да» before it books the operation.
+ * It asks "yes" before it books the operation.
  */
 asks: boolean, 
 /**
@@ -682,7 +682,7 @@ from_symbol: string,
 to_symbol: string, 
 /**
  * `Converter`: amount to convert. `Position`: the quote given for the
- * position («Отдаёте 1 000 USDT»), commission included.
+ * position ("You give 1 000 USDT"), commission included.
  */
 amount: Amount, 
 /**
@@ -774,7 +774,7 @@ reward_risk: Amount, };
  */
 type CalcScenario = { id: string, name: string, input: InvestInput, source: ScenarioSource | null, 
 /**
- * RFC3339 of the last «Обновить из данных»: the numbers are a snapshot.
+ * RFC3339 of the last "Refresh from data": the numbers are a snapshot.
  */
 prefilled_at: string | null, created_at: string, updated_at: string, };
 
@@ -944,7 +944,7 @@ service_interval_km: number | null,
 mileage_km: number | null, mileage_at: string | null, };
 
 /**
- * «Сделать»: one action of it.
+ * "Do": one action of it.
  */
 type CardAction = { 
 /**
@@ -979,7 +979,7 @@ currency: string | null, from_store: string | null, to_store: string | null,
 category: string | null, };
 
 /**
- * «Если»: what starts it.
+ * "If": what starts it.
  */
 type CardTrigger = { "kind": "schedule" } | { "kind": "transaction", tx_kind: string, category: string | null, store: string | null, } | { "kind": "manual" } | { "kind": "other", node_kind: string, };
 
@@ -1177,7 +1177,7 @@ type ConflictSide = "local" | "remote";
 
 type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, 
 /**
- * Group the directory lists it under («Семья», «P2P»); empty = by kind.
+ * Group the directory lists it under ("Family", «P2P»); empty = by kind.
  */
 group: string, };
 
@@ -1186,11 +1186,11 @@ group: string, };
  */
 type ContactAccount = { id: string, 
 /**
- * Grouping label in the UI («Мой банк», «Биржа»).
+ * Grouping label in the UI ("My bank", "Exchange").
  */
 group: string | null, 
 /**
- * «Основной счёт», «USDT TRC-20».
+ * "Main account", «USDT TRC-20».
  */
 label: string, kind: DetailKind, value: string, 
 /**
@@ -1216,7 +1216,7 @@ type ContactBalance = { contact_id: string, asset: AssetRef, receivable: Amount,
  */
 type ContactDraft = { name: string, kind: ContactKind, note: string, accounts: Array<ContactAccount>, 
 /**
- * Directory group («Семья», «P2P»); empty = grouped by kind.
+ * Directory group ("Family", «P2P»); empty = grouped by kind.
  */
 group: string, };
 
@@ -1286,7 +1286,7 @@ type ConvertSide = { account: AccountRef, asset: AssetRef, amount: Amount, price
 type ConvertSideInput = { account: AccountRef, asset: AssetIdent, amount: Amount, };
 
 /**
- * «Обменять»: give one asset, receive another (bank FX, an exchanger, P2P).
+ * "Exchange": give one asset, receive another (bank FX, an exchanger, P2P).
  */
 type ConvertTx = { meta: TxMeta, from: ConvertSide, to: ConvertSide, fee: Fee | null, 
 /**
@@ -1474,7 +1474,7 @@ net_worth: Comparison,
  */
 health: HealthColor | null, 
 /**
- * «Можно тратить сегодня», in `budget_currency`.
+ * "Safe to spend today", in `budget_currency`.
  */
 left_today: Amount, budget_currency: string, 
 /**
@@ -1520,7 +1520,7 @@ store_id: string | null,
  */
 period: DashPeriod | null, 
 /**
- * The calculator scenario a «Сценарий» widget follows (plan H4).
+ * The calculator scenario a "Scenario" widget follows (plan H4).
  */
 scenario_id: string | null, };
 
@@ -1541,7 +1541,7 @@ history: Array<SourceValue>,
  */
 pending: SourceValue | null, failures: number, status: SourceStatus, 
 /**
- * The last error, for «Починить».
+ * The last error, for "Fix".
  */
 error: string | null, 
 /**
@@ -1727,7 +1727,7 @@ graph: string, workflow_id: string | null,
  */
 trigger_node: string | null, 
 /**
- * Answers to «Ждать подтверждения» given so far, by node id; a question
+ * Answers to "Wait for confirmation" given so far, by node id; a question
  * without one pauses the emulation (outcome `asking`).
  */
 answers?: { [key: string]: boolean }, };
@@ -1781,7 +1781,7 @@ target_amount: Amount | null,
  */
 surplus: Amount | null, interest_12m: Amount, 
 /**
- * Savings accounts not in the fund yet, for «Сделать подушкой».
+ * Savings accounts not in the fund yet, for "Make it the fund".
  */
 candidates: Array<string>, };
 
@@ -1811,7 +1811,7 @@ interest_12m: Amount,
 goal_ids: Array<string>, };
 
 /**
- * An event a run sent with «Отправить событие».
+ * An event a run sent with "Send event".
  */
 type EmittedEvent = { name: string, payload: WfValue, };
 
@@ -1881,7 +1881,7 @@ type EntityRef = { kind: EntityKind, id: string, };
 
 /**
  * An envelope: a named, earmarked part of one asset's balance in one store
- * («отпуск», «налоги»). Nothing physically moves — the store still holds the
+ * ("vacation", "Taxes"). Nothing physically moves — the store still holds the
  * money; envelopes only mark how much of it is spoken for.
  */
 type Envelope = { id: string, store_id: string, name: string, asset: AssetRef, 
@@ -1923,7 +1923,7 @@ short: boolean, };
 
 type EventItem = { id: string, title: string, 
 /**
- * «шт», «кг», «л», «уп» or free text.
+ * "pcs", "kg", "l", "pack" or free text.
  */
 unit: string, category_id: string | null, plan: ItemPlan | null, purchases: Array<Purchase>, cancelled: boolean, split: ItemSplit, };
 
@@ -2157,7 +2157,7 @@ priority: number,
  */
 monthly_commitment: Amount | null, scope: StoreScope, created_at: string, 
 /**
- * The calculator scenario the goal follows: «по плану к сегодня».
+ * The calculator scenario the goal follows: "Planned by today".
  */
 scenario_id: string | null, 
 /**
@@ -2395,7 +2395,7 @@ month: string, color: HealthColor, reasons: Array<HealthReasonCode>, };
 type HistoryPoint = { ts: string, ts_ms: bigint, value_usd: Amount, value_base: Amount, };
 
 /**
- * A position of one asset inside one store (хранилище !== актив).
+ * A position of one asset inside one store (a store is not an asset).
  */
 type Holding = { id: string, store_id: string, asset: AssetRef, quantity: Amount, 
 /**
@@ -2500,7 +2500,7 @@ known: number,
  */
 filtered: number, 
 /**
- * Booked at once by «подтверждать сразу».
+ * Booked at once by "Confirm immediately".
  */
 confirmed: number, 
 /**
@@ -2723,7 +2723,7 @@ income: Amount, taxable: Amount, tax: Amount,
 remaining_free: Amount | null, };
 
 /**
- * «Что выгоднее?»: a higher rate against higher contributions.
+ * "What pays off more?": a higher rate against higher contributions.
  */
 type InvestCompare = { rows: Array<CompareRow>, 
 /**
@@ -2903,7 +2903,7 @@ at: string, status: JournalStatus,
  */
 money: CardMoney, 
 /**
- * For «Подтвердить» in the row.
+ * For "Confirm" in the row.
  */
 wait_id: string | null, 
 /**
@@ -3109,7 +3109,7 @@ source_store_ids: Array<string>,
 unit: LoyaltyUnit, };
 
 /**
- * What a programme's points are called on screen: «1 240 баллов», «2 купона».
+ * What a programme's points are called on screen: "1 240 points", "2 coupons".
  */
 type LoyaltyUnit = "points" | "miles" | "coupons";
 
@@ -3160,7 +3160,7 @@ day: number | null,
 zone: string | null, };
 
 /**
- * One row of «Мои».
+ * One row of "Mine".
  */
 type MineItem = { kind: MineKind, 
 /**
@@ -3190,7 +3190,7 @@ from_store: string | null,
  */
 to_store: string | null, 
 /**
- * It asks «да» before it does anything.
+ * It asks "yes" before it does anything.
  */
 asks: boolean, 
 /**
@@ -3268,7 +3268,7 @@ forecast: Amount | null, };
 
 /**
  * The biggest income or spending of the last month: what the chart labels
- * («+1 575 $ зарплата», «−36 $ Продукты»).
+ * ("+1 575 $ Salary", "−36 $ Groceries").
  */
 type MonthBalanceMark = { 
 /**
@@ -3408,7 +3408,7 @@ type MoveEnvelopeInput = { from: string, to: string, amount: Amount, };
 type MoveStoreInput = { id: string, parent_id: string | null, };
 
 /**
- * «Моя позиция».
+ * "My position".
  */
 type MyPosition = { paid: Amount, share: Amount, 
 /**
@@ -3570,7 +3570,7 @@ type NotificationSettings = {
  */
 system: boolean, 
 /**
- * While the vault is locked: «Платёж по кредиту» without the name and the sum.
+ * While the vault is locked: "Loan payment" without the name and the sum.
  */
 hide_details_when_locked: boolean, 
 /**
@@ -3596,7 +3596,7 @@ decimal_comma: boolean,
  */
 multiplier: Amount, 
 /**
- * Text removed before parsing (a currency sign, «руб.»).
+ * Text removed before parsing (a currency sign, "руб." (Russian ruble sign)).
  */
 strip: string, };
 
@@ -3754,7 +3754,7 @@ reading_day: number | null,
 zone_readings: Array<ZoneReadingInput>, };
 
 /**
- * «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
+ * "Pay": money leaves a store for good (a purchase, a bill, interest).
  */
 type PaymentTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, fee: Fee | null, 
 /**
@@ -3882,7 +3882,7 @@ type PersonView = {
  */
 id: string, 
 /**
- * Empty for me (the UI says «Я»).
+ * Empty for me (the UI says "Me").
  */
 name: string, kind: PersonKind, contact_id: string | null, 
 /**
@@ -4172,7 +4172,7 @@ type PropertyPurchase = {
  */
 date: string, unit_price: Amount, currency: string, 
 /**
- * The first «Приобрести» operation, else the old form fields.
+ * The first "Acquire" operation, else the old form fields.
  */
 from_operation: boolean, };
 
@@ -4295,7 +4295,7 @@ payment_missing: boolean, };
 type Purpose = "everyday" | "savings" | "investment" | "transit";
 
 /**
- * Operations a workflow prepared behind a «Ждать подтверждения» node.
+ * Operations a workflow prepared behind a "Wait for confirmation" node.
  */
 type QueuedActions = { id: string, workflow_id: string, run_id: string, created_at: string, 
 /**
@@ -4317,7 +4317,7 @@ from: string,
 rate: Amount, };
 
 /**
- * Why a goal is marked «Пересмотреть».
+ * Why a goal is marked "Revise".
  */
 type RealismIssue = { "over_commitment": { need: Amount, commitment: Amount, } } | { "over_surplus": { need_total: Amount, surplus: Amount, currency: string, } };
 
@@ -4430,7 +4430,7 @@ snoozed_until: string | null,
  */
 source_key: string, 
 /**
- * «Кнопка в напоминании» (Auto-2 · 10): «Оплатить» opens the payment
+ * "Button in the reminder" (Auto-2 · 10): "Pay" opens the payment
  * form filled with this wallet and category.
  */
 pay: ReminderPay | null, };
@@ -4445,12 +4445,12 @@ due_at: string,
  */
 repeat: ReminderRepeat | null, 
 /**
- * «Оплатить» in the reminder; `None` — no button.
+ * "Pay" in the reminder; `None` — no button.
  */
 pay?: ReminderPay, };
 
 /**
- * What «Оплатить» in a reminder fills the payment form with.
+ * What "Pay" in a reminder fills the payment form with.
  */
 type ReminderPay = { store_id: string | null, category: string | null, };
 
@@ -4672,7 +4672,7 @@ saved: Amount,
 saved_pct: Amount | null, };
 
 /**
- * Numbers «Из данных» puts into the calculator, with where they came from.
+ * Numbers "From your data" puts into the calculator, with where they came from.
  */
 type ScenarioPrefill = { 
 /**
@@ -4707,7 +4707,7 @@ income_months_used: number,
 income_manual: boolean, prefilled_at: string, };
 
 /**
- * Where a calculator scenario takes its numbers from (plan A, «Из данных»).
+ * Where a calculator scenario takes its numbers from (plan A, "From your data").
  */
 type ScenarioSource = { 
 /**
@@ -4776,7 +4776,7 @@ type SelectVaultInput = { path: string, };
 type SeriesPoint = { label: string, value: Amount, };
 
 /**
- * Set or clear the interest terms of a savings account, deposit or ПДС.
+ * Set or clear the interest terms of a savings account, deposit or PDS (a Russian long-term savings programme).
  */
 type SetDepositTermsInput = { store_id: string, terms: DepositTerms | null, };
 
@@ -4807,7 +4807,7 @@ type SetLoyaltyInfoInput = { store_id: string, info: LoyaltyInfo, };
 type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: string, };
 
 /**
- * The «Вкл.» switch of a «Мои» row.
+ * The "On" switch of a "Mine" row.
  */
 type SetMyAutomationActiveInput = { kind: MineKind, id: string, active: boolean, };
 
@@ -4873,7 +4873,7 @@ budget_currency: string,
 notifications: NotificationSettings, 
 /**
  * The budget settings were saved at least once: the checklist step
- * «доля сбережений» is done even when 10 % was the right answer.
+ * "Savings rate" is done even when 10 % was the right answer.
  */
 budget_configured: boolean, 
 /**
@@ -4923,7 +4923,7 @@ pinned: Array<Pinned>,
  */
 dashboard_period: DashPeriod, 
 /**
- * The user hid the «С чего начать» checklist (plan H3; it lived in localStorage).
+ * The user hid the "Where to start" checklist (plan H3; it lived in localStorage).
  */
 onboarding_checklist_hidden: boolean, 
 /**
@@ -5060,7 +5060,7 @@ overrides_invalid: boolean, };
  */
 type SharedItemDraft = { title: string, 
 /**
- * «шт», «кг», «л», «уп» or any text; empty: «шт».
+ * "pcs", "kg", "l", "pack" or any text; empty: "pcs".
  */
 unit: string, category_id: string | null, plan: ItemPlan | null, cancelled: boolean, };
 
@@ -5150,7 +5150,7 @@ locale: string, };
 type SharedTxLink = { tx_id: string, event_title: string, link: SharedLink, };
 
 /**
- * Whether the «+ Операция» key can be registered by the app, and the command
+ * Whether the "+ Transaction" key can be registered by the app, and the command
  * a compositor binding runs instead when it cannot (Wayland).
  */
 type ShortcutSupport = { global_keys: boolean, 
@@ -5248,7 +5248,7 @@ type SourceValue = {
 at: string, number: Amount | null, text: string | null, series: Array<SeriesPoint>, };
 
 /**
- * One day of the «Траты» week strip.
+ * One day of the "Spending" week strip.
  */
 type SpendingDay = { 
 /**
@@ -5261,7 +5261,7 @@ date: string,
 daily: Amount, over: boolean, };
 
 /**
- * The «Траты» widget: the period, the week and a series for the sparkline.
+ * The "Spending" widget: the period, the week and a series for the sparkline.
  */
 type SpendingOverview = { currency: string, period: DashPeriod, 
 /**
@@ -5296,7 +5296,7 @@ allowance: Amount | null, };
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
 /**
- * A "store"/"platform" (хранилище) — a portfolio container.
+ * A "store"/"platform" (a vault-level container) — a portfolio container.
  * Important: a store is NOT an asset — it holds holdings (`Holding`).
  */
 type Store = { id: string, name: string, kind: StoreKind, 
@@ -5689,7 +5689,7 @@ peer_name: string, counts: Array<SyncJournalCount>,
  */
 label: string | null, outcome: SyncJournalOutcome, 
 /**
- * The kept batch behind an applied line, for «Отменить» while it is kept.
+ * The kept batch behind an applied line, for "Undo" while it is kept.
  */
 batch_id: string | null, };
 
@@ -5746,7 +5746,7 @@ type SyncPairingEvent = { session_id: string, peer_name: string, code: string, }
  */
 type SyncPeerView = { device_id: string, name: string, paired_at: string, last_synced_at: string | null, online: boolean, 
 /**
- * The user declined its list of changes: no exchange until «Продолжить».
+ * The user declined its list of changes: no exchange until "Resume".
  */
 paused: boolean, 
 /**
@@ -5838,7 +5838,7 @@ type SyncStatus = { enabled: boolean, role: SyncRole, device_id: string, device_
  */
 key_storage: string, sessions: Array<SyncSessionView>, 
 /**
- * A backup from before a sync exists («Восстановить до синхронизации»).
+ * A backup from before a sync exists ("Restore from before the sync").
  */
 has_backup: boolean, 
 /**
@@ -5993,7 +5993,7 @@ add: Amount, pct_after: Amount | null,
 capped: boolean, };
 
 /**
- * «Пополнить»: money comes into a store from outside (salary, cashback, buying an asset).
+ * "Top up": money comes into a store from outside (salary, cashback, buying an asset).
  */
 type TopupTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount, fee: Fee | null, 
 /**
@@ -6138,7 +6138,7 @@ saved_path: string | null,
 error: string | null, };
 
 /**
- * «Передать»: to whom, and the vault password typed again.
+ * "Send": to whom, and the vault password typed again.
  */
 type TransferSendInput = { id: string, password: string, };
 
@@ -6160,7 +6160,7 @@ attempts_left: number,
 wrong_code: boolean, done_bytes: number, total_bytes: number, error: string | null, };
 
 /**
- * «Перевести»: one asset moves between two places, at least one of them mine.
+ * "Transfer": one asset moves between two places, at least one of them mine.
  */
 type TransferTx = { meta: TxMeta, from: AccountRef, to: AccountRef, asset: AssetRef, 
 /**
@@ -6253,7 +6253,7 @@ text: string | null,
  */
 category: string | null, 
 /**
- * Only transactions that paid a fee (what «Потери» are made of).
+ * Only transactions that paid a fee (what "Losses" are made of).
  */
 with_fee: boolean, 
 /**
@@ -6510,7 +6510,7 @@ inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null,
  */
 completed_tours: Array<string> | null, 
 /**
- * Replaces the list of «Что нового» entries already shown.
+ * Replaces the list of "What's new" entries already shown.
  */
 seen_whats_new: Array<string> | null, 
 /**
@@ -6586,7 +6586,7 @@ budget_currency: string | null,
  */
 notifications: NotificationSettings | null, 
 /**
- * Replaces the list of checklist steps marked «Не нужно».
+ * Replaces the list of checklist steps marked "Not needed".
  */
 onboarding_skipped: Array<string> | null, 
 /**
@@ -6754,7 +6754,7 @@ type UtilityKind = { "metered": { unit: string, tariff: Amount,
  */
 formula: string | null, 
 /**
- * Tariff zones of a multi-rate meter («день», «ночь»): a reading per
+ * Tariff zones of a multi-rate meter ("day", "night"): a reading per
  * zone; empty = one reading.
  */
 zones: Array<string>, } } | { "static": { amount: Amount, } } | { "housing": { amount: Amount, deposit: Amount | null, due_day: number, automation_id: string | null, } };
@@ -6923,7 +6923,7 @@ notification_log: Array<NoticeRecord>,
  */
 workflows: Array<Workflow>, workflow_runs: Array<WorkflowRun>, workflow_vars: Array<WorkflowVar>, workflow_queue: Array<QueuedActions>, workflow_state: Array<WorkflowState>, 
 /**
- * Runs asleep at a «Подождать» node.
+ * Runs asleep at a "Wait" node.
  */
 workflow_waits: Array<WorkflowWait>, 
 /**
@@ -7311,7 +7311,7 @@ trigger_node: string | null,
  */
 at: string | null, 
 /**
- * Answers to «Ждать подтверждения» questions, by node id; a question
+ * Answers to "Wait for confirmation" questions, by node id; a question
  * without one ends the emulation as `waiting`.
  */
 answers?: { [key: string]: boolean }, expect: TestExpect, };
@@ -7331,12 +7331,12 @@ problems_ru: Array<string>, problems_en: Array<string>, report: RunReport, };
 type WorkflowVar = { scope: VarScope, name: string, value: string, updated_at: string, };
 
 /**
- * A run asleep at a «Подождать» or «Ждать подтверждения» node: where it goes
+ * A run asleep at a "Wait" or "Wait for confirmation" node: where it goes
  * on, when, and the data it had worked out by then.
  */
 type WorkflowWait = { id: string, workflow_id: string, run_id: string, 
 /**
- * The wait node; the run goes on from its «Дальше» (or «Да»/«Нет»).
+ * The wait node; the run goes on from its "Next" (or "Yes"/"No").
  */
 node_id: string, 
 /**
@@ -7348,12 +7348,12 @@ resume_at: string,
  */
 memo: string, 
 /**
- * Unused: the confirmation queue is gone (a «Ждать подтверждения» node
+ * Unused: the confirmation queue is gone (a "Wait for confirmation" node
  * asks instead). Kept so older vaults read.
  */
 queue_mode: boolean, trigger: string, kind: WaitKind, 
 /**
- * The question of a «Ждать подтверждения» node.
+ * The question of a "Wait for confirmation" node.
  */
 question: string, 
 /**
@@ -7380,7 +7380,7 @@ empty: boolean, };
 type ZoneBillLine = { zone: string, previous_reading: Amount | null, reading: Amount | null, };
 
 /**
- * One tariff zone of a month («день»: 800, used 200).
+ * One tariff zone of a month ("day": 800, used 200).
  */
 type ZoneMonth = { zone: string, reading: Amount, consumption: Amount | null, };
 

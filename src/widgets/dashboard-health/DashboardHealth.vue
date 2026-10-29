@@ -17,7 +17,7 @@ import { SectionState } from '@/shared/ui/section-state'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 /**
- * «Чекап» on the dashboard (plan H4): S — the light; M — the first reason and its
+ * `Checkup` on the dashboard (plan H4): S — the light; M — the first reason and its
  * step; L — the fund's months, the debt load and the freedom index too.
  */
 const { t } = useI18n()

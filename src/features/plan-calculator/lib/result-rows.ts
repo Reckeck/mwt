@@ -29,7 +29,7 @@ export function resultRows(
       { key: 'net_out', label: t('calc.netOut'), value: money(calc.net_out, toSymbol) },
     ]
   }
-  // «Выход по цели · Профит · Риск до стопа · Риск / прибыль» (Money 4 · 23), all in the quote.
+  // `Exit at target · Profit · Risk to stop · Risk / reward` (Money 4 · 23), all in the quote.
   const quote = (amount: string, signed = false): SumPart => ({ amount, currency: USDT.symbol, decimals: 2, signed })
   const pct = (value: string) => formatPct(value, { signed: true, decimals: 1 })
   const rows: ResultRow[] = []

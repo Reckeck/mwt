@@ -9,7 +9,7 @@ export const WORKDAY_SHIFTS: readonly WorkdayShift[] = ['none', 'back', 'forward
 export const WIZARD_TYPES = ['repeat', 'reminder', 'alert', 'scheme'] as const
 export type WizardType = (typeof WIZARD_TYPES)[number]
 
-/** «Или начать с готовой»: the first two the wizard fills itself, the others open their own form. */
+/** `Or start from a ready one`: the first two the wizard fills itself, the others open their own form. */
 export const WIZARD_STARTERS = ['save_share', 'low_balance', 'weekly_buy', 'workday_payment'] as const
 export type WizardStarter = (typeof WIZARD_STARTERS)[number]
 /** The two a phone shows (Auto-1 · 6, the sheet). */
@@ -19,7 +19,7 @@ export const WIZARD_PHONE_STARTERS: readonly WizardStarter[] = ['save_share', 'l
 export const WIZARD_ACTIONS = ['operation', 'remind', 'share'] as const
 export type WizardAction = (typeof WIZARD_ACTIONS)[number]
 
-/** Step 3 (Auto-1 · 8): «Как часто». */
+/** Step 3 (Auto-1 · 8): `How often`. */
 export const WIZARD_FREQUENCIES = ['monthly', 'weekly', 'daily'] as const
 export type WizardFrequency = (typeof WIZARD_FREQUENCIES)[number]
 

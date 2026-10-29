@@ -1,4 +1,4 @@
-/** Pack 2 · Money and «Ещё»: bonuses and investments on a phone, the calculator, the month labels, the menu descriptions. */
+/** Pack 2 · Money and `More`: bonuses and investments on a phone, the calculator, the month labels, the menu descriptions. */
 export const pack2b = [
   { name: 'p2b-bonuses', route: '/transactions/bonuses', steps: [{ wait: 900 }] },
   { name: 'p2b-invest', route: '/money/investments', steps: [{ wait: 900 }] },

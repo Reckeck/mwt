@@ -1,45 +1,47 @@
-# Клавиатура, фокус, доступность, анимация
+# Keyboard, focus, accessibility, animation
 
-## Клавиатура
+## Keyboard
 
-- Всё, что делается мышью, делается с клавиатуры: Tab доходит до каждого
-  элемента, Enter/Space его нажимает.
-- Enter в форме сохраняет (`<form>` или `FormDialog`), в многострочном поле —
-  Ctrl+Enter. Esc закрывает диалог, поповер, меню (делает Reka).
-- Кликабельное — `Button`, ссылка — `RouterLink`. `div @click` допустим
-  только с `role`, `tabindex="0"` и обработкой Enter (так сделаны строки
-  `DataTable` с `clickable`).
-- Горячие клавиши показываются в подсказке (`Kbd`) и не ломаются на
-  русской раскладке: проверяй `event.code`, а не `event.key`.
+- Everything done with the mouse can be done from the keyboard: Tab reaches
+  every element, Enter/Space activates it.
+- Enter in a form saves (`<form>` or `FormDialog`); in a multiline field it is
+  Ctrl+Enter. Esc closes a dialog, popover, menu (Reka does this).
+- Something clickable is a `Button`, a link is a `RouterLink`. `div @click` is
+  allowed only with `role`, `tabindex="0"` and Enter handling (this is how
+  `DataTable` rows with `clickable` are built).
+- Hotkeys are shown in a hint (`Kbd`) and must not break on a non-Latin
+  (e.g. Russian) keyboard layout: check `event.code`, not `event.key`.
 
-## Фокус
+## Focus
 
-- Фокус виден: `focus-visible:ring-2 focus-visible:ring-ring` (у компонентов
-  `shared/ui` уже есть; своя кнопка из `<button>` — нарушение `check-ui`).
-- Открытый диалог ставит фокус на первое поле (у Reka — `@open-auto-focus`),
-  закрытый возвращает его на кнопку, которая его открыла.
-- После неудачного сохранения фокус на первом поле с ошибкой (делает
+- Focus is visible: `focus-visible:ring-2 focus-visible:ring-ring` (the
+  `shared/ui` components already have it; your own button made from `<button>`
+  is a `check-ui` violation).
+- An open dialog puts focus on the first field (in Reka — `@open-auto-focus`);
+  a closed one returns it to the button that opened it.
+- After a failed save, focus goes to the first field with an error (done by
   `useFormValidation`).
 
-## ARIA и смысл
+## ARIA and meaning
 
-- Кнопка-иконка — `aria-label` (и `title` для подсказки мышью).
-- Поле — с подписью (`Label for`); подсказка/ошибка связаны с полем.
-- Сообщение об ошибке — `role="alert"` (`FormField`, `SectionState`).
-- Сортируемый заголовок таблицы — `aria-sort` (делает `DataTable`).
-- Статус не только цветом: «Архив» словом, P&L со знаком.
-- Контраст текста не ниже 4.5:1; `text-muted-foreground` на `bg-muted` —
-  проверь в тёмной теме.
+- An icon button gets `aria-label` (and `title` for the mouse hint).
+- A field has a label (`Label for`); the hint/error is linked to the field.
+- An error message is `role="alert"` (`FormField`, `SectionState`).
+- A sortable table header gets `aria-sort` (done by `DataTable`).
+- Status is not conveyed by color alone: "Archive" as a word, P&L with a sign.
+- Text contrast is at least 4.5:1; check `text-muted-foreground` on
+  `bg-muted` in the dark theme.
 
-## Анимация
+## Animation
 
-- Анимация объясняет переход (появился диалог, раскрылась группа), а не
-  украшает частые действия (открыть меню, добавить строку).
-- Анимируй `transform` и `opacity`, не `transition-all` (`check-ui`); длина
-  до ~200 мс; анимацию можно прервать.
-- `prefers-reduced-motion: reduce` гасит анимации и переходы глобально
-  (`styles.css`) — свой код ничего для этого не делает, но и не обходит.
-- Смена темы без анимации цветов.
+- Animation explains a transition (a dialog appeared, a group expanded); it
+  does not decorate frequent actions (open a menu, add a row).
+- Animate `transform` and `opacity`, not `transition-all` (`check-ui`); up to
+  ~200 ms; the animation can be interrupted.
+- `prefers-reduced-motion: reduce` turns off animations and transitions
+  globally (`styles.css`) — your own code does nothing for this, but does not
+  bypass it either.
+- Theme switching does not animate colors.
 
-Источники: Vercel Web Interface Guidelines, Rauno Freiberg «Interfaces»
+Sources: Vercel Web Interface Guidelines, Rauno Freiberg "Interfaces"
 (interfaces.rauno.me), WAI-ARIA Authoring Practices.

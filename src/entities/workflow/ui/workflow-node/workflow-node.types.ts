@@ -6,9 +6,9 @@ export interface WorkflowNodeData {
   disabled: boolean
   /** Errors and warnings pinned to this node. */
   issues: GraphIssue[]
-  /** Its value in words, e.g. «сумма × 10 %», «Перевод → Наличные». */
+  /** Its value in words, e.g. `amount × 10 %`, `Transfer → Cash`. */
   summary: string
-  /** What keeps the scheme off, over the card in red: «заполните «Куда»»; empty when nothing does. */
+  /** What keeps the scheme off, over the card in red: `fill in `To``; empty when nothing does. */
   problem: string
   /** Wired ports, «in:a» / «out:result»: only these show until the node is selected or hovered. */
   linked: string[]

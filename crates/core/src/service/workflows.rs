@@ -1024,8 +1024,8 @@ impl UnlockedVault {
         self.doc.workflow_waits.clone()
     }
 
-    /// Answer a «Ждать подтверждения» question: the run goes on from «Да» or
-    /// «Нет» right away.
+    /// Answer a "Wait for confirmation" question: the run goes on from "Yes" or
+    /// "No" right away.
     pub fn answer_workflow_wait(
         &mut self,
         id: &str,
@@ -1137,10 +1137,11 @@ impl UnlockedVault {
                     crate::model::notify::NoticeCategory::Automation,
                     format!("wf-ask:{}", wait.id),
                     &title,
-                    if wait.question.is_empty() {
-                        "Нужен ваш ответ, чтобы продолжить".to_string()
-                    } else {
-                        format!("Нужен ваш ответ: {}", wait.question)
+                    match (self.notice_ru, wait.question.is_empty()) {
+                        (true, true) => "Нужен ваш ответ, чтобы продолжить".to_string(),
+                        (true, false) => format!("Нужен ваш ответ: {}", wait.question),
+                        (false, true) => "Your answer is needed to go on".to_string(),
+                        (false, false) => format!("Your answer is needed: {}", wait.question),
                     },
                     Some(crate::routes::AUTOMATIONS_JOURNAL.to_string()),
                     wait.created_at.clone(),
@@ -1343,7 +1344,7 @@ impl UnlockedVault {
         report.events
     }
 
-    /// Several firings of one trigger in a pass: with a «Очередь» in the
+    /// Several firings of one trigger in a pass: with a "Queue" in the
     /// workflow, one run that hands them on one by one; otherwise a run each.
     fn fire_all(
         &mut self,
@@ -1369,7 +1370,7 @@ impl UnlockedVault {
         events
     }
 
-    /// An example batch for «Очередь» when run by hand or emulated: the
+    /// An example batch for "Queue" when run by hand or emulated: the
     /// latest firings of an operation trigger (up to 3, oldest first).
     fn sample_batch(
         &self,
@@ -1399,7 +1400,7 @@ impl UnlockedVault {
         vec![self.sample_trigger_values(trigger, now, zone)]
     }
 
-    /// Run a workflow now from a trigger (a «Запуск вручную» one by default).
+    /// Run a workflow now from a trigger (a "Run manually" one by default).
     pub fn run_workflow_now(
         &mut self,
         id: &str,
@@ -1417,7 +1418,7 @@ impl UnlockedVault {
         }
         let trigger = pick_trigger(&graph, trigger_node)?;
         let mut ctx = self.context(&workflow, &trigger, now, zone);
-        // «Запуск вручную» is the button's own trigger; any other is started
+        // "Run manually" is the button's own trigger; any other is started
         // by hand to try it, and the journal says so.
         ctx.trigger_label = if trigger.kind == "trigger.manual" {
             trigger_label("manual", "")
@@ -2058,7 +2059,7 @@ fn wait_graph(wait: &WorkflowWait, workflow: &Workflow) -> Result<Graph> {
     }
 }
 
-/// Whether a workflow gathers the firings of a pass: it has a «Очередь» that is on.
+/// Whether a workflow gathers the firings of a pass: it has a "Queue" that is on.
 fn has_queue(graph: &Graph) -> bool {
     graph
         .nodes

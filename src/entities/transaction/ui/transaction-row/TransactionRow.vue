@@ -47,9 +47,9 @@ const emit = defineEmits<{ open: [tx: Transaction] }>()
  */
 const slots = defineSlots<{
   actions?(props: { tx: Transaction }): unknown
-  /** A side's name in «Тинькофф → Bybit»: the list may make it a wallet's glance (Paths 1 · 4). */
+  /** A side's name in `Tinkoff → Bybit`: the list may make it a wallet's glance (Paths 1 · 4). */
   side?(props: { side: AccountRef; label: string }): unknown
-  /** «авто» of a booked one: the list may make it the automation's glance (Paths 2 · 10). */
+  /** `Auto` of a booked one: the list may make it the automation's glance (Paths 2 · 10). */
   origin?(props: { tx: Transaction; automationId: string; runId: string | null }): unknown
 }>()
 
@@ -62,7 +62,7 @@ const ownMove = computed(() => txIsMove(props.tx))
 /** A same-asset «conversion» looks like the transfer it is. */
 const kind = computed(() => (ownMove.value ? 'transfer' : txKind(props.tx)))
 const titleOf = useTxTitle()
-/** «Зарплата», «Мама», «RUB → USDT», «Перевод»: the currency stays with the sum. */
+/** `Salary`, `Mom`, `RUB → USDT`, `Transfer`: the currency stays with the sum. */
 const title = computed(() => titleOf(props.tx))
 const badges = computed(() => meta.value.categories.filter((key) => key !== title.value.category))
 const meta = computed(() => txMeta(props.tx))
@@ -72,7 +72,7 @@ const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 const debt = computed(() => txDebt(props.tx))
 const automation = computed(() => txAutomation(props.tx))
 const fee = computed(() => txFee(props.tx))
-/** «за сентябрь»: an income recorded for a month other than its date's. */
+/** `for September`: an income recorded for a month other than its date's. */
 const forMonth = computed(() => txForMonthLabel(props.tx))
 /** Brought in from an exchange; a correction has no categories, so it gets the mark here. */
 const imported = computed(() => {
@@ -95,7 +95,7 @@ function openExplorer() {
   if (explorer.value) void call('open_explorer', { url: explorer.value })
 }
 
-/** «Курс сделки 93,75 · через skycapital»: the facts and the comment on one line. */
+/** `Deal rate 93.75 · via skycapital`: the facts and the comment on one line. */
 const notes = computed(() =>
   [...txDetails(props.tx).map(([key, value]) => `${t(key)} ${value}`), commentNotInRoute.value].filter(Boolean).join(' · '),
 )
@@ -122,7 +122,7 @@ const phoneLine = computed(() => {
         <Check v-if="props.selected" class="size-3.5" />
       </span>
     </span>
-    <!-- One grey icon for every kind, PC and phone: a word mark («Корректировка») overflowed its column.
+    <!-- One grey icon for every kind, PC and phone: a word mark (`Correction`) overflowed its column.
          The colour of the amount already tells in from out; the kind's name is in the title. -->
     <span
       v-else

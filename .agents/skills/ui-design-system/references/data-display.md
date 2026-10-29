@@ -1,32 +1,34 @@
-# Данные: таблицы, деньги, P&L, графики, списки
+# Data: tables, money, P&L, charts, lists
 
-## Числа
+## Numbers
 
-| Что | Как показать |
+| What | How to show it |
 |---|---|
-| сумма | `<Money :amount :currency>`; в строке — `formatMoney(value, { currency })` |
-| сумма со знаком и цветом | `<Money colored>` |
-| прибыль/убыток | `<PnlText :amount :currency :pct>` |
-| процент | `formatPct(value)`, со знаком — `formatPct(value, { signed: true })`; значение **уже в процентах** (`12.5` → «12,50 %»), не доля |
-| целое число (сделки, штуки) | `formatQuantity(value)` |
-| количество актива | `formatQuantity(value)` — без хвостовых нулей (`1`, `0,00042`) |
-| цена за единицу | `formatPrice(value, currency)` — 2 знака от 1 и больше, точнее для мелких |
-| дата / дата и время | `formatDate`, `formatDateTime`; «сегодня в 14:05» — `formatAsOf` |
-| цвет по знаку | `signClass(value)` / `SIGN_TONE_CLASS[signTone(value)]` |
+| amount | `<Money :amount :currency>`; in a string — `formatMoney(value, { currency })` |
+| amount with sign and color | `<Money colored>` |
+| profit/loss | `<PnlText :amount :currency :pct>` |
+| percent | `formatPct(value)`, signed — `formatPct(value, { signed: true })`; the value is **already in percent** (`12.5` -> "12.50 %" in en, "12,50 %" in ru), not a fraction |
+| integer (trades, pieces) | `formatQuantity(value)` |
+| asset quantity | `formatQuantity(value)` — without trailing zeros (`1`, `0.00042`) |
+| unit price | `formatPrice(value, currency)` — 2 decimals from 1 and up, more precise for small ones |
+| date / date and time | `formatDate`, `formatDateTime`; "today at 14:05" — `formatAsOf` |
+| color by sign | `signClass(value)` / `SIGN_TONE_CLASS[signTone(value)]` |
 
-- Никаких `toFixed`, `toLocaleString(undefined)` и ручного «−»: локаль
-  интерфейса и группировка разрядов есть только в `format.ts`.
-- Деньги из Rust приходят строкой (`Amount`), в `f64` не превращай для
-  логики — только для отображения.
-- Одна и та же величина на разных экранах форматируется одинаково (итог
-  кошелька на карточке, на странице и в отчёте — одно число знаков).
-- Ноль нейтральный: не «прибыль» и не зелёный.
-- Цифры, которые сравнивают глазами, — `tabular-nums` (уже в `Money`,
-  `StatCard`, правых колонках `DataTable`).
+- No `toFixed`, `toLocaleString(undefined)` or a hand-typed "−": the interface
+  locale and digit grouping exist only in `format.ts`.
+- Money comes from Rust as a string (`Amount`); do not turn it into `f64` for
+  logic — only for display.
+- The same quantity is formatted the same way on different screens (a
+  wallet's total on the card, on the page and in the report — the same number
+  of decimals).
+- Zero is neutral: not "profit" and not green.
+- Digits that are compared by eye are `tabular-nums` (already in `Money`,
+  `StatCard`, the right-hand columns of `DataTable`).
 
-## Таблица — `DataTable`
+## Table — `DataTable`
 
-Колонки — `computed`: заголовки через `t()` должны смениться вместе с языком.
+Columns are a `computed`: headers via `t()` must change together with the
+language.
 
 ```ts
 const columns = computed<ColumnDef<Position>[]>(() => [
@@ -52,49 +54,48 @@ const columns = computed<ColumnDef<Position>[]>(() => [
 <DataTable :columns="columns" :data="rows" :initial-sorting="[{ id: 'pnl', desc: true }]" sticky-header />
 ```
 
-- Числа — по правому краю (`meta.align: 'right'`), текст и даты — по левому,
-  по центру ничего. Заголовок выровнен как его колонка.
-- Сортировка по клику на заголовок; разумная сортировка по умолчанию
-  (новые сверху, крупные сверху).
-- Тонкие разделители строк, без зебры; шапка закреплена, если таблица
-  прокручивается.
-- Пусто из-за запроса (нет данных вообще, нет за период) — `SectionState
-  :empty` вокруг таблицы; `emptyText` таблицы — только для пустоты внутри уже
-  показанной таблицы (например, после локального фильтра по строке поиска).
-- Где лежит: таблица отчёта или экрана из нескольких сущностей — `widgets/`;
-  таблица одной сущности без действий — `entities/<name>/ui`.
-- Строка-ссылка: `clickable` + `@row-click` (клавиатура: Tab + Enter уже
-  работают).
-- Действия строки — `ActionMenu` в последней колонке.
+- Numbers are right-aligned (`meta.align: 'right'`), text and dates are
+  left-aligned, nothing is centered. The header is aligned like its column.
+- Sorting by clicking the header; a sensible default sort (new on top, large
+  on top).
+- Thin row dividers, no zebra; the header is pinned if the table scrolls.
+- Empty because of a query (no data at all, none for the period) —
+  `SectionState :empty` around the table; the table's `emptyText` is only for
+  emptiness inside an already shown table (for example, after a local filter
+  by a search string).
+- Where it lives: a report or multi-entity screen table — `widgets/`; a
+  single-entity table without actions — `entities/<name>/ui`.
+- A link row: `clickable` + `@row-click` (keyboard: Tab + Enter already work).
+- Row actions — `ActionMenu` in the last column.
 
-## Длинные списки
+## Long lists
 
-Больше ~50 строк — страница за страницей с кнопкой «Показать ещё N»
-(`ui.showMore`), как в `TransactionsList` (по 100, новый фильтр — снова с
-первой страницы) и `LossSummary`. Виртуализация (`@tanstack/vue-virtual`) —
-только для строк одной высоты: строки разной высоты в виртуальном списке
-прыгают. Обрезка без кнопки («первые 8») прячет данные молча.
+More than ~50 rows — page by page with a "Show N more" button
+(`ui.showMore`), as in `TransactionsList` (100 at a time, a new filter starts
+again from the first page) and `LossSummary`. Virtualization
+(`@tanstack/vue-virtual`) only for rows of equal height: rows of different
+heights jump in a virtual list. Truncation without a button ("first 8") hides
+data silently.
 
-Повторяющийся элемент списка (строка, заголовок дня, всё внутри `v-for`) —
-без `backdrop-blur` / `backdrop-filter`, фон непрозрачный (`bg-card`):
-десяток таких слоёв в прокрутке, и WebKitGTK (окно на Linux) перестаёт
-рисовать кадры — приложение зависает намертво. Размытие — только у одиночных
-элементов (шапка, легенда графика, плашка снизу).
+A repeating list item (a row, a day header, anything inside `v-for`) has no
+`backdrop-blur` / `backdrop-filter`, and an opaque background (`bg-card`): a
+dozen such layers in a scroll and WebKitGTK (the Linux window) stops drawing
+frames — the application hangs for good. Blur only on single elements (a
+header, a chart legend, a bottom bar).
 
-## Графики (vue-echarts)
+## Charts (vue-echarts)
 
-- Высота — на обёртке: `<div class="h-80"><Chart … /></div>` (vue-echarts
-  8 ставит `height: 100%` стилем, который перебивает `h-*` на самом
-  `<Chart>`).
-- Новый тип графика — регистрация в `shared/lib/echarts.ts`.
-- У каждого графика: подписи осей через форматтер денег, подсказка с
-  валютой, легенда при нескольких сериях, состояние «Нет данных» вместо
-  пустых осей (`SectionState :empty`).
-- Цвета серий — из темы (`echarts-theme.ts`), различимые при дальтонизме;
-  рост/падение дополнительно отличаются формой или подписью.
-- Тема графика следит за темой приложения (реактивно, не один раз при
-  создании).
+- Height goes on the wrapper: `<div class="h-80"><Chart … /></div>` (vue-echarts
+  8 sets `height: 100%` as a style, which overrides `h-*` on `<Chart>`
+  itself).
+- A new chart type — registration in `shared/lib/echarts.ts`.
+- Every chart has: axis labels through the money formatter, a tooltip with the
+  currency, a legend with several series, a "No data" state instead of empty
+  axes (`SectionState :empty`).
+- Series colors come from the theme (`echarts-theme.ts`), distinguishable with
+  color blindness; growth/decline additionally differ by shape or label.
+- The chart theme follows the app theme (reactively, not once at creation).
 
-Источники: Pencil & Paper «Enterprise data tables»
+Sources: Pencil & Paper "Enterprise data tables"
 (pencilandpaper.io/articles/ux-pattern-analysis-enterprise-data-tables),
 Vercel Web Interface Guidelines (github.com/vercel-labs/web-interface-guidelines).

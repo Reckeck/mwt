@@ -10,8 +10,8 @@ import { FormDialog } from '@/shared/ui/form-dialog'
 import type { SharedRemainderDialogProps } from '../shared-remainder.types'
 
 /**
- * «Списать остаток» and «Переложить на других»: asks once, with the sum, because both change
- * the shares for good. The save toast offers «Отменить».
+ * `Write off the remainder` and `Move onto the others`: asks once, with the sum, because both change
+ * the shares for good. The save toast offers `Undo`.
  */
 const props = defineProps<SharedRemainderDialogProps>()
 const open = defineModel<boolean>('open', { required: true })

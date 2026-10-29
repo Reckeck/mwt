@@ -41,7 +41,7 @@ pub struct CalcInput {
     /// Target asset symbol, display only.
     pub to_symbol: String,
     /// `Converter`: amount to convert. `Position`: the quote given for the
-    /// position («Отдаёте 1 000 USDT»), commission included.
+    /// position ("You give 1 000 USDT"), commission included.
     pub amount: Amount,
     /// Price of one unit of the source asset. In `Position` mode this is the
     /// entry price of the bought asset, in the quote.

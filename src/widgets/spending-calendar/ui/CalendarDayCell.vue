@@ -18,7 +18,7 @@ const props = defineProps<{
   currency: string
   today: string
   selected: boolean
-  /** Today's «можно»: the day's allowance plus what earlier days left unspent. */
+  /** Today's `can spend`: the day's allowance plus what earlier days left unspent. */
   leftToday: string | null
   compact: boolean
 }>()

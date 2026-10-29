@@ -11,7 +11,7 @@ import { Label } from '@/shared/ui/label'
 
 import type { FilterFieldProps } from '../../transaction-filter.types'
 
-/** «Кошелёк»: several wallets at once, with or without their sub-accounts. */
+/** `Wallet`: several wallets at once, with or without their sub-accounts. */
 const props = defineProps<FilterFieldProps>()
 const filter = defineModel<TxFilter>({ required: true })
 

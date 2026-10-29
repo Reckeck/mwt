@@ -19,8 +19,8 @@ import { MyPosition } from './ui/my-position'
 import { SettlementTable } from './ui/settlement-table'
 
 /**
- * The «Расчёт» section of an event: my position, then who owes whom through the organizer, with
- * «Получил» / «Отдал» / «Оплатить долю» on the rows and the rest in «⋯». It reads the event itself
+ * The `Calculation` section of an event: my position, then who owes whom through the organizer, with
+ * `received` / `Gave` / `Pay my share` on the rows and the rest in «⋯». It reads the event itself
  * (the shared query key), so every change anywhere refreshes it.
  */
 const props = defineProps<SharedEventSettlementProps>()

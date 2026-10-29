@@ -33,7 +33,7 @@ export const mockRecents: MockRecent[] = [
   { path: '/home/anna/Загрузки/old-2024.wallet', opened: 1_720_000_000, exists: false, encrypted: true },
 ]
 
-/** Rows taken out of the history, for «Отменить». */
+/** Rows taken out of the history, for "Undo". */
 const forgotten = new Map<string, MockRecent>()
 
 const reject = (code: string, message: string) => Promise.reject({ code, message })
@@ -82,7 +82,7 @@ export const vaultFilesCommands: MockCommands = {
     }
     return resolve(undefined)
   },
-  // «Найти файл…»: the row points at the found file and keeps its place.
+  // "Find file…": the row points at the found file and keeps its place.
   relocate_recent_vault: ({ body }) => {
     const index = indexOfPath(body?.path)
     const target = String(body?.new_path)

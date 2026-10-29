@@ -8,7 +8,7 @@ import { TapHint } from '@/shared/ui/tap-hint'
 
 import type { PersonNameProps } from './person-name.types'
 
-/** A person of an event as a table cell: the initial, the name, «гость» / «быстрый», a phone mark. */
+/** A person of an event as a table cell: the initial, the name, `guest` / `quick`, a phone mark. */
 const props = defineProps<PersonNameProps>()
 const { t } = useI18n()
 const shown = computed(() => props.name || t('sharedEvents.me'))

@@ -2,7 +2,7 @@ import { txKind, txMeta } from '@/shared/lib/transactions'
 
 /**
  * The category used most often by operations of this kind (OpForm-1 · 1,
- * «Часто: Продукты»); ties go to the one used last. `null` without history.
+ * `Often: Groceries`); ties go to the one used last. `null` without history.
  */
 export function frequentCategory(transactions: Transaction[], kind: TxKind): string | null {
   const counts = new Map<string, { count: number; order: number }>()

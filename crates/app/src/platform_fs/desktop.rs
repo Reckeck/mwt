@@ -13,14 +13,21 @@ use super::location_of;
 const FILTER: &str = "Multi Wallet Tracker vault";
 
 pub fn pick_vault(app: &AppHandle, save: bool) -> Result<Option<PickedVault>> {
+    let ru = crate::scheduler::russian(app);
     let dialog = app.dialog().file().add_filter(FILTER, &["wallet"]);
     let picked = if save {
         dialog
             .set_file_name("vault.wallet")
-            .set_title("Сохранить vault как…")
+            .set_title(crate::scheduler::pick(
+                ru,
+                "Сохранить vault как…",
+                "Save vault as…",
+            ))
             .blocking_save_file()
     } else {
-        dialog.set_title("Открыть vault").blocking_pick_file()
+        dialog
+            .set_title(crate::scheduler::pick(ru, "Открыть vault", "Open vault"))
+            .blocking_pick_file()
     };
     let Some(location) = picked.map(location_of) else {
         return Ok(None);

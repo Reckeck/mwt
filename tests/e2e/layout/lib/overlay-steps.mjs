@@ -136,7 +136,7 @@ export async function openLayer(page, entry) {
 }
 
 
-/** Esc with a mouse, «Назад» on a phone; waits until the layer is gone. Returns whether it went. */
+/** Esc with a mouse, `Back` on a phone; waits until the layer is gone. Returns whether it went. */
 export async function closeLayer(page, selector, touch) {
   if (touch) await page.eval(`const { closeTopLayer } = await import('/src/shared/lib/back-stack.ts'); return closeTopLayer()`)
   else await press(page, 'Escape')

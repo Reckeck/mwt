@@ -8,7 +8,7 @@ const at = (group, section) => `/?settings=${group}${section ? `&section=${secti
 const shot = (name, group, section, board, frame) => ({ name, route: at(group, section), steps: [{ wait: 600 }], canvas: { board, frame } })
 
 /** The devices shot comes after the sync shot of the same run: it relies on the phone paired here. */
-/** The scripted phone of the mock: sync on, «Добавить устройство», the codes match («Готово»), the first changes applied. */
+/** The scripted phone of the mock: sync on, `Add a device`, the codes match (`Done`), the first changes applied. */
 const pairPhone = [
   { wait: 600 },
   { click: { text: 'Синхронизировать по Wi-Fi' } },
@@ -39,7 +39,7 @@ export const stage6 = [
   { name: 'set-vault-restore', route: at('vault', ''), steps: [{ wait: 600 }, { click: { text: 'Восстановить…' } }, { wait: 600 }] },
   { ...shot('set-sync', 'sync', '', 'Settings-1', '7.'), steps: [...pairPhone, { wait: 600 }] },
   { ...shot('set-devices', 'sync', 'sync-devices', 'Settings-2', '8.'), steps: [{ wait: 600 }] },
-  // «Добавить устройство» with the scripted phone nearby: the code, the time left, the phone found.
+  // `Add a device` with the scripted phone nearby: the code, the time left, the phone found.
   // Comes after the devices shot: forgets the phone paired there and turns sync off and on to see it again.
   {
     ...shot('set-add-device', 'sync', 'sync-devices', 'Settings-2', '9.'),
@@ -60,7 +60,7 @@ export const stage6 = [
       { wait: 800 },
     ],
   },
-  // Pair the phone (its changes wait for an answer), then open «История»: the block with «Принять» above the journal.
+  // Pair the phone (its changes wait for an answer), then open `History`: the block with `Accept` above the journal.
   {
     ...shot('set-sync-history', 'sync', 'sync-history', 'Settings-2', '10.'),
     steps: [
@@ -82,7 +82,7 @@ export const stage6 = [
     ],
   },
   shot('set-transfer', 'sync', 'sync-transfer', 'Settings-2', '11.'),
-  // «Получить»: this device waits under its name, the time left, the way in the menu of the other one (Settings-2 · 12).
+  // `Receive`: this device waits under its name, the time left, the way in the menu of the other one (Settings-2 · 12).
   {
     ...shot('set-receive', 'sync', 'sync-transfer', 'Settings-2', '12.'),
     steps: [{ wait: 600 }, { click: { text: 'Получить', within: '[data-section="sync-transfer"]' } }, { wait: 700 }],
@@ -107,5 +107,5 @@ stage6.push(...login)
 /** Vault without a password: create, remove, set. After the rest: they bend the mock's vault and its external copy. */
 stage6.push(...encrypt)
 
-/** Sandbox: the entrance, the bar, «Сбросить песочницу?», after «Выйти». */
+/** Sandbox: the entrance, the bar, `Reset the sandbox?`, after `Exit`. */
 stage6.push(...sandbox)

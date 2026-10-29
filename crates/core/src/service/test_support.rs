@@ -93,12 +93,12 @@ pub fn fee_usd(raw: &str) -> Option<Fee> {
     })
 }
 
-/// «Пополнить»: USD salary at a price of 1.
+/// "Top up": USD salary at a price of 1.
 pub fn income(store: &str, raw: &str, comment: &str) -> Transaction {
     income_of(store, usd(), raw, "1", comment)
 }
 
-/// «Пополнить» in a chosen asset at a chosen USD price.
+/// "Top up" in a chosen asset at a chosen USD price.
 pub fn income_of(
     store: &str,
     asset: AssetRef,
@@ -118,7 +118,7 @@ pub fn income_of(
     })
 }
 
-/// «Оплатить» in USD, category groceries.
+/// "Pay" in USD, category groceries.
 pub fn payment(store: &str, raw: &str, comment: &str) -> Transaction {
     Transaction::Payment(PaymentTx {
         meta: meta(comment, &["groceries"]),
@@ -132,7 +132,7 @@ pub fn payment(store: &str, raw: &str, comment: &str) -> Transaction {
     })
 }
 
-/// «Перевести» between two sides.
+/// "Transfer" between two sides.
 pub fn transfer_between(
     from: AccountRef,
     to: AccountRef,

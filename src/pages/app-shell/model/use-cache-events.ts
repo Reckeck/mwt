@@ -33,7 +33,7 @@ export function useCacheEvents() {
       invalidate([['transactions'], ['store'], ['store-pnl'], ['store-history'], ['history'], ['summary']])
   })
 
-  // Inflation or the key rate came in (the daily fetch, «Обновить», a mode change).
+  // Inflation or the key rate came in (the daily fetch, `Refresh`, a mode change).
   useBackendEvent('rates-updated', () => invalidate([['inflation-overview'], ['report'], ['interest-tax']]))
   // Own data sources (plan I2) feed inflation and asset prices.
   useBackendEvent('sources-updated', () => {

@@ -12,7 +12,7 @@ import { LOYALTY_UNITS } from '../loyalty-edit.constants'
 import type { LoyaltyInfoState } from '../model/use-loyalty-info'
 import type { ProgramField } from '../loyalty-edit.types'
 
-/** Step 1 of «Новая программа» (Ops-2 · 13): what it is, where it lives, what a point is worth. */
+/** Step 1 of `New programme` (Ops-2 · 13): what it is, where it lives, what a point is worth. */
 const props = defineProps<{ state: LoyaltyInfoState; error: (field: ProgramField) => string | undefined }>()
 const name = defineModel<string>('name', { required: true })
 const wallet = defineModel<string>('wallet', { required: true })

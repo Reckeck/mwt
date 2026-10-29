@@ -1,4 +1,4 @@
-//! The danger zone's «Сменить тип или перенести» (plan §4): change a
+//! The danger zone's "Change kind or move" (plan §4): change a
 //! wallet's kind, move an account into another wallet (of any kind), make a
 //! sub-account a wallet of its own, or merge one account into another.
 //!

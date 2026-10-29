@@ -8,7 +8,7 @@ import { AutomationWorkflowBanner, useAutomationWorkflow } from '@/features/auto
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 
-// «Автоматизации ›» and the name live in the editor's own toolbar (Auto-2 · 13).
+// `Automations ›` and the name live in the editor's own toolbar (Auto-2 · 13).
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()

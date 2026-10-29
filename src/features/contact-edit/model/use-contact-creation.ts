@@ -23,7 +23,7 @@ export function useContactCreation() {
     settle?.(contact)
     settle = null
   }
-  // Closed without saving (Cancel, Esc, «Назад»): the picker keeps what it had.
+  // Closed without saving (Cancel, Esc, `Back`): the picker keeps what it had.
   watch(open, (now) => {
     if (now) return
     settle?.(null)

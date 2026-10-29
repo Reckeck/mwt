@@ -75,7 +75,7 @@ export function useSelection(editor: EditorGraph) {
   })
 
   /**
-   * «Выполнится: после «Ждать подтверждения» → да, когда готова «Сумма»»: the
+   * `Runs: after `Wait for confirmation` → yes, when `Amount` is ready`: the
    * nodes it runs after (by a flow wire, else by data) and the inputs it waits for.
    */
   const runsWhen = computed(() => {

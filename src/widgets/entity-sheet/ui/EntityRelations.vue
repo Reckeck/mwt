@@ -9,7 +9,7 @@ import { EntityLink } from '@/shared/ui/entity-link'
 import type { EntityRelationsProps } from '../entity-sheet.types'
 import { useEntityName } from '../model/use-entity-name'
 
-/** «Связи»: everything that points at the entity, one block per kind of link. */
+/** `Links`: everything that points at the entity, one block per kind of link. */
 const props = defineProps<EntityRelationsProps>()
 
 const { t } = useI18n()

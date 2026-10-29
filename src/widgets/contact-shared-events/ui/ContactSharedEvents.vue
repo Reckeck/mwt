@@ -12,7 +12,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 
 
 /**
- * «Общие события» in a contact's card: the events I share with them, each with the balance
+ * `Shared events` in a contact's card: the events I share with them, each with the balance
  * between us (green: they owe me, red: I owe them). Without events it says so in a row of the same height.
  */
 const props = defineProps<{ contactId: string }>()

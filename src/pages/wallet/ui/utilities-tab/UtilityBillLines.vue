@@ -13,7 +13,7 @@ import { phoneSubtitle, utilityLineView } from '../../lib/utility-line'
 
 /**
  * The items of the bill (Wallets-2 · 10): a table on a desktop — item, reading,
- * consumption, this month's amount, «Внести» or «авто» — and a list on a phone
+ * consumption, this month's amount, `Enter` or `Auto` — and a list on a phone
  * with the columns folded into the line under the name.
  */
 const props = defineProps<{ bill: UtilityBill; phone: boolean; disabled: boolean; active: string | null }>()

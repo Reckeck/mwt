@@ -77,7 +77,7 @@ pub async fn delete_automation(id: String, state: State<'_, AppState>) -> Result
     with_vault_mut(&state, |vault| vault.delete_automation(&id))
 }
 
-/// «Создать сейчас»: same funds check as the schedule; a shortfall is
+/// "Create now": same funds check as the schedule; a shortfall is
 /// `INSUFFICIENT_FUNDS`.
 #[tauri::command]
 pub async fn run_automation(id: String, state: State<'_, AppState>) -> Result<Transaction, String> {
@@ -138,7 +138,7 @@ pub async fn confirm_estimated_amount(
     })
 }
 
-/// «Сделать обычной схемой»: the automation's workflow is edited in the
+/// "Make an ordinary workflow": the automation's workflow is edited in the
 /// editor from now on.
 #[tauri::command]
 pub async fn detach_automation(id: String, state: State<'_, AppState>) -> Result<Workflow, String> {
@@ -439,7 +439,7 @@ pub async fn get_upcoming(
     })
 }
 
-/// «Мои»: everything that fires on its own, with when and what it does next.
+/// "Mine": everything that fires on its own, with when and what it does next.
 #[tauri::command]
 pub async fn list_my_automations(
     app: AppHandle,
@@ -449,7 +449,7 @@ pub async fn list_my_automations(
     with_vault(&state, |vault| Ok(vault.my_automations(now_secs(), &zone)))
 }
 
-/// The «Вкл.» switch of a «Мои» row, whatever kind it is.
+/// The "On" switch of a "Mine" row, whatever kind it is.
 #[tauri::command]
 pub async fn set_my_automation_active(
     input: trade_core::ipc_contract::SetMyAutomationActiveInput,
@@ -707,7 +707,7 @@ pub async fn preview_utility_formula(
     Ok(trade_core::service::preview_utility_formula(&input))
 }
 
-/// The «Оплатить» for one month (`YYYY-MM`, default: this month).
+/// The "Pay" for one month (`YYYY-MM`, default: this month).
 #[tauri::command]
 pub async fn get_utility_payment_draft(
     item_id: String,

@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { JournalRow } from './journal.types'
 
 /**
- * The journal on a computer (Auto-1 · 4): Когда · Автоматизация · Итог · Что
- * сделала; a run waiting for «да» has «Подтвердить» at the end of its row.
+ * The journal on a computer (Auto-1 · 4): When · Automation · Result · What
+ * it did; a run waiting for `Yes` has `Confirm` at the end of its row.
  */
 defineProps<{ rows: JournalRow[] }>()
 const emit = defineEmits<{ confirm: [entry: JournalEntry] }>()

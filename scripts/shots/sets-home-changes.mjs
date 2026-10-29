@@ -1,4 +1,4 @@
-// «Что изменилось» on Home: the day band under the title, a reconciliation row, the day total.
+// `What changed` on Home: the day band under the title, a reconciliation row, the day total.
 import { GP } from './steps.mjs'
 
 /** Home last seen three days ago; a reconciliation of the Bybit wallet booked yesterday. */

@@ -10,8 +10,8 @@ import { Button } from '@/shared/ui/button'
 import { SectionState } from '@/shared/ui/section-state'
 
 /**
- * «Что выгоднее»: the same plan with 2 points more rate against 20 % more
- * contribution; «Подставить» moves the form to that plan.
+ * `Which pays more`: the same plan with 2 points more rate against 20 % more
+ * contribution; `Use it` moves the form to that plan.
  */
 const props = defineProps<{ input: InvestInput }>()
 const emit = defineEmits<{ apply: [kind: CompareKind] }>()

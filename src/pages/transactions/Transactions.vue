@@ -35,7 +35,7 @@ const phone = useIsPhone()
 
 const filter = useTxFilterInUrl()
 const route = useRoute()
-/** Came from a figure elsewhere («Траты · октябрь»): the chip leads back there. */
+/** Came from a figure elsewhere (`Spending · October`): the chip leads back there. */
 const back = computed(() => backFromQuery(route.query))
 
 const { query: txs, rows, total } = useTxPages(filter)
@@ -75,7 +75,7 @@ useBackendEvent<RefreshResult>('prices-updated', () => {
 /* --- «⋯» and right-click on a row: open, edit, duplicate, copy, delete --- */
 const rowMenu = useTxRowMenu({ duplicate: true })
 
-/* --- Several rows at once (Ops-1 · 4): checkboxes on a desktop, «Выбрать» in the hold menu on a phone --- */
+/* --- Several rows at once (Ops-1 · 4): checkboxes on a desktop, `choose` in the hold menu on a phone --- */
 const selection = useSelection(() => rows.value.map(txId))
 function rowActions(tx: Transaction): UiAction[] {
   if (!phone.value) return rowMenu.actions(tx)

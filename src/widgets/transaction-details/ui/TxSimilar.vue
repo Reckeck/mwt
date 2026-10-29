@@ -15,7 +15,7 @@ import { useTxContext } from '@/shared/lib/tx-context'
 
 import { pairRate, similarTitle, txPair } from '../lib/tx-card'
 
-/** «Похожие · 2» (Paths 1 · 6): two earlier ones like this and a way to all of them. */
+/** `Similar · 2` (Paths 1 · 6): two earlier ones like this and a way to all of them. */
 const props = defineProps<{ tx: Transaction; items: Transaction[]; filter: TxFilter }>()
 
 const { t } = useI18n()

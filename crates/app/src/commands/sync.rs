@@ -58,7 +58,7 @@ pub async fn sync_set_settings(
     Ok(sync::status(&app))
 }
 
-/// «Открыть порт»: let the other devices through this device's firewall
+/// "Open port": let the other devices through this device's firewall
 /// (asks for the system password).
 #[tauri::command]
 pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
@@ -68,8 +68,8 @@ pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
     Ok(sync::status(&app))
 }
 
-/// «Сопрячь» on the banner: both screens show the code. With a `device_id`
-/// instead of a session (the device list, «Сопрячь заново»): the device cut
+/// "Pair" on the banner: both screens show the code. With a `device_id`
+/// instead of a session (the device list, "Pair again"): the device cut
 /// this one off, so it is dialed once with the pairing request.
 #[tauri::command]
 pub async fn sync_pair(
@@ -86,7 +86,7 @@ pub async fn sync_pair(
     }
 }
 
-/// «Не сейчас» on the banner: the device is not offered again until sync restarts.
+/// "Not now" on the banner: the device is not offered again until sync restarts.
 #[tauri::command]
 pub async fn sync_dismiss_offer(app: AppHandle, session_id: String) -> Result<(), String> {
     send(&app, &session_id, Order::Dismiss)
@@ -148,7 +148,7 @@ pub async fn sync_peers(
         .collect())
 }
 
-/// «Забыть устройство»: refused here at once, everywhere once it spreads.
+/// "Forget device": refused here at once, everywhere once it spreads.
 #[tauri::command]
 pub async fn sync_forget_peer(
     app: AppHandle,
@@ -167,7 +167,7 @@ pub async fn sync_forget_peer(
     Ok(())
 }
 
-/// «Продолжить»: lift the pause set by declining a list of changes and
+/// "Resume": lift the pause set by declining a list of changes and
 /// connect again; the list is asked about again.
 #[tauri::command]
 pub async fn sync_resume_peer(

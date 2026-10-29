@@ -10,7 +10,7 @@ import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 
 /**
- * «Ручной итог»: a person's total fixed by hand (the bill of a guest who ate only salad); what is
+ * `Set total by hand`: a person's total fixed by hand (the bill of a guest who ate only salad); what is
  * left of the spent sum is shared among the others. The backend refuses totals above what was spent.
  */
 const props = defineProps<{ person: PersonView | null; current: string; currency: string; spent: string; pending?: boolean }>()

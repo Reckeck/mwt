@@ -1,4 +1,4 @@
-/** A limit made a moment ago: its first «превышен» notice would only repeat what the screen already shows. */
+/** A limit made a moment ago: its first `exceeded` notice would only repeat what the screen already shows. */
 const FRESH_MS = 60_000
 const created = new Map<string, number>()
 

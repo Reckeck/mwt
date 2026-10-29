@@ -553,8 +553,8 @@ async fn pair<H: Host>(
     let deadline = tokio::time::sleep(PAIRING_TIMEOUT);
     tokio::pin!(deadline);
     let (mut shown, mut mine, mut theirs) = (false, false, false);
-    // The pairing was asked for before this point: the user's («Сопрячь
-    // заново») or the other side's request that opened the session.
+    // The pairing was asked for before this point: the user's ("Pair
+    // again") or the other side's request that opened the session.
     if ask_now || asked {
         shown = true;
         show_code(app);
@@ -963,7 +963,7 @@ async fn apply_shown<H: Host>(
             if decision != Some(true) {
                 let declined = decision == Some(false);
                 if declined {
-                    // «Отклонить» pauses exchange with this device until the
+                    // "Decline" pauses exchange with this device until the
                     // user resumes it; a timeout only closes this session.
                     let _ = app.with_vault(|vault| {
                         vault.sync_journal_record(

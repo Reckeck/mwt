@@ -5,6 +5,6 @@ export interface GoalDeleteProps {
   wallet: string | null
   /** Name of the automation that fills the goal; it is switched off. */
   filler: string | null
-  /** The button's text: «Удалить» in the card, «Удалить цель» in the edit form. */
+  /** The button's text: `Delete` in the card, `Delete goal` in the edit form. */
   label?: string
 }

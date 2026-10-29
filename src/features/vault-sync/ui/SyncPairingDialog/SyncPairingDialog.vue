@@ -12,10 +12,10 @@ import { usePairingCountdown } from '../../model/use-pairing-countdown'
 import { useSyncStatus } from '../../model/use-sync-status'
 
 /**
- * «Добавить устройство»: both screens show the same six-digit code from the
+ * `Add a device`: both screens show the same six-digit code from the
  * encrypted handshake, big, with the time left. The same code on both means
  * nobody sits in between; the device is trusted only when the user presses
- * «Готово» here and the other device confirms too.
+ * `Done` here and the other device confirms too.
  */
 const { t } = useI18n()
 const { pairing } = useSyncStatus()

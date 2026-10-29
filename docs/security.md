@@ -1,15 +1,15 @@
-# Безопасность
+# Security
 
-## Модель угроз (кратко)
+## Threat model (brief)
 
-- Мастер-пароль не хранится и не передаётся; vault-файл можно красть —
-  без пароля он нечитаем.
-- Ошибочный/подобранный пароль даёт криптографический отказ —
-  нет никакого верификатора, который позволил бы оффлайн-подбор ставить
-  в очередь или сравнивать частично.
-- Любое изменение файла (в т.ч. тривиальное) инвалидирует AEAD-тег.
+- The master password is neither stored nor transmitted; the vault file can be stolen —
+  without the password it is unreadable.
+- A wrong or guessed password yields a cryptographic failure —
+  there is no verifier that would let offline guessing be queued
+  or compared partially.
+- Any change to the file (even a trivial one) invalidates the AEAD tag.
 
-## Формат файла
+## File format
 
 ```
 +--------+-----------------------------+------------------------+
@@ -21,98 +21,99 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
        | [u8;16] salt | [u8;24] nonce | u8 payload_fmt
 ```
 
-- **KDF** — Argon2id, `m=65536 KiB (64 MiB)`, `t=3`, `p=1`, выход 32 байта.
+- **KDF** — Argon2id, `m=65536 KiB (64 MiB)`, `t=3`, `p=1`, 32-byte output.
 - **AEAD** — XChaCha20-Poly1305: `key = XChaCha20Poly1305::new(derive_key(pw, salt))`,
-  `nonce = random 24B`, `aad = header.bytes()`, новые случайные salt+nonce при
-  каждой записи (никакого nonce-переиспользования между коллизиями).
-- **payload_fmt** — `0` = JSON (dev), `1` = bincode (release до v2, только чтение), `2` = MessagePack с именами полей (release с v2); файл самодостаточен.
-- **Атомарная запись** — временный файл рядом (`.<name>.tmp.<pid>.<uuid>`), запись,
-  `fsync(file)`, `rename`, best-effort `fsync(dir)`; при ошибке tmp удаляется.
+  `nonce = random 24B`, `aad = header.bytes()`, a new random salt+nonce on
+  every write (no nonce reuse across collisions).
+- **payload_fmt** — `0` = JSON (dev), `1` = bincode (release before v2, read-only), `2` = MessagePack with field names (release since v2); the file is self-contained.
+- **Atomic write** — a temporary file next to it (`.<name>.tmp.<pid>.<uuid>`), write,
+  `fsync(file)`, `rename`, best-effort `fsync(dir)`; on error the tmp file is removed.
 
-## Ключевые инварианты
+## Key invariants
 
-1. `KDF_MEM_KIB/KDF_ITERS/KDF_PAR` глобальные (хранятся в header тоже).
-2. `VaultHeader::from_bytes` проверяет `kdf_id == Argon2id` и длину.
-3. Вся целостность — на AEAD: отдельного MAC/checksum нет (и не нужно).
-4. Ключ выводится Argon2 один раз при разблокировке и живёт в памяти, пока
-   vault открыт (`crypto::SealKey`, `Zeroizing`, затирается при блокировке и
-   выходе). Каждое сохранение шифрует им с той же солью и новым случайным
-   24-байтным nonce (XChaCha20 это допускает); новая соль — только при
-   создании vault и смене пароля. Раньше Argon2 (64 MiB) шёл на каждом
-   сохранении: 80–230 мс под замком vault на ПК, в разы дольше на телефоне.
-   Пароль и так хранился в памяти сессии (`Zeroizing<String>`), так что
-   ключ рядом с ним поверхности атаки не добавляет. `Debug` ключа не
-   печатает байты.
-5. Тесты покрывают: wrong password, tampered file, отсутствие magic,
-   неслучайность salt/nonce (на самом деле — случайность).
+1. `KDF_MEM_KIB/KDF_ITERS/KDF_PAR` are global (also stored in the header).
+2. `VaultHeader::from_bytes` checks `kdf_id == Argon2id` and the length.
+3. All integrity rests on AEAD: there is no separate MAC/checksum (and none is needed).
+4. The key is derived by Argon2 once at unlock and lives in memory while the
+   vault is open (`crypto::SealKey`, `Zeroizing`, wiped on lock and
+   exit). Every save encrypts with it using the same salt and a fresh random
+   24-byte nonce (XChaCha20 allows this); a new salt only on
+   vault creation and password change. Previously Argon2 (64 MiB) ran on every
+   save: 80-230 ms under the vault lock on a PC, several times longer on a phone.
+   The password was already kept in session memory (`Zeroizing<String>`), so
+   a key next to it adds no attack surface. The key's `Debug` does not
+   print its bytes.
+5. Tests cover: wrong password, tampered file, missing magic,
+   salt/nonce randomness (in fact — that they are random).
 
-## Content Security Policy окна
+## Window Content Security Policy
 
-Окно приложения работает со строгой CSP (`app.security.csp` в
-`crates/app/tauri.conf.json`): если в интерфейс попадёт чужой код (XSS в
-библиотеке, текст из импорта), браузер его не выполнит и не даст ему
-отправить данные.
+The app window runs under a strict CSP (`app.security.csp` in
+`crates/app/tauri.conf.json`): if foreign code gets into the interface (an XSS
+in a library, text from an import), the browser will not run it and will not let
+it send data out.
 
-- `script-src 'self'` — только скрипты сборки. Inline-скрипт темы в
-  `index.html` Tauri разрешает сам, хешем при сборке; `eval` и `new Function`
-  запрещены.
-- `style-src 'self' 'unsafe-inline'` — inline-стили нужны Vue, Reka и ECharts.
-  `dangerousDisableAssetCspModification: ["style-src"]` не даёт Tauri дописать
-  сюда хеши: с ними браузер перестал бы учитывать `'unsafe-inline'`.
-- `connect-src ipc: http://ipc.localhost` — сеть у webview только к бэкенду.
-  Цены, FX, биржи и синхронизация ходят в сеть из Rust; новый внешний запрос
-  с фронта — тоже через команду, а не расширением CSP.
+- `script-src 'self'` — only the build's scripts. The theme inline script in
+  `index.html` is allowed by Tauri itself, by a hash at build time; `eval` and
+  `new Function` are forbidden.
+- `style-src 'self' 'unsafe-inline'` — inline styles are needed by Vue, Reka and ECharts.
+  `dangerousDisableAssetCspModification: ["style-src"]` stops Tauri from appending
+  hashes here: with them the browser would stop honoring `'unsafe-inline'`.
+- `connect-src ipc: http://ipc.localhost` — the webview's network access is only to the backend.
+  Prices, FX, exchanges and sync go to the network from Rust; a new external request
+  from the frontend also goes through a command, not by widening the CSP.
 - `img-src 'self' data: blob:`; `object-src`, `base-uri`, `form-action` — `'none'`.
-- `devCsp` для `mise run dev` добавляет только HMR Vite (`ws:`,
-  `http://localhost:1420`) и inline-скрипты dev-сервера.
+- `devCsp` for `mise run dev` adds only Vite HMR (`ws:`,
+  `http://localhost:1420`) and the dev server's inline scripts.
 
-Проверено 2026-11-03: все экраны и оверлеи check-layout под этой политикой
-в Chromium и окно Tauri на Linux (WebKitGTK) — нарушений нет, подброшенный
-inline-скрипт блокируется.
+Checked 2026-11-03: all check-layout screens and overlays under this policy
+in Chromium and the Tauri window on Linux (WebKitGTK) — no violations, an injected
+inline script is blocked.
 
-## Рекомендации для пользователя
+## Recommendations for the user
 
-- Пароль ≥ 12 символов, уникальный, не из словаря. Всё остальное уже учтено
-  параметрами KDF.
-- Делайте резервные копии vault-файла (это просто файл, безопасно копировать).
+- A password of 12+ characters, unique, not from a dictionary. Everything else is already covered
+  by the KDF parameters.
+- Back up the vault file (it is just a file, safe to copy).
 
-## Известные ограничения / роадмап улучшений
+## Known limitations / hardening roadmap
 
-- Нет rate-limiter'а попыток unlock внутри приложения (подбор против локального
-  процесса — задача ОС; при желании добавить экспоненциальную паузу в команду unlock).
-- Ключ расшифрованного vault лежит в памяти процесса `multi-wallet-tracker`; YubiKey/TPM
-  изоляция ключа — вне скоупа v1.
-- `categories` и цены не шифруются отдельно (всё тело документа шифруется целиком,
-  так что это не проблема).
-## Синхронизация устройств
+- There is no in-app rate limiter for unlock attempts (guessing against a local
+  process is the OS's job; an exponential delay could be added to the unlock command if desired).
+- The decrypted vault key sits in the memory of the `multi-wallet-tracker` process; YubiKey/TPM
+  key isolation is out of scope for v1.
+- `categories` and prices are not encrypted separately (the whole document body is encrypted as one,
+  so this is not a problem).
 
-Обмен идёт внутри Noise-канала после доказательства, что на обеих сторонах
-открыт один vault; первое сопряжение — по одинаковому коду на двух экранах.
-Модель угроз и защита — `docs/sync.md`.
+## Device sync
 
-Передача хранилища на новое устройство отдаёт зашифрованный файл: получивший
-его может подбирать пароль офлайн. Поэтому файл уходит только после выбора
-устройства, повторного ввода пароля на отправителе, «Принять» на получателе
-и одноразового кода, проверенного SPAKE2; каждая передача видна в истории и
-приходит уведомлением на все связанные устройства (`docs/sync.md`,
-«Передача хранилища»).
+Exchange happens inside a Noise channel after proof that the same vault is
+open on both sides; the first pairing uses the same code on two screens.
+The threat model and protections — `docs/sync.md`.
 
-## Уведомления при заблокированном vault
+Transferring a vault to a new device hands over an encrypted file: whoever receives
+it can guess the password offline. So the file is sent only after the
+device is chosen, the password is re-entered on the sender, "Accept" is pressed on the receiver
+and a one-time code verified by SPAKE2 is entered; each transfer is visible in the history and
+arrives as a notification on all linked devices (`docs/sync.md`,
+"Vault transfer").
 
-Пока vault открыт, планировщик раз в минуту (и при блокировке) снимает
-`NotificationSnapshot`: даты напоминаний на 60 дней, пороги ценовых алертов с
-последними курсами, ожидающие автоматизации. Он хранится в памяти и на диске —
-`<app_config_dir>/notify-snapshot.bin`, **только зашифрованным**
-XChaCha20-Poly1305 со случайным 32-байтовым ключом, который лежит в системной
-связке ключей (Secret Service / Keychain / Credential Manager, крейт `keyring`).
-Без связки ключей файл не пишется вовсе: расписание живёт в памяти до выхода из
-приложения. Открытым текстом снимок не хранится никогда.
+## Notifications while the vault is locked
 
-Что раскрывает снимок тому, кто получил и файл, и доступ к связке ключей
-пользователя: тексты напоминаний и порогов алертов на 60 дней вперёд — но не
-балансы, не операции, не ключи бирж и не пароль. Опция «Скрывать подробности,
-пока vault заблокирован» заменяет текст уведомлений нейтральной фразой.
+While the vault is open, the scheduler once a minute (and on lock) takes a
+`NotificationSnapshot`: reminder dates for 60 days ahead, price alert thresholds with the
+latest rates, pending automations. It is kept in memory and on disk —
+`<app_config_dir>/notify-snapshot.bin`, **only encrypted** with
+XChaCha20-Poly1305 using a random 32-byte key that lives in the system
+keyring (Secret Service / Keychain / Credential Manager, the `keyring` crate).
+Without a keyring the file is not written at all: the schedule lives in memory until the
+app exits. The snapshot is never stored in plain text.
 
-Показанное при заблокированном vault при следующей разблокировке переносится в
-журнал vault (`apply_locked_deliveries`), сработавшие алерты помечаются — без
-повторов.
+What the snapshot reveals to someone who obtains both the file and access to the user's
+keyring: reminder texts and alert thresholds for 60 days ahead — but not
+balances, transactions, exchange keys or the password. The "Hide details
+while the vault is locked" option replaces notification text with a neutral phrase.
+
+Whatever was shown while the vault was locked is carried into the vault
+journal on the next unlock (`apply_locked_deliveries`), and fired alerts are marked — with no
+repeats.

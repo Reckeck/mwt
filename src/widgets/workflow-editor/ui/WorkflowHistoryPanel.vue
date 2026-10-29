@@ -9,7 +9,7 @@ import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { formatDateTime } from '@/shared/lib/format'
 import { parseGraph } from '@/shared/lib/workflow'
 
-/** A saved workflow's history: earlier versions to put back. Its tests live in «Проверка». */
+/** A saved workflow's history: earlier versions to put back. Its tests live in `Check`. */
 const props = defineProps<{ workflow: Workflow; dirty: boolean }>()
 const emit = defineEmits<{ restored: [workflow: Workflow] }>()
 

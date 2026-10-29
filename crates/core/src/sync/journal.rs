@@ -42,7 +42,7 @@ pub struct SyncJournalEntry {
     #[serde(default)]
     pub label: Option<String>,
     pub outcome: SyncJournalOutcome,
-    /// The kept batch behind an applied line, for «Отменить» while it is kept.
+    /// The kept batch behind an applied line, for "Undo" while it is kept.
     #[serde(default)]
     pub batch_id: Option<String>,
 }

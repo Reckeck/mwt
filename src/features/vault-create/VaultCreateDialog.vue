@@ -26,7 +26,7 @@ const { path, password, passwordRepeat, withPassword, crypto, baseCurrency, erro
   useCreateVault()
 const { currency, asked } = baseCurrency
 
-/** 1 — «Файл и защита», 2 — «Как будете вести учёт» (Full-New-Encrypt 1–2). */
+/** 1 — `File and protection`, 2 — `How you will keep records` (Full-New-Encrypt 1–2). */
 const step = ref(1)
 const titles = computed(() => [t('vaultCreate.stepFile'), t('vaultCreate.stepAccounting')])
 
@@ -53,7 +53,7 @@ const form = useFormValidation(
   { resetOn: [open, step] },
 )
 
-/** «Далее» checks the first step, «Создать» the second. */
+/** `Next` checks the first step, `Create` the second. */
 function onSubmit(event: Event) {
   if (step.value === 1) form.submit(() => (step.value = 2), event)
   else form.submit(submit, event)

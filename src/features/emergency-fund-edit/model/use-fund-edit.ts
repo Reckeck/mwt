@@ -7,7 +7,7 @@ import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 interface FundChange {
   fund: EmergencyFund
-  /** The fund before the change, for «Отменить». */
+  /** The fund before the change, for `Undo`. */
   previous: EmergencyFund
 }
 
@@ -33,7 +33,7 @@ export function useFundSet() {
   })
 }
 
-/** «Сделать подушкой» on a candidate account of the checkup. */
+/** `Make it the fund` on a candidate account of the checkup. */
 export function useFundAdd() {
   const refresh = useRefresh()
   return useMutation({
@@ -47,7 +47,7 @@ export function useFundAdd() {
   })
 }
 
-/** «Создать цель «Подушка» в Плане»: a goal over the fund's accounts, sized by the fund. */
+/** `Create the "Emergency fund" goal in Plan`: a goal over the fund's accounts, sized by the fund. */
 export function useFundGoal() {
   const queryClient = useQueryClient()
   return useMutation({

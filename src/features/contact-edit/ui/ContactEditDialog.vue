@@ -17,7 +17,7 @@ import type { ContactEditDialogProps } from '../contact-edit.types'
 import { draftOf } from '../model/use-contact-save'
 import ContactArchive from './ContactArchive.vue'
 
-/** «+ Контакт» and «⋯ › Изменить»: name, kind, group and note in one form; requisites live in the card. */
+/** `+ Contact` and `⋯ › Edit`: name, kind, group and note in one form; requisites live in the card. */
 const props = defineProps<ContactEditDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [contact: Contact]; deleted: [] }>()

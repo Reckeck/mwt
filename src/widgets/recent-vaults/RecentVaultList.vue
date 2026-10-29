@@ -34,7 +34,7 @@ function title(recent: RecentVault): string {
 
 const SECONDS_PER_DAY = 86400
 
-/** «сегодня» or «12 окт»; empty when the history has no date. */
+/** `today` or `Oct 12`; empty when the history has no date. */
 function when(recent: RecentVault): string {
   const seconds = Number(recent.last_opened)
   if (!Number.isFinite(seconds) || seconds <= 0) return ''

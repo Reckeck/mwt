@@ -14,8 +14,8 @@ import { EMPTY_DETAILS } from '../shared-event-edit.constants'
 import type { GuestDetailsDialogProps, GuestDetailsResult } from '../shared-event-edit.types'
 
 /**
- * «Контакты гостя»: a guest has a name, a phone, a messenger, requisites and a note, kept in the
- * event only. The same fields as a contact; «Сделать контактом» moves them to the address book.
+ * `Guest details`: a guest has a name, a phone, a messenger, requisites and a note, kept in the
+ * event only. The same fields as a contact; `Make a contact` moves them to the address book.
  * The caller saves (a draft in the dialog, or the event itself). The requisite form belongs to
  * another feature (contacts), so the layer above hands it in through `#requisite-form`.
  */

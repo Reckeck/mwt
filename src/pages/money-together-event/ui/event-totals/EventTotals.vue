@@ -8,7 +8,7 @@ import { StatCard } from '@/shared/ui/stat-card'
 import { TapHint } from '@/shared/ui/tap-hint'
 
 /**
- * «Запланировано / Потрачено / Разница» and the shares in one line. Overspending is red
+ * `Planned / Spent / Difference` and the shares in one line. Overspending is red
  * (+600), staying under the plan is green; only what was bought counts.
  */
 const props = defineProps<{ view: SharedEventView }>()

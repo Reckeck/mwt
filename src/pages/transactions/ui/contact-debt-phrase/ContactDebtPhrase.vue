@@ -7,9 +7,9 @@ import { cn } from '@/shared/lib/utils'
 import type { ContactNet } from '@/entities/contact'
 
 /**
- * A contact's debts in words (Ops-1 · 6): «вам должны 5 000 ₽», «вы должны
+ * A contact's debts in words (Ops-1 · 6): `you are owed 5,000 ₽`, `you owe
  * 120 USDT», one phrase per asset, green when they owe, red when you do.
- * Without debts it falls back to the given text («долгов нет», «обменник»).
+ * Without debts it falls back to the given text (`no debts`, `Exchanger`).
  */
 const props = defineProps<{ nets: ContactNet[]; empty: string; strong?: boolean }>()
 

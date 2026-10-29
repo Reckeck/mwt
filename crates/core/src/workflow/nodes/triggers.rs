@@ -179,7 +179,7 @@ fn first_category(tx: &Transaction) -> WfValue {
         .map_or(WfValue::Null, |key| WfValue::Category(key.clone()))
 }
 
-/// What «Добавлена операция» hands on.
+/// What "Transaction added" hands on.
 pub fn tx_trigger_values(tx: &Transaction) -> BTreeMap<String, WfValue> {
     let (amount, _, account) = tx_main(tx);
     BTreeMap::from([
@@ -193,7 +193,7 @@ pub fn tx_trigger_values(tx: &Transaction) -> BTreeMap<String, WfValue> {
     ])
 }
 
-/// The fields «Разобрать операцию» gives.
+/// The fields "Parse transaction" gives.
 pub(crate) fn tx_fields(tx: &Transaction) -> super::Outputs {
     let (amount, asset, account) = tx_main(tx);
     super::Outputs::from([
@@ -206,7 +206,7 @@ pub(crate) fn tx_fields(tx: &Transaction) -> super::Outputs {
     ])
 }
 
-/// Whether an operation passes the filter of a «Добавлена операция» node.
+/// Whether an operation passes the filter of a "Transaction added" node.
 pub fn tx_matches(vault: &UnlockedVault, params: &Map<String, Value>, tx: &Transaction) -> bool {
     if matches!(tx.meta().origin, TxOrigin::Workflow { .. })
         && !field(params, "include_workflows")

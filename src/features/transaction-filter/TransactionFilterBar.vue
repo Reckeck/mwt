@@ -20,8 +20,8 @@ import type { TransactionFilterBarProps } from './transaction-filter.types'
 
 /**
  * The operations' filters: search, wallet and kind in the row; period,
- * category, contact, amount and the switches under «Ещё фильтры», applied by
- * «Показать N». On a phone everything but the search is in the «Фильтры» screen.
+ * category, contact, amount and the switches under `More filters`, applied by
+ * `Show N`. On a phone everything but the search is in the `Filters` screen.
  */
 const props = withDefaults(defineProps<TransactionFilterBarProps>(), { fixedScope: false, idPrefix: 'tx-filter' })
 /** Things that belong to the row but are not filters (export), and the count on the right. */
@@ -31,7 +31,7 @@ const filter = defineModel<TxFilter>({ required: true })
 const { t, locale } = useI18n()
 const phone = useIsPhone()
 const open = ref(false)
-/** Filters edited in the row, not in the panel: «Показать» must not overwrite them. A phone has only the search there. */
+/** Filters edited in the row, not in the panel: `Show` must not overwrite them. A phone has only the search there. */
 const ROW_KEYS: (keyof TxFilter)[] = ['text', 'flow_id', 'with_fee', 'realized']
 const { draft, total, apply } = useFilterDraft(filter, open, () =>
   phone.value ? ROW_KEYS : [...ROW_KEYS, 'kinds', ...(props.fixedScope ? [] : (['scope'] as const))],
@@ -82,8 +82,8 @@ function reset() {
   filter.value = emptyTxFilter(kept())
 }
 /**
- * «Сбросить» in the panel clears the draft at once, and the count under «Показать» follows. A computer
- * also applies it: the list behind the panel updates. A phone waits for «Показать», which closes the screen.
+ * `Reset` in the panel clears the draft at once, and the count under `Show` follows. A computer
+ * also applies it: the list behind the panel updates. A phone waits for `Show`, which closes the screen.
  */
 function clear() {
   draft.value = emptyTxFilter({
@@ -127,13 +127,13 @@ function clear() {
     <!-- What a report opened the list with: each is a chip that takes itself off. -->
     <FilterChips v-model="filter" :fixed-scope="props.fixedScope" />
 
-    <!-- A phone: every set filter under the search, «С файлами ×», and «Сбросить» (the search stays). -->
+    <!-- A phone: every set filter under the search, `With files ×`, and `Reset` (the search stays). -->
     <template v-if="phone" #below>
       <FilterChips v-model="filter" :fixed-scope="props.fixedScope" @reset="filter = emptyTxFilter({ ...kept(), text: filter.text })" />
     </template>
     <template #more>
       <MoreFields v-model="draft" :id-prefix="`${props.idPrefix}-more`">
-        <!-- A phone has no row for them: they follow the period on the «Фильтры» screen. -->
+        <!-- A phone has no row for them: they follow the period on the `Filters` screen. -->
         <template v-if="phone">
           <ScopeField v-if="!props.fixedScope" v-model="draft" :id-prefix="`${props.idPrefix}-more`" />
           <KindField v-model="draft" :id-prefix="`${props.idPrefix}-more`" />

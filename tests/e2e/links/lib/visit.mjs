@@ -98,7 +98,7 @@ async function checkGlance(page, glance, where, errors) {
 /** The same screen: the lists add their own default period to the address, so only the path counts. */
 const samePage = (left, right) => left.split('?')[0] === right.split('?')[0]
 
-/** Two cards stacked (`?open=a~b`): the top one has «← Назад», it shows the one under; a lone card has none. */
+/** Two cards stacked (`?open=a~b`): the top one has `← Back`, it shows the one under; a lone card has none. */
 async function checkStack(page, entities, at, errors) {
   const cards = sample(entities.filter((entity) => entity.open === 'card'))
   if (cards.length < 2) return false

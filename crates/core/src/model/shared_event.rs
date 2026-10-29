@@ -1,4 +1,4 @@
-//! Shared events («посиделки»): a living list of items bought together, split
+//! Shared events ("shared events"): a living list of items bought together, split
 //! between people, with the debts it leaves worked out from the list itself.
 //! Nothing here is derived data: shares, balances and statuses are computed by
 //! `service::shared_events` and never stored.
@@ -140,7 +140,7 @@ impl Purchase {
 pub struct EventItem {
     pub id: String,
     pub title: String,
-    /// «шт», «кг», «л», «уп» or free text.
+    /// "pcs", "kg", "l", "pack" or free text.
     pub unit: String,
     #[serde(default)]
     pub category_id: Option<String>,

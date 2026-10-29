@@ -13,7 +13,7 @@ import { call } from '@/shared/api/ipc'
 import { FormField } from '@/shared/ui/form-field'
 
 /**
- * `?new=blank` opens «Новая автоматизация» (Auto-1 · 6–8). What the wizard
+ * `?new=blank` opens `New automation` (Auto-1 · 6–8). What the wizard
  * does not make itself opens in its own form: a reminder, a price alert, a
  * scheme on the canvas, a ready-made start by its `?new=`. Step 2 gets the
  * short operation form from here: the wizard's feature cannot import it.
@@ -30,7 +30,7 @@ const wizardOpen = computed({
 })
 
 /**
- * `?edit=<id>` (the «Изменить» of an automation's card or menu) opens its form here; the key goes
+ * `?edit=<id>` (the `Edit` of an automation's card or menu) opens its form here; the key goes
  * when the form closes. The automation stays in `editing` while the form slides out.
  */
 const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations') })

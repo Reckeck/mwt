@@ -8,7 +8,7 @@ import { FormField } from '@/shared/ui/form-field'
 
 import type { CalcPreview } from '../model/use-calc-preview'
 
-/** «Конвертер»: an amount of one asset priced into another, net of the commission. */
+/** `Converter`: an amount of one asset priced into another, net of the commission. */
 const props = defineProps<{
   calc: CalcPreview
   amountError?: string | null

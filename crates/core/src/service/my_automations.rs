@@ -1,4 +1,4 @@
-//! «Мои» (redesign Auto-1 · 1): everything that fires on its own in one
+//! "Mine" (redesign Auto-1 · 1): everything that fires on its own in one
 //! list — schemes, repeats, reminders and price alerts — with when each fires
 //! next and what it will do. Before, that took five screens.
 
@@ -16,7 +16,7 @@ use crate::workflow::nodes::triggers::schedule_moments_limited;
 
 use super::UnlockedVault;
 
-/// How far ahead «Следующий раз» looks: a yearly schedule still has a date.
+/// How far ahead "Next time" looks: a yearly schedule still has a date.
 const LOOKAHEAD_DAYS: i64 = 400;
 
 /// What kind of thing fires.
@@ -31,7 +31,7 @@ pub enum MineKind {
     Alert,
 }
 
-/// One row of «Мои».
+/// One row of "Mine".
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MineItem {
     pub kind: MineKind,
@@ -51,7 +51,7 @@ pub struct MineItem {
     pub from_store: Option<String>,
     /// The wallet the money comes to.
     pub to_store: Option<String>,
-    /// It asks «да» before it does anything.
+    /// It asks "yes" before it does anything.
     pub asks: bool,
     /// It only notifies: a reminder, an alert, a scheme without operations.
     pub notifies: bool,
@@ -202,7 +202,7 @@ impl UnlockedVault {
         out
     }
 
-    /// The «Вкл.» switch of a row: a scheme or a repeat is switched like a
+    /// The "On" switch of a row: a scheme or a repeat is switched like a
     /// workflow (one with errors stays off), a reminder is muted, an alert
     /// switched back on waits for the price again.
     pub fn set_my_automation_active(

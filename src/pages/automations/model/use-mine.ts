@@ -12,7 +12,7 @@ import { type MineFilter, isMineFilter } from '../lib/mine-view'
 /** Query key of `list_my_automations`: under `workflows`, and in PLANNING_KEYS, so every write there refreshes it. */
 export const MINE_KEY = [...WORKFLOW_KEYS.list, 'mine']
 
-/** «Мои» (Auto-1 · 1): the list, the chip that narrows it (`?type=`), the switch of a row. */
+/** `Mine` (Auto-1 · 1): the list, the chip that narrows it (`?type=`), the switch of a row. */
 export function useMine() {
   const route = useRoute()
   const router = useRouter()

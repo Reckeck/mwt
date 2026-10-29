@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 import { storeTxFilter } from '@/shared/lib/tx-filter'
 
-/** «Последние операции»: three, newest first. */
+/** `Latest operations`: three, newest first. */
 const LAST = 3
 
 /**

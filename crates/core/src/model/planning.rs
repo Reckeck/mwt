@@ -144,7 +144,7 @@ pub struct AutomationSpec {
     /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
     #[serde(default)]
     pub time: Option<String>,
-    /// It asks «да» before it books the operation.
+    /// It asks "yes" before it books the operation.
     #[serde(default)]
     pub asks: bool,
     /// An income only: the month it is for, in months from the one it is
@@ -186,7 +186,7 @@ pub struct Automation {
     /// The local time it fires, «HH:MM»; `None` — 09:00, as before.
     #[serde(default)]
     pub time: Option<String>,
-    /// It asks «да» before it books the operation.
+    /// It asks "yes" before it books the operation.
     #[serde(default)]
     pub asks: bool,
     /// An income only: the month it is for, in months from the one it is
@@ -295,7 +295,7 @@ pub struct Goal {
     pub monthly_commitment: Option<Amount>,
     pub scope: StoreScope,
     pub created_at: String,
-    /// The calculator scenario the goal follows: «по плану к сегодня».
+    /// The calculator scenario the goal follows: "Planned by today".
     #[serde(default)]
     pub scenario_id: Option<String>,
     /// What the savings are expected to earn, percent a year, compounded
@@ -304,7 +304,7 @@ pub struct Goal {
     pub expected_return: Option<Amount>,
 }
 
-/// Where a calculator scenario takes its numbers from (plan A, «Из данных»).
+/// Where a calculator scenario takes its numbers from (plan A, "From your data").
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct ScenarioSource {
     /// The wallets whose value is the start amount and whose deposit terms
@@ -325,7 +325,7 @@ pub struct CalcScenario {
     pub input: crate::calc::invest::InvestInput,
     #[serde(default)]
     pub source: Option<ScenarioSource>,
-    /// RFC3339 of the last «Обновить из данных»: the numbers are a snapshot.
+    /// RFC3339 of the last "Refresh from data": the numbers are a snapshot.
     #[serde(default)]
     pub prefilled_at: Option<String>,
     pub created_at: String,
@@ -563,13 +563,13 @@ pub struct Reminder {
     /// sync never undoes «done».
     #[serde(default)]
     pub source_key: String,
-    /// «Кнопка в напоминании» (Auto-2 · 10): «Оплатить» opens the payment
+    /// "Button in the reminder" (Auto-2 · 10): "Pay" opens the payment
     /// form filled with this wallet and category.
     #[serde(default)]
     pub pay: Option<ReminderPay>,
 }
 
-/// What «Оплатить» in a reminder fills the payment form with.
+/// What "Pay" in a reminder fills the payment form with.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct ReminderPay {
     #[serde(default)]
@@ -645,7 +645,7 @@ pub enum UtilityKind {
         /// The bill by a formula (`utilities_formula`); `None` = consumption × tariff.
         #[serde(default)]
         formula: Option<String>,
-        /// Tariff zones of a multi-rate meter («день», «ночь»): a reading per
+        /// Tariff zones of a multi-rate meter ("day", "night"): a reading per
         /// zone; empty = one reading.
         #[serde(default)]
         zones: Vec<String>,
@@ -718,7 +718,7 @@ impl MeterReading {
 }
 
 /// An envelope: a named, earmarked part of one asset's balance in one store
-/// («отпуск», «налоги»). Nothing physically moves — the store still holds the
+/// ("vacation", "Taxes"). Nothing physically moves — the store still holds the
 /// money; envelopes only mark how much of it is spoken for.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct Envelope {

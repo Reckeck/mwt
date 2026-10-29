@@ -1,6 +1,6 @@
 /**
  * Where the toasts sit: above the phone's bottom bar, and above the footer of the layer
- * that is open (a sheet's or a dialog's «Удалить / Изменить»), so a toast never covers
+ * that is open (a sheet's or a dialog's `Delete / Edit`), so a toast never covers
  * the buttons it comes from. Written to `--toast-bottom` on `<html>`; styles.css puts the toaster there.
  */
 const GAP = 12

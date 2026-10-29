@@ -19,9 +19,9 @@ import ContactAccountForm from './ContactAccountForm.vue'
 import ContactAccountRow from './ContactAccountRow.vue'
 
 /**
- * «Реквизиты» of a contact (Ops-2 · 7–9): records, not inputs. A paste
+ * `Requisites` of a contact (Ops-2 · 7–9): records, not inputs. A paste
  * anywhere outside a field (Ctrl V) or into the dashed box opens the form with
- * what the app recognised; each change saves with «Отменить» in the toast.
+ * what the app recognised; each change saves with `Undo` in the toast.
  */
 const props = defineProps<ContactAccountsProps>()
 const emit = defineEmits<{ transfer: [account: ContactAccount] }>()
@@ -48,7 +48,7 @@ function open(value = '') {
   editing.value = ''
 }
 
-/** Each change carries the requisites as they were, so its «Отменить» puts exactly those back. */
+/** Each change carries the requisites as they were, so its `Undo` puts exactly those back. */
 interface AccountsChange {
   accounts: ContactAccount[]
   before: ContactDraft

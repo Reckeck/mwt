@@ -20,7 +20,7 @@ import InvestYearTable from './InvestYearTable.vue'
 import ResultHint from './ResultHint.vue'
 import ResultStats from './ResultStats.vue'
 
-/** How the answer adds up: the figures, the chart, «что выгоднее» and the years. */
+/** How the answer adds up: the figures, the chart, `Which pays more` and the years. */
 const props = defineProps<{
   calc: InvestCalc
   compare: CompareLines
@@ -64,7 +64,7 @@ function onChartClick(params: { seriesName?: string }) {
   if (line) emit('open', line.open)
 }
 
-/** «Что выгоднее» answers «сколько будет»: it has nothing to add to a found value or to running out. */
+/** `Which pays more` answers `how much there will be`: it has nothing to add to a found value or to running out. */
 const comparing = computed(() => !props.outcome.solved && Number(props.outcome.result.withdrawn ?? 0) === 0)
 </script>
 

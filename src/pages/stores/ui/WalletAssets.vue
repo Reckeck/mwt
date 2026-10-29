@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 /**
  * What the wallets hold per currency (Currency-1 · 2). Under the table it is one
- * line — «₽ 3 295 090 · 35 147 $ · 87 %»; in the «По валютам» view, a table.
+ * line — «₽ 3 295 090 · 35 147 $ · 87 %»; in the `By currency` view, a table.
  */
 const props = defineProps<{
   assets: (AssetBalance & { share: number })[]

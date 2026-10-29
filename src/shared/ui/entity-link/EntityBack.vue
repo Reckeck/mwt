@@ -6,7 +6,7 @@ import { useEntityNav } from '@/shared/lib/entity-link'
 import { Button } from '@/shared/ui/button'
 
 /**
- * «← Назад» for a card opened over another one (`?open=a~b`): it drops the top
+ * `← Back` for a card opened over another one (`?open=a~b`): it drops the top
  * card and the one under it shows again. Nothing under it, nothing drawn.
  * One button for every card sheet (docs/ui-links.md, 24).
  */

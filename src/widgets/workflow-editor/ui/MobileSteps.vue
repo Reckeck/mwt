@@ -16,7 +16,7 @@ import type { useSchemeWords } from '../model/use-scheme-words'
 /**
  * The phone's scheme (Auto-2 · 13): the steps as a list in run order, the
  * data nodes folded into one line over it. A tap opens the step's fields in
- * the sheet; «Холст» shows the nodes and wires instead. The last emulation
+ * the sheet; `Canvas` shows the nodes and wires instead. The last emulation
  * numbers the steps and puts its card under them (the default slot).
  */
 const props = defineProps<{

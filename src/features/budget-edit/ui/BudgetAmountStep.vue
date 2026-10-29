@@ -24,7 +24,7 @@ const { t } = useI18n()
 /** The dialog lands on the field marked `autofocus`: an edit goes straight to the sum. */
 const focusAttrs = computed(() => (props.focus ? { autofocus: true } : {}))
 
-/** «36 $ из 50 $ · 72 %»: only a monthly limit in the spending's own currency compares. */
+/** `36 $ of 50 $ · 72 %`: only a monthly limit in the spending's own currency compares. */
 const taken = computed(() => {
   const spending = props.spending
   const cap = Number(limit.value)

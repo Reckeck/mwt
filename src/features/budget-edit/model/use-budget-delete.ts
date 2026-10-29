@@ -4,13 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
-/** What the toast names: the limit's own name («Продукты», «все траты»). */
+/** What the toast names: the limit's own name (`Groceries`, `all spending`). */
 export interface BudgetDeleteVars {
   budget: Budget
   name: string
 }
 
-/** Delete a limit (`delete_budget`); the toast's «Отменить» creates it again with every field. */
+/** Delete a limit (`delete_budget`); the toast's `Undo` creates it again with every field. */
 export function useBudgetDelete() {
   const { t } = useI18n()
   const queryClient = useQueryClient()

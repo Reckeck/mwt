@@ -3,7 +3,7 @@ import { useInfiniteQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
-/** Rows per request: what one «Показать ещё» adds. */
+/** Rows per request: what one `Show more` adds. */
 export const TX_PAGE = 100
 
 /**

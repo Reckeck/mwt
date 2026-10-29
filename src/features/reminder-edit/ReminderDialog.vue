@@ -32,7 +32,7 @@ const text = ref('')
 const date = ref('')
 const time = ref('09:00')
 const preset = ref<WhenPreset>('once')
-/** «Другой интервал»: every `every` `unit`s. */
+/** `Other interval`: every `every` `unit`s. */
 const unit = ref<RepeatUnit>('month')
 const every = ref('1')
 const pay = ref<ReminderPay | null>(null)
@@ -59,7 +59,7 @@ const dueAt = computed(() => {
 })
 const repeat = computed(() => repeatOf(preset.value, { unit: unit.value, every: Number(every.value) }))
 
-/** «Каждое 10-е», «Каждую неделю · пт»: the day comes from the date. */
+/** `Every 10th`, `Every week · Fri`: the day comes from the date. */
 function presetLabel(entry: WhenPreset) {
   const day = date.value ? new Date(`${date.value}T12:00`) : null
   if (!day || Number.isNaN(day.getTime())) return t(`reminder.when.${entry}`, { day: '', date: '' })

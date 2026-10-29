@@ -14,7 +14,7 @@ import { keepPreviousFor } from '@/shared/lib/query'
 
 /**
  * The operations of one exchange wallet: what waits for confirmation, then
- * what was already brought in (marked «Импорт с биржи»), newest first.
+ * what was already brought in (marked `Exchange import`), newest first.
  */
 const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()

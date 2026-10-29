@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 pub const START: &str = "<!-- commits:start -->";
 pub const END: &str = "<!-- commits:end -->";
 const HEADING: &str = "## [Unreleased]";
-pub const EMPTY_LIST: &str = "_Коммитов с прошлого релиза нет._";
+pub const EMPTY_LIST: &str = "_No commits since the last release._";
 
 /// Three or more line breaks in a row become two.
 fn collapse_blank_lines(text: &str) -> String {
@@ -49,7 +49,7 @@ pub fn with_commits(text: &str, list: &str) -> Result<String> {
             section = format!("{}{block}{}", &section[..from], &section[to + END.len()..]);
         }
         (Some(_), Some(_)) => bail!("CHANGELOG.md: the end marker comes before the start marker"),
-        _ => section = format!("{section}\n\n### Коммиты\n\n{block}"),
+        _ => section = format!("{section}\n\n### Commits\n\n{block}"),
     }
     Ok(collapse_blank_lines(&format!(
         "{}{section}\n\n{}",
@@ -70,7 +70,7 @@ pub fn promote(text: &str, next: &str, date: &str) -> Result<String> {
         .replacen(&format!("{START}\n\n"), "", 1)
         .replacen(&format!("\n\n{END}"), "", 1);
     let body = body.trim();
-    let fresh = format!("{HEADING}\n\n### Коммиты\n\n{START}\n\n{EMPTY_LIST}\n\n{END}");
+    let fresh = format!("{HEADING}\n\n### Commits\n\n{START}\n\n{EMPTY_LIST}\n\n{END}");
     Ok(collapse_blank_lines(&format!(
         "{}{fresh}\n\n## [{next}] — {date}\n\n{body}\n\n{}",
         &text[..start],
@@ -91,7 +91,7 @@ mod tests {
         assert_eq!(
             out,
             format!(
-                "# Changelog\n\n## [Unreleased]\n\nBy hand.\n\n### Коммиты\n\n{START}\n\n- a\n\n{END}\n\n## [0.1.0] — 2026-10-13\n\nOld.\n"
+                "# Changelog\n\n## [Unreleased]\n\nBy hand.\n\n### Commits\n\n{START}\n\n- a\n\n{END}\n\n## [0.1.0] — 2026-10-13\n\nOld.\n"
             )
         );
     }
@@ -121,10 +121,10 @@ mod tests {
         let listed = with_commits(BASE, "- a").unwrap();
         let out = promote(&listed, "0.2.0", "2026-11-01").unwrap();
         let fresh =
-            format!("## [Unreleased]\n\n### Коммиты\n\n{START}\n\n{EMPTY_LIST}\n\n{END}\n\n");
+            format!("## [Unreleased]\n\n### Commits\n\n{START}\n\n{EMPTY_LIST}\n\n{END}\n\n");
         assert!(out.contains(&fresh));
         assert!(
-            out.contains("## [0.2.0] — 2026-11-01\n\nBy hand.\n\n### Коммиты\n\n- a\n\n## [0.1.0]")
+            out.contains("## [0.2.0] — 2026-11-01\n\nBy hand.\n\n### Commits\n\n- a\n\n## [0.1.0]")
         );
         assert!(!out.contains("commits:start -->\n\n- a"));
     }

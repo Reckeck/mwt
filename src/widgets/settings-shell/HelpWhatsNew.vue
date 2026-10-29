@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { SettingsSection } from '@/shared/ui/settings-section'
 import { WHATS_NEW } from '@/shared/config/whats-new'
 
-/** «Что нового» in a block: the titles of the latest updates; the dialog holds the points. */
+/** `What's new` in a block: the titles of the latest updates; the dialog holds the points. */
 const { t } = useI18n()
 const router = useRouter()
 const latest = computed(() => WHATS_NEW.slice(0, 3))

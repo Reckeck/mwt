@@ -1,50 +1,50 @@
 ---
 name: commit-coauthor
 description: >
-  Как агент помечает свои коммиты трейлером Co-authored-by с указанием себя
-  (инструмента: OpenCode, Claude Code, Codex, Zed…). Использовать перед
-  каждым `jj describe` / `jj commit` / `jj new -m`, при переписывании
-  сообщения чужого коммита и при вопросах про авторство агента. Триггеры:
-  коммит, commit, describe, соавтор, co-author, Co-authored-by, трейлер,
-  trailer, авторство, «кто написал».
+  How an agent marks its own commits with a Co-authored-by trailer naming itself
+  (the tool: OpenCode, Claude Code, Codex, Zed...). Use before every
+  `jj describe` / `jj commit` / `jj new -m`, when rewriting someone else's
+  commit message, and for questions about agent authorship. Triggers:
+  commit, коммит, describe, co-author, соавтор, Co-authored-by, trailer, трейлер,
+  authorship, авторство, "кто написал" (who wrote it).
 ---
 
-# Соавтор в коммитах: агент указывает себя сам
+# Co-author in commits: the agent names itself
 
-jj **не** добавляет трейлер автоматически (`templates.commit_trailers` в
-repo-конфиге не задан). Каждый агент, который пишет сообщение коммита,
-**сам** дописывает строку соавторства с **собственным** именем — именем
-инструмента, которым он работает, а не чужим.
+jj does **not** add the trailer automatically (`templates.commit_trailers` is not set
+in the repo config). Every agent that writes a commit message
+appends the co-author line **itself**, with its **own** name: the name of
+the tool it works with, not someone else's.
 
-## Формат
+## Format
 
-Последний абзац сообщения, отделён пустой строкой:
+The last paragraph of the message, separated by a blank line:
 
 ```
 feat(web): build the dashboard from its widgets
 
 Body: what changed and why.
 
-Co-authored-by: <Инструмент> <email>
+Co-authored-by: <Tool> <email>
 ```
 
-| Инструмент | Строка |
+| Tool | Line |
 |---|---|
 | OpenCode | `Co-authored-by: OpenCode <agent@opencode.local>` |
 | Claude Code | `Co-authored-by: Claude Code <noreply@anthropic.com>` |
 | Codex | `Co-authored-by: Codex <noreply@openai.com>` |
 | Zed | `Co-authored-by: Zed Agent <agent@zed.dev>` |
 
-- Пиши **своё** имя. Если твоего инструмента нет в таблице — добавь строку
-  `Co-authored-by: <Имя инструмента> <email>` и дополни таблицу этим же
-  изменением.
-- Если твоя среда задаёт свою строку атрибуции (например, системная
-  инструкция с точным текстом `Co-Authored-By: …`) — используй её дословно,
-  она имеет приоритет над таблицей.
-- Ровно **одна** строка на инструмент. Два агента работали над change —
-  две строки, по одной от каждого.
+- Write **your own** name. If your tool is not in the table, add the line
+  `Co-authored-by: <Tool name> <email>` and extend the table in the same
+  change.
+- If your environment sets its own attribution line (for example, a system
+  instruction with the exact text `Co-Authored-By: …`), use it verbatim;
+  it takes priority over the table.
+- Exactly **one** line per tool. If two agents worked on a change,
+  two lines, one from each.
 
-## Как писать с jj
+## How to write it with jj
 
 ```bash
 jj describe -m "fix(core): keep vault unlock error as Error::Secret
@@ -54,25 +54,25 @@ Why it changed.
 Co-authored-by: Claude Code <noreply@anthropic.com>"
 ```
 
-То же для `jj commit -m` и `jj new -m`. Проверка:
+The same goes for `jj commit -m` and `jj new -m`. To check:
 
 ```bash
-jj log -r @ --no-graph -T description | tail -3   # твоя строка на месте, дубля нет
+jj log -r @ --no-graph -T description | tail -3   # your line is in place, no duplicate
 ```
 
-## Правила
+## Rules
 
-- **Не убирай чужие трейлеры.** Переписывая сообщение (`jj describe -r …`,
-  `jj squash`, `jj split`) — сохрани все существующие `Co-authored-by:` и
-  добавь свою, если её ещё нет.
-- **Не дублируй.** Перед `describe` посмотри текущее сообщение; если твоя
-  строка уже есть — не добавляй вторую.
-- **Автоподстановка выключена намеренно.** Если
-  `jj config list templates.commit_trailers` что-то выводит — шаблон снова
-  включён и будет подставлять чужое имя рядом с твоим. Не включай его и
-  сообщи пользователю, если нашёл.
-- Коммит — по-прежнему **только по явной просьбе пользователя** (скилл
-  `jj-workflow`).
-- GitHub показывает трейлер `Co-authored-by` аватаром соавтора у коммита, только
-  если email принадлежит аккаунту; `*.local` / `noreply` без аккаунта — нет, но в
-  тексте коммита трейлер остаётся.
+- **Do not remove other people's trailers.** When rewriting a message (`jj describe -r …`,
+  `jj squash`, `jj split`), keep every existing `Co-authored-by:` and
+  add yours if it is not there yet.
+- **Do not duplicate.** Before `describe`, look at the current message; if your
+  line is already there, do not add a second one.
+- **Auto-insertion is off on purpose.** If
+  `jj config list templates.commit_trailers` prints anything, the template is
+  enabled again and will insert someone else's name next to yours. Do not enable it, and
+  tell the user if you find it.
+- A commit is still made **only at the user's explicit request** (the
+  `jj-workflow` skill).
+- GitHub shows the `Co-authored-by` trailer as the co-author's avatar on the commit only
+  if the email belongs to an account; `*.local` / `noreply` without an account do not, but
+  the trailer stays in the commit text.

@@ -28,7 +28,7 @@ import { NAV_ITEMS, type NavItem } from '../../app-shell.constants'
 
 /**
  * Shell · 7: the five sections, the favourites, then settings, lock and
- * «Свернуть · Ctrl B». Folded to icons, every row keeps a tooltip.
+ * `Collapse · Ctrl B`. Folded to icons, every row keeps a tooltip.
  */
 const emit = defineEmits<{ lock: []; openSettings: [] }>()
 

@@ -13,7 +13,7 @@ import type { DraftPerson } from '../shared-event-edit.types'
 import { guestDraft } from './guest-details'
 
 /**
- * The fields of «Новое событие» / «Изменить событие» and what the save sends. The people are
+ * The fields of `New event` / `Edit event` and what the save sends. The people are
  * a draft only while the event is new; later they are changed one by one on the event screen.
  */
 export function useEventDraft(open: Ref<boolean>, event: () => SharedEvent | null | undefined) {

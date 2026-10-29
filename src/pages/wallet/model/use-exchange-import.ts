@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
-/** «Импортировать каждый час»: what the switch turns on. */
+/** `Import every hour`: what the switch turns on. */
 export const HOURLY = 3600
 
 /**

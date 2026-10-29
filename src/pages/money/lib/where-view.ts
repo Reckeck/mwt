@@ -31,7 +31,7 @@ export const WHERE_TX_KINDS: Partial<Record<WhereKind, TxKind[]>> = {
   invested: ['trade_spot'],
 }
 
-/** One operation of an opened row: «21 окт · Тинькофф → Bybit · 45 000 ₽ → 480 USDT». */
+/** One operation of an opened row: `Oct 21 · Tinkoff → Bybit · 45,000 ₽ → 480 USDT`. */
 export function whereItemRoute(kind: WhereKind, item: WhereItem): string {
   if (kind === 'lent') return [item.comment || item.label, item.to].filter(Boolean).join(', ')
   if (kind === 'invested') return item.label

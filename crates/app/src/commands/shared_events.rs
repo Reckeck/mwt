@@ -1,4 +1,4 @@
-//! Shared events («посиделки»): thin wrappers over the vault's event service.
+//! Shared events ("shared events"): thin wrappers over the vault's event service.
 //! Every mutation answers with the refreshed event (`SharedEventView`) so the
 //! screen can redraw from the reply alone.
 
@@ -132,7 +132,7 @@ pub async fn remove_shared_participant(
         .map_err(err_to_string)
 }
 
-/// «Сделать контактом»: the guest becomes a contact with their details.
+/// "Make a contact": the guest becomes a contact with their details.
 #[tauri::command]
 pub async fn make_shared_participant_contact(
     input: SharedParticipantRef,
@@ -267,7 +267,7 @@ pub async fn set_shared_share_override(
         .map_err(err_to_string)
 }
 
-/// «Получил» / «Отдал» / «Оплатить долю» / «Зачесть без операции».
+/// "Received" / "Gave" / "Pay my share" / "Set off without an operation".
 #[tauri::command]
 pub async fn settle_shared(
     input: SettleSharedInput,
@@ -281,7 +281,7 @@ pub async fn settle_shared(
         .map_err(err_to_string)
 }
 
-/// «Списать остаток»: the rest becomes my expense.
+/// "Write off the rest": the rest becomes my expense.
 #[tauri::command]
 pub async fn write_off_shared(
     input: SharedRemainderInput,
@@ -295,7 +295,7 @@ pub async fn write_off_shared(
         .map_err(err_to_string)
 }
 
-/// «Переложить на других»: the rest is split between the others.
+/// "Move onto the others": the rest is split between the others.
 #[tauri::command]
 pub async fn reassign_shared(
     input: SharedRemainderInput,
@@ -309,7 +309,7 @@ pub async fn reassign_shared(
         .map_err(err_to_string)
 }
 
-/// Take a settlement back (the toast's «Отменить»), with its operation.
+/// Take a settlement back (the toast's "Undo"), with its operation.
 #[tauri::command]
 pub async fn delete_shared_settlement(
     input: SharedSettlementRef,
@@ -351,7 +351,7 @@ pub async fn get_shared_event_share_text(
         .map_err(err_to_string)
 }
 
-/// What the events say about one contact: the «Общие события» block.
+/// What the events say about one contact: the "Shared events" block.
 #[tauri::command]
 pub async fn get_contact_shared_events(
     contact_id: String,

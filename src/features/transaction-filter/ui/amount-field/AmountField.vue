@@ -8,7 +8,7 @@ import { Label } from '@/shared/ui/label'
 import type { FilterFieldProps } from '../../transaction-filter.types'
 
 /**
- * «Сумма»: from and to in one frame, in the base currency by the operation's
+ * `Amount`: from and to in one frame, in the base currency by the operation's
  * larger side. A comma reads as the decimal point; anything else is left out.
  */
 const props = defineProps<FilterFieldProps>()

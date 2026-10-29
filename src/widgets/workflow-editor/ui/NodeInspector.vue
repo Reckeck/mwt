@@ -28,7 +28,7 @@ const props = defineProps<{
   flows: FlowPortLinks[]
   /** The actions it runs after by data. */
   dataAfter: string[]
-  /** «Выполнится: после … , когда есть …». */
+  /** `Runs: after … , when … is there`. */
   runsWhen: { after: string[]; ready: string[] } | null
   issues: GraphIssue[]
 }>()

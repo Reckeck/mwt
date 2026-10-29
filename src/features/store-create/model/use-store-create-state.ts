@@ -58,7 +58,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   /** A new bank comes with its first card: a card is a bank account. */
   const cardCurrency = ref('')
   const withCard = computed(() => !isSub.value && kind.value === 'bank')
-  /** «Учитывать в бюджете» (W3): spending from it counts in «Можно потратить сегодня». */
+  /** `Count in the budget` (W3): spending from it counts in `Can spend today`. */
   const inBudget = ref(true)
   const offersBudget = computed(() => !isSub.value && (kind.value === 'bank' || kind.value === 'cash'))
   /** The bank behind it, from the contacts: for the icon and statement import. */
@@ -83,9 +83,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const openingCurrency = ref('')
   const openingToken = ref<AssetRef | null>(null)
   const openingSide = ref<'base' | 'quote'>('quote')
-  /** «На дату» (W4): the day the balance was there; the opening top-up is booked on it. */
+  /** `As of` (W4): the day the balance was there; the opening top-up is booked on it. */
   const openingAt = ref('')
-  /** «В избранное» (W4): pinned to the sidebar right after it is created. */
+  /** `Add to favourites` (W4): pinned to the sidebar right after it is created. */
   const favorite = ref(true)
   /** Property is valued by purchase and a loan by its terms: no opening balance there. */
   const offersOpening = computed(() => !['property', 'liability'].includes(kind.value))
@@ -138,7 +138,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
     })
   })
 
-  /** A card on step 1 only picks; «Далее» (or a second click) moves on. */
+  /** A card on step 1 only picks; `Next` (or a second click) moves on. */
   function pickKind(value: StoreKind) {
     kind.value = value
     color.value = KIND_COLORS[value] ?? DEFAULT_STORE_COLOR

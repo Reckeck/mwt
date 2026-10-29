@@ -9,7 +9,7 @@ import { accountStoreId, txMeta } from '@/shared/lib/transactions'
 import { storeTxFilter } from '@/shared/lib/tx-filter'
 
 /**
- * «Пришло с Bybit 17 окт · 0,04 BTC, комиссия сети 0,0002 BTC» under the assets of a crypto
+ * `Received from Bybit Oct 17 · 0.04 BTC, network fee 0.0002 BTC` under the assets of a crypto
  * wallet (Wallets-1 · 6): the last transfer that came in from another of the user's wallets.
  */
 const props = defineProps<{ storeId: string }>()

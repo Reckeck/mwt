@@ -514,7 +514,7 @@ fn flow_reach(graph: &Graph, start: &str, port: Option<&str>) -> HashSet<String>
     seen
 }
 
-/// «Очередь» hands on the firings of a trigger, so it stands after one; a
+/// "Queue" hands on the firings of a trigger, so it stands after one; a
 /// wait inside it would stop the items that are left.
 fn queue_issues(graph: &Graph) -> Vec<GraphIssue> {
     let mut out = Vec::new();

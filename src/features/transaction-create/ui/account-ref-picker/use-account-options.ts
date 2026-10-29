@@ -55,7 +55,7 @@ export function useAccountOptions(
 
   const storeOptions = computed<AccountOption[]>(() =>
     flattenStoreTree(tree.data.value ?? [])
-      // Bonus programmes move only through «Начислить / Списать» (plan G1).
+      // Bonus programmes move only through `Accrue / Write off` (plan G1).
       .filter((node) => !node.store.archived && node.store.kind !== 'loyalty' && node.store.id !== props.excludeStoreId)
       .map((node) => {
         const row = walletRow(node, t, settings.baseCurrency)

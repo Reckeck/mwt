@@ -24,7 +24,7 @@ const budgets = useQuery({
   queryFn: () => call<Budget[]>('list_budgets'),
   enabled: computed(() => props.field.kind === 'budget'),
 })
-/** Income for «Заплати себе первым», spending for the watchers. */
+/** Income for `Pay yourself first`, spending for the watchers. */
 const groups = computed<CategoryGroup[]>(() =>
   props.templateId === 'pay_yourself_first' ? ['income'] : ['fixed', 'daily'],
 )

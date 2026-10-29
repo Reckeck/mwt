@@ -12,7 +12,7 @@ export interface GlancePayment {
 }
 
 /**
- * «Перекрёсток · 14 окт 9 $»: a payment in a glance's «Последние оплаты» —
+ * `Perekrestok · Oct 14 9 $`: a payment in a glance's `Latest payments` —
  * the comment, else who was paid, else the category.
  */
 export function glancePayments(

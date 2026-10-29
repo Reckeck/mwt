@@ -9,9 +9,9 @@ import { useAutomationWizard } from '../../model/use-automation-wizard'
 import { WizardOption } from '../wizard-option'
 
 /**
- * Step 2 (Auto-1 · 7): what it does. «Записать операцию» is the short form of
+ * Step 2 (Auto-1 · 7): what it does. `Record a transaction` is the short form of
  * an operation — the same tabs as Ctrl N, put in by the page through
- * `#operation`; «Напомнить» and «Перевести долю» open their own forms.
+ * `#operation`; `Remind` and `Transfer a share` open their own forms.
  */
 const { t } = useI18n()
 defineSlots<{ operation(props: WizardOperationSlot): unknown }>()

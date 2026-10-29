@@ -13,8 +13,8 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
 /**
- * «Избранные валюты» (Currency-1 · 1): a chip per favourite with × (undone
- * from the toast) and «+ Валюта» that opens the currency list. The order is
+ * `Favourite currencies` (Currency-1 · 1): a chip per favourite with × (undone
+ * from the toast) and `+ Currency` that opens the currency list. The order is
  * the order they were added in; it ranks the conversions under an amount.
  */
 const { t } = useI18n()
@@ -45,7 +45,7 @@ async function add(code: string) {
     await settings.loadApp().catch(() => {})
     return
   }
-  // The backend drops a code it cannot use; «Сохранено» would then be a lie.
+  // The backend drops a code it cannot use; `Saved` would then be a lie.
   if (!favorites.isFavorite(code)) {
     notify.error(null, t('settings.favoriteRejected', { code }))
     return

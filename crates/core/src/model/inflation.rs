@@ -14,7 +14,7 @@ use crate::Amount;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum InflationSource {
-    /// Bank of Russia, «Инфляция и ключевая ставка» table.
+    /// Bank of Russia, "Inflation and key rate" table.
     Cbr,
     /// US Bureau of Labor Statistics, CPI-U all items (`CUUR0000SA0`).
     Bls,

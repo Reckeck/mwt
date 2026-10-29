@@ -8,7 +8,7 @@ import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { Button } from '@/shared/ui/button'
 
-/** With nothing selected: the workflow's own settings and one «Проверка» block (problems, then tests). */
+/** With nothing selected: the workflow's own settings and one `Check` block (problems, then tests). */
 const props = defineProps<{
   issues: GraphIssue[]
   base: string

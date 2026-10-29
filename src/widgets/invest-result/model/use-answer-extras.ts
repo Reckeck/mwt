@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import type { CalcOutcome } from '@/features/invest-calculator'
 import { call } from '@/shared/api/ipc'
 
-/** How much longer and how much more rate the «если взнос не по силам» hint tries. */
+/** How much longer and how much more rate the `if the contribution is unaffordable` hint tries. */
 const LONGER_MONTHS = 24
 const RATE_BUMP = 2
 
@@ -17,7 +17,7 @@ export interface ContributionAlternative {
 
 /**
  * What the answer adds to the run: the withdrawal that lasts the term when
- * the money runs out, and in the «Взнос» mode what a longer term or a higher
+ * the money runs out, and in the `Contribution` mode what a longer term or a higher
  * rate would ask for instead.
  */
 export function useAnswerExtras(

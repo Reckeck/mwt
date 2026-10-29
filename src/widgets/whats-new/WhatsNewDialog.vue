@@ -14,7 +14,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
- * «Что нового»: after an update, what changed and where to see it. Opens by
+ * `What's new`: after an update, what changed and where to see it. Opens by
  * itself for entries not seen yet; `?whatsNew=1` opens the whole history.
  */
 const { t } = useI18n()

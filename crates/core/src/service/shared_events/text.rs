@@ -1,4 +1,4 @@
-//! «Поделиться расчётом»: the text to send to the chat. Purchases, shares,
+//! "Share the settlement": the text to send to the chat. Purchases, shares,
 //! who pays whom through the organizer, and the organizer's requisites when
 //! they are a contact (or a guest who left some).
 
@@ -69,14 +69,14 @@ fn words(english: bool) -> Words {
     }
 }
 
-/// «5 человек», «2 человека», «1 человека» (the form after «на»), `5 people`.
+/// Russian "5 people", "2 people", "1 person" (the form after "to"), `5 people`.
 fn people_text(count: usize, english: bool) -> String {
     if english {
         return format!("{count} {}", if count == 1 { "person" } else { "people" });
     }
     let last = count % 10;
     let tens = count % 100;
-    // «на 1 человека», «на 2 человека», «на 5 человек»
+    // Russian "for 1 person", "for 2 people", "for 5 people"
     let word =
         if (last == 1 && tens != 11) || ((2..=4).contains(&last) && !(12..=14).contains(&tens)) {
             "человека"
@@ -121,7 +121,7 @@ fn day_text(day: NaiveDate, words: &Words, with_year: bool) -> String {
     }
 }
 
-/// «2 ноя», «2–4 ноя», «30 окт – 2 ноя»; another year than `year` adds it.
+/// Russian "2 Nov", "2-4 Nov", "30 Oct - 2 Nov"; another year than `year` adds it.
 fn range_text(event: &SharedEvent, words: &Words, year: i32) -> Option<String> {
     let parse = |raw: &str| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok();
     let start = event.starts_on.as_deref().and_then(parse)?;

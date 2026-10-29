@@ -9,8 +9,8 @@ import NotificationDetails from './NotificationDetails.vue'
 import { useNotificationConfig } from './use-notification-config'
 
 /**
- * «Уведомления»: three switches for the kinds people think in; the rest
- * (channel, time, per-category lead days, permission) sits under «Подробные настройки».
+ * `Notifications`: three switches for the kinds people think in; the rest
+ * (channel, time, per-category lead days, permission) sits under `Detailed settings`.
  */
 const { t } = useI18n()
 const { category, patchCategory } = useNotificationConfig()

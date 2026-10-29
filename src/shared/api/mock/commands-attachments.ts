@@ -91,7 +91,7 @@ export const attachmentCommands: MockCommands = {
     item.title = input.title.trim()
     return resolve({ ...item })
   },
-  // The browser has no file system: «Сохранить как…» downloads the file instead.
+  // The browser has no file system: "Save as…" downloads the file instead.
   save_attachment_as: ({ body }) => {
     const item = find((body as AttachmentIdInput).id)
     const data = mockAttachmentData.get(item.id) ?? ''

@@ -6,7 +6,7 @@ import { ContactAccountForm } from '@/features/contact-edit'
 import { SharedEventEditDialog, type SharedEventEditDialogProps } from '@/features/shared-event-edit'
 
 /**
- * «Новое событие» / «Изменить событие» with what the event form borrows from other features: the
+ * `New event` / `Edit event` with what the event form borrows from other features: the
  * category picker and the requisite form of a guest. The dialog itself lives in `shared-event-edit`.
  */
 const props = defineProps<SharedEventEditDialogProps>()

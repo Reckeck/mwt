@@ -18,7 +18,7 @@ import { flattenStoreTree, withoutLoyalty } from '@/shared/lib/store-tree'
 import { SALARY_SHARE_PCT } from '../../lib/salary-plan'
 
 /**
- * «Заплати себе первым» (Auto-2 · 12): a share of each income from one wallet
+ * `Pay yourself first` (Auto-2 · 12): a share of each income from one wallet
  * goes to a goal's wallet. Three fields and what it makes of the usual salary.
  */
 const open = defineModel<boolean>('open', { required: true })
@@ -37,11 +37,11 @@ const nodes = computed(() => withoutLoyalty(tree.data.value ?? []))
 const flat = computed(() => flattenStoreTree(nodes.value))
 /** Goals that have a wallet to put the share in. */
 const targets = computed(() => (goals.data.value ?? []).filter((goal) => goal.active && goal.scope.store_ids.length > 0))
-/** The usual salary, for «С зарплаты 1 575 $ → 157,50 $ в месяц». */
+/** The usual salary, for `From salary 1,575 $ → 157.50 $ a month`. */
 const salary = computed(() => {
   const active = (automations.data.value ?? []).filter((entry) => entry.active)
   const salaries = active.flatMap((entry) => ('topup' in entry.template ? [{ preset: entry.preset, topup: entry.template.topup }] : []))
-  // A salary made before the «Зарплата» start has no preset: its category tells.
+  // A salary made before the `Salary` start has no preset: its category tells.
   const found = salaries.find((row) => row.preset === 'salary') ?? salaries.find((row) => row.topup.meta.categories.includes('salary'))
   const topup = found?.topup
   return topup ? { amount: Number(topup.amount), currency: topup.asset.symbol } : null

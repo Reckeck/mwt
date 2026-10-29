@@ -15,8 +15,8 @@ import PrefillPanel from './ui/PrefillPanel.vue'
 import StageList from './ui/StageList.vue'
 
 /**
- * «Что посчитать»: the fields from the most to the least asked-about. There
- * is no «Рассчитать» — the result follows the fields as they change.
+ * `What to find`: the fields from the most to the least asked-about. There
+ * is no `Calculate` — the result follows the fields as they change.
  */
 const props = defineProps<{ calc: InvestCalc }>()
 

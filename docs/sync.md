@@ -1,263 +1,263 @@
-# Синхронизация устройств по локальной сети
+# Device sync over the local network
 
-Два и больше устройства с одним и тем же vault в одной сети находят друг
-друга и обмениваются изменениями напрямую, зашифрованно, без облака. Режим
-выключен по умолчанию (Настройки → Синхронизация). BLE — следующая фаза
-поверх того же протокола; синхронизация целым файлом через внешнюю копию
-(`docs/storage-platforms.md`) остаётся отдельной функцией. Эти два пути
-встречаются при входе: если внешняя копия изменилась на другом устройстве,
-её записи сливаются в открытый vault тем же путём (`sync_manifest`,
-`sync_records`, `sync_apply`, партнёр «Внешняя копия»); `doc.sync` копии
-не берётся, запись в копию идёт с проверкой хэша и не затирает чужие правки.
+Two or more devices with the same vault on one network find each other
+and exchange changes directly, encrypted, without a cloud. The mode is
+off by default (Settings → Sync). BLE is the next phase
+on top of the same protocol; whole-file sync through an external copy
+(`docs/storage-platforms.md`) remains a separate feature. These two paths
+meet at sign-in: if the external copy changed on another device,
+its records are merged into the open vault by the same path (`sync_manifest`,
+`sync_records`, `sync_apply`, the "External copy" partner); the copy's `doc.sync`
+is not taken, and the write to the copy is hash-checked and does not overwrite someone else's edits.
 
-Решения пользователя — 2026-10-17 (план `bubbly-jumping-hare`).
+User decisions — 2026-10-17 (plan `bubbly-jumping-hare`).
 
-## Где код
+## Where the code is
 
-| Часть | Файл |
+| Part | File |
 |---|---|
-| Учёт изменений, слияние, откат (чисто, без сети) | `crates/core/src/sync/` — `stamp`, `state`, `registry`, `view`, `track`, `merge`, `plan`, `manifest` |
-| Канал: Noise, код сопряжения, доказательство vault, часы | `crates/core/src/sync/session.rs`, `protocol.rs` |
-| Vault: `persist` ставит штампы, `sync_apply`/`sync_undo`/бэкап | `crates/core/src/service/peer_sync.rs` |
-| Сеть: mDNS, TCP, роли, сессия | `crates/app/src/sync/` — `discovery`, `link`, `mod` (хаб), `keystore`, `host` |
-| Команды и события | `crates/app/src/commands/sync.rs`, `docs/ipc.md` |
-| Интерфейс | `src/features/vault-sync/`, `src/widgets/sync-settings/` |
+| Change tracking, merge, undo (pure, no network) | `crates/core/src/sync/` — `stamp`, `state`, `registry`, `view`, `track`, `merge`, `plan`, `manifest` |
+| Channel: Noise, pairing code, vault proof, clock | `crates/core/src/sync/session.rs`, `protocol.rs` |
+| Vault: `persist` sets stamps, `sync_apply`/`sync_undo`/backup | `crates/core/src/service/peer_sync.rs` |
+| Network: mDNS, TCP, roles, session | `crates/app/src/sync/` — `discovery`, `link`, `mod` (hub), `keystore`, `host` |
+| Commands and events | `crates/app/src/commands/sync.rs`, `docs/ipc.md` |
+| Interface | `src/features/vault-sync/`, `src/widgets/sync-settings/` |
 
-## Учёт изменений
+## Change tracking
 
-Мутации vault не знают о синхронизации. Каждый `persist()` сравнивает поля
-каждой записи с прошлым сохранением (`sync::track::Tracker`, отпечатки в
-памяти) и ставит **штамп** гибридных часов (`Stamp { wall_ms, counter,
-device }`) на изменённые поля. Пропавшая запись получает **tombstone**. Всё
-это хранится в `VaultDoc.sync` (`SyncState`, аддитивное поле — бамп формата не
-нужен):
+Vault mutations know nothing about sync. Every `persist()` compares the fields
+of each record with the previous save (`sync::track::Tracker`, fingerprints in
+memory) and puts a hybrid-clock **stamp** (`Stamp { wall_ms, counter,
+device }`) on the changed fields. A missing record gets a **tombstone**. All
+of this is stored in `VaultDoc.sync` (`SyncState`, an additive field — no format
+bump needed):
 
-- `stamps` — `коллекция:ключ` → `{ created, fields }`; штамп поля хранится,
-  только если поле правили после создания записи;
-- `tombstones` — удалённые ключи; старше 180 дней и подтверждённые всеми
-  устройствами сжимаются; возраст считается от более позднего из штампа
-  удаления и времени, когда оно дошло сюда (`tombstones_seen`, локальные мс,
-  не синхронизируется), поэтому удаление, пришедшее с опозданием, сразу не
-  сжимается и запись не воскресает с других устройств;
-- `peers` — доверенные устройства (ключ, имя, отзыв);
-- `batches` — последние 20 пачек (не старше 7 дней) для отмены.
+- `stamps` — `collection:key` → `{ created, fields }`; a field stamp is stored
+  only if the field was edited after the record was created;
+- `tombstones` — deleted keys; those older than 180 days and confirmed by all
+  devices are compacted; the age is counted from the later of the deletion
+  stamp and the time it arrived here (`tombstones_seen`, local ms,
+  not synced), so a deletion that arrives late is not compacted at once
+  and the record does not resurrect from other devices;
+- `peers` — trusted devices (key, name, revocation);
+- `batches` — the last 20 batches (not older than 7 days) for undo.
 
-Каждое поле `VaultDoc` описано в `sync::registry` правилом; поле без правила
-валит тест `every_vault_field_has_a_sync_rule`.
+Every `VaultDoc` field is described by a rule in `sync::registry`; a field without a rule
+fails the `every_vault_field_has_a_sync_rule` test.
 
-| Правило | Коллекции |
+| Rule | Collections |
 |---|---|
-| записи по ключу, слияние по полям, удаления — tombstone | счета, операции (`meta` раскрыт по полям), категории, контакты, планирование, схемы и их очередь/ожидания/состояние, ключи бирж, настройки vault (одним объектом) |
-| журнал: объединение, порядок по времени, обрезка до лимита, обрезка — не удаление | `notification_log`, `automation_runs`, `workflow_runs`, `import_runs` |
-| объединение неизменяемых точек, без штампов | `price_cache`, `fx_cache` (первая сессия — 90 дней), `discarded_imports` |
-| не синхронизируется | `holdings` (пересчёт), `id`/`version`/`created_at`, `sync`, поля устройства в `settings` (`minimize_to_tray`, `fx_refresh_interval_sec`, `display_decimals` — теперь в `app_settings.json`) |
+| records by key, field-level merge, deletions — tombstone | accounts, transactions (`meta` expanded by field), categories, contacts, planning, schemes and their queue/waits/state, exchange keys, vault settings (as one object) |
+| log: union, ordered by time, trimmed to a limit, trimming is not deletion | `notification_log`, `automation_runs`, `workflow_runs`, `import_runs` |
+| union of immutable points, no stamps | `price_cache`, `fx_cache` (first session — 90 days), `discarded_imports` |
+| not synced | `holdings` (recomputed), `id`/`version`/`created_at`, `sync`, device fields in `settings` (`minimize_to_tray`, `fx_refresh_interval_sec`, `display_decimals` — now in `app_settings.json`) |
 
-## Слияние
+## Merge
 
-Для каждого поля побеждает больший штамп; равные штампы (данные, бывшие в
-обеих копиях до синхронизации) сравниваются по значению — результат один и
-тот же на обоих устройствах, `A⊕B = B⊕A`. Правки разных полей одной записи
-сохраняются обе. Если одно поле меняли на двух устройствах, остаётся более
-поздняя правка, а в сводке пачки — «Перезаписано: было → стало». Удаление
-побеждает правки, сделанные раньше него; правка после удаления запись
-возвращает. Другой вид операции (тег варианта) — вся запись целиком по
-последнему штампу.
+For each field the larger stamp wins; equal stamps (data that was in
+both copies before sync) are compared by value — the result is the same
+on both devices, `A⊕B = B⊕A`. Edits to different fields of one record
+are both kept. If one field was changed on two devices, the later
+edit stays, and the batch summary says "Overwritten: was → became". A deletion
+beats edits made before it; an edit after the deletion brings the record
+back. A different transaction kind (the variant tag) — the whole record goes
+by the latest stamp.
 
-Пачка применяется как одна операция: записи собираются в JSON, документ
-заново разбирается serde — запись, не подходящая под схему, отклоняет всю
-пачку. Запись под чужим ключом или из несинхронизируемой коллекции —
-`INVALID_INPUT`. После применения: дубли операций одной автоматизации или
-импорта (обе стороны успели их создать) сворачиваются в одну, holdings
-пересчитываются. Рабочий процесс может создать за один прогон несколько
-операций на один плановый момент (зарплата и налог): выигрывает самая ранняя
-операция, остаются все операции её прогона и все операции того же устройства;
-удаляются только операции другого прогона с другого устройства. Операция без
-штампа не удаляется (ни импорт, ни автоматизация). Копия, которая уходит, отдаёт
-оставшейся свои более поздние правки полей (с их штампами); удаление и перенос
-полей записываются в пачку, поэтому отмена пачки возвращает обе копии.
+A batch is applied as one operation: records are assembled into JSON, the document
+is re-parsed by serde — a record that does not fit the schema rejects the whole
+batch. A record under a foreign key or from a non-synced collection is
+`INVALID_INPUT`. After applying: duplicate transactions of one automation
+or import (both sides managed to create them) are collapsed into one, and holdings are
+recomputed. A workflow can create several transactions per planned moment
+in one run (salary and tax): the earliest transaction wins, all transactions of its
+run and all transactions of the same device stay; only transactions of another run
+from another device are deleted. A transaction without a stamp is not deleted (neither an import
+nor an automation). The copy that goes away hands the remaining one its later field
+edits (with their stamps); the deletion and the field move are
+written into the batch, so undoing the batch restores both copies.
 
-## Отмена
+## Undo
 
-Пачка хранит каждую запись «до» и штампы «после». Отмена возвращает записи,
-чьи штампы с тех пор не менялись; изменённые позже остаются как есть и
-перечисляются. Отмена — **новая локальная правка** со свежими штампами, она
-уходит на другие устройства: две копии одного vault не могут навсегда
-разойтись в одной записи. Аварийный выход — `<vault>.presync.bak` (последние
-три, пишется перед первой пачкой каждой сессии), «Восстановить до
-синхронизации» в настройках.
+A batch stores each record "before" and the stamps "after". Undo restores the records
+whose stamps have not changed since; those changed later stay as they are and
+are listed. Undo is a **new local edit** with fresh stamps, and it
+goes to the other devices: two copies of one vault cannot diverge
+forever on one record. The emergency exit is `<vault>.presync.bak` (the last
+three, written before the first batch of each session), "Restore from before the sync" in
+settings.
 
-## Сеть и роли
+## Network and roles
 
-- mDNS `_mwt-sync._tcp`: в TXT только тег `HMAC(vault.id, "mwt-disc" ‖ день)[..8]`,
-  признак главного и версия. Посторонние видят случайные байты, меняющиеся
-  каждый день; имя устройства не рекламируется.
-- **Звезда.** Не видя главного 3 секунды, устройство становится главным;
-  остальные подключаются к нему. Два главных — уступает то, у кого больше
-  случайный идентификатор экземпляра. Ушло главное — клиенты ждут по очереди
-  подключения (ранг) и первый становится главным. Устройство с «Предпочитать
-  главным» получает роль после своего первого обмена.
-- **Порт и встречный звонок.** Синхронизация слушает TCP 53318 (занят —
-  случайный порт). Клиент, который не смог подключиться к главному, не
-  становится главным сам: он ждёт, и главное через 6 с само звонит каждому
-  устройству группы, которое видит в mDNS, но не связано с ним. После трёх
-  неудачных попыток подряд главное считается ушедшим. Если связь пришла с
-  обеих сторон сразу, остаётся та, что открыл клиент.
-- **Фаервол.** Клиент сообщает в Hello (`unreached`), что не смог
-  подключиться, и главное показывает «Входящие соединения блокирует
-  фаервол». Кнопка «Открыть порт» добавляет правило только для локальной
-  подсети: Linux — `pkexec` + ufw или firewalld (какой включён), Windows —
-  `netsh` через UAC, профиль Private. Flatpak к фаерволу хоста не допущен
-  (без `--talk-name=org.freedesktop.Flatpak`) и показывает команды для
-  терминала. На macOS система спрашивает сама, у Android фаервола нет.
-- **Диагностика.** Настройки → Синхронизация: порт, адрес, сколько
-  устройств с этим vault видно, последняя ошибка; через 30 с без соседей —
-  подсказка, что проверить.
-- **Только главное** выполняет фоновые задачи планировщика (автоматизации,
-  схемы, импорт Bybit, алерты, напоминания); клиенты получают результат
-  синхронизацией. Ручное обновление цен работает везде — кэши объединяются.
-- **Уведомления.** Системное уведомление показывает устройство, чьё окно в
-  фокусе; если в фокусе нет ни одного — все. Колокольчик обновляется везде.
-  Пришедшие синхронизацией уведомления старше часа не всплывают.
+- mDNS `_mwt-sync._tcp`: the TXT holds only the tag `HMAC(vault.id, "mwt-disc" ‖ day)[..8]`,
+  the main-device flag and the version. Outsiders see random bytes that change
+  every day; the device name is not advertised.
+- **Star.** If it does not see a main device for 3 seconds, a device becomes the main one;
+  the others connect to it. With two main devices, the one with the larger
+  random instance identifier yields. If the main device leaves, clients wait their turn
+  to connect (rank) and the first becomes the main one. A device with "Make this
+  device the main one" gets the role after its first exchange.
+- **Port and the return call.** Sync listens on TCP 53318 (if busy —
+  a random port). A client that could not connect to the main device does not
+  become main itself: it waits, and after 6 s the main device calls every
+  device of the group it sees in mDNS but is not connected to. After three
+  failed attempts in a row the main device is considered gone. If a connection arrived from
+  both sides at once, the one opened by the client stays.
+- **Firewall.** The client reports in Hello (`unreached`) that it could not
+  connect, and the main device shows "A firewall blocks incoming connections". The
+  "Open the port" button adds a rule for the local
+  subnet only: Linux — `pkexec` + ufw or firewalld (whichever is enabled), Windows —
+  `netsh` through UAC, the Private profile. Flatpak is not allowed to touch the host firewall
+  (without `--talk-name=org.freedesktop.Flatpak`) and shows commands for a
+  terminal. On macOS the system asks by itself, Android has no firewall.
+- **Diagnostics.** Settings → Sync: the port, the address, how many
+  devices with this vault are visible, the last error; after 30 s without neighbors —
+  a hint about what to check.
+- **Only the main device** runs the scheduler's background tasks (automations,
+  schemes, Bybit import, alerts, reminders); clients receive the result through
+  sync. A manual price refresh works everywhere — caches are merged.
+- **Notifications.** The system notification is shown by the device whose window is
+  focused; if no window is focused, all of them. The bell updates everywhere.
+  Notifications that arrived through sync and are older than an hour do not pop up.
 
-## Сессия
+## Session
 
-1. Noise `XX_25519_ChaChaPoly_BLAKE2s`: обе стороны показывают статический
-   ключ устройства.
-2. `Hello`: версия протокола и формата vault, `HMAC(vault.id, handshake_hash,
-   роль)` — доказательство, что открыт тот же vault (не раскрывает id и не
-   отражается обратно), время.
-3. Неизвестный ключ — баннер «Сопрячь»; по нажатию на обоих экранах один и
-   тот же 6-значный код из `handshake_hash`. Доверие — только после
-   подтверждения на **обоих** устройствах. Забытый (отозванный) ключ тоже идёт через сопряжение: пока код не подтверждён на обоих, он не доверенный и данных не получает; подтверждённое сопряжение возвращает его (решает самая новая запись о ключе).
-4. Списки доверенных устройств объединяются (так «Забыть» доходит до всех):
-   по устройству побеждает более поздняя запись, но отзыв снимается только
-   локальным сопряжением, а не пришедшим списком; запись со штампом дальше
-   допустимого сдвига часов пропускается. Дошедший отзыв закрывает сессию с
-   забытым устройством на главном, остальным уходит новый список.
-5. Манифесты (`ключ → дайджест`) → запрос различающихся записей → записи
-   кусками по 500.
-6. Список изменений ждёт пользователя после сопряжения, при «Спрашивать
-   перед синхронизацией» (только первая пачка сессии) и от «временно
-   ненадёжного» устройства (каждая пачка). Иначе применяется сразу, с
-   уведомлением и «Отменить».
-   **«Отклонить» = пауза с этим устройством.** Id устройства попадает в
-   `SyncState.paused` (в vault, переживает перезапуск и блокировку; никогда не
-   синхронизируется и не входит в `peers`). Пока пауза стоит, сессия с ним
-   тихо закрывается сразу после `Hello`: без ошибки, без уведомления. В списке
-   устройств — «Обмен приостановлен» и «Продолжить» (`sync_resume_peer`):
-   пауза снимается, соединение пробуется сразу, список изменений спросят
-   заново со свежей сводкой. «Забыть» тоже снимает паузу. **Таймаут не отказ:**
-   нет ответа за `DECISION_TIMEOUT` (или окно закрыто) — сессия тихо
-   закрывается, пауза не ставится, следующая сессия спросит снова.
-   **Разрыв называют.** Пока пауза стоит (и когда ключ звонящего забыт), устройство не
-   закрывает сессию молча, а шлёт `Bye { reason: "paused" | "forgotten" }` (новых
-   вариантов сообщений нет: старые сборки видят обычный `Bye`). Забытое
-   устройство получает `forgotten`, если не просило сопряжения (`PairRequest` сразу
-   после `Hello`). Получатель пишет `SyncState.cut_by[X] = { reason, at }` (локально, в vault,
-   не синхронизируется), один раз показывает `SYNC_PAUSED_BY_PEER` /
-   `SYNC_FORGOTTEN_BY_PEER` с именем устройства и перестаёт набирать X (клиент
-   главного, главный в обратных вызовах, выборы). Клиент, от которого отказался
-   главный, не становится главным сам: ждёт его звонка. Свои звонки X принимает.
-   Отметка снимается после завершённого обмена, сопряжения, «Сопрячь заново»
-   (`sync_pair` с `deviceId`) и «Забыть». Сторона с паузой не звонит и устройствам,
-   которые поставила на паузу.
-7. Живой режим: сохранения отправляются через 1 секунду тишины, главное
-   пересылает их остальным; `Time` каждые 30 секунд, тишина 95 секунд —
-   конец сессии.
+1. Noise `XX_25519_ChaChaPoly_BLAKE2s`: both sides present their static
+   device key.
+2. `Hello`: the protocol and vault format versions, `HMAC(vault.id, handshake_hash,
+   role)` — proof that the same vault is open (it does not reveal the id and is not
+   reflected back), the time.
+3. An unknown key — a "Pair" banner; when pressed, both screens show the same
+   6-digit code derived from `handshake_hash`. Trust only after
+   confirmation on **both** devices. A forgotten (revoked) key also goes through pairing: until the code is confirmed on both, it is not trusted and receives no data; a confirmed pairing brings it back (the newest record about the key decides).
+4. The lists of trusted devices are merged (this is how "Forget" reaches everyone):
+   per device the later record wins, but a revocation is lifted only by
+   a local pairing, not by an incoming list; a record with a stamp beyond
+   the allowed clock skew is skipped. A revocation that arrives closes the session with
+   the forgotten device on the main device, and the others get the new list.
+5. Manifests (`key → digest`) → a request for the differing records → records
+   in chunks of 500.
+6. The change list waits for the user after pairing, with "Ask before
+   syncing" (only the first batch of a session) and from a "temporarily
+   untrusted" device (every batch). Otherwise it is applied immediately, with a
+   notification and "Undo".
+   **"Decline" = a pause with this device.** The device id goes into
+   `SyncState.paused` (in the vault, survives a restart and a lock; it is never
+   synced and is not part of `peers`). While the pause stands, a session with it
+   is quietly closed right after `Hello`: no error, no notification. In the device
+   list — "Exchange paused" and "Resume" (`sync_resume_peer`):
+   the pause is lifted, a connection is tried at once, and the change list will be asked about
+   again with a fresh summary. "Forget" also lifts the pause. **A timeout is not a refusal:**
+   no answer within `DECISION_TIMEOUT` (or the window is closed) — the session is quietly
+   closed, no pause is set, the next session asks again.
+   **A cut-off is named.** While a pause stands (and when the caller's key is forgotten), the device does not
+   close the session silently but sends `Bye { reason: "paused" | "forgotten" }` (there are no new
+   message variants: old builds see a plain `Bye`). A forgotten
+   device gets `forgotten` if it did not ask for pairing (`PairRequest` right
+   after `Hello`). The receiver writes `SyncState.cut_by[X] = { reason, at }` (locally, in the vault,
+   not synced), shows `SYNC_PAUSED_BY_PEER` /
+   `SYNC_FORGOTTEN_BY_PEER` once with the device name and stops dialing X (the main
+   device's client, the main device in return calls, elections). A client that the
+   main device refused does not become the main device itself: it waits for its call. X's own calls are accepted.
+   The mark is lifted after a completed exchange, a pairing, "Pair again"
+   (`sync_pair` with `deviceId`) and "Forget". A side that has a pause does not call the devices
+   it paused either.
+7. Live mode: saves are sent after 1 second of quiet, the main device
+   forwards them to the rest; `Time` every 30 seconds, 95 seconds of silence is
+   the end of the session.
 
-## Модель угроз
+## Threat model
 
-| Угроза | Защита |
+| Threat | Protection |
 |---|---|
-| Посторонний в сети читает или подменяет данные | Noise (X25519 + ChaChaPoly), подмена кадра рвёт сессию (`SYNC_CHANNEL`) |
-| Посторонний узнаёт, что у кого-то есть vault, или следит за устройством | в mDNS только ежедневный HMAC-тег, без имени |
-| Устройство в середине (MITM) при первом сопряжении | 6-значный код из `handshake_hash` — у MITM на экранах разные коды; доверие только после подтверждения на обоих |
-| Похожий или чужой vault | доказательство по `vault.id` внутри канала (`SYNC_OTHER_VAULT`) |
-| Старое или новое приложение с другим форматом | версия протокола и `VAULT_FORMAT_VERSION` (`SYNC_VERSION_MISMATCH`) |
-| Потерянное устройство | «Забыть устройство» распространяется на всех (`SYNC_REVOKED` при отзыве на живой сессии); вернуть его можно только новым сопряжением с кодом на обоих устройствах; копию vault на нём отозвать нельзя — совет сменить пароль |
-| Устройство с неверным временем перетягивает правки | расхождение до 5 мин — норма; до 24 ч — предупреждение; больше — отказ (`SYNC_CLOCK_SKEW`); прыжки во время сессии (дрейф > 2 мин, время назад, штамп из будущего) — «временно ненадёжное»: каждая пачка ждёт подтверждения |
-| Ошибочное массовое удаление | бэкап перед сессией, отмена любой пачки за неделю |
-| Подбор сопряжения | 3 неудачи с адреса — адрес игнорируется 10 минут; кадр не больше 16 МиБ |
-| Кража vault передачей на чужое устройство | выбор устройства по имени, пароль на отправителе, «Принять» на получателе, одноразовый код через SPAKE2 (одна попытка на соединение, 3 на запрос), уведомление на всех связанных устройствах |
-| Подмена получателя в сети | ключ за адресом сверяется с отпечатком из mDNS; без кода с его экрана подтверждение не сойдётся |
+| An outsider on the network reads or tampers with data | Noise (X25519 + ChaChaPoly), a tampered frame breaks the session (`SYNC_CHANNEL`) |
+| An outsider learns that someone has a vault, or tracks a device | mDNS has only a daily HMAC tag, no name |
+| A man in the middle (MITM) at first pairing | a 6-digit code from `handshake_hash` — the MITM's two screens show different codes; trust only after confirmation on both |
+| A similar or foreign vault | proof by `vault.id` inside the channel (`SYNC_OTHER_VAULT`) |
+| An old or new app with a different format | the protocol version and `VAULT_FORMAT_VERSION` (`SYNC_VERSION_MISMATCH`) |
+| A lost device | "Forget device" propagates to everyone (`SYNC_REVOKED` when revoking on a live session); it can come back only by a new pairing with a code on both devices; the vault copy on it cannot be revoked — the advice is to change the password |
+| A device with a wrong clock drags edits along | a skew of up to 5 min is normal; up to 24 h — a warning; more — a refusal (`SYNC_CLOCK_SKEW`); jumps during a session (drift > 2 min, time going back, a stamp from the future) — "temporarily untrusted": every batch waits for confirmation |
+| An erroneous mass deletion | a backup before the session, undo of any batch within a week |
+| Pairing brute force | 3 failures from an address — the address is ignored for 10 minutes; a frame is at most 16 MiB |
+| Stealing a vault by transferring it to a foreign device | the device is chosen by name, a password on the sender, "Accept" on the receiver, a one-time code through SPAKE2 (one attempt per connection, 3 per request), a notification on all linked devices |
+| Recipient substitution on the network | the key behind the address is checked against the fingerprint from mDNS; without the code from its screen the confirmation will not match |
 
-Ключ устройства: Android — обёрнут аппаратным ключом Android Keystore
-(`crates/plugin-net`), десктоп — хранилище паролей ОС (`keyring`). Без
-хранилища ключ живёт в памяти: после перезапуска нужно сопрячь заново
-(настройки об этом говорят). Пароль vault никогда не передаётся: у каждого
-устройства свой; после смены пароля приложение напоминает, что на других
-устройствах он прежний.
+The device key: on Android it is wrapped by a hardware Android Keystore key
+(`crates/plugin-net`), on desktop it is in the OS password store (`keyring`). Without a
+store the key lives in memory: after a restart you have to pair again
+(the settings say so). The vault password is never transmitted: each
+device has its own; after a password change the app reminds you that on the other
+devices it is still the old one.
 
-## Передача хранилища
+## Vault transfer
 
-Новому устройству хранилище достаётся целиком, по локальной сети
-(Настройки → Синхронизация → Передача хранилища; на экране разблокировки —
-«Получить с другого устройства»). Код: `trade_core::sync::transfer` (протокол,
-SPAKE2, проверка файла), `crates/app/src/sync/transfer.rs` (сессии),
-`sync/handover.rs` (mDNS, экраны, сохранение).
+A new device receives the whole vault over the local network
+(Settings → Sync → Vault transfer; on the unlock screen —
+"Receive from another device"). Code: `trade_core::sync::transfer` (the protocol,
+SPAKE2, file check), `crates/app/src/sync/transfer.rs` (sessions),
+`sync/handover.rs` (mDNS, screens, saving).
 
-1. **Получатель** до 5 минут объявляет себя в mDNS `_mwt-recv._tcp` (порт
-   53319): в TXT только имя устройства, тип (`mobile`/`desktop`) и отпечаток
-   его ключа (`sha256(pubkey)[..8]`). Имя — как в LocalSend: прилагательное
-   и фрукт на языке приложения («Сочный Апельсин»), постоянное, в appconfig,
-   то же, что в синхронизации; меняется в настройках.
-2. **Отправитель** видит такие устройства, выбирает одно и **ещё раз вводит
-   пароль** хранилища (сверка в памяти за постоянное время; неверный —
-   `SECRET`, ничего не уходит).
-3. Канал — Noise XX, как у синхронизации; ключ за адресом должен совпасть с
-   объявленным отпечатком.
-4. Получатель видит «<имя> хочет передать хранилище» и **принимает или
-   отклоняет**. После «Принять» он показывает **6-значный одноразовый код**
+1. The **receiver** advertises itself for up to 5 minutes in mDNS `_mwt-recv._tcp` (port
+   53319): the TXT has only the device name, the type (`mobile`/`desktop`) and the fingerprint of
+   its key (`sha256(pubkey)[..8]`). The name is as in LocalSend: an adjective
+   and a fruit in the app language ("Juicy Orange"), permanent, in appconfig,
+   the same as in sync; changed in settings.
+2. The **sender** sees such devices, picks one and **enters the vault
+   password once more** (checked in memory in constant time; a wrong one is
+   `SECRET`, nothing is sent).
+3. The channel is Noise XX, as in sync; the key behind the address must match the
+   advertised fingerprint.
+4. The receiver sees "<name> wants to transfer a vault" and **accepts or
+   declines**. After "Accept" it shows a **6-digit one-time code**
    (CSPRNG).
-5. Код вводится на отправителе и проверяется **SPAKE2** (симметричный,
-   Ed25519). Ключ PAKE связан с хешем рукопожатия Noise, подтверждения
-   (HMAC с ролью) идут по очереди: отправитель первым. У перехватчика одна
-   попытка на соединение и ничего для перебора офлайн; после 3 неверных
-   кодов запрос сбрасывается (`SYNC_BAD_CODE`). Простой MAC от кода тут не
-   годится: его перехватчик подобрал бы офлайн за доли секунды.
-6. Файл — зашифрованный `.wallet` как есть (пароль не передаётся), кусками по
-   1 МиБ с SHA-256 целиком; получатель проверяет размер, сумму и что это
-   контейнер vault (`crypto::parse_file`), пишет через `atomic_write` в папку
-   хранилищ под исходным именем (занято — « (2)») и сразу предлагает ввести
-   пароль.
-7. **След.** Отправитель пишет передачу в историю синхронизации
-   (`SyncState.transfers`, локально) и уведомление категории `security` в
-   журнал — оно приходит на все связанные устройства. Получателю
-   отправитель доверяет сразу; получатель — после первой разблокировки
-   этого файла. На новом устройстве синхронизация включается.
+5. The code is entered on the sender and verified with **SPAKE2** (symmetric,
+   Ed25519). The PAKE key is bound to the Noise handshake hash, the confirmations
+   (HMAC with the role) go in turn: the sender first. An eavesdropper has one
+   attempt per connection and nothing to brute-force offline; after 3 wrong
+   codes the request is reset (`SYNC_BAD_CODE`). A plain MAC of the code would not
+   do here: an eavesdropper would crack it offline in fractions of a second.
+6. The file is the encrypted `.wallet` as is (the password is not transmitted), in chunks of
+   1 MiB with a SHA-256 of the whole; the receiver checks the size, the sum and that it is a
+   vault container (`crypto::parse_file`), writes through `atomic_write` into the vaults
+   folder under the original name (if taken — " (2)") and immediately offers to enter the
+   password.
+7. **Trail.** The sender writes the transfer into the sync history
+   (`SyncState.transfers`, local) and a `security` category notification into the
+   journal — it reaches all linked devices. The sender trusts the
+   receiver immediately; the receiver does so after the first unlock
+   of that file. Sync is turned on on the new device.
 
-Порт 53319 входит в правило «Открыть порт» вместе с 53318. Протокол
-синхронизации поднят до 2: в журнале уведомлений может прийти категория
-`security`, которую старая версия не прочтёт — она получит
-`SYNC_VERSION_MISMATCH`, а не ошибку разбора.
+Port 53319 is included in the "Open the port" rule together with 53318. The sync
+protocol was raised to 2: the notification log may now carry the `security`
+category, which an old version cannot read — it gets
+`SYNC_VERSION_MISMATCH`, not a parse error.
 
-`Hello.app_version` (`#[serde(default)]`, пусто у сборки без поля) — версия
-приложения отправителя, только для текста отказа: протокол не меняется и
-версия ничего не решает. При `SYNC_VERSION_MISMATCH` событие `sync-error`
-несёт `peer_name`, `peer_version` и `own_version`, уведомление называет
-устройство и обе версии; пустая версия пира читается как «старая версия».
+`Hello.app_version` (`#[serde(default)]`, empty for a build without the field) is the
+sender's app version, only for the refusal text: the protocol does not change and
+the version decides nothing. On `SYNC_VERSION_MISMATCH` the `sync-error` event
+carries `peer_name`, `peer_version` and `own_version`, and the notification names the
+device and both versions; an empty peer version reads as "an old version".
 
-Секретные поля. Коллекции `exchanges` и `attachment_keys` скрыты целиком
-(`Collection.secret`); у остальных коллекций отдельные поля помечены в
-`Collection.secret_fields` (`data_sources.url`, `workflow_vars.value`): в
-`before`/`after` предпросмотров, пачек и журнала они показываются как `•••`,
-подпись записи их не содержит, а при открытии старые предпросмотры этих полей
-тоже маскируются (идемпотентно). Остальные поля той же записи видны.
+Secret fields. The `exchanges` and `attachment_keys` collections are hidden entirely
+(`Collection.secret`); in other collections individual fields are marked in
+`Collection.secret_fields` (`data_sources.url`, `workflow_vars.value`): in the
+`before`/`after` of previews, batches and the journal they are shown as `•••`,
+the record's signature does not contain them, and on open old previews of these fields
+are masked too (idempotently). The other fields of the same record are visible.
 
-## Ограничения
+## Limitations
 
-- Синхронизация идёт, пока vault разблокирован на обоих устройствах. На
-  Android свёрнутое приложение продолжает её в foreground service
-  (`plugin-net`, тип `connectedDevice`, Wi-Fi lock, разрешение на уведомления
-  спрашивается при включении синхронизации): уведомление показывает число
-  устройств и кнопки «Заблокировать» и «Остановить» («Остановить» — до
-  возвращения в приложение). Через выбранное время в фоне без синхронизаций
-  (5–60 мин, по умолчанию 30, или никогда) vault блокируется сам. Исключение
-  из оптимизации батареи не запрашивается: в Doze соединение замирает, а
-  следующее передаёт только недостающее.
-- Компенсация расхождения часов — через гибридные часы: после встречи новые
-  правки отставшего устройства сортируются после правок ушедшего вперёд;
-  правки, сделанные до встречи, сравниваются по их собственным штампам
-  (предупреждение говорит об этом).
-- Обнаружение — mDNS: сети, где multicast запрещён (гостевой Wi-Fi с
-  изоляцией клиентов), устройства не видят друг друга.
+- Sync runs while the vault is unlocked on both devices. On
+  Android a minimized app continues it in a foreground service
+  (`plugin-net`, type `connectedDevice`, a Wi-Fi lock, the notification permission
+  is requested when sync is turned on): the notification shows the number of
+  devices and the "Lock" and "Stop" buttons ("Stop" lasts until
+  returning to the app). After the chosen time in the background without syncs
+  (5-60 min, 30 by default, or never) the vault locks itself. An exemption
+  from battery optimization is not requested: in Doze the connection freezes, and
+  the next one transfers only what is missing.
+- Clock skew is compensated through the hybrid clock: after a meeting the new
+  edits of the lagging device sort after the edits of the one that ran ahead;
+  edits made before the meeting are compared by their own stamps
+  (the warning says so).
+- Discovery is mDNS: on networks where multicast is forbidden (guest Wi-Fi with
+  client isolation) devices do not see each other.

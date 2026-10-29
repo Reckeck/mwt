@@ -16,7 +16,7 @@ import { useWidgetSize } from '@/shared/ui/widget-frame'
 import { openEvents, totalsByCurrency } from '../lib/open-events'
 
 /**
- * «Вместе» on the dashboard: how much the open events owe me, and what I owe, per currency.
+ * `Together` on the dashboard: how much the open events owe me, and what I owe, per currency.
  * S is the figure; M and L add the events themselves. With no open event it only says so.
  */
 const { t, locale } = useI18n()

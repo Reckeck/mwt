@@ -7,9 +7,9 @@ import { lastDay } from '@/shared/lib/drill'
 import { shiftMonth } from '@/shared/lib/period'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
-/** Spending groups, as the «Траты» tab counts them. */
+/** Spending groups, as the `Spending` tab counts them. */
 export const SPENT_GROUPS: CategoryGroup[] = ['fixed', 'daily']
-/** «Последние оплаты»: three, newest first. */
+/** `Latest payments`: three, newest first. */
 const LAST = 3
 
 export const monthFilter = (month: string): ReportFilter => ({
@@ -29,9 +29,9 @@ export interface SpentShare {
 }
 
 /**
- * What «Потрачено в октябре» opens (Paths 1 · 2): the month against the one
+ * What `Spent in October` opens (Paths 1 · 2): the month against the one
  * before, the categories' shares and the last payments. The queries are the
- * ones «Траты» and Home already run, so a glance mostly reads the cache.
+ * ones `Spending` and Home already run, so a glance mostly reads the cache.
  */
 export function useSpentGlance(month: MaybeRefOrGetter<string>, enabled: MaybeRefOrGetter<boolean>) {
   const filter = computed(() => monthFilter(toValue(month)))

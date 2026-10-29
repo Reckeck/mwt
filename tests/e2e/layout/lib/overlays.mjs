@@ -59,7 +59,7 @@ async function run(page, entry, touch) {
   const during = await page.eval(PAGE)
   await page.eval(`window.__scope = undefined; return true`)
 
-  // Close: Esc with a mouse, «Назад» on a phone.
+  // Close: Esc with a mouse, `Back` on a phone.
   if (!(await closeLayer(page, entry.layer, touch))) problems.push(touch ? 'Back does not close it' : 'Esc does not close it')
   await page.sleep(200)
   for (const key of entry.keys ?? []) {

@@ -1,5 +1,5 @@
 /**
- * «Что нового»: what changed for the user, newest first. Shown once after an
+ * `What's new`: what changed for the user, newest first. Shown once after an
  * update (seen ids live in the app settings), and kept in the learning
  * centre. Every visible change of behaviour adds a point here — see the
  * `onboarding` skill. Texts: `whatsNew.<id>.title` and

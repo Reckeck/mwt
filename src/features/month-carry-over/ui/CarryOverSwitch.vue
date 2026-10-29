@@ -9,7 +9,7 @@ import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 
 /**
- * «Переносить неистраченное в следующий месяц»: what a month left joins the
+ * `Carry what is left into the next month`: what a month left joins the
  * next one. Turned on, the carry starts with `from` (the first month the user
  * sees), so the table shows its effect at once; off, each month stands alone.
  */

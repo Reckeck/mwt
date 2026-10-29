@@ -16,7 +16,7 @@ import { useWidgetSize } from '@/shared/ui/widget-frame'
 import MonthGrowth from './ui/MonthGrowth.vue'
 
 /**
- * «Итоги месяца» (plan H3): S — saved against the previous month to the same
+ * `This month` (plan H3): S — saved against the previous month to the same
  * date; M — income, spending and savings; L — the plan breakdown and the
  * categories that grew most.
  */

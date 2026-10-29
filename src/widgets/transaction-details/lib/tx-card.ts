@@ -2,12 +2,12 @@ import { type TxPair, txKind, txMeta, txPair, txPrincipalLegs } from '@/shared/l
 
 export { type TxPair, similarFilter, txPair } from '@/shared/lib/transactions'
 
-/** Units of the given asset per one received: «93,75 ₽ за USDT». */
+/** Units of the given asset per one received: `93.75 ₽ per USDT`. */
 export function pairRate(pair: TxPair): number {
   return pair.into.amount ? pair.out.amount / pair.into.amount : 0
 }
 
-/** What «Все такие» names: the pair of an exchange, else the category the filter follows. */
+/** What `All like this` names: the pair of an exchange, else the category the filter follows. */
 export function similarTitle(tx: Transaction, categoryName: (key: string) => string): string {
   const pair = txPair(tx)
   if (pair) return `${pair.out.symbol} → ${pair.into.symbol}`
@@ -25,7 +25,7 @@ export function txBaseValue(tx: Transaction, fxPerUsd: number): number | null {
   return legs.reduce((total, leg) => total + Number(leg.amount) * Number(leg.price_usd) * fxPerUsd, 0)
 }
 
-/** Whether the operation counts in spending, income or neither («не трата»). */
+/** Whether the operation counts in spending, income or neither (`not spending`). */
 export function txFlowKind(tx: Transaction): 'spending' | 'income' | 'neutral' {
   const kind = txKind(tx)
   if (kind === 'payment') return 'spending'

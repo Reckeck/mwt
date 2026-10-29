@@ -21,7 +21,7 @@ import { keepPreviousFor } from '@/shared/lib/query'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
- * «Проверить»: what the automations would do over the next days, played out
+ * `Test`: what the automations would do over the next days, played out
  * on a copy of the vault. Nothing is written, so it is safe to try anything.
  */
 const props = withDefaults(defineProps<AutomationSimulationDialogProps>(), { automationId: null, name: '' })

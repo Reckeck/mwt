@@ -152,7 +152,9 @@ pub async fn run_workflow_now(
     state: State<'_, AppState>,
 ) -> Result<RunReport, String> {
     let zone = current_zone(&app);
+    let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
+        vault.set_notice_language(ru);
         vault.run_workflow_now(&input.id, input.trigger_node.as_deref(), now_secs(), &zone)
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);
@@ -204,7 +206,7 @@ pub async fn list_workflow_waits(state: State<'_, AppState>) -> Result<Vec<Workf
     with_vault(&state, |vault| Ok(vault.workflow_waits()))
 }
 
-/// Answer a «Ждать подтверждения» question; the run goes on at once.
+/// Answer a "Wait for confirmation" question; the run goes on at once.
 #[tauri::command]
 pub async fn answer_workflow_wait(
     input: AnswerWorkflowWaitInput,
@@ -212,7 +214,9 @@ pub async fn answer_workflow_wait(
     state: State<'_, AppState>,
 ) -> Result<RunReport, String> {
     let zone = current_zone(&app);
+    let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
+        vault.set_notice_language(ru);
         vault.answer_workflow_wait(&input.id, input.yes, now_secs(), &zone)
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);

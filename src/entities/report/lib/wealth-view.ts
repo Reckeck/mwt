@@ -27,7 +27,7 @@ export interface WealthRow {
   share: number | null
 }
 
-/** «Из чего»: the groups at the last point, biggest first, debts last; empty groups left out. */
+/** `Made of`: the groups at the last point, biggest first, debts last; empty groups left out. */
 export function wealthRows(point: NetworthPoint | undefined): WealthRow[] {
   if (!point) return []
   const owned = (['property', 'crypto', 'bank', 'owed'] as const).map((group) => ({
@@ -68,7 +68,7 @@ export function wealthChange(points: NetworthPoint[]): WealthChange | null {
 
 /**
  * The group that moved capital most over the last month, in the direction capital
- * itself moved: «Выросло в основном за счёт Крипты». Only groups the breakdown shows.
+ * itself moved: `Grew mostly because of Crypto`. Only groups the breakdown shows.
  */
 export function wealthDriver(points: NetworthPoint[]): { group: WealthGroup; delta: number; up: boolean } | null {
   const last = points.at(-1)

@@ -13,9 +13,9 @@ export interface UtilityHistoryRow {
   consumption: string
   /** The month's sum; `null` while there is none yet («—»). */
   amount: SumPart | null
-  /** This month is not read yet: «ждёт». */
+  /** This month is not read yet: `waiting`. */
   waiting: boolean
-  /** The last bill is well above the average: «необычно много». */
+  /** The last bill is well above the average: `unusually high`. */
   anomaly: boolean
 }
 
@@ -23,7 +23,7 @@ const number = (value: string | null | undefined) =>
   value === null || value === undefined ? '—' : formatQuantity(value, 2)
 
 /**
- * The item's months newest first; this month leads with «ждёт» while it has no
+ * The item's months newest first; this month leads with `waiting` while it has no
  * reading. Only the last month can carry the anomaly: core flags no other.
  */
 export function historyRows(item: UtilityItem, trend: UtilityTrend, period: string): UtilityHistoryRow[] {
@@ -53,7 +53,7 @@ export function historyRows(item: UtilityItem, trend: UtilityTrend, period: stri
   return [empty, ...rows.slice(0, 3)]
 }
 
-/** The kind under the name: «по счётчику · две зоны · кВт·ч», «… · одно показание · своя формула». */
+/** The kind under the name: `by meter · two zones · kWh`, `… · one reading · custom formula`. */
 export function itemSubtitle(item: UtilityItem, t: T): string {
   if (!('metered' in item.kind)) return t('utilityTab.fixed')
   const { unit, zones, formula } = item.kind.metered

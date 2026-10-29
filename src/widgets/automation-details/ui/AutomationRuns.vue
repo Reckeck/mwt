@@ -7,7 +7,7 @@ import { cn } from '@/shared/lib/utils'
 
 import { type RunTone, runMoney, statusTone } from '../lib/card-view'
 
-/** «Последние запуски»: the day, what it did, how it ended (Auto-1 · 3). */
+/** `Last runs`: the day, what it did, how it ended (Auto-1 · 3). */
 defineProps<{
   runs: JournalEntry[]
   names: { store: (id: string) => string; category: (key: string) => string }

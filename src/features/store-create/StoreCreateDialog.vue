@@ -37,7 +37,7 @@ const createStore = useCreateStore(state, (store) => emit('created', store))
 
 const stepTitles = computed(() => steps.value.map((entry) => t(`storeWizard.step.${isSub.value && entry === 'pick' ? 'subType' : entry}`)))
 
-/** «Лояльность и бонусы»: the Bonuses wizard (name, card, point value) takes over from step 1, on its own page. */
+/** `Loyalty and bonuses`: the Bonuses wizard (name, card, point value) takes over from step 1, on its own page. */
 watch(programOpen, (handed) => {
   if (!handed) return
   programOpen.value = false
@@ -45,7 +45,7 @@ watch(programOpen, (handed) => {
   void router.push({ name: 'transactions-bonuses', query: { new: 'program' } })
 })
 
-/** Each step checks its own fields: «Далее» moves on, the last one creates. */
+/** Each step checks its own fields: `Next` moves on, the last one creates. */
 function submit(event?: Event) {
   if (step.value === 'pick') return goNext()
   form.submit(() => (isLast.value ? createStore.mutate() : goNext()), event)

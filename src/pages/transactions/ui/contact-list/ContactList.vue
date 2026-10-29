@@ -26,7 +26,7 @@ const props = defineProps<{
   actionsOf: (contact: Contact) => UiAction[]
   /** On a phone a row opens a screen of its own: an icon tile and a chevron, rows divided. */
   phone?: boolean
-  /** How many live contacts still lack requisites: the «Дозаполнить» chip shows while there are any. */
+  /** How many live contacts still lack requisites: the `To fill in` chip shows while there are any. */
   quickCount?: number
 }>()
 const emit = defineEmits<{ select: [id: string] }>()
@@ -37,7 +37,7 @@ const quickOnly = defineModel<boolean>('quickOnly', { default: false })
 const { t } = useI18n()
 
 const ICONS: Record<ContactKind, typeof User> = { person: User, company: Building2, exchanger: Repeat }
-/** Without debts a person reads «долгов нет», a company or an exchanger its kind. */
+/** Without debts a person reads `no debts`, a company or an exchanger its kind. */
 const emptyText = (contact: Contact) =>
   contact.kind === 'person' ? t('contacts.debt.none') : t(`contactKind.${contact.kind}`).toLowerCase()
 </script>

@@ -25,7 +25,7 @@ export function txSides(tx: Transaction): { from: AccountRef | null; to: Account
 }
 
 /**
- * The two ends as a route reads them, «Тинькофф → Пятёрочка»: a payment leaves its own wallet and a
+ * The two ends as a route reads them, `Tinkoff → Pyaterochka`: a payment leaves its own wallet and a
  * top-up lands in it, so that end is named too (`txSides` keeps only the far end, the one the form asks for).
  */
 export function txRouteSides(tx: Transaction): { from: AccountRef | null; to: AccountRef | null } {
@@ -58,7 +58,7 @@ export function txIsInternal(tx: Transaction, rootOf: (id: string) => string): b
 
 /**
  * One asset moved between the user's own wallets: a transfer, or a «conversion» that gives and gets
- * the same asset (USD → USD). It reads as «Перевод», not as an exchange, and is neither in nor out.
+ * the same asset (USD → USD). It reads as `Transfer`, not as an exchange, and is neither in nor out.
  */
 export function txIsMove(tx: Transaction): boolean {
   const kind = txKind(tx)

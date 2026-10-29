@@ -17,7 +17,7 @@ import ProgramRulesStep from './ProgramRulesStep.vue'
 import ProgramWhatStep from './ProgramWhatStep.vue'
 
 /**
- * «+ Программа» in two steps (Ops-2 · 13): what the programme is and what a
+ * `+ Program` in two steps (Ops-2 · 13): what the programme is and what a
  * point is worth, then — all optional — how it earns. The ticker is made from
  * the name and can be changed on step 2.
  */

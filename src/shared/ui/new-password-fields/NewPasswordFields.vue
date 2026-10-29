@@ -11,8 +11,8 @@ import { Input } from '@/shared/ui/input'
 import type { NewPasswordFieldsProps } from './new-password-fields.types'
 
 /**
- * A new password typed twice (Full-New-Encrypt 1, 5): the same pair in «Новое хранилище»
- * and «Задать пароль». Shown as typed on request: a new password is easy to mistype twice alike.
+ * A new password typed twice (Full-New-Encrypt 1, 5): the same pair in `New vault`
+ * and `Set password`. Shown as typed on request: a new password is easy to mistype twice alike.
  */
 const props = withDefaults(defineProps<NewPasswordFieldsProps>(), { label: undefined })
 const password = defineModel<string>('password', { required: true })
