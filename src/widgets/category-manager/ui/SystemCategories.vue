@@ -16,7 +16,7 @@ const meaning = (key: string) => (te(`categories.system.${key}`) ? t(`categories
 </script>
 
 <template>
-  <div class="grid" data-category-system>
+  <div class="grid grid-cols-[minmax(0,1fr)]" data-category-system>
     <div class="mt-0.5 mb-1 flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
       <Lock class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <span class="min-w-0 flex-1">{{ t('categories.manage.systemHint') }}</span>

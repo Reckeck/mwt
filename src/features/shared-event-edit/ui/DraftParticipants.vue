@@ -29,10 +29,12 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const contacts = useContacts()
 const picked = ref('')
-watch(picked, (id) => {
+// A contact just made in the picker is not in the list until it is read again: wait for it, do not drop the pick.
+watch([picked, () => contacts.data.value], ([id]) => {
   if (!id) return
   const contact = (contacts.data.value ?? []).find((entry) => entry.id === id)
-  if (contact) emit('addContact', contact)
+  if (!contact) return
+  emit('addContact', contact)
   picked.value = ''
 })
 

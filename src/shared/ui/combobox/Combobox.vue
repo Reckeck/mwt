@@ -90,6 +90,8 @@ function create() {
   if (!text) return
   emit('create', text)
   search.value = ''
+  // The form that creates it opens over this list: the list must not stay open under it (or over it).
+  open.value = false
 }
 
 function guest() {
@@ -162,7 +164,7 @@ function onBackspace() {
         @keydown.enter="onEnter"
       />
 
-      <ComboboxTrigger class="ml-auto shrink-0 text-muted-foreground" :tabindex="-1">
+      <ComboboxTrigger class="touch-hit-xl ml-auto shrink-0 text-muted-foreground" :tabindex="-1">
         <ChevronDown class="size-4" />
       </ComboboxTrigger>
     </ComboboxAnchor>
