@@ -16,6 +16,7 @@ import type { ContactPickerProps } from './contact-picker.types'
  * typed in the screen below stays as it was.
  */
 const props = defineProps<ContactPickerProps>()
+const emit = defineEmits<{ guest: [name: string] }>()
 
 /** Contact id; `''` is «no contact». */
 const model = defineModel<string>({ required: true })
@@ -52,6 +53,10 @@ async function startCreate(name: string) {
 const createLabel = computed(() =>
   props.noCreate || !creator ? undefined : (text: string) => t('contactPicker.create', { name: text }),
 )
+
+const guestLabel = computed(() =>
+  props.guestLabel ? (text: string) => t('contactPicker.guest', { name: text }) : undefined,
+)
 </script>
 
 <template>
@@ -64,6 +69,8 @@ const createLabel = computed(() =>
     :empty-label="t('contactPicker.empty')"
     :create-label="createLabel"
     :disabled="props.disabled"
+    :guest-label="guestLabel"
     @create="startCreate"
+    @guest="(name) => emit('guest', name)"
   />
 </template>

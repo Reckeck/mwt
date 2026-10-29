@@ -25,6 +25,9 @@ const phone = useIsPhone()
 const sheetOpen = ref(false)
 const list = ref<InstanceType<typeof TabsList> | null>(null)
 
+/** The tab a route belongs to: its own name, or `meta.tab` for a screen opened from a tab (an event from the events list). */
+const current = computed(() => String(route.meta.tab ?? route.name ?? ''))
+
 function open(name: string) {
   if (name === route.name) return
   const keep = props.keepQuery
@@ -33,7 +36,7 @@ function open(name: string) {
 }
 
 /** The open tab behind «More», if any: the button wears its name. */
-const openMore = computed(() => props.more.find((tab) => tab.name === route.name) ?? null)
+const openMore = computed(() => props.more.find((tab) => tab.name === current.value) ?? null)
 
 /** On a phone «More» is a sheet from below, like every other menu there. */
 const moreActions = computed(() =>
@@ -55,7 +58,7 @@ const TAB =
 </script>
 
 <template>
-  <TabsRoot :model-value="String(route.name ?? '')" activation-mode="manual" @update:model-value="(value) => open(String(value))">
+  <TabsRoot :model-value="current" activation-mode="manual" @update:model-value="(value) => open(String(value))">
     <TabsList ref="list" class="scrollbar-none inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[0.625rem] bg-muted p-[3px]">
       <TabsTrigger v-for="tab in props.tabs" :key="tab.name" :value="tab.name" :class="TAB">
         {{ tab.label }}

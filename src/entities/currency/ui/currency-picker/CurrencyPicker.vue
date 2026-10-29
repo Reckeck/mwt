@@ -116,7 +116,7 @@ function retryCatalog() {
 </script>
 
 <template>
-  <div class="grid content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
+  <div class="grid grid-cols-1 content-start gap-1.5" :data-invalid="props.error ? '' : undefined">
     <Label v-if="props.label" :for="triggerId" :required="props.required">{{ props.label }}</Label>
 
     <ComboboxRoot

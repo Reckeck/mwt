@@ -9,6 +9,7 @@ import { txId } from '@/shared/lib/transactions'
 import { emptyForm, formFromTransaction } from '../transaction-form.model'
 import type { TransactionFormProps } from '../transaction-form.types'
 import { TX_PROPERTY_LINKS_KEY, useContacts, useStoreTree } from '@/shared/api/queries'
+import { useSharedEvents } from '@/entities/shared-event'
 
 /** The form's data and what it reads about the wallet it is opened on. */
 export function useTxFormState(props: TransactionFormProps) {
@@ -70,6 +71,18 @@ export function useTxFormState(props: TransactionFormProps) {
     { immediate: true },
   )
 
+  /**
+   * The shared event a new payment belongs to: once saved, it is linked as a purchase.
+   * Offered for a new payment only, and only for events I take part in.
+   */
+  const sharedEventId = ref('')
+  const events = useSharedEvents(false)
+  const sharedEventOptions = computed(() =>
+    editing.value || props.template || form.kind !== 'payment'
+      ? []
+      : (events.data.value ?? []).filter((row) => row.i_participate && row.status !== 'closed'),
+  )
+
   /** Files and links of a new operation (Attach 5): attached once it is saved, dropped with the form. */
   const attachments = ref<StagedAttachment[]>([])
 
@@ -99,6 +112,8 @@ export function useTxFormState(props: TransactionFormProps) {
     proceedsStores,
     attachments,
     serverErrors,
+    sharedEventId,
+    sharedEventOptions,
   }
 }
 

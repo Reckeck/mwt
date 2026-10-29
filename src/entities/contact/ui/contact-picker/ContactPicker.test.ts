@@ -117,6 +117,27 @@ describe('ContactPicker', () => {
     expect(picked.value).toBe('c-anna')
   })
 
+  it('offers «Добавить гостем» next to «Создать» and hands over only the name', async () => {
+    const onGuest = vi.fn()
+    const { picked } = mountPicker({ guestLabel: 'guest', onGuest })
+    await flushPromises()
+    await type('Оля')
+    expect(options()).toEqual(['Создать «Оля»', 'Добавить гостем «Оля»'])
+    ;(document.body.querySelectorAll('[role=option]')[1] as HTMLElement).click()
+    await flushPromises()
+
+    expect(onGuest).toHaveBeenCalledWith('Оля')
+    expect(creator).not.toHaveBeenCalled()
+    expect(picked.value).toBe('')
+  })
+
+  it('has no guest row unless the field asks for it', async () => {
+    mountPicker()
+    await flushPromises()
+    await type('Оля')
+    expect(options()).toEqual(['Создать «Оля»'])
+  })
+
   it('only picks where no shell provides a form', async () => {
     mountPicker({}, false)
     await flushPromises()

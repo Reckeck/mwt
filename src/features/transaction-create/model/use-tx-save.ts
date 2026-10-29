@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { attachStaged } from '@/entities/attachment'
+import { sharedEventKeys } from '@/entities/shared-event'
 import { call, parseError } from '@/shared/api/ipc'
 import { notify } from '@/shared/lib/notify'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
@@ -26,7 +27,7 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
   const queryClient = useQueryClient()
   const settings = useSettingsStore()
   const lookup = useTradeLookupStore()
-  const { props, form, editing, attachments, serverErrors } = state
+  const { props, form, editing, attachments, serverErrors, sharedEventId } = state
 
   const linked = computed(() => !props.template && isLinked(form))
 
@@ -55,6 +56,27 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
     if (missed.length) notify.error(null, t('attachments.stagedMissed', { names: missed.join(', ') }))
   }
 
+  /** The payment is saved either way; a refusal of the event (a crypto asset, a closed event) is named in a toast. */
+  async function linkToEvent(tx: Transaction) {
+    const eventId = sharedEventId.value
+    if (!eventId || editing.value || form.kind !== 'payment') return
+    try {
+      await call<SharedEventView>('attach_payment_to_shared_event', {
+        input: {
+          event_id: eventId,
+          tx_id: txId(tx),
+          item_id: null,
+          new_item_title: form.comment.trim() || t('tx.field.eventItem'),
+          qty: null,
+        } satisfies AttachPaymentInput,
+      })
+      void queryClient.invalidateQueries({ queryKey: sharedEventKeys.all })
+      notify.success('tx.field.eventLinked')
+    } catch (err) {
+      notify.error(err, 'tx.field.eventLinkFailed')
+    }
+  }
+
   const save = useMutation({
     mutationFn: async () => {
       let tx: Transaction
@@ -73,11 +95,13 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
         return null
       }
       await attach(tx)
+      await linkToEvent(tx)
       return tx
     },
     onSuccess: (tx) => {
       if (!tx) return
       attachments.value = []
+      sharedEventId.value = ''
       for (const queryKey of STALE_KEYS) void queryClient.invalidateQueries({ queryKey })
       if (!editing.value)
         Object.assign(form, emptyForm(props.storeId, form.kind), {

@@ -20,6 +20,11 @@ export interface ComboboxProps {
    * item with this label is offered and picking it (or Enter) emits `create`.
    */
   createLabel?: (text: string) => string
+  /**
+   * A second row next to the create one, for a lighter «just this name» choice
+   * (a guest instead of a contact): picking it emits `guest` with the typed text.
+   */
+  guestLabel?: (text: string) => string
   /** Accessible name when there is no visible `<label for>`. */
   ariaLabel?: string
 }

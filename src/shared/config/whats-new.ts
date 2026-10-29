@@ -8,10 +8,22 @@
 import type { WhatsNewEntry } from './whats-new.types'
 // The extension lets scripts/check-onboarding.mjs load this file with Node's type stripping.
 import { WHATS_NEW_ARCHIVE } from './whats-new.archive.ts'
+import { WHATS_NEW_AUTUMN } from './whats-new.autumn.ts'
 
 export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    id: 'togetherEvents',
+    date: '2026-10-29',
+    points: [
+      { key: 'create', route: 'money-together' },
+      { key: 'items', route: 'money-together-event' },
+      { key: 'split', route: 'money-together-event' },
+      { key: 'guests', route: 'money-together-event' },
+      { key: 'payment', route: 'transactions' },
+    ],
+  },
   {
     id: 'togetherSettle',
     date: '2026-10-29',
@@ -270,32 +282,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'wallets', route: 'transactions-bonuses' },
     ],
   },
-  {
-    id: 'assetClasses',
-    date: '2026-10-21',
-    points: [
-      { key: 'advisor', route: 'money-investments' },
-      { key: 'wallet', route: 'wallet-settings' },
-      { key: 'networth', route: 'dashboard' },
-    ],
-  },
-  { id: 'health', date: '2026-10-21', points: [{ key: 'light', route: 'money-health' }] },
-  {
-    id: 'passive',
-    date: '2026-10-21',
-    points: [
-      { key: 'categories', route: 'settings:accounting:categories' },
-      { key: 'flag', route: 'settings:accounting:categories' },
-    ],
-  },
-  { id: 'loanKinds', date: '2026-10-21', points: [{ key: 'networth', route: 'dashboard' }] },
-  {
-    id: 'emergency',
-    date: '2026-10-21',
-    points: [
-      { key: 'essential', route: 'settings:accounting:categories' },
-      { key: 'fund', route: 'wallet-settings' },
-    ],
-  },
+  ...WHATS_NEW_AUTUMN,
   ...WHATS_NEW_ARCHIVE,
 ]

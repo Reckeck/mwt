@@ -14,6 +14,7 @@ import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
 
 import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
+import { TxEventField } from '../tx-event-field'
 
 /**
  * What the short form folds away (OpForm-1 · 5): date, fee, the other side,
@@ -21,7 +22,8 @@ import { AccountRefPicker } from '../account-ref-picker'
  * nothing hides behind a vague «Дополнительно».
  */
 const { t } = useI18n()
-const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments, noteExpression } = useTxForm()
+const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments, noteExpression, sharedEventOptions } =
+  useTxForm()
 
 const showSide = computed(() => form.kind === 'payment' || form.kind === 'topup')
 const showProperty = computed(
@@ -35,6 +37,7 @@ const parts = computed(() =>
     showFee.value && t('tx.more.fee'),
     showSide.value && t(form.kind === 'topup' ? 'tx.more.fromWhom' : 'tx.more.toWhom'),
     showProperty.value && t('tx.more.property'),
+    sharedEventOptions.value.length > 0 && t('tx.more.event'),
     showChain.value && t('tx.more.network'),
     !editing.value && t('tx.more.files'),
   ]
@@ -89,6 +92,7 @@ const feeSuffix = computed(() => {
           :empty-label="t('form.propertyPlaceholder')"
         />
       </FormField>
+      <TxEventField />
     </div>
     <div v-if="showChain" class="grid items-start gap-3 @md:grid-cols-2">
       <FormField for="tx-network" :label="t('form.network')">
