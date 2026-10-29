@@ -76,10 +76,9 @@ const description = computed(() =>
     >
       <StoreNodeSelect id="shared-pay-wallet" v-model="storeId" :nodes="nodes" :invalid="Boolean(form.error('store'))" />
     </FormField>
-    <div class="grid gap-1.5">
+    <FormField :hint="t('sharedEvents.pay.toHint')">
       <ReadonlyField :label="t('sharedEvents.pay.to')" :value="organizerName" />
-      <p class="text-xs text-muted-foreground">{{ t('sharedEvents.pay.toHint') }}</p>
-    </div>
+    </FormField>
     <FormField for="shared-pay-date" :label="t('sharedEvents.settle.date')">
       <DateTimePicker id="shared-pay-date" v-model="date" mode="date" required />
     </FormField>

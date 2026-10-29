@@ -83,7 +83,7 @@ function save() {
       <Input id="event-title" v-model="draft.title.value" autocomplete="off" :placeholder="t('sharedEvents.edit.titlePlaceholder')" />
     </FormField>
 
-    <div class="grid gap-4 @sm:grid-cols-[1fr_11rem]" data-tour="shared-edit-dates">
+    <div class="grid gap-4 @sm:grid-cols-[1fr_11rem]">
       <FormField :label="t('sharedEvents.edit.dates')" :error="draft.form.error('dates')">
         <DateRangePicker
           v-model="draft.dates.value"
@@ -115,7 +115,7 @@ function save() {
       </FormField>
     </div>
 
-    <FormField :label="t('sharedEvents.edit.organizer')" :hint="t('sharedEvents.edit.organizerHint')" :error="draft.form.error('organizer')" data-tour="shared-edit-organizer">
+    <FormField :label="t('sharedEvents.edit.organizer')" :hint="t('sharedEvents.edit.organizerHint')" :error="draft.form.error('organizer')">
       <div class="grid gap-2">
         <ToggleGroup
           type="single"

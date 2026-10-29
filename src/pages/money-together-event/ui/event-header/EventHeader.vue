@@ -35,7 +35,7 @@ const dates = computed(() =>
       <span class="inline-flex" data-tour="shared-event-menu">
         <ActionMenu :actions="props.actions" :label="t('actions.more')" :sheet="{ title: props.view.event.title }" />
       </span>
-      <Button variant="outline" size="icon" :aria-label="t('tour.start')" :title="t('tour.start')" data-tour="shared-tour" @click="emit('tour')">
+      <Button variant="outline" size="icon" :aria-label="t('tour.start')" :title="t('tour.start')" @click="emit('tour')">
         <CircleHelp class="size-4" />
       </Button>
     </div>

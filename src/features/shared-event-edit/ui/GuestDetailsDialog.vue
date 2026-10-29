@@ -94,6 +94,7 @@ function save() {
             variant="ghost"
             size="icon-sm"
             :aria-label="t('actions.delete')"
+            :title="t('actions.delete')"
             @click="accounts = accounts.filter((entry) => entry.id !== account.id)"
           >
             <Trash2 class="size-4" />

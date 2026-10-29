@@ -82,7 +82,7 @@ const unitHint = computed(() =>
       <Input id="purchase-title" v-model="draft.title.value" autocomplete="off" :placeholder="t('sharedEvents.item.titlePlaceholder')" />
     </FormField>
 
-    <FormField :label="t('sharedEvents.purchase.buyer')" required :error="draft.form.error('buyer')" data-tour="shared-purchase-buyer">
+    <FormField :label="t('sharedEvents.purchase.buyer')" required :error="draft.form.error('buyer')">
       <ToggleGroup
         type="single"
         variant="outline"

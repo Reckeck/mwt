@@ -1,7 +1,7 @@
 import type { SignTone } from '@/shared/lib/format'
 
 export interface StatCardProps {
-  /** What the figure is ("Итого", "Реализованный P&L"). */
+  /** What the figure is ("Итого", "Реализованный P&L"); the `label` slot swaps in a label with an explanation. */
   label: string
   /** The figure as text; or put `<Money>`/`<PnlText>` in the default slot instead. */
   value?: string

@@ -39,10 +39,10 @@ const form = useFormValidation(() => ({ total: firstError(required(total.value),
   >
     <FormField for="override-total" :label="t('sharedEvents.override.total')" required :error="form.error('total')">
       <AmountInput id="override-total" v-model="total" :decimals="2" />
+      <template #hint>
+        {{ t('sharedEvents.override.spent') }}
+        <Money :amount="props.spent" :currency="props.currency" :convert="false" class="font-medium text-foreground" />
+      </template>
     </FormField>
-    <p class="text-xs text-muted-foreground">
-      {{ t('sharedEvents.override.spent') }}
-      <Money :amount="props.spent" :currency="props.currency" :convert="false" class="font-medium text-foreground" />
-    </p>
   </FormDialog>
 </template>

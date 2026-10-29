@@ -125,7 +125,7 @@ const menu = computed<UiAction[]>(() => {
   >
     <div class="grid grid-cols-1 gap-5">
       <div v-if="props.phone" class="-mx-2 flex items-center gap-1">
-        <Button variant="ghost" size="icon" :aria-label="t('actions.back')" @click="emit('back')">
+        <Button variant="ghost" size="icon" :aria-label="t('actions.back')" :title="t('actions.back')" @click="emit('back')">
           <ChevronLeft class="size-5" />
         </Button>
         <h1 class="min-w-0 flex-1 truncate text-xl font-semibold">{{ props.contact.name }}</h1>
@@ -153,7 +153,6 @@ const menu = computed<UiAction[]>(() => {
             variant="outline"
             :class="cn('flex-1 @lg:flex-none', props.phone && 'h-12')"
             :disabled="Boolean(props.transferBlocked)"
-            :title="props.transferBlocked || undefined"
             data-tour="contact-transactions"
             @click="transfer(null)"
           >
@@ -163,7 +162,6 @@ const menu = computed<UiAction[]>(() => {
             v-if="settle"
             :class="cn('flex-1 @lg:flex-none', props.phone && 'h-12')"
             :disabled="Boolean(props.transferBlocked)"
-            :title="props.transferBlocked || undefined"
             @click="transfer(settle)"
           >
             {{ t(`contacts.settle.${settle}`) }}
@@ -175,6 +173,9 @@ const menu = computed<UiAction[]>(() => {
             :sheet="{ title: props.contact.name, description: subtitle }"
           />
         </div>
+        <p v-if="props.transferBlocked" class="w-full text-xs text-muted-foreground" data-transfer-blocked>
+          {{ props.transferBlocked }}
+        </p>
       </header>
 
       <div v-if="!props.phone" class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm" data-tour="contact-debts">
