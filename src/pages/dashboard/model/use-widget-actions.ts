@@ -20,7 +20,7 @@ interface WidgetActionDeps {
   /** The widget's own period, `null` while it follows the dashboard. */
   ownPeriod: (id: string) => DashPeriod | null
   setPeriod: (id: string, period: DashPeriod | null) => void
-  /** Saved calculator scenarios, newest first, for the «Сценарий» widget. */
+  /** Saved calculator scenarios, newest first, for the `Scenario` widget. */
   scenarios: ComputedRef<CalcScenario[]>
   ownScenario: (id: string) => string | null
   setScenario: (id: string, scenarioId: string | null) => void

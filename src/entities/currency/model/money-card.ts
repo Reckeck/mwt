@@ -57,7 +57,7 @@ export function useMoneyCard(
   )
   const now = useConverted(size, from, base, () => '', foreign)
 
-  /** Units of the sum's currency per one of the base: «93,75 ₽ за $». */
+  /** Units of the sum's currency per one of the base: `93.75 ₽ per $`. */
   const rate = (value: number | null | undefined) => (value ? size() / value : null)
 
   // With a moment the favourites are at the operation's rate too, not at today's.

@@ -1,109 +1,109 @@
-# Роадмап
+# Roadmap
 
-Шкала статусов: `[x]` сделано · `[~]` в работе · `[ ]` запланировано.
+Status legend: `[x]` done · `[~]` in progress · `[ ]` planned.
 
-## Фаза 1 — Фундамент `[~]`
-- `[x]` Cargo workspace (`crates/core` + `crates/app`), mise-окружение, задачи
-- `[x]` Domain-модель (VaultDoc, Store/Holding, Transaction, Settings, Chain, Sim)
-- `[x]` Крипто: Argon2id + XChaCha20-Poly1305, header=AAD, атомарная запись
-- `[x]` Хранилище: JSON (dev) / bincode (release), VaultFile::create/open/save
-- `[x]` UnlockedVault: мутации, holdings (derived), сводка, история, realized PnL
-- `[x]` Прайсы+FX: CoinGecko→CoinCap→Binance, open.er-api.com, кэш TTL
-- `[x]` IPC-контракт + генератор `src/shared/api/ipc.gen.d.ts` (ts-rs)
-- `[x]` Tauri shell: builder, AppState, команды (auth/stores/…/sim)
-- `[x]` Документация (README, AGENTS, docs/*)
-- `[~]` Фронтенд-скаффолд (см. Фазу 2)
-- `[ ]` Первый релиз-сборок-пайплайн: bundle deb/rpm/AppImage (финальная верификация)
+## Phase 1 — Foundation `[~]`
+- `[x]` Cargo workspace (`crates/core` + `crates/app`), mise environment, tasks
+- `[x]` Domain model (VaultDoc, Store/Holding, Transaction, Settings, Chain, Sim)
+- `[x]` Crypto: Argon2id + XChaCha20-Poly1305, header=AAD, atomic write
+- `[x]` Storage: JSON (dev) / bincode (release), VaultFile::create/open/save
+- `[x]` UnlockedVault: mutations, holdings (derived), summary, history, realized PnL
+- `[x]` Prices+FX: CoinGecko→CoinCap→Binance, open.er-api.com, TTL cache
+- `[x]` IPC contract + the `src/shared/api/ipc.gen.d.ts` generator (ts-rs)
+- `[x]` Tauri shell: builder, AppState, commands (auth/stores/…/sim)
+- `[x]` Documentation (README, AGENTS, docs/*)
+- `[~]` Frontend scaffold (see Phase 2)
+- `[ ]` First release build pipeline: bundle deb/rpm/AppImage (final verification)
 
-## Фаза 2 — Frontend `[x]`
-- `[x]` Скаффолд Vue 3.5 + Vite + TS, shadcn-vue + Tailwind v4, vue-i18n (ru/en), Pinia, TanStack Query, vue-echarts
-- `[x]` Экран Unlock / Create Vault (пароль, TTL авто-лок, индикатор аутентификации)
-- `[x]` Dashboard: сводка портфеля, by-chain/by-store, FX-курс, «цена обновлена»
-- `[x]` Stores: CRUD, архив, цвет, переход к holdings
-- `[x]` Transactions: список, фильтры, добавление income/expense/transfer/trade, комментарии, категории
-- `[x]` Adder-формы с autocomplete активов (`search_assets`), выбор сети + tx-hash (explorer-ссылка)
-- `[x]` Charts: динамика портфеля, распределение по активам/сетям (ECharts)
-- `[x]` Settings: базовая валюта, тема light/dark/system, локаль, decimals, смена пароля
-- `[x]` Strategy Lab: конструктор правил (формы + YAML-превью), прогон real/synthetic, equity-кривая и метрики, бумажный аккаунт
-- `[x]` **Wallet page**: сайдбар с кошельками, калькулятор (конвертер + PnL), формы транзакций, позиции, история, график навигации
+## Phase 2 — Frontend `[x]`
+- `[x]` Scaffold Vue 3.5 + Vite + TS, shadcn-vue + Tailwind v4, vue-i18n (ru/en), Pinia, TanStack Query, vue-echarts
+- `[x]` Unlock / Create Vault screen (password, auto-lock TTL, authentication indicator)
+- `[x]` Dashboard: portfolio summary, by-chain/by-store, FX rate, "price updated"
+- `[x]` Stores: CRUD, archive, color, jump to holdings
+- `[x]` Transactions: list, filters, adding income/expense/transfer/trade, comments, categories
+- `[x]` Adder forms with asset autocomplete (`search_assets`), network choice + tx hash (explorer link)
+- `[x]` Charts: portfolio dynamics, distribution by assets/networks (ECharts)
+- `[x]` Settings: base currency, light/dark/system theme, locale, decimals, password change
+- `[x]` Strategy Lab: rule builder (forms + YAML preview), real/synthetic run, equity curve and metrics, paper account
+- `[x]` **Wallet page**: sidebar with wallets, calculator (converter + PnL), transaction forms, positions, history, NAV chart
 
-## Фаза D — Терминал, Strategy Lab, импорт Bybit `[~]`
+## Phase D — Terminal, Strategy Lab, Bybit import `[~]`
 
-Подробное описание изменений (по файлам и командам) — в [`CHANGELOG.md`](../CHANGELOG.md),
-раздел `[Unreleased]`. Здесь — что изменилось по сути.
+A detailed description of the changes (by file and command) is in [`CHANGELOG.md`](../CHANGELOG.md),
+the `[Unreleased]` section. Here — what changed in essence.
 
-- `[x]` **D1. Дизайн-система и настройки интерфейса** (`docs/ui-design.md`)
-  - `[x]` Общие примитивы: иконки кошельков (`src/shared/lib/store-icons.ts`), подсказки
-        (`src/shared/ui/tooltip.vue`), шкала отступов (`src/shared/lib/spacing.ts`)
-  - `[x]` Виды (`DashboardView`, `StoresView`, `ChartsView`, `SidebarWallets`,
-        `TransactionsView`) переведены на общие токены
-  - `[x]` Настройки: состав виджетов дашборда, избранные валюты в шапке, интервал
-        обновления цен, сворачивание в трей, индикатор «Оффлайн», раздел
-        «Для разработчика» (открыть vault / скачать JSON)
-- `[x]` **D1. Недавние хранилища** — список недавних файлов на экране
-  разблокировки с пометками «существует / не найден / старый формат», свой путь
-  через системный диалог, кнопка «Назад к списку»
-- `[x]` **D2.3. Валидация хешей транзакций** — проверка формы хеша
-  (`TX_HASH_MALFORMED`) и соответствия сети актива
+- `[x]` **D1. Design system and interface settings** (`docs/ui-design.md`)
+  - `[x]` Shared primitives: wallet icons (`src/shared/lib/store-icons.ts`), tooltips
+        (`src/shared/ui/tooltip.vue`), spacing scale (`src/shared/lib/spacing.ts`)
+  - `[x]` Views (`DashboardView`, `StoresView`, `ChartsView`, `SidebarWallets`,
+        `TransactionsView`) moved to shared tokens
+  - `[x]` Settings: dashboard widget set, favorite currencies in the header, price
+        refresh interval, minimize to tray, "Offline" indicator, a
+        "For developers" section (open vault / download JSON)
+- `[x]` **D1. Recent vaults** — a list of recent files on the unlock
+  screen with marks "exists / not found / old format", a custom path
+  through the system dialog, a "Back to list" button
+- `[x]` **D2.3. Transaction hash validation** — checking the hash shape
+  (`TX_HASH_MALFORMED`) and that it matches the asset's network
   (`TX_HASH_NETWORK_MISMATCH`)
-- `[~]` **D2.1. Торговый терминал** (`/trading`; маршрут временно скрыт — график переезжает в кошелёк типа «биржа») — свечной график на
-  lightweight-charts 5, таймфреймы 1…1440 мин, SMA20 / EMA50 / RSI14, гистограмма
-  объёма (наложением под свечами), семь инструментов рисовалки с сохранением в `localStorage`, онлайн-свечи
-  через Binance WebSocket с реконнектом и индикатором Live/Offline
-- `[x]` **D2.2. Strategy Lab: сделки, сигналы, прогноз** — движок пишет
-  объяснение каждого сработавшего правила (`SimSignal`), синтетические свечи
-  воспроизводимы по `seed`, прогоны хранят параметры генератора; график свечей с
-  маркерами сделок и сигналов, таблица причин, веер GBM-прогноза (`get_gbm_paths`)
-- `[x]` **D2.4. Импорт истории Bybit со staging-подтверждением** — сделки попадают
-  в `pending_imports` и становятся операциями **только** после подтверждения
-  пользователем; дедупликация по `execId`, фоновый опрос по расписанию
-  (`bybit_import_interval_sec`, `0` — выкл) и событие `bybit-import-pending`
-- `[x]` **Прочее**: строгий `decode_bin` (усечённый bincode-снимок → ошибка
-  вместо тихого мусора), `clippy -D warnings` по всему воркспейсу, 97 новых
-  ключей локализации в ru/en
+- `[~]` **D2.1. Trading terminal** (`/trading`; the route is temporarily hidden — the chart is moving into an "exchange" type wallet) — a candlestick chart on
+  lightweight-charts 5, timeframes 1…1440 min, SMA20 / EMA50 / RSI14, a volume
+  histogram (overlaid under the candles), seven drawing tools saved to `localStorage`, live candles
+  over Binance WebSocket with reconnect and a Live/Offline indicator
+- `[x]` **D2.2. Strategy Lab: trades, signals, forecast** — the engine records an
+  explanation for every rule that fired (`SimSignal`), synthetic candles
+  are reproducible by `seed`, runs store the generator parameters; a candle chart with
+  trade and signal markers, a table of reasons, a GBM forecast fan (`get_gbm_paths`)
+- `[x]` **D2.4. Bybit history import with staging confirmation** — trades go
+  into `pending_imports` and become transactions **only** after the
+  user confirms; deduplication by `execId`, background polling on a schedule
+  (`bybit_import_interval_sec`, `0` — off) and the `bybit-import-pending` event
+- `[x]` **Misc**: strict `decode_bin` (a truncated bincode snapshot → an error
+  instead of silent garbage), `clippy -D warnings` across the whole workspace, 97 new
+  localization keys in ru/en
 
-## Фаза 3 — Умный рост `[ ]`
-- `[ ]` Портфельный отчёт: за период (прибыль/убыток, дивиденды/стекинг)
-- `[ ]` Category-аналитика и бюджеты по категориям
-- `[ ]` Импорт/экспорт транзакций (CSV), шаблоны
-- `[ ]` Снапшот-бэкап и восстановление vault с проверкой целостности
-- `[ ]` Телеграм/веб-хук для цены и сигналов (пул-модель, без ключей в vault-репо)
+## Phase 3 — Smart growth `[ ]`
+- `[ ]` Portfolio report: per period (profit/loss, dividends/staking)
+- `[ ]` Category analytics and budgets by category
+- `[ ]` Transaction import/export (CSV), templates
+- `[ ]` Snapshot backup and vault restore with an integrity check
+- `[ ]` Telegram/webhook for price and signals (pull model, no keys in the vault repo)
 
-## Аналитика и упрощение разделов
-- `[x]` Обзор аналитики (4 карточки) и три раздела вместо девяти вкладок; вывод
-  словами — факты из ядра (`Insight`, `get_report_overview`), текст из локалей;
-  переход из отчёта к операциям (фильтр `category` у `TxFilter`)
-- `[x]` Убраны: вкладка «Граф» в операциях, отдельные «Очередь»/«Запуски»/
-  «Переменные» схем, пункт «Контакты» в меню (теперь «Операции → Контакты и долги»)
-- `[ ]` **Вывод от модели (фаза 2).** Шаблонный вывод остаётся всегда, модель —
-  только по включению в настройках; без сети или при ошибке — шаблон.
-  - Наружу уходят только факты (`Insight`) и названия категорий — не имена
-    кошельков и контактов, не суммы отдельных операций, не заметки.
-  - Заранее заданный промпт; ключ — внутри зашифрованного vault; ответ
-    кэшируется по отчёту и периоду.
-  - Два адаптера: OpenAI-совместимый с пресетами (OpenRouter, Hugging Face
-    Inference Providers, OpenAI, Google Gemini в режиме совместимости, Mistral;
-    DeepSeek, Qwen/DashScope, Kimi/Moonshot, GLM/Zhipu; локальные Ollama,
-    LM Studio, llama.cpp server; «свой адрес») и нативный Anthropic (Claude).
-  - Модель — из списка пресета или вручную; если провайдер отдаёт `/models`,
-    список подтягивается.
-- `[ ]` **История как поток.** Элемент графа = операция, по нему видно, как
-  деньги шли через кошельки и обмены. Прежний граф (`get_tx_graph` в ядре
-  оставлен) был неудобен: заново продумать вид, прежде чем возвращать вкладку.
-- `[ ]` Карточки обзора как виджеты Главной (компонент `OverviewCard` уже
-  переиспользуемый)
+## Analytics and section simplification
+- `[x]` An analytics overview (4 cards) and three sections instead of nine tabs; the conclusion
+  in words — facts from the core (`Insight`, `get_report_overview`), text from the locales;
+  a jump from the report to transactions (the `category` filter of `TxFilter`)
+- `[x]` Removed: the "Graph" tab in transactions, the separate "Queue"/"Runs"/
+  "Variables" of schemes, the "Contacts" menu item (now "Transactions → Contacts and debts")
+- `[ ]` **Model-generated conclusion (phase 2).** The templated conclusion always stays, the model —
+  only when enabled in settings; offline or on error — the template.
+  - Only facts (`Insight`) and category names leave the device — not wallet and
+    contact names, not individual transaction amounts, not notes.
+  - A predefined prompt; the key lives inside the encrypted vault; the response is
+    cached per report and period.
+  - Two adapters: OpenAI-compatible with presets (OpenRouter, Hugging Face
+    Inference Providers, OpenAI, Google Gemini in compatibility mode, Mistral;
+    DeepSeek, Qwen/DashScope, Kimi/Moonshot, GLM/Zhipu; local Ollama,
+    LM Studio, llama.cpp server; "custom address") and native Anthropic (Claude).
+  - The model comes from the preset's list or is entered manually; if the provider serves `/models`,
+    the list is fetched.
+- `[ ]` **History as a flow.** A graph element = a transaction, showing how
+  money moved through wallets and exchanges. The previous graph (`get_tx_graph` is kept
+  in the core) was inconvenient: rethink the view before bringing the tab back.
+- `[ ]` Overview cards as Home widgets (the `OverviewCard` component is already
+  reusable)
 
-## Синхронизация устройств
-- `[x]` По Wi-Fi: mDNS + Noise, сопряжение кодом, слияние по полям, отмена (`docs/sync.md`)
-- `[ ]` По Bluetooth (BLE) поверх того же протокола
+## Device sync
+- `[x]` Over Wi-Fi: mDNS + Noise, code pairing, field-level merge, cancel (`docs/sync.md`)
+- `[ ]` Over Bluetooth (BLE) on top of the same protocol
 
-## Фаза 4 — Оборона / polish `[ ]`
-- `[ ]` Auto-lock по неактивности, пауза при N неудачных попытках unlock
-- `[ ]` Windows/macOS сборки в CI (GitHub Actions + mise-шаги идентичны локальным)
-- `[ ]` E2E smoke: создать vault → транзакция → график → lock/unlock
-- `[ ]` Производительность: индексы по transactions, ленивые графики на big data
-- `[ ]` Updater (tauri-plugin-updater), подпись артефактов
+## Phase 4 — Hardening / polish `[ ]`
+- `[ ]` Auto-lock on inactivity, a pause after N failed unlock attempts
+- `[ ]` Windows/macOS builds in CI (GitHub Actions + mise steps identical to local ones)
+- `[ ]` E2E smoke: create vault → transaction → chart → lock/unlock
+- `[ ]` Performance: indexes on transactions, lazy charts on big data
+- `[ ]` Updater (tauri-plugin-updater), artifact signing
 
-## Не-скоуп (сознательно)
-- Хранение ключей в TPM/YubiKey (v1 — пароль; см. docs/security.md)
-- Торговые ордера на биржах (учёт — да, исполнение — нет)
+## Out of scope (deliberately)
+- Storing keys in TPM/YubiKey (v1 — password; see docs/security.md)
+- Trading orders on exchanges (accounting — yes, execution — no)

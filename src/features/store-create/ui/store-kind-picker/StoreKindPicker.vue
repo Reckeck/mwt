@@ -11,12 +11,12 @@ import { PICK_CARD_CLASS } from '../../store-create.constants'
 
 /**
  * Step 1 (Wallets-1 · 2): a card per wallet kind, two in a row; a click picks,
- * «Далее» or a second click moves on. A sub-account: a card per type, a click moves on.
+ * `Next` or a second click moves on. A sub-account: a card per type, a click moves on.
  */
 const { t } = useI18n()
 const { isSub, kind, creatableKinds, subTypes, pickKind, pickSubType, goNext } = useStoreCreate()
 
-/** A programme reads as «Лояльность и бонусы» with a bag here (Wallets-1 · 2); elsewhere it stays «Бонусы». */
+/** A programme reads as `Loyalty and bonuses` with a bag here (Wallets-1 · 2); elsewhere it stays `Bonuses`. */
 const label = (value: StoreKind) => t(value === 'loyalty' ? 'storeWizard.kindLoyalty' : `stores.kind.${value}`)
 const icon = (value: StoreKind) => (value === 'loyalty' ? ShoppingBag : getStoreIcon(value))
 

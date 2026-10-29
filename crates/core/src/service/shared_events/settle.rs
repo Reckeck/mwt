@@ -181,7 +181,7 @@ impl UnlockedVault {
         Ok(amount.min(saldo))
     }
 
-    /// «Списать остаток»: I give up what a participant owes me; it becomes my
+    /// "Write off the rest": I give up what a participant owes me; it becomes my
     /// expense in the category of the event.
     pub fn write_off_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView> {
         let event = self.find_shared_event(&input.event_id)?;
@@ -207,7 +207,7 @@ impl UnlockedVault {
         self.shared_event_view(&input.event_id)
     }
 
-    /// «Переложить на других»: what a participant has not returned is split
+    /// "Move onto the others": what a participant has not returned is split
     /// between the others.
     pub fn reassign_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView> {
         let event = self.find_shared_event(&input.event_id)?;

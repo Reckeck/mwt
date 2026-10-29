@@ -12,7 +12,7 @@ use super::state::{RecordStamps, RecordState};
 use super::view::{Fields, join, split};
 
 /// A field the merge took from the other device although this one had
-/// edited it too: shown in the summary as «перезаписано».
+/// edited it too: shown in the summary as "overwritten".
 #[derive(Debug, Clone, PartialEq)]
 pub struct Overwrite {
     pub field: String,

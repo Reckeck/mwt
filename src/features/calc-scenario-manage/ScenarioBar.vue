@@ -17,13 +17,13 @@ import ScenarioNameDialog from './ui/ScenarioNameDialog.vue'
  * into a goal. A saved one keeps up with the form by itself. The form lives in
  * the page, so the bar reads it through `snapshot` and hands loads back via `load`.
  */
-/** `goalButton: false`: the page puts «Создать цель» under the answer itself (a phone). */
+/** `goalButton: false`: the page puts `Create goal` under the answer itself (a phone). */
 const props = withDefaults(defineProps<{ snapshot: () => ScenarioBody; goalButton?: boolean }>(), { goalButton: true })
 const scenarioId = defineModel<string | null>('scenarioId', { required: true })
 const emit = defineEmits<{
   load: [scenario: CalcScenario]
   goal: [draft: GoalInput, scenarioId: string]
-  /** «Создать цель» was pressed: the page settles the form (a found contribution goes in) and calls `createGoal`. */
+  /** `Create goal` was pressed: the page settles the form (a found contribution goes in) and calls `createGoal`. */
   wantGoal: []
 }>()
 
@@ -31,7 +31,7 @@ const { t } = useI18n()
 const { list, scenarios, byId, save, autosave, remove, goalDraft } = useScenarios()
 const current = computed(() => byId(scenarioId.value))
 const { saving } = useAutosave(current, props.snapshot, autosave)
-/** «Создать цель» on an unsaved run asks for a name first, then goes on to the goal. */
+/** `Create goal` on an unsaved run asks for a name first, then goes on to the goal. */
 const goalAfterSave = ref(false)
 
 // A scenario named in the address loads once the list arrives, and again on each pick.
@@ -136,7 +136,7 @@ const picked = computed({
     </span>
     <!-- Three buttons do not fit a phone in a row: two side by side, the goal under them (or under the answer). -->
     <div class="ms-auto flex items-center gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2">
-      <!-- What the page adds to the run's actions: «Сравнить» lives with the chart it draws on. -->
+      <!-- What the page adds to the run's actions: `Compare` lives with the chart it draws on. -->
       <slot name="actions" />
       <Button v-if="!current" variant="outline" :disabled="save.isPending.value" @click="naming = 'new'">
         {{ t('invest.scenario.save') }}

@@ -25,6 +25,6 @@ export interface RemainderChange {
 
 export interface DueChange {
   input: SetSharedDueInput
-  /** The term before the change, for «Отменить». */
+  /** The term before the change, for `Undo`. */
   previous: string | null
 }

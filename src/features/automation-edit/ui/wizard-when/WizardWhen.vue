@@ -17,7 +17,7 @@ import { useAutomationWizard } from '../../model/use-automation-wizard'
 
 /**
  * Step 3 (Auto-1 · 8): how often, on which day and at what time; where a day
- * off moves it; whether it asks «да» first. Under them, the next three dates
+ * off moves it; whether it asks `Yes` first. Under them, the next three dates
  * as the app will fire them.
  */
 const { t } = useI18n()

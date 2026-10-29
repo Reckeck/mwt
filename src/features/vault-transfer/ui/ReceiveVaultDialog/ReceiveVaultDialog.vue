@@ -13,7 +13,7 @@ import { useReceiveVault } from '../../model/use-receive-vault'
 import { TransferProgress } from '../TransferProgress'
 
 /**
- * «Получить хранилище»: this device is visible nearby by its name for five
+ * `Receive a vault`: this device is visible nearby by its name for five
  * minutes. The other device picks it, this one accepts, then shows the code
  * to type there; only then does the vault come.
  */

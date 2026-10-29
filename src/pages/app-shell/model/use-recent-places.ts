@@ -7,7 +7,7 @@ import { placeTitle } from '../lib/place-title'
 
 /** A place the user opened: the address to come back to, with its filter, and the title it had then. */
 export interface RecentPlace {
-  /** The full path: «Деньги › Траты · октябрь» comes back to October (Paths 1 · 7). */
+  /** The full path: `Money › Spending · October` comes back to October (Paths 1 · 7). */
   path: string
   title: string
   /** When it was last open, ISO; older records have none. */

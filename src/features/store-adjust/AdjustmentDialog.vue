@@ -14,7 +14,7 @@ import { AdjustmentAssetAdder } from './ui/adjustment-asset-adder'
 import { AdjustmentRowsTable } from './ui/adjustment-rows-table'
 import { AdjustmentSimple } from './ui/adjustment-simple'
 
-/** «Сверить с реальностью»: type what is really there, the difference is booked as a correction. */
+/** `Match reality`: type what is really there, the difference is booked as a correction. */
 const props = withDefaults(defineProps<AdjustmentDialogProps>(), { transaction: null })
 const open = defineModel<boolean>('open', { required: true })
 

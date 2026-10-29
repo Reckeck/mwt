@@ -16,7 +16,7 @@ import { useFundForm } from './model/use-fund-form'
 
 /**
  * The fund (Money 3 · 17): how many months, where it lies, the sum that makes
- * and «Создать цель «Подушка» в Плане». From the checkup and its full card.
+ * and `Create the "Emergency fund" goal in Plan`. From the checkup and its full card.
  */
 const props = defineProps<{ fund: EmergencyFund; status?: EmergencyStatus | null }>()
 const open = defineModel<boolean>('open', { required: true })
@@ -31,7 +31,7 @@ const { storeIds, targetMonths, avgMonths, makeGoal, goal, form, set, save } = u
 
 // money: plain — the hint under the field is a string prop of FormField
 const money = (amount: string, currency: string) => formatMoney(amount, { currency, decimals: 0 })
-/** «Расходы в месяц: 1 265 $ — по средним за 3 месяца»; the general advice until spending is known. */
+/** `Monthly spending: 1,265 $ — averaged over 3 months`; the general advice until spending is known. */
 const monthsHint = computed(() => {
   const status = props.status
   if (!status?.e_mand) return t('emergency.dialog.targetHint')

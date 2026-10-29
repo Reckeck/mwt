@@ -33,7 +33,7 @@ const span = computed(() => {
   return `${long(rows[0].month)} — ${long(rows[rows.length - 1].month)}`
 })
 const inPeriod = (key: string) => key >= props.from && key <= props.to
-/** «ноя», «дек»: three letters fit a phone's column (Intl's «нояб.», «сент.» do not). */
+/** `Nov`, `Dec`: three letters fit a phone's column (Intl's `Nov.`, `Sept.` do not). */
 const monthShort = (key: string) => formatMonthKey(key, { month: 'short' }).replace('.', '').slice(0, 3)
 /**
  * On a phone one month shown names every other column back from the last one

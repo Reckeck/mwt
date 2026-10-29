@@ -1,9 +1,9 @@
 import type { RouteLocationRaw } from 'vue-router'
 
 export interface GlanceProps {
-  /** What the figure is («Потрачено в октябре»): the sheet's title on a phone, the trigger's name for a reader. */
+  /** What the figure is (`Spent in October`): the sheet's title on a phone, the trigger's name for a reader. */
   title: string
-  /** The screen behind the figure: «Открыть в Тратах →», and Enter on a computer. */
+  /** The screen behind the figure: `Open in Spending →`, and Enter on a computer. */
   openTo?: RouteLocationRaw
   /** The link's words, without the arrow. */
   openLabel?: string

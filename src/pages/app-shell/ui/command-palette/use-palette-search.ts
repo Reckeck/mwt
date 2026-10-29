@@ -111,7 +111,7 @@ export function usePaletteSearch(open: Ref<boolean>, search: Ref<string>) {
   })
   const found = computed(() => (search.value.trim().length >= TX_MIN_CHARS ? (transactions.data.value ?? []) : []))
 
-  /** The month's spending per category: «Продукты · 36 $ в окт.» (Paths 2 · 8). */
+  /** The month's spending per category: `Groceries · 36 $ in Oct` (Paths 2 · 8). */
   const month = currentMonth()
   const report = useReport(
     'categories',

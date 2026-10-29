@@ -28,7 +28,7 @@ export function isMoneyTask(kind: TodayTodoKind): boolean {
   return kind !== 'points_expire' && kind !== 'pending_import'
 }
 
-/** A thing whose date has passed: «просрочено». A reminder for today is not late. */
+/** A thing whose date has passed: `Overdue`. A reminder for today is not late. */
 export function isOverdue(todo: TodayTodo, today: string): boolean {
   return todo.date !== null && todo.date < today
 }

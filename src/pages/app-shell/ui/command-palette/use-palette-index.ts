@@ -7,7 +7,7 @@ import { SETTINGS_GROUPS } from '@/widgets/settings-shell'
 export interface PaletteEntry {
   id: string
   label: string
-  /** Hidden words the search also matches («пароль» finds the vault). */
+  /** Hidden words the search also matches (`Password` finds the vault). */
   keywords: string
   to: RouteLocationRaw
 }

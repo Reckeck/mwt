@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<FormFieldProps>(), {
 /**
  * The control comes from the slot, so its error and hint are linked after the
  * render: `aria-invalid` and `aria-describedby` on it, pointing at the message
- * under it — a screen reader reads «Сумма, обязательно, введите сумму».
+ * under it — a screen reader reads `Amount, required, enter an amount`.
  */
 const slots = useSlots()
 /** A function, not a computed: slots are not reactive, and a hint slot may come and go (`<template v-if #hint>`). */

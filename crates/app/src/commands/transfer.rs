@@ -1,4 +1,4 @@
-//! Handing the vault to a new device (docs/sync.md, «Передача хранилища»):
+//! Handing the vault to a new device (docs/sync.md, "Vault transfer"):
 //! receiving works without a vault open, sending needs the vault and its
 //! password typed again. The work is in `crate::sync::handover`.
 
@@ -10,7 +10,7 @@ use trade_core::ipc_contract::{
 use crate::commands::err_to_string;
 use crate::sync::handover;
 
-/// «Получить хранилище»: visible nearby by this device's name for five minutes.
+/// "Receive a vault": visible nearby by this device's name for five minutes.
 #[tauri::command]
 pub async fn transfer_receive_start(app: AppHandle) -> Result<TransferReceiveView, String> {
     crate::commands::sandbox::refuse_app(&app, "handing the vault over")?;
@@ -23,7 +23,7 @@ pub async fn transfer_receive_stop(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// «Принять» (`true`) or «Отклонить» the request on screen.
+/// "Accept" (`true`) or "Decline" the request on screen.
 #[tauri::command]
 pub async fn transfer_receive_decide(app: AppHandle, accept: bool) -> Result<(), String> {
     handover::receive_decide(&app, accept).map_err(err_to_string)
@@ -42,7 +42,7 @@ pub async fn transfer_browse_stop(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// «Передать»: `SECRET` when the password is not this vault's.
+/// "Send": `SECRET` when the password is not this vault's.
 #[tauri::command]
 pub async fn transfer_send(
     app: AppHandle,

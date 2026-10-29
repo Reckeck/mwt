@@ -1,77 +1,77 @@
 ---
 name: workflow
 description: >
-  Как агент ведёт любую сессию в этом репозитории: загружать первым действием
-  в каждом новом чате, до другой работы. Анализ, поиск и изменения отдаются
-  подагентам, главная сессия планирует, пишет бриф, проверяет и отчитывается.
-  Триггеры: начало сессии, новый чат, workflow, «как работать», подагент,
-  subagent, agents, анализ, поиск, изменения, делегировать.
+  How an agent runs any session in this repository: load it as the first action
+  in every new chat, before any other work. Analysis, search and changes are handed to
+  subagents; the main session plans, writes the brief, verifies and reports.
+  Triggers: session start, начало сессии, new chat, новый чат, workflow, "how to work" ("как работать"),
+  subagent, подагент, agents, analysis, анализ, search, поиск, changes, изменения, delegate, делегировать.
 ---
 
-# Workflow: порядок работы в сессии
+# Workflow: how a session runs
 
-## Когда загружать
+## When to load
 
-- Первым действием в каждом новом чате или сессии, до чтения кода.
-- Когда пользователь пишет «используй workflow».
+- As the first action in every new chat or session, before reading code.
+- When the user writes "use workflow" (Russian: «используй workflow»).
 
-## Подагенты: по умолчанию
+## Subagents: the default
 
-Три вида работы выполняет подагент (Claude Code: инструмент `Agent`;
-OpenCode и Codex: их task/subagent):
+Three kinds of work are done by a subagent (Claude Code: the `Agent` tool;
+OpenCode and Codex: their task/subagent):
 
-- **анализ**: разбор кода, причины багов, обзор;
-- **поиск**: grep-обходы, «где это», логи;
-- **изменения**: правки кода, документов, макетов `.figcraft`.
+- **analysis**: reading code, causes of bugs, reviews;
+- **search**: grep sweeps, "where is this", logs;
+- **changes**: edits to code, documents, `.figcraft` mockups.
 
-Главная сессия: план, бриф, проверка результата (дифф, гейт, скриншоты),
-отчёт пользователю, коммит по просьбе.
+The main session: plan, brief, verification of the result (diff, gate, screenshots),
+the report to the user, a commit on request.
 
-Исключения, когда делегировать не нужно: однострочный ответ из уже открытого
-контекста, правка в одну строку, вопрос пользователю.
+Exceptions where delegating is not needed: a one-line answer from already open
+context, a one-line edit, a question to the user.
 
-Правила делегирования:
+Delegation rules:
 
-- Бриф самодостаточный: пути, id, конвенции, критерий готовности и что
-  запрещено (коммиты, worktree, выход за задачу). Как писать бриф и запускать
-  исполнителя — скиллы `subtask-pipeline` и `context-engineering`.
-- Исполнитель — более слабая модель (Sonnet), проверка — сильная; роли как в
-  разделе «Подзадачи» `AGENTS.md`.
-- Один исполнитель за раз на файл или рабочую копию: параллельные правки
-  одного файла, Vite и figcraft-cli гоняются друг с другом. Независимые
-  поиски можно запускать параллельно.
-- Подагент не коммитит и не расширяет задачу.
-- Отчёт подагента главная сессия перепроверяет (дифф, проверки), а не
-  пересказывает на веру.
+- The brief is self-contained: paths, ids, conventions, the definition of done and what is
+  forbidden (commits, worktrees, going beyond the task). How to write a brief and launch
+  an executor: the `subtask-pipeline` and `context-engineering` skills.
+- The executor is the weaker model (Sonnet), the review is done by the strong one; the roles are as in
+  the "Subtasks" section of `AGENTS.md`.
+- One executor at a time per file or working copy: parallel edits of
+  one file, Vite and figcraft-cli race each other. Independent
+  searches can run in parallel.
+- A subagent does not commit and does not widen the task.
+- The main session re-checks the subagent's report (diff, checks) instead of
+  retelling it on faith.
 
-## Рабочие копии
+## Working copies
 
-Только `../work-app-<slug>` через `jjw-start <slug>`; путь называй
-пользователю в первом же сообщении о задаче. Если основная копия грязная:
+Only `../work-app-<slug>` via `jjw-start <slug>`; give the user the path
+in the very first message about the task. If the main copy is dirty:
 
 ```bash
 jj workspace add ../work-app-<slug> --name work-app-<slug> -r development
 jj bookmark create <slug>
 ```
 
-Никогда `EnterWorktree`, `isolation: "worktree"`, `.claude/worktrees/`,
-`git worktree add`. Подробно — «Рабочие копии» в `AGENTS.md`.
+Never `EnterWorktree`, `isolation: "worktree"`, `.claude/worktrees/`,
+`git worktree add`. Details: "Working copies" in `AGENTS.md`.
 
-## Коммиты и гейт
+## Commits and the gate
 
-Скиллы `jj-workflow` и `commit-coauthor`. Коммит только по явной просьбе
-пользователя; гейт (`cargo fmt`, `mise run check`, `mise run check-platforms`)
-до коммита прогоняет главная сессия сама.
+The `jj-workflow` and `commit-coauthor` skills. Commit only at the user's explicit
+request; the gate (`cargo fmt`, `mise run check`, `mise run check-platforms`)
+is run by the main session itself before the commit.
 
-## Вопросы пользователю
+## Questions to the user
 
-Через инструмент вопросов (`AskUserQuestion`), с рекомендуемым вариантом.
-Крупная задача: сначала спека и план (план вне репозитория, см. «Подзадачи» в
-`AGENTS.md`), потом реализация.
+Through the question tool (`AskUserQuestion`), with a recommended option.
+A large task: first a spec and a plan (the plan lives outside the repository, see "Subtasks" in
+`AGENTS.md`), then the implementation.
 
-## Скиллы
+## Skills
 
-Перед правкой загрузи профильный скилл из таблицы «Skills агентов» в
+Before editing, load the relevant skill from the "Agent skills" table in
 `AGENTS.md`: `ui-design-system`, `onboarding`, `ipc-command`, `vault-crypto`,
-`frontend-feature`, `figcraft` и другие. В бриф подагента впиши, какие скиллы
-ему загрузить.
+`frontend-feature`, `figcraft` and others. In the subagent's brief, list which skills
+it should load.

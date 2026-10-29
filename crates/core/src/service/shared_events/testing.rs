@@ -1,4 +1,4 @@
-//! Scenarios the tests of shared events share. The first is the «Шашлыки»
+//! Scenarios the tests of shared events share. The first is the "Barbecue"
 //! board of the design (shared-expenses 2): five people, 7 100 ₽, beer split
 //! by units; the same numbers sit in the browser mock.
 
@@ -120,7 +120,7 @@ fn planned(title: &str, unit: &str, qty: &str, total: &str) -> SharedItemDraft {
     }
 }
 
-/// «Шашлыки · 2–4 ноя»: I organize; Petya, Vasya, Anya and the guest Olya.
+/// "Barbecue · 2-4 Nov": I organize; Petya, Vasya, Anya and the guest Olya.
 /// I bought the meat (4 800) and the beer (8 for 1 800), Vasya the coal (500).
 pub fn skewers_scenario() -> Scenario {
     let (dir, mut vault, wallet, contacts) = new_vault();
@@ -187,7 +187,7 @@ pub fn skewers_scenario() -> Scenario {
     }
 }
 
-/// «Подарок Маше · 5 ноя»: Anya organizes and bought the 7 400 gift; four of
+/// "Gift for Masha · 5 Nov": Anya organizes and bought the 7 400 gift; four of
 /// us share it, my part is 1 850.
 pub fn gift_scenario() -> Scenario {
     let (dir, mut vault, wallet, contacts) = new_vault();

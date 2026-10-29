@@ -6,7 +6,7 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useStoreTree } from '@/shared/api/queries'
 import { useSettingsStore } from '@/shared/store/settings'
 
-/** The fields of a bonus programme, shared by «Добавить программу» and its settings. */
+/** The fields of a bonus programme, shared by `Add programme` and its settings. */
 export function useLoyaltyInfo() {
   const settings = useSettingsStore()
   const tree = useStoreTree()
@@ -49,7 +49,7 @@ export function useLoyaltyInfo() {
     unit.value = info?.unit ?? 'points'
   }
 
-  /** «Тинькофф кешбэк» → «ТИНЬКОФФ», then «ТИНЬКОФФ2» if another programme has it. */
+  /** `Tinkoff cashback` → `Chase`, then `TINKOFF2` if another programme has it. */
   function symbolFrom(name: string): string {
     const word = (name.trim().split(/\s+/)[0] ?? '')
       .replace(/[^\p{L}\p{N}]/gu, '')

@@ -12,7 +12,7 @@ import { cn } from '@/shared/lib/utils'
 /**
  * What a wallet holds, a row per asset. Plain (Wallets-1 · 6): asset,
  * quantity, price, value. Spot (Currency-1 · 4): also the 24 h change and the
- * share as a bar, under «Спот по валютам» with the time of the quotes. A
+ * share as a bar, under `Spot by currency` with the time of the quotes. A
  * phone lists the same rows. A row opens the asset.
  */
 const props = defineProps<{

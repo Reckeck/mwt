@@ -93,7 +93,7 @@ const MONTHS_EN: [&str; 12] = [
     "December",
 ];
 
-/// `YYYY-MM` → «сентябре» / «September».
+/// `YYYY-MM` → "in September" (Russian prepositional case) / "September".
 fn month_name(month: &str, ru: bool) -> String {
     let index = month
         .get(5..7)

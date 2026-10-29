@@ -1,69 +1,69 @@
-# Обратная связь: уведомления, загрузка, ошибки, пусто
+# Feedback: notifications, loading, errors, empty
 
-Действие, которое прошло молча, выглядит как мёртвая кнопка. Действие,
-которое молча упало, хуже: пользователь думает, что всё сохранилось.
+An action that passed silently looks like a dead button. An action that failed
+silently is worse: the user thinks everything was saved.
 
-## Уведомление о каждом действии
+## A notification for every action
 
-Всё, что меняет данные (создать, сохранить, удалить, архивировать,
-импортировать, синхронизировать, обновить цены, сменить настройку),
-заканчивается уведомлением. Механизм один на приложение:
+Everything that changes data (create, save, delete, archive, import, sync,
+refresh prices, change a setting) ends with a notification. There is one
+mechanism per application:
 
 ```ts
 const archive = useMutation({
   mutationFn: (store: Store) => call('archive_store', { id: store.id, archived: !store.archived }),
-  onSuccess: invalidate, // только данные; уведомление здесь не нужно
+  onSuccess: invalidate, // data only; no notification needed here
   meta: {
-    error: 'stores.archiveFailed', // заголовок ошибки; причину добавит обработчик
+    error: 'stores.archiveFailed', // error title; the handler adds the reason
     success: (_data, store) => ({ text: t('stores.archivedToast'), description: (store as Store).name }),
     undo: (_data, store) => call('archive_store', { id: (store as Store).id, archived: (store as Store).archived }),
   },
 })
 ```
 
-- `MutationCache` (`app/providers/query`) показывает успех (`meta.success`:
-  ключ i18n, текст или функция → текст / `{ text, description }`; пустая
-  строка — «сказать нечего», например, отменён диалог файла) и ошибку
-  (`meta.error` + причина по коду через `anyErrorMessage`).
-- Обработчик кэша срабатывает **до** `onSuccess` мутации, поэтому в
-  `success` ещё видно состояние формы до сброса.
-- `meta.undo` — кнопка «Отменить» для обратимого (архив, скрытие). Удаление
-  без восстановления на бэкенде — `ConfirmButton`, а не `undo`.
-- `meta.silent: '<почему>'` — когда результат и так на экране (превью,
-  автосохранение раскладки) или у мутации свой, более богатый тост.
-  `silent` гасит и тост ошибки: ошибку показывает собственный `onError`
-  мутации через `notify.error`.
-- Строка `success` — ключ i18n; функция возвращает **готовый** текст (сама
-  зовёт `t()`), её результат не переводится повторно.
-- Типичный набор — `{ success, error }`; `undo` — дополнительно; `silent` —
-  вместо `success`.
-- В компоненте не вызывай `toast` напрямую. Вне мутаций — `notify`
+- `MutationCache` (`app/providers/query`) shows success (`meta.success`: an
+  i18n key, a text or a function -> text / `{ text, description }`; an empty
+  string means "nothing to say", for example a file dialog was cancelled) and
+  the error (`meta.error` + the reason by code via `anyErrorMessage`).
+- The cache handler fires **before** the mutation's `onSuccess`, so
+  `success` still sees the form state before it is reset.
+- `meta.undo` — an "Undo" button for something reversible (archive, hide).
+  A delete with no restore on the backend is a `ConfirmButton`, not `undo`.
+- `meta.silent: '<why>'` — when the result is already on the screen (preview,
+  layout autosave) or the mutation has its own, richer toast. `silent` also
+  suppresses the error toast: the error is shown by the mutation's own
+  `onError` via `notify.error`.
+- A `success` string is an i18n key; a function returns the **finished** text
+  (it calls `t()` itself), and its result is not translated again.
+- The typical set is `{ success, error }`; `undo` is extra; `silent` replaces
+  `success`.
+- Do not call `toast` directly in a component. Outside mutations use `notify`
   (`shared/lib/notify`):
 
-| Нужно | Вызов |
+| Need | Call |
 |---|---|
-| успех без мутации | `notify.success('ключ' или текст, { description })` |
-| ошибка из `catch` | `notify.error(err, 'ключ.заголовка')` |
-| предупреждение (нет ключа API, нечего импортировать) | `notify.warning(...)` |
-| нейтральное событие от бэкенда | `notify.info(...)` |
-| долгая операция | `notify.promise(promise, { loading, success, error })` |
-| настройка, которая сохраняется сама | `notify.saved()`: одно «Сохранено» после паузы ~600 мс |
+| success without a mutation | `notify.success('key' or text, { description })` |
+| error from a `catch` | `notify.error(err, 'title.key')` |
+| warning (no API key, nothing to import) | `notify.warning(...)` |
+| neutral event from the backend | `notify.info(...)` |
+| long operation | `notify.promise(promise, { loading, success, error })` |
+| a setting that saves itself | `notify.saved()`: one "Saved" after a ~600 ms pause |
 
-- `notify` убирает повтор одинакового сообщения в течение 1,5 с: двойной
-  клик не даёт два тоста.
-- Чисто интерфейсные переключения (свернуть меню, вкладка, раскрыть
-  группу, предпросмотр темы) уведомлений не дают — изменение и так видно.
+- `notify` drops a repeat of an identical message within 1.5 s: a double click
+  does not give two toasts.
+- Purely interface toggles (collapse a menu, a tab, expand a group, theme
+  preview) give no notifications — the change is visible anyway.
 
-## Что не уведомление
+## What is not a notification
 
-Постоянное состояние живёт на экране, не в тосте: пустое состояние,
-бейдж синхронизации, предупреждение «курсы устарели», ошибка под полем.
-Тост исчезнет — информация, нужная дольше, должна остаться.
+A persistent state lives on the screen, not in a toast: an empty state, a sync
+badge, a "rates are stale" warning, an error under a field. The toast will
+disappear — information needed for longer must stay.
 
-Одно событие — одно сообщение: либо тост об исходе, либо текст на экране о
-состоянии, не оба.
+One event — one message: either a toast about the outcome, or text on the
+screen about the state, not both.
 
-## Загрузка, ошибка, пусто — `SectionState`
+## Loading, error, empty — `SectionState`
 
 ```vue
 <SectionState
@@ -82,39 +82,41 @@ const archive = useMutation({
 </SectionState>
 ```
 
-- `loading` — только первая загрузка (`isPending`); фоновое обновление
-  оставляет данные на месте.
-- Скелетон появляется через ~200 мс: быстрый ответ не мигает заглушкой.
-  Форма скелетона повторяет будущий контент (`list`, `table`, `chart`,
-  `figure`).
-- Ошибка — `Alert` с причиной и «Повторить»; не прячь её в тост, раз данных
-  на экране нет.
-- Пустое состояние говорит, что здесь будет и с чего начать, и даёт кнопку
-  первого действия. Пусто из-за фильтра — «Нет данных за выбранный период»
-  и подсказка поменять фильтр (`ui.noData`, `ui.noDataHint`).
-- Виджет, который до загрузки показывает `0`, врёт: `StatCard :loading`.
+- `loading` is only the first load (`isPending`); a background refresh leaves
+  the data in place.
+- The skeleton appears after ~200 ms: a fast answer does not flash a
+  placeholder. The skeleton shape repeats the future content (`list`,
+  `table`, `chart`, `figure`).
+- An error is an `Alert` with the reason and "Retry"; do not hide it in a
+  toast when there is no data on the screen.
+- An empty state says what will be here and where to start, and gives a
+  button for the first action. Empty because of a filter — "No data for the
+  selected period" and a hint to change the filter (`ui.noData`,
+  `ui.noDataHint`).
+- A widget that shows `0` before loading lies: `StatCard :loading`.
 
-## Ожидание на кнопке
+## Waiting on a button
 
-Кнопка остаётся с подписью и получает `Spinner` + `disabled`, пока идёт
-запрос. В `FormDialog` это уже сделано (`pending`).
+The button keeps its label and gets a `Spinner` + `disabled` while the request
+runs. `FormDialog` already does this (`pending`).
 
-## Опасные действия
+## Dangerous actions
 
-| Действие | Как |
+| Action | How |
 |---|---|
-| обратимое (архив, скрыть) | сразу, тост с «Отменить» (`meta.undo`) |
-| необратимое (удалить) | `ConfirmButton`: клик → «Удалить?» → клик; тост об итоге |
-| бэкенд откажет, и интерфейс это знает (у кошелька есть операции) | кнопка неактивна, причина рядом текстом |
-| бэкенд может отказать, но интерфейс не знает заранее | кнопка активна; отказ — тост ошибки с причиной и подсказкой («архивируйте контакт») |
+| reversible (archive, hide) | immediately, a toast with "Undo" (`meta.undo`) |
+| irreversible (delete) | `ConfirmButton`: click -> "Delete?" -> click; a toast with the result |
+| the backend will refuse and the interface knows it (the wallet has transactions) | the button is disabled, the reason is next to it as text |
+| the backend may refuse but the interface does not know in advance | the button is active; the refusal is an error toast with the reason and a hint ("archive the contact") |
 
-`ConfirmButton`: в слот кладётся иконка (вид в покое), `label` — её
-`aria-label` и подсказка, `confirm-label` — текст второго нажатия
-(«Удалить?»). Флага ожидания нет: передай `:disabled="remove.isPending.value"`,
-иначе быстрый двойной клик запустит мутацию дважды.
+`ConfirmButton`: the icon goes into the slot (the resting look), `label` is
+its `aria-label` and hint, `confirm-label` is the text of the second press
+("Delete?"). There is no pending flag: pass
+`:disabled="remove.isPending.value"`, otherwise a quick double click runs the
+mutation twice.
 
-Модальное окно «Вы уверены?» не используется — кроме одного случая:
-необратимое действие из контекстного меню, где двухшаговой кнопке негде
-жить. Тогда — короткий `Dialog size="sm"` с названием действия на кнопке
-(«Удалить операцию»), а пункт меню заканчивается «…» (образец —
-удаление операции в `pages/transactions/Transactions.vue`).
+An "Are you sure?" modal is not used — except in one case: an irreversible
+action from a context menu, where a two-step button has no place to live.
+Then a short `Dialog size="sm"` with the action name on the button ("Delete
+transaction"), and the menu item ends with "…" (the sample is deleting a
+transaction in `pages/transactions/Transactions.vue`).

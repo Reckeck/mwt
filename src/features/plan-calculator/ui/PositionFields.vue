@@ -10,7 +10,7 @@ import { FormField } from '@/shared/ui/form-field'
 
 import type { CalcPreview } from '../model/use-calc-preview'
 
-/** «Позиция» (Money 4 · 23): USDT given for a coin at the entry price, the take and the stop. */
+/** `Position` (Money 4 · 23): USDT given for a coin at the entry price, the take and the stop. */
 const props = defineProps<{
   calc: CalcPreview
   amountError?: string | null

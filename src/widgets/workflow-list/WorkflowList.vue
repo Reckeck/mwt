@@ -62,7 +62,7 @@ watch(
     </div>
 
     <h3 class="text-sm font-medium">{{ t('workflow.list.mine') }}</h3>
-    <!-- The skeleton holds the cards' place: «Как это устроено» below does not jump when they land. -->
+    <!-- The skeleton holds the cards' place: `How it works` below does not jump when they land. -->
     <SectionState
       :loading="workflows.isPending.value"
       :error="workflows.error.value"

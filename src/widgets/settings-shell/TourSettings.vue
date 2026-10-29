@@ -52,7 +52,7 @@ function open(id: string) {
   if (location) void router.push(location)
 }
 
-/** «Предлагать подсказки в новых разделах»: on until the banner's «Больше не предлагать». */
+/** `Offer tips in new sections`: on until the banner's `Don't offer again`. */
 async function setOffers(on: boolean) {
   try {
     await tour.setOffers(on)

@@ -1,18 +1,18 @@
-# Архитектура
+# Architecture
 
-## Обзор
+## Overview
 
-Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с монолитным Rust-ядром и Vue-фронтендом,
-связка через IPC (invoke + events). Вся бизнес-логика живёт в `crates/core`
-(чистый Rust, ноль зависимостей от Tauri) и покрыта юнит-тестами; `crates/app`
-представляет собой тонкую оболочку: `tauri::Builder`, команды и состояние.
+Multi Wallet Tracker (MWT) is a Tauri 2 desktop application with a monolithic Rust core and a Vue
+frontend, connected through IPC (invoke + events). All business logic lives in `crates/core`
+(pure Rust, zero dependencies on Tauri) and is covered by unit tests; `crates/app`
+is a thin shell: `tauri::Builder`, commands and state.
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    Vue 3 frontend                    │
-│  Pinia (состояние) · TanStack Query (сеть+кэш)      │
-│  shadcn-vue (UI) · vue-echarts (графики)            │
-│  vue-i18n (ru/en) · types из src/shared/api/ipc.gen.d.ts        │
+│  Pinia (state) · TanStack Query (network + cache)   │
+│  shadcn-vue (UI) · vue-echarts (charts)             │
+│  vue-i18n (ru/en) · types from src/shared/api/ipc.gen.d.ts      │
 └──────────────────────────┬──────────────────────────┘
                            │ invoke / events
 ┌──────────────────────────┴──────────────────────────┐
@@ -23,98 +23,97 @@ Multi Wallet Tracker (MWT) — это Tauri 2 desktop-приложение с м
 │             pricing,portfolio,settings,exchange,     │
 │             app_settings,vault_recents}             │
 └──────────────────────────┬──────────────────────────┘
-                           │ (общая зависимость через workspace)
+                           │ (shared dependency via the workspace)
 ┌──────────────────────────┴──────────────────────────┐
 │                crates/core (business)               │
-│  model/      — доменные сущности (VaultDoc, Store,  │
+│  model/      — domain entities (VaultDoc, Store,    │
 │                Transaction, Settings, Chain)        │
-│  appconfig.rs— настройки приложения (вне vault, JSON)│
-│  service.rs  — UnlockedVault: все мутации + аналитика│
-│  pricing/    — ценовые провайдеры, кэш, FX           │
+│  appconfig.rs— app settings (outside the vault, JSON)│
+│  service.rs  — UnlockedVault: all mutations + analytics│
+│  pricing/    — price providers, cache, FX            │
 │  crypto/     — XChaCha20-Poly1305 + Argon2id,        │
-│                фиксированный 55-байт header (AAD)    │
+│                fixed 55-byte header (AAD)            │
 │  storage/    — SnapshotFormat (JSON/MessagePack),    │
-│                атомарная запись                      │
-│  market/     — OHLCV-свечи Binance для графиков     │
-│  ipc_contract.rs — DTO команд (ts-rs → ipc.gen.d.ts)  │
+│                atomic write                          │
+│  market/     — Binance OHLCV candles for charts      │
+│  ipc_contract.rs — command DTOs (ts-rs → ipc.gen.d.ts)│
 └─────────────────────────────────────────────────────┘
 ```
 
-## Плагины Android
+## Android plugins
 
-Платформенное на Android — отдельные крейты-плагины с Kotlin-частью; снаружи
-(в webview) они ничего не открывают, их зовёт Rust (`run_mobile_plugin`):
+Platform-specific Android code lives in separate plugin crates with a Kotlin part; they expose
+nothing to the webview, Rust calls them (`run_mobile_plugin`):
 
-- `crates/plugin-saf` — выбор документа с долговременным правом (`platform_fs`);
-- `crates/plugin-net` — синхронизация по локальной сети: multicast-lock,
-  фоновый сервис, ключ устройства в Keystore;
-- `crates/plugin-insets` — системные панели: отступы строки состояния,
-  навигации, выреза и клавиатуры как CSS-переменные `--native-inset-*` и
-  `--native-ime` (WebView отдаёт `env(safe-area-inset-*)` нулями), цвет значков
-  под тему (`set_system_bars`) и «свернуть» (`move_to_back`). Фронт читает их
-  через `--safe-*` и утилиты `*-safe` (`src/app/styles.css`).
+- `crates/plugin-saf` — picking a document with a persistent permission (`platform_fs`);
+- `crates/plugin-net` — local-network sync: multicast lock, foreground
+  service, device key in the Keystore;
+- `crates/plugin-insets` — system bars: status bar, navigation, cutout and keyboard
+  insets as the CSS variables `--native-inset-*` and `--native-ime` (WebView reports
+  `env(safe-area-inset-*)` as zeros), icon color matching the theme
+  (`set_system_bars`) and "move to back" (`move_to_back`). The frontend reads them
+  through `--safe-*` and the `*-safe` utilities (`src/app/styles.css`).
 
-## Где что лежит на диске
+## Where things live on disk
 
-Пути — для dev-приложения (`dev.mwt.desktop`); релиз из `main` хранит всё
-так же, но в каталогах `mwt.desktop` (каналы — `docs/ci.md`).
+Paths are for the dev app (`dev.mwt.desktop`); a release from `main` stores everything
+the same way, but in `mwt.desktop` directories (channels — `docs/ci.md`).
 
-| Путь (Linux) | Что | Формат |
+| Path (Linux) | What | Format |
 |---|---|---|
-| `~/.local/share/dev.mwt.desktop/vault.wallet` | хранилище: настройки vault, магазины, операции, **кэш цен и FX** | зашифрован (JSON в dev, MessagePack в release; старый bincode читается) |
-| `~/.config/dev.mwt.desktop/app_settings.json` | тема, язык, базовая валюта, избранные валюты | обычный JSON |
-| `~/.config/dev.mwt.desktop/currencies.json` | кэш каталога валют (фиат + крипто) | обычный JSON |
-| `~/.config/dev.mwt.desktop/recent_vaults.json` | недавние хранилища | обычный JSON |
+| `~/.local/share/dev.mwt.desktop/vault.wallet` | the vault: vault settings, stores, transactions, **price and FX cache** | encrypted (JSON in dev, MessagePack in release; the old bincode is still readable) |
+| `~/.config/dev.mwt.desktop/app_settings.json` | theme, language, base currency, favorite currencies | plain JSON |
+| `~/.config/dev.mwt.desktop/currencies.json` | currency catalog cache (fiat + crypto) | plain JSON |
+| `~/.config/dev.mwt.desktop/recent_vaults.json` | recent vaults | plain JSON |
+| `~/.config/dev.mwt.desktop/vault_links.json` | which vault is mirrored to which external file | plain JSON |
 
-| `~/.config/dev.mwt.desktop/vault_links.json` | какой vault копируется в какой внешний файл | обычный JSON |
+Paths on other OSes, Android (the vault in app storage, `content://` import) and
+the copy in an external file — `docs/storage-platforms.md`.
 
-Пути других ОС, Android (vault в памяти приложения, импорт `content://`) и
-копия во внешнем файле — `docs/storage-platforms.md`.
+The price and FX cache lives **inside the vault** (`VaultDoc.price_cache` / `fx_cache`) — it is
+encrypted and survives a restart, but is tied to a particular vault, each one has its
+own. The currency catalog is in the app configs: it is not secret and is the same for all
+vaults.
 
-Кэш цен и FX **внутри vault** (`VaultDoc.price_cache` / `fx_cache`) — он
-зашифрован и переживает рестарт, но привязан к конкретному хранилищу, у каждого
-свой. Каталог валют — в конфигах приложения: он не секретный и одинаков для всех
-vault.
+## Data flow
 
-## Поток данных
+1. The user enters the master password → `auth::unlock_vault` →
+   `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD check of the
+   password) → `VaultDoc` deserialization. The result is stored in `AppState.vault`.
+2. All mutations (store/tx/settings) go through `UnlockedVault::*` methods,
+   each of which ends with `persist()` — re-encryption and an
+   atomic write to disk.
+3. Prices: `refresh_all` first takes a snapshot of what it needs (assets, base currency)
+   and releases the mutex, then does the network fetches (library await),
+   then locks the vault again and applies the cache through `apply_prices/apply_fx`.
+4. The frontend listens for the `prices-updated` event and invalidates the TanStack cache.
+5. User settings do not go through the vault: `App.vue` reads
+   `get_app_settings` before unlock, so the theme and language are applied already on
+   the sign-in screen; after `open`/`create` the base currency is pushed into the vault
+   through `sync_base_currency`.
 
-1. Пользователь вводит мастер-пароль → `auth::unlock_vault` →
-   `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD-проверка
-   пароля) → десериализация `VaultDoc`. Результат кладётся в `AppState.vault`.
-2. Все мутации (store/tx/settings) идут через `UnlockedVault::*` методы,
-   каждый из которых в конце вызывает `persist()` — пере-шифрование и
-   атомарная запись на диск.
-3. Цены: `refresh_all` сначала снимает снимок нужного (активы, базовая валюта)
-   и отпускает мьютекс, затем делает сетевые фетчи (библиотечный await),
-   затем снова захватывает vault и применяет кэш через `apply_prices/apply_fx`.
-4. Frontend слушает событие `prices-updated` и инвалидирует TanStack-кэш.
-5. Настройки пользователя не идут через vault: `App.vue` читает
-   `get_app_settings` до разблокировки, поэтому тема и язык применяются уже на
-   экране входа; базовая валюта после `open`/`create` заталкивается в vault
-   через `sync_base_currency`.
+## Principles
 
-## Принципы
+- **A core without a GUI.** Everything testable is in core, tests run without Tauri.
+- **Secure by default.** One password, no stored verifiers;
+  integrity is provided by AEAD (header = AAD, any change fails the check).
+- **Offline-friendly.** Prices/FX accumulate history in the vault (`price_cache`,
+  `fx_cache`); without a network the last known rate is used, and transactions
+  are valued at the rate of their own date.
+- **Money = Decimal.** `Amount` is a newtype over `rust_decimal::Decimal`,
+  always serialized as a string (precision + stable JSON and MessagePack).
+- **Settings that describe the user live outside the vault.** Theme, language,
+  base currency and favorite currencies are not encrypted and not duplicated in each
+  vault; they have nothing to hide, while a second vault should inherit them and
+  the sign-in screen should render in the right language before the password is entered. Vault-scoped
+  settings (intervals, tray, widgets) stay in the document.
+- **Snapshot formats.** Dev — human-readable JSON, release — MessagePack with
+  field names (before v2 — bincode, now read-only). The type is stored in the file
+  header (`payload_fmt`), so the file is self-contained. Old schema versions are migrated
+  on open, see `docs/data-model.md` → "Versions and migrations".
 
-- **Ядро без GUI.** Всё тестируемое — в core, тесты запускаются без Tauri.
-- **Безопасность по умолчанию.** Один пароль, никаких хранимых верификаторов;
-  целостность обеспечивает AEAD (header = AAD, любые изменения фейлят чек).
-- **Оффлайн-френдли.** Прайсы/FX копят историю в vault (`price_cache`,
-  `fx_cache`); без сети используется последний известный курс, а операции
-  оцениваются по курсу своей даты.
-- **Деньги = Decimal.** `Amount` — newtype над `rust_decimal::Decimal`,
-  всегда сериализуется строкой (точность + стабильность JSON и MessagePack).
-- **Настройки, которые описывают пользователя, живут вне vault.** Тема, язык,
-  базовая валюта и избранные валюты не шифруются и не дублируются в каждом
-  хранилище; им нечего прятать, зато второй vault должен унаследовать их, а
-  экран входа — отрисоваться на нужном языке до ввода пароля. Vault-scoped
-  настройки (интервалы, трей, виджеты) остаются в документе.
-- **Форматы снапшота.** Dev — человекочитаемый JSON, release — MessagePack с
-  именами полей (до v2 — bincode, он только читается). Тип хранится в header
-  файла (`payload_fmt`), файл самодостаточен. Старые версии схемы мигрируют
-  при открытии, см. `docs/data-model.md` → «Версии и миграции».
+## Scaling
 
-## Масштабирование
-
-Пока монолит. Если ядро вырастет — потенциальные слоты: вынос тяжёлых
-численных задач в отдельный фон-процесс, плагины провайдеров данных через
-feature-флаги в `trade-core`. IPC-контракт остаётся источником истины для FE.
+For now it is a monolith. If the core grows, potential slots are: moving heavy
+numeric tasks into a separate background process, data-provider plugins through
+feature flags in `trade-core`. The IPC contract remains the source of truth for the frontend.

@@ -7,7 +7,7 @@ import { Input } from '@/shared/ui/input'
 
 import { useFreedomRate } from './model/use-freedom-rate'
 
-/** «Ожидаемая доходность» of the freedom potential; blank falls back to the key rate. */
+/** `Expected return` of the freedom potential; blank falls back to the key rate. */
 const props = defineProps<{ rate: Amount | null; keyRate: Amount | null }>()
 
 const { t } = useI18n()

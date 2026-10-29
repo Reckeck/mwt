@@ -78,7 +78,7 @@ pub fn months_to_target(
     None
 }
 
-/// Why a goal is marked «Пересмотреть».
+/// Why a goal is marked "Revise".
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum RealismIssue {
@@ -308,7 +308,7 @@ impl UnlockedVault {
     }
 
     /// Delete a goal (New-Goal 5): the money stays in its wallets, its
-    /// envelopes go back to «можно потратить», the workflows that only put
+    /// envelopes go back to "safe to spend", the workflows that only put
     /// money aside into it stop. Its files go with the next open of the vault
     /// unless [`Self::restore_goal`] brings it back first.
     pub fn delete_goal(&mut self, id: &str, now: i64) -> Result<GoalDeleted> {
@@ -354,7 +354,7 @@ impl UnlockedVault {
     }
 
     /// Active workflows that move money into the goal's wallet (what
-    /// «Откладывать 10 % каждой зарплаты» makes), unless another goal saves
+    /// "Set aside 10% of every salary" makes), unless another goal saves
     /// there too: a wallet's salary or a shared one keeps working.
     fn goal_savers(&self, goal: &Goal) -> Vec<String> {
         let others: HashSet<&String> = self
@@ -747,7 +747,7 @@ impl UnlockedVault {
         out
     }
 
-    /// «Нужно отложить / отложено» by month of a year (plan §7.4), in the
+    /// "To set aside / set aside" by month of a year (plan §7.4), in the
     /// budget currency.
     pub fn goal_calendar(&self, year: i32, now: i64, zone: &str) -> Result<GoalCalendar> {
         let cal = Calendar::new(zone);

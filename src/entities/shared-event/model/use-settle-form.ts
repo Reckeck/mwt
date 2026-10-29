@@ -43,7 +43,7 @@ export interface SettleFormOptions {
 }
 
 /**
- * The fields and the save of one settlement form (`Получил`, `Отдал`, `Оплатить долю`, `Зачесть`):
+ * The fields and the save of one settlement form (`Received`, `Gave`, `Pay the share`, `Offset`):
  * the sum starts at what is owed and may be less, never more; the wallet starts at the last one used.
  */
 export function useSettleForm(options: SettleFormOptions) {

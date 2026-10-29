@@ -157,7 +157,7 @@ pub async fn rename_attachment(
         .map_err(err_to_string)
 }
 
-/// «Сохранить как…»: the save dialog, then the opened bytes where it points.
+/// "Save as…": the save dialog, then the opened bytes where it points.
 /// `None` when the dialog was closed; otherwise what to show as «saved to».
 #[tauri::command]
 pub async fn save_attachment_as(

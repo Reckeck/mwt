@@ -378,7 +378,7 @@ pub async fn bybit_balances(
 /// payouts, let the import settings and the history of ids sort them, stage
 /// (or book) the new ones, then set the live balance where the ledger still
 /// disagrees. A failed fetch is kept in the history with its reason. Shared
-/// by the background poll and «Синхронизировать сейчас».
+/// by the background poll and "Sync now".
 pub(crate) async fn sync_bybit(
     state: &AppState,
     root_id: &str,

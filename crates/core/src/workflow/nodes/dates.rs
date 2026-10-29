@@ -84,7 +84,7 @@ pub(crate) fn format_date(local: NaiveDateTime, pattern: &str) -> String {
     };
     let month_word = MONTHS_RU[local.month0() as usize];
     let weekday = WEEKDAYS_RU[local.weekday().num_days_from_monday() as usize];
-    // Longer tokens first, so «МММ» is not read as «ММ» + «М».
+    // Longer tokens first, so "МММ" is not read as "ММ" + "М".
     let tokens: [(&str, String); 14] = [
         ("ГГГГ", format!("{:04}", local.year())),
         ("YYYY", format!("{:04}", local.year())),

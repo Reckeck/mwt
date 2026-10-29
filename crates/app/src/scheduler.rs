@@ -150,6 +150,12 @@ fn is_unlocked(app: &AppHandle) -> bool {
     state.vault.lock().is_ok_and(|guard| guard.is_some())
 }
 
+/// The text for the interface language: `ru_text` when `ru`, else `en_text`.
+/// `ru` comes from [`russian`]; every text shown outside the window goes through here.
+pub fn pick(ru: bool, ru_text: &str, en_text: &str) -> String {
+    if ru { ru_text } else { en_text }.to_string()
+}
+
 /// Whether texts shown outside the window should be in Russian.
 pub fn russian(app: &AppHandle) -> bool {
     let Ok(dir) = app.path().app_config_dir() else {
@@ -517,6 +523,7 @@ struct AutomationNews {
 /// show what they told. Automations keep their own events and notices.
 fn workflows_tick(app: &AppHandle) {
     let zone = current_zone(app);
+    let ru = russian(app);
     let (pass, news, interest) = {
         let state = app.state::<AppState>();
         let Ok(mut guard) = state.vault.lock() else {
@@ -525,6 +532,7 @@ fn workflows_tick(app: &AppHandle) {
         let Some(vault) = guard.as_mut() else {
             return;
         };
+        vault.set_notice_language(ru);
         let Ok(pass) = vault.run_due_workflows(now_secs(), &zone) else {
             return;
         };
@@ -678,7 +686,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
     }
 }
 
-/// «Аренда 2026-10-15 не создана: на счёте 8000 RUB из 25000 RUB».
+/// "Rent 2026-10-15 not created: the account has 8000 RUB of 25000 RUB".
 fn rejected_text(ru: bool, name: &str, date: &str, reason: &RejectReason) -> (String, String) {
     let title = if ru {
         format!("«{name}» {date} не создана")
@@ -817,4 +825,15 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
         let _ = app.emit("reminder-due", serde_json::json!({}));
     }
     deliver(app, fresh, false);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pick;
+
+    #[test]
+    fn pick_follows_the_interface_language() {
+        assert_eq!(pick(true, "Блокировка", "Lock"), "Блокировка");
+        assert_eq!(pick(false, "Блокировка", "Lock"), "Lock");
+    }
 }

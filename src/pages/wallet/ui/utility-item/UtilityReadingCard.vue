@@ -17,9 +17,9 @@ import { cn } from '@/shared/lib/utils'
 import { fillFormula, prettyFormula } from '@/shared/lib/utility-formula'
 
 /**
- * «Показание за октябрь» (Wallets-2 · 11–12): a field per tariff zone (or one),
- * the day it was read, and what it comes to before it is saved — «Расход
- * 125 + 70 кВт·ч → 1 036,50 ₽», or the formula with the numbers in it.
+ * `October reading` (Wallets-2 · 11–12): a field per tariff zone (or one),
+ * the day it was read, and what it comes to before it is saved — `Used
+ * 125 + 70 kWh → 1,036.50 ₽`, or the formula with the numbers in it.
  */
 const props = defineProps<{ line: UtilityBillLine; phone: boolean; disabled: boolean }>()
 const { t } = useI18n()
@@ -79,7 +79,7 @@ const preview = useQuery({
 const used = computed(() =>
   values.value.map((value, index) => Math.max(0, Number(value.replace(',', '.')) - Number(previous.value[index] ?? 0))),
 )
-/** «Расход 125 + 70 кВт·ч → 1 036,50 ₽»; with a formula «(209 − 205) × 3,5 × 10 = 140,00 ₽». */
+/** `Used 125 + 70 kWh → 1,036.50 ₽`; with a formula `(209 − 205) × 3.5 × 10 = 140.00 ₽`. */
 const calc = computed(() => {
   const amount = (input.value && preview.data.value?.amount) || null
   if (!meter.value || !amount) return null

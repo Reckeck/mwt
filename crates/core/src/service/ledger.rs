@@ -1,4 +1,4 @@
-//! The operations list and the operations graph (plan Ф4).
+//! The operations list and the operations graph (plan F4).
 //!
 //! One filter drives both: which wallets, which kinds, a contact, a chain, a
 //! date range in the user's zone, whether moves inside one wallet show, and
@@ -58,7 +58,7 @@ pub struct TxFilter {
     /// The main category key, as reports group by it; `""` = without a category.
     #[serde(default)]
     pub category: Option<String>,
-    /// Only transactions that paid a fee (what «Потери» are made of).
+    /// Only transactions that paid a fee (what "Losses" are made of).
     #[serde(default)]
     pub with_fee: bool,
     /// Only transactions that closed a position with a profit or a loss
@@ -159,7 +159,7 @@ impl UnlockedVault {
     }
 
     /// The filtered operations as CSV, oldest first, one line per leg: the
-    /// «Экспорт ▾ › Операции по фильтру» of the list.
+    /// "Export ▾ › Transactions by filter" of the list.
     pub fn transactions_csv(&self, filter: &TxFilter, zone: &str) -> Result<String> {
         let mut txs = self.filtered(filter, zone)?;
         txs.sort_by(|left, right| left.meta().timestamp.cmp(&right.meta().timestamp));
@@ -471,7 +471,7 @@ impl UnlockedVault {
         for (_, hash) in tx.on_chain_refs() {
             parts.extend(hash.map(str::to_string));
         }
-        // File names and link captions: «где был чек skycapital?».
+        // File names and link captions: "where was the skycapital receipt?".
         for item in self.doc.attachments.iter().filter(|item| {
             item.removed_at.is_none()
                 && item.owner.kind == crate::model::entity_ref::EntityKind::Tx

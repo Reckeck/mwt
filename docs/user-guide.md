@@ -1,418 +1,418 @@
-# Руководство пользователя
+# User guide
 
-Как пользоваться Multi Wallet Tracker (MWT). Разделы добавляются вместе с функциями.
+How to use Multi Wallet Tracker (MWT). Sections are added together with features.
 
-## Кошельки и субсчета
+## Wallets and sub-accounts
 
-Кошельки в боковой панели разбиты по типам: **Наличные · Банки · Крипто · Биржи ·
-Имущество · Кредиты**. Пустые группы скрыты; у группы — сумма и «+» для нового
-кошелька этого типа. Правый клик по кошельку — быстрые действия: операция,
-субсчёт, настройки, автоматизации, архив.
+Wallets in the sidebar are grouped by type: **Cash · Banks · Crypto · Exchanges ·
+Property · Loans**. Empty groups are hidden; a group shows its total and a "+" for a new
+wallet of that type. A right click on a wallet gives quick actions: transaction,
+sub-account, settings, automations, archive.
 
-- **Наличные** создаются вместе с хранилищем и всегда одни: второй кошелёк
-  наличных не нужен, архивировать или удалить его нельзя. Разные валюты — это
-  субсчета-«карманы».
-- **Банки, крипто-кошельки, биржи, имущество, кредиты** добавляете вы.
+- **Cash** is created together with the vault and there is always just one: a second
+  cash wallet is not needed, and it cannot be archived or deleted. Different currencies are
+  "pocket" sub-accounts.
+- **Banks, crypto wallets, exchanges, property, loans** are added by you.
 
-### Создать кошелёк
+### Create a wallet
 
-**«Добавить кошелёк»** внизу списка (или «+» у группы). Сначала выбирается тип —
-у каждого одна строка пояснения, — потом только нужные поля: для биржи — какая
-это биржа, для крипто-кошелька — горячий или холодный, для имущества — что это,
-для кредита — условия и залог. Необязательное поле **«Начальный остаток»** — сколько уже лежит: запишется
-одной операцией «Начальный остаток», это не доход и не трата.
+**"Add wallet"** at the bottom of the list (or the "+" of a group). First you choose a type —
+each has a one-line explanation — then only the fields needed: for an exchange, which
+exchange it is; for a crypto wallet, hot or cold; for property, what it is;
+for a loan, the terms and collateral. The optional **"Opening balance"** field is how much is already there: it is recorded
+as a single "Opening balance" transaction, which is neither income nor spending.
 
-### Субсчета: жёсткая привязка
+### Sub-accounts: a strict binding
 
-Субсчёт — часть кошелька того же типа, которая держит **ровно то, к чему
-привязана**. Шаблоны зависят от типа кошелька:
+A sub-account is a part of a wallet of the same type that holds **exactly what it is
+bound to**. The templates depend on the wallet type:
 
-| Кошелёк | Субсчета | Привязка |
+| Wallet | Sub-accounts | Binding |
 |---|---|---|
-| Наличные | Карман | валюта |
-| Банк | Карта, Счёт, Вклад, Накопительный, Кредитная карта | валюта |
-| Крипто | Токен | токен и сеть |
-| Биржа | Spot, Futures, Earn, Торговая пара | рынок или пара |
+| Cash | Pocket | currency |
+| Bank | Card, Account, Deposit, Savings, Credit card | currency |
+| Crypto | Token | token and network |
+| Exchange | Spot, Futures, Earn, Trading pair | market or pair |
 
-Торговая пара (например, **BTCUSDT**) держит обе монеты и меняет их в обе
-стороны. Операция с чужим активом не пройдёт: «Операция не подходит к привязке
-субсчёта». Вложенность — один уровень: у субсчёта своих субсчетов нет.
+A trading pair (for example, **BTCUSDT**) holds both coins and exchanges them in both
+directions. A transaction with a foreign asset will not go through: "The transaction does not match the
+sub-account's binding". Nesting is one level: a sub-account has no sub-accounts of its own.
 
-Субсчёт создаётся в **Настройках кошелька → «Субсчета и конверты»** или правым
-кликом по кошельку. Перенести его можно только в другой кошелёк того же типа.
+A sub-account is created in **Wallet settings → "Sub-accounts and envelopes"** or with a right
+click on the wallet. It can be moved only to another wallet of the same type.
 
-### Конверты
+### Envelopes
 
-Конверт откладывает часть денег на цель, **не перемещая их**: деньги остаются в
-кошельке, но помечены как занятые. «Отложить» берёт из свободного остатка,
-«Вернуть» возвращает в него. Если трата залезет в отложенное, форма операции
-предупредит, а конверт покажет нехватку. Конверт можно связать с целью — её
-прогресс будет равен сумме в конверте.
+An envelope sets part of the money aside for a goal **without moving it**: the money stays in
+the wallet but is marked as taken. "Put aside" takes from the free balance,
+"Release" returns to it. If a spend would dip into the money set aside, the transaction form
+warns you and the envelope shows the shortfall. An envelope can be linked to a goal — its
+progress equals the amount in the envelope.
 
-### Назначение денег (вместо «Учитывать в бюджете»)
+### What the money is for (instead of "Count in the budget")
 
-В настройках кошелька выбирается, **для чего эти деньги**:
+In wallet settings you choose **what this money is for**:
 
-| Назначение | Что значит | Пример |
+| Purpose | What it means | Example |
 |---|---|---|
-| Повседневные | траты и доходы видны в дневном бюджете | наличные, зарплатная карта, кредитка для покупок |
-| Накопления | перевод сюда — «отложил», а не «потратил» | вклад, накопительный счёт |
-| Инвестиции | сделки и колебания цены не трогают бюджет, но входят в капитал | биржа, крипто-кошелёк, квартира |
-| Чужие / транзит | ни в бюджете, ни в капитале | счёт ИП под налоги, общий семейный счёт, деньги друга |
+| Everyday | spending and income show in the daily budget | cash, a salary card, a credit card for purchases |
+| Savings | moving money here is "put aside", not "spent" | a deposit, a savings account |
+| Investment | trades and price swings stay out of the budget but count in net worth | an exchange, a crypto wallet, a flat |
+| Not mine / transit | neither in the budget nor in net worth | a sole-proprietor account for taxes, a shared family account, a friend's money |
 
-Назначение подставляется само по типу и шаблону (вклад — накопления), менять
-его нужно редко. Кредиты в бюджет не входят никогда.
+The purpose is filled in by itself from the type and template (a deposit — savings), and
+rarely needs changing. Loans are never part of the budget.
 
-### Настройки кошелька
+### Wallet settings
 
-Шестерёнка на странице кошелька открывает его настройки. Вкладки зависят от
-типа: **Общее** (имя, цвет, назначение, контакт), **Субсчета и конверты**,
-**Автоматизации**, **Биржа** (выбор биржи, потом ключи и интервал импорта),
-**Объект** и **ЖКХ** (у имущества), **Условия** (у кредита и кредитки),
-**Опасная зона** (архив и удаление).
+The gear on the wallet page opens its settings. The tabs depend on the
+type: **General** (name, color, purpose, contact), **Sub-accounts and envelopes**,
+**Automations**, **Exchange** (choose an exchange, then keys and the import interval),
+**Property** and **Utilities** (for property), **Terms** (for a loan or credit card),
+**Danger zone** (archive and deletion).
 
-### Биржа и терминал
+### Exchange and terminal
 
-Сначала в настройках выбирается биржа (пока поддержан Bybit, остальные
-помечены «скоро») — только после этого можно вставить API-ключи. У биржи на
-её странице три раздела: **Обзор**, **Терминал**, **Импорт**. Терминал — часть
-этой биржи: список монет, рисунки на графике, таймфрейм и индикаторы
-сохраняются в ней, у двух бирж — два независимых терминала. Отдельного пункта
-«Трейдинг» в меню нет: без биржи терминал не нужен.
+First the exchange is chosen in settings (for now Bybit is supported, the others
+are marked "soon") — only after that can API keys be pasted. An exchange has
+three sections on its page: **Overview**, **Terminal**, **Import**. The terminal is part of
+that exchange: the coin list, chart drawings, timeframe and indicators
+are stored in it, so two exchanges have two independent terminals. There is no separate
+"Trading" menu item: without an exchange a terminal is not needed.
 
-Правый клик по графику: **алерт на цене под курсором** (условие «выше» или
-«ниже» подставляется относительно текущей цены), инструменты рисования,
-копирование цены и удаление рисунков монеты. Алерты, заведённые в терминале,
-принадлежат этой бирже и видны под списком монет; в Календаре видны все.
+Right click on the chart: **an alert at the cursor price** (the "above" or
+"below" condition is set relative to the current price), drawing tools,
+copying the price and deleting the coin's drawings. Alerts created in the terminal
+belong to that exchange and are visible under the coin list; the Calendar shows all of them.
 
-На дашборд можно добавить виджет **«Сверка с биржей»**. Он есть в каталоге,
-только пока в vault есть биржа с выбранным провайдером. Если бирж несколько,
-каталог спросит, какую показывать.
+The **"Exchange check"** widget can be added to the dashboard. It is in the catalog
+only while the vault has an exchange with a chosen provider. If there are several exchanges,
+the catalog asks which one to show.
 
-### Архив и удаление
+### Archive and deletion
 
-- **Архивация** кошелька убирает в архив и все его субсчета. Восстановить субсчёт,
-  пока родитель в архиве, нельзя — сначала восстановите родителя.
-- **Удалить** можно только пустой кошелёк: без операций и без субсчетов. Кошелёк с
-  историей архивируйте. Наличные не архивируются и не удаляются.
+- **Archiving** a wallet moves it and all its sub-accounts to the archive. A sub-account
+  cannot be restored while its parent is archived — restore the parent first.
+- Only an empty wallet can be **deleted**: no transactions and no sub-accounts. A wallet with
+  history should be archived. Cash cannot be archived or deleted.
 
-## Операции
+## Transactions
 
-Кнопка **«Операция»** на странице кошелька открывает форму; кошелёк уже
-подставлен, актив — основной для этого кошелька (в пустом банке — базовая
-валюта). Кнопка **«+ Операция»** в шапке работает из любого раздела: первым
-полем выбирается кошелёк (запоминается последний).
+The **"Transaction"** button on a wallet page opens the form; the wallet is already
+filled in, the asset is the main one for that wallet (in an empty bank — the base
+currency). The **"+ Transaction"** button in the header works from any section: the first
+field is the wallet (the last one is remembered).
 
-| Вид | Когда |
+| Kind | When |
 |---|---|
-| **Пополнить** | Деньги пришли извне: зарплата, кешбэк, подарок. Для кошелька «Имущество» — «Приобрести» |
-| **Оплатить** | Деньги ушли насовсем: покупка, счёт, проценты по кредиту |
-| **Перевести** | Один актив между двумя местами, хотя бы одно — ваше: между своими кошельками, человеку, на биржу |
-| **Обменять** | Отдаёте одно, получаете другое: обмен валюты в банке, через обменник |
-| Спот, фьючерсы, DeFi, продажа имущества | Специальные — только у подходящих кошельков |
+| **Top up** | Money came from outside: salary, cashback, a gift. For a "Property" wallet — "Acquire" |
+| **Pay** | Money is gone for good: a purchase, a bill, loan interest |
+| **Transfer** | One asset between two places, at least one of them yours: between your own wallets, to a person, to an exchange |
+| **Convert** | You give one thing and get another: currency exchange at a bank or an exchanger |
+| Spot trade, Futures, DeFi, Sell property | Special — only for suitable wallets |
 
-- У «Пополнить» и «Оплатить» обязательна категория. Если её не выбрать,
-  приложение возьмёт её из правил (Настройки → «Правила категорий»), например
-  «такси» → «Такси».
-- Комиссия списывается с кошелька отдельно; получатель перевода получает ровно
-  указанную сумму.
-- Перевод между субсчетами одного кошелька помечается **«внутренний»**: он не
-  доход и не расход.
-- Любую операцию можно изменить целиком — значок карандаша в списке.
-- Цена фиксируется **по курсу на дату операции**: под полем «Цена» видно, курс
-  какого дня будет записан. Если ввести цену руками, она не меняется.
-- Пометка **«без цены»** — для операции не нашлось курса; при следующем
-  обновлении курсов цена подставится сама и пометка исчезнет.
+- "Top up" and "Pay" require a category. If you do not choose one,
+  the app takes it from the rules (Settings → "Category rules"), for example
+  "taxi" → "Taxi".
+- The fee is deducted from the wallet separately; the recipient of a transfer receives exactly
+  the amount stated.
+- A transfer between sub-accounts of one wallet is marked **"internal"**: it is neither
+  income nor spending.
+- Any transaction can be edited in full — the pencil icon in the list.
+- The price is fixed **at the rate on the transaction date**: under the "Price" field you can see which
+  day's rate will be recorded. If you enter a price by hand, it does not change.
+- The **"without a rate"** mark — no rate was found for the transaction; at the next
+  rate refresh the price is filled in by itself and the mark disappears.
 
-## Контакты
+## Contacts
 
-**Операции → Контакты и долги** — люди, компании и обменники, с которыми двигаются
-деньги. Всё правится прямо в карточке, без окон:
+**Transactions → Contacts and debts** — people, companies and exchangers with whom money
+moves. Everything is edited right in the card, without windows:
 
-- **Новый контакт** — впишите имя в поле над списком и нажмите Enter.
-- **Поля** — нажмите и правьте; сохраняется само, когда поле теряет фокус.
-- **Реквизит** — просто вставьте: карта, IBAN, телефон, ссылка или
-  крипто-адрес. Тип и сеть (Ethereum, Tron, Bitcoin, Solana, TON…) определятся
-  сами, их можно поправить.
-- **Фильтр** над списком — «Все / Мне должны / Я должен»; рядом с именем — сумма
-  долга.
-- Правый клик по контакту — перевод, «Дал в долг», «Взял в долг», копирование
-  реквизита, архив.
-- Контакт, по которому есть операции, не удаляется — его можно архивировать.
+- **New contact** — type the name in the field above the list and press Enter.
+- **Fields** — click and edit; it saves by itself when the field loses focus.
+- **A requisite** — just paste it: a card, IBAN, phone, link or
+  crypto address. The type and network (Ethereum, Tron, Bitcoin, Solana, TON…) are detected
+  by themselves and can be corrected.
+- **The filter** above the list — "All / Owe me / I owe"; next to the name — the amount of
+  debt.
+- A right click on a contact — transfer, "Lent", "Borrowed", copying a
+  requisite, archive.
+- A contact that has transactions is not deleted — it can be archived.
 
-### Долги с людьми
+### Debts with people
 
-Вкладка **«Долги»** в карточке: сколько должны вам и сколько должны вы, по
-каждой валюте. Кнопки **«Дал в долг / Взял в долг / Вернул долг / Мне вернули»**
-открывают перевод с нужным видом долга. Сумма считается из этих операций, а для
-каждого долга можно задать **срок возврата** и заметку — просроченный долг
-виден в Календаре.
+The **"Debts"** tab in the card: how much is owed to you and how much you owe, per
+currency. The buttons **"Lent / Borrowed / Repaid / Got it back"**
+open a transfer with the right kind of debt. The amount is computed from those transactions, and for
+each debt you can set a **return date** and a note — an overdue debt
+is visible in the Calendar.
 
-## Кредиты и долги
+## Loans and debts
 
-- **Кредит, ипотека, кредитка** — кошелёк типа «Обязательство». Получили кредит
-  на карту — «Перевести» с кредитного кошелька на карту; покупка кредиткой —
-  «Оплатить» с неё; платёж — «Перевести» с карты на кредитный кошелёк. Долг
-  виден как отрицательный баланс и в «Обязательствах» на Dashboard.
-- **Долги с людьми** — обычный перевод контакту с отметкой «Это долг?»: дал в
-  долг, взял в долг, вернул, мне вернули. Сумма появляется в карточке контакта
-  («мне должны / я должен») и в чистом капитале, но не в доходах и расходах.
-- **Имущество** — кошелёк «Имущество»: «Приобрести» с ценой за единицу, позже
-  «Изменить стоимость» в списке позиций. Оценка действует на всю историю.
+- **A loan, mortgage, credit card** — a wallet of the "Loan" type. You received a loan
+  on a card — "Transfer" from the loan wallet to the card; a purchase with a credit card —
+  "Pay" from it; a payment — "Transfer" from the card to the loan wallet. The debt
+  is visible as a negative balance and in "Debts" on the Dashboard.
+- **Debts with people** — an ordinary transfer to a contact with the "Is it a debt?" mark: lent,
+  borrowed, repaid, got it back. The amount appears in the contact card
+  ("owes me / I owe") and in net worth, but not in income and spending.
+- **Property** — a "Property" wallet: "Acquire" with a unit price, later
+  a value change in the positions list. The valuation applies to the whole history.
 
-## Категории и бюджет
+## Categories and budget
 
-Настройки → **«Категории»**: у каждой категории есть группа — доходы,
-обязательные, ежедневные, накопления или служебные. Группа решает, куда трата
-попадёт в бюджете; служебные (трейдинг, переводы, обмен) в бюджет не входят.
-Там же — **процент накоплений**, **валюта бюджета** и **режим бюджета дня**.
+Settings → **"Categories"**: each category has a group — income,
+mandatory, everyday, savings or bookkeeping. The group decides where a spend
+lands in the budget; bookkeeping ones (trading, transfers, exchange) are not part of the budget.
+This is also where the **savings percentage**, the **budget currency** and the **daily budget mode** are.
 
-В бюджет дня попадают кошельки с назначением **«Повседневные»** — см. «Назначение
-денег» выше.
+The daily budget includes wallets with the purpose **"Everyday"** — see "What the money
+is for" above.
 
-Категория в форме операции выбирается полем с подсказками: начните вводить —
-список отфильтруется. Если такой категории нет, пункт **«Создать «…»»** создаст
-её сразу, без похода в настройки.
+A category in the transaction form is chosen with a suggestion field: start typing —
+the list is filtered. If there is no such category, the **"Create «…»"** item creates
+it at once, without a trip to settings.
 
-## Планирование
+## Planning
 
-Раздел **«Календарь»** — обзор: ближайшие платежи, лимиты, цели, напоминания и
-алерты. **Автоматизации создаются в кошельке**: Настройки кошелька →
-«Автоматизации». Там же — готовые шаблоны под тип кошелька: зарплата и платёж с
-карты у банка, DCA у биржи и крипто-кошелька, аренда и налог у имущества,
-платёж по кредиту у кредита. Шаблон сам выбирает вид операции и категорию —
-остаётся сумма и дата.
-Дни и месяцы считаются в часовом поясе из Настроек → «Категории и бюджет»
-(по умолчанию — как в системе); месяц бюджета — календарный.
+The **"Calendar"** section is an overview: upcoming payments, limits, goals, reminders and
+alerts. **Automations are created in a wallet**: Wallet settings →
+"Automations". It also has ready-made templates for the wallet type: salary and a card
+payment for a bank, DCA for an exchange and a crypto wallet, rent and tax for
+property, a loan payment for a loan. A template picks the transaction kind and category by itself —
+what is left is the amount and the date.
+Days and months are counted in the time zone from Settings → "Categories and budget"
+(by default — as in the system); the budget month is the calendar month.
 
-### Зарплата-автоматизация, лимит и бюджет дня
+### Salary automation, a limit and the daily budget
 
-1. **Автоматизации → «Новая автоматизация»**: название «Зарплата», кошелёк —
-   карта, «Каждый месяц», день 10, вид «Пополнить», сумма и категория
-   «Зарплата». Операция будет создаваться сама 10-го в 9:00.
-2. Так же заведите «Аренду» (вид «Оплатить», категория «Аренда / ипотека»).
-   **Перед созданием списания проверяется баланс** кошелька на его дату. Не
-   хватает — операция не создаётся, приходит уведомление «Аренда 15.10 не
-   создана: на Тинькофф 8 000 из 25 000». Запуск ждёт решения:
-   **«Повторить»** (баланс проверится сейчас, операция — с сегодняшней датой)
-   или **«Пропустить»**. Сами по себе отклонённые запуски не повторяются.
-   «Предстоящие» заранее помечают списание «Не хватит N».
-3. **Лимиты → «Новый лимит»**: например, «Продукты» на месяц 30 000 RUB. Лимит
-   может быть в любой валюте — траты пересчитываются по курсу на дату
-   операции. В форме операции появится плашка, если трата выйдет за лимит.
-4. **Бюджет дня** на Dashboard — сколько можно потратить сегодня. Два режима
-   (Настройки → «Режим бюджета дня»):
-   - **«Месяц с переносом»** (по умолчанию): `(доходы − обязательные −
-     накопления по плану) / дней в месяце`. Доходы и обязательные — большее из
-     факта и плана по автоматизациям. Недотраченное переносится на следующие
-     дни, перерасход их уменьшает; с 1-го числа сальдо начинается заново.
-   - **«До зарплаты»**: свободный остаток кошельков в бюджете минус
-     обязательные платежи до следующей зарплаты, делённый на дни до неё.
-     Автоматизации зарплаты нет — до конца месяца.
+1. **Automations → "New automation"**: the name "Salary", the wallet — a
+   card, "Every month", day 10, kind "Top up", an amount and the category
+   "Salary". The transaction will be created by itself on the 10th at 9:00.
+2. Create "Rent" in the same way (kind "Pay", category "Rent / mortgage").
+   **Before an expense is created the balance is checked** of the wallet on its date. If there is not
+   enough, the transaction is not created, and a notification arrives "Rent 15.10 was not
+   created: on Tinkoff 8,000 of 25,000". The run waits for a decision:
+   **"Retry"** (the balance is checked now, the transaction gets today's date)
+   or **"Skip"**. Rejected runs are not retried by themselves.
+   "Upcoming" marks an expense in advance with "Not enough: N".
+3. **Limits → "New limit"**: for example, "Groceries" for a month, 30,000 RUB. A limit
+   can be in any currency — spending is converted at the rate on the transaction
+   date. A badge appears in the transaction form if a spend exceeds the limit.
+4. **The daily budget** on the Dashboard is how much can be spent today. There are two modes
+   (Settings → "Daily budget"):
+   - **"Month, carrying over the rest"** (default): `(income − mandatory −
+     planned savings) / days in the month`. Income and mandatory are the larger of
+     the actual and the automations' plan. Underspending is carried to the following
+     days, overspending reduces them; from the 1st the balance starts anew.
+   - **"Until the next income"**: the free balance of wallets in the budget minus
+     mandatory payments before the next salary, divided by the days until it.
+     With no salary automation — until the end of the month.
 
-   Учитываются только кошельки с флагом «Учитывать в бюджете». Перевод с биржи
-   на карту — пополнение бюджета, а не доход.
+   Only wallets with the purpose "Everyday" are counted. A transfer from an exchange
+   to a card tops up the budget, it is not income.
 
-### Цели: сколько откладывать и реально ли это
+### Goals: how much to put aside and is it realistic
 
-**Цели → «Новая цель»** (или «⋯ → Сделать цель» на странице кошелька): сумма,
-валюта, начало, дедлайн, важность ⭐1–5, «готов откладывать в месяц» и
-кошельки, где лежат накопления. В карточке:
+**Goals → "New goal"** (or "⋯ → Make a goal" on a wallet page): amount,
+currency, start, deadline, importance ⭐1–5, "can put aside a month" and
+the wallets where the savings are. In the card:
 
-- **Накоплено** — текущая стоимость этих кошельков; **внесено вами** — сколько
-  вы туда положили по курсу на день взноса; **курсовая разница** — разница
-  между ними (у крипты растёт и падает вместе с курсом).
-- **Нужно в месяц** — `(сумма − накоплено) / оставшихся месяцев`.
-- **✅ Реально / ⚠️ Пересмотреть** — с причиной: нужно больше, чем вы готовы
-  откладывать, или все цели вместе требуют больше, чем у вас обычно
-  остаётся за месяц (среднее за 6 последних непустых месяцев).
-- **Прогноз по темпу** — когда цель будет достигнута при темпе последних 90
-  дней; «не накапливается», если темп не растёт.
+- **Saved** — the current value of those wallets; **put in by you** — how much
+  you put there at the rate of the day of the contribution; **rate difference** — the difference
+  between them (for crypto it rises and falls with the rate).
+- **Needed a month** — `(amount − saved) / remaining months`.
+- **✅ Realistic / ⚠️ Revise** — with a reason: more is needed than you are willing to
+  put aside, or all goals together require more than usually
+  remains for you in a month (the average of the last 6 non-empty months).
+- **At this pace** — when the goal will be reached at the pace of the last 90
+  days; "not growing" if the pace is not rising.
 
-Если у двух целей общий кошелёк, его баланс делится пропорционально плановым
-взносам; ни одна цель не получает больше своей суммы. Ниже карточек —
-**календарь накоплений**: сколько нужно было отложить в каждом месяце и сколько
-отложено.
+If two goals share a wallet, its balance is split in proportion to the planned
+contributions; no goal gets more than its amount. Below the cards is a
+**savings calendar**: how much needed to be put aside in each month and how much
+was put aside.
 
-### Итоги месяца
+### Month totals
 
-Карточка на Dashboard: доходы, обязательные и ежедневные траты, накопления по
-плану (`доходы × процент накоплений`) и по факту (`доходы − обязательные −
-ежедневные`), доля отложенного. Долговые переводы и переводы между своими
-кошельками в бюджете в итоги не входят. Отдельно показано, сколько запусков
-автоматизаций не исполнено.
+A card on the Dashboard: income, mandatory and everyday spending, savings
+as planned (`income × savings percentage`) and actual (`income − mandatory −
+everyday`), the share put aside. Debt transfers and transfers between your own
+wallets in the budget are not part of the totals. It separately shows how many automation
+runs were not executed.
 
-### Напоминания и алерты
+### Reminders and alerts
 
-Напоминание и ценовой алерт приходят системным уведомлением, пока приложение
-открыто и vault разблокирован. Алерт срабатывает один раз; после правки
-взводится снова.
+A reminder and a price alert arrive as a system notification while the app is
+open and the vault is unlocked. An alert fires once; after editing
+it is armed again.
 
-## Аналитика
+## Analytics
 
-Раздел **«Аналитика»** открывается **обзором**: четыре карточки за месяц —
-**Доходы и расходы**, **Сколько у меня всего**, **Вложения** (с начала года) и
-**Год**. У каждой — главные цифры, вывод словами («Отложили 25 % дохода»,
-«Трат на 12 % больше, чем в прошлом месяце») и ссылка **«Подробнее»** на
-нужный раздел. Пустая карточка подсказывает первый шаг.
+The **"Analytics"** section opens with an **overview**: four cards for the month —
+**Income and spending**, **What I have**, **Investments** (since the start of the year) and
+**Year**. Each has the main figures, a conclusion in words ("Put aside 25 % of income",
+"Spending is 12 % higher than last month") and a **"More"** link to the
+right section. An empty card suggests the first step.
 
-Подробно — три раздела:
+In detail — three sections:
 
-- **Доходы и расходы** с переключателем **По месяцам / Год / Категории**.
-  По месяцам — доходы, траты и что осталось; переводы между своими кошельками
-  и долги сюда не попадают. Год — как годовой бюджет: накопления по плану и
-  факту, отклонение, лучший и худший месяц. Категории — пять самых больших
-  трат с долей и матрица «категория × месяц» с изменением к прошлому такому же
-  периоду; среднее считается по месяцам, где были траты.
-- **Сколько у меня всего** — капитал (деньги, имущество, «мне должны», кредиты
-  и «я должен») по месяцам и таблица **по кошелькам**: стоимость на начало и
-  конец, сколько пришло и ушло. Переключатель **«В сегодняшних деньгах»**
-  пересчитывает прошлые месяцы по инфляции.
-- **Вложения** — из чего состоит портфель, результат сделок и комиссии, потери
-  на обменах со списком цепочек.
+- **Income and spending** with a **By month / Year / Categories** switch.
+  By month — income, spending and what remains; transfers between your own wallets
+  and debts do not appear here. Year — like an annual budget: savings as planned and
+  actual, deviation, the best and worst month. Categories — the five biggest
+  spends with their share and a "category × month" matrix with the change against the same previous
+  period; the average is computed over months where there was spending.
+- **What I have** — net worth (money, property, "owed to me", loans
+  and "I owe") by month and a table **by wallet**: value at the start and
+  end, how much came in and went out. The **"In today's money"** switch
+  recomputes past months for inflation.
+- **Investments** — what the portfolio consists of, trade results and fees, losses
+  on exchanges with a list of chains.
 
-Над каждым отчётом — вывод словами, под графиком — **«Подробно по месяцам»**.
-Наведите на название колонки — появится пояснение. Месяц, категория или
-столбец графика открывают **Операции** с этим фильтром. На узком экране
-таблица показывает главные колонки, остальные — по стрелке у строки.
+Above each report is a conclusion in words, under the chart — **"Month by month"**.
+Hover a column name — an explanation appears. A month, category or
+chart bar opens **Transactions** with that filter. On a narrow screen
+the table shows the main columns, the rest are behind the arrow of the row.
 
-Фильтр сверху общий для всех разделов: быстрый период (12 месяцев, этот
-месяц, 3 месяца, с начала года, прошлый год) или свои месяцы, один или
-несколько кошельков, валюта (по умолчанию — валюта бюджета). Суммы
-пересчитываются по курсу на дату каждой операции.
+The filter at the top is shared by all sections: a quick period (12 months, this
+month, 3 months, year to date, last year) or your own months, one or
+several wallets, a currency (by default the budget currency). Amounts
+are converted at the rate on the date of each transaction.
 
-Кнопка **«Экспорт CSV»** сохраняет то, что на экране; где отчётов несколько,
-она открывает меню. Файл открывается в Excel и LibreOffice без настройки
-кодировки.
+The **"Export CSV"** button saves what is on the screen; where there are several reports,
+it opens a menu. The file opens in Excel and LibreOffice without setting up
+the encoding.
 
-### Найти операцию
+### Find a transaction
 
-**Операции → Список** и история кошелька фильтруются по виду, контакту,
-периоду, категории и тексту (комментарий, категория, актив, кошелёк, контакт,
-хеш).
-В общем списке есть ещё выбор кошелька — с субсчетами или без — и
-**«Скрыть внутренние»**: переводы между субсчетами одного кошелька пропадут.
-Клик по строке открывает панель операции.
+**Transactions → List** and a wallet's history are filtered by kind, contact,
+period, category and text (comment, category, asset, wallet, contact,
+hash).
+The shared list also has a wallet choice — with sub-accounts or without — and
+**"Hide internal"**: transfers between sub-accounts of one wallet disappear.
+A click on a row opens the transaction panel.
 
-### Быстрый ввод с клавиатуры
+### Quick entry from the keyboard
 
-Настройки → **«Быстрый ввод операции»**: нажмите в поле нужное сочетание,
-например Ctrl+Shift+Space, и «Сохранить». Сочетание открывает «+ Операция»
-даже из другой программы. По умолчанию выключено: на Hyprland и других
-тайловых менеджерах многие сочетания уже заняты. Если сочетание занято или
-глобальные клавиши в системе недоступны (часть Wayland-окружений), появится
-сообщение — выберите другое.
+Settings → **"Quick entry"**: press the desired combination in the field,
+for example Ctrl+Shift+Space, and "Save". The combination opens "+ Transaction"
+even from another program. Off by default: on Hyprland and other
+tiling managers many combinations are already taken. If the combination is taken or
+global keys are unavailable in the system (some Wayland environments), a
+message appears — choose another one.
 
-## Календарь
+## Calendar
 
-**Операции → Календарь**: траты по дням месяца. Цвет дня — сравнение
-ежедневных трат с бюджетом дня: зелёный — в пределах, жёлтый — почти весь,
-красный — перерасход. Клик по дню показывает его операции (клик по
-операции — её панель); справа —
-предстоящие списания и поступления. Мини-календарь и «Траты за 7 дней» есть и
-на Dashboard.
+**Transactions → Calendar**: spending by days of the month. The color of a day compares
+everyday spending with the daily budget: green — within it, yellow — almost all of it,
+red — overspending. A click on a day shows its transactions (a click on a
+transaction opens its panel); on the right —
+upcoming expenses and receipts. A mini calendar and "Last 7 days" are also on the
+Dashboard.
 
-## Инфляция
+## Inflation
 
-Настройки → **«Инфляция (справочно)»**: годовая инфляция по валютам. Она
-нужна только аналитике — переключателю «В сегодняшних деньгах» в разделе
-**Сколько у меня всего** и галочке в фильтре «Доходов и расходов». Цифры
-по умолчанию примерные — поправьте их под себя. На суммы в кошельках инфляция
-не влияет.
+Settings → **"Inflation (reference)"**: annual inflation by currency. It is
+needed only for analytics — the "In today's money" switch in the
+**What I have** section and the checkbox in the "Income and spending" filter. The default figures
+are approximate — adjust them to yourself. Inflation does not affect the amounts in
+wallets.
 
-## Курсы
+## Rates
 
-**Настройки → Деньги → Курсы**: все валюты к базовой — сколько базовой стоит единица
-валюты и сколько её за единицу базовой, когда курс обновлён. Жирным выделены
-валюты, которыми вы пользуетесь: для них хранится история курсов. Справа —
-**конвертер** между любыми двумя валютами, по сегодняшнему курсу или на выбранную
-дату.
+**Settings → Money → Rates**: all currencies against the base one — how much of the base currency a unit of
+the currency costs and how much of it per unit of the base, when the rate was updated. Currencies
+you use are in bold: a rate history is stored for them. On the right is a
+**converter** between any two currencies, at today's rate or on a chosen
+date.
 
-## Потери и цепочки: RUB → USDT → THB через skycapital
+## Losses and chains: RUB → USDT → THB via skycapital
 
-Пример: рубли меняются на USDT у обменника, USDT — на баты.
+An example: rubles are exchanged for USDT at an exchanger, USDT for baht.
 
-1. Заведите контакт **skycapital** (Операции → Контакты и долги, вид «обменник»).
-2. На рублёвой карте: **Обменять** — отдаёте 10 000 RUB с карты, получаете 98 USDT
-   на кошелёк, контакт — skycapital. Курс сделки можно ввести руками — он
-   сохранится как есть.
-3. Откройте операцию в списке (клик по строке) → **«Продолжить цепочку»**: новая
-   операция откроется с кошелька, куда пришли USDT, и войдёт в ту же цепочку.
-   Обменяйте 98 USDT на 3 400 THB.
+1. Create the contact **skycapital** (Transactions → Contacts and debts, kind "exchanger").
+2. On the ruble card: **Convert** — you give 10,000 RUB from the card, you get 98 USDT
+   into a wallet, the contact is skycapital. The deal rate can be entered by hand — it
+   is saved as is.
+3. Open the transaction in the list (click the row) → **"Continue the chain"**: a new
+   transaction opens from the wallet where the USDT arrived and joins the same chain.
+   Exchange 98 USDT for 3,400 THB.
 
-**Потеря** операции = комиссия + разница между отданным и полученным по
-**рыночному** курсу на момент операции. Если рынок давал 100 USD за 10 000 RUB,
-а вы получили 98 USDT, потеря — 2 USD. Обмен между своими субсчетами — не трата,
-но его комиссия и курсовая разница всё равно считаются потерей.
+A transaction's **loss** = the fee + the difference between what was given and received at the
+**market** rate at the moment of the transaction. If the market gave 100 USD for 10,000 RUB
+and you got 98 USDT, the loss is 2 USD. An exchange between your own sub-accounts is not spending,
+but its fee and rate difference are still counted as a loss.
 
-- В списке операций у строки с потерей — «потеря N».
-- Панель операции: суммы, курс сделки, комиссия, потеря, цепочка; кнопки
-  «Продолжить цепочку», «Связать с…» (добавить уже записанные операции),
-  «Убрать из цепочки».
-- **Операции → Потери и цепочки**: потери за год по видам операций, кошелькам и
-  контактам; цепочки «отдали → получили» с потерей по каждому звену.
-- **Аналитика → Потери** — то же по месяцам, с общим фильтром и CSV.
+- In the transaction list a row with a loss shows "loss N".
+- The transaction panel: amounts, deal rate, fee, loss, chain; the buttons
+  "Continue the chain", "Link with…" (add already recorded transactions),
+  "Remove from chain".
+- **Transactions → Losses and chains**: losses for the year by transaction kind, wallet and
+  contact; "gave → got" chains with the loss of each link.
+- **Analytics → Losses** — the same by month, with the shared filter and CSV.
 
-## Проверка в блокчейне
+## Blockchain look-up
 
-Если у операции есть хеш транзакции, приложение может найти в публичном
-обозревателе её сетевую комиссию и статус. Это **выключено**, пока вы не
-разрешите: вопрос появится при первой операции с хешем, переключатель — в
-Настройках. В сеть уходят только хеш и сеть. Найденное показывается в панели
-операции: **«Применить»** допишет комиссию, если её не было, **«Отклонить»**
-оставит операцию как есть.
+If a transaction has a transaction hash, the app can find its network fee and status
+in a public explorer. This is **off** until you
+allow it: the question appears at the first transaction with a hash, the switch is in
+Settings. Only the hash and the network are sent. What is found is shown in the transaction
+panel: **"Apply"** adds the fee if there was none, **"Dismiss"**
+leaves the transaction as it is.
 
-## ЖКХ
+## Utilities
 
-ЖКХ живёт **внутри имущества**: добавьте квартиру или дом (кошелёк
-«Имущество»), откройте его настройки → **«ЖКХ»**. Там же — сводка объекта:
-стоимость, долг по ипотеке (кредит с залогом на этот объект), ваша доля и
-расходы в месяц. Три вида счетов:
+Utilities live **inside property**: add a flat or a house (a "Property"
+wallet), open its settings → **"Utilities"**. This is also where the property summary is:
+value, mortgage debt (a loan secured by this property), your share and
+monthly costs. Three kinds of bills:
 
-- **По счётчику** (свет, вода, газ): единица и тариф. Раз в месяц вводите
-  показание — сумма = (показание − прошлое показание) × тариф. Счётчик только
-  растёт: показание меньше прошлого приложение не примет.
-- **Фиксированный** (интернет, связь): сумма как в прошлый раз, при первой
-  оплате — заданная.
-- **Аренда**: сумма в месяц, день оплаты и залог — он добавится к первому
-  платежу. Если аренду платит автоматизация, свяжите её, чтобы платёж не
-  считался в плане дважды.
+- **By meter** (electricity, water, gas): a unit and a tariff. Once a month you enter a
+  reading — the amount = (reading − previous reading) × tariff. A meter only
+  grows: the app will not accept a reading lower than the previous one.
+- **Fixed** (internet, phone): the amount as last time, at the first
+  payment — the given one.
+- **Rent**: the amount per month, the payment day and a deposit — it is added to the first
+  payment. If an automation pays the rent, link it so the payment is not
+  counted twice in the plan.
 
-В карточке — сумма в месяц, изменение к прошлому счёту ▲/▼, среднее за 6
-месяцев, прогноз на следующий месяц и пометка **«необычно много»**, если счёт
-больше чем в полтора раза выше среднего. **«Записать расход»** открывает форму
-«Оплатить» с готовой суммой, категорией и названием счёта в комментарии —
-остаётся проверить и сохранить. Виджет **«Постоянные расходы»** на Dashboard
-показывает прогноз по каждому счёту; строка ведёт в ЖКХ её объекта.
+The card shows the monthly amount, the change against the previous bill ▲/▼, the 6-month average,
+the forecast for next month and an **"unusually high"** mark if a bill is
+more than one and a half times the average. **"Record the payment"** opens the "Pay" form
+with the amount, category and bill name already in the comment —
+you only have to check and save. The **"Fixed costs"** widget on the Dashboard
+shows the forecast for each bill; a row leads to the Utilities of its property.
 
-## Вопросы и ответы
+## Questions and answers
 
-**Почему «Записать расход» по счётчику пишет «нет показания»?** Сначала введите
-показание за этот месяц: сумма считается от разницы с прошлым.
+**Why does "Record the payment" for a meter say "no reading"?** First enter the
+reading for this month: the amount is computed from the difference with the previous one.
 
-**Почему тренд фиксированного счёта пустой?** Он строится по оплатам, сделанным
-через «Записать расход» (их узнаёт по названию счёта в комментарии и категории).
-Оплаты, записанные вручную с другим комментарием, в тренд не попадают.
+**Why is the trend of a fixed bill empty?** It is built from payments made
+through "Record the payment" (they are recognized by the bill name in the comment and the category).
+Payments recorded by hand with a different comment are not in the trend.
 
-**Аренда уже есть в автоматизациях — учтётся ли она дважды?** Нет, если в
-карточке аренды выбрана эта автоматизация.
+**Rent is already in the automations — will it be counted twice?** No, if this automation is
+selected in the rent card.
 
-**Почему старый vault не открывается?** Схема данных поменялась один раз при
-переходе на новую модель операций; старые файлы не конвертируются.
+**Why does an old vault not open?** The data schema changed once on the
+move to the new transaction model; old files are not converted.
 
-## Дашборд, настройки и подсказки
+## Dashboard, settings and hints
 
-- **Дашборд** — сетка виджетов. Тяните виджет за заголовок, размер меняйте за
-  правый нижний угол; пустые места заполняются сами. «Скрыть заголовок»
-  закрепляет виджет — он не двигается и не меняет размер. Круглая кнопка **«+»**
-  открывает каталог: описание и живое превью каждого ещё не добавленного виджета.
-- **Настройки** открываются окном поверх страницы: разделы слева, подразделы под
-  активным разделом — наведение или клик прокручивает к ним.
-- **Что произойдёт** — форма операции показывает, как изменятся балансы
-  затронутых кошельков (было → стало), куда операция попадёт в бюджете и
-  предупреждает о минусе, лимите кредитки или трате из конвертов.
-- **«?»** в шапке показывает обучение текущего экрана; при первом входе оно
-  запускается само. «Показать снова» — Настройки → Общие → Обучение.
-- **Правый клик** по кошельку, виджету, контакту, операции, монете или графику в
-  терминале — быстрые действия. Опасные пункты красные и стоят последними,
-  недоступные показывают причину.
+- **The dashboard** is a grid of widgets. Drag a widget by its title, resize it by the
+  bottom right corner; empty spaces fill themselves. "Hide title"
+  pins a widget — it neither moves nor resizes. The round **"+"** button
+  opens the catalog: a description and a live preview of each widget not yet added.
+- **Settings** open as a window over the page: sections on the left, subsections under the
+  active section — hovering or clicking scrolls to them.
+- **What will happen** — the transaction form shows how the balances of the
+  affected wallets will change (was → will be), where the transaction lands in the budget, and
+  warns about a negative balance, a credit card limit or spending from envelopes.
+- **"?"** in the header shows the onboarding of the current screen; on the first sign-in it
+  starts by itself. "Show again" — Settings → General → Tours.
+- **Right click** on a wallet, widget, contact, transaction, coin or a chart in the
+  terminal — quick actions. Dangerous items are red and last, unavailable
+  ones show the reason.

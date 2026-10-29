@@ -16,9 +16,9 @@ import AttachmentIntakeRows from './AttachmentIntakeRows.vue'
 import AttachmentItem from './AttachmentItem.vue'
 
 /**
- * «Файлы и ссылки · N» (Attach 1–4, 7): receipts, contracts, screenshots and
- * links right in the operation. Added from «Добавить», by dragging a file onto
- * the card or with Ctrl V; deleted at once, with «Отменить» in the toast.
+ * `Files and links · N` (Attach 1–4, 7): receipts, contracts, screenshots and
+ * links right in the operation. Added from `Add`, by dragging a file onto
+ * the card or with Ctrl V; deleted at once, with `Undo` in the toast.
  */
 const props = withDefaults(defineProps<AttachmentsBlockProps>(), { dropTarget: null, active: true })
 

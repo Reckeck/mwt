@@ -9,8 +9,8 @@ import type { UiAction } from '@/shared/ui/context-menu'
 import { Input } from '@/shared/ui/input'
 
 /**
- * A row with its «⋯» (Attach 1): Открыть, Сохранить как…, Переименовать,
- * Удалить. Renaming turns the name into a field: Enter keeps it, Esc drops it.
+ * A row with its «⋯» (Attach 1): Open, Save as…, Rename,
+ * Delete. Renaming turns the name into a field: Enter keeps it, Esc drops it.
  */
 const props = defineProps<{ item: Attachment }>()
 const emit = defineEmits<{ open: []; save: []; rename: [title: string]; remove: [] }>()

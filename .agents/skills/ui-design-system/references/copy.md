@@ -1,42 +1,46 @@
-# Тексты интерфейса
+# Interface copy
 
-Тексты — в `src/shared/config/i18n/locales/{ru,en}.json`, плоские ключи,
-наборы ключей совпадают (`check-onboarding`). Тексты туров и «Что нового» —
-скилл `onboarding`.
+Texts live in `src/shared/config/i18n/locales/{ru,en}.json`, flat keys, the key
+sets match (`check-onboarding`). Tour and "What's new" texts — the
+`onboarding` skill.
 
-## Тон
+## Tone
 
-- С точки зрения пользователя и его действия: «Введите фактический остаток —
-  разница запишется корректировкой», не «Компонент позволяет…».
-- Одно действие называется одинаково на всём пути: кнопка «Архивировать» →
-  тост «Кошелёк в архиве» → фильтр «Архив».
-- Кнопка — глагол с объектом, если он не очевиден: «Добавить операцию»,
-  «Сохранить», не «ОК».
-- Ошибка говорит, что не случилось и как исправить: «Не удалось сохранить
-  бюджет» + «Лимит должен быть больше нуля».
-- Пустое состояние — что здесь будет и с чего начать.
-- Без внутренних терминов: не `store`, `binding`, `flow_id`, «субсчёт типа
-  market».
+- From the point of view of the user and their action: "Enter the actual
+  balance — the difference will be recorded as an adjustment", not "The
+  component allows…".
+- One action is called the same thing along the whole path: the button
+  "Archive" -> the toast "Wallet archived" -> the filter "Archive".
+- A button is a verb with an object if it is not obvious: "Add transaction",
+  "Save", not "OK".
+- An error says what did not happen and how to fix it: "Could not save the
+  budget" + "The limit must be greater than zero".
+- An empty state says what will be here and where to start.
+- No internal terms: not `store`, `binding`, `flow_id`, "sub-account of type
+  market".
 
-## Форма записи
+## Writing conventions
 
-- Русский: «ё» пишется; кавычки «ёлочки», тире «—», многоточие «…».
-- Английский: sentence case («Add wallet», не «Add Wallet»), кавычки
-  “typographic”.
-- Пункт меню, за которым следует ещё шаг (диалог), заканчивается «…»:
-  «Переименовать…».
-- Количества — цифрами: «3 операции»; склонение — через plural-форму
-  vue-i18n (`t('key', { count })`).
-- Числа, даты, валюты — только через `format.ts` (не в тексте ключа).
+- Russian: "ё" is written; guillemets «», dash "—", ellipsis "…".
+- English: sentence case ("Add wallet", not "Add Wallet"), “typographic”
+  quotes.
+- A menu item followed by one more step (a dialog) ends with "…":
+  "Rename…".
+- Quantities are digits: "3 transactions"; pluralization goes through the
+  vue-i18n plural form (`t('key', { count })`).
+- Numbers, dates, currencies — only through `format.ts` (not in the key text).
 
-## Словарь
+## Glossary
 
-| Говорим | Не говорим |
+The terms are given in English with the Russian UI word in guillemets (the
+value in `ru.json`), because the Russian wording is part of the rule.
+
+| Say | Do not say |
 |---|---|
-| кошелёк (банк, биржа, наличные, крипто) | хранилище, store |
-| субсчёт | дочерний store |
-| операция | транзакция (в интерфейсе) |
-| актив | токен (кроме крипто-контекста) |
-| хранилище (vault) — файл с данными | база |
-| схема (workflow) | граф, воркфлоу |
-| архив / архивировать | скрыть, деактивировать |
+| wallet (bank, exchange, cash, crypto) — «кошелёк» | store, «хранилище» |
+| sub-account — «субсчёт» | child store |
+| transaction (operation) — «операция» | «транзакция» (in the interface) |
+| asset — «актив» | token (except in a crypto context) |
+| vault — the data file, «хранилище (vault)» | database, «база» |
+| workflow — «схема (workflow)» | graph, «граф», «воркфлоу» |
+| archive / to archive — «архив / архивировать» | hide, deactivate, «скрыть», «деактивировать» |

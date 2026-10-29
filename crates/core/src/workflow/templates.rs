@@ -226,7 +226,7 @@ fn pay_yourself_first(build: &mut Builder) -> Texts {
     let category = build.value("category");
     let pct = build.number("pct");
     let target = build.value("target");
-    // «С кошелька» (Auto-2 · 12): only income to this wallet; empty — any.
+    // "From wallet" (Auto-2 · 12): only income to this wallet; empty — any.
     let source = build.value("source");
     let question = build.tr(
         "Пришёл доход. Отложить {a}: в подушку {b}, на счёт накоплений {c}?",

@@ -2,11 +2,11 @@ import { useLocalStorage } from '@vueuse/core'
 
 import { dayKey } from '@/shared/lib/period'
 
-/** A week back: what «Что изменилось» covers on the first visit. */
+/** A week back: what `What changed` covers on the first visit. */
 const FIRST_VISIT_DAYS = 7
 
 /**
- * The day Home was last opened before today (Home 1, «Что изменилось с …»).
+ * The day Home was last opened before today (Home 1, `What changed since …`).
  * Visits within one day keep the same answer; the next day moves it on.
  * It is this device's memory, not the vault's.
  */

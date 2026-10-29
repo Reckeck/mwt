@@ -1,8 +1,8 @@
-//! What shared events do to spending: reports, budgets and «Куда ушли» count
+//! What shared events do to spending: reports, budgets and "Where it went" count
 //! my part of an event, not what left my wallet.
 //!
 //! * A payment of mine for an event counts for my part of that purchase (the
-//!   rest is «мне должны»).
+//!   rest is "Owed to me").
 //! * My part of a purchase somebody else made counts from the day of the
 //!   purchase, though I have paid nothing yet.
 //! * What I wrote off counts as my expense in the event's category.

@@ -24,7 +24,7 @@ const AMOUNT_FIELDS = new Set([
   'sellPrice',
 ])
 
-/** Fields that hold a wallet or a person: «Выберите кошелёк», not «Выберите значение». */
+/** Fields that hold a wallet or a person: `Pick a wallet`, not `Pick one`. */
 const WALLET_FIELDS = new Set(['from', 'to', 'via'])
 const ASSET_FIELDS = new Set(['asset', 'fromAsset', 'toAsset', 'soldAsset', 'boughtAsset', 'currency'])
 

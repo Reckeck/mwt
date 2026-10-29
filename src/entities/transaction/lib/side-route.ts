@@ -1,6 +1,6 @@
 import { txRouteSides } from '@/shared/lib/transactions'
 
-/** One side of «Тинькофф → Bybit»: the account and its name. */
+/** One side of `Tinkoff → Bybit`: the account and its name. */
 export interface RouteSide {
   side: AccountRef
   label: string
@@ -22,8 +22,8 @@ export function sideRouteText(parts: (string | RouteSide)[]): string {
 }
 
 /**
- * A comment that only repeats a side of the route («Пятёрочка» in «Тинькофф → Пятёрочка»), or another
- * name the row already shows (`also`: its wallet, its title: «Тинькофф кешбэк» of a cashback), is not said twice.
+ * A comment that only repeats a side of the route (`Pyaterochka` in `Tinkoff → Pyaterochka`), or another
+ * name the row already shows (`also`: its wallet, its title: `Tinkoff cashback` of a cashback), is not said twice.
  */
 export function routeRepeats(parts: (string | RouteSide)[], comment: string, ...also: string[]): boolean {
   const text = comment.trim().toLowerCase()

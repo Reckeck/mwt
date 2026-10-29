@@ -6,13 +6,13 @@ import { call } from '@/shared/api/ipc'
 /**
  * A plain copy of a filter. Not `structuredClone(toRaw(..))`: after a field edit the filter is
  * `{ ...filter, x }`, whose nested `scope` and `kinds` are still reactive proxies, and those
- * cannot be structured-cloned (DataCloneError: «Показать N» did nothing).
+ * cannot be structured-cloned (DataCloneError: `Show N` did nothing).
  */
 const copy = (filter: TxFilter): TxFilter => JSON.parse(JSON.stringify(filter))
 
 /**
- * What «Ещё фильтры» edits: a copy of the filter taken when the panel opens.
- * The list stays as it was until «Показать N» applies it; N is how many
+ * What `More filters` edits: a copy of the filter taken when the panel opens.
+ * The list stays as it was until `Show N` applies it; N is how many
  * operations the draft would show, counted by the same command as the list.
  */
 export function useFilterDraft(
@@ -26,7 +26,7 @@ export function useFilterDraft(
   })
 
   // Fields kept in the row (a computer's wallet and kind, the search, report chips) change under the
-  // open panel: the draft follows them, or «Показать» would put the old values back.
+  // open panel: the draft follows them, or `Show` would put the old values back.
   watch(
     () => copy(filter.value),
     (now) => {

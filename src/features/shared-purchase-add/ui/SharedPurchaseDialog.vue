@@ -17,7 +17,7 @@ import { usePurchaseForm } from '../model/use-purchase-form'
 import type { SharedPurchaseDialogProps } from '../shared-purchase-add.types'
 
 /**
- * «Купили · Пиво»: who bought, how many, for how much, in which currency; a purchase of mine also
+ * `Bought · Beer`: who bought, how many, for how much, in which currency; a purchase of mine also
  * says which wallet the payment comes from (it becomes a real payment), a foreign currency
  * offers a rate. A sheet from below on a phone.
  */

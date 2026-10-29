@@ -131,7 +131,7 @@ function seedStress() {
     details: STRESS_DETAILS,
   }
   mockTransactions.push(mockTransactionFrom(input, priceOf))
-  // Two purchases in the same currency: Траты say the total is a lower bound (Currency-1 · 7).
+  // Two purchases in the same currency: Spending says the total is a lower bound (Currency-1 · 7).
   const now = new Date()
   for (const day of [3, 5]) {
     const at = new Date(now.getFullYear(), now.getMonth(), Math.min(day, now.getDate()), 13)

@@ -4,6 +4,6 @@ export interface ReadonlyFieldProps {
   value?: string
   /** A copy button at the end of the value. */
   copyable?: boolean
-  /** Names what is copied in the «Скопировано» toast. */
+  /** Names what is copied in the `Copied` toast. */
   copyKey?: string
 }

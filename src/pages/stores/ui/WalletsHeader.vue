@@ -10,7 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import type { WalletMode } from '../stores.types'
 
 /**
- * «В кошельках 40 605,10 $ · курсы на сегодня 14:20» and the switch beside it:
+ * `In wallets 40,605.10 $ · rates for today 14:20` and the switch beside it:
  * the base, the budget's currency, per currency (Currency-1 · 2). The total
  * itself comes in the slot: it is a glance, which this page owns.
  */
@@ -26,7 +26,7 @@ const modes = computed(() =>
     ...(props.phone ? [] : [{ value: 'assets' as const, label: t('stores.view.assets') }]),
   ],
 )
-/** A phone has no «По валютам»: the table view falls back to the base. */
+/** A phone has no `By currency`: the table view falls back to the base. */
 const picked = computed({
   get: () => (modes.value.some((entry) => entry.value === mode.value) ? mode.value : 'base'),
   set: (value: WalletMode) => {

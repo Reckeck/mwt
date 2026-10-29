@@ -1,62 +1,62 @@
-# Телефон
+# Phone
 
-Правило 16 скилла полностью. Телефон — окно уже 768 px (`md`), признак во
-фронте — `useIsPhone()` (`shared/lib/phone`, запрос `PHONE_QUERY`), платформа
-(Android, ПК) — `usePlatform()`.
+Rule 16 of the skill in full. A phone is a window narrower than 768 px (`md`);
+the frontend flag is `useIsPhone()` (`shared/lib/phone`, query `PHONE_QUERY`),
+the platform (Android, desktop) — `usePlatform()`.
 
-## Правила
+## Rules
 
-1. **Граница — `md` (768 px).** Раскладка страницы переключается по `md:` /
-   `max-md:`; внутри компонента — container queries (`@container`, `@wide:`),
-   потому что компонент не знает, где стоит.
-2. **Отступы системных панелей — только `*-safe` и `--safe-*`.** Утилиты
-   `pt-safe`, `pb-safe`, `px-safe`, `inset-safe`; в `calc` —
-   `var(--safe-top)` и т. д. (Android отдаёт их плагином `plugin-insets`,
-   браузер — `env(safe-area-inset-*)`). Всё `fixed`/`sticky` у края экрана —
-   с ними. → `check-ui` (fixed-edge)
-3. **Высота — `dvh`, не `vh` и не `h-screen`.** Внутри оболочки — `h-full`:
-   высоту даёт `AppShell`. → `check-ui` (viewport-height)
-4. **Нет действий только с клавиатуры, наведения или правого клика.** У ряда
-   с `ContextMenu` на касании видна кнопка «⋯» — `ActionMenu` с тем же
-   списком в `<span class="pointer-fine:hidden">`; кнопки «по наведению» —
-   `pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100`, пальцу они
-   видны всегда.
-5. **Цель касания ≥ 40 px** на `pointer: coarse` (вкладки, пункты меню и
-   списков уже получают это из `styles.css`; своя кнопка-иконка — `size-10`
-   на телефоне).
-6. **Диалог — снизу.** `Dialog`/`FormDialog` на телефоне сами рисуют
-   `Drawer` с тем же API; своя всплывающая панель — тоже в `Drawer`
-   (`shared/ui/drawer`), не `fixed` по координатам.
-7. **Ширина от `w-56` — только с префиксом** (`sm:w-56`), с потолком
-   (`min-w-[min(14rem,calc(100vw-2rem))]`) или гибкая (`min-w-0 flex-1`).
-   `grid` без колонок растягивается по самой длинной строке — пиши
-   `grid-cols-1`. → `check-ui` (fixed-width)
-8. **Одно главное действие на телефоне.** Остальные — в `#more` у
-   `PageHeader` (меню «⋯»); кнопка, видимая только на ПК, —
-   `max-md:hidden`, её пункт в меню — `md:hidden`.
-9. **Горизонтальная прокрутка — только внутри таблиц и полос вкладок.** У
-   таблицы — `DataTable sticky-first-column` (или `sticky left-0 z-[1]
-   bg-card` у первой ячейки); вкладки-маршруты — `RouteTabs`. У страницы
-   `scrollWidth` равен ширине окна.
-10. **Шапку и нижнюю панель рисует оболочка.** Экрану на весь телефон —
-    `meta.fullscreen` у маршрута (`route-meta.d.ts`); тогда своя строка
-    действий — внутри экрана.
-11. **Проверка:** 390 и 360 px с эмуляцией отступов
+1. **The boundary is `md` (768 px).** Page layout switches by `md:` /
+   `max-md:`; inside a component — container queries (`@container`,
+   `@wide:`), because a component does not know where it stands.
+2. **System bar insets — only `*-safe` and `--safe-*`.** The utilities
+   `pt-safe`, `pb-safe`, `px-safe`, `inset-safe`; in `calc` —
+   `var(--safe-top)` and so on (Android supplies them through the
+   `plugin-insets` plugin, the browser through `env(safe-area-inset-*)`).
+   Everything `fixed`/`sticky` at a screen edge uses them. -> `check-ui`
+   (fixed-edge)
+3. **Height is `dvh`, not `vh` and not `h-screen`.** Inside the shell —
+   `h-full`: `AppShell` provides the height. -> `check-ui` (viewport-height)
+4. **No actions available only from the keyboard, hover or right click.** A
+   row with a `ContextMenu` shows a "⋯" button on touch — an `ActionMenu` with
+   the same list in `<span class="pointer-fine:hidden">`; "on hover" buttons
+   are `pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100`, a finger
+   always sees them.
+5. **Touch target >= 40 px** on `pointer: coarse` (tabs, menu items and list
+   items already get this from `styles.css`; your own icon button is `size-10`
+   on a phone).
+6. **A dialog comes from the bottom.** `Dialog`/`FormDialog` on a phone draw a
+   `Drawer` themselves with the same API; your own popup panel is also in a
+   `Drawer` (`shared/ui/drawer`), not `fixed` by coordinates.
+7. **A width of `w-56` and up — only with a prefix** (`sm:w-56`), with a
+   ceiling (`min-w-[min(14rem,calc(100vw-2rem))]`) or flexible
+   (`min-w-0 flex-1`). A `grid` without columns stretches to the longest line
+   — write `grid-cols-1`. -> `check-ui` (fixed-width)
+8. **One main action on a phone.** The rest go in `#more` of `PageHeader` (a
+   "⋯" menu); a button visible only on desktop is `max-md:hidden`, its menu
+   item is `md:hidden`.
+9. **Horizontal scroll only inside tables and tab strips.** For a table —
+   `DataTable sticky-first-column` (or `sticky left-0 z-[1] bg-card` on the
+   first cell); route tabs — `RouteTabs`. The page's `scrollWidth` equals the
+   window width.
+10. **The header and bottom bar are drawn by the shell.** A full-phone screen
+    gets `meta.fullscreen` on the route (`route-meta.d.ts`); then its own
+    action row is inside the screen.
+11. **Check:** 390 and 360 px with inset emulation
     (`document.documentElement.style.setProperty('--native-inset-top', '32px')`,
-    `--native-inset-bottom: 48px`), плюс 1280 и 800; светлая и тёмная тема.
+    `--native-inset-bottom: 48px`), plus 1280 and 800; light and dark theme.
 
-## Системный «Назад» (Android)
+## System "Back" (Android)
 
-`useBackButton` (оболочка) закрывает сначала верхний слой: открытый слой
-Reka (диалог, шторка, меню, список, окно настроек) получает Escape сам;
-свой слой поверх страницы (тур) регистрируется при открытии через
-`pushBackLayer(close)` из `shared/lib/back-stack` и снимается при закрытии.
-Затем — предыдущая страница; на Главной второе нажатие за 2 с сворачивает
-приложение.
+`useBackButton` (the shell) closes the top layer first: an open Reka layer
+(dialog, sheet, menu, list, settings window) gets Escape itself; your own
+layer over the page (a tour) registers on open through `pushBackLayer(close)`
+from `shared/lib/back-stack` and is removed on close. Then — the previous
+page; on the Dashboard a second press within 2 s minimizes the application.
 
-## Фильтры, графики
+## Filters, charts
 
-- `FilterBar`: поиск или период — в слоте `#lead`, он остаётся в строке; всё
-  остальное на телефоне уходит в шторку «Фильтры (N)».
-- Графики — через `Chart` из `shared/lib/echarts`: на узком графике он сам
-  прокручивает легенду и прореживает подписи оси.
+- `FilterBar`: search or period goes in the `#lead` slot and stays in the row;
+  everything else on a phone moves into the "Filters (N)" sheet.
+- Charts go through `Chart` from `shared/lib/echarts`: on a narrow chart it
+  scrolls the legend and thins the axis labels itself.

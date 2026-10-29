@@ -37,9 +37,9 @@ pub enum DetailKind {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct ContactAccount {
     pub id: String,
-    /// Grouping label in the UI («Мой банк», «Биржа»).
+    /// Grouping label in the UI ("My bank", "Exchange").
     pub group: Option<String>,
-    /// «Основной счёт», «USDT TRC-20».
+    /// "Main account", «USDT TRC-20».
     pub label: String,
     pub kind: DetailKind,
     pub value: String,
@@ -74,7 +74,7 @@ pub struct Contact {
     pub note: String,
     pub archived: bool,
     pub created_at: String,
-    /// Group the directory lists it under («Семья», «P2P»); empty = by kind.
+    /// Group the directory lists it under ("Family", «P2P»); empty = by kind.
     #[serde(default)]
     pub group: String,
 }

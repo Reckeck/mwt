@@ -12,7 +12,7 @@ import { parseConvertQuery } from './convert-query'
 
 /** As many rows as the frame shows: the asked one or the base, then the favourites. */
 const NOW_ROWS = 3
-/** How far back «на дату» looks for the last exchange. */
+/** How far back `As of` looks for the last exchange. */
 const EXCHANGE_LOOKBACK_DAYS = 365
 
 export interface PaletteConversion {
@@ -21,8 +21,8 @@ export interface PaletteConversion {
 }
 
 /**
- * Ctrl K as a converter (Currency-2 · 10): «100 usd», «5000 руб», «0.01 btc
- * в thb» read as an amount, shown at today's rate in the asked currency or
+ * Ctrl K as a converter (Currency-2 · 10): `100 usd`, `5000 rub`, `0.01 btc
+ * in thb` read as an amount, shown at today's rate in the asked currency or
  * the base and the favourites, and at the rate of the day of the last
  * exchange in that currency.
  */
@@ -70,7 +70,7 @@ export function usePaletteConvert(open: Ref<boolean>, search: Ref<string>) {
     staleTime: 60_000,
   })
 
-  /** The first row's currency on the day of the last exchange: «100 $ на 21 окт. = 9 375,00 ₽». */
+  /** The first row's currency on the day of the last exchange: `100 $ on Oct 21 = 9,375.00 ₽`. */
   const datedTo = computed(() => now.value[0]?.currency ?? '')
   const dated = useQuery({
     queryKey: computed(() => [

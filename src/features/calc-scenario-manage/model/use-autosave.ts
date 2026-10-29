@@ -12,7 +12,7 @@ const sameBody = (scenario: CalcScenario, body: ScenarioBody) =>
 
 /**
  * A saved scenario keeps up with the form: 800 ms after the last change the
- * fields go into it. An unsaved run waits for «Сохранить» and a name.
+ * fields go into it. An unsaved run waits for `Save` and a name.
  */
 export function useAutosave(
   current: ComputedRef<CalcScenario | null>,

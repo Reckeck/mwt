@@ -23,7 +23,7 @@ const props = defineProps<{
   /** The average month of the year that ends with the period. */
   average: string
   rows: SpendingCategory[]
-  /** Some spending has no rate: the sum is a floor, «не меньше» (Currency-1 · 7). */
+  /** Some spending has no rate: the sum is a floor, `at least` (Currency-1 · 7). */
   incomplete?: boolean
 }>()
 
@@ -50,7 +50,7 @@ const headline = computed(() => {
   return { key: props.incomplete ? `${key}AtLeast` : key, category }
 })
 
-/** «Месяц идёт: день 22 из 31» while the period is the running month. */
+/** `Month in progress: day 22 of 31` while the period is the running month. */
 const progress = computed(() => {
   if (!single.value || props.to !== currentMonth()) return null
   const now = new Date()

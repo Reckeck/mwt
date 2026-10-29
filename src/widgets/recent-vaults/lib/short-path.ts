@@ -2,8 +2,8 @@
 const HOME_PREFIX = /^(?:\/home\/[^/]+|\/Users\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)(?=[\\/]|$)/
 
 /**
- * Directory of a vault file for a list row: «~/Документы/Семья» instead of
- * «/home/anna/Документы/Семья/семья.wallet». With `bare` the leading «~/» goes too (phone sheet).
+ * Directory of a vault file for a list row: `~/Documents/Family` instead of
+ * `/home/anna/Documents/Family/family.wallet`. With `bare` the leading «~/» goes too (phone sheet).
  */
 export function shortDir(path: string, bare = false): string {
   const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))

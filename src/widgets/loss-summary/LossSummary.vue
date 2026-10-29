@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<LossSummaryProps>(), { report: null, stor
 
 const { t } = useI18n()
 
-/** Rows a group shows before «Показать ещё». */
+/** Rows a group shows before `Show more`. */
 const SHOWN = 8
 const expanded = ref(new Set<string>())
 function toggle(key: string) {

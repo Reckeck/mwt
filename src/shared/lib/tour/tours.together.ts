@@ -1,6 +1,6 @@
 import type { TourStep } from './tours.ts'
 
-/** The tours of the «Вместе» events: the list, and the screen of one event with its three sections. */
+/** The tours of the `Together` events: the list, and the screen of one event with its three sections. */
 export const TOGETHER_TOURS: Record<string, TourStep[]> = {
   'money-together': [
     { target: 'section-tabs', key: 'planning.tabs', side: 'bottom' },

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 
 /**
- * «Вложения» for these wallets (`get_investments`). The key starts with
+ * `Investments` for these wallets (`get_investments`). The key starts with
  * `report` so whatever refreshes the reports (a new operation, new rates) refreshes it too.
  */
 export function useInvestments(storeIds: MaybeRefOrGetter<string[]>) {

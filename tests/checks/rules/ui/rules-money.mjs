@@ -53,7 +53,7 @@ function moneyHelpers(script, source, offset) {
   for (const match of script.matchAll(/const\s*\{([^}]*)\}\s*=\s*useMoney\s*\(/g)) {
     for (const name of match[1].split(',')) helpers.add(name.split(':').pop().trim())
   }
-  // A number without its mark next to a `<Money>` (`money(x).replace(…)`, «накоплено / цель»): the
+  // A number without its mark next to a `<Money>` (`money(x).replace(…)`, `saved / goal`): the
   // mark is the sum beside it, which is a Money. Not a text sum.
   return helpers
 }
@@ -149,7 +149,7 @@ export const MONEY_RULES = [
     say: 'formatMoney in a slice’s lib/model returns a string a template prints as is — return { amount, currency, at } and draw <Money>, or mark `money: plain — <reason>`',
   },
   {
-    // «Можно потратить сегодня» had `:convert="false"`: the figure did not open the currency card.
+    // `Can spend today` had `:convert="false"`: the figure did not open the currency card.
     id: 'money-home-figure',
     vueOnly: true,
     skip: (file) => !/^src\/pages\/dashboard\/ui\/home-[^/]+\//.test(file),

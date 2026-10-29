@@ -15,7 +15,7 @@ import { SectionState } from '@/shared/ui/section-state'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 /**
- * «Куда отложить» (plan H4): last month's savings split by the target shares.
+ * `Where to set aside` (plan H4): last month's savings split by the target shares.
  * S — the sum; M — the baskets that get money; L — every basket.
  */
 const { t } = useI18n()

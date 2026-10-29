@@ -75,7 +75,7 @@ const cachedTx = (target: EntityRef): Transaction | null => {
   return tx && txId(tx) === target.id ? tx : null
 }
 
-/** Category in «Траты» for the month: the same jump as Ctrl K (Paths 2 · 8). */
+/** Category in `Spending` for the month: the same jump as Ctrl K (Paths 2 · 8). */
 export function spendingOfCategory(category: string, month = new Date().toISOString().slice(0, 7)): RouteLocationRaw {
   return { name: 'money', query: { from: month, to: month, category } }
 }

@@ -41,7 +41,7 @@ impl UnlockedVault {
     }
 
     /// Ids of the operations that have at least one file or link: the paperclip
-    /// in the list and the «С вложениями» filter.
+    /// in the list and the "With attachments" filter.
     pub fn transactions_with_attachments(&self) -> Vec<String> {
         let mut ids: Vec<String> = self
             .list_attachments(None)
@@ -202,7 +202,7 @@ impl UnlockedVault {
     }
 
     /// Drop what was removed and what lost its owner (a deleted operation or
-    /// goal), files included. Runs when the vault is opened: no «Отменить» of
+    /// goal), files included. Runs when the vault is opened: no "Undo" of
     /// the last session can be waiting any more. Returns whether anything went.
     pub(super) fn prune_attachments(&mut self) -> bool {
         let gone: Vec<String> = self

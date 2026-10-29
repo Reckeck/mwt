@@ -12,7 +12,7 @@ type AddFile = (vars: { name: string; mime: string | null; data: string }) => Pr
 /**
  * Files on their way in (Attach 3, 7): each gets a row with a bar while it is
  * sealed and saved, and a red row with the reason if it was too big or could
- * not be read. «Отменить» on a pending row drops the file once it lands.
+ * not be read. `Undo` on a pending row drops the file once it lands.
  */
 export function useAttachmentIntake(addFile: AddFile) {
   const { t } = useI18n()

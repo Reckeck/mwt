@@ -27,7 +27,7 @@ const daily = computed(() => props.home.daily.data.value)
 const spent = computed(() => props.home.balance.data.value?.total.spent ?? '0')
 const spentCurrency = computed(() => props.home.balance.data.value?.currency ?? today.value?.currency ?? '')
 const change = computed(() => comparisonDelta(today.value?.net_worth).pct)
-/** «курс 20 окт.» (Currency-2 · 8): the capital is counted at an earlier day's rates. */
+/** `rate Oct 20` (Currency-2 · 8): the capital is counted at an earlier day's rates. */
 const rates = useRatesAge()
 const ratesDay = computed(() =>
   rates.stale.value && rates.at.value ? dateFormat({ day: 'numeric', month: 'short' }).format(new Date(rates.at.value)) : '',

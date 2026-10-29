@@ -12,7 +12,7 @@ import { STORE_STALE_KEYS, updateInputOf, useStoreUpdate } from './use-store-upd
 const BUDGET_PURPOSE: Purpose = 'everyday'
 
 /**
- * «Настройки · <кошелёк>» (Wallets-3 · 19): the name, the budget and favourite
+ * `Settings · <wallet>` (Wallets-3 · 19): the name, the budget and favourite
  * switches and the purpose, saved together; the archive is its own action.
  */
 export function useStoreSettings(store: () => Store, open: Ref<boolean>, onDone: () => void) {

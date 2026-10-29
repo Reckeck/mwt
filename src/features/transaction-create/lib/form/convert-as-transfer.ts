@@ -4,7 +4,7 @@ import type { TransactionFormState } from './form-state'
 
 /**
  * An exchange of one currency for itself is a transfer between wallets: the
- * same wallets, date, comment and files go on as a «Перевод»; what the
+ * same wallets, date, comment and files go on as a `Transfer`; what the
  * receiving side got short of the given sum becomes the transfer's fee.
  */
 export function convertAsTransfer(form: TransactionFormState): void {

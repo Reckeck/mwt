@@ -23,7 +23,7 @@ import { useTxForm } from '../../model/use-tx-form'
 /**
  * What every kind shares, under its own fields: fee and date, categories
  * (with the cashback source), comment; network, hash and contact sit folded
- * under «Дополнительно».
+ * under `More options`.
  */
 const { t } = useI18n()
 const { form, check, props, showChain, lookupHint, rateHint, needsCategory, cashbackSources, properties, isProperty, noteExpression } =

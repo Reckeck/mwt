@@ -1,5 +1,5 @@
-//! Handing the vault to a new device, the app side (docs/sync.md, «Передача
-//! хранилища»): the receiving device announces itself by its friendly name
+//! Handing the vault to a new device, the app side (docs/sync.md, "Vault transfer"):
+//! the receiving device announces itself by its friendly name
 //! for five minutes, the sending one lists such devices, and the sessions in
 //! `transfer` do the rest. The received file goes to the app's vault folder;
 //! once it is unlocked there, the sending device is trusted for sync.
@@ -37,7 +37,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 struct Receiving {
     generation: u64,
     view: TransferReceiveView,
-    /// «Принять / Отклонить» for the request on screen.
+    /// "Accept / Decline" for the request on screen.
     decide: Option<mpsc::UnboundedSender<bool>>,
     busy: bool,
     stop: tokio::sync::watch::Sender<bool>,
@@ -153,7 +153,7 @@ async fn listen() -> Result<TcpListener> {
     Ok(TcpListener::bind(("0.0.0.0", 0)).await?)
 }
 
-/// «Получить хранилище»: be visible nearby for five minutes.
+/// "Receive a vault": be visible nearby for five minutes.
 pub async fn receive_start(app: &AppHandle) -> Result<TransferReceiveView> {
     if state(app).receiving.is_some() {
         return Ok(receive_view(app));
@@ -305,7 +305,7 @@ pub fn receive_stop(app: &AppHandle) {
     emit_receive(app);
 }
 
-/// «Принять» / «Отклонить».
+/// "Accept" / "Decline".
 pub fn receive_decide(app: &AppHandle, accept: bool) -> Result<()> {
     let sender = state(app)
         .receiving
@@ -462,7 +462,7 @@ fn emit_nearby(app: &AppHandle) {
     let _ = app.emit(NEARBY_EVENT, list);
 }
 
-/// «Передать на новое устройство» opened: look for receiving devices.
+/// "Send to a new device" opened: look for receiving devices.
 pub fn browse_start(app: &AppHandle) -> Result<Vec<TransferNearby>> {
     if state(app).browsing.is_some() {
         return Ok(nearby_list(&state(app)));
@@ -550,7 +550,7 @@ fn update_send(app: &AppHandle, generation: u64, edit: impl FnOnce(&mut Transfer
     let _ = app.emit(SEND_EVENT, send_view(app));
 }
 
-/// «Передать»: the password is checked here, before anything leaves.
+/// "Send": the password is checked here, before anything leaves.
 pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<TransferSendView> {
     let (vault, file_name) = {
         let app_state = app.state::<AppState>();
@@ -713,7 +713,7 @@ pub fn send_code(app: &AppHandle, code: &str) -> Result<()> {
     Ok(())
 }
 
-/// The sending screen closed (or «Отмена»).
+/// The sending screen closed (or "Cancel").
 pub fn send_cancel(app: &AppHandle) {
     let sending = state(app).sending.take();
     if let Some(task) = sending.and_then(|sending| sending.task) {

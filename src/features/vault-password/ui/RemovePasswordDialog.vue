@@ -14,7 +14,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 
 /**
- * «Отключить пароль?» (Full-New-Encrypt 4): the current password proves it is the owner,
+ * `Remove password` (Full-New-Encrypt 4): the current password proves it is the owner,
  * the question says what becomes readable. A vault with an external copy needs the consent
  * that the copy loses its password too (`external_copy_too`).
  */

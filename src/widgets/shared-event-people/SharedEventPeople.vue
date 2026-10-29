@@ -19,7 +19,7 @@ import { PeopleTable } from './ui/people-table'
 import { ShareOverrideDialog } from './ui/share-override'
 
 /**
- * The «Участники» section: who takes part with their share, what they bought and the saldo. Add a
+ * The `People` section: who takes part with their share, what they bought and the saldo. Add a
  * contact or a guest, open a guest's contacts, fix a total by hand, make a guest a contact, remove.
  */
 const props = defineProps<SharedEventPeopleProps>()

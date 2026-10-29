@@ -98,7 +98,7 @@ export function whereReport(ctx: AnalyticsMockContext, months: string[], filter:
       )
     }
   }
-  // Fees of the period (network, exchange): the core's «Потери».
+  // Fees of the period (network, exchange): the core's "Losses".
   const fees = ctx.transactions
     .filter((tx) => inPeriod(txMeta(tx).timestamp))
     .flatMap((tx) => txLegs(tx).filter((leg) => leg.role === 'fee'))

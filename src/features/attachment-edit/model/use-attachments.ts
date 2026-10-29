@@ -15,7 +15,7 @@ interface NewFileVars {
 
 /**
  * One owner's files and links and everything done to them. Each change also
- * refreshes the operations: their paperclips, the «С файлами» filter and the
+ * refreshes the operations: their paperclips, the `With files` filter and the
  * text search read the attachments too.
  */
 export function useAttachments(owner: MaybeRefOrGetter<EntityRef>, enabled: MaybeRefOrGetter<boolean> = true) {

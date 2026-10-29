@@ -1,178 +1,187 @@
 ---
 name: vault-crypto
 description: >
-  Инварианты зашифрованного vault в trade-app: формат контейнера, версии,
-  миграции VaultDoc, Argon2id/XChaCha20-Poly1305, атомарная запись, точность
-  денег через Amount (Decimal) и правила обращения с секретами. Использовать
-  при любой правке model/vault.rs, storage/mod.rs, crypto/*, amount.rs,
-  service.rs, а также при задачах «добавь поле в vault», «миграция», «старый
-  файл не открывается», «неверный пароль», «потеря данных», «точность сумм».
-  Триггеры: vault, VaultDoc, VAULT_FORMAT_VERSION, VAULT_CONTAINER_VERSION,
+  Invariants of the encrypted vault in trade-app: container format, versions,
+  VaultDoc migrations, Argon2id/XChaCha20-Poly1305, atomic writes, money
+  precision via Amount (Decimal) and the rules for handling secrets. Use when
+  changing model/vault.rs, storage/mod.rs, crypto/*, amount.rs, service.rs, and
+  for tasks like "add a field to the vault" («добавь поле в vault»),
+  "migration" («миграция»), "old file does not open" («старый файл не
+  открывается»), "wrong password" («неверный пароль»), "data loss" («потеря
+  данных»), "amount precision" («точность сумм»).
+  Triggers: vault, VaultDoc, VAULT_FORMAT_VERSION, VAULT_CONTAINER_VERSION,
   SnapshotFormat, bincode, atomic_write, Argon2id, XChaCha20,
-  header, AAD, Amount, Decimal, f64, key.zeroize, секрет, пароль, миграция
-  схемы.
+  header, AAD, Amount, Decimal, f64, key.zeroize, секрет (secret), пароль
+  (password), миграция схемы (schema migration).
 ---
 
-# Vault: формат, крипта, деньги
+# Vault: format, crypto, money
 
-Это самый рискованный слой проекта. Здесь ошибка стоит пользователю данных,
-а не только сборки. Любое изменение обязано сопровождаться тестом.
+This is the riskiest layer of the project. Here a mistake costs the user their
+data, not just a build. Every change must come with a test.
 
-## Две независимые версии — не путай
+## Two independent versions: do not confuse them
 
-| Константа | Что версионирует | Когда бампать |
+| Constant | What it versions | When to bump |
 |---|---|---|
-| `VAULT_CONTAINER_VERSION` (сейчас `1`) | конверт: magic, поля header, параметры KDF, шифр | только когда меняется байтовый layout контейнера; иначе старые vault перестанут открываться |
-| `VAULT_FORMAT_VERSION` (сейчас `2`) | схема payload `VaultDoc`, поле `doc.version` | только для несовместимой правки схемы и **только вместе с миграцией** |
+| `VAULT_CONTAINER_VERSION` (currently `1`) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
+| `VAULT_FORMAT_VERSION` (currently `2`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
 
-Обе в `crates/core/src/lib.rs`. Формат файла:
+Both live in `crates/core/src/lib.rs`. File format:
 
 ```
 [ VAULT_MAGIC 8B = "TRDWVLT\0" ][ header 55B ][ ciphertext+tag 16B+ ]
                         ^^^^^^^^^
-                     используется как AAD
+                     used as AAD
 ```
 
-`payload_fmt` в header: `FMT_JSON`(0) — debug; `FMT_BIN`(1) — bincode
-release-сборок до v2, **только чтение**; `FMT_PACK`(2) — MessagePack с именами
-полей, release с v2. Файл самодостаточен: приложение читает все три.
+`payload_fmt` in the header: `FMT_JSON`(0) is debug; `FMT_BIN`(1) is bincode
+from release builds before v2, **read-only**; `FMT_PACK`(2) is MessagePack with
+field names, release since v2. The file is self-describing: the application
+reads all three.
 
-## Обратная совместимость (обязательна с 2026-10-11)
+## Backward compatibility (mandatory since 2026-10-11)
 
-У пользователя реальный vault. Любой существующий файл обязан открываться и
-сохранять данные после обновления.
+The user has a real vault. Every existing file must open and keep its data
+after an update.
 
-### Добавление поля (самая частая операция)
+### Adding a field (the most common operation)
 
-1. Добавь поле с `#[serde(default)]` (и `#[ts(optional)]`, если иначе
-   сломаются моки фронта). JSON и MessagePack хранят имена полей, поэтому
-   старый файл v2 прочитается, бамп **не нужен**.
-2. Никогда `skip_serializing_if` на сохраняемых полях.
-3. Тест: документ без нового поля читается в `Json` и `Pack`
-   (образец — `a_v2_pack_payload_tolerates_a_missing_defaulted_field`), и
-   `fixtures::full_doc()` заполняет новое поле непустым значением — его
-   round-trip проверяет `a_full_document_round_trips_in_every_format`.
+1. Add the field with `#[serde(default)]` (and `#[ts(optional)]` if the
+   frontend mocks would break otherwise). JSON and MessagePack store field
+   names, so an old v2 file will still be read; **no bump needed**.
+2. Never use `skip_serializing_if` on persisted fields.
+3. Test: a document without the new field is read in `Json` and `Pack`
+   (example: `a_v2_pack_payload_tolerates_a_missing_defaulted_field`), and
+   `fixtures::full_doc()` fills the new field with a non-empty value; its
+   round trip is checked by `a_full_document_round_trips_in_every_format`.
 
-### Несовместимая правка: бамп + миграция
+### Incompatible change: bump + migration
 
-Переименование, смена типа или смысла поля, удаление варианта enum:
+Renaming a field, changing its type or meaning, removing an enum variant:
 
-1. Скопируй текущую форму изменяемых типов (и их родителей до `VaultDoc`) в
-   новый модуль `storage/vN.rs` (образец — `storage/v1.rs`). Эти определения
-   больше не правятся никогда.
-2. `impl From<VaultDocVN> for VaultDoc` (или шаг `vN → vN+1`), ничего не
-   теряя.
-3. Добавь версию в `match` в `storage::decode_versioned`, бампни
+1. Copy the current shape of the changed types (and their parents up to
+   `VaultDoc`) into a new module `storage/vN.rs` (example: `storage/v1.rs`).
+   These definitions are never edited again.
+2. `impl From<VaultDocVN> for VaultDoc` (or a `vN → vN+1` step), losing
+   nothing.
+3. Add the version to the `match` in `storage::decode_versioned` and bump
    `VAULT_FORMAT_VERSION`.
-4. Тесты: старый документ в JSON **и** бинарном формате мигрирует без потерь
-   (образец — `a_v1_document_migrates_from_json_and_bincode`); открытие
-   создаёт `.vN.bak` и переписывает файл (`opening_a_v1_vault_backs_it_up_and_rewrites_it`).
-5. Обнови `docs/data-model.md` («Версии и миграции»).
+4. Tests: an old document in JSON **and** the binary format migrates without
+   loss (example: `a_v1_document_migrates_from_json_and_bincode`); opening
+   creates `.vN.bak` and rewrites the file
+   (`opening_a_v1_vault_backs_it_up_and_rewrites_it`).
+5. Update `docs/data-model.md` ("Versions and migrations").
 
-Бамп без миграции недопустим: `decode` отвергает неизвестную версию, и
-пользователь потеряет доступ к своим данным.
+A bump without a migration is not allowed: `decode` rejects an unknown
+version, and the user loses access to their data.
 
-## Крипта — чего нельзя делать
+## Crypto: what you must not do
 
-Primitives заданы в `crypto/mod.rs` и **менять их нельзя** без смены
-`VAULT_CONTAINER_VERSION` (что сломает все существующие vault):
+The primitives are defined in `crypto/mod.rs` and **must not be changed**
+without changing `VAULT_CONTAINER_VERSION` (which would break every existing
+vault):
 
-- KDF: `Argon2id`, v0x13, 64 MiB, 3 итерации, parallelism 1
+- KDF: `Argon2id`, v0x13, 64 MiB, 3 iterations, parallelism 1
   (`KDF_MEM_KIB`, `KDF_ITERS`, `KDF_PAR`).
-- Шифр: `XChaCha20-Poly1305`, 24-байтный nonce, 16-байтный tag.
-- Ключ: 32 байта, `key.zeroize()` после создания шифра — **не убирать**.
+- Cipher: `XChaCha20-Poly1305`, 24-byte nonce, 16-byte tag.
+- Key: 32 bytes, `key.zeroize()` after the cipher is created: **do not
+  remove it**.
 
-Инварианты:
+Invariants:
 
-- **Верификатора пароля в хранилище нет и не должно быть.** Неверный пароль
-  и подделанный файл неразличимы by design — оба дают `Error::Secret`. Это
-  осознанный компромисс, не баг. Не «улучшай» его хешем-верификатором.
-- Ошибка расшифровки мапится в `Error::Secret` (`map_err(|_| Error::Secret)`),
-  а не `Error::Crypto` — иначе UI не предложит повторить ввод пароля.
-- **Никаких `unwrap`/`expect`/паники на пути decrypt.** Мутированный,
-  усечённый или чужой файл — это `Error`, а не паника. Это проверяется тестами
-  вектора тестирования (см. ниже).
-- AAD = байты header. Header участвует в аутентификации: изменение любого его
-  байта (включая `payload_fmt`) ломает проверку тега.
-- **Ключ сессии.** Argon2 — только при открытии (`VaultFile::open_keyed`),
-  создании и смене пароля (`SealKey::fresh`, новая соль). Сохранение —
-  `crypto::seal_with(&SealKey, …)`: та же соль, новый nonce. Не возвращай KDF
-  в путь `persist` — это снова 80–230 мс под замком vault на каждое действие.
-- **Пакетная запись.** `persist()` в приложении только помечает изменения;
-  пишет `vault_writer`. Код, который читает **файл** vault (копия, бэкап,
-  передача, внешняя копия), сначала вызывает `flush_pending()`. Новый путь
-  закрытия vault — сначала `flush_pending()`, при ошибке не закрывать.
-  Подробно — `docs/storage-platforms.md`, «Пакетная запись».
-- Запись — только `atomic_write`: temp-файл + `fsync` + `rename`. Прямой
-  `fs::write` по пути vault недопустим: обрыв на середине оставит файл, который
-  не открывается никогда.
+- **There is no password verifier in storage and there must not be.** A wrong
+  password and a tampered file are indistinguishable by design: both give
+  `Error::Secret`. This is a deliberate trade-off, not a bug. Do not "improve"
+  it with a hash verifier.
+- A decryption failure maps to `Error::Secret` (`map_err(|_| Error::Secret)`),
+  not `Error::Crypto`; otherwise the UI will not offer to retry the password.
+- **No `unwrap`/`expect`/panics on the decrypt path.** A mutated, truncated or
+  foreign file is an `Error`, not a panic. This is covered by the test vector
+  (see below).
+- AAD = the header bytes. The header takes part in authentication: changing any
+  byte of it (including `payload_fmt`) breaks tag verification.
+- **Session key.** Argon2 runs only on open (`VaultFile::open_keyed`), on
+  creation and on password change (`SealKey::fresh`, new salt). Saving uses
+  `crypto::seal_with(&SealKey, …)`: same salt, new nonce. Do not bring the KDF
+  back into the `persist` path: that would again cost 80-230 ms under the vault
+  lock on every action.
+- **Batched writes.** In the application `persist()` only marks changes; the
+  `vault_writer` does the writing. Code that reads the vault **file** (copy,
+  backup, transfer, external copy) calls `flush_pending()` first. A new way of
+  closing the vault: `flush_pending()` first, and do not close on error.
+  Details: `docs/storage-platforms.md`, "Batched writes".
+- Writes go only through `atomic_write`: temp file + `fsync` + `rename`. A
+  direct `fs::write` to the vault path is not allowed: a crash midway leaves a
+  file that never opens again.
 
-`switch_format` (`service.rs`) существует для принудительной смены
-JSON↔MessagePack (просьба о bincode пишет MessagePack) — это тоже миграция,
-для неё нужен тест на round-trip.
+`switch_format` (`service.rs`) exists to force a JSON↔MessagePack switch (a
+request for bincode writes MessagePack). This is also a migration, so it needs
+a round-trip test.
 
-## Деньги — только `Amount` (Decimal)
+## Money: only `Amount` (Decimal)
 
 ```rust
 pub struct Amount(pub Decimal);
 ```
 
-- **Доменные количества, цены, PnL, комиссии — только `Amount`.** `f64`
-  в домене запрещён: он не умеет 0.1 + 0.2 без артефактов, и накопленная
-  ошибка в портфеле неприемлема.
-- `f64` допустим **только в `market/`** — OHLCV-свечи для графиков, не деньги,
-  а точки для отрисовки. Конверсия с доменом — явно, на границе
-  (`Amount::to_f64()` / `Amount::from_f64()`).
+- **Domain quantities, prices, PnL and fees are `Amount` only.** `f64` is
+  forbidden in the domain: it cannot do 0.1 + 0.2 without artifacts, and an
+  accumulated error in a portfolio is unacceptable.
+- `f64` is allowed **only in `market/`**: OHLCV candles for charts are not
+  money but points to draw. Conversion to and from the domain is explicit, at
+  the boundary (`Amount::to_f64()` / `Amount::from_f64()`).
 - API: `Amount::parse`, `from_f64`, `is_zero/is_negative/is_positive`, `abs`,
   `max`, `to_f64`, `round(dp)`, `into_inner`.
-- Сериализация — **строкой**; в TypeScript `Amount` = `string`. Фронт не
-  парсит его в `number` для арифметики.
-- Округление — только явным `round(dp)`. Неявного округления быть не должно.
+- Serialization is a **string**; in TypeScript `Amount` = `string`. The
+  frontend does not parse it into a `number` for arithmetic.
+- Rounding only via an explicit `round(dp)`. There must be no implicit
+  rounding.
 
-`Amount` — newtype с собственным ts-rs impl в `amount.rs`; если добавишь
-вариант представления, сломаешь совместимость с сохранёнными файлами и
-локалями.
+`Amount` is a newtype with its own ts-rs impl in `amount.rs`; adding another
+representation breaks compatibility with saved files and locales.
 
-## Секреты
+## Secrets
 
-- Пароль и API-ключ Bybit живут **только внутри зашифрованного `VaultDoc`** и
-  никогда не покидают core наружу.
-- Наружу отдаётся только маска вида `abcd…wxyz` (`ExchangeKeyStatus.hint`).
-- Никогда не логируй пароль, ключ, salt, nonce или расшифрованный payload.
-  `RUST_LOG=info` включается через `mise`, но в лог не должно утекать ничего
-  секретного — проверяй `tracing`/`println!` в core.
-- Файлы vault и бэкапы: `*.wallet`, `*.wallet.bak`, `data/` — в `.gitignore`.
-  Если увидел их в `jj status` — не коммить, скажи пользователю.
+- The password and the Bybit API key live **only inside the encrypted
+  `VaultDoc`** and never leave core.
+- Only a mask like `abcd…wxyz` is exposed (`ExchangeKeyStatus.hint`).
+- Never log the password, key, salt, nonce or decrypted payload.
+  `RUST_LOG=info` is enabled through `mise`, but nothing secret must leak into
+  the log: check `tracing`/`println!` in core.
+- Vault files and backups: `*.wallet`, `*.wallet.bak`, `data/` are in
+  `.gitignore`. If you see them in `jj status`, do not commit them and tell the
+  user.
 
-## Вектор тестирования (обязательный)
+## Test vector (mandatory)
 
-Эти случаи обязаны возвращать `Error::Secret` и **не паниковать**:
+These cases must return `Error::Secret` and **not panic**:
 
-1. верный файл + неверный пароль;
-2. файл с изменённым байтом ciphertext (тампер);
-3. файл с изменённым байтом header;
-4. обрезанный файл;
-5. пустой файл;
-6. файл с чужим magic;
-7. файл с `VAULT_CONTAINER_VERSION` из будущего.
+1. a valid file + a wrong password;
+2. a file with a changed ciphertext byte (tamper);
+3. a file with a changed header byte;
+4. a truncated file;
+5. an empty file;
+6. a file with a foreign magic;
+7. a file with a `VAULT_CONTAINER_VERSION` from the future.
 
-Плюс: создание vault, повторное открытие, round-trip всех полей во всех
-форматах, сохранение и перезагрузка, миграция со всех предыдущих версий.
+Plus: vault creation, reopening, a round trip of all fields in all formats,
+saving and reloading, migration from all previous versions.
 
-Все эти тесты живут в `#[cfg(test)] mod tests` рядом с кодом
+All of these tests live in `#[cfg(test)] mod tests` next to the code
 (`crypto/mod.rs`, `crypto/header.rs`, `storage/mod.rs`, `service.rs`).
 
-## Проверки
+## Checks
 
 ```bash
-cargo fmt && mise run test        # unit-тесты core обязательны
-mise run check                    # полный гейт перед коммитом
+cargo fmt && mise run test        # core unit tests are mandatory
+mise run check                    # full gate before committing
 ```
 
-Для правки контейнера дополнительно осмысленно собрать приложение:
-`mise run build` — она проверит, что формат переживает реальный цикл записи.
+For a container change, additionally build the application properly:
+`mise run build` checks that the format survives a real write cycle.
 
-Не забудь про `mise run gen-types`, если тронул `Settings` или типы,
-попадающие в IPC: они экспортируются в `src/shared/api/ipc.gen.d.ts`.
-Документация по формату — `docs/data-model.md` и `docs/security.md`;
-обнови их, если меняешь схему.
+Do not forget `mise run gen-types` if you touched `Settings` or types that go
+through IPC: they are exported to `src/shared/api/ipc.gen.d.ts`.
+Documentation on the format is in `docs/data-model.md` and `docs/security.md`;
+update them if you change the schema.

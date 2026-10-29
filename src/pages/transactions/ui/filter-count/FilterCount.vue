@@ -6,12 +6,12 @@ import { formatDay, formatMonthKey, pluralForm } from '@/shared/lib/format'
 
 import type { FilterCountProps } from './filter-count.types'
 
-/** «5 операций за октябрь»: how many the filter keeps, and over what. */
+/** `5 operations for October`: how many the filter keeps, and over what. */
 const props = defineProps<FilterCountProps>()
 
 const { t, locale } = useI18n()
 
-/** One whole month reads as its name; other days as «1 окт – 15 окт». */
+/** One whole month reads as its name; other days as `Oct 1 – Oct 15`. */
 const period = computed(() => {
   const { from, to } = props.filter
   if (!from && !to) return ''

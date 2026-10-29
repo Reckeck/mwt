@@ -15,9 +15,9 @@ export interface SharedEventEditDialogProps {
 export interface GuestDetailsDialogProps {
   /** The guest's name and details now; `null` while closed. */
   guest: { name: string; details: GuestDetails | null } | null
-  /** «Гость события «Шашлыки · 2–4 ноя»» under the name. */
+  /** `Guest of the event "Barbecue · Nov 2–4"` under the name. */
   eventLabel: string
-  /** «Сделать контактом» is offered only for a guest that is already in an event. */
+  /** `Make a contact` is offered only for a guest that is already in an event. */
   canMakeContact?: boolean
   pending?: boolean
 }

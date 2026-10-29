@@ -2247,6 +2247,7 @@
   "sharedEvents.items.attach": "Link a payment",
   "sharedEvents.items.emptyTitle": "No items",
   "sharedEvents.items.emptyHint": "Add a shopping plan, or just what has already been bought.",
+  "sharedEvents.items.qtyOf": "of",
   "sharedEvents.items.head.item": "Item",
   "sharedEvents.items.head.qty": "Quantity",
   "sharedEvents.items.head.plan": "Plan",

@@ -1,92 +1,92 @@
-# Редактор vault в формате JSON
+# Vault JSON editor
 
-Экран «Настройки → Открыть vault → Просмотр JSON» (только в dev-сборке,
-`import.meta.env.DEV`). Показывает расшифрованный документ vault в CodeMirror и
-позволяет править его напрямую — с подсказками по полям, проверкой схемы и
-автодополнением из Rust.
+The "Settings → Open vault → View JSON" screen (dev build only,
+`import.meta.env.DEV`). It shows the decrypted vault document in CodeMirror and
+lets you edit it directly — with field hints, schema validation and
+autocompletion from Rust.
 
-## Что где лежит
+## What lives where
 
-| Слой | Файл | Ответственность |
+| Layer | File | Responsibility |
 |---|---|---|
-| Схема | `crates/core/src/model/vault.rs` → `json_schema()` | единственный источник формы документа (`schemars` по `VaultDoc`) |
+| Schema | `crates/core/src/model/vault.rs` → `json_schema()` | the single source of the document shape (`schemars` over `VaultDoc`) |
 | IPC | `crates/app/src/commands/settings.rs` | `vault_schema`, `dev_dump_vault`, `dev_apply_vault_json`, `dev_open_vault_json_in_editor`, `dev_reload_vault_json_from_editor` |
-| Автодополнение | `src/shared/lib/json-schema-reader.ts` | `$ref` / `anyOf` / `oneOf` / `type: [...]` → плоские подсказки |
-| Редактор | `src/shared/lib/editor/` (`theme`, `json-path`, `completions`, `extensions`) | расширения CodeMirror: тема, autocomplete по JSON-пути, lint, history, folding |
-| JSON-хелперы | `src/shared/lib/json.ts` | `parseJson` (разбирается ли draft) и `normalizeJson` (канонический вид для сравнения) |
-| Компонент | `src/widgets/vault-json-editor/VaultJsonEditor.vue` | склейка: CodeMirror + IPC + статус |
+| Autocompletion | `src/shared/lib/json-schema-reader.ts` | `$ref` / `anyOf` / `oneOf` / `type: [...]` → flat suggestions |
+| Editor | `src/shared/lib/editor/` (`theme`, `json-path`, `completions`, `extensions`) | CodeMirror extensions: theme, autocomplete by JSON path, lint, history, folding |
+| JSON helpers | `src/shared/lib/json.ts` | `parseJson` (whether the draft parses) and `normalizeJson` (canonical form for comparison) |
+| Component | `src/widgets/vault-json-editor/VaultJsonEditor.vue` | glue: CodeMirror + IPC + status |
 
-Формы документа на фронтенде нет ни в одном месте: редактор спрашивает схему у
-бэкенда. Добавил поле в `VaultDoc` — оно появилось в подсказках само.
+The document shape exists nowhere in the frontend: the editor asks the backend for the schema.
+Add a field to `VaultDoc` and it shows up in the suggestions by itself.
 
-## Модель редактирования
+## Editing model
 
-**Черновик не пишет в vault.** Нажатие — только Ctrl+S. Остальное:
+**A draft does not write to the vault.** Saving is Ctrl+S only. The rest:
 
-- набор текста лишь перепроверяет черновик (дебаунс 400 мс) и двигает статус-бейдж;
-- черновик, который не парсится, **не сохраняется вообще** — на диске остаётся
-  последнее сохранённое состояние, строка под редактором объясняет почему;
-- «Сбросить» возвращает буфер к тому, что backend вернул после последнего
-  успешного сохранения.
+- typing only re-validates the draft (400 ms debounce) and moves the status badge;
+- a draft that does not parse is **not saved at all** — the last saved state
+  stays on disk, and the line under the editor explains why;
+- "Reset" returns the buffer to what the backend returned after the last
+  successful save.
 
-Бэкенд отклоняет документ тоже до записи: невалидный JSON, неизвестная схема
-или неверная версия payload → `Error`, `.bak`-копия не трогается. Единственное
-место, где создаётся бэкап, — `dev_apply_vault_json`, и только после успешного
+The backend also rejects a document before writing: invalid JSON, an unknown schema
+or a wrong payload version → `Error`, and the `.bak` copy is untouched. The only
+place a backup is created is `dev_apply_vault_json`, and only after a successful
 `decode`.
 
-## Статус-бейдж
+## Status badge
 
-| Статус | Когда |
+| Status | When |
 |---|---|
-| `loading` | грузится схема и документ |
-| `saved` | черновик канонически равен тому, что на диске |
-| `pending` | черновик валиден и отличается от диска |
-| `applying` | идёт запись |
-| `invalid` | черновик не парсится (сообщение — инлайн, рядом с полем) |
-| `rejected` | backend отклонил документ (подробности — в toast) |
+| `loading` | the schema and document are loading |
+| `saved` | the draft is canonically equal to what is on disk |
+| `pending` | the draft is valid and differs from disk |
+| `applying` | a write is in progress |
+| `invalid` | the draft does not parse (the message is inline, next to the field) |
+| `rejected` | the backend rejected the document (details in a toast) |
 
-## Автодополнение
+## Autocompletion
 
-Путь берётся из собственного синтаксического дерева Lezer, поэтому он верен по
-построению — строкового сканера в коде нет. Схема разрешается по `$ref`,
-`Option<T` раскрывается в `anyOf` с `null`, `enum` может прийти плоским
-списком или `oneOf` из `const`.
+The path is taken from Lezer's own syntax tree, so it is correct by
+construction — there is no string scanner in the code. The schema is resolved through `$ref`,
+`Option<T>` expands to an `anyOf` with `null`, and an `enum` can arrive as a flat
+list or as a `oneOf` of `const`.
 
-- `Ctrl+Space` или пауза 1,5 с после последнего нажатия — открыть список;
-- `↑` `↓` — выбор, `Enter` — вставить, `Tab` — отступ, `Esc` — закрыть.
+- `Ctrl+Space` or a 1.5 s pause after the last keystroke — open the list;
+- `↑` `↓` — select, `Enter` — insert, `Tab` — indent, `Esc` — close.
 
-Список не переоткрывается, если он уже открыт: это переставило бы его под
-каретку, которую пользователь уже сдвинул.
+The list is not reopened if it is already open: that would move it under the
+caret, which the user has already moved.
 
-## Внешний редактор
+## External editor
 
-`Открыть в редакторе` пишет документ во временный файл и запускает `$EDITOR`
-detached (команда возвращается сразу, окно не блокируется). `Забрать из
-редактора` читает **только** этот файл — произвольный путь с фронтенда
-запросить нельзя, команда его и не принимает.
+"Open in editor" writes the document to a temporary file and launches `$EDITOR`
+detached (the command returns immediately, the window is not blocked). "Pull from
+editor" reads **only** that file — an arbitrary path cannot be requested from the
+frontend, and the command does not accept one.
 
-## Ошибки и уведомления
+## Errors and notifications
 
-Синтаксическая ошибка остаётся инлайном: она связана с кареткой и должна
-читаться рядом с черновиком. Всё остальное — toast (`vue-sonner`): успешная
-запись, отказ backend, ошибки загрузки схемы/документа, работа с
-внешним редактором. Inline и toast об одном и том же событии не дублируются.
+A syntax error stays inline: it is tied to the caret and must be readable next to the draft.
+Everything else is a toast (`vue-sonner`): a successful
+write, a backend refusal, schema/document load errors, external
+editor operations. Inline and toast are not duplicated for the same event.
 
-## Схема после Ф2
+## Schema after Phase 2
 
-Схема строится из `VaultDoc` (`vault_schema`), поэтому новые разделы —
-`contacts`, `categorization_rules`, `manual_prices`, а также пока пустые
+The schema is built from `VaultDoc` (`vault_schema`), so the new sections —
+`contacts`, `categorization_rules`, `manual_prices`, as well as the still empty
 `automations`, `automation_runs`, `budgets`, `goals`, `reminders`,
-`price_alerts`, `utility_items`, `meter_readings`, `enrichments` — появились в
-автодополнении сами. `categories` теперь список объектов
-`{ key, name, group, archived }`, а операции — восемь вариантов с внешним
-тегом (`{ "topup": { … } }`).
+`price_alerts`, `utility_items`, `meter_readings`, `enrichments` — appeared in
+autocompletion by themselves. `categories` is now a list of objects
+`{ key, name, group, archived }`, and transactions are eight variants with an external
+tag (`{ "topup": { … } }`).
 
-Ошибку схемы при «Применить» редактор показывает как ошибку разбора
-(`DESERIALIZE`), а не как `INCOMPATIBLE_VAULT`: это опечатка в черновике, а не
-старый файл.
+A schema error on "Apply" is shown by the editor as a parse error
+(`DESERIALIZE`), not as `INCOMPATIBLE_VAULT`: it is a typo in the draft, not an
+old file.
 
-## Что здесь опасно
+## What is dangerous here
 
-Файл содержит **все** транзакции и ключи Bybit в открытом виде. Не коммитить
-его, не выгружать в репозиторий, не показывать на скриншоте без подготовки.
+The file contains **all** transactions and Bybit keys in plain text. Do not commit
+it, do not push it to a repository, do not show it in a screenshot without preparation.

@@ -1,4 +1,4 @@
-//! «Куда ушли» (Money 1 · 6): where the period's money went — spent, lent,
+//! "Where it went" (Money 1 · 6): where the period's money went — spent, lent,
 //! moved between the user's own wallets, invested, lost to fees — each with
 //! what it was, in the units it moved in.
 

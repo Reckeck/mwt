@@ -20,7 +20,7 @@ const props = defineProps<{ reminder: Reminder }>()
 const emit = defineEmits<{ done: []; snooze: [choice: SnoozeChoice]; finish: []; edit: []; remove: [] }>()
 const { t } = useI18n()
 
-/** «Оплатить» (Auto-2 · 10): the payment form filled with the reminder's category and wallet. */
+/** `Pay` (Auto-2 · 10): the payment form filled with the reminder's category and wallet. */
 function pay() {
   const target = props.reminder.pay
   openQuickAdd({ kind: 'payment', category: target?.category ?? undefined, storeId: target?.store_id ?? undefined })

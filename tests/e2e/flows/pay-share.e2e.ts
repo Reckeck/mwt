@@ -10,7 +10,7 @@ const READ_POSITION = (label: string) => `
   const match = text.match(new RegExp(${JSON.stringify(label)} + ' ?([0-9 ,\\u00a0\\u202f]+)'))
   return match ? Number(match[1].replace(/\\D/g, '')) : NaN`
 
-/** The sum in a «Моя позиция» card by its label, as a number. */
+/** The sum in a `My position` card by its label, as a number. */
 const position = (app: App, label: string) => app.page.eval<number>(READ_POSITION(label))
 
 /** Click a row's button (main action or «⋯») by the person's name. */

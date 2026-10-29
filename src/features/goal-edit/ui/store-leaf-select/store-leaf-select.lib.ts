@@ -1,7 +1,7 @@
 /** A group heading with the sub-accounts that can be picked under it. */
 export interface LeafGroup {
   key: string
-  /** The group's path («Основной банк»); empty for a top-level wallet without sub-accounts. */
+  /** The group's path (`Main bank`); empty for a top-level wallet without sub-accounts. */
   heading: string
   leaves: StoreTreeNode[]
 }

@@ -680,7 +680,7 @@ pub(super) mod fixtures {
         }
     }
 
-    /// The «Шашлыки» board: me, Petya, Vasya, Anya and the guest Olya, in rubles.
+    /// The "Barbecue" board: me, Petya, Vasya, Anya and the guest Olya, in rubles.
     pub fn skewers() -> SharedEvent {
         let mut meat = item("meat", "Мясо", Some(("4", "4800")));
         meat.purchases = vec![purchase("p-meat", ME, "4", "4800", "rub")];

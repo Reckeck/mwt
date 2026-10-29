@@ -7,7 +7,7 @@ import { useEmergencyFund } from '../model/use-emergency-fund'
 
 const props = defineProps<{
   store: Store
-  /** The purpose picked in the form, saved or not: leaving «Сбережения» takes the wallet out on save. */
+  /** The purpose picked in the form, saved or not: leaving `Savings` takes the wallet out on save. */
   purpose: Purpose
 }>()
 const { t } = useI18n()

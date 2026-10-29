@@ -12,7 +12,7 @@ const pct = (value: string) =>
 
 /**
  * The folded row's second line: what the rare settings hold now, so the user
- * sees what is counted without opening it — «инфляция 3,74 % · налога нет · снятий нет».
+ * sees what is counted without opening it — `inflation 3.74 % · no tax · no withdrawals`.
  */
 export function advancedSummary(form: CalcForm, t: Translate): SumPart[] {
   const parts: SumPart[][] = []

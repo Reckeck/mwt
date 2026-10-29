@@ -9,8 +9,8 @@ import { useRunSummary } from '../model/use-run-summary'
 
 /**
  * The phone's emulation under the steps (Auto-3 · 15): the question with
- * «Нет» / «Да» in reach of the thumb; any other run in a line, the full
- * report in the sheet behind «Подробнее».
+ * `No` / `Yes` in reach of the thumb; any other run in a line, the full
+ * report in the sheet behind `Details`.
  */
 const props = defineProps<{ report: RunReport; answers?: Record<string, boolean> }>()
 const emit = defineEmits<{ answer: [nodeId: string, yes: boolean]; details: [] }>()

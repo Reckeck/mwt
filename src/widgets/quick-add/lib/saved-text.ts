@@ -6,7 +6,7 @@ type Translate = (key: string, named?: Record<string, unknown>) => string
 
 const SAID_KINDS = new Set(['payment', 'convert', 'transfer', 'topup'])
 
-/** «Оплата 340 ₽ · Продукты сохранена»: what was just written, in the toast after a save. */
+/** `Payment 340 ₽ · Groceries saved`: what was just written, in the toast after a save. */
 export function savedText(tx: Transaction, categories: Category[] | undefined, t: Translate): string {
   const kind = txKind(tx)
   const said = SAID_KINDS.has(kind) ? kind : 'other'

@@ -86,7 +86,7 @@ pub struct NumberFormat {
     /// Applied after parsing: 0.01 turns «635 bp» into 6.35.
     #[serde(default = "one")]
     pub multiplier: Amount,
-    /// Text removed before parsing (a currency sign, «руб.»).
+    /// Text removed before parsing (a currency sign, "руб." (Russian ruble sign)).
     #[serde(default)]
     pub strip: String,
 }
@@ -179,7 +179,7 @@ pub struct DataSource {
     pub failures: u8,
     #[serde(default = "status_ok")]
     pub status: SourceStatus,
-    /// The last error, for «Починить».
+    /// The last error, for "Fix".
     #[serde(default)]
     pub error: Option<String>,
     /// RFC3339 of the last attempt, successful or not.

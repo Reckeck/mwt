@@ -29,7 +29,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const opened = ref<WhereKind | null>(null)
 const toggle = (kind: WhereKind) => (opened.value = opened.value === kind ? null : kind)
-/** The row's operations in the list, with «← Куда ушли» back here. */
+/** The row's operations in the list, with `← Where it went` back here. */
 const listOf = (kind: WhereKind) =>
   drillTo({
     from: props.filter.from ?? undefined,

@@ -1,5 +1,5 @@
 //! One vault transfer over one TCP connection, from the Noise handshake to
-//! the last byte (docs/sync.md, «Передача хранилища»). The rules and the
+//! the last byte (docs/sync.md, "Vault transfer"). The rules and the
 //! crypto are in `trade_core::sync::transfer`; the app side (discovery, the
 //! screens, saving the file) is in `handover`.
 //!
@@ -127,7 +127,7 @@ pub(crate) struct Received {
     pub sender_key: String,
 }
 
-/// Serve one request. `decisions` carries «Принять» (`true`) or «Отклонить».
+/// Serve one request. `decisions` carries "Accept" (`true`) or "Decline".
 pub(crate) async fn receive(
     stream: TcpStream,
     key: &DeviceKey,

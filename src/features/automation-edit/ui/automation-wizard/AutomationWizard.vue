@@ -13,8 +13,8 @@ import { WizardWhat } from '../wizard-what'
 import { WizardWhen } from '../wizard-when'
 
 /**
- * «Новая автоматизация» (Auto-1 · 6–8) in three steps. Step 2 stays mounted
- * behind step 3, so «Назад» finds the operation as it was typed. The operation
+ * `New automation` (Auto-1 · 6–8) in three steps. Step 2 stays mounted
+ * behind step 3, so `Back` finds the operation as it was typed. The operation
  * form itself comes from the page through `#operation`: features do not import
  * each other.
  */

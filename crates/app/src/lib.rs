@@ -150,7 +150,7 @@ pub fn run() {
             contacts::get_contact_balances,
             contacts::list_debt_terms,
             contacts::set_debt_terms,
-            // shared events (посиделки)
+            // shared events (shared sit-down events)
             shared_events::list_shared_events,
             shared_events::get_shared_event,
             shared_events::create_shared_event,
@@ -461,7 +461,7 @@ pub fn run() {
             // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
             scheduler::spawn(app.handle().clone());
 
-            // The «+ Операция» key, if the user chose one. A clash only costs
+            // The "+ Transaction" key, if the user chose one. A clash only costs
             // the shortcut; the settings screen shows it as not registered.
             let stored = app_settings::current_settings(app.handle()).quick_add_shortcut;
             if let Err(err) = shortcut::apply(app.handle(), stored.as_deref()) {

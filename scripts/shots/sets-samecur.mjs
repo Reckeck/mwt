@@ -1,6 +1,6 @@
-/** Same-currency exchange: the hint under «Получаю», «Записать как перевод», the saved transfer. */
+/** Same-currency exchange: the hint under `Receive`, `Record as transfer`, the saved transfer. */
 
-/** Both currencies set on the form's state itself (the chip's search clears the asset while typing): THB for «Отдаю» and «Получаю». */
+/** Both currencies set on the form's state itself (the chip's search clears the asset while typing): THB for `Give` and `Receive`. */
 const BOTH_THB = `
   const thb = { symbol: 'THB', name: 'THB', coingecko_id: null, chain: 'fiat', contract: null, quote: 'THB' }
   let node = document.querySelector('#transaction-form').__vueParentComponent
@@ -25,7 +25,7 @@ const OPEN = [
   { eval: BOTH_THB },
   { wait: 500 },
 ]
-/** Into the second wallet: the picker opens on «— Выберите —». */
+/** Into the second wallet: the picker opens on `— Pick —`. */
 const TO_WALLET = [
   { click: { text: '— Выберите —', within: '[role=dialog]' } },
   { wait: 500 },

@@ -1,4 +1,4 @@
-//! What the app may tell while the vault is locked (plan §14, option Б).
+//! What the app may tell while the vault is locked (plan §14, option B).
 //!
 //! At unlock and while the vault is open, the app takes a snapshot of every
 //! notice ahead — each date of each reminder, the thresholds of price alerts
@@ -56,7 +56,7 @@ pub struct NotificationSnapshot {
     pub vault_id: String,
     pub created_at: String,
     pub system: bool,
-    /// Show «Платёж по кредиту» without the name and the sum.
+    /// Show "Loan payment" without the name and the sum.
     pub hide_details: bool,
     pub notices: Vec<ScheduledNotice>,
     pub alerts: Vec<SnapshotAlert>,

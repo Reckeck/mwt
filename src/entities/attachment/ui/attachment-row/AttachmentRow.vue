@@ -11,8 +11,8 @@ import type { AttachmentRowProps } from './attachment-row.types'
 import AttachmentIcon from './AttachmentIcon.vue'
 
 /**
- * One file or link (Attach 1): its kind, its name, «PDF · 84 КБ · добавлен
- * 21 окт» or «Ссылка · t.me/…». The whole row opens it; actions go in the slot.
+ * One file or link (Attach 1): its kind, its name, `PDF · 84 KB · added
+ * Oct 21` or `Link · t.me/…`. The whole row opens it; actions go in the slot.
  */
 const props = defineProps<AttachmentRowProps>()
 const emit = defineEmits<{ open: [] }>()

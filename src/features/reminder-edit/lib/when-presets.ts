@@ -1,7 +1,7 @@
 /**
- * «Когда» of a reminder as one choice (Auto-2 · 10): «Каждое 10-е» reads
- * better than «каждые 1 месяц» next to a date. The day, the weekday and the
- * date come from the reminder's first date; anything else is «Другой интервал».
+ * `When` of a reminder as one choice (Auto-2 · 10): `Every 10th` reads
+ * better than `every 1 month` next to a date. The day, the weekday and the
+ * date come from the reminder's first date; anything else is `Other interval`.
  */
 export type WhenPreset = 'once' | RepeatUnit | 'custom'
 

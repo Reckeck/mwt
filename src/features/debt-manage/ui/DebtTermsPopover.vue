@@ -16,8 +16,8 @@ import { cn } from '@/shared/lib/utils'
 import type { DebtTermsPopoverProps } from '../debt-manage.types'
 
 /**
- * «вернуть до 20 нояб» in the debt line (Ops-1 · 6): the term reads as text and
- * opens a small form for the date and a note. With no term yet it says «срок».
+ * `repay by Nov 20` in the debt line (Ops-1 · 6): the term reads as text and
+ * opens a small form for the date and a note. With no term yet it says `Term`.
  */
 const props = defineProps<DebtTermsPopoverProps>()
 

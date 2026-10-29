@@ -117,7 +117,7 @@ impl Executor<'_> {
         };
         let mut meta = TxMeta::new(&comment);
         // The run's own moment, not the emulated clock: a sandbox operation
-        // dated after a long «Подождать» would fail the future-date check,
+        // dated after a long "Wait" would fail the future-date check,
         // which the real run (made at that later moment) passes. A planned
         // moment after the run is not taken either.
         // A run made long after its planned day (confirmed later, started by hand,
@@ -140,7 +140,7 @@ impl Executor<'_> {
         meta
     }
 
-    /// The moment wired into «Дата операции», if any.
+    /// The moment wired into "Transaction date", if any.
     fn date_input(&mut self, node: &Node) -> Result<Option<i64>, String> {
         Ok(match self.input(node, "date")? {
             WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
@@ -187,7 +187,7 @@ impl Executor<'_> {
         Ok(saved)
     }
 
-    /// An operation from «Шаблон операции» (what the automation form keeps,
+    /// An operation from "Transaction template" (what the automation form keeps,
     /// fee, contact and all): the amount and the date still come from the
     /// node.
     fn build_from_template(&mut self, node: &Node, raw: &str) -> Result<Transaction, String> {
@@ -500,7 +500,7 @@ impl Executor<'_> {
             }
             "action.confirm" => {
                 // Left empty when the node asks nothing in particular: the
-                // app words it in its own language («Продолжить?» / «Go on?»).
+                // app words it in its own language ("Continue" / «Go on?»).
                 let question = self.input(node, "question")?.as_text().trim().to_string();
                 let (asked_ru, asked_en) = crate::workflow::exec::asked(&question);
                 if self.ctx.mode == RunMode::DryRun
@@ -619,7 +619,7 @@ impl Executor<'_> {
         }
     }
 
-    /// «Вызвать схему»: run a helper workflow inside this run and take its answer.
+    /// "Call scheme": run a helper workflow inside this run and take its answer.
     fn call_workflow(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
         if self.ctx.call_depth >= MAX_CALL_DEPTH {
             return Err(Fault::Error(format!(
@@ -700,7 +700,7 @@ impl Executor<'_> {
                 return Err(Fault::Error(format!("«{}»: {message}", callee.name)));
             }
             Err(Halt::Wait(_)) => return Err(Fault::Error("a called workflow cannot wait".into())),
-            // The caller's own «Создать операцию» decides how to refuse.
+            // The caller's own "Create transaction" decides how to refuse.
             Err(Halt::Reject(reason)) => {
                 return Err(Fault::Error(format!(
                     "«{}»: {}",

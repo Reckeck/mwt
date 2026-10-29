@@ -18,7 +18,7 @@ import { UtilityItemSheet } from '../utility-item'
 /**
  * A home's first tab (Wallets-2 · 10): this month's bill on top, its items
  * below. Paying and typing the readings open the bill, an item opens its own panel; a new item comes
- * from «+ Статья» beside the tabs (below the list on a phone).
+ * from `+ Item` beside the tabs (below the list on a phone).
  */
 const props = defineProps<{ store: Store }>()
 const emit = defineEmits<{ newItem: [] }>()

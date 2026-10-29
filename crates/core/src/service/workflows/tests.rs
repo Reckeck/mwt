@@ -190,6 +190,30 @@ fn a_question_pauses_the_run_until_the_answer() {
 }
 
 #[test]
+fn the_question_notice_follows_the_notice_language() {
+    for (ru, expected) in [
+        (true, "Нужен ваш ответ: Отложить 300?"),
+        (false, "Your answer is needed: Отложить 300?"),
+    ] {
+        let (_dir, mut vault, card, savings) = wallets();
+        vault.set_notice_language(ru);
+        let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
+        vault
+            .run_workflow_now(&workflow.id, None, later(), "UTC")
+            .unwrap();
+        assert!(
+            vault
+                .doc
+                .notification_log
+                .iter()
+                .any(|notice| notice.body == expected),
+            "{expected}: {:?}",
+            vault.doc.notification_log
+        );
+    }
+}
+
+#[test]
 fn answering_no_goes_the_no_way() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
@@ -1998,14 +2022,14 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
         "{}",
         report.notices[0].body
     );
-    // With no trigger named, the button starts «Запуск вручную».
+    // With no trigger named, the button starts "Run manually".
     let manual = vault
         .run_workflow_now(&workflow.id, None, now, "UTC")
         .unwrap();
     assert_eq!(manual.run.trigger, "manual");
 }
 
-/// Salary → «Очередь» → send the salary's amount from savings to the card.
+/// Salary → "Queue" → send the salary's amount from savings to the card.
 /// Savings hold 500; the card gets the salaries.
 fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String, Workflow) {
     let (dir, mut vault, card, savings) = wallets();

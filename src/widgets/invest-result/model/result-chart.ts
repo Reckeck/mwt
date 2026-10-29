@@ -25,14 +25,14 @@ export interface ResultChartTexts {
   real: string
   crossover: string
   depleted: string
-  /** «Этот расчёт»: the current run's name among the compared lines. */
+  /** `This calculation`: the current run's name among the compared lines. */
   current: string
 }
 
 const MONTHS_IN_YEAR = 12
 
 /**
- * Stacked area «вложено / проценты» per year with the real balance as a
+ * Stacked area `invested / interest` per year with the real balance as a
  * line; the year interest first beats the contributions and the year the
  * money runs out are marked on the axis. With other runs to compare the
  * chart turns to one balance line per run, each in its own color (Money 4 · 22).

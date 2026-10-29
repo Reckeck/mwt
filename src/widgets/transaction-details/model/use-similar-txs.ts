@@ -10,8 +10,8 @@ import { isSimilar, pairRate, rateDelta, similarFilter, txPair } from '../lib/tx
 const LOOK_BACK = 50
 
 /**
- * «Похожие · 2» (Paths 1 · 6): earlier operations like this one, and how its
- * rate compares with theirs («выше прошлых на 1,3 %»).
+ * `Similar · 2` (Paths 1 · 6): earlier operations like this one, and how its
+ * rate compares with theirs (`1.3 % higher than before`).
  */
 export function useSimilarTxs(tx: MaybeRefOrGetter<Transaction | null>, enabled: MaybeRefOrGetter<boolean>) {
   const filter = computed(() => {

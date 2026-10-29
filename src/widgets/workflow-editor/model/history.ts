@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-/** Most steps back «Отменить» keeps. */
+/** Most steps back `Undo` keeps. */
 const LIMIT = 100
 
 /** Undo and redo over snapshots of the graph (its JSON). */

@@ -97,7 +97,7 @@ pub struct PropertyPurchase {
     pub date: String,
     pub unit_price: Amount,
     pub currency: String,
-    /// The first «Приобрести» operation, else the old form fields.
+    /// The first "Acquire" operation, else the old form fields.
     pub from_operation: bool,
 }
 
@@ -349,7 +349,7 @@ impl UnlockedVault {
         ))
     }
 
-    /// The purchase of an asset: the first «Приобрести» into the property
+    /// The purchase of an asset: the first "Acquire" into the property
     /// (its unit price is in the base currency of that moment), else the old
     /// purchase fields of the form.
     pub(crate) fn purchase_of(&self, store: &Store, asset_key: &str) -> Option<PropertyPurchase> {

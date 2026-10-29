@@ -7,7 +7,7 @@ import { PLANNING_KEYS } from '@/shared/lib/planning'
 /** Everything a goal shows up in: plan, envelopes, the automation it switched off, open cards. */
 const STALE_KEYS: ReadonlyArray<readonly string[]> = [...PLANNING_KEYS, ['envelopes'], ['workflows'], ['entity-card']]
 
-/** Delete a goal (`delete_goal`); the toast's «Отменить» puts it back (`restore_goal`). */
+/** Delete a goal (`delete_goal`); the toast's `Undo` puts it back (`restore_goal`). */
 export function useGoalDelete() {
   const { t } = useI18n()
   const queryClient = useQueryClient()

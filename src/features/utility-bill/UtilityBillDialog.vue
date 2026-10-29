@@ -23,7 +23,7 @@ import type { BillRow, UtilityBillDialogProps } from './utility-bill.types'
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
- * «Счёт за октябрь · Квартира» (Wallets-2 · 13): meters get their reading
+ * `October bill · Apartment` (Wallets-2 · 13): meters get their reading
  * typed in place (the amount follows), fixed bills come pre-filled, the rent an
  * automation pays stays off, and one button books every ticked line as its own
  * payment — the way they are actually paid, on one day.
@@ -57,7 +57,7 @@ const automations = useQuery({
   queryFn: () => call<Automation[]>('list_automations'),
   enabled: open,
 })
-/** The automation that pays a rent line, by name: «платит автоматизация «Аренда» 10-го». */
+/** The automation that pays a rent line, by name: `paid by the `Rent` automation on the 10th`. */
 const automationName = (row: BillRow) => {
   const kind = row.line.item.kind
   const id = 'housing' in kind ? kind.housing.automation_id : null

@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 
 /**
- * A saved workflow's tests inside the «Проверка» block: each one emulates the
+ * A saved workflow's tests inside the `Check` block: each one emulates the
  * workflow and says whether it still does what it should.
  */
 const props = defineProps<{ workflow: Workflow; dirty: boolean }>()

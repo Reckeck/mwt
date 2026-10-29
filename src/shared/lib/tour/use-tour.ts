@@ -113,7 +113,7 @@ export function useTour() {
     return !app.completed_tours.includes(id) && !app.declined_tours.includes(id)
   }
 
-  /** «Не сейчас»: this screen does not offer again; the others still do. */
+  /** `Not now`: this screen does not offer again; the others still do. */
   async function decline(id: string) {
     const declined = settings.app?.declined_tours ?? []
     if (declined.includes(id)) return

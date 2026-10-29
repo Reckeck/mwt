@@ -10,8 +10,8 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 
 /**
  * The phone's calculator for an amount field: a bottom sheet with digits and
- * `+ − × ÷ ( ) %`. It edits its own text; «Готово» hands it back and the field
- * applies it like a typed expression. «Назад» closes it (a Reka layer).
+ * `+ − × ÷ ( ) %`. It edits its own text; `Done` hands it back and the field
+ * applies it like a typed expression. `Back` closes it (a Reka layer).
  */
 const props = defineProps<{ text: string; decimals?: number; allowNegative?: boolean; decimalMark: string }>()
 const open = defineModel<boolean>('open', { default: false })
@@ -54,7 +54,7 @@ const errorText = computed(() => {
   if (!outcome || outcome.ok) return ''
   return outcome.code === 'divByZero' ? t('amount.calc.divByZero') : ''
 })
-/** What «Готово» would hand back is shown as the field's own number once there is no operator. */
+/** What `Done` would hand back is shown as the field's own number once there is no operator. */
 const shown = computed(() => (typed.value ? typed.value.replace(/\./g, props.decimalMark) : '0'))
 const failed = ref(false)
 

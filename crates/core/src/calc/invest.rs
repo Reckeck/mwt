@@ -30,7 +30,7 @@ use crate::error::{Error, Result};
 pub const MAX_TERM_MONTHS: u32 = 1200;
 /// The bounds of [`SolveUnknown::Rate`], in percent per year.
 const RATE_SOLVE_MAX_PCT: Decimal = Decimal::from_parts(200, 0, 0, false, 0);
-/// «Что выгоднее?»: the rate bump (percentage points) and the contribution factor.
+/// "What pays off more?": the rate bump (percentage points) and the contribution factor.
 const COMPARE_RATE_BUMP: Decimal = Decimal::TWO;
 const COMPARE_CONTRIBUTION_FACTOR: Decimal = Decimal::from_parts(12, 0, 0, false, 1);
 const HUNDRED: Decimal = Decimal::ONE_HUNDRED;
@@ -283,7 +283,7 @@ pub struct CompareRow {
     pub gain: Amount,
 }
 
-/// «Что выгоднее?»: a higher rate against higher contributions.
+/// "What pays off more?": a higher rate against higher contributions.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct InvestCompare {
     pub rows: Vec<CompareRow>,

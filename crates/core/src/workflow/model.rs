@@ -61,7 +61,7 @@ pub struct WorkflowTest {
     /// The moment to emulate (RFC3339); now when empty.
     #[serde(default)]
     pub at: Option<String>,
-    /// Answers to «Ждать подтверждения» questions, by node id; a question
+    /// Answers to "Wait for confirmation" questions, by node id; a question
     /// without one ends the emulation as `waiting`.
     #[serde(default)]
     #[ts(optional)]
@@ -93,13 +93,13 @@ pub struct GraphVersion {
 pub enum RunOutcome {
     /// Ran to the end.
     Done,
-    /// Stopped by a «Стоп» node or a guard, with its reason.
+    /// Stopped by a "Stop" node or a guard, with its reason.
     Stopped { reason: String },
     /// Failed: nothing it did was kept.
     Failed { message: String },
-    /// Asleep at a «Подождать» node until `until` (RFC3339).
+    /// Asleep at a "Wait" node until `until` (RFC3339).
     Waiting { until: String },
-    /// Asleep at a «Ждать подтверждения» node until the user answers (or,
+    /// Asleep at a "Wait for confirmation" node until the user answers (or,
     /// with a time limit, until `until`, which counts as «No»).
     Asking {
         node_id: String,
@@ -110,8 +110,8 @@ pub enum RunOutcome {
     /// Ran to the end, but some branches failed: each failed branch was
     /// undone, the rest kept. One line per failed branch.
     Partial { failed: Vec<String> },
-    /// Refused for want of money at a «Создать операцию» set to refuse:
-    /// nothing was kept; the run waits for «Повторить» or «Пропустить».
+    /// Refused for want of money at a "Create transaction" set to refuse:
+    /// nothing was kept; the run waits for "Retry" or "Skip".
     /// `trigger_node` and `planned_at` let a retry fire it the same way.
     Rejected {
         reason: crate::model::planning::RejectReason,
@@ -163,7 +163,7 @@ pub struct WorkflowVar {
     pub updated_at: String,
 }
 
-/// Operations a workflow prepared behind a «Ждать подтверждения» node.
+/// Operations a workflow prepared behind a "Wait for confirmation" node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct QueuedActions {
     pub id: String,
@@ -193,34 +193,34 @@ pub struct WorkflowState {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum WaitKind {
-    /// «Подождать»: goes on from «Дальше» at `resume_at`.
+    /// "Wait": goes on from "Next" at `resume_at`.
     #[default]
     Timer,
-    /// «Ждать подтверждения»: goes on from «Да» or «Нет» when the user
-    /// answers; `resume_at`, when set, is the deadline that counts as «Нет».
+    /// "Wait for confirmation": goes on from "Yes" or "No" when the user
+    /// answers; `resume_at`, when set, is the deadline that counts as "No".
     Confirm,
 }
 
-/// A run asleep at a «Подождать» or «Ждать подтверждения» node: where it goes
+/// A run asleep at a "Wait" or "Wait for confirmation" node: where it goes
 /// on, when, and the data it had worked out by then.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct WorkflowWait {
     pub id: String,
     pub workflow_id: String,
     pub run_id: String,
-    /// The wait node; the run goes on from its «Дальше» (or «Да»/«Нет»).
+    /// The wait node; the run goes on from its "Next" (or "Yes"/"No").
     pub node_id: String,
     /// RFC3339; empty for a question without a deadline.
     pub resume_at: String,
     /// Node outputs computed before the wait, as JSON.
     pub memo: String,
-    /// Unused: the confirmation queue is gone (a «Ждать подтверждения» node
+    /// Unused: the confirmation queue is gone (a "Wait for confirmation" node
     /// asks instead). Kept so older vaults read.
     pub queue_mode: bool,
     pub trigger: String,
     #[serde(default)]
     pub kind: WaitKind,
-    /// The question of a «Ждать подтверждения» node.
+    /// The question of a "Wait for confirmation" node.
     #[serde(default)]
     pub question: String,
     /// When the run fell asleep (RFC3339).

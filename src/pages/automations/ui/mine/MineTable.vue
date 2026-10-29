@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { mineDoes, mineName, mineRoute, mineWhen } from '../../lib/mine-view'
 
 /**
- * «Мои» on a computer (Auto-1 · 1): Название · Тип · Следующий раз · Что
- * сделает · Вкл. A click on the name opens it; the switch turns it off.
+ * `Mine` on a computer (Auto-1 · 1): Name · Type · Next time · What
+ * it will do · On. A click on the name opens it; the switch turns it off.
  */
 const props = defineProps<{ items: MineItem[]; storeName: (id: string) => string }>()
 const emit = defineEmits<{ toggle: [item: MineItem, active: boolean] }>()

@@ -1,5 +1,5 @@
 //! Inflation and the key rate from the statistics offices: the background
-//! refresh, the «Обновить» button and the per-currency mode.
+//! refresh, the "Refresh" button and the per-currency mode.
 
 use chrono::{Datelike, Months, NaiveDate};
 use tauri::{AppHandle, Emitter, Manager, State};

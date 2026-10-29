@@ -13,7 +13,7 @@ import { WORKDAY_SHIFTS } from '../../automation-edit.constants'
 import type { SalaryForMonth, SalaryPayout } from '../../lib/salary-plan'
 
 /**
- * One payout of «Зарплата»: its name, the day, the month it is for, where a
+ * One payout of `Salary`: its name, the day, the month it is for, where a
  * day off moves it and the amount. The dialog shows it once or twice.
  */
 const props = defineProps<{

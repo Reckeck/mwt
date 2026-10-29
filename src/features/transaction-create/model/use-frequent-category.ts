@@ -6,7 +6,7 @@ import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { frequentCategory } from '../lib/frequent-category'
 
-/** How far back «Часто» looks: a quarter is enough to know the habit and stays cheap. */
+/** How far back `Often` looks: a quarter is enough to know the habit and stays cheap. */
 const LOOKBACK_DAYS = 90
 
 /** The category this kind of operation gets most often lately, offered under the field. */

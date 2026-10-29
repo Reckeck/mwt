@@ -38,7 +38,7 @@ const period = computed(() => {
 const details = ref(false)
 const recording = ref(false)
 
-/** «Посчитать сделку» (Money 4 · 23): its buy opens «Записать сделку» with the same sums. */
+/** `Work out a trade` (Money 4 · 23): its buy opens `Record a trade` with the same sums. */
 const calculating = ref(false)
 const draft = ref<TradeDraft | null>(null)
 const tree = useStoreTree()

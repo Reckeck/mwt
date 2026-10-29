@@ -7,7 +7,7 @@ import type { ForgetTarget, ForgottenRow } from '../vault-forget.types'
 
 /**
  * Take vaults out of the recent list. Only the list entry goes, never the file,
- * so there is no question: the toast offers «Отменить» (`restoreRecent`).
+ * so there is no question: the toast offers `Undo` (`restoreRecent`).
  */
 export function useVaultForget() {
   const { t } = useI18n()

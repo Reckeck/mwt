@@ -21,7 +21,7 @@ const sessionSet = (status: SyncStatus | undefined) =>
 
 /**
  * What sync tells in the background: a batch arrived (every screen re-reads,
- * a toast offers «Отменить»), a session failed, the clocks disagree.
+ * a toast offers `Undo`), a session failed, the clocks disagree.
  * Mounted once by the shell.
  */
 export function useSyncEvents() {

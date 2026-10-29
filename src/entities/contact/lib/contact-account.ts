@@ -1,4 +1,4 @@
-/** Card payment systems told apart by the first digits; the name is the same in every language but «Мир». */
+/** Card payment systems told apart by the first digits; the name is the same in every language but `Mir`. */
 export type CardBrand = 'mir' | 'visa' | 'mastercard' | 'unionpay' | 'amex' | 'jcb'
 
 /** The payment system of a card number, or `null` when the digits say nothing. */

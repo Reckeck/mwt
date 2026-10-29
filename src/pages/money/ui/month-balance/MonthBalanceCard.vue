@@ -13,7 +13,7 @@ import { SpendingMonths } from '../spending'
 import MonthCarryLine from './MonthCarryLine.vue'
 
 /**
- * «По месяцам» of the month's balance (Money 3 · 15): the bars, the carry
+ * `By month` of the month's balance (Money 3 · 15): the bars, the carry
  * switch, and the table of what came, went, was left and carried. A month is
  * picked with a click on its bar. On a phone the months are a list.
  */

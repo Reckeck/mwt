@@ -13,7 +13,7 @@ import { SectionState } from '@/shared/ui/section-state'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 /**
- * «Пассивный доход» (plan H4): S — the month so far; M — the trend of the last
+ * `Passive income` (plan H4): S — the month so far; M — the trend of the last
  * months and how much of the base spending it covers; L — the year's total too.
  */
 const { t } = useI18n()

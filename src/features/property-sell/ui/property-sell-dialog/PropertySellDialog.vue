@@ -14,9 +14,9 @@ import { localDate } from '@/shared/lib/planning'
 import { usePropertySell } from '../../model/use-property-sell'
 
 /**
- * «Продать «Машину»» (Wallets-4 · 21): only a property has it. The sum on a
+ * `Sell "Car"` (Wallets-4 · 21): only a property has it. The sum on a
  * line of its own, the wallet and the day under it at one height, what the
- * thing stood at in the books and the gain over it, and «в архив».
+ * thing stood at in the books and the gain over it, and `Archive`.
  */
 const props = defineProps<{ store: Store; positions: StorePosition[] }>()
 const open = defineModel<boolean>('open', { required: true })

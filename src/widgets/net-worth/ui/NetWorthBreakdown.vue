@@ -20,7 +20,7 @@ const rows = computed(() =>
   ].filter((row) => Number(row.value) !== 0),
 )
 
-/** Debts by loan kind, under «Кредиты»; one kind would only repeat the total. */
+/** Debts by loan kind, under `Loans`; one kind would only repeat the total. */
 const loanKinds = computed(() => {
   const shares = props.worth.liabilities_by_kind ?? []
   return shares.length > 1 ? shares : []
@@ -28,7 +28,7 @@ const loanKinds = computed(() => {
 
 const classes = useAssetClasses()
 
-/** Financial assets by basket, under «Финансовые»; shown once there is more than one, or a fund to set apart. */
+/** Financial assets by basket, under `Financial`; shown once there is more than one, or a fund to set apart. */
 const classShares = computed(() => {
   const data = props.worth
   const fund = Number(data.financial_fund)

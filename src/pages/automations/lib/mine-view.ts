@@ -1,4 +1,4 @@
-/** How a «Мои» row reads (Auto-1 · 1): the name, when it fires next, what it will do. */
+/** How a `Mine` row reads (Auto-1 · 1): the name, when it fires next, what it will do. */
 
 import type { LocationQuery, RouteLocationRaw } from 'vue-router'
 
@@ -31,15 +31,15 @@ export function mineName(item: MineItem): string {
   return `${item.name} ${sign} ${formatMoney(item.amount, { currency: item.currency ?? 'usd', decimals: whole ? 0 : 2 })}`
 }
 
-/** «25 ноя»; «по цене» for an alert, «по событию» for a scheme that waits for an operation. */
+/** `Nov 25`; `on price` for an alert, `on an event` for a scheme that waits for an operation. */
 export function mineWhen(item: MineItem, t: Translate): string {
   if (item.next_at) return formatDayMonthShort(item.next_at)
   return item.kind === 'alert' ? t('automations.mine.byPrice') : t('automations.mine.byEvent')
 }
 
 /**
- * «+1 575 $ → Тинькофф», «45 000 ₽ Тинькофф → Bybit», «уведомление»; a scheme
- * says what its description says. « · ждёт «да»» when it asks first.
+ * `+1,575 $ → Tinkoff`, `45,000 ₽ Tinkoff → Bybit`, `a notice`; a scheme
+ * says what its description says. ` · waits for `Yes`` when it asks first.
  */
 export function mineDoes(item: MineItem, storeName: (id: string) => string, t: Translate): SumPart[] {
   const asks = item.asks ? ` · ${t('automations.mine.asks')}` : ''
@@ -61,6 +61,6 @@ export function mineRoute(item: MineItem, query: LocationQuery): RouteLocationRa
   return entityLocation({ kind: 'automation', id: item.id }, query)
 }
 
-/** The ready-made starts of the empty «Мои» (Auto-1 · 2), in the frame's order. */
+/** The ready-made starts of the empty `Mine` (Auto-1 · 2), in the frame's order. */
 export const MINE_STARTERS = ['salary', 'save_share', 'low_balance', 'weekly_buy'] as const
 export type MineStarter = (typeof MINE_STARTERS)[number]

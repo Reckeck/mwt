@@ -23,7 +23,7 @@ import { ContactList } from './ui/contact-list'
 /**
  * Contacts and debts (Ops-1 · 6): the list on the left, the picked contact on
  * the right. The pick lives in the address (`?contact=`), so on a phone the
- * contact is a screen of its own and «Назад» returns to the list.
+ * contact is a screen of its own and `Back` returns to the list.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -55,7 +55,7 @@ const selectedId = computed({
   get: () => (typeof route.query.contact === 'string' ? route.query.contact : ''),
   set: (id: string) => {
     const to = { query: { ...route.query, contact: id || undefined } }
-    // A phone steps into the contact, so «Назад» has somewhere to go; a desktop just swaps the right side.
+    // A phone steps into the contact, so `Back` has somewhere to go; a desktop just swaps the right side.
     void (phone.value && id ? router.push(to) : router.replace(to))
   },
 })

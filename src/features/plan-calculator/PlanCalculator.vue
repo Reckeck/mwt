@@ -32,7 +32,7 @@ const rows = computed<ResultRow[]>(() =>
 
 const form = useFormValidation(() => ({ amount: positiveAmount(amount.value), priceIn: positiveAmount(priceIn.value) }))
 
-/** «Позиция» first: the deal question the frame opens with. */
+/** `Position` first: the deal question the frame opens with. */
 const tabs = computed(() =>
   (['position', 'converter'] as const).map((value) => ({ value, label: t(`calc.mode.${value}`) })),
 )
@@ -48,7 +48,7 @@ function apply(event?: Event) {
 
 function emitPlan() {
   if (mode.value === 'position') {
-    // «Спот» on the exchange: USDT given, the coin bought — the same sums as the calculation.
+    // `Spot` on the exchange: USDT given, the coin bought — the same sums as the calculation.
     emit('apply', {
       mode: 'position',
       from: { ...USDT },

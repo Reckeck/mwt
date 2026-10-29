@@ -9,10 +9,10 @@ export interface ItemRow {
   item: EventItem
   view: ItemView
   fact: PlanFact
-  /** «по штукам · Петя 3, Вася 5», «только Петя, Вася»; empty when everybody shares. */
+  /** `by units · Pete 3, Vasya 5`, `only Pete, Vasya`; empty when everybody shares. */
   caption: string
-  /** «купил я», «купили Вася и я»; empty when nothing was bought. */
+  /** `I bought`, `Vasya and I bought`; empty when nothing was bought. */
   boughtBy: string
-  /** «8 из 6 шт · +600 ₽» as plain text: the accessible name of the status cell. */
+  /** `8 of 6 pcs · +600 ₽` as plain text: the accessible name of the status cell. */
   summary: string
 }

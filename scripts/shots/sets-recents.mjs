@@ -1,4 +1,4 @@
-/** «Вход» on the unlock screen: Full-New-Recents 1–4 and Full-New-Encrypt 3. No login, each shot prepares its own mock state. */
+/** `Sign in` on the unlock screen: Full-New-Recents 1–4 and Full-New-Encrypt 3. No login, each shot prepares its own mock state. */
 
 const FIELD = '[data-recents-field]'
 /** A returning user: the base currency is chosen, so the card does not ask for it. */
@@ -35,7 +35,7 @@ export const login = [
     canvas: { board: 'New-Recents', frame: '2.' },
   },
   {
-    // The chosen row has no file: the error under the field, «Найти файл…» and «Убрать из истории».
+    // The chosen row has no file: the error under the field, `Find file…` and `Remove from history`.
     name: 'login-missing',
     route: '/unlock',
     login: false,
@@ -43,7 +43,7 @@ export const login = [
     canvas: { board: 'New-Recents', frame: '3.' },
   },
   {
-    // The app's own storage: a bin instead of «×», «Удалить хранилище?» for the second vault.
+    // The app's own storage: a bin instead of «×», `Delete vault` for the second vault.
     name: 'login-delete',
     route: '/unlock',
     login: false,
@@ -63,7 +63,7 @@ export const login = [
     canvas: { board: 'New-Recents', frame: '4.' },
   },
   {
-    // A vault without a password (ядро #85): the «без пароля» label, «Открыть» opens it at once.
+    // A vault without a password (core #85): the `no password` label, `Open` opens it at once.
     name: 'login-plain',
     route: '/unlock',
     login: false,

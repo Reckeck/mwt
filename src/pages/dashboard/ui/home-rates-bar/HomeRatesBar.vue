@@ -9,9 +9,9 @@ import { TIME_CYCLE, dateFormat, pluralForm } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
 
 /**
- * «Нет сети / курсы устарели» over the figures (Currency-2 · 8): when the rates
+ * `No network / rates are stale` over the figures (Currency-2 · 8): when the rates
  * the sums use are from an earlier day, or the device is offline — what they
- * are as of, that operations are still recorded, and «Обновить». Goes with
+ * are as of, that operations are still recorded, and `Refresh`. Goes with
  * the next rates.
  */
 const { t, locale } = useI18n()

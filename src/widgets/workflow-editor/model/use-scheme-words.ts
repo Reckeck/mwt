@@ -12,7 +12,7 @@ import { schemeWords } from './scheme-words'
 import type { EditorGraph } from './use-editor-graph'
 
 /**
- * The scheme read aloud: «Словами» over the canvas, each node's value in
+ * The scheme read aloud: `In words` over the canvas, each node's value in
  * words, and which of its ports are wired — a card shows only those.
  */
 export function useSchemeWords(editor: EditorGraph) {

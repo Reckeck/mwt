@@ -26,7 +26,7 @@ import { useAmountExpression } from './use-amount-expression'
  * as is; the grouped text exists only inside the field. Both `,` and `.` are
  * accepted as the decimal mark, and pasted amounts like `1,234.50 ₽` are read
  * correctly. The `suffix` slot sits inside the field's border (a currency);
- * `prefix` does the same on the left («1 балл =»).
+ * `prefix` does the same on the left (`1 point =`).
  *
  * Text with an operator (`1200+350*2`) is an expression: the hint under the
  * field shows `= 1 900`, Enter or leaving the field makes it the amount (and

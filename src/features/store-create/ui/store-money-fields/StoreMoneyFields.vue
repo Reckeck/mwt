@@ -12,7 +12,7 @@ import { SwitchRow } from '@/shared/ui/switch-row'
 import { useStoreCreate } from '../../model/use-store-create-state'
 
 /**
- * What the wallet holds now (Wallets-1 · 4): booked as «Начальный остаток» on
+ * What the wallet holds now (Wallets-1 · 4): booked as `Opening balance` on
  * its day, not as income; and whether it goes to the sidebar right away.
  */
 const { t } = useI18n()

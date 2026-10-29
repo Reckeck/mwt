@@ -43,7 +43,7 @@ export function useSyncActions() {
     meta: { success: '', error: 'sync.pairFailed' },
   })
 
-  // «Сопрячь заново» on a device that forgot this one: dials it with the request.
+  // "Pair again" on a device that forgot this one: dials it with the request.
   const pairAgain = useMutation({
     mutationFn: (deviceId: string) => call('sync_pair', { deviceId }),
     onSettled: () => refresh(SYNC_PEERS_KEY, SYNC_STATUS_KEY),
@@ -71,7 +71,7 @@ export function useSyncActions() {
     // Accepted or declined, the journal has a new line (the backend writes it when it is done).
     onSettled: () => refresh(SYNC_JOURNAL_KEY, SYNC_HISTORY_KEY),
     meta: {
-      // Applying reports itself through `vault-synced` (with «Отменить»).
+      // Applying reports itself through `vault-synced` (with `Undo`).
       success: (_data, input) => ((input as SyncDecisionInput).accept ? '' : t('sync.plan.declined')),
       error: 'sync.applyFailed',
     },
@@ -113,7 +113,7 @@ export function useSyncActions() {
     meta: { success: 'sync.backup.restored', error: 'sync.backup.restoreFailed' },
   })
 
-  // «Открыть порт»: the system asks for its password; the warning goes once it is done.
+  // `Open the port`: the system asks for its password; the warning goes once it is done.
   const openFirewall = useMutation({
     mutationFn: () => call<SyncStatus>('sync_open_firewall'),
     onSuccess: (status) => queryClient.setQueryData(SYNC_STATUS_KEY, status),

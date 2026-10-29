@@ -17,7 +17,7 @@ import { useTxForm } from '../../model/use-tx-form'
 type Side = 'buy' | 'sell'
 
 /**
- * Spot in «Сделка · <биржа>» (OpForm-2 · 9): a side, a pair, how much of the
+ * Spot in `Trade · <exchange>` (OpForm-2 · 9): a side, a pair, how much of the
  * base at what price, the fee in the quote, and what leaves the wallet. A buy
  * sells the quote for the base, a sell the other way round; the full editor
  * keeps the order id and maker or taker.
@@ -72,7 +72,7 @@ onUnmounted(() => {
   form.feeAsset = null
 })
 
-/** «Итого спишется 1 286,30 USDT» on a buy, «Итого придёт …» on a sell. */
+/** `Total to be debited 1,286.30 USDT` on a buy, `Total to receive…` on a sell. */
 const total = computed(() => {
   if (!cost.value || !quote.value) return null
   const fee = form.feeAmount.trim() || '0'

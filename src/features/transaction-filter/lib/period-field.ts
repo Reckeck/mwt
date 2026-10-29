@@ -7,7 +7,7 @@ import {
   type PeriodPreset,
 } from '@/shared/lib/period'
 
-/** The chips under the month: whole-month presets, then «с … по». */
+/** The chips under the month: whole-month presets, then `from … to`. */
 export const PERIOD_CHIPS = PERIOD_PRESETS.filter((preset) => preset !== 'all')
 
 /** How many months the month list goes back. */

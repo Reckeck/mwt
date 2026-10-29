@@ -24,7 +24,7 @@ export function useItemRows(view: MaybeRefOrGetter<SharedEventView | undefined>)
         // money: plain — the accessible name is text
         formatMoney(value, { currency: current.event.currency, decimals: sumDecimals(current) })
       const summary = [
-        qtyText(fact, item.unit, formatQuantity),
+        qtyText(fact, item.unit, formatQuantity, t('sharedEvents.items.qtyOf')),
         fact.diffMoney !== null ? diffText(fact.diffMoney, money) : fact.state === 'unplanned' ? money(fact.cost) : '',
       ]
         .filter(Boolean)

@@ -12,7 +12,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { SectionState } from '@/shared/ui/section-state'
 
-/** A savings account, deposit or ПДС at a glance: its rate, what it earned, what is ahead. */
+/** A savings account, deposit or a PDS (pension savings plan) at a glance: its rate, what it earned, what is ahead. */
 const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()
 

@@ -51,7 +51,7 @@ export function activeFilterCount(filter: TxFilter): number {
 
 type Query = Record<string, string | null | (string | null)[] | undefined>
 
-/** The filter as short query keys, only what is set: `?store=a,b&kind=payment&q=кофе`. */
+/** The filter as short query keys, only what is set: `?store=a,b&kind=payment&q=coffee`. */
 export function txFilterToQuery(filter: TxFilter): Record<string, string | undefined> {
   return {
     store: filter.scope.store_ids.join(',') || undefined,

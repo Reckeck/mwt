@@ -22,7 +22,7 @@ const queryClient = useQueryClient()
 
 const reminders = useQuery({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
 useFocusRow(() => reminders.isSuccess.value)
-/** «Мои» are written by the user, «Авто» are made from the data. */
+/** `Mine` are written by the user, `Auto` are made from the data. */
 const show = ref<'all' | 'mine' | 'auto'>('all')
 /** By time; grouped below into overdue, today, later and done. Muted automatic ones are hidden. */
 const list = computed(() =>

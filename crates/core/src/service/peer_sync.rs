@@ -378,6 +378,7 @@ impl UnlockedVault {
             fmt: fmt.for_writing(),
             doc: decoded.doc,
             base_currency: self.base_currency.clone(),
+            notice_ru: self.notice_ru,
             password: Zeroizing::new(String::new()),
             _lock: crate::storage::VaultLock::detached(),
             // Nothing in the copy is ever written back.
@@ -937,7 +938,7 @@ impl UnlockedVault {
         self.persist()
     }
 
-    /// «Забыть устройство»: its key is refused here and, once this reaches
+    /// "Forget device": its key is refused here and, once this reaches
     /// them, on every other device.
     pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()> {
         if let Some(known) = self
@@ -990,7 +991,7 @@ impl UnlockedVault {
         Ok(())
     }
 
-    /// «Продолжить»: exchange with the device may run again.
+    /// "Resume": exchange with the device may run again.
     pub fn sync_resume_peer(&mut self, device_id: &str) -> Result<()> {
         if self.doc.sync.paused.remove(device_id) {
             self.persist()?;

@@ -3,7 +3,7 @@
 //! disagrees with it after everything is booked.
 //!
 //! The ledger stays the source of truth: balances come from operations. The
-//! live balance only enters as a correction («Корректировка»), so history is
+//! live balance only enters as a correction ("Adjustment"), so history is
 //! kept and a later import still lands before it.
 
 use std::collections::HashSet;

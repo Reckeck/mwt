@@ -16,7 +16,7 @@ import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 
 /**
- * «Первые шаги» on an empty Home (Home 5): four steps checked off from the vault
+ * `First steps` on an empty Home (Home 5): four steps checked off from the vault
  * itself; only the next one has a button. Hidden in the vault, so every device agrees.
  */
 const { t } = useI18n()

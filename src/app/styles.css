@@ -374,7 +374,7 @@
     }
   }
 }
-/* «Подробно», «Ещё поля»: a row that folds is a full-width tap target on a touch screen. */
+/* `Details`, `More fields`: a row that folds is a full-width tap target on a touch screen. */
 @media (pointer: coarse) {
   [data-slot='collapsible-trigger'] {
     min-height: 2.5rem;
@@ -434,7 +434,7 @@ body .driver-overlay {
 body:has([data-slot='sheet-content'][data-state='open']) [data-sonner-toaster][data-y-position='top'] {
   top: calc(var(--safe-top, 0px) + 3.5rem) !important;
 }
-/* Two buttons («Отложить», «Выполнено») squeezed the text into a column of syllables:
+/* Two buttons (`Snooze`, `Done`) squeezed the text into a column of syllables:
    such a toast wraps, the text takes the whole width and the buttons go under it. */
 [data-sonner-toast][data-styled='true']:has([data-cancel]) {
   flex-wrap: wrap;
@@ -511,7 +511,7 @@ body:has([data-slot='sheet-content'][data-state='open']) [data-sonner-toaster][d
   text-decoration: none;
 }
 
-/* A glance the screen points at (the «≈ N $» of a header, «всего с сентября»): one dotted line, always. */
+/* A glance the screen points at (the `≈ N $` of a header, `total since September`): one dotted line, always. */
 .money-glance.money-convertible {
   text-decoration: underline dotted color-mix(in oklch, var(--primary) 70%, transparent) 1.5px;
   text-underline-offset: 5px;
@@ -529,7 +529,7 @@ body:has([data-slot='sheet-content'][data-state='open']) [data-sonner-toaster][d
   cursor: inherit;
 }
 
-/* The mark of a sum on a filled button (a primary «Направить остаток 558 $ в цель»): the muted
+/* The mark of a sum on a filled button (a primary `Send the remaining 558 $ to a goal`): the muted
    grey would vanish on the blue, so it takes the button's text colour, a little softer. */
 :is(.bg-primary, .bg-destructive) .money-symbol {
   color: inherit;

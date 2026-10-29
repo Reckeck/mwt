@@ -1,7 +1,7 @@
 export interface AdvancedFieldsProps {
-  /** The toggle's text; "Дополнительно" by default. */
+  /** The toggle's text; `More options` by default. */
   label?: string
-  /** The toggle's text while open («Скрыть: дата, комиссия…»); `label` when unset. */
+  /** The toggle's text while open (`Hide: date, fee…`); `label` when unset. */
   openLabel?: string
   /** `primary`: a link-coloured row with a chevron down, what the short operation form uses. */
   tone?: 'muted' | 'primary'

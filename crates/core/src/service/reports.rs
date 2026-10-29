@@ -1,4 +1,4 @@
-//! Analytics (plan Ф6): reports over months, the spending calendar and CSV.
+//! Analytics (plan F6): reports over months, the spending calendar and CSV.
 //!
 //! Every report reads the same classified flows as the budget
 //! ([`UnlockedVault::classify_flow`]) or replays legs to value what was held
@@ -1350,7 +1350,7 @@ impl UnlockedVault {
     // -- the calendar -----------------------------------------------------------------------
 
     /// Spending by day of a month (`YYYY-MM`) against the day's allowance,
-    /// with what is still to come (plan Ф6).
+    /// with what is still to come (plan F6).
     pub fn calendar_month(&self, month: &str, now: i64, zone: &str) -> Result<CalendarMonth> {
         let first = calendar::parse_month(month)
             .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;

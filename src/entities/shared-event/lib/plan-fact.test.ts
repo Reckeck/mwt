@@ -47,7 +47,7 @@ describe('planFact', () => {
       }),
     )
     expect(fact.state).toBe('bought')
-    expect(qtyText(fact, 'шт')).toBe('8 из 6 шт')
+    expect(qtyText(fact, 'шт', undefined, 'из')).toBe('8 из 6 шт')
     expect(diffText(fact.diffMoney ?? '0', (sum) => `${sum} ₽`)).toBe('+600 ₽')
   })
 

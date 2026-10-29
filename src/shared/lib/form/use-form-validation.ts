@@ -8,7 +8,7 @@ export interface FormValidationOptions {
 }
 
 /**
- * The one validation flow of every form (AGENTS.md, «Формы»):
+ * The one validation flow of every form (AGENTS.md, "Forms"):
  *
  * - the save button stays enabled (only a pending save disables it);
  * - pressing it with a missing or wrong field shows the message under each

@@ -29,7 +29,7 @@ const fromStore = computed(() => accountStoreId(form.from))
       <AvailableHint :store-id="fromStore" :asset="form.asset" @max="(quantity) => (form.amount = quantity)" />
     </FormField>
   </div>
-  <!-- Top-aligned: a two-line «Откуда» pushed the «Куда» label 8px down with items-end. -->
+  <!-- Top-aligned: a two-line `From` pushed the `To` label 8px down with items-end. -->
   <div class="grid items-start gap-3 @xl:grid-cols-[1fr_auto_1fr]">
     <FormField :label="t('tx.field.from')" required :error="check.error('from')">
       <AccountRefPicker v-model="form.from" />

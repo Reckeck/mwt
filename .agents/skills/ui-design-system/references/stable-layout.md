@@ -1,105 +1,111 @@
-# Стабильная раскладка (правило 17)
+# Stable layout (rule 17)
 
-Интерфейс не двигается сам: ни наведение, ни фокус, ни нажатие, ни загрузка
-данных, ни полоса прокрутки не меняют размер и место соседей. Каждый пункт ниже
-— реальная ошибка, которую уже исправляли (аудит 2026-10-20).
+The interface does not move by itself: neither hover, nor focus, nor a press,
+nor data loading, nor a scrollbar appearing changes the size and place of its
+neighbors. Every item below is a real bug that was already fixed (audit
+2026-10-20).
 
-Проверки: `mise run check-ui` (статически, правила в `tests/checks/rules/ui/`) и
-`mise run check-layout` (приложение на моке в headless Chromium).
+Checks: `mise run check-ui` (static, the rules are in
+`tests/checks/rules/ui/`) and `mise run check-layout` (the application on the
+mock in headless Chromium).
 
-## Наведение и фокус
+## Hover and focus
 
-- **Кнопки строки — в зарезервированной колонке.** Место под действия есть
-  всегда (фиксированная ширина или «⋯» `ActionMenu`); по наведению меняется
-  только `opacity`. Монтировать лениво можно — но в уже занятое место.
-  → `hover-mount`, `check-layout` («row moves Npx on hover/leave»)
-- **Скрытое до наведения — только для мыши:** `pointer-fine:opacity-0
-  pointer-fine:group-hover:opacity-100`. Без `pointer-fine:` палец кнопку не
-  увидит. → `hover-only`, `check-layout` («invisible on touch»)
-- **Подсказка не пересоздаёт свой триггер.** Тяжёлое тело (`MoneyConversions`)
-  — лениво внутри открытого `TooltipContent`; задержка открытия — общая
-  (300 мс), нулевая только у меню свёрнутого сайдбара.
+- **Row buttons go in a reserved column.** The place for actions is always
+  there (a fixed width or a "⋯" `ActionMenu`); on hover only `opacity`
+  changes. Lazy mounting is fine — but into an already occupied place.
+  -> `hover-mount`, `check-layout` ("row moves Npx on hover/leave")
+- **Hidden until hover — for the mouse only:** `pointer-fine:opacity-0
+  pointer-fine:group-hover:opacity-100`. Without `pointer-fine:` a finger will
+  not see the button. -> `hover-only`, `check-layout` ("invisible on touch")
+- **A tooltip does not recreate its trigger.** A heavy body
+  (`MoneyConversions`) is lazy inside the open `TooltipContent`; the open
+  delay is shared (300 ms), zero only for the collapsed sidebar's menu.
 
-## Элемент управления меняет состояние, а не себя
+## A control changes state, not itself
 
-- **Один элемент.** «Удалить?» у `ConfirmButton` — тот же `<button>` другого
-  варианта и той же ширины; фокус остаётся на нём. Пара `<Button v-if>` /
-  `<Button v-else>` уничтожает фокус и прыгает по ширине. → `control-swap`,
-  `check-layout` («confirm button changes width / loses focus»)
-- **Спиннер — вместо иконки, не перед текстом.** Кнопка в ожидании не шире
-  себя обычной: иконка слева меняется на `Spinner` того же размера, или спиннер
-  поверх текста. → `control-swap`
+- **One element.** The "Delete?" of `ConfirmButton` is the same `<button>` of a
+  different variant and the same width; focus stays on it. A pair
+  `<Button v-if>` / `<Button v-else>` destroys focus and jumps in width.
+  -> `control-swap`, `check-layout` ("confirm button changes width / loses
+  focus")
+- **A spinner replaces the icon, it does not go before the text.** A pending
+  button is no wider than usual: the left icon is swapped for a `Spinner` of
+  the same size, or the spinner goes over the text. -> `control-swap`
 
-## Данные
+## Data
 
-- **Смена ключа не опустошает экран.** У запроса с `queryKey: computed(…)` —
-  `placeholderData: keepPreviousData`; прежние данные видны (приглушённо),
-  пока едут новые. Ключ «сущность + фильтр» (счёт и период) —
-  `keepPreviousFor(id)` из `shared/lib/query`: фильтр меняется без пустоты, а
-  чужой счёт под новым заголовком не показывается. Ключ — только сущность, или
-  данные заполняют форму через `watch` — без заглушки, с комментарием
-  `// no placeholder: <почему>` перед `queryKey`. → `query-keep-data`,
-  `check-layout` («layout shift»)
-- **`SectionState`:** первая загрузка — скелетон высотой с контент сразу;
-  обновление — контент остаётся. Пустая обёртка нулевой высоты — ошибка.
-- **Подписка на событие бэкенда — `useBackendEvent`** (снимается с областью
-  видимости). Голый `onEvent` в `setup` добавляет обработчик на каждый заход.
-  Таймер с хэндлом — `clearTimeout` в `onScopeDispose`. → `raw-listener`,
-  `check-layout` («listeners grow per visit»)
-- **Событие инвалидирует только свои ключи.** `invalidateQueries()` без ключа
-  перерисовывает все экраны — только при замене vault целиком (с
-  `check-ui-ignore invalidate-all: <почему>`). → `invalidate-all`
-- **Страница не пересоздаётся при смене пути.** `RouterView` без `:key`;
-  страница реагирует на `route.params` через ключи запросов. → `router-key`
-- **Форматтеры — из `shared/lib/format`** (кэш `Intl`), не `new Intl.*` на
-  вызов. → `intl-cache`
-- **Строка списка считает себя один раз:** модель строки в `computed` или
-  компонент строки, а не `fn(row)` трижды в шаблоне. → `row-repeat-call`
+- **Changing a key does not empty the screen.** A query with
+  `queryKey: computed(…)` gets `placeholderData: keepPreviousData`; the
+  previous data is visible (dimmed) while the new data arrives. A key of
+  "entity + filter" (account and period) — `keepPreviousFor(id)` from
+  `shared/lib/query`: the filter changes without a gap, and another account is
+  not shown under the new heading. A key that is the entity only, or data that
+  fills a form via `watch` — no placeholder, with a comment
+  `// no placeholder: <why>` before `queryKey`. -> `query-keep-data`,
+  `check-layout` ("layout shift")
+- **`SectionState`:** the first load is a skeleton of content height right
+  away; a refresh keeps the content. An empty wrapper of zero height is a bug.
+- **Subscribing to a backend event is `useBackendEvent`** (removed with the
+  scope). A bare `onEvent` in `setup` adds a handler on every visit. A timer
+  with a handle — `clearTimeout` in `onScopeDispose`. -> `raw-listener`,
+  `check-layout` ("listeners grow per visit")
+- **An event invalidates only its own keys.** `invalidateQueries()` without a
+  key redraws all screens — only when the whole vault is replaced (with
+  `check-ui-ignore invalidate-all: <why>`). -> `invalidate-all`
+- **A page is not recreated when the path changes.** `RouterView` without
+  `:key`; the page reacts to `route.params` through query keys. ->
+  `router-key`
+- **Formatters come from `shared/lib/format`** (an `Intl` cache), not
+  `new Intl.*` per call. -> `intl-cache`
+- **A list row computes itself once:** the row model in a `computed` or a row
+  component, not `fn(row)` three times in the template. -> `row-repeat-call`
 
-## Прокрутка и размеры
+## Scrolling and sizes
 
-- **Скроллер — со `scrollbar-gutter: stable`:** появление полосы не сдвигает
-  правый край.
-- **Сетка с фиксированными треками** (`grid-cols-[1fr_8rem_9rem]`) от 14rem —
-  только с брейкпоинтом; на узком контейнере строка складывается в две.
-  → `grid-fixed-track`
-- **`--container-*` в `@theme` не переопределяются:** в Tailwind v4 они же
-  задают `max-w-sm/md/lg`. Размеры контейнер-запросов проекта — свои имена:
-  `@mid` (44rem), `@wide` (52rem); 36rem — штатный `@xl`. Диалоги:
-  sm < md < lg < xl = `max-w-md/2xl/3xl/4xl`. → `theme-token-override`
-- **Шкалы:** `text-2xs` вместо `text-[10px]`; `z-sticky / z-overlay /
-  z-popover` вместо `z-50`/`z-[60]`. → `arbitrary-size`, `z-scale`
+- **A scroller has `scrollbar-gutter: stable`:** the scrollbar appearing does
+  not shift the right edge.
+- **A grid with fixed tracks** (`grid-cols-[1fr_8rem_9rem]`) from 14rem — only
+  with a breakpoint; in a narrow container the row folds into two. ->
+  `grid-fixed-track`
+- **`--container-*` in `@theme` are not overridden:** in Tailwind v4 they also
+  define `max-w-sm/md/lg`. The project's container-query sizes have their own
+  names: `@mid` (44rem), `@wide` (52rem); 36rem is the standard `@xl`.
+  Dialogs: sm < md < lg < xl = `max-w-md/2xl/3xl/4xl`. ->
+  `theme-token-override`
+- **Scales:** `text-2xs` instead of `text-[10px]`; `z-sticky / z-overlay /
+  z-popover` instead of `z-50`/`z-[60]`. -> `arbitrary-size`, `z-scale`
 
-- **Минимум окна — телефонный (360×480), не выше.** Тайловый композитор
-  (Hyprland, Sway) не соблюдает `minWidth`: окно в плитке 566 px при минимуме
-  768 рисовалось на 768 и сжималось картинкой — интерфейс «уменьшался», а не
-  перестраивался. Узкое окно получает телефонную раскладку с мышью;
-  `check-layout` проверяет это на 560×860.
+- **The window minimum is the phone one (360×480), no higher.** A tiling
+  compositor (Hyprland, Sway) does not honor `minWidth`: a window in a
+  566 px tile with a minimum of 768 was drawn at 768 and squeezed as a
+  picture — the interface "shrank" instead of reflowing. A narrow window gets
+  the phone layout with a mouse; `check-layout` checks this at 560×860.
 
-## Анимация и WebKitGTK
+## Animation and WebKitGTK
 
-- **Оверлей анимирует `opacity` и `scale`.** Tailwind v4 центрирует через
-  свойство `translate`; `transform: translate(-50%,-50%)` в кадрах добавит
-  второй сдвиг. Анимации — через `@utility`, иначе вариант
-  `data-[state=open]:` не сгенерируется. → `transform-keyframes`
-- **Без `backdrop-filter`.** WebKitGTK (окно на Linux) пересчитывает каждый слой
-  размытия на кадре; на списке это замораживало приложение. Непрозрачный
-  `bg-card`/`bg-popover`. → `backdrop-blur`
-- **В окне на Linux оверлеи открываются без анимации.** WebKitGTK на Wayland
-  перерисовывает всё окно, когда появляется анимированный слой: каждый диалог,
-  шторка, меню и всплывающая подсказка мерцали. `index.html` ставит
-  `data-engine="webkitgtk"`, и `styles.css` там выключает `animation` у всего с
-  `[data-state]` и переходы тостов. Новый оверлей ничего для этого не делает;
-  не добавляй ему анимаций мимо `data-state`.
-- **Не анимировать `width/height/left/top/margin/padding`** — это перекладка
-  страницы на каждом кадре; `transform`/`opacity`. → `layout-transition`
+- **An overlay animates `opacity` and `scale`.** Tailwind v4 centers through
+  the `translate` property; `transform: translate(-50%,-50%)` in the frames
+  adds a second shift. Animations go through `@utility`, otherwise the
+  `data-[state=open]:` variant is not generated. -> `transform-keyframes`
+- **No `backdrop-filter`.** WebKitGTK (the Linux window) recomputes every blur
+  layer on a frame; on a list this froze the application. An opaque
+  `bg-card`/`bg-popover`. -> `backdrop-blur`
+- **In the Linux window overlays open without animation.** WebKitGTK on
+  Wayland repaints the whole window when an animated layer appears: every
+  dialog, sheet, menu and tooltip flickered. `index.html` sets
+  `data-engine="webkitgtk"`, and `styles.css` turns off `animation` there for
+  everything with `[data-state]`, and toast transitions. A new overlay does
+  nothing for this; do not add animations to it bypassing `data-state`.
+- **Do not animate `width/height/left/top/margin/padding`** — it relayouts the
+  page on every frame; use `transform`/`opacity`. -> `layout-transition`
 
-## Как проверить руками
+## How to check by hand
 
-`mise run check-layout` пишет скриншоты всех экранов в
-`.cache/check-layout/<theme>-<width>-<view>.png`. Headless Chromium сам по себе
-отдаёт `pointer: none`; стенд запускает его с указателем `fine` и `hover`, как у
-WebKitGTK, а телефонные размеры — с сенсорной эмуляцией. Окончательная
-проверка — окно Tauri на Linux (`mise run dev`): провести мышью по строкам и
-уйти, сменить период в аналитике, открыть пять диалогов, быстро переключить
-три настройки.
+`mise run check-layout` writes screenshots of all screens to
+`.cache/check-layout/<theme>-<width>-<view>.png`. Headless Chromium by itself
+reports `pointer: none`; the stand launches it with a `fine` pointer and
+`hover`, like WebKitGTK, and the phone sizes with touch emulation. The final
+check is the Tauri window on Linux (`mise run dev`): run the mouse over the
+rows and leave, change the period in analytics, open five dialogs, quickly
+toggle three settings.

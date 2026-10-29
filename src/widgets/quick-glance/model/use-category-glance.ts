@@ -8,7 +8,7 @@ import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { SPENT_GROUPS, monthFilter } from './use-spent-glance'
 
-/** «Последние оплаты»: three, newest first. */
+/** `Latest payments`: three, newest first. */
 const LAST = 3
 
 /** The category's row of a categories report, and the month's whole spending. */

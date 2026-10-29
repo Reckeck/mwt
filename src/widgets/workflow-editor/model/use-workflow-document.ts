@@ -42,7 +42,7 @@ export function useWorkflowDocument(
   const maxAmount = ref('')
   const loaded = ref(false)
   const savedSnapshot = ref('')
-  /** What «Отменить правки» goes back to: the saved workflow, or the start of a new one. */
+  /** What `Undo the edits` goes back to: the saved workflow, or the start of a new one. */
   const savedState = ref<{ graph: string; settings: Settings } | null>(null)
 
   const settingsOf = (): Settings => [name.value, description.value, active.value, react.value, maxAmount.value]
@@ -196,7 +196,7 @@ export function useWorkflowDocument(
     })
   }
 
-  /** Put the kept-aside edits on the canvas; they count as unsaved until «Сохранить». */
+  /** Put the kept-aside edits on the canvas; they count as unsaved until `Save`. */
   function openDraft() {
     const kept = workflow.data.value?.draft
     if (!kept) return

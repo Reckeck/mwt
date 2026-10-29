@@ -1,28 +1,29 @@
-# Формы (правила 13 и 14 AGENTS.md — здесь полный текст)
+# Forms (rules 13 and 14 of AGENTS.md — the full text is here)
 
-## Как устроена любая форма
+## How any form is built
 
-Диалог, вкладка настроек или строка «добавить» — одинаково:
+A dialog, a settings tab or an "add" row — all the same:
 
-1. **Обязательное поле отмечено красной `*`**: `FormField required` или
-   `Label required`; у `AssetInput` и `CurrencyPicker` — свои `required`/`error`.
-2. **Кнопка сохранения активна.** Её блокирует только идущее сохранение
-   (`isPending`) или отказ бэкенда, причина которого показана рядом.
-   Пользователь не должен гадать, почему кнопка серая.
-3. **Нажатие с пустым или неверным полем не сохраняет**, а показывает
-   сообщение под каждым таким полем, красит рамку и ставит фокус на первое.
-   Дальше сообщения следуют за вводом. Всё это даёт `useFormValidation`.
-4. **Правила — из `shared/lib/form/validators.ts`**: `required`, `decimal`,
-   `positiveAmount`, `nonNegativeAmount`, `integerInRange`, `minLength`,
-   `firstError`. Тексты — `validation.*`, говорят, как исправить («Должно быть
-   больше нуля»), а не «неверно».
-5. **Что бэкенд отвергнет по известному правилу, форма проверяет сама**
-   (пример: категория у пополнения и оплаты). «Invalid input» после нажатия —
-   баг формы.
-6. **Enter сохраняет** (в многострочном поле — Ctrl+Enter), Esc закрывает
-   диалог.
+1. **A required field is marked with a red `*`**: `FormField required` or
+   `Label required`; `AssetInput` and `CurrencyPicker` have their own
+   `required`/`error`.
+2. **The save button is active.** It is blocked only by a save in progress
+   (`isPending`) or a backend refusal whose reason is shown next to it. The
+   user must not guess why the button is gray.
+3. **A press with an empty or wrong field does not save**, but shows a message
+   under each such field, colors the border and puts focus on the first one.
+   After that the messages follow the input. All of this is provided by
+   `useFormValidation`.
+4. **The rules come from `shared/lib/form/validators.ts`**: `required`,
+   `decimal`, `positiveAmount`, `nonNegativeAmount`, `integerInRange`,
+   `minLength`, `firstError`. The texts are `validation.*`; they say how to
+   fix it ("Must be greater than zero"), not "invalid".
+5. **What the backend will reject by a known rule, the form checks itself**
+   (example: a category on a top-up and a payment). "Invalid input" after a
+   press is a form bug.
+6. **Enter saves** (in a multiline field — Ctrl+Enter), Esc closes the dialog.
 
-## Диалог с формой — `FormDialog`
+## A dialog with a form — `FormDialog`
 
 ```vue
 <script setup lang="ts">
@@ -55,7 +56,7 @@ const form = useFormValidation(
     limit: positiveAmount(limit.value),
     currency: required(currency.value, 'pick'),
   }),
-  { resetOn: open }, // заново открытый диалог начинается чистым
+  { resetOn: open }, // a reopened dialog starts clean
 )
 const save = useMutation({
   mutationFn: () => call<Budget>('create_budget', { input: { limit: limit.value, currency: currency.value } }),
@@ -83,65 +84,68 @@ const save = useMutation({
 </template>
 ```
 
-`FormDialog` даёт `<form>` (Enter), кнопки «Отмена» / «Сохранить», спиннер на
-время сохранения и `@container` для раскладки полей. Свои кнопки слева в
-подвале — слот `#footer-start`.
+`FormDialog` provides the `<form>` (Enter), the "Cancel" / "Save" buttons, a
+spinner while saving and a `@container` for the field layout. Your own buttons
+on the left of the footer go in the `#footer-start` slot.
 
-Без диалога: `<form @submit.prevent="form.submit(save.mutate, $event)">`, кнопка
-вне формы — `@click="form.submit(save.mutate, $event)"`.
+Without a dialog: `<form @submit.prevent="form.submit(save.mutate, $event)">`,
+a button outside the form — `@click="form.submit(save.mutate, $event)"`.
 
-## Однострочная строка «добавить»
+## A single-line "add" row
 
-Обёрни каждый контрол в `<span class="contents" :data-invalid="form.invalidAttr('name')">`,
-`form.firstMessage()` выведи одной строкой под рядом, после успешного
-добавления вызови `form.reset()`, иначе очищенное поле сразу покажет ошибку.
+Wrap each control in `<span class="contents" :data-invalid="form.invalidAttr('name')">`,
+print `form.firstMessage()` as one line under the row, and after a successful
+add call `form.reset()`, otherwise the cleared field will immediately show an
+error.
 
-## Редкие поля
+## Rare fields
 
-Поля, которые заполняет меньшинство (комиссия, сеть и хэш, контакт,
-кэшбэк), — под `AdvancedFields`. Если в скрытом поле уже есть значение или
-ошибка, передай `default-open`, чтобы оно не пряталось.
+Fields that a minority fill in (fee, network and hash, contact, cashback) go
+under `AdvancedFields`. If a hidden field already has a value or an error,
+pass `default-open` so it does not hide.
 
-## Числа и даты в полях
+## Numbers and dates in fields
 
-- Суммы — `AmountInput` (`inputmode="decimal"`, запятая и точка).
-- Дата, дата со временем, месяц — `DateTimePicker` (`shared/ui/date-time-picker`,
-  `mode="date|datetime|month"`), не `<Input type="date|datetime-local|month">`:
-  модель — та же строка, что у нативного поля (`2026-10-14`,
-  `2026-10-14T09:30`, `2026-10`), `min`/`max`, `required` (без «Очистить»),
-  `invalid` для поля с ошибкой. Только время — `<Input type="time">`.
-  В ISO для бэкенда — `dateInputToIso` / `toIsoTimestamp`, обратно —
-  `localDate` / `toLocalInput` (`shared/lib/planning`, `shared/lib/datetime`).
-  Необязательная дата — пустая строка → `null`.
-- Коды, тикеры, хэши — `spellcheck="false"`, без автозаглавной.
-- Плейсхолдер — пример значения, а не подпись: «0x…», «например, такси».
+- Amounts — `AmountInput` (`inputmode="decimal"`, comma and dot).
+- Date, date with time, month — `DateTimePicker`
+  (`shared/ui/date-time-picker`, `mode="date|datetime|month"`), not
+  `<Input type="date|datetime-local|month">`: the model is the same string as
+  the native field's (`2026-10-14`, `2026-10-14T09:30`, `2026-10`),
+  `min`/`max`, `required` (without "Clear"), `invalid` for a field with an
+  error. Time only — `<Input type="time">`. To ISO for the backend —
+  `dateInputToIso` / `toIsoTimestamp`, back — `localDate` / `toLocalInput`
+  (`shared/lib/planning`, `shared/lib/datetime`). An optional date is an empty
+  string -> `null`.
+- Codes, tickers, hashes — `spellcheck="false"`, no auto-capitalization.
+- A placeholder is an example value, not a label: "0x…", "for example, taxi".
 
-## Выбор счёта, актива, валюты (правило 14)
+## Choosing an account, asset, currency (rule 14)
 
-Везде, где пользователь выбирает счёт, актив или валюту (формы, фильтры,
-настройки, поля нод сценариев), — один и тот же компонент:
+Everywhere the user chooses an account, asset or currency (forms, filters,
+settings, workflow node fields) it is the same component:
 
-| Что | Компонент | Заметки |
+| What | Component | Notes |
 |---|---|---|
-| кошелёк / субсчёт | `StoreNodeSelect` (`entities/store`) | путь «Кошелёк › Субсчёт»; `flat`, `placeholder`, `emptyLabel`, `invalid` |
-| счёт, контакт или свободный текст в операции | `AccountRefPicker` (`features/transaction-create`) | |
-| любой актив (поиск) | `AssetInput` (`entities/asset`) | `required`, `error` |
-| один из известных (что лежит на счёте) | `AssetSelect` (`entities/asset`) | модель — `AssetRef`; `placeholder`, `invalid` |
-| валюта | `CurrencyPicker` (`entities/currency`) | избранные сверху; `extra`, `kinds`, `allowEmpty`, `required`, `error` |
+| wallet / sub-account | `StoreNodeSelect` (`entities/store`) | path "Wallet › Sub-account"; `flat`, `placeholder`, `emptyLabel`, `invalid` |
+| account, contact or free text in a transaction | `AccountRefPicker` (`features/transaction-create`) | |
+| any asset (search) | `AssetInput` (`entities/asset`) | `required`, `error` |
+| one of the known ones (what lies on the account) | `AssetSelect` (`entities/asset`) | the model is `AssetRef`; `placeholder`, `invalid` |
+| currency | `CurrencyPicker` (`entities/currency`) | favorites on top; `extra`, `kinds`, `allowEmpty`, `required`, `error` |
 
-Как их класть в форму:
+How to put them into a form:
 
-- `CurrencyPicker` и `AssetInput` рисуют свою подпись и ошибку (`label`,
-  `required`, `error`) — **без** `FormField` вокруг.
-- `StoreNodeSelect` и `AssetSelect` подписи не рисуют — оберни в
-  `FormField` (`required`, `:error`) и передай `:invalid="!!form.error('x')"`.
+- `CurrencyPicker` and `AssetInput` draw their own label and error (`label`,
+  `required`, `error`) — **without** a `FormField` around them.
+- `StoreNodeSelect` and `AssetSelect` do not draw labels — wrap them in a
+  `FormField` (`required`, `:error`) and pass
+  `:invalid="!!form.error('x')"`.
 
-Нужен вариант, которого компонент не умеет, — пропс в компонент, а не
-список рядом.
+If you need a variant the component cannot do, add a prop to the component,
+not a list next to it.
 
-## Проверка
+## Check
 
-`mise run check-forms` ловит: кнопку отправки, заблокированную чем-то кроме
-`isPending`/`pending`/`busy`/`refused`/`loading`; `@submit` с ручной проверкой
-(`valid && save()`); `<option v-for>` по счетам, активам, кодам валют;
-`<Input>` с валютой в `v-model`.
+`mise run check-forms` catches: a submit button blocked by anything except
+`isPending`/`pending`/`busy`/`refused`/`loading`; `@submit` with a manual
+check (`valid && save()`); `<option v-for>` over accounts, assets, currency
+codes; an `<Input>` with a currency in `v-model`.

@@ -1,4 +1,4 @@
-//! Analytics (plan Ф6): reports, their CSV export and the spending calendar.
+//! Analytics (plan F6): reports, their CSV export and the spending calendar.
 //! The reports live in core; this only adds «now», the zone and the user's
 //! reference inflation from the app settings.
 
@@ -169,7 +169,7 @@ pub async fn get_spending_overview(
     Ok(vault.spending_overview(period, now_secs(), &zone))
 }
 
-/// «Бюджет дня» and «Итоги месяца» (plan H3): the month so far against the
+/// "Daily budget" and "This month" (plan H3): the month so far against the
 /// previous month to the same date, the plan to date and the growing categories.
 #[tauri::command]
 pub async fn get_month_pace(
@@ -181,7 +181,7 @@ pub async fn get_month_pace(
     Ok(guard.as_ref().unwrap().month_pace(now_secs(), &zone))
 }
 
-/// «Чистый капитал» (plan H3): the holdings now against the period's start, and
+/// "Net worth" (plan H3): the holdings now against the period's start, and
 /// their series; the dashboard period when omitted.
 #[tauri::command]
 pub async fn get_net_worth_trend(
@@ -196,7 +196,7 @@ pub async fn get_net_worth_trend(
     Ok(vault.net_worth_trend(period, now_secs(), &zone))
 }
 
-/// The «Сегодня» strip (plan H5): capital and its change, the light, what
+/// The "Today" strip (plan H5): capital and its change, the light, what
 /// may be spent today and up to three things to do, in one request.
 #[tauri::command]
 pub async fn get_dashboard_today(
@@ -212,7 +212,7 @@ pub async fn get_dashboard_today(
     Ok(vault.dashboard_today(period, now_secs(), &zone, &inflation))
 }
 
-/// The «Сценарий» widget (plan H4): a calculator scenario's plan to date
+/// The "Scenario" widget (plan H4): a calculator scenario's plan to date
 /// against the money its wallets hold.
 #[tauri::command]
 pub async fn get_scenario_status(

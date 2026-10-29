@@ -1,4 +1,4 @@
-//! Shared events («посиделки»): the list of what was bought together, who
+//! Shared events ("shared events"): the list of what was bought together, who
 //! shares what, and the debts that leaves. Shares, balances and statuses are
 //! worked out from the list ([`split`]) and never stored. This file holds the
 //! event itself, its people and its items; purchases, settlements, the
@@ -474,7 +474,7 @@ impl UnlockedVault {
         self.shared_event_view(event_id)
     }
 
-    /// «Сделать контактом»: a guest becomes a contact of the directory with
+    /// "Make a contact": a guest becomes a contact of the directory with
     /// the details they had, and is linked to it.
     pub fn make_shared_participant_contact(
         &mut self,

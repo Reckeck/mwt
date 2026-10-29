@@ -28,7 +28,7 @@ const COLLAPSE = [{ desktop: [{ press: 'ctrl+b' }] }]
 /** Ctrl B again: the sidebar state is remembered, the next shot starts expanded. */
 const EXPAND = { name: 'sidebar-restore', route: '/', steps: COLLAPSE, phone: false }
 
-/** «Недавние» as on Paths 1 · 7: a wallet, the October spending and an operation card were open a moment ago. */
+/** `Recent` as on Paths 1 · 7: a wallet, the October spending and an operation card were open a moment ago. */
 const SEED_RECENT = `
   ${GP}
   const wait = () => new Promise((done) => setTimeout(done, 600))
@@ -38,7 +38,7 @@ const SEED_RECENT = `
   if (wallet) { await gp.$router.push(wallet); await wait() }
   await gp.$router.push('/'); await wait(); return true`
 
-/** The Bybit wallet's own page: «Сделка · Bybit» opens from its header (OpForm-2 · 9–11). */
+/** The Bybit wallet's own page: `Trade · Bybit` opens from its header (OpForm-2 · 9–11). */
 const TO_BYBIT = `
   ${GP}
   await gp.$router.push('/stores'); await new Promise((done) => setTimeout(done, 700))
@@ -57,11 +57,11 @@ const openLine = (name) => `
   const rows = [...document.querySelectorAll('[data-utility-lines] tr[data-utility-line], [data-utility-lines] li > button')]
   rows.find((row) => row.textContent.includes('${name}'))?.click()
   await new Promise((done) => setTimeout(done, 900)); return true`
-/** «Оплатить счёт» on the home's bill card (Wallets-2 · 13); the visible one of the two layouts. */
+/** `Pay the bill` on the home's bill card (Wallets-2 · 13); the visible one of the two layouts. */
 const PAY_BILL = `
   ;[...document.querySelectorAll('[data-bill-pay]')].find((button) => button.offsetParent)?.click()
   await new Promise((done) => setTimeout(done, 900)); return true`
-/** «+ Статья» on the property's bill tab (Wallets-3 · 14); the visible one of the two layouts. */
+/** `+ Item` on the property's bill tab (Wallets-3 · 14); the visible one of the two layouts. */
 const NEW_ITEM = `
   ;[...document.querySelectorAll('[data-utility-new]')].find((button) => button.offsetParent)?.click()
   await new Promise((done) => setTimeout(done, 700)); return true`
@@ -114,7 +114,7 @@ const stage1 = [
   { name: 'spending', route: '/money', scenarios: ALL, canvas: { board: 'Money-1', frame: '1.' } },
   { name: 'period', route: '/money', steps: PERIOD, canvas: { board: 'Period', frame: '1.' } },
   { name: 'month', route: '/money/month', scenarios: ['year', 'empty', 'stress'], canvas: { board: 'Money-3', frame: '15.' } },
-  // The carry switched on with the real switch (it refreshes the queries): the line «Перенесено дальше» in «По месяцам», «всего с сентября» in the answer.
+  // The carry switched on with the real switch (it refreshes the queries): the line `Carried on` in `By month`, `total since September` in the answer.
   { name: 'month-carry', route: '/money/month', steps: [...CARRY_ON, { wait: 900 }] },
   { name: 'spending-carry', route: '/money/month', steps: [...CARRY_ON, { eval: `${GP} await gp.$router.push('/money'); return true` }, { wait: 900 }] },
   { name: 'money-more', route: '/money', steps: [{ click: '[data-tour="route-tabs-more"]' }] },
@@ -302,7 +302,7 @@ const paths = [
 ]
 
 /** Stage 3: operations (canvas Ops-1, 2), the operation forms (OpForm-1, 2), attachments and the goal (New-Attach, New-Goal). */
-/** Two rows picked: checkboxes on a desktop, a hold → «Выбрать» and a tap on a phone. */
+/** Two rows picked: checkboxes on a desktop, a hold → `choose` and a tap on a phone. */
 const HOLD_FIRST_ROW = `const row = document.querySelectorAll('[data-tx-open]')[0]
   const at = { bubbles: true, pointerType: 'touch', isPrimary: true }
   row.dispatchEvent(new PointerEvent('pointerdown', at))
@@ -500,7 +500,7 @@ const stage3 = [
   { name: 'goal-edit', route: '/money/plan', steps: [{ click: '[data-entity^="goal:"]' }, { wait: 500 }, { click: '[data-goal-edit]' }, { wait: 500 }], canvas: { board: 'New-Goal', frame: '4.' } },
 ]
 
-/** Opens «Новый кошелёк» from the wallets header. */
+/** Opens `New wallet` from the wallets header. */
 const CREATE_STORE = [{ wait: 600 }, { click: '[data-tour="stores-create"]' }, { wait: 500 }]
 
 /** Stage 4: wallets and currencies. */
@@ -557,7 +557,7 @@ const stage4 = [
     canvas: { board: 'Wallets-3', frame: '17.' },
   },
   {
-    // a new vault: the «Наличные» it comes with, nothing in it
+    // a new vault: the `Cash` it comes with, nothing in it
     name: 'wallet-cash-empty',
     route: '/stores',
     scenarios: ['fresh'],
@@ -568,7 +568,7 @@ const stage4 = [
   {
     name: 'wallet-adjust',
     route: '/stores',
-    // one currency: the short form (Тинькофф holds RUB and USD in the mock, so it gets the table)
+    // one currency: the short form (Tinkoff holds RUB and USD in the mock, so it gets the table)
     steps: [{ eval: toWallet('Наличные') }, ...gear('adjust'), { fill: ['#adjustment-actual', '95400'] }, { wait: 400 }],
     canvas: { board: 'Wallets-3', frame: '20.' },
   },

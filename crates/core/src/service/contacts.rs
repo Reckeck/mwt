@@ -49,7 +49,7 @@ pub struct ContactDraft {
     pub kind: ContactKind,
     pub note: String,
     pub accounts: Vec<ContactAccount>,
-    /// Directory group («Семья», «P2P»); empty = grouped by kind.
+    /// Directory group ("Family", «P2P»); empty = grouped by kind.
     #[serde(default)]
     pub group: String,
 }

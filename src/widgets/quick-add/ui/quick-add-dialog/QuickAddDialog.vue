@@ -20,8 +20,8 @@ import { useQuickAddSeries } from '../../model/use-quick-add-series'
  * Ctrl N from anywhere (OpForm-1): the short form, with the wallet as one of
  * its fields — next to the category — and starting on the one used last.
  * Enter saves and closes; Ctrl Enter saves and starts the next one.
- * With `deal` it is «Сделка · <биржа>» (OpForm-2 · 9–11): the exchange's own
- * wallet, fixed, and its tabs Обмен · Перевод | Спот · Фьючерс · DeFi.
+ * With `deal` it is `Trade · <exchange>` (OpForm-2 · 9–11): the exchange's own
+ * wallet, fixed, and its tabs Exchange · Transfer | Spot · Futures · DeFi.
  */
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ deal?: { store: Store; kind: TxKind } | null }>()
@@ -31,7 +31,7 @@ const phone = useIsPhone()
 const LAST_STORE_KEY = 'quick-add.store'
 
 const tree = useStoreTree()
-/** An operation is written on a sub-account, never on a group («Основной банк» holds «Карта» and «Накопления»). */
+/** An operation is written on a sub-account, never on a group (`Main bank` holds `Card` and `Savings`). */
 const nodes = computed(() =>
   flattenStoreTree(tree.data.value ?? []).filter(
     (node) => !node.store.archived && (props.deal ? true : node.children.filter((child) => !child.store.archived).length === 0),
@@ -92,7 +92,7 @@ watch(
   { flush: 'sync' },
 )
 
-/** «Перевести» from a glance, «Записать оплату в „Продукты“» from Ctrl K: the form starts on that kind and category. */
+/** `Transfer` from a glance, `Record a payment in "Groceries"` from Ctrl K: the form starts on that kind and category. */
 const initial = computed<TransactionInitial | null>(() => {
   if (carried.value) return carried.value
   if (props.deal) return { kind: props.deal.kind, categories: [] }

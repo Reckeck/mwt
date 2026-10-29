@@ -11,7 +11,7 @@ import { formatDayMonthShort } from '@/shared/lib/format'
 import { txId, txMeta } from '@/shared/lib/transactions'
 
 /**
- * The cards open at `?open=`: the top one is drawn, «Назад» or closing it
+ * The cards open at `?open=`: the top one is drawn, `Back` or closing it
  * shows the one under it. An operation, a goal and an automation keep their own sheets;
  * every other kind shares the generic card.
  */
@@ -57,7 +57,7 @@ export function useEntityHost() {
     },
   )
   const tx = useLatestTx(openedTx)
-  /** Ctrl K lists an operation by its comment and day («Маме до зарплаты · 20 окт»). */
+  /** Ctrl K lists an operation by its comment and day (`To Mom before payday · Oct 20`). */
   watch(tx, (shown) => {
     const meta = shown ? txMeta(shown) : null
     if (meta?.comment && top.value?.kind === 'tx')

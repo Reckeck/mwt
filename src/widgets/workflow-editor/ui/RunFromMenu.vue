@@ -11,8 +11,8 @@ import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import type { TriggerChoice } from '../model/trigger-choices'
 
 /**
- * «Эмулировать» / «Запустить» with the trigger to start from: the button
- * starts the default one («Запуск вручную» when there is one), the arrow
+ * `Emulate` / `Run` with the trigger to start from: the button
+ * starts the default one (`run by hand` when there is one), the arrow
  * lists every trigger of the workflow.
  */
 defineOptions({ inheritAttrs: false })

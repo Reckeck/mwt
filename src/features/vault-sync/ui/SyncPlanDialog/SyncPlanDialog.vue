@@ -12,9 +12,9 @@ import { SyncChanges } from '../SyncChanges'
 
 /**
  * What a batch from another device will change here, before it is applied:
- * after pairing, with «Спрашивать перед синхронизацией», or while the other
+ * after pairing, with `Ask before syncing`, or while the other
  * device's clock is not trusted. Closing the window declines the batch. Not on
- * Настройки › Синхронизация › История: the same batch is answered there, in the list.
+ * Settings › Sync › History: the same batch is answered there, in the list.
  */
 const { t } = useI18n()
 const { plan } = useSyncStatus()

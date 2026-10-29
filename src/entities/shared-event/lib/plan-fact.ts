@@ -33,11 +33,16 @@ export function planFact(item: EventItem, view: ItemView): PlanFact {
   }
 }
 
-/** «8 из 6 шт», «1 уп», «4 из 4 кг»: what was bought against what was planned. */
-export function qtyText(fact: PlanFact, unit: string, format: (value: string) => string = (value) => value): string {
+/** `8 of 6 pcs`, `1 pack`, `4 of 4 kg`: what was bought against what was planned; `ofWord` is the localized "of". */
+export function qtyText(
+  fact: PlanFact,
+  unit: string,
+  format: (value: string) => string = (value) => value,
+  ofWord = 'of',
+): string {
   const bought = format(fact.bought)
   if (fact.planQty === null || fact.state === 'unplanned') return `${bought} ${unit}`
-  return `${bought} из ${format(fact.planQty)} ${unit}`
+  return `${bought} ${ofWord} ${format(fact.planQty)} ${unit}`
 }
 
 /** `+600 ₽`, `−200 ₽`, `0 ₽`: a difference with its sign, the sum itself written by `money`. */

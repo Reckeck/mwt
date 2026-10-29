@@ -1,6 +1,6 @@
 import { portAccepts } from '@/shared/lib/workflow'
 
-/** The port the search starts from, for its heading: «Добавлена операция → сумма». */
+/** The port the search starts from, for its heading: `Operation added → amount`. */
 export interface QuickAddSource {
   node: LocalizedText | string
   port: LocalizedText
@@ -58,7 +58,7 @@ const COMPARE: Record<string, string> = { '>': 'gt', '>=': 'gte', '<': 'lt', '<=
 const MATH: Record<string, string> = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div' }
 
 /**
- * A quick expression typed into the search: `10%` → «B % от A», `> 5000` →
+ * A quick expression typed into the search: `10%` → `B % of A`, `> 5000` →
  * a comparison, `+ 100` → math, `= 5000` or a bare number → a value,
  * `"text"` → a text value. `null` when the text is not one.
  */

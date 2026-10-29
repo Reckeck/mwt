@@ -140,7 +140,7 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
     (host, received)
 }
 
-/// Answers every question the way `accept` says («Сопрячь», the code, the
+/// Answers every question the way `accept` says ("Pair", the code, the
 /// list of changes); returns the error codes the device reported.
 fn answer(host: TestHost, mut events: Events, accept: bool) -> Arc<Mutex<Vec<String>>> {
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -366,7 +366,7 @@ async fn a_declined_pairing_trusts_nobody() {
     assert_eq!(peers, 0);
 }
 
-/// «Не сейчас» on every offer; returns the error codes reported.
+/// "Not now" on every offer; returns the error codes reported.
 fn dismiss(host: TestHost, mut events: Events) -> Arc<Mutex<Vec<String>>> {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let log = seen.clone();
@@ -813,7 +813,7 @@ async fn declining_a_plan_pauses_the_device_until_resumed() {
     assert_eq!(*main_seen.errors.lock().unwrap(), ["SYNC_PAUSED_BY_PEER"]);
     assert!(comments(&client).is_empty());
 
-    // «Продолжить»: the plan question comes back.
+    // "Resume": the plan question comes back.
     client
         .with_vault(|vault| vault.sync_resume_peer(&main_id))
         .unwrap();
@@ -1332,7 +1332,7 @@ async fn resuming_on_the_other_side_brings_the_exchange_back() {
     dial(&phone, "Laptop", addr).await;
     until("cut", || cut_reason(&phone, &laptop_id).is_some()).await;
 
-    // «Продолжить» there; the laptop calls the phone itself.
+    // "Resume" there; the laptop calls the phone itself.
     laptop
         .with_vault(|vault| vault.sync_resume_peer(&phone_id))
         .unwrap();
@@ -1411,7 +1411,7 @@ async fn a_forgotten_device_is_told_and_waits_for_pairing() {
     assert_eq!(count_of(&phone_seen, "SYNC_FORGOTTEN_BY_PEER"), 1);
     assert!(comments(&phone).is_empty());
 
-    // «Сопрячь заново»: one dial with the pairing request; the cut is over.
+    // "Pair again": one dial with the pairing request; the cut is over.
     super::pair_again(&phone, &laptop_id).unwrap();
     assert_eq!(cut_reason(&phone, &laptop_id), None);
     until("paired and live", || live(&laptop) && live(&phone)).await;

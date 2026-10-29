@@ -1,88 +1,90 @@
 ---
 name: json-editor
 description: >
-  Редактор vault в формате JSON (Настройки → Просмотр JSON, dev-only):
-  CodeMirror, схема документа из Rust, автодополнение по JSON-пути, Ctrl+S,
-  .bak перед записью, $EDITOR. Использовать при правках crates/app/src/commands/settings.rs
+  Vault editor in JSON format (Settings → View JSON, dev-only): CodeMirror,
+  document schema from Rust, JSON-path autocomplete, Ctrl+S, .bak before
+  writing, $EDITOR. Use when editing crates/app/src/commands/settings.rs
   (vault_schema, dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
   dev_reload_vault_json_from_editor), crates/core/src/model/vault.rs (json_schema),
   src/shared/lib/editor.ts, src/shared/lib/json.ts, src/shared/lib/json-schema-reader.ts,
-  src/widgets/vault-json-editor/VaultJsonEditor.vue, а также на задачах «редактор vault»,
-  «JSON vault», «правка документа», «подсказки полей», «Ctrl+S», «схема vault»,
-  «autocomplete JSON», «VaultFile::backup», «отклонён документ», «черновик»,
-  «dev_apply_vault_json», «vault_schema», «Открыть в редакторе».
+  src/widgets/vault-json-editor/VaultJsonEditor.vue, and for tasks like
+  "редактор vault", "JSON vault", "правка документа", "подсказки полей",
+  "Ctrl+S", "схема vault", "autocomplete JSON", "VaultFile::backup",
+  "отклонён документ", "черновик", "dev_apply_vault_json", "vault_schema",
+  "Открыть в редакторе".
 ---
 
-# Редактор vault в формате JSON
+# Vault editor in JSON format
 
-Документ vault показывается и правится как есть: расшифрованный `VaultDoc` в
-CodeMirror. Экран живёт в `src/widgets/vault-json-editor/VaultJsonEditor.vue`,
-схема приходит из Rust по IPC. Полное описание — `docs/json-editor.md`;
-здесь только то, что нужно, чтобы не сломать.
+The vault document is shown and edited as is: the decrypted `VaultDoc` in
+CodeMirror. The screen lives in `src/widgets/vault-json-editor/VaultJsonEditor.vue`,
+the schema comes from Rust over IPC. The full description is in
+`docs/json-editor.md`; here is only what you need to avoid breaking it.
 
-## Три правила, которые легко нарушить
+## Three rules that are easy to break
 
-1. **Черновик не пишет в vault.** Только Ctrl+S (`dev_apply_vault_json`).
-   Ввод текста лишь перепроверяет черновик с дебаунсом и двигает статус-бейдж.
-2. **Неразбирающийся черновик не сохраняется.** И на фронте (`parseJson` до
-   вызова), и в ядре (`storage::decode` до `replace_doc`) — два независимых
-   отказа. Не обходи это «на всякий случай».
-3. **Форма документа живёт только в Rust.** Фронт не знает полей vault —
-   он спрашивает `vault_schema` и строит подсказки из ответа. Добавил поле в
-   `VaultDoc` — подсказки обновились сами.
+1. **A draft does not write to the vault.** Only Ctrl+S (`dev_apply_vault_json`)
+   does. Typing only re-checks the draft with a debounce and moves the status
+   badge.
+2. **A draft that does not parse is not saved.** Both on the frontend
+   (`parseJson` before the call) and in the core (`storage::decode` before
+   `replace_doc`) — two independent refusals. Do not bypass this "just in case".
+3. **The shape of the document lives only in Rust.** The frontend does not know
+   the vault fields — it asks `vault_schema` and builds hints from the answer.
+   Add a field to `VaultDoc` and the hints update by themselves.
 
-## Слои
+## Layers
 
-| Слой | Файл |
+| Layer | File |
 |---|---|
-| Схема (`schemars` по `VaultDoc`) | `crates/core/src/model/vault.rs` → `json_schema()` |
-| IPC-хендлеры | `crates/app/src/commands/settings.rs` |
-| Бэкап перед записью | `VaultFile::backup` (вызывает только `dev_apply_vault_json`) |
-| Разбор `$ref` / `anyOf` / `oneOf` | `src/shared/lib/json-schema-reader.ts` |
-| Расширения CodeMirror, тема, autocomplete | `src/shared/lib/editor.ts` |
+| Schema (`schemars` over `VaultDoc`) | `crates/core/src/model/vault.rs` → `json_schema()` |
+| IPC handlers | `crates/app/src/commands/settings.rs` |
+| Backup before writing | `VaultFile::backup` (called only by `dev_apply_vault_json`) |
+| `$ref` / `anyOf` / `oneOf` parsing | `src/shared/lib/json-schema-reader.ts` |
+| CodeMirror extensions, theme, autocomplete | `src/shared/lib/editor.ts` |
 | `parseJson` / `normalizeJson` | `src/shared/lib/json.ts` |
-| Компонент + статус-бейдж | `src/widgets/vault-json-editor/VaultJsonEditor.vue` |
+| Component + status badge | `src/widgets/vault-json-editor/VaultJsonEditor.vue` |
 
-## Что менять и где
+## What to change and where
 
-**Новое поле vault** → `crates/core/src/model/vault.rs`. Больше ничего: схема
-и подсказки подхватят сами. Если меняешь только DTO — `mise run gen-types` и
-`mise run test`.
+**A new vault field** → `crates/core/src/model/vault.rs`. Nothing else: the
+schema and hints pick it up by themselves. If you change only a DTO — `mise run
+gen-types` and `mise run test`.
 
-**Новая подсказка в списке** → `src/shared/lib/json-schema-reader.ts`. Схема от
-`schemars` приходит вся, включая `$defs`; `$ref`, `Option<T>` как
-`anyOf` с `null`, `enum` и как плоский список, и как `oneOf` из `const` —
-все четыре варианта уже разобраны, дублировать не надо.
+**A new hint in the list** → `src/shared/lib/json-schema-reader.ts`. The schema
+from `schemars` arrives whole, including `$defs`; `$ref`, `Option<T>` as
+`anyOf` with `null`, and `enum` both as a flat list and as a `oneOf` of
+`const` — all four variants are already handled, do not duplicate them.
 
-**Цвета редактора** → `HighlightStyle` в `src/shared/lib/editor.ts` на CSS-переменных
-темы. Не `.cm-*` правилами в CSS: без зарегистрированного хайтлайтера
-CodeMirror генерирует классы, на которые CSS не попадёт, и документ рендерится
-без цвета.
+**Editor colors** → `HighlightStyle` in `src/shared/lib/editor.ts` on the
+theme's CSS variables. Not `.cm-*` rules in CSS: without a registered
+highlighter CodeMirror generates classes that the CSS will not hit, and the
+document renders without color.
 
-**Путь для подсказок** → берётся из `syntaxTree()` (Lezer), не из
-собственного парсинга строк. Не переписывай на сканер: он верен по построению.
+**The path for hints** → taken from `syntaxTree()` (Lezer), not from your own
+string parsing. Do not rewrite it as a scanner: it is correct by construction.
 
-**Баланс «сохранено / не сохранено»** → сравнение через `normalizeJson`, то
-есть канонический `JSON.stringify(JSON.parse(...))`. Пробелы и порядок ключей
-не должны считаться правкой: backend всегда возвращает своё форматирование.
+**The "saved / not saved" balance** → comparison via `normalizeJson`, that is,
+the canonical `JSON.stringify(JSON.parse(...))`. Whitespace and key order must
+not count as an edit: the backend always returns its own formatting.
 
-## Ошибки
+## Errors
 
-Синтаксис — инлайн под редактором (связан с кареткой, должен читаться рядом).
-Всё остальное — `toast` из `vue-sonner`: успешная запись, отказ backend,
-ошибки загрузки схемы и документа, работа с `$EDITOR`. Одно событие — либо
-toast, либо инлайн, не оба.
+Syntax — inline under the editor (tied to the caret, must be readable next to
+it). Everything else — `toast` from `vue-sonner`: a successful write, a backend
+refusal, errors loading the schema and the document, work with `$EDITOR`. One
+event is either a toast or inline, not both.
 
-Коды ошибок backend (`DESERIALIZE`, `SERIALIZE`, `INVALID_INPUT`, …) приходят
-префиксом к сообщению; `errorText()` ищет `errors.<CODE>` в локалях и
-откатывается на сырое сообщение.
+Backend error codes (`DESERIALIZE`, `SERIALIZE`, `INVALID_INPUT`, …) arrive as
+a prefix to the message; `errorText()` looks up `errors.<CODE>` in the locales
+and falls back to the raw message.
 
-## Грабли
+## Pitfalls
 
-| Симптом | Причина |
+| Symptom | Cause |
 |---|---|
-| Документ без подсветки | хайтлайтер задан как `.cm-*` в CSS вместо `HighlightStyle` |
-| Статус вечно «есть несохранённые правки» | сравнение идёт по сырому тексту, а не через `normalizeJson` |
-| Бейдж «синхронизировано» сразу после Ctrl+S | база обновлена из отправленного текста, а не из ответа backend |
-| Каретка прыгает после сохранения | не сохраняешь `hasFocus` и `selection.main.head` до `invalidateQueries()` — диалог перерисовывается и забирает фокус |
-| `invoke` → «command … not found» | команда не в `generate_handler!` |
+| Document without highlighting | the highlighter is set as `.cm-*` in CSS instead of `HighlightStyle` |
+| Status forever "has unsaved changes" | comparison is on raw text, not through `normalizeJson` |
+| "Synchronized" badge right after Ctrl+S | the baseline is updated from the sent text, not from the backend response |
+| Caret jumps after saving | you do not save `hasFocus` and `selection.main.head` before `invalidateQueries()` — the dialog re-renders and takes focus |
+| `invoke` → "command … not found" | the command is not in `generate_handler!` |

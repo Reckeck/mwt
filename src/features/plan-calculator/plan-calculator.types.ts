@@ -17,6 +17,6 @@ export interface PlanCalculatorProps {
 }
 
 export interface PlanCalculatorDialogProps extends PlanCalculatorProps {
-  /** The exchange the deal is for: «Посчитать сделку · Bybit». */
+  /** The exchange the deal is for: `Work out a trade · Bybit`. */
   exchange?: string | null
 }

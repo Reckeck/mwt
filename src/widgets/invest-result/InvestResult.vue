@@ -16,7 +16,7 @@ import ResultDetails from './ui/ResultDetails.vue'
 
 /**
  * The answer first, then how it adds up. On a phone (Money 3 · 18) the answer
- * is a card of its own under the fields, «Создать цель» right under it, and the
+ * is a card of its own under the fields, `Create goal` right under it, and the
  * figures, the chart and the years in a card below.
  */
 const props = defineProps<{ calc: InvestCalc; compare: CompareLines }>()

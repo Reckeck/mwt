@@ -59,7 +59,7 @@ function submit() {
         category: category.value,
         address: located.value ? address.value.trim() : '',
         area: located.value ? area.value.trim() || null : null,
-        // the purchase now comes from the «Приобрести» operation; these stay as a fallback
+        // the purchase now comes from the `Acquire` operation; these stay as a fallback
         purchased_at: props.store.property?.purchased_at ?? null,
         purchase_price: props.store.property?.purchase_price ?? null,
         currency: currency.value,

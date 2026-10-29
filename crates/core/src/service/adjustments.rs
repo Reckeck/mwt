@@ -1,4 +1,4 @@
-//! Corrections («Корректировка»): set the balances of one account to what is
+//! Corrections ("Adjustment"): set the balances of one account to what is
 //! really there. The ledger balance before it is worked out at the
 //! correction's own moment, so a back-dated one corrects the past, and it is
 //! worked out again whenever the history changes: what a correction keeps is

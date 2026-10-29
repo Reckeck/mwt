@@ -2,7 +2,7 @@ import type { InjectionKey, Ref } from 'vue'
 
 /**
  * reka-ui reserves the empty string for «nothing picked», but the app's
- * selects use `''` for a real choice («Любой», «—», «Без контакта»). Inside
+ * selects use `''` for a real choice (`Any`, «—», `No contact`). Inside
  * the list that choice travels under this value; the model still sees `''`.
  */
 export const EMPTY_VALUE = '__select-empty__'

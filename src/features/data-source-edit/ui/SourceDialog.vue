@@ -21,8 +21,8 @@ import RowsPicker from './RowsPicker.vue'
 import UsesFields from './UsesFields.vue'
 
 /**
- * «Новый источник» and «Изменить» / «Починить»: the address, a click on the
- * value in the page as the background fetch sees it, «Проверить», then the
+ * `New source` and `Edit` / `Fix`: the address, a click on the
+ * value in the page as the background fetch sees it, `Test`, then the
  * name, how often and where the value goes.
  */
 const open = defineModel<boolean>('open', { required: true })

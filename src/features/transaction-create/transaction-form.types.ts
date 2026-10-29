@@ -27,10 +27,10 @@ export interface TransactionFormProps {
   /**
    * The short form of Ctrl N (OpForm-1): four tabs, the amount with its
    * currency chip, the wallet (`#store`) next to the category, the rest under
-   * «Ещё»; no balance preview.
+   * `More`; no balance preview.
    */
   compact?: boolean
-  /** With `compact`: the tab groups of «Сделка · <биржа>» instead of the four quick kinds. */
+  /** With `compact`: the tab groups of `Trade · <exchange>` instead of the four quick kinds. */
   kindGroups?: TxKind[][] | null
 }
 

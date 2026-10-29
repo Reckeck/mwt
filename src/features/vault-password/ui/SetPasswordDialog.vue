@@ -15,7 +15,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { Label } from '@/shared/ui/label'
 import { NewPasswordFields } from '@/shared/ui/new-password-fields'
 
-/** «Задать пароль» for a vault without one (Full-New-Encrypt 5): the file and its external copy are encrypted at once. */
+/** `Set password` for a vault without one (Full-New-Encrypt 5): the file and its external copy are encrypted at once. */
 const props = defineProps<{ externalCopy: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 
@@ -23,7 +23,7 @@ const { t, locale } = useI18n()
 const vault = useVaultStore()
 const queryClient = useQueryClient()
 
-/** While the vault has no password every copy of it is plain: those are the ones «Удалить старые копии» takes away. */
+/** While the vault has no password every copy of it is plain: those are the ones `Delete old copies` takes away. */
 const backups = useQuery({
   queryKey: ['vault-backups'],
   queryFn: () => call<VaultBackup[]>('list_vault_backups'),
@@ -58,7 +58,7 @@ const save = useMutation({
     }),
   onSuccess: async () => {
     open.value = false
-    // «Заблокировать», the auto-lock and the label «без пароля» follow the status; the backup list lost some copies.
+    // `Lock`, the auto-lock and the label `no password` follow the status; the backup list lost some copies.
     await vault.refreshStatus().catch(() => {})
     void queryClient.invalidateQueries({ queryKey: ['vault-backups'] })
   },

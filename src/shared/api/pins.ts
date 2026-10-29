@@ -16,7 +16,7 @@ export const usePinned = () => useQuery({ queryKey: PINNED_KEY, queryFn: () => c
 
 interface PinsChange {
   pins: Pinned[]
-  /** The list before the change, for «Отменить». */
+  /** The list before the change, for `Undo`. */
   previous: Pinned[]
   /** Which toast: an entity was pinned, unpinned, or a filter saved. */
   notice: 'pinned' | 'unpinned' | 'filterSaved'

@@ -7,8 +7,8 @@ import { Button } from '@/shared/ui/button'
 import type { JournalRow } from './journal.types'
 
 /**
- * The journal on a phone (Auto-1 · 4): the name, «когда · что сделала» under
- * it, the outcome on the right. A run waiting for «да» has its own «Подтвердить».
+ * The journal on a phone (Auto-1 · 4): the name, `when · what it did` under
+ * it, the outcome on the right. A run waiting for `Yes` has its own `Confirm`.
  */
 defineProps<{ rows: JournalRow[] }>()
 const emit = defineEmits<{ confirm: [entry: JournalEntry] }>()

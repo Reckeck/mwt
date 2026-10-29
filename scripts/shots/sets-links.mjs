@@ -4,7 +4,7 @@ import { GP } from './steps.mjs'
 
 const wait = `const sleep = (ms) => new Promise((done) => setTimeout(done, ms))`
 
-/** The first wallet of the list, opened by its page (a root wallet: «Кошельки ›» above it, «‹» on a phone). */
+/** The first wallet of the list, opened by its page (a root wallet: `Wallets ›` above it, «‹» on a phone). */
 const FIRST_WALLET = `
   ${GP} ${wait}
   await gp.$router.push('/stores'); await sleep(700)
@@ -12,7 +12,7 @@ const FIRST_WALLET = `
   if (link) await gp.$router.push(link.getAttribute('href'))
   await sleep(900); return true`
 
-/** Two cards stacked: a contact under a goal; the goal's sheet shows «← Назад». */
+/** Two cards stacked: a contact under a goal; the goal's sheet shows `← Back`. */
 const CARD_STACK = `
   ${GP} ${wait}
   const { call } = await import('/src/shared/api/ipc.ts')

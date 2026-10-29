@@ -21,7 +21,7 @@ import ProgramTable from './ui/ProgramTable.vue'
 
 /**
  * Bonuses (Ops-2 · 12): what they come to in the base currency, then the
- * programmes — a table on a desktop, a list on a phone. «+ Программа» sits on
+ * programmes — a table on a desktop, a list on a phone. `+ Program` sits on
  * the tabs' row when the page gives a place for it (`addTo`).
  */
 const props = defineProps<{ addTo?: string }>()
@@ -45,7 +45,7 @@ watch(
 )
 
 const createOpen = ref(false)
-/** `?new=program`: the wallet wizard handed over «Лояльность и бонусы»; the query is dropped once open. */
+/** `?new=program`: the wallet wizard handed over `Loyalty and bonuses`; the query is dropped once open. */
 watch(
   () => route.query.new,
   (value) => {
@@ -62,7 +62,7 @@ const pointsOpen = computed({
     if (!value) points.value = null
   },
 })
-/** «Начислить» on a phone: straight to the one programme that counts points, else a pick of them. */
+/** `Credit` on a phone: straight to the one programme that counts points, else a pick of them. */
 const creditable = computed(() => rows.value.filter((row) => row.store.loyalty))
 const pickOpen = ref(false)
 const creditActions = computed<UiAction[]>(() =>

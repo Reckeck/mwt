@@ -23,7 +23,7 @@ const props = defineProps<{
   hasDrawings: boolean
   refreshing: boolean
   stream: StreamStatus
-  /** «Алерт по цене» is offered (a price alert can be set for this symbol). */
+  /** `Price alert` is offered (a price alert can be set for this symbol). */
   canAlert?: boolean
 }>()
 const magnet = defineModel<boolean>('magnet', { required: true })

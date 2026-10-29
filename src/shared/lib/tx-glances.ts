@@ -1,7 +1,7 @@
 import { type Component, type InjectionKey, inject, provide } from 'vue'
 
 /**
- * What a wallet's name and «авто» in an operation row open on the spot. The
+ * What a wallet's name and `Auto` in an operation row open on the spot. The
  * glances live in a widget, the list in a lower layer: the shell hands them
  * down once, and every list of operations picks them up.
  */

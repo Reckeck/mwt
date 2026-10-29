@@ -19,7 +19,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 import FavoriteChips from './ui/FavoriteChips.vue'
 
 /**
- * «Валюты» (Currency-1 · 1): the three roles of a currency side by side —
+ * `Currencies` (Currency-1 · 1): the three roles of a currency side by side —
  * the base one, the budget's, the favourites — with what each one changes,
  * how often rates refresh and how many digits a coin shows. A new base
  * currency is asked first (Currency-2 · 9).
@@ -51,7 +51,7 @@ const intervals = computed(() => [30, 60, 300, 900, 1800, 3600].map((value) => (
 const interval = computed(() => String(settings.app?.fx_refresh_interval_sec ?? settings.vault?.fx_refresh_interval_sec ?? 300))
 
 const table = useQuery({ queryKey: ['fx-table'], queryFn: () => call<FxTable>('get_fx_table'), staleTime: FX_TABLE_STALE_MS })
-/** The newest rate in the table: «Последнее: сегодня 14:20». */
+/** The newest rate in the table: `Latest: today 14:20`. */
 const lastRefresh = computed(() => {
   const stamps = (table.data.value?.rows ?? []).map((row) => row.updated_at).filter(Boolean).sort()
   const last = stamps.at(-1)
@@ -78,7 +78,7 @@ function openRates() {
       </FormField>
       <FavoriteChips />
     </div>
-    <!-- The canvas shows only the base and favourite currencies; the rest of Currency-1 waits under «Ещё». -->
+    <!-- The canvas shows only the base and favourite currencies; the rest of Currency-1 waits under `More`. -->
     <Collapsible class="grid gap-4">
       <CollapsibleTrigger class="group flex min-h-10 w-fit items-center gap-1 text-sm text-primary hover:underline" data-currency-more>
         {{ t('currencySettings.more') }}

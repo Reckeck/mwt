@@ -117,7 +117,7 @@ export function useDashboardLayout() {
     void save(cfgsOf(layout.value, next))
   }
 
-  /** Taking a widget off is one click; the toast's «Отменить» puts the old layout back. */
+  /** Taking a widget off is one click; the toast's `Undo` puts the old layout back. */
   function remove(id: string) {
     const before = cfgsOf(layout.value)
     void save(cfgsOf(layout.value.filter((item) => item.i !== id)))
@@ -142,7 +142,7 @@ export function useDashboardLayout() {
   }
 
   /**
-   * On the stacked (phone) dashboard nothing can be dragged: «Выше»/«Ниже» swap a widget
+   * On the stacked (phone) dashboard nothing can be dragged: `Move up`/`Move down` swap a widget
    * with its neighbour in reading order, and the grid closes any gap.
    */
   function move(id: string, step: -1 | 1) {
@@ -177,7 +177,7 @@ export function useDashboardLayout() {
     setExtras(id, { period })
   }
 
-  /** The scenario a «Сценарий» widget follows; `null` = the newest one. */
+  /** The scenario a `Scenario` widget follows; `null` = the newest one. */
   const ownScenario = (id: string) => extras.value.get(id)?.scenario_id ?? null
   function setScenario(id: string, scenarioId: string | null) {
     setExtras(id, { scenario_id: scenarioId })
@@ -190,7 +190,7 @@ export function useDashboardLayout() {
     void save(cfgsOf(layout.value, pinnedIds.value, kept))
   }
 
-  /** «Сбросить раскладку» (plan H6): the default set; the toast's «Отменить» brings the old one back. */
+  /** `Reset layout` (plan H6): the default set; the toast's `Undo` brings the old one back. */
   function resetLayout() {
     const before = cfgsOf(layout.value)
     void save(packWidgets(DEFAULT_DASHBOARD))

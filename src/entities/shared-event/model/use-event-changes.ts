@@ -16,7 +16,7 @@ function purchaseIds(view: SharedEventView): string[] {
   return view.event.items.flatMap((item) => item.purchases.map((purchase) => purchase.id))
 }
 
-/** «Новое событие»: the event with the people typed in the dialog; the toast offers «Отменить». */
+/** `New event`: the event with the people typed in the dialog; the toast offers `Undo`. */
 export function useCreateSharedEvent() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -39,7 +39,7 @@ export function useUpdateSharedEvent() {
   })
 }
 
-/** The archive: closed events only; «Отменить» brings it back. */
+/** The archive: closed events only; `Undo` brings it back. */
 export function useArchiveSharedEvent() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -114,7 +114,7 @@ export function useRemoveSharedParticipant() {
   })
 }
 
-/** «Сделать контактом»: the guest's details become a contact and the debts move to its card. */
+/** `Make a contact`: the guest's details become a contact and the debts move to its card. */
 export function useMakeSharedParticipantContact() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -171,7 +171,7 @@ export function useDeleteSharedItem() {
   })
 }
 
-/** «Как делить»: the shares are recalculated at once; «Отменить» puts the old split back. */
+/** `How to split`: the shares are recalculated at once; `Undo` puts the old split back. */
 export function useSetSharedItemSplit() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -207,7 +207,7 @@ export function useSetSharedOverride() {
   })
 }
 
-/** «Купили»: a purchase; mine makes a payment, so the toast says from which wallet. */
+/** `Bought`: a purchase; mine makes a payment, so the toast says from which wallet. */
 export function useAddSharedPurchase() {
   const sync = useSharedEventSync()
   return useMutation({
@@ -252,7 +252,7 @@ export function useDeleteSharedPurchase() {
   })
 }
 
-/** «Привязать платёж»: an existing payment of mine becomes a purchase of the event. */
+/** `Link a payment`: an existing payment of mine becomes a purchase of the event. */
 export function useAttachSharedPayment() {
   const sync = useSharedEventSync()
   return useMutation({

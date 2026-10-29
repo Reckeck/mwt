@@ -1,6 +1,6 @@
 //! Utilities (plan §7.5): metered bills (consumption × tariff), fixed ones
 //! repeated from last time, and rent with a deposit in the first payment.
-//! A bill becomes an ordinary «Оплатить» the user confirms in the form.
+//! A bill becomes an ordinary "Pay" the user confirms in the form.
 
 use std::collections::BTreeMap;
 
@@ -69,7 +69,7 @@ pub struct UtilityMonth {
     pub zones: Vec<ZoneMonth>,
 }
 
-/// One tariff zone of a month («день»: 800, used 200).
+/// One tariff zone of a month ("day": 800, used 200).
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ZoneMonth {
     pub zone: String,
@@ -117,7 +117,7 @@ struct MonthReadings {
     start: Option<Amount>,
     end: Amount,
     end_id: String,
-    /// When the start and the end were read (`sort_key`), for «дней».
+    /// When the start and the end were read (`sort_key`), for "days".
     start_at: Option<(String, u8)>,
     end_at: (String, u8),
     /// A multi-rate meter: the same per zone; the totals above sum them.
@@ -1170,7 +1170,7 @@ impl UnlockedVault {
 
     // -- the payment ----------------------------------------------------------------
 
-    /// The «Оплатить» for one month of an item (plan §7.5): metered —
+    /// The "Pay" for one month of an item (plan §7.5): metered —
     /// consumption × tariff; fixed — what was paid last time, else the set
     /// amount; rent — the monthly amount plus the deposit with the first one.
     pub fn utility_payment_draft(
@@ -1253,7 +1253,7 @@ impl UnlockedVault {
     // -- the whole bill -------------------------------------------------------------
 
     /// The month's bill of a property: every active item with its suggested
-    /// amount, meters with their previous reading (plan: «всё платится в один день»).
+    /// amount, meters with their previous reading (plan: "everything is paid on one day").
     pub fn utility_bill(&self, property_id: &str, period: &str, zone: &str) -> Result<UtilityBill> {
         let property = self
             .doc

@@ -5,7 +5,7 @@ import { cn } from '@/shared/lib/utils'
 
 /**
  * Where a wizard is (Money 1 · 3–4): a segment per step, the done ones filled,
- * and «Шаг 1 из 2 · На что?» under them. Steps are numbered from 1.
+ * and `Step 1 of 2 · For what?` under them. Steps are numbered from 1.
  */
 const props = defineProps<{ step: number; titles: string[] }>()
 const { t } = useI18n()

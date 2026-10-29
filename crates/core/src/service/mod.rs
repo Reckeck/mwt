@@ -266,6 +266,9 @@ pub struct UnlockedVault {
     /// different vault must not change it. The app layer pushes the current
     /// value in right after the vault is opened.
     base_currency: String,
+    /// Whether notices made inside the core (not passed a language) are in
+    /// Russian. Runtime only; the app layer sets it before running workflows.
+    notice_ru: bool,
     password: Zeroizing<String>,
     /// Released when the vault is locked (dropped).
     _lock: crate::storage::VaultLock,
@@ -317,6 +320,7 @@ impl UnlockedVault {
             fmt,
             doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
+            notice_ru: true,
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
@@ -370,6 +374,7 @@ impl UnlockedVault {
             fmt: fmt.for_writing(),
             doc: decoded.doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
+            notice_ru: true,
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
@@ -390,7 +395,7 @@ impl UnlockedVault {
         let graphs_migrated = vault.migrate_workflow_graphs();
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
-        // Files removed last session (their «Отменить» is long gone) go now.
+        // Files removed last session (their "Undo" is long gone) go now.
         let attachments_pruned = vault.prune_attachments();
         // Sync history written before secrets were hidden.
         let secrets_scrubbed = vault.scrub_sync_secrets();
@@ -405,6 +410,11 @@ impl UnlockedVault {
             vault.persist()?;
         }
         Ok(vault)
+    }
+
+    /// Language of notices the core makes without being asked for one.
+    pub fn set_notice_language(&mut self, ru: bool) {
+        self.notice_ru = ru;
     }
 
     /// Point the vault at the app-level base currency.
@@ -456,6 +466,7 @@ impl UnlockedVault {
             fmt: self.fmt,
             doc: self.doc.clone(),
             base_currency: self.base_currency.clone(),
+            notice_ru: self.notice_ru,
             password: Zeroizing::new(String::new()),
             _lock: crate::storage::VaultLock::detached(),
             sandbox: true,

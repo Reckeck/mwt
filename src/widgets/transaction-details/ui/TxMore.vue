@@ -20,7 +20,7 @@ import { txId, txKind, txLegs, txMeta } from '@/shared/lib/transactions'
 import LegPrices from './LegPrices.vue'
 
 /**
- * «Подробнее»: what the card held before Paths 1 · 6 and the frame leaves
+ * `Details`: what the card held before Paths 1 · 6 and the frame leaves
  * out — the loss, the chain, coin prices, enrichment, related entities.
  */
 const props = defineProps<{ tx: Transaction; open: boolean }>()

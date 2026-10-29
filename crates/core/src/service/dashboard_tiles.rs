@@ -1,5 +1,5 @@
 //! Figures for the existing dashboard widgets (plan H3): the month's pace for
-//! «Бюджет дня» and «Итоги месяца», the capital's trend for «Чистый капитал».
+//! "Daily budget" and "This month", the capital's trend for "Net worth".
 
 use std::collections::BTreeMap;
 
@@ -14,7 +14,7 @@ use crate::calendar::{self, Calendar};
 use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
 
-/// How many growing categories «Итоги месяца» names.
+/// How many growing categories "This month" names.
 const TOP_GROWTH: usize = 3;
 
 /// A spending category that grew against the same date of the last month.
@@ -99,7 +99,7 @@ impl UnlockedVault {
         totals
     }
 
-    /// The current month's pace (plan H3: «Бюджет дня» and «Итоги месяца»).
+    /// The current month's pace (plan H3: "Daily budget" and "This month").
     pub fn month_pace(&self, now: i64, zone: &str) -> MonthPace {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);
@@ -165,7 +165,7 @@ impl UnlockedVault {
         }
     }
 
-    /// The holdings' value over a period (plan H3: «Чистый капитал»).
+    /// The holdings' value over a period (plan H3: "Net worth").
     pub fn net_worth_trend(&self, period: DashPeriod, now: i64, zone: &str) -> NetWorthTrend {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);

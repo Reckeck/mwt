@@ -19,7 +19,7 @@ import { TxEventField } from '../tx-event-field'
 /**
  * What the short form folds away (OpForm-1 · 5): date, fee, the other side,
  * the property, the network, files and links (Attach 5). The toggle names exactly what is inside, so
- * nothing hides behind a vague «Дополнительно».
+ * nothing hides behind a vague `More options`.
  */
 const { t } = useI18n()
 const { form, check, showChain, lookupHint, properties, isProperty, editing, attachments, noteExpression, sharedEventOptions } =

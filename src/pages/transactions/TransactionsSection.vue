@@ -17,7 +17,7 @@ const phone = useIsPhone()
 const contacts = useContacts()
 /** A contact on a phone is a screen of its own, with «‹» instead of the tabs. */
 const inContact = computed(() => phone.value && route.name === 'transactions-contacts' && Boolean(route.query.contact))
-/** So are the bonuses (Ops-2 · 12): «‹ Бонусы и кешбэк», back to the list. */
+/** So are the bonuses (Ops-2 · 12): `‹ Bonuses and cashback`, back to the list. */
 const inBonuses = computed(() => phone.value && route.name === 'transactions-bonuses')
 function back() {
   if (window.history.state?.back) router.back()
@@ -29,7 +29,7 @@ const tabs = computed(() => [
   { name: 'transactions', label: t('transactions.tab.list') },
   { name: 'transactions-calendar', label: t('transactions.tab.calendar') },
 ])
-/** Used less often: under «Ещё ▾». */
+/** Used less often: under `More ▾`. */
 const quickCount = computed(() => quickContacts(contacts.data.value ?? []).length)
 const more = computed(() => [
   {

@@ -27,7 +27,7 @@ export type WalletTabsKind = 'home' | 'money' | 'coins' | 'exchange'
 /**
  * The tabs a wallet's kind needs, kept in the URL so a link or «Back» returns
  * to them: a card opens on its operations, a coin wallet on its positions, an
- * exchange adds its terminal and keeps the import and relations under «Ещё»;
+ * exchange adds its terminal and keeps the import and relations under `More`;
  * a home opens on its utilities beside its operations (Wallets-2 · 10). Old `?view=terminal|import` links still land.
  */
 export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolean>) {
@@ -52,7 +52,7 @@ export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolea
     if (kind.value === 'coins') return [tabOf('positions'), tabOf('history'), tabOf('relations')]
     return [tabOf('positions'), tabOf('history'), ...(hasTerminal.value && !phone.value ? [tabOf('terminal')] : [])]
   })
-  /** A phone has no room for the terminal in the strip (Wallets-1 · 7): it joins «Ещё». */
+  /** A phone has no room for the terminal in the strip (Wallets-1 · 7): it joins `More`. */
   const more = computed(() =>
     kind.value === 'exchange'
       ? [...(hasTerminal.value && phone.value ? [tabOf('terminal')] : []), tabOf('import'), tabOf('relations')]

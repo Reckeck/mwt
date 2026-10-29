@@ -8,14 +8,14 @@ export const MAX_COMPARED = 3
 const VARIANTS = ['more_rate', 'more_contribution'] as const
 type Variant = (typeof VARIANTS)[number]
 
-/** One thing the run can be compared with: a «Что выгоднее» variant or a saved scenario. */
+/** One thing the run can be compared with: a `Which pays more` variant or a saved scenario. */
 export interface CompareOption {
   key: string
-  /** `variant`: from «Что выгоднее»; `goal`: a saved scenario a goal follows; `saved`: any other saved one. */
+  /** `variant`: from `Which pays more`; `goal`: a saved scenario a goal follows; `saved`: any other saved one. */
   tag: 'variant' | 'saved' | 'goal'
   name: string
   input: InvestInput
-  /** What «щелчок по линии» opens: a variant goes into the form, a saved scenario is loaded. */
+  /** What `click on a line` opens: a variant goes into the form, a saved scenario is loaded. */
   open: { variant: Variant } | { scenario: string }
 }
 
@@ -29,9 +29,9 @@ export interface CompareLine {
 }
 
 /**
- * «Сравнить с расчётами (до 3)»: the variants of the current run and the saved
+ * `Compare with calculations (up to 3)`: the variants of the current run and the saved
  * scenarios; each picked one is simulated with its own parameters.
- * `name` gives a variant its label («Доходность 14 %», «Пополнения +20 %»).
+ * `name` gives a variant its label (`Return 14 %`, `Contributions +20%`).
  */
 export function useCompareLines(
   currentId: () => string | null,

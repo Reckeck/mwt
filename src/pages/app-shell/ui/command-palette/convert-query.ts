@@ -1,4 +1,4 @@
-/** Words and signs people type for a currency, beside its code: «5000 руб», «100 $», «20 баксов». */
+/** Words and signs people type for a currency, beside its code: `5000 rub`, `100 $`, `20 bucks`. */
 const ALIASES = new Map<string, string>([
   ['$', 'usd'],
   ['доллар', 'usd'],
@@ -30,14 +30,14 @@ const ALIASES = new Map<string, string>([
   ['дирхам', 'aed'],
 ])
 
-/** «рублей», «долларов», «баксов»: the endings fall off before the word is looked up. */
+/** `rubles`, `dollars`, `bucks`: the endings fall off before the word is looked up. */
 const ENDINGS = /(?:ей|ов|ям|ях|ами|ах|ам|я|а|ы|и|у|е|ь|s)$/u
 
-/** «100 usd в thb»: an amount, its currency and, maybe, the one wanted. */
+/** `100 usd in thb`: an amount, its currency and, maybe, the one wanted. */
 export interface ConvertQuery {
   amount: number
   from: string
-  /** Asked for with «в thb», «to eur»; empty for the favourites. */
+  /** Asked for with `in thb`, `to eur`; empty for the favourites. */
   to: string
 }
 

@@ -462,7 +462,7 @@ impl UnlockedVault {
 
     // -- rates --------------------------------------------------------------------
 
-    /// Every cached currency against the base, latest rates (plan Ф3b, «Курсы»),
+    /// Every cached currency against the base, latest rates (plan F3b, "Rates"),
     /// plus a row per crypto favourite that has a cached price.
     /// The rate `ts` minus a day or earlier: the newest such point of `code`.
     fn fx_rate_before(&self, code: &str, limit: i64) -> Option<Amount> {

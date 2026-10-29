@@ -15,7 +15,7 @@ import SpendingMonth from './ui/SpendingMonth.vue'
 import SpendingWeek from './ui/SpendingWeek.vue'
 
 /**
- * «Траты» (plan H2: the 7-day bars and the mini calendar in one): S — the week
+ * `Spending` (plan H2: the 7-day bars and the mini calendar in one): S — the week
  * against the one before; M — the period against the previous one, the bars and
  * the trend; L — the month's calendar too. Rising spending is the bad direction.
  */

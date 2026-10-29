@@ -6,7 +6,7 @@ import { Check } from 'lucide-vue-next'
 import { EMPTY_VALUE, SELECT_EMPTY_ITEMS } from './select.constants'
 import type { SelectItemProps } from './select.types'
 
-/** One entry of a `Select`; `value=""` is a real choice («Любой», «—»). */
+/** One entry of a `Select`; `value=""` is a real choice (`Any`, «—»). */
 const props = defineProps<SelectItemProps>()
 
 // Counted once: an item's value does not change in this app's lists.

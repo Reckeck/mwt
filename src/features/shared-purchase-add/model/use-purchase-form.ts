@@ -8,7 +8,7 @@ import { dateInputToIso, localDate } from '@/shared/lib/planning'
 import type { SharedPurchaseDialogProps } from '../shared-purchase-add.types'
 import { defaultPurchaseDate } from './purchase-date'
 
-/** The fields and the save of «Купили» (new, or a change of a purchase). */
+/** The fields and the save of `Bought` (new, or a change of a purchase). */
 export function usePurchaseForm(open: Ref<boolean>, props: SharedPurchaseDialogProps) {
   const event = computed(() => props.event.event)
 
@@ -65,7 +65,7 @@ export function usePurchaseForm(open: Ref<boolean>, props: SharedPurchaseDialogP
     { resetOn: open },
   )
 
-  /** «Цена за шт 225 ₽»: what one unit came to, once both numbers are in. */
+  /** `Price per pc 225 ₽`: what one unit came to, once both numbers are in. */
   const unitPriceHint = computed(() => {
     const count = Number(parseDecimal(qty.value) ?? 0)
     const sum = Number(parseDecimal(amount.value) ?? 0)

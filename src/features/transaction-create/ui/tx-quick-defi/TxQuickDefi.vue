@@ -15,7 +15,7 @@ import { QUICK_DEFI_ACTIONS } from '../../transaction-form.constants'
 import { AvailableHint } from '../available-hint'
 
 /**
- * DeFi in «Сделка · <биржа>» (OpForm-2 · 11): staking or a pool, where, and
+ * DeFi in `Trade · <exchange>` (OpForm-2 · 11): staking or a pool, where, and
  * how much. What it earns comes later as income operations of its own;
  * unstaking, claims and pool ids stay in the full editor.
  */

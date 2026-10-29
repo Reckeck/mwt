@@ -14,14 +14,14 @@ import type { LinkDraft } from '../../attachment.types'
 import AttachmentLinkForm from './AttachmentLinkForm.vue'
 
 /**
- * «Добавить ▾» (Attach 2, 4). On a computer a menu — Файл…, Ссылка — and the
+ * `Add ▾` (Attach 2, 4). On a computer a menu — File…, Link — and the
  * link form as a popover under the button; on a phone a sheet with the camera
  * first, since a receipt is usually photographed on the spot.
  */
 const props = defineProps<{
   pending?: boolean
   linkUrl?: string
-  /** «Файл или ссылка»: a dashed button of one line in a form (Attach 5), instead of «Добавить ▾». */
+  /** `File or link`: a dashed button of one line in a form (Attach 5), instead of `Add ▾`. */
   label?: string
 }>()
 const linkOpen = defineModel<boolean>('linkOpen', { default: false })

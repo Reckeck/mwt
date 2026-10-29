@@ -19,7 +19,7 @@ import type { PriceAlertDialogProps } from './price-alert-edit.types'
 import { useCurrentPrice } from './model/use-current-price'
 
 /**
- * «Новый алерт цены» (Auto-2 · 11): asset and condition side by side, the
+ * `New price alert` (Auto-2 · 11): asset and condition side by side, the
  * level with its currency inside the field and today's price under it, and
  * whether it fires once or on every crossing.
  */
@@ -71,7 +71,7 @@ const save = useMutation({
       condition: condition.value,
       price: price.value.trim(),
       currency: currency.value,
-      // Switched off from «Мои»; the dialog keeps it as it was.
+      // Switched off from `Mine`; the dialog keeps it as it was.
       active: props.alert?.active ?? true,
       store_id: (props.alert ? props.alert.store_id : props.storeId) ?? undefined,
       repeats: !once.value,

@@ -7,7 +7,7 @@ import { CALC_SCENARIOS_KEY } from '@/shared/api/queries'
 
 export const SCENARIOS_KEY = CALC_SCENARIOS_KEY
 
-/** What is saved: the fields as the engine reads them and where «Из данных» took them from. */
+/** What is saved: the fields as the engine reads them and where `From your data` took them from. */
 export interface ScenarioBody {
   input: InvestInput
   source: ScenarioSource | null
@@ -51,7 +51,7 @@ export function useScenarios() {
     },
   })
 
-  /** Changes to a saved scenario go in by themselves; the bar says «сохранён» instead of a toast. */
+  /** Changes to a saved scenario go in by themselves; the bar says `saved` instead of a toast. */
   const autosave = useMutation({
     mutationFn: store,
     onSuccess: refresh,

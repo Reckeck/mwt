@@ -5,6 +5,6 @@ export interface ReportExportButtonProps {
 }
 
 export interface TransactionsExportButtonProps {
-  /** The list's filter: what «операции по фильтру» writes. */
+  /** The list's filter: what `operations by filter` writes. */
   filter: TxFilter
 }

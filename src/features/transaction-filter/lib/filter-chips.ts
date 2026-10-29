@@ -15,8 +15,8 @@ export interface FilterChip {
 export const ROW_CHIP_KEYS = ['kinds', 'fee', 'realized', 'flow']
 
 /**
- * Every set filter but the search, in the order of the «Фильтры» screen: the phone's line under the
- * search, the computer's row chips, the «Под фильтр ничего не попало» sentence. A wallet fixed by the
+ * Every set filter but the search, in the order of the `Filters` screen: the phone's line under the
+ * search, the computer's row chips, the `Nothing matches the filter` sentence. A wallet fixed by the
  * page (`fixedScope`) is not a filter the user set.
  */
 export function useFilterChips(): (filter: TxFilter, fixedScope?: boolean) => FilterChip[] {

@@ -25,7 +25,7 @@ import BudgetTargetStep from './ui/BudgetTargetStep.vue'
 
 /**
  * A new limit takes two steps (Money 1 · 3–4): on what and per what period, then how
- * much. An existing one changes in one form (Full-New-Fixes 5), with «Удалить…» in
+ * much. An existing one changes in one form (Full-New-Fixes 5), with `Delete…` in
  * its footer. Saving says what was set and offers to take it back (Money 1 · 5).
  */
 const props = withDefaults(defineProps<BudgetDialogProps>(), { budget: null, category: '', spending: null })
@@ -74,7 +74,7 @@ const target = computed<BudgetTarget>(() => {
   return { store: { store_ids: [storeId.value], include_children: true } }
 })
 
-/** Each step checks its own fields: «Далее» the first, «Сохранить» the second. */
+/** Each step checks its own fields: `Next` the first, `Save` the second. */
 const whatRules = () => ({
   category: targetKind.value === 'category' ? required(category.value, 'pick') : null,
   store: targetKind.value === 'store' ? required(storeId.value, 'pick') : null,
@@ -88,7 +88,7 @@ const form = useFormValidation<BudgetField>(
 const title = computed(() => (props.budget ? t('budget.editOn', { name: currentName.value }) : t(`budget.newOn.${targetKind.value}`)))
 const steps = computed(() => [t('budget.step.what'), t('budget.step.howMuch')])
 
-/** «Продукты», «все траты», «Тинькофф»: what the toast says the limit is on. */
+/** `Groceries`, `all spending`, `Chase`: what the toast says the limit is on. */
 function targetName(input: BudgetInput): string {
   if (input.target === 'total') return t('budget.allSpending')
   if ('category' in input.target) return categoryKeyLabel(input.target.category, categories.data.value, t)

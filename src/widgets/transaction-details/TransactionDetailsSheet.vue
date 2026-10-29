@@ -54,7 +54,7 @@ const similar = useSimilarTxs(() => props.tx, open)
 
 const meta = computed(() => (props.tx ? txMeta(props.tx) : null))
 const duplicateOpen = ref(false)
-/** A comment that is the card's title or one of its sides («Кому · Пятёрочка») already is said once. */
+/** A comment that is the card's title or one of its sides (`To whom · Pyaterochka`) already is said once. */
 const showComment = computed(() => {
   const comment = meta.value?.comment.trim()
   if (!comment || !props.tx) return Boolean(comment)
@@ -63,7 +63,7 @@ const showComment = computed(() => {
   return !said.some((text) => text.trim().toLowerCase() === comment.toLowerCase())
 })
 
-/** The whole card is where a dragged file lands; «к операции RUB → USDT · 21 окт» says which one. */
+/** The whole card is where a dragged file lands; `to the RUB → USDT operation · Oct 21` says which one. */
 const cardBody = ref<HTMLElement | null>(null)
 const owner = computed<EntityRef>(() => ({ kind: 'tx', id: props.tx ? txId(props.tx) : '' }))
 const ownerLabel = computed(() =>

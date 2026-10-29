@@ -26,7 +26,7 @@ import type { StoreChangeAction, StoreChangeDialogProps } from './store-change.t
 import { useStoreTree } from '@/shared/api/queries'
 
 /**
- * «Сменить тип или перенести»: pick the change and its target, read what it
+ * `Change kind or move`: pick the change and its target, read what it
  * would do (the backend works it out without writing), confirm with the
  * account's name. Conflicting operations block it until they are fixed.
  */

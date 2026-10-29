@@ -10,7 +10,7 @@ import { formatQuantity } from '@/shared/lib/format'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 
-/** «Подушка» (Home 4): how many months of spending the emergency fund covers; the figure is the checkup's. */
+/** `Emergency fund` (Home 4): how many months of spending the emergency fund covers; the figure is the checkup's. */
 const { t } = useI18n()
 const report = useQuery({
   queryKey: CAPITAL_HEALTH_KEY,

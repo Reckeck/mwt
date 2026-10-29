@@ -295,7 +295,7 @@ impl KindDetails {
 
 // -- the eight variants ------------------------------------------------------
 
-/// «Пополнить»: money comes into a store from outside (salary, cashback, buying an asset).
+/// "Top up": money comes into a store from outside (salary, cashback, buying an asset).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct TopupTx {
     pub meta: TxMeta,
@@ -309,7 +309,7 @@ pub struct TopupTx {
     pub price: PriceStamp,
 }
 
-/// «Оплатить»: money leaves a store for good (a purchase, a bill, interest).
+/// "Pay": money leaves a store for good (a purchase, a bill, interest).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct PaymentTx {
     pub meta: TxMeta,
@@ -344,7 +344,7 @@ impl DebtEffect {
     }
 }
 
-/// «Перевести»: one asset moves between two places, at least one of them mine.
+/// "Transfer": one asset moves between two places, at least one of them mine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct TransferTx {
     pub meta: TxMeta,
@@ -371,7 +371,7 @@ pub struct ConvertSide {
     pub price: PriceStamp,
 }
 
-/// «Обменять»: give one asset, receive another (bank FX, an exchanger, P2P).
+/// "Exchange": give one asset, receive another (bank FX, an exchanger, P2P).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct ConvertTx {
     pub meta: TxMeta,
@@ -527,7 +527,7 @@ impl AdjustmentLine {
     }
 }
 
-/// «Синхронизация с реальностью»: the balances of one account set to what is
+/// "Reality sync": the balances of one account set to what is
 /// really there. `before` is worked out from the ledger when it is saved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct AdjustmentTx {

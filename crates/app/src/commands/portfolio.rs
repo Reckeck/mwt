@@ -42,7 +42,7 @@ pub async fn get_asset_holdings(
     Ok(guard.as_ref().unwrap().asset_holdings(&asset))
 }
 
-/// «Вложения»: coins and futures margin, at cost and today (Money 2 · 13).
+/// "Investments": coins and futures margin, at cost and today (Money 2 · 13).
 #[tauri::command]
 pub async fn get_investments(
     store_ids: Option<Vec<String>>,
@@ -227,7 +227,7 @@ pub async fn property_valuation_add(
         .map_err(err_to_string)
 }
 
-/// Remove a valuation; the removed one comes back for «Отменить».
+/// Remove a valuation; the removed one comes back for "Undo".
 #[tauri::command]
 pub async fn property_valuation_delete(
     id: String,

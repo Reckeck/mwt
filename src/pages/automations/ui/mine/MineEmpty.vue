@@ -9,7 +9,7 @@ import { MINE_STARTERS, type MineStarter } from '../../lib/mine-view'
 
 /**
  * Nothing fires on its own yet (Auto-1 · 2): what will be here and four
- * ready-made starts. «Настроить →» opens the wizard with that start.
+ * ready-made starts. `Set up →` opens the wizard with that start.
  */
 const emit = defineEmits<{ pick: [starter: MineStarter] }>()
 const { t } = useI18n()

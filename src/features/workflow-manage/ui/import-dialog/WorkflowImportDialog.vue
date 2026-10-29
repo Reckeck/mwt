@@ -16,7 +16,7 @@ import { withoutLoyalty } from '@/shared/lib/store-tree'
 
 import { useWorkflowImport } from '../../model/use-workflow-import'
 
-/** «Импорт автоматизации» (Auto-3 · 17): a .json file dropped or chosen, what it holds, a wallet in place of each missing one. */
+/** `Import an automation` (Auto-3 · 17): a .json file dropped or chosen, what it holds, a wallet in place of each missing one. */
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ imported: [workflow: Workflow] }>()
 

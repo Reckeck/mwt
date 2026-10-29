@@ -11,17 +11,17 @@ export interface UtilityLineView {
   line: UtilityBillLine
   icon: Component
   name: string
-  /** «по счётчику · день / ночь», «фиксированная», «аренда · 10-го · автоматизация». */
+  /** `by meter · day / night`, `Fixed`, `rent · 10th · automation`. */
   subtitle: SumPart[]
-  /** «412 → 418 м³», «13 395 / 5 120», «—». */
+  /** `412 → 418 m³`, `13,395 / 5,120`, `—`. */
   reading: string
-  /** «6 м³», «ждёт показаний», «—». */
+  /** `6 m³`, `awaiting reading`, `—`. */
   consumption: string
   /** «294 ₽», «≈ 1 270 ₽»; empty is «—». */
   amount: SumPart[]
-  /** A meter not read this month: its amount is an estimate, «Внести» stands beside. */
+  /** A meter not read this month: its amount is an estimate, `Enter` stands beside. */
   waiting: boolean
-  /** Rent an automation pays: «авто», never in the bill's total. */
+  /** Rent an automation pays: `Auto`, never in the bill's total. */
   automated: boolean
 }
 

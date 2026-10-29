@@ -10,7 +10,7 @@ import { settingsQuery } from '@/shared/lib/settings-link'
 import { Button } from '@/shared/ui/button'
 
 /**
- * «Итог неполный» (Currency-1 · 7): spending without a rate is kept, but left
+ * `The total is incomplete:` (Currency-1 · 7): spending without a rate is kept, but left
  * out of the sums; the banner says how much, when and in what, and offers to
  * see those operations or to enter the rate.
  */
@@ -20,7 +20,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-/** «3 и 5 окт.»: the days grouped by month, each month named once. */
+/** `Oct 3 and 5`: the days grouped by month, each month named once. */
 const days = computed(() => {
   const months = new Map<string, string[]>()
   for (const day of props.unpriced.days) months.set(day.slice(0, 7), [...(months.get(day.slice(0, 7)) ?? []), day])

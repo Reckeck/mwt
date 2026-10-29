@@ -43,7 +43,7 @@ const form = useFormValidation(() => ({
   network: needsNetwork.value && !network.value ? t('contacts.networkRequired') : null,
 }))
 
-/** «карта Мир · RUB», «криптоадрес · TRON». */
+/** `Mir card · RUB`, `crypto address · TRON`. */
 const recognized = computed(() => {
   if (!value.value.trim()) return ''
   const brand = kind.value === 'card' ? cardBrand(value.value) : null
