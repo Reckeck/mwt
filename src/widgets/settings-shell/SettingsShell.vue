@@ -117,7 +117,7 @@ function focusPanel(event: Event) {
           <SettingsGroupList :groups="groups" :active-id="activeGroup.id" :list="isList" :file="vaultFile" @select="selectGroup" />
         </nav>
 
-        <div :class="cn('flex min-w-0 flex-1 flex-col', isList && 'max-md:hidden')">
+        <div :class="cn('flex min-h-0 min-w-0 flex-1 flex-col', isList && 'max-md:hidden')">
           <header class="flex items-center gap-1 px-4 pt-4 pb-3 md:gap-3 md:px-6 md:pt-5">
             <Button variant="ghost" size="icon-sm" class="text-muted-foreground max-md:size-10 max-md:bg-transparent max-md:hover:bg-transparent md:hidden" :aria-label="t('actions.back')" @click="backToList">
               <ChevronLeft class="size-6" />
