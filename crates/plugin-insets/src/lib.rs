@@ -98,9 +98,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             Ok(())
         })
         // Each loaded page starts without the variables: hand them over again.
+        // The hook runs on the Android UI thread, and `run_mobile_plugin` waits
+        // for that same thread to run the Kotlin side: called here, it deadlocks
+        // (black screen, then «isn't responding»). So it goes off the UI thread.
         .on_page_load(|webview, payload| {
             if payload.event() == PageLoadEvent::Finished {
-                let _ = webview.app_handle().insets().apply();
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _ = app.insets().apply();
+                });
             }
         })
         .build()
