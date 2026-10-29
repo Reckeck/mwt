@@ -42,6 +42,11 @@ impl Cmd {
         self.args([arg])
     }
 
+    pub fn env(mut self, key: &str, value: impl AsRef<str>) -> Self {
+        self.env.push((key.to_string(), value.as_ref().to_string()));
+        self
+    }
+
     pub fn display(&self) -> String {
         let mut parts = vec![self.program.clone()];
         parts.extend(self.args.iter().cloned());
@@ -82,6 +87,7 @@ impl Ctx {
         let mut command = Command::new(&cmd.program);
         command
             .args(&cmd.args)
+            .envs(crate::sccache::host_env(&cmd.program, &cmd.env))
             .envs(cmd.env.iter().map(|(key, value)| (key, value)))
             .current_dir(&self.root)
             .stdin(Stdio::null())

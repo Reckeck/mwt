@@ -1,11 +1,13 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
+mod build;
 mod checks;
 mod exec;
 mod graph;
 mod guard;
 mod lock;
 mod platforms;
+mod sccache;
 mod sink;
 
 use std::process::ExitCode;
@@ -37,6 +39,9 @@ enum Command {
         #[arg(long, default_value_t = 2)]
         heavy: usize,
     },
+    /// Bundles for every platform (linux pacman flatpak android windows macos) into
+    /// `.cache/build-all/builds/<channel>/`.
+    Build(BuildArgs),
     /// For tests of the run lock: sleeps, then exits with `--code`.
     #[command(hide = true)]
     SelftestSleep {
@@ -70,6 +75,27 @@ struct CheckArgs {
     list: bool,
 }
 
+#[derive(Args)]
+struct BuildArgs {
+    /// Platforms (with what they need); all when empty.
+    platforms: Vec<String>,
+    /// `dev` is the app of development, `prod` the release of main (scripts/ci/channel.sh).
+    #[arg(long, default_value = "dev", value_parser = ["dev", "prod"])]
+    channel: String,
+    /// Default: the version of tauri.conf.json (scripts/ci/version.sh).
+    #[arg(long)]
+    version: Option<String>,
+    /// Build linux and flatpak on this host instead of in containers.
+    #[arg(long)]
+    native: bool,
+    /// Cargo builds at once (android, windows, linux).
+    #[arg(long, default_value_t = 2)]
+    heavy: usize,
+    /// Print the task graph and exit.
+    #[arg(long)]
+    list: bool,
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     match run().await {
@@ -84,6 +110,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<i32> {
     let cli = Cli::parse();
     let root = lock::find_root()?;
+    let mut built = None;
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
             let mut all = checks::check_tasks(&root, args.overlap_browser);
@@ -127,6 +154,31 @@ async fn run() -> Result<i32> {
                 *heavy,
             )
         }
+        Command::Build(args) => {
+            let version = match &args.version {
+                Some(version) => version.clone(),
+                None => build::version_of(&root)?,
+            };
+            build::check_version(&version)?;
+            let env = Arc::new(build::Env::detect(
+                root.clone(),
+                &args.channel,
+                &version,
+                args.native,
+            ));
+            let facts = build::Facts {
+                mac: build::MacFacts::detect(),
+                tarball: env.tarball().is_file(),
+            };
+            let tasks = build::graph(&env, &args.platforms, &facts)?;
+            if args.list {
+                list(&tasks);
+                return Ok(0);
+            }
+            std::fs::create_dir_all(root.join(&env.out))?;
+            built = Some(env);
+            (tasks, args.heavy)
+        }
         Command::SelftestSleep { .. } => (Vec::new(), 1),
     };
     let cmdline = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
@@ -141,6 +193,9 @@ async fn run() -> Result<i32> {
         Command::SelftestSleep { seconds, code } => selftest(&sink, &cancel, seconds, code).await,
         _ => run_tasks(tasks, heavy, &root, &sink, &cancel).await,
     };
+    if let (Some(env), 0) = (&built, code) {
+        build::print_output(env, &sink);
+    }
     let code = if interrupted.is_cancelled() {
         130
     } else {
@@ -158,6 +213,7 @@ async fn run_tasks(
     sink: &Arc<Sink>,
     cancel: &CancellationToken,
 ) -> i32 {
+    sccache::prepare(sink);
     let schemas = guard::SchemasGuard::take(root);
     let reports = graph::run_graph(
         tasks,
@@ -170,6 +226,9 @@ async fn run_tasks(
     .await;
     schemas.restore();
     graph::summary(&reports, sink.elapsed(), sink);
+    if let Some(line) = sccache::stats_line() {
+        sink.line(&line);
+    }
     i32::from(reports.iter().any(|report| report.status == Status::Fail))
 }
 
