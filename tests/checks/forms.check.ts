@@ -10,7 +10,9 @@
 //   `AssetSelect`/`AssetInput`, `CurrencyPicker`; currencies as `<ToggleGroupItem v-for>` →
 //   `ChartCurrencySwitch`/`CurrencyPicker`; an `<Input>` typed into a currency, symbol, pair,
 //   ticker or contract → `CurrencyPicker`/`PairInput`/`AssetInput`; a field that is not an asset
-//   says so with `data-picker-ok`). The components themselves (PICKERS) are where such lists live.
+//   says so with `data-picker-ok`; a `<SelectItem>` / `<option>` / `<ComboboxItem>` per contact
+//   → `ContactPicker`, a pick-only filter says `no-create`). The components themselves (PICKERS)
+//   are where such lists live.
 //
 // A button that is off for a reason the user cannot fix in the form (the backend refuses the plan)
 // is allowed with a name from ALLOWED; it must say why next to it.
@@ -25,11 +27,14 @@ import { lineOf, walk } from './lib/walk'
 /** What a submit button may wait for: a save in flight, or a refusal shown with its reason. */
 const ALLOWED = /^(?:[a-zA-Z]+\.)*(?:isPending(?:\.value)?|pending|busy|refused|loading)$/
 
-/** The ready pickers: the only places a list of wallets, assets or currencies is drawn by hand. */
+/** The ready pickers: the only places a list of wallets, assets, currencies or contacts is drawn by hand. */
 const PICKERS =
-  /(?:StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker|ChartCurrencySwitch|PairInput)\.vue$/
+  /(?:ContactPicker|StoreNodeSelect|AssetSelect|AssetInput|CurrencyPicker|AccountRefPicker|ChartCurrencySwitch|PairInput)\.vue$/
 
-type Finding = { rule: 'rule-13-submit' | 'rule-13-submit-handler' | 'rule-14-pickers'; text: string }
+type Finding = {
+  rule: 'rule-13-submit' | 'rule-13-submit-handler' | 'rule-14-pickers' | 'rule-14-contacts'
+  text: string
+}
 
 function scan(): Finding[] {
   const found: Finding[] = []
@@ -76,6 +81,17 @@ function scan(): Finding[] {
           add('rule-14-pickers', match.index, `a currency list by hand («${list}») — use CurrencyPicker (rule 14)`)
         }
       }
+      // Quoted attributes may hold `>` (`(entry) => …`), so the tag is read quote by quote.
+      for (const match of text.matchAll(/<(?:SelectItem|option|ComboboxItem)\b(?:[^>"]|"[^"]*")*/g)) {
+        const loop = match[0].match(/v-for="\s*\(?\s*(\w+)[^"]*?\bin\s+([^"]+)"/)
+        if (loop && (/contact/i.test(loop[1]) || /\bcontacts?\b/i.test(loop[2]))) {
+          add(
+            'rule-14-contacts',
+            match.index,
+            `a contact list by hand («${loop[2].trim()}») — use ContactPicker (rule 14)`,
+          )
+        }
+      }
       for (const match of text.matchAll(/<ToggleGroupItem\b[^>]*v-for="\s*\(?\s*(code|currency)\b[^"]*"/gs)) {
         add(
           'rule-14-pickers',
@@ -119,4 +135,5 @@ describe('check-forms', () => {
   it('rule 13: a submit button is blocked only by a save in flight', () => expectNone(of('rule-13-submit')))
   it('rule 13: @submit does not check fields by hand', () => expectNone(of('rule-13-submit-handler')))
   it('rule 14: accounts, assets and currencies come from the ready pickers', () => expectNone(of('rule-14-pickers')))
+  it('rule 14: contacts come from ContactPicker', () => expectNone(of('rule-14-contacts')))
 })
