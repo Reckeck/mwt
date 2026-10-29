@@ -31,7 +31,7 @@ const confirm = (entry: JournalEntry) => (confirming.value = entry)
       </RouterLink>
     </EmptyState>
     <div v-else class="grid gap-6">
-      <div data-tour="automations-journal">
+      <div class="min-w-0" data-tour="automations-journal">
         <JournalList v-if="phone" :rows="rows" @confirm="confirm" />
         <JournalTable v-else :rows="rows" @confirm="confirm" />
       </div>

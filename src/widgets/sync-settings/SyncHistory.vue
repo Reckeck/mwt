@@ -70,8 +70,8 @@ const empty = computed(() => journal.isSuccess.value && !rows.value.length)
           </TableHeader>
           <TableBody>
             <TableRow v-for="row in rows" :key="row.id">
-              <TableCell class="whitespace-nowrap text-sm tabular-nums text-muted-foreground">{{ formatDateTime(row.at) }}</TableCell>
-              <TableCell>{{ row.device }}</TableCell>
+              <TableCell class="whitespace-normal text-sm tabular-nums text-muted-foreground">{{ formatDateTime(row.at) }}</TableCell>
+              <TableCell class="whitespace-normal">{{ row.device }}</TableCell>
               <TableCell class="whitespace-normal">{{ row.what }}</TableCell>
               <TableCell class="text-right text-sm">
                 <span class="inline-flex items-center justify-end gap-2">

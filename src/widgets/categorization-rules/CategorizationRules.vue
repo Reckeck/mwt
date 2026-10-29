@@ -94,19 +94,19 @@ const create = useMutation({
       </form>
 
       <p v-if="!rules.data.value?.length" class="text-sm text-muted-foreground">{{ t('rules.empty') }}</p>
-      <div v-for="(rule, index) in rules.data.value ?? []" :key="rule.id" class="flex flex-wrap items-center gap-2 md:flex-nowrap" :class="!rule.active && 'opacity-60'">
+      <div v-for="(rule, index) in rules.data.value ?? []" :key="rule.id" class="flex flex-wrap items-center gap-2 lg:flex-nowrap" :class="!rule.active && 'opacity-60'">
         <Checkbox
           :model-value="rule.active"
           :aria-label="t('rules.active')"
           @update:model-value="update.mutate({ ...rule, active: !rule.active })"
         />
         <Input
-          class="h-8 min-w-0 flex-1 basis-[calc(100%-2.5rem)] md:basis-0"
+          class="h-8 min-w-0 flex-1 basis-[calc(100%-2.5rem)] lg:basis-0"
           :model-value="rule.pattern"
           :aria-label="t('rules.pattern')"
           @change="(event: Event) => update.mutate({ ...rule, pattern: (event.target as HTMLInputElement).value })"
         />
-        <div class="min-w-0 flex-1 basis-32 md:w-48 md:flex-none md:basis-auto">
+        <div class="min-w-0 flex-1 basis-32 lg:w-48 lg:flex-none lg:basis-auto">
           <CategorySelect
             :model-value="rule.category"
             :groups="CATEGORY_GROUPS"

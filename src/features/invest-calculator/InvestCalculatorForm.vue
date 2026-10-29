@@ -60,7 +60,7 @@ function pickMode(value: unknown) {
       </FormField>
 
       <div class="grid grid-cols-2 gap-3">
-        <FormField for="calc-initial" :label="t('invest.initial')" :error="error('initial') ?? error('currency')">
+        <FormField for="calc-initial" :label="t('invest.initial')" :error="error('initial') ?? error('currency')" class="@max-sm:col-span-2">
           <AmountInput id="calc-initial" v-model="form.initial" :decimals="2" placeholder="0">
             <template #suffix>
               <CurrencyPicker

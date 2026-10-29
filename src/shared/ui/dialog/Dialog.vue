@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, toRef } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import {
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from 'reka-ui'
 
+import { useLatePortal } from '@/shared/lib/late-portal'
 import { useCoarsePointer, useIsPhone } from '@/shared/lib/phone'
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/shared/ui/drawer'
 
@@ -25,6 +27,10 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
 const widths = dialogWidths
+/** The portal is made when the dialog opens, so a dialog opened over another one lands above it (`late-portal.ts`). */
+const late = useLatePortal(toRef(() => props.open === true))
+/** An uncontrolled dialog (no `open`) keeps its portal as before. */
+const portalled = computed(() => props.open === undefined || late.value)
 
 const { t } = useI18n()
 /** On a phone the same dialog is a sheet from the bottom that a swipe closes. */
@@ -91,7 +97,7 @@ function focusFirstField(event: Event) {
   </Drawer>
 
   <DialogRoot v-else :open="props.open" @update:open="(value) => emit('update:open', value)">
-    <DialogPortal>
+    <DialogPortal v-if="portalled">
       <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
         class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-clip rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"

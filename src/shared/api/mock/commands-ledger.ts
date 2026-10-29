@@ -30,7 +30,7 @@ function mockPriceAt(code: string, at: string | null | undefined): number | unde
 /** Commands: contacts. */
 export const contactsCommands: MockCommands = {
   list_contacts: (_call) => {
-    return resolve(mockContacts)
+    return resolve([...mockContacts])
   },
   create_contact: ({ args }) => {
     const input = args?.input as ContactDraft
