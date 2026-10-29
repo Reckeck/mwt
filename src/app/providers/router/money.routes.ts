@@ -55,5 +55,11 @@ export const moneyRoutes: RouteRecordRaw = {
       component: () => page().then((module) => module.MoneyCalculator),
       meta: { i18n: 'nav.money', group: 'calculator' },
     },
+    {
+      path: 'together/:id',
+      name: 'money-together-event',
+      component: () => import('@/pages/money-together-event').then((module) => module.MoneyTogetherEvent),
+      meta: { i18n: 'nav.money', group: 'plan' },
+    },
   ],
 }

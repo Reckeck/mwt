@@ -3,6 +3,7 @@ import type { Component } from 'vue'
 import type { DashboardWidgetDef } from './dashboard-registry.types'
 import DashboardFavorite from './ui/DashboardFavorite.vue'
 import DashboardFund from './ui/DashboardFund.vue'
+import DashboardSharedEvents from './ui/DashboardSharedEvents.vue'
 
 import { CashbackBonuses } from '@/widgets/cashback-bonuses'
 import { DailyBudget } from '@/widgets/daily-budget'
@@ -70,6 +71,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   widget('passiveIncome', DashboardPassive, [4, 5, 3, 3], { link: { name: 'money-health' } }),
   widget('topupAdvisor', DashboardTopup, [4, 6, 3, 4], { link: { name: 'money-investments' } }),
   widget('scenario', DashboardScenario, [4, 5, 3, 3], { link: { name: 'money-calculator' }, scenario: true }),
+  widget('sharedEvents', DashboardSharedEvents, [4, 4, 3, 3]),
   widget('goals', DashboardGoals, [6, 5, 3, 4], { link: { name: 'money-plan' } }),
   widget('budgets', DashboardBudgets, [6, 5, 3, 4], { link: { name: 'money-plan' } }),
   widget('utilities', DashboardUtilities, [6, 6, 3, 5], { home: true }),
