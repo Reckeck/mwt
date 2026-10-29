@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Lock, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-vue-next'
 
+import { SidebarEvents } from '@/widgets/sidebar-events'
 import { SidebarPinned } from '@/widgets/sidebar-pinned'
 import {
   Sidebar,
@@ -92,6 +93,7 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
 
       <SidebarSeparator v-if="collapsed" class="my-1" />
       <SidebarPinned />
+      <SidebarEvents />
     </SidebarContent>
 
     <SidebarFooter>

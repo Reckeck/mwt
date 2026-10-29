@@ -22,6 +22,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'split', route: 'money-together-event' },
       { key: 'guests', route: 'money-together-event' },
       { key: 'payment', route: 'transactions' },
+      { key: 'sidebar', route: 'dashboard' },
     ],
   },
   {
