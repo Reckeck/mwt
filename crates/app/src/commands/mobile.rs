@@ -1,11 +1,13 @@
 //! Phone-only window behaviour, as commands that do nothing on a desktop:
 //! the colour of the system bar icons and «minimise» on the system Back.
+//! `async` on purpose: a sync command runs on the Android UI thread, and the
+//! plugin call it makes waits for that thread, so it would deadlock.
 
 use tauri::AppHandle;
 
 /// Light icons on a dark theme, dark ones on a light theme.
 #[tauri::command]
-pub fn set_system_bars(app: AppHandle, dark: bool) -> Result<(), String> {
+pub async fn set_system_bars(app: AppHandle, dark: bool) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         use tauri_plugin_insets::InsetsExt;
@@ -20,7 +22,7 @@ pub fn set_system_bars(app: AppHandle, dark: bool) -> Result<(), String> {
 
 /// Back on the home screen: the app goes to the background, it does not quit.
 #[tauri::command]
-pub fn move_to_back(app: AppHandle) -> Result<(), String> {
+pub async fn move_to_back(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         use tauri_plugin_insets::InsetsExt;
