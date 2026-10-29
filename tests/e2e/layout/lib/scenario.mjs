@@ -42,6 +42,11 @@ const STATIC_ROUTES = [
   '/automations',
   '/money/calculator',
   '/money/plan',
+  // Together: the list and the event with its three tabs (the seed event «Шашлыки»).
+  '/money/together',
+  '/money/together/mock-event-skewers',
+  '/money/together/mock-event-skewers?tab=people',
+  '/money/together/mock-event-skewers?tab=settle',
   '/automations/reminders',
   '/automations/alerts',
   '/automations/workflows',

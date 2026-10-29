@@ -77,9 +77,10 @@ describe('check-layout', () => {
   // Mouse first: touch emulation leaves the pointer coarse for the rest of the run.
   const sweep = (label: string, sizes: number[][], touch: boolean) =>
     describe.each(['dark', 'light'])(`${label} (%s theme)`, (theme) => {
-      describe.each(sizes)('%i x %i', (width, height) => {
-        // Light theme: colours only change, so the main sizes are enough.
-        if (theme === 'light' && width !== 1280 && width !== 390) return
+      // Light theme: colours only change, so the main sizes are enough (an empty suite is an error in vitest).
+      const themed = theme === 'light' ? sizes.filter(([width]) => width === 1280 || width === 390) : sizes
+      if (!themed.length) return
+      describe.each(themed)('%i x %i', (width, height) => {
         it('every view is stable', async () => {
           await setTheme(page, theme)
           await page.viewport(width, height, touch)

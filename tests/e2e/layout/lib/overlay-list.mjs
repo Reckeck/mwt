@@ -17,6 +17,15 @@ const overlay = (id) => `[data-overlay="${id}"]`
 // The sidebar's pinned wallets carry sums too, laid over their links: not a plain sum.
 const PLAIN_SUM = '[data-money-convertible]:not(a *, button *, label *, [role="button"] *, [role="tab"] *, [data-slot="sidebar"] *)'
 const ADD = '[data-tour="quick-add"]'
+/** A «⋯» button of an action menu, and an item of the menu it opens (a menu on a desktop, a sheet on a phone). */
+const ACTION_MORE = 'button[aria-label="Ещё"]'
+const MENU_ITEM = '[role="menuitem"], [data-action-sheet] button'
+/** Marks the «⋯» button of the row that has `text` (a click needs a selector; the rows share one). */
+const MARK_ROW_MORE = (rows, text) => `
+  const row = [...document.querySelectorAll(${JSON.stringify(rows)})].find((node) => node.textContent.includes(${JSON.stringify(text)}))
+  row.querySelector('button[aria-label="Ещё"]').setAttribute('data-probe', '')
+  return true`
+const UNMARK = `document.querySelector('[data-probe]')?.removeAttribute('data-probe'); return true`
 /** Sets a field of a pinia store. */
 const PINIA = (name, assign) => `const store = document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('${name}'); store.${assign}; return true`
 const flag = (module, code) => `const mod = await import('${module}'); ${code}; return true`
@@ -115,6 +124,23 @@ export const OVERLAYS = [
   { id: 'goal', route: '/money/plan', phone: true, open: [{ click: '[data-tour="plan-goals"] button', text: '^\\s*Цель\\s*$' }], layer: overlay('goal') },
   { id: 'money-wallets-filter', route: '/money', phone: true, open: [{ click: 'button[aria-label="Ещё фильтры"]' }], layer: overlay('money-wallets-filter') },
   { id: 'calc-compare', route: '/money/calculator', phone: true, open: [{ click: '[data-calc-compare]' }], layer: overlay('calc-compare') },
+
+  // 3.5 Money · Together (shared events): the list, the event screen with its three tabs, settling up
+  { id: 'shared-event-edit', route: '/money/together', phone: true, centred: true, open: [{ click: '[data-tour="shared-new"]' }], layer: overlay('shared-event-edit') },
+  { id: 'shared-event-edit-change', route: '/money/together/{event}', phone: true, open: [{ click: '[data-tour="shared-event-menu"]', wait: 700 }, { click: MENU_ITEM, text: 'Изменить событие' }], layer: overlay('shared-event-edit') },
+  { id: 'shared-guest-details', route: '/money/together/{event}?tab=people', phone: true, open: [{ eval: MARK_ROW_MORE('[data-tour="shared-people-table"] tr', 'Оля') }, { click: '[data-probe]', wait: 700 }, { click: MENU_ITEM, text: 'Контакты гостя' }], layer: overlay('shared-guest-details'), cleanup: UNMARK },
+  { id: 'shared-item-edit', route: '/money/together/{event}', phone: true, open: [{ click: '[data-tour="shared-add-item"]' }], layer: overlay('shared-item-edit') },
+  { id: 'shared-purchase', route: '/money/together/{event}', phone: true, open: [{ click: '[data-tour="shared-buy"]' }], layer: overlay('shared-purchase') },
+  { id: 'shared-purchase-unplanned', route: '/money/together/{event}', phone: true, open: [{ click: '[data-tour="shared-add-bought"]' }], layer: overlay('shared-purchase') },
+  { id: 'shared-split', route: '/money/together/{event}', phone: true, open: [{ click: `[data-tour="shared-items-table"] ${ACTION_MORE}`, wait: 700 }, { click: MENU_ITEM, text: 'Как делить' }], layer: overlay('shared-split') },
+  { id: 'shared-attach', route: '/money/together/{event}', phone: true, open: [{ click: 'button', text: 'Привязать платёж' }], layer: overlay('shared-attach') },
+  { id: 'shared-override', route: '/money/together/{event}?tab=people', phone: true, open: [{ click: `[data-tour="shared-people-table"] ${ACTION_MORE}`, wait: 700 }, { click: MENU_ITEM, text: 'Ручной итог' }], layer: overlay('shared-override') },
+  { id: 'shared-settle', route: '/money/together/{event}?tab=settle', phone: true, open: [{ click: '[data-tour="shared-settlement"] button', text: '^\\s*Получил\\s*$' }], layer: overlay('shared-settle') },
+  { id: 'shared-offset', route: '/money/together/{event}?tab=settle', phone: true, open: [{ click: `[data-tour="shared-settlement"] ${ACTION_MORE}`, wait: 700 }, { click: MENU_ITEM, text: 'Зачесть без операции' }], layer: overlay('shared-settle') },
+  { id: 'shared-remainder', route: '/money/together/{event}?tab=settle', phone: true, open: [{ click: `[data-tour="shared-settlement"] ${ACTION_MORE}`, wait: 700 }, { click: MENU_ITEM, text: 'Списать остаток' }], layer: overlay('shared-remainder') },
+  { id: 'shared-due', route: '/money/together/{event}?tab=settle', phone: true, open: [{ click: `[data-tour="shared-settlement"] ${ACTION_MORE}`, wait: 700 }, { click: MENU_ITEM, text: 'Срок возврата' }], layer: overlay('shared-due') },
+  { id: 'shared-pay-share', route: '/money/together/{event:others}?tab=settle', phone: true, open: [{ click: '[data-tour="shared-pay-share"]' }], layer: overlay('shared-pay-share') },
+  { id: 'shared-share', route: '/money/together/{event}?tab=settle', phone: true, open: [{ click: '[data-tour="shared-share"]' }], layer: overlay('shared-share') },
 
   // 3.6 Automations
   { id: 'automation-wizard', route: '/automations', phone: true, open: [{ query: { new: 'blank' } }], layer: overlay('automation-wizard'), keys: ['new'] },
