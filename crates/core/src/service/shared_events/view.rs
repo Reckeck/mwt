@@ -132,6 +132,9 @@ pub struct SharedEventView {
     pub plan: Vec<PlannedPayment>,
     /// Absent when I do not take part.
     pub mine: Option<MyPosition>,
+    /// The hand-set totals no longer fit what was bought and are ignored.
+    #[serde(default)]
+    pub overrides_invalid: bool,
 }
 
 /// A row of the list of events.
@@ -334,6 +337,7 @@ impl UnlockedVault {
             settlements,
             plan,
             mine: my_position(event, computed),
+            overrides_invalid: computed.overrides_invalid,
         }
     }
 
@@ -407,11 +411,12 @@ impl UnlockedVault {
 
     /// Every event debt with a contact, for the contact balances: positive
     /// means the contact owes me.
-    pub(crate) fn shared_debts(&self) -> Vec<SharedDebt> {
+    pub(crate) fn shared_debts(&self, secs: i64) -> Vec<SharedDebt> {
         let mut out = Vec::new();
         for event in &self.doc.shared_events {
-            let computed = split::compute(event);
-            for (contact_id, amount) in event_debts(event, &computed) {
+            let event = as_of(event, secs);
+            let computed = split::compute(&event);
+            for (contact_id, amount) in event_debts(&event, &computed) {
                 if split::round_places(amount, 2).is_zero() {
                     continue;
                 }
@@ -469,6 +474,21 @@ impl UnlockedVault {
         }
         out
     }
+}
+
+/// The event as it stood at `secs`: later purchases and settlements are not
+/// there yet. The present (`i64::MAX`) borrows the event untouched.
+fn as_of(event: &SharedEvent, secs: i64) -> std::borrow::Cow<'_, SharedEvent> {
+    if secs == i64::MAX {
+        return std::borrow::Cow::Borrowed(event);
+    }
+    let until = |at: &str| crate::pricing::history::secs_or_now(at) <= secs;
+    let mut past = event.clone();
+    for item in &mut past.items {
+        item.purchases.retain(|purchase| until(&purchase.at));
+    }
+    past.settlements.retain(|settlement| until(&settlement.at));
+    std::borrow::Cow::Owned(past)
 }
 
 /// One event's debt with one contact.

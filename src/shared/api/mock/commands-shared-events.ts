@@ -4,17 +4,25 @@ import { mockTransactions } from './demo'
 import { mockContacts } from './ledger'
 import { resolve } from './core'
 import type { MockCommands } from './core'
-import { ME } from './shared-events/engine'
+import { ME, onlySharer } from './shared-events/engine'
 import { fail, findEvent, mockSharedEvents } from './shared-events/state'
 import { contactEvents, eventView, listSummaries, shareText, txLinks } from './shared-events/view'
 import { txId } from '@/shared/lib/transactions'
+import { mockAppSettings } from './vault-data'
 
 const STEPS = ['0.01', '1', '10', '50', '100']
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 export const txExists = (id: string) => mockTransactions.some((tx) => txId(tx) === id)
 
-export const viewOf = (event: SharedEvent) => resolve(eventView(event, txExists))
+/** The reply of a read. */
+export const readView = (event: SharedEvent) => resolve(eventView(event, txExists))
+
+/** The reply of a change: an archived event that was edited is open again. */
+export const viewOf = (event: SharedEvent) => {
+  event.archived = false
+  return readView(event)
+}
 
 /** The event, or a rejected `MISSING` the caller returns. */
 export function eventOrFail(id: string): SharedEvent | Promise<never> {
@@ -61,7 +69,7 @@ function applyDraft(event: SharedEvent, draft: SharedEventDraft): string | null 
     note: draft.note.trim(),
     starts_on: dates[0],
     ends_on: dates[1],
-    currency: draft.currency.trim().toLowerCase() || 'rub',
+    currency: draft.currency.trim().toLowerCase() || mockAppSettings.base_currency.toLowerCase(),
     rounding_step: step,
     category_id: draft.category_id,
     organizer,
@@ -78,7 +86,7 @@ export const sharedEventCommands: MockCommands = {
     resolve(listSummaries(Boolean((args?.filter as SharedEventFilter | null | undefined)?.include_archived))),
   get_shared_event: ({ args }) => {
     const event = eventOrFail(String(args?.id))
-    return event instanceof Promise ? event : viewOf(event)
+    return event instanceof Promise ? event : readView(event)
   },
   create_shared_event: ({ body }) => {
     const draft = body as SharedEventDraft
@@ -124,21 +132,24 @@ export const sharedEventCommands: MockCommands = {
     if (copy.organizer !== event.organizer && event.settlements.length) {
       return bad('the organizer cannot change once people have settled')
     }
+    if (event.i_participate && !copy.i_participate) {
+      const inMyMoney =
+        event.items.some((item) => item.purchases.some((purchase) => purchase.buyer === ME)) ||
+        event.settlements.some((entry) => entry.participant_id === ME || event.organizer === ME)
+      if (inMyMoney) return bad('you paid or settled in this event: you cannot leave it')
+      for (const item of copy.items) {
+        if ('equal' in item.split) item.split.equal.among = item.split.equal.among.filter((id) => id !== ME)
+        else delete item.split.by_units.units[ME]
+      }
+      copy.adjustments = copy.adjustments.filter((fix) => fix.participant_id !== ME)
+    }
     Object.assign(event, copy)
     return viewOf(event)
   },
+  // Every real operation the event made stays in the ledger as an ordinary one.
   delete_shared_event: ({ args }) => {
     const event = eventOrFail(String(args?.id))
     if (event instanceof Promise) return event
-    const owned = new Set([
-      ...event.items.flatMap((item) =>
-        item.purchases.filter((purchase) => purchase.tx_owned).map((entry) => entry.tx_id),
-      ),
-      ...event.settlements.map((settlement) => settlement.tx_id),
-    ])
-    for (let index = mockTransactions.length - 1; index >= 0; index--) {
-      if (owned.has(txId(mockTransactions[index]))) mockTransactions.splice(index, 1)
-    }
     mockSharedEvents.splice(mockSharedEvents.indexOf(event), 1)
     return resolve({})
   },
@@ -170,6 +181,13 @@ export const sharedEventCommands: MockCommands = {
     if (typeof built === 'string') return bad(built)
     const index = event.participants.findIndex((person) => person.id === input.participant_id)
     if (index < 0) return bad(`participant ${input.participant_id}`)
+    if (built.contact_id !== event.participants[index].contact_id) {
+      const operation = event.settlements.some(
+        (entry) =>
+          entry.tx_id && (entry.participant_id === input.participant_id || event.organizer === input.participant_id),
+      )
+      if (operation) return bad('the contact cannot change: operations were made with it in this event')
+    }
     event.participants[index] = { ...built, id: input.participant_id }
     return viewOf(event)
   },
@@ -178,6 +196,8 @@ export const sharedEventCommands: MockCommands = {
     const event = eventOrFail(input.event_id)
     if (event instanceof Promise) return event
     const who = input.participant_id
+    const lone = event.items.find((item) => onlySharer(event, item, who))
+    if (lone) return bad(`this person is the only one sharing «${lone.title}»: change how it is split first`)
     const busy =
       event.organizer === who ||
       event.items.some((item) => item.purchases.some((purchase) => purchase.buyer === who)) ||
@@ -228,6 +248,7 @@ export const sharedEventCommands: MockCommands = {
     mockContacts.push(contact)
     guest.contact_id = contact.id
     guest.details = null
+    event.archived = false
     return resolve(contact)
   },
   get_contact_shared_events: ({ args }) => resolve(contactEvents(String(args?.contactId ?? args?.contact_id))),

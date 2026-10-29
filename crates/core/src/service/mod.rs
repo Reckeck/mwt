@@ -1368,7 +1368,18 @@ impl UnlockedVault {
     /// changes what happened, not where the record came from.
     pub fn update_transaction(&mut self, id: &str, tx: Transaction) -> Result<Transaction> {
         let property = self.property_of_tx(id).map(str::to_string);
-        self.update_transaction_for(id, tx, property.as_deref())
+        self.update_transaction_inner(id, tx, property.as_deref(), true)
+    }
+
+    /// [`Self::update_transaction`] for the shared event that owns the
+    /// operation: the event has changed its own side already.
+    pub(crate) fn update_transaction_unsynced(
+        &mut self,
+        id: &str,
+        tx: Transaction,
+    ) -> Result<Transaction> {
+        let property = self.property_of_tx(id).map(str::to_string);
+        self.update_transaction_inner(id, tx, property.as_deref(), false)
     }
 
     /// [`Self::update_transaction`] that also sets the operation's property;
@@ -1376,8 +1387,20 @@ impl UnlockedVault {
     pub fn update_transaction_for(
         &mut self,
         id: &str,
+        tx: Transaction,
+        property_id: Option<&str>,
+    ) -> Result<Transaction> {
+        self.update_transaction_inner(id, tx, property_id, true)
+    }
+
+    /// `follow_events`: an operation a shared event owns drags the event's
+    /// purchase or settlement along (or is refused).
+    fn update_transaction_inner(
+        &mut self,
+        id: &str,
         mut tx: Transaction,
         property_id: Option<&str>,
+        follow_events: bool,
     ) -> Result<Transaction> {
         self.check_property_link(property_id)?;
         let index = self
@@ -1398,7 +1421,13 @@ impl UnlockedVault {
         tx.meta_mut().id = id.to_string();
         tx.meta_mut().origin = origin;
         self.prepare_transaction(&mut tx)?;
+        let event_edit = if follow_events {
+            self.plan_shared_tx_edit(id, &tx)?
+        } else {
+            None
+        };
         self.doc.transactions[index] = tx.clone();
+        self.apply_shared_edit(event_edit);
         self.set_property_link(id, property_id);
         self.recompute_holdings();
         self.persist()?;
@@ -1411,6 +1440,7 @@ impl UnlockedVault {
         if self.doc.transactions.len() == before {
             return Err(Error::Missing("transaction".into()));
         }
+        self.cascade_shared_delete(id);
         self.set_property_link(id, None);
         self.recompute_holdings();
         self.persist()?;

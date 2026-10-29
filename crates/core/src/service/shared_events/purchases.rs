@@ -280,7 +280,7 @@ impl UnlockedVault {
         }
         event.items[item_index].purchases.push(purchase);
         *self.find_shared_event_mut(event_id)? = event;
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -302,7 +302,7 @@ impl UnlockedVault {
             }
             event.items[item_index].purchases[purchase_index].qty = draft.qty;
             *self.find_shared_event_mut(event_id)? = event;
-            self.persist()?;
+            self.persist_event(event_id)?;
             return self.shared_event_view(event_id);
         }
         let prepared = self.prepare_purchase(&event, &draft)?;
@@ -315,7 +315,7 @@ impl UnlockedVault {
         ) {
             (Some(tx_id), true, Some(store_id)) => {
                 let payment = Self::shared_payment(&event, &item, &purchase, store_id, tx_id);
-                self.update_transaction(tx_id, payment)?;
+                self.update_transaction_unsynced(tx_id, payment)?;
                 purchase.tx_id = Some(tx_id.to_string());
                 purchase.tx_owned = true;
             }
@@ -334,7 +334,7 @@ impl UnlockedVault {
         }
         event.items[item_index].purchases[purchase_index] = purchase;
         *self.find_shared_event_mut(event_id)? = event;
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -355,7 +355,7 @@ impl UnlockedVault {
         self.find_shared_event_mut(event_id)?.items[item_index]
             .purchases
             .remove(purchase_index);
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -436,7 +436,7 @@ impl UnlockedVault {
         };
         event.items[item_index].purchases.push(purchase);
         *self.find_shared_event_mut(&input.event_id)? = event;
-        self.persist()?;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 }
@@ -725,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn deleting_the_event_deletes_the_payments_it_made() {
+    fn deleting_the_event_keeps_every_real_operation() {
         let mut setup = setup_event();
         let draft = buy(&setup, None, "", "1200");
         setup
@@ -734,7 +734,8 @@ mod tests {
             .unwrap();
         assert_eq!(rub_balance(&setup), amount("48800"));
         setup.vault.delete_shared_event(&setup.event).unwrap();
-        assert_eq!(rub_balance(&setup), amount("50000"));
+        assert_eq!(rub_balance(&setup), amount("48800"));
+        assert!(setup.vault.shared_tx_links().is_empty());
     }
 
     #[test]

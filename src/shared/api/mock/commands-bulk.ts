@@ -1,5 +1,6 @@
 /** Commands: several operations at once (`service/bulk.rs`), all or nothing. */
 
+import { cascadeSharedDelete } from './shared-events/ledger-sync'
 import { txId, txMeta } from '@/shared/lib/transactions'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -26,6 +27,7 @@ export const bulkCommands: MockCommands = {
     const deleted: DeletedTransaction[] = ids.map((id) => {
       const property_id = mockPropertyLinks.find((row) => row.tx_id === id)?.property_id ?? null
       const [transaction] = mockTransactions.splice(indexOf(id), 1)
+      cascadeSharedDelete(id)
       mockLinkProperty(id, null)
       return { transaction, property_id }
     })

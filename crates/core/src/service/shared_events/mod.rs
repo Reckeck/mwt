@@ -21,6 +21,7 @@ use super::UnlockedVault;
 use super::contacts::ContactDraft;
 
 mod analytics;
+mod ledger;
 mod purchases;
 mod settle;
 pub(crate) mod split;
@@ -222,7 +223,7 @@ impl UnlockedVault {
         };
         let id = event.id.clone();
         self.doc.shared_events.push(event);
-        self.persist()?;
+        self.persist_event(&id)?;
         self.shared_event_view(&id)
     }
 
@@ -298,35 +299,31 @@ impl UnlockedVault {
             }
             event.adjustments.retain(|fix| fix.participant_id != me);
         }
-        self.persist()?;
+        self.persist_event(id)?;
         self.shared_event_view(id)
     }
 
-    /// Delete an event with the payments it made; payments that were only
-    /// linked stay, unlinked.
+    /// Delete an event. Every real operation it made or adopted stays in the
+    /// vault as an ordinary one: my payments are plain payments, and the
+    /// `Collect`/`Repay` transfers are plain debt transfers (they count in the
+    /// contact balances again, as the event's own balance goes away).
     pub fn delete_shared_event(&mut self, id: &str) -> Result<()> {
-        let event = self.find_shared_event(id)?.clone();
-        let mut owned: Vec<String> = Vec::new();
-        // Payments that were only adopted stay where they are.
-        for purchase in event.items.iter().flat_map(|item| &item.purchases) {
-            if let (Some(tx_id), true) = (&purchase.tx_id, purchase.tx_owned) {
-                owned.push(tx_id.clone());
-            }
-        }
-        owned.extend(
-            event
-                .settlements
-                .iter()
-                .filter_map(|settlement| settlement.tx_id.clone()),
-        );
-        self.doc
-            .transactions
-            .retain(|tx| !owned.contains(&tx.meta().id));
-        for tx_id in &owned {
-            self.set_property_link(tx_id, None);
-        }
+        self.find_shared_event(id)?;
         self.doc.shared_events.retain(|known| known.id != id);
-        self.recompute_holdings();
+        self.persist()
+    }
+
+    /// Save after a change to the event: an archived event that was edited is
+    /// open again.
+    pub(super) fn persist_event(&mut self, id: &str) -> Result<()> {
+        if let Some(event) = self
+            .doc
+            .shared_events
+            .iter_mut()
+            .find(|event| event.id == id)
+        {
+            event.archived = false;
+        }
         self.persist()
     }
 
@@ -360,7 +357,7 @@ impl UnlockedVault {
         self.find_shared_event_mut(event_id)?
             .participants
             .push(participant);
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -389,6 +386,23 @@ impl UnlockedVault {
         let mut rebuilt =
             self.build_participant(&SharedParticipantDraft { id: None, ..draft }, &others)?;
         rebuilt.id = participant_id.to_string();
+        let old_contact = event
+            .participants
+            .iter()
+            .find(|person| person.id == participant_id)
+            .and_then(|person| person.contact_id.clone());
+        if rebuilt.contact_id != old_contact {
+            let has_operation = event.settlements.iter().any(|settlement| {
+                settlement.tx_id.is_some()
+                    && (settlement.participant_id == participant_id
+                        || event.organizer == participant_id)
+            });
+            if has_operation {
+                return Err(Error::InvalidInput(
+                    "the contact cannot change: operations were made with it in this event".into(),
+                ));
+            }
+        }
         let event = self.find_shared_event_mut(event_id)?;
         if let Some(person) = event
             .participants
@@ -397,7 +411,7 @@ impl UnlockedVault {
         {
             *person = rebuilt;
         }
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -415,6 +429,16 @@ impl UnlockedVault {
             .any(|person| person.id == participant_id)
         {
             return Err(Error::Missing(format!("participant {participant_id}")));
+        }
+        if let Some(item) = event
+            .items
+            .iter()
+            .find(|item| split::only_sharer(event, item, participant_id))
+        {
+            return Err(Error::InvalidInput(format!(
+                "this person is the only one sharing «{}»: change how it is split first",
+                item.title
+            )));
         }
         let busy = event.organizer == participant_id
             || event
@@ -446,7 +470,7 @@ impl UnlockedVault {
                 }
             }
         }
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -514,7 +538,7 @@ impl UnlockedVault {
             person.contact_id = Some(contact.id.clone());
             person.details = None;
         }
-        self.persist()?;
+        self.persist_event(event_id)?;
         Ok(contact)
     }
 
@@ -536,19 +560,37 @@ impl UnlockedVault {
                 input.participant_id
             )));
         }
-        event
+        let mut adjustments: Vec<ShareOverride> = event
             .adjustments
-            .retain(|fix| fix.participant_id != input.participant_id);
+            .iter()
+            .filter(|fix| fix.participant_id != input.participant_id)
+            .cloned()
+            .collect();
         if let Some(total) = input.total {
             if total.is_negative() {
                 return Err(Error::InvalidInput("a total cannot be negative".into()));
             }
-            event.adjustments.push(ShareOverride {
+            adjustments.push(ShareOverride {
                 participant_id: input.participant_id,
                 total,
             });
         }
-        self.persist()?;
+        let spent = split::compute(&SharedEvent {
+            adjustments: Vec::new(),
+            ..event.clone()
+        })
+        .spent;
+        let fixed: Vec<(String, Amount)> = adjustments
+            .iter()
+            .map(|fix| (fix.participant_id.clone(), fix.total))
+            .collect();
+        if !split::overrides_fit(&fixed, &split::sharer_pool(event), spent) {
+            return Err(Error::InvalidInput(
+                "the fixed totals must not exceed what was bought, and must add up to it when everybody is fixed".into(),
+            ));
+        }
+        event.adjustments = adjustments;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 
@@ -599,7 +641,7 @@ impl UnlockedVault {
             cancelled: draft.cancelled,
             split: ItemSplit::default(),
         });
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -627,7 +669,7 @@ impl UnlockedVault {
         item.category_id = category_id;
         item.plan = draft.plan;
         item.cancelled = draft.cancelled;
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -645,7 +687,7 @@ impl UnlockedVault {
             ));
         }
         event.items.retain(|item| item.id != item_id);
-        self.persist()?;
+        self.persist_event(event_id)?;
         self.shared_event_view(event_id)
     }
 
@@ -682,7 +724,7 @@ impl UnlockedVault {
             .find(|item| item.id == input.item_id)
             .ok_or_else(|| Error::Missing(format!("item {}", input.item_id)))?
             .split = split;
-        self.persist()?;
+        self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
     }
 }

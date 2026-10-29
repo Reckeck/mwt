@@ -11,7 +11,8 @@ use rust_decimal::{Decimal, RoundingStrategy};
 
 use crate::Amount;
 use crate::model::shared_event::{
-    ItemSplit, ME, Purchase, SettleDirection, SettlementKind, SharedEvent, SharedEventStatus,
+    EventItem, ItemSplit, ME, Purchase, SettleDirection, SettlementKind, SharedEvent,
+    SharedEventStatus,
 };
 
 /// One person's numbers in an event.
@@ -67,6 +68,8 @@ pub struct Split {
     pub spent: Amount,
     /// Everything planned for the items not cancelled.
     pub planned: Amount,
+    /// Hand-set totals no longer fit what was bought; they were ignored.
+    pub overrides_invalid: bool,
 }
 
 impl Split {
@@ -82,6 +85,11 @@ impl Split {
 
 pub(crate) fn one() -> Amount {
     Amount::new(Decimal::ONE)
+}
+
+/// How far over what is owed a settlement may go (half a cent).
+pub(crate) fn settle_tolerance() -> Amount {
+    Amount::new(Decimal::new(5, 3))
 }
 
 fn is_zero(value: Amount) -> bool {
@@ -127,7 +135,7 @@ pub fn people_ids(event: &SharedEvent) -> Vec<String> {
 }
 
 /// Who can share an item: everybody, but the owner only when they take part.
-fn sharer_pool(event: &SharedEvent) -> Vec<String> {
+pub(crate) fn sharer_pool(event: &SharedEvent) -> Vec<String> {
     people_ids(event)
         .into_iter()
         .filter(|id| id != ME || event.i_participate)
@@ -177,14 +185,9 @@ fn weights(event: &SharedEvent, split: &ItemSplit, pool: &[String]) -> Vec<(Stri
     .collect()
 }
 
-/// Spread `cost` over `weights`, each part rounded to `step`; the leftover goes
-/// to `taker` when they share, else to the first sharer.
-fn spread(
-    cost: Amount,
-    weights: &[(String, Amount)],
-    step: Amount,
-    taker: &str,
-) -> BTreeMap<String, Amount> {
+/// Spread `cost` over `weights` to the cent; the leftover cents go to `taker`
+/// when they share, else to the first sharer.
+fn spread(cost: Amount, weights: &[(String, Amount)], taker: &str) -> BTreeMap<String, Amount> {
     let mut parts = BTreeMap::new();
     let total_weight = weights
         .iter()
@@ -194,7 +197,7 @@ fn spread(
     }
     let mut given = Amount::ZERO;
     for (id, weight) in weights {
-        let part = round_to_step(cost * *weight / total_weight, step);
+        let part = round_places(cost * *weight / total_weight, 2);
         given += part;
         parts.insert(id.clone(), part);
     }
@@ -209,9 +212,26 @@ fn spread(
     parts
 }
 
+/// Whether `participant` is the only person an item is split between (so
+/// removing them would silently spread the item over everybody).
+pub fn only_sharer(event: &SharedEvent, item: &EventItem, participant: &str) -> bool {
+    let pool = sharer_pool(event);
+    let named: Vec<&String> = match &item.split {
+        ItemSplit::Equal { among } => among.iter().filter(|id| pool.contains(id)).collect(),
+        ItemSplit::ByUnits { units } => units
+            .iter()
+            .filter(|(id, qty)| qty.is_positive() && pool.contains(id))
+            .map(|(id, _)| id)
+            .collect(),
+    };
+    if named.is_empty() {
+        return pool.len() == 1 && pool[0] == participant;
+    }
+    named.iter().all(|id| id.as_str() == participant)
+}
+
 pub fn compute(event: &SharedEvent) -> Split {
     let pool = sharer_pool(event);
-    let step = event.rounding_step;
     let mut items = Vec::new();
     let mut purchases: Vec<PurchaseLine> = Vec::new();
     let mut shares: BTreeMap<String, Amount> = BTreeMap::new();
@@ -255,7 +275,7 @@ pub fn compute(event: &SharedEvent) -> Split {
             });
         }
         spent += cost;
-        let item_shares = spread(cost, &weights(event, &item.split, &pool), step, &buyer);
+        let item_shares = spread(cost, &weights(event, &item.split, &pool), &buyer);
         for (id, part) in &item_shares {
             *shares.entry(id.clone()).or_default() += *part;
         }
@@ -269,7 +289,8 @@ pub fn compute(event: &SharedEvent) -> Split {
         });
     }
 
-    apply_overrides(event, &pool, &mut shares, &paid, spent);
+    let (locked, overrides_invalid) = apply_overrides(event, &pool, &mut shares, &paid, spent);
+    round_totals(event, &pool, &mut shares, &paid, &locked, spent);
     apply_reassignments(event, &mut shares);
 
     let mut moved: BTreeMap<String, Amount> = BTreeMap::new();
@@ -330,72 +351,169 @@ pub fn compute(event: &SharedEvent) -> Split {
         purchases,
         spent,
         planned,
+        overrides_invalid,
     }
 }
 
+/// Whether hand-set totals (those of people in `pool`) fit what was bought:
+/// they must not add up to more than `spent`, and when everybody is fixed
+/// they must add up to exactly that.
+pub fn overrides_fit(fixed: &[(String, Amount)], pool: &[String], spent: Amount) -> bool {
+    let fixed: Vec<&(String, Amount)> = fixed.iter().filter(|(id, _)| pool.contains(id)).collect();
+    if fixed.is_empty() {
+        return true;
+    }
+    let sum = fixed
+        .iter()
+        .fold(Amount::ZERO, |sum, (_, total)| sum + *total);
+    if sum > spent {
+        return false;
+    }
+    let everyone = pool
+        .iter()
+        .all(|id| fixed.iter().any(|(fixed_id, _)| fixed_id == id));
+    !everyone || sum == spent
+}
+
+/// Who gets the rounding leftover: the organizer when they take part, then
+/// whoever paid the most (the first on a tie), then the biggest share.
+fn leftover_order(
+    event: &SharedEvent,
+    pool: &[String],
+    shares: &BTreeMap<String, Amount>,
+    paid: &BTreeMap<String, Amount>,
+    locked: &[String],
+) -> Vec<String> {
+    let open: Vec<&String> = pool.iter().filter(|id| !locked.contains(id)).collect();
+    let mut order: Vec<String> = Vec::new();
+    if open.iter().any(|id| **id == event.organizer) {
+        order.push(event.organizer.clone());
+    }
+    let mut rest: Vec<&String> = open
+        .into_iter()
+        .filter(|id| **id != event.organizer)
+        .collect();
+    // Stable: equal payers keep the order of the pool, then of the shares.
+    rest.sort_by(|left, right| {
+        let pay = |id: &String| paid.get(id).copied().unwrap_or_default();
+        let part = |id: &String| shares.get(id).copied().unwrap_or_default();
+        pay(right)
+            .cmp(&pay(left))
+            .then_with(|| part(right).cmp(&part(left)))
+    });
+    order.extend(rest.into_iter().cloned());
+    order
+}
+
 /// Hand-set totals: those people get exactly that, the others share the rest
-/// in proportion to what they would have owed.
+/// in proportion to what they would have owed. Returns the people fixed by
+/// hand and whether the totals had to be ignored because they no longer fit.
 fn apply_overrides(
     event: &SharedEvent,
     pool: &[String],
     shares: &mut BTreeMap<String, Amount>,
     paid: &BTreeMap<String, Amount>,
     spent: Amount,
-) {
-    let fixed: Vec<(&String, Amount)> = event
+) -> (Vec<String>, bool) {
+    let fixed: Vec<(String, Amount)> = event
         .adjustments
         .iter()
         .filter(|fix| pool.contains(&fix.participant_id))
-        .map(|fix| (&fix.participant_id, fix.total))
+        .map(|fix| (fix.participant_id.clone(), fix.total))
         .collect();
     if fixed.is_empty() {
-        return;
+        return (Vec::new(), false);
+    }
+    if !overrides_fit(&fixed, pool, spent) {
+        return (Vec::new(), true);
     }
     let fixed_sum = fixed
         .iter()
         .fold(Amount::ZERO, |sum, (_, total)| sum + *total);
-    let rest = spent - fixed_sum;
-    let others: Vec<&String> = pool
+    let others: Vec<String> = pool
         .iter()
-        .filter(|id| !fixed.iter().any(|(fixed_id, _)| fixed_id == id))
+        .filter(|id| !fixed.iter().any(|(fixed_id, _)| fixed_id == *id))
+        .cloned()
         .collect();
-    if others.is_empty() {
-        for (id, total) in &fixed {
-            shares.insert((*id).clone(), *total);
+    let locked: Vec<String> = fixed.iter().map(|(id, _)| id.clone()).collect();
+    if !others.is_empty() {
+        let weights: Vec<(String, Amount)> = others
+            .iter()
+            .map(|id| (id.clone(), shares.get(id).copied().unwrap_or_default()))
+            .collect();
+        let base_sum = weights
+            .iter()
+            .fold(Amount::ZERO, |sum, (_, weight)| sum + *weight);
+        let weights = if base_sum.is_positive() {
+            weights
+        } else {
+            // Nobody else had a part: the rest is split evenly.
+            weights.into_iter().map(|(id, _)| (id, one())).collect()
+        };
+        // The cents left over go to whoever paid the most among the others.
+        let mut taker = others[0].clone();
+        for id in &others {
+            let pay = |who: &String| paid.get(who).copied().unwrap_or_default();
+            if pay(id) > pay(&taker) {
+                taker = id.clone();
+            }
+        }
+        let spread_rest = spread(spent - fixed_sum, &weights, &taker);
+        for id in &others {
+            shares.insert(id.clone(), spread_rest.get(id).copied().unwrap_or_default());
+        }
+    }
+    for (id, total) in &fixed {
+        shares.insert(id.clone(), *total);
+    }
+    (locked, false)
+}
+
+/// Round each person's total once to the event's step. The leftover goes to
+/// the organizer when they take part, else to the biggest payer; a share is
+/// never pushed below zero (what does not fit moves to the next in line).
+fn round_totals(
+    event: &SharedEvent,
+    pool: &[String],
+    shares: &mut BTreeMap<String, Amount>,
+    paid: &BTreeMap<String, Amount>,
+    locked: &[String],
+    spent: Amount,
+) {
+    let step = event.rounding_step;
+    if !step.is_positive() || step == Amount::parse("0.01").unwrap_or_default() {
+        return;
+    }
+    for id in pool.iter().filter(|id| !locked.contains(id)) {
+        if let Some(part) = shares.get_mut(id) {
+            *part = round_to_step(*part, step);
+        }
+    }
+    let total = pool.iter().fold(Amount::ZERO, |sum, id| {
+        sum + shares.get(id).copied().unwrap_or_default()
+    });
+    let mut leftover = spent - total;
+    if leftover.is_zero() {
+        return;
+    }
+    let order = leftover_order(event, pool, shares, paid, locked);
+    if leftover.is_positive() {
+        if let Some(first) = order.first() {
+            *shares.entry(first.clone()).or_default() += leftover;
         }
         return;
     }
-    let weights: Vec<(String, Amount)> = others
-        .iter()
-        .map(|id| {
-            let base = shares.get(*id).copied().unwrap_or_default();
-            ((*id).clone(), base)
-        })
-        .collect();
-    let base_sum = weights
-        .iter()
-        .fold(Amount::ZERO, |sum, (_, weight)| sum + *weight);
-    let weights = if base_sum.is_positive() {
-        weights
-    } else {
-        // Nobody else had a part: the rest is split evenly.
-        weights
-            .into_iter()
-            .map(|(id, _)| (id, one()))
-            .collect::<Vec<_>>()
-    };
-    // The leftover of the rounding goes to whoever paid the most among the others.
-    let taker = others
-        .iter()
-        .max_by_key(|id| paid.get(**id).copied().unwrap_or_default())
-        .map(|id| (*id).clone())
-        .unwrap_or_default();
-    let spread_rest = spread(rest, &weights, event.rounding_step, &taker);
-    for (id, total) in &fixed {
-        shares.insert((*id).clone(), *total);
-    }
-    for id in others {
-        shares.insert(id.clone(), spread_rest.get(id).copied().unwrap_or_default());
+    for id in &order {
+        let part = shares.get(id).copied().unwrap_or_default();
+        let want = -leftover;
+        let take = if want < part { want } else { part };
+        if let Some(slot) = shares.get_mut(id) {
+            *slot -= take;
+        }
+        leftover += take;
+        if leftover.is_zero() {
+            return;
+        }
     }
 }
 
@@ -477,10 +595,10 @@ pub fn status(event: &SharedEvent, split: &Split) -> SharedEventStatus {
         .any(|item| !item.cancelled && !item.purchases.is_empty());
     if !bought {
         SharedEventStatus::Planning
-    } else if event.settlements.is_empty() {
-        SharedEventStatus::InProgress
     } else if split.all_settled() {
         SharedEventStatus::Closed
+    } else if event.settlements.is_empty() {
+        SharedEventStatus::InProgress
     } else {
         SharedEventStatus::Settling
     }
@@ -669,11 +787,11 @@ mod tests {
         }];
         event.participants = vec![person("vasya", "Вася"), person("petya", "Петя")];
         event.i_participate = true;
-        // 100 / 3 = 33.33 -> 33 each at step 1; the leftover 1 goes to the buyer
+        // 100 / 3 = 33.33 -> 33 each at step 1; the leftover 1 goes to the organizer (me)
         let split = compute(&event);
-        assert_eq!(share_of(&split, ME), amount("33"));
+        assert_eq!(share_of(&split, ME), amount("34"));
         assert_eq!(share_of(&split, "petya"), amount("33"));
-        assert_eq!(share_of(&split, "vasya"), amount("34"));
+        assert_eq!(share_of(&split, "vasya"), amount("33"));
         // at step 50 the parts round to 50 and 0; the sum still holds
         event.rounding_step = amount("50");
         let coarse = compute(&event);
@@ -900,5 +1018,122 @@ mod tests {
             buy.price_mode = PriceMode::PerUnit;
             event_amount("rub", &buy)
         }
+    }
+
+    fn three_people(step: &str, item_title: &str, buyer: &str, total: &str) -> SharedEvent {
+        let mut event = skewers();
+        event.rounding_step = amount(step);
+        event.participants.truncate(2);
+        let mut bought = item("x", item_title, None);
+        bought.purchases = vec![purchase("px", buyer, "1", total, "rub")];
+        event.items = vec![bought];
+        event
+    }
+
+    #[test]
+    fn a_big_step_never_makes_a_share_negative() {
+        // bread 150 at step 100 between three: 50 each rounds up to 100 each
+        let split = compute(&three_people("100", "Хлеб", "petya", "150"));
+        for row in &split.people {
+            assert!(!row.share.is_negative(), "{} {}", row.id, row.share);
+        }
+        let total = split
+            .people
+            .iter()
+            .fold(Amount::ZERO, |sum, row| sum + row.share);
+        assert_eq!(total, amount("150"));
+        // pizza 1400 between three: 466.67 -> 500 each, the organizer gives back 100
+        let split = compute(&three_people("100", "Пицца", "petya", "1400"));
+        assert_eq!(share_of(&split, ME), amount("400"));
+        assert_eq!(share_of(&split, "petya"), amount("500"));
+        assert_eq!(share_of(&split, "vasya"), amount("500"));
+    }
+
+    #[test]
+    fn rounding_works_on_the_total_of_a_person_not_on_each_item() {
+        // two items of 10 between two people at step 10: each item alone would
+        // give 5 -> 10 / 0; the totals are 10 and 10
+        let mut event = skewers();
+        event.rounding_step = amount("10");
+        event.participants.truncate(1);
+        event.items = vec![
+            {
+                let mut one = item("a", "A", None);
+                one.purchases = vec![purchase("pa", ME, "1", "10", "rub")];
+                one
+            },
+            {
+                let mut two = item("b", "B", None);
+                two.purchases = vec![purchase("pb", ME, "1", "10", "rub")];
+                two
+            },
+        ];
+        let split = compute(&event);
+        assert_eq!(share_of(&split, ME), amount("10"));
+        assert_eq!(share_of(&split, "petya"), amount("10"));
+    }
+
+    #[test]
+    fn totals_that_do_not_fit_are_ignored_and_flagged() {
+        let mut event = skewers();
+        event.adjustments = vec![ShareOverride {
+            participant_id: "petya".into(),
+            total: amount("10000"),
+        }];
+        let split = compute(&event);
+        assert!(split.overrides_invalid);
+        assert_eq!(share_of(&split, "petya"), amount("1735"));
+        // everybody fixed but the sum differs from what was bought
+        let mut event = skewers();
+        event.participants.truncate(1);
+        event.adjustments = vec![
+            ShareOverride {
+                participant_id: "petya".into(),
+                total: amount("100"),
+            },
+            ShareOverride {
+                participant_id: ME.into(),
+                total: amount("100"),
+            },
+        ];
+        assert!(compute(&event).overrides_invalid);
+        // fixed to exactly what was bought: fine
+        event.adjustments[0].total = amount("2800");
+        event.adjustments[1].total = amount("4300");
+        let ok = compute(&event);
+        assert!(!ok.overrides_invalid);
+        assert_eq!(share_of(&ok, "petya"), amount("2800"));
+    }
+
+    #[test]
+    fn bought_and_even_closes_without_any_settlement() {
+        let mut event = skewers();
+        event.participants.truncate(1);
+        let mut shared = item("a", "A", None);
+        shared.purchases = vec![
+            purchase("pa", ME, "1", "500", "rub"),
+            purchase("pb", "petya", "1", "500", "rub"),
+        ];
+        event.items = vec![shared];
+        let split = compute(&event);
+        assert_eq!(status(&event, &split), SharedEventStatus::Closed);
+    }
+
+    #[test]
+    fn the_only_sharer_of_an_item_is_found() {
+        let mut event = skewers();
+        let mut beer = item("b", "Пиво", None);
+        beer.split = ItemSplit::Equal {
+            among: vec!["petya".into()],
+        };
+        assert!(only_sharer(&event, &beer, "petya"));
+        assert!(!only_sharer(&event, &beer, "vasya"));
+        beer.split = ItemSplit::Equal {
+            among: vec!["petya".into(), "vasya".into()],
+        };
+        assert!(!only_sharer(&event, &beer, "petya"));
+        event.i_participate = false;
+        event.participants.truncate(1);
+        assert!(only_sharer(&event, &item("c", "C", None), "petya"));
     }
 }
