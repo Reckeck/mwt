@@ -1,4 +1,4 @@
-//! «За какой месяц»: the month an income is for when it is not the month of
+//! "For which month": the month an income is for when it is not the month of
 //! its date. A salary paid on the 5th is for the month before; an advance
 //! paid on the 20th is for the month it comes in.
 
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn a_weekend_shift_back_does_not_change_the_month() {
-        // The 5th of Sept 2026 is a Saturday: «в пятницу перед» pays on the 4th.
+        // The 5th of Sept 2026 is a Saturday: "Friday before" pays on the 4th.
         assert_eq!(for_month_key(date("2026-09-04"), Some(5), -1), "2026-08");
         // Sunday the 1st of Nov 2026 moved back lands on Friday Oct 30th.
         assert_eq!(for_month_key(date("2026-10-30"), Some(1), -1), "2026-10");

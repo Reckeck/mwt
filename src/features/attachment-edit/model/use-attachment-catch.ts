@@ -11,7 +11,7 @@ interface CatchHandlers {
 const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files')
 
 /**
- * Where files come from besides «Добавить» (Attach 3): dragged onto the card
+ * Where files come from besides `Add` (Attach 3): dragged onto the card
  * — it lights up while a file is over it — or pasted with Ctrl V outside a
  * field. A pasted address opens the link form with it.
  */

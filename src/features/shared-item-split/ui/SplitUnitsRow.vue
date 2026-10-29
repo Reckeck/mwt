@@ -7,7 +7,7 @@ import { decimalAdd, decimalSub, parseDecimal } from '@/shared/lib/decimal'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 
-/** One person's share of an item in units: «−  3  +  шт  675 ₽». */
+/** One person's share of an item in units: `−  3  +  pcs  675 ₽`. */
 const props = defineProps<{ name: string; unit: string; amount: string; currency: string; decimals: number }>()
 const qty = defineModel<string>({ required: true })
 const { t } = useI18n()

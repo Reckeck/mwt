@@ -1,70 +1,72 @@
 ---
 name: frontend-feature
 description: >
-  Архитектура фронтенда Multi Wallet Tracker (Vue 3 + Vite + Pinia + TanStack
-  Query + vue-i18n + ECharts): куда положить код по FSD, что держать в Query, а
-  что в Pinia, как вызвать бэкенд (`call`, `onEvent`, мок для pnpm dev), ключи
-  запросов и инвалидация, локали ru/en, маршруты, графики, проверки. Загружать
-  при новом экране, сторе, запросе, мутации, маршруте, переводе, графике.
-  Триггеры: Pinia, useQuery, useMutation, invalidateQueries, queryKey, i18n,
-  локали, перевод, router, маршрут, страница, ECharts, pnpm dev, мок IPC.
+  Multi Wallet Tracker frontend architecture (Vue 3 + Vite + Pinia + TanStack
+  Query + vue-i18n + ECharts): where to put code by FSD, what to keep in Query
+  versus Pinia, how to call the backend (`call`, `onEvent`, the mock for
+  pnpm dev), query keys and invalidation, ru/en locales, routes, charts,
+  checks. Load for a new screen, store, query, mutation, route, translation,
+  chart. Russian triggers: локали, перевод, маршрут, страница, мок IPC.
+  Triggers: Pinia, useQuery, useMutation, invalidateQueries, queryKey, i18n,
+  router, ECharts, pnpm dev.
 ---
 
-# Фронтенд: где код и как он говорит с бэкендом
+# Frontend: where the code lives and how it talks to the backend
 
-Вид и поведение интерфейса (компоненты, формы, уведомления, таблицы) —
-скилл `ui-design-system`. Методология слоёв — `feature-sliced-design`; здесь
-только то, как она применена в проекте.
+Look and behavior of the interface (components, forms, notifications, tables)
+is the `ui-design-system` skill. The layer methodology is `feature-sliced-design`;
+here is only how it is applied in the project.
 
-Стек: Vue 3.5 (`<script setup lang="ts">`), Vite, TypeScript strict, Pinia,
-TanStack Query, Tailwind v4, shadcn-vue на Reka UI, vue-i18n, vue-echarts.
+Stack: Vue 3.5 (`<script setup lang="ts">`), Vite, TypeScript strict, Pinia,
+TanStack Query, Tailwind v4, shadcn-vue on Reka UI, vue-i18n, vue-echarts.
 
-## Куда класть код
+## Where to put code
 
 ```
-src/app/providers/   роутер, QueryClient (+ глобальные уведомления мутаций)
-src/pages/<route>/   экран = тонкая композиция; свои части — pages/<route>/ui, model
-src/widgets/<name>/  секция страницы из нескольких сущностей/фич
-src/features/<name>/ действие пользователя (создать, изменить, удалить, обновить)
-src/entities/<name>/ представление сущности (store, transaction, asset, currency, contact…)
-src/shared/          ui (компоненты), lib (format, notify, form…), api/ipc.ts, store (Pinia), config (i18n)
+src/app/providers/   router, QueryClient (+ global mutation notifications)
+src/pages/<route>/   screen = thin composition; its own parts — pages/<route>/ui, model
+src/widgets/<name>/  page section made of several entities/features
+src/features/<name>/ user action (create, change, delete, refresh)
+src/entities/<name>/ entity representation (store, transaction, asset, currency, contact…)
+src/shared/          ui (components), lib (format, notify, form…), api/ipc.ts, store (Pinia), config (i18n)
 ```
 
-- Импорт только вниз: `app → pages → widgets → features → entities → shared`;
-  соседние слайсы — только через их `index.ts` (правило 9).
-- Внутри слайса: `ui/<Component>/` (папка + `index.ts`), `model/use-*.ts`
-  (композаблы со состоянием), `lib/*.ts` (чистые функции, тестируемые),
-  `*.types.ts`, `*.constants.ts`. Из `<script setup>` ничего не экспортируется.
-- В FSD-скилле widgets «не рекомендуются» — в проекте они есть и нужны
-  (правило 10).
-- Файл длиннее лимита (`.vue` 250, `.ts` 300) делится по смыслу — `check-ui`.
+- Imports go only downward: `app → pages → widgets → features → entities → shared`;
+  neighboring slices — only through their `index.ts` (rule 9).
+- Inside a slice: `ui/<Component>/` (folder + `index.ts`), `model/use-*.ts`
+  (composables with state), `lib/*.ts` (pure, testable functions),
+  `*.types.ts`, `*.constants.ts`. Nothing is exported from `<script setup>`.
+- The FSD skill "does not recommend" widgets — in the project they exist and
+  are needed (rule 10).
+- A file longer than the limit (`.vue` 250, `.ts` 300) is split by meaning —
+  `check-ui`.
 
-## Состояние: Query или Pinia
+## State: Query or Pinia
 
-- **TanStack Query** — всё, что можно перечитать из Rust: обзор кошелька,
-  операции, отчёты, планирование.
-- **Pinia** (`shared/store`) — только клиентское и общее для экранов: статус
-  vault, настройки приложения и vault, буфер предзаполнения формы.
-- Одно и то же в двух местах — источник рассинхрона.
+- **TanStack Query** — everything that can be re-read from Rust: wallet
+  overview, operations, reports, planning.
+- **Pinia** (`shared/store`) — only client-side state shared between screens:
+  vault status, app and vault settings, the form prefill buffer.
+- The same thing in two places is a source of desync.
 
-Шаблон запроса, у которого меняется ключ (фильтр, период, страница):
+A template for a query whose key changes (filter, period, page):
 
 ```ts
 const report = useQuery({
   queryKey: computed(() => ['report', 'cashflow', filter.value]),
   queryFn: () => call<CashflowReport>('report_cashflow', { input: filter.value }),
-  placeholderData: keepPreviousData, // экран не пустеет на смене ключа (правило 17)
+  placeholderData: keepPreviousData, // the screen does not go empty on a key change (rule 17)
 })
 ```
 
-Общие списки (дерево кошельков, контакты, категории) — композаблы из
-`entities` (`useStoreTree`, `useContacts`, `useCategories`), а не
-`call('get_store_tree')` в каждом компоненте: одни ключи и опции.
+Shared lists (wallet tree, contacts, categories) are composables from
+`entities` (`useStoreTree`, `useContacts`, `useCategories`), not
+`call('get_store_tree')` in every component: the same keys and options.
 
-Ключи запросов короткие и общие: `['store', id, includeChildren]`,
-`['store-history', id]`, `['summary']`, `['stores']`, наборы — `LEDGER_KEYS`,
+Query keys are short and shared: `['store', id, includeChildren]`,
+`['store-history', id]`, `['summary']`, `['stores']`, sets — `LEDGER_KEYS`,
 `PLANNING_KEYS` (`shared/lib/planning`), `STORE_TREE_QUERY_KEY`.
-Инвалидация по префиксу, поэтому ключ — массив от общего к частному.
+Invalidation is by prefix, so a key is an array from general to specific.
 
 ```ts
 const archive = useMutation({
@@ -72,69 +74,69 @@ const archive = useMutation({
   onSuccess: () => {
     for (const queryKey of [['stores'], ['store'], ['summary']]) void queryClient.invalidateQueries({ queryKey })
   },
-  meta: { success: 'wallet.archived', error: 'wallet.archiveFailed' }, // уведомление — см. ui-design-system
+  meta: { success: 'wallet.archived', error: 'wallet.archiveFailed' }, // notification — see ui-design-system
 })
 ```
 
-## Вызов бэкенда
+## Calling the backend
 
 ```ts
 import { call, onEvent, parseError } from '@/shared/api/ipc'
 ```
 
-- Только через `call<T>()` / `onEvent<T>()`; `invoke` из `@tauri-apps/api` в
-  компоненте — ошибка.
-- Аргументы: скаляры camelCase (`{ storeId }`), DTO — `{ input: { …snake_case… } }`.
-  Новая команда — скилл `ipc-command`.
-- Типы из `ipc.gen.d.ts` доступны глобально, без импорта; файл генерирует
-  `mise run gen-types`.
-- Ошибка — `AppError { code, message }` (`parseError`); текст для человека —
+- Only through `call<T>()` / `onEvent<T>()`; `invoke` from `@tauri-apps/api` in
+  a component is an error.
+- Arguments: scalars in camelCase (`{ storeId }`), DTOs — `{ input: { …snake_case… } }`.
+  A new command — the `ipc-command` skill.
+- Types from `ipc.gen.d.ts` are available globally, without import; the file is
+  generated by `mise run gen-types`.
+- An error is `AppError { code, message }` (`parseError`); human-readable text —
   `anyErrorMessage(err, t)` / `codeErrorMessage` (`shared/lib/vault-error`),
-  ключи `errors.<CODE>` в обоих локалях.
-- Событие бэкенда — только `useBackendEvent(event, handler)`
-  (`shared/api/use-backend-event`): отписка с областью видимости. Голый
-  `onEvent` в `setup` копит обработчики на каждый заход (`check-ui`
-  `raw-listener`). Событие инвалидирует свои ключи, не `invalidateQueries()`.
-- Вне Tauri `call` лениво грузит мок (`shared/api/mock/`,
-  пароль `secret`). Команду, которую нужно видеть в `pnpm dev`, добавь в мок.
+  keys `errors.<CODE>` in both locales.
+- A backend event — only `useBackendEvent(event, handler)`
+  (`shared/api/use-backend-event`): scope-bound unsubscribe. A bare `onEvent` in
+  `setup` accumulates handlers on every visit (`check-ui` `raw-listener`). An
+  event invalidates its own keys, not `invalidateQueries()`.
+- Outside Tauri `call` lazily loads the mock (`shared/api/mock/`, password
+  `secret`). A command you need to see in `pnpm dev` must be added to the mock.
 
-## Локализация
+## Localization
 
-- `ru.json` и `en.json` — плоские ключи (`"nav.dashboard"`), наборы
-  совпадают; проверяет `check-onboarding`.
-- Любой видимый текст — через `t()`; пользовательские данные (имя кошелька)
-  — как есть. Правила текстов — `ui-design-system/references/copy.md`.
-- Вне компонента (обработчики, сторы) — `i18n.global.t` из
-  `@/shared/config/i18n` или `notify` с ключом.
-- Язык переключается без перезагрузки (`shared/lib/locale.ts`), `auto`
-  следует за системой.
+- `ru.json` and `en.json` use flat keys (`"nav.dashboard"`), the sets match;
+  `check-onboarding` checks this.
+- Any visible text goes through `t()`; user data (a wallet name) — as is. Copy
+  rules — `ui-design-system/references/copy.md`.
+- Outside a component (handlers, stores) — `i18n.global.t` from
+  `@/shared/config/i18n` or `notify` with a key.
+- The language switches without a reload (`shared/lib/locale.ts`), `auto`
+  follows the system.
 
-## Маршрут
+## Route
 
-Новый экран — папка `src/pages/<route>/` + `index.ts`, запись в
-`src/app/providers/router/index.ts` с `meta: { i18n: 'nav.…' }` (по ключу —
-заголовок окна и `h1` оболочки). Вложенные — `children` у `AppShell`;
-`meta.public: true` — экран вне оболочки (`/unlock`). У каждого маршрута тур
-или запись в `TOURLESS_ROUTES` (скилл `onboarding`). Переименовал маршрут —
-оставь редирект со старого пути.
+A new screen is a folder `src/pages/<route>/` + `index.ts`, an entry in
+`src/app/providers/router/index.ts` with `meta: { i18n: 'nav.…' }` (by the key —
+the window title and the shell's `h1`). Nested ones — `children` of `AppShell`;
+`meta.public: true` — a screen outside the shell (`/unlock`). Every route has a
+tour or an entry in `TOURLESS_ROUTES` (the `onboarding` skill). If you renamed a
+route, leave a redirect from the old path.
 
-## Графики
+## Charts
 
-vue-echarts; модули регистрируются в `shared/lib/echarts.ts`, тема — в
-`echarts-theme.ts`. Правила вида — `ui-design-system/references/data-display.md`.
+vue-echarts; modules are registered in `shared/lib/echarts.ts`, the theme is in
+`echarts-theme.ts`. Look rules — `ui-design-system/references/data-display.md`.
 
-## Проверки
+## Checks
 
 ```bash
-mise run lint        # Biome: линт + формат .ts (.vue форматируй вручную: одинарные кавычки, без ;)
+mise run lint        # Biome: lint + format .ts (format .vue by hand: single quotes, no ;)
 mise run typecheck   # vue-tsc strict
-mise run check-ui    # компоненты, токены, уведомления, размер файлов
-pnpm dev             # мок IPC в браузере
-mise run check       # всё перед коммитом
+mise run check-ui    # components, tokens, notifications, file size
+pnpm dev             # IPC mock in the browser
+mise run check       # everything before a commit
 ```
 
-- `verbatimModuleSyntax`: типы — `import type`.
-- Имена от двух символов (Biome `useNamingConvention`; исключение — `t`);
-  неиспользуемый параметр — с `_`.
+- `verbatimModuleSyntax`: types use `import type`.
+- Names of two or more characters (Biome `useNamingConvention`; exception — `t`);
+  an unused parameter gets `_`.
 
-Коммит — только по просьбе пользователя (скилл `jj-workflow`).
+Commit — only on the user's request (the `jj-workflow` skill).

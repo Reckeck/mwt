@@ -7,7 +7,7 @@ export interface FormDialogProps {
   size?: DialogSize
   /** The `<form>` id; the footer's save button submits it, so it must be unique on the page. */
   formId: string
-  /** The save button's text; "Сохранить" by default. */
+  /** The save button's text; `Save` by default. */
   submitLabel?: string
   /** A save in flight: the only thing that disables the save button (rule 13). */
   pending?: boolean

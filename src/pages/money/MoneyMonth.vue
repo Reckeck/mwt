@@ -12,7 +12,7 @@ import { useIsPhone } from '@/shared/lib/phone'
 
 import { MonthBalanceCard, MonthDaysChart, MonthNow, MonthPhone } from './ui/month-balance'
 
-/** «Остаток месяца» (Money 3 · 15): the month in a sentence, day by day, then the twelve months with the carry. */
+/** `Month's balance` (Money 3 · 15): the month in a sentence, day by day, then the twelve months with the carry. */
 const props = defineProps<{ filter: ReportFilter }>()
 
 const { t } = useI18n()

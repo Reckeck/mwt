@@ -14,7 +14,7 @@ declare module '@tanstack/vue-query' {
 /**
  * Every action reports its outcome from here: a mutation names its success
  * text (and, if it can be taken back, how) in `meta`, and these handlers show
- * the toast — success with an optional "Отменить", failure with the reason.
+ * the toast — success with an optional `Undo`, failure with the reason.
  * A mutation without `meta` is left alone (`check-ui` makes sure there is none).
  */
 const mutationCache = new MutationCache({

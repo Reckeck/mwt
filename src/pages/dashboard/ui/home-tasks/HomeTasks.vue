@@ -14,8 +14,8 @@ import { isMoneyTask, isOverdue, taskAction } from '../../lib/task-action'
 import TaskButton from './TaskButton.vue'
 
 /**
- * «Дела» on Home (Home 1, 2): up to three things, each with the one button that
- * does it. One thing is a single line. «Скрыть до завтра» is this device's choice.
+ * `To do` on Home (Home 1, 2): up to three things, each with the one button that
+ * does it. One thing is a single line. `Hide until tomorrow` is this device's choice.
  */
 const props = defineProps<{ todos: TodayTodo[]; total: number; currency: string }>()
 const { t } = useI18n()

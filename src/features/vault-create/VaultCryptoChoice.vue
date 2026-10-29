@@ -20,7 +20,7 @@ const choice = computed({
 </script>
 
 <template>
-  <!-- Asked once per vault; Settings → Хранилище → Направление changes it later. -->
+  <!-- Asked once per vault; Settings → Vault → Direction changes it later. -->
   <fieldset class="grid gap-1.5">
     <legend class="mb-1 text-sm font-medium">{{ t('auth.crypto.title') }}</legend>
     <RadioGroup v-model="choice" class="grid gap-2 sm:grid-cols-2">

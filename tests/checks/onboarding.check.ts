@@ -1,5 +1,5 @@
 // The onboarding gate (AGENTS.md rule 12, skill `onboarding`): every screen has a tour, every tour
-// step points at an element that exists, every tour, «Что нового» and learning-centre text is there
+// step points at an element that exists, every tour, `What's new` and learning-centre text is there
 // in both locales. Static: reads the sources, runs nothing. Unused `data-tour` targets are only reported.
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'

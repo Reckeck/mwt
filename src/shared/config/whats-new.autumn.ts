@@ -1,4 +1,4 @@
-/** «Что нового» of 21–22 October: after the newest entries, before the older archive. */
+/** `What's new` of 21–22 October: after the newest entries, before the older archive. */
 import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_AUTUMN: WhatsNewEntry[] = [

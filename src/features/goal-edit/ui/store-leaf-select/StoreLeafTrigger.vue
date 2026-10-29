@@ -6,7 +6,7 @@ import { Money } from '@/entities/currency'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
-/** The closed field of `StoreLeafSelect`: «Основной банк › Накопления · 1 234 $» or the hint. */
+/** The closed field of `StoreLeafSelect`: `Main bank › Savings · 1,234 $` or the hint. */
 const props = defineProps<{ picked: StoreTreeNode | null; currency: string; placeholder?: string; invalid?: boolean; id?: string; open: boolean }>()
 
 const { t } = useI18n()

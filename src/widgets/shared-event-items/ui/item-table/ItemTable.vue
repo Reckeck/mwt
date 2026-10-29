@@ -15,8 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { ItemRow } from '../../shared-event-items.types'
 
 /**
- * The plan against what was bought: planned items wait with «Купили», bought ones show the
- * difference («8 из 6 шт · +600 ₽»), a purchase outside the plan is marked «вне плана».
+ * The plan against what was bought: planned items wait with `Bought`, bought ones show the
+ * difference (`8 of 6 pcs · +600 ₽`), a purchase outside the plan is marked `off plan`.
  * On a phone the figures move under the name; the buttons keep their place (they never swap).
  */
 const props = defineProps<{ rows: ItemRow[]; currency: string; decimals: number; actionsOf: (row: ItemRow) => UiAction[] }>()
@@ -79,7 +79,7 @@ const TONE_CLASS = { over: 'text-destructive font-semibold', under: 'text-succes
             <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Badge :variant="STATE_BADGE[row.fact.state].variant" :class="STATE_BADGE[row.fact.state].class">{{ t(`sharedEvents.items.state.${row.fact.state}`) }}</Badge>
               <template v-if="row.fact.state === 'bought' || row.fact.state === 'unplanned'">
-                <span>{{ qtyText(row.fact, row.item.unit, formatQuantity) }}</span>
+                <span>{{ qtyText(row.fact, row.item.unit, formatQuantity, t('sharedEvents.items.qtyOf')) }}</span>
                 <template v-if="row.fact.diffMoney !== null">
                   <span aria-hidden="true">·</span>
                   <Money

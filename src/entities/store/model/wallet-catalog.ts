@@ -28,7 +28,7 @@ export function presetsOf(catalog: WalletCatalog | undefined, store: Pick<Store,
   return kindInfo(catalog, store.kind)?.presets ?? []
 }
 
-/** Short, human label of a binding: «USD», «BTC ↔ USDT», «Фьючерсы». */
+/** Short, human label of a binding: «USD», «BTC ↔ USDT», `Futures`. */
 export function bindingLabel(binding: Binding): string {
   if (binding === 'any') return ''
   if ('asset' in binding) return binding.asset.symbol.toUpperCase()
@@ -38,7 +38,7 @@ export function bindingLabel(binding: Binding): string {
 
 /**
  * The binding badge next to a wallet's name, or `''` when the name already
- * says it («Futures» needs no «Фьючерсы» badge).
+ * says it (`Futures` needs no `Futures` badge).
  */
 export function bindingBadge(store: Pick<Store, 'name' | 'binding'>): string {
   const label = bindingLabel(store.binding)

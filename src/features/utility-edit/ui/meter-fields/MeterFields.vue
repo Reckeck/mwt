@@ -31,7 +31,7 @@ const decimalsOf = (value: string) => (Number(value) % 1 ? 2 : 0)
 const quantity = (value: string) => formatQuantity(value, 3)
 const ru = computed(() => locale.value === 'ru')
 
-/** «Пример: расход 100 м³ — 4 900 ₽. Показание одно: …» */
+/** `Example: used 100 m³ — 4,900 ₽. One reading: …` */
 const example = computed(() => {
   const amount = preview.value?.amount
   if (!amount || !(Number(tariff.value) > 0)) return null
@@ -42,7 +42,7 @@ const example = computed(() => {
     how: zones ? t('utilityEdit.exampleZonesHow', { names: zoneNames.value.join(', ') }) : t('utilityEdit.exampleOneHow'),
   }
 })
-/** «Проверка на последних показаниях: (209 − 205) × 3,5 × 10 = 140,00 ₽». */
+/** `Check on the latest readings: (209 − 205) × 3.5 × 10 = 140.00 ₽`. */
 const check = computed(() => {
   const result = preview.value
   if (!result?.amount || result.issue || !formula.value.trim()) return null

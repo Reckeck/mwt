@@ -17,7 +17,7 @@ import type { InvestCalc } from '../model/use-invest-calc'
 
 /**
  * Tax, inflation, indexation and withdrawals: folded into one row that says
- * what they hold now («инфляция 3,74 % · налога нет · снятий нет»).
+ * what they hold now (`inflation 3.74 % · no tax · no withdrawals`).
  */
 const props = defineProps<{ calc: InvestCalc }>()
 

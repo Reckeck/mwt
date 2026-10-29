@@ -9,7 +9,7 @@ import { assetKey } from '@/shared/lib/asset-ref'
 import { formatQuantity } from '@/shared/lib/format'
 
 /**
- * «Доступно: 1 250 USDT · Всё» under an amount that leaves a wallet. Matched by
+ * `Available: 1,250 USDT · All` under an amount that leaves a wallet. Matched by
  * the asset's key; envelopes are not subtracted, the core warns about those.
  */
 const props = defineProps<{ storeId: string | null; asset: AssetRef | null }>()

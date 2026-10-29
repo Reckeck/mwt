@@ -25,13 +25,13 @@ export function useProgramRows() {
   const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
   const names = computed(() => new Map(nodes.value.map((node) => [node.store.id, node.store.name])))
 
-  /** «1 240 баллов», «1 балл». */
+  /** `1,240 points`, `1 point`. */
   function count(unit: LoyaltyUnit, value: string): string {
     const shown = formatQuantity(value, 0)
     return t(`loyaltyUnit.count.${unit}.${pluralForm(Number(value), locale.value)}`, { count: shown })
   }
 
-  /** «Тинькофф · баллы = ₽» when a point is a unit of the currency, else «· 1 купон = 2,50 $». */
+  /** `Tinkoff · points = ₽` when a point is a unit of the currency, else `· 1 coupon = 2.50 $`. */
   function subtitle(store: Store): SumPart[] {
     const info = store.loyalty
     if (!info) return [{ text: t('loyalty.setup') }]

@@ -107,7 +107,7 @@ function onKey(event: KeyboardEvent) {
 }
 
 const text = (value: LocalizedText | string) => (typeof value === 'string' ? value : localized(value, locale.value))
-/** «Вставить в связь «Добавлена операция → сумма»: …» — where the new node will stand. */
+/** `Insert into the link "Operation added → amount": …` — where the new node will stand. */
 const contextText = computed(() => {
   const ctx = props.context
   if (ctx.mode === 'free') return t('workflow.quick.free')

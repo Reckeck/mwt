@@ -83,7 +83,7 @@ pub struct NoticeCategoryCfg {
 pub struct NotificationSettings {
     /// Show notices from the system as well as inside the app.
     pub system: bool,
-    /// While the vault is locked: «Платёж по кредиту» without the name and the sum.
+    /// While the vault is locked: "Loan payment" without the name and the sum.
     pub hide_details_when_locked: bool,
     /// `HH:MM`, local: when automatic reminders are due.
     pub default_time: String,

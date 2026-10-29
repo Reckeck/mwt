@@ -17,7 +17,7 @@ import CategoryRow from './ui/CategoryRow.vue'
 import SystemCategories from './ui/SystemCategories.vue'
 
 /**
- * Учёт › «Категории» (Settings-1 · 4): search and «+ Категория», then the
+ * Accounting › `Categories` (Settings-1 · 4): search and `+ Category`, then the
  * categories by block (expenses, income, savings) and the app's own below,
  * locked. The change itself is the backend's: system categories are refused there.
  */

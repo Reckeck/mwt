@@ -70,7 +70,7 @@ export function useBackendNotices() {
         })
         .catch((err) => notify.error(err, 'reminder.saveFailed'))
     }
-    // «Оплатить» (Auto-2 · 10) opens the payment form filled in; «Выполнено» stays in the bell and the list.
+    // `Pay` (Auto-2 · 10) opens the payment form filled in; `Done` stays in the bell and the list.
     const reminders = reminderId
       ? await queryClient
           .ensureQueryData({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders') })
@@ -79,7 +79,7 @@ export function useBackendNotices() {
     const pay = reminders.find((entry) => entry.id === reminderId)?.pay
     const payNow = () =>
       openQuickAdd({ kind: 'payment', category: pay?.category ?? undefined, storeId: pay?.store_id ?? undefined })
-    // The toasts stand in a stack: a notice never replaces the one with «Отменить». A limit made a moment ago stays silent.
+    // The toasts stand in a stack: a notice never replaces the one with `Undo`. A limit made a moment ago stays silent.
     if (isFreshBudgetNotice(record.key)) return
     toast.info(record.title, {
       description: record.body,

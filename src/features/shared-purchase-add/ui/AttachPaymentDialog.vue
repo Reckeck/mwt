@@ -19,7 +19,7 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import type { AttachPaymentDialogProps } from '../shared-purchase-add.types'
 
 /**
- * «Привязать платёж»: a payment already in the journal (typed in, or imported) becomes a purchase of
+ * `Link a payment`: a payment already in the journal (typed in, or imported) becomes a purchase of
  * this event. It stays one payment; the event only points at it. One payment belongs to one event.
  */
 const props = defineProps<AttachPaymentDialogProps>()

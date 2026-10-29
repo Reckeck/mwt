@@ -1,6 +1,6 @@
 import { numberFormat } from '@/shared/lib/format'
 
-/** What the row's icon and its first word say: «PDF», «Картинка», «Ссылка». */
+/** What the row's icon and its first word say: `PDF`, `Image`, `Link`. */
 export type AttachmentLook = 'pdf' | 'image' | 'document' | 'link'
 
 export function attachmentLook(item: Pick<Attachment, 'kind' | 'mime' | 'title'>): AttachmentLook {
@@ -11,7 +11,7 @@ export function attachmentLook(item: Pick<Attachment, 'kind' | 'mime' | 'title'>
   return 'document'
 }
 
-/** «84 КБ», «1,2 МБ»: one decimal only under ten. */
+/** `84 KB`, `1.2 MB`: one decimal only under ten. */
 export function formatBytes(bytes: number, units: { b: string; kb: string; mb: string }): string {
   if (bytes < 1024) return `${bytes} ${units.b}`
   const kb = bytes / 1024

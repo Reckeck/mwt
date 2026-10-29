@@ -15,7 +15,7 @@ import { Switch } from '@/shared/ui/switch'
 import { EventRow } from './ui/event-row'
 
 /**
- * «Вместе»: the events — посиделки, trips, gifts — where several people spend and settle up. A new
+ * `Together`: the events — get-togethers, trips, gifts — where several people spend and settle up. A new
  * event opens its screen; an old closed one can go to the archive and is shown on request.
  */
 const { t } = useI18n()

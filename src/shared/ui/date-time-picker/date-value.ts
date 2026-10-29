@@ -24,13 +24,13 @@ export function fromParts(mode: DateTimePickerMode, date: DateValue, time = ''):
   return day
 }
 
-/** «Сегодня» / «Сейчас» in the model's format. */
+/** `today` / `Now` in the model's format. */
 export function nowValue(mode: DateTimePickerMode): string {
   const now = new Date()
   return fromParts(mode, today(getLocalTimeZone()), `${pad(now.getHours())}:${pad(now.getMinutes())}`)
 }
 
-/** How the trigger reads the value in the UI language: «14 окт. 2026 г., 09:30». */
+/** How the trigger reads the value in the UI language: `Oct 14, 2026, 09:30`. */
 export function formatValue(mode: DateTimePickerMode, value: string, locale: string): string {
   const date = toCalendarDate(value)
   if (!date) return ''

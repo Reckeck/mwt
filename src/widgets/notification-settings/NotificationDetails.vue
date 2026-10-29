@@ -20,7 +20,7 @@ import {
 } from './notification-settings.constants'
 import { useNotificationConfig } from './use-notification-config'
 
-/** The long form of «Уведомления»: what to be told about, how far ahead, and how. */
+/** The long form of `Notifications`: what to be told about, how far ahead, and how. */
 const { t } = useI18n()
 
 const { current, category, save, patchCategory } = useNotificationConfig()
@@ -120,7 +120,7 @@ const test = useMutation({
           {{ storage.data.value === 'keyring' ? t('notices.lockedKeyring') : t('notices.lockedMemory') }}
         </p>
       </div>
-      <!-- Starting with the system is a device setting: «Это устройство». -->
+      <!-- Starting with the system is a device setting: `This device`. -->
       <RouterLink :to="{ query: { settings: 'app', section: 'device-app' } }" class="w-fit text-xs text-primary hover:underline">
         {{ t('notices.autostartMoved') }}
       </RouterLink>

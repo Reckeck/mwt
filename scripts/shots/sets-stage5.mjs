@@ -1,9 +1,9 @@
-/** Stage 5 · Automations (Auto-1…3): «Мои», the card, the journal, the wizard, schemes. */
+/** Stage 5 · Automations (Auto-1…3): `Mine`, the card, the journal, the wizard, schemes. */
 
 /** Into step 2 with a transfer: the default type is a repeat, so one click moves on. */
 const WIZARD_DO = [{ wait: 400 }, { click: '[data-wizard-type="repeat"]' }, { click: '[data-kind-tab="transfer"]' }]
 
-/** A file from someone else's vault: two steps and their «Сбер», unknown here (Auto-3 · 17). */
+/** A file from someone else's vault: two steps and their `Sber`, unknown here (Auto-3 · 17). */
 const IMPORT_FILE = `const file = new File([JSON.stringify({
   format: 'trade-app-workflow', version: 1, name: 'Платёж в рабочий день', description: '',
   graph: { nodes: [{ id: 't', kind: 'trigger.schedule' }, { id: 'a', kind: 'action.transfer' }, { id: 'b', kind: 'action.notify' }], edges: [] },

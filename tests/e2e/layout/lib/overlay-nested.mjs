@@ -100,7 +100,7 @@ export const NESTED = [
     child: overlay('password-change'),
     openChild: [{ click: 'button', text: 'Сменить пароль' }],
   },
-  // A name typed into a contact field offers «Создать «…»»: the contact form opens over the form, the name filled in.
+  // A name typed into a contact field offers `Create "…"`: the contact form opens over the form, the name filled in.
   {
     id: 'contact-create-in-form',
     route: '/money/together',

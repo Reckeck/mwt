@@ -15,7 +15,7 @@ import type { VarDialogProps } from './var-dialog.types'
 
 /**
  * A shared variable by hand: a number, an amount or text that every workflow
- * reads with «Получить переменную» — change the share of savings in one place.
+ * reads with `Get variable` — change the share of savings in one place.
  */
 const props = defineProps<VarDialogProps>()
 const open = defineModel<boolean>('open', { default: false })

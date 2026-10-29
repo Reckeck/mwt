@@ -1,96 +1,104 @@
 ---
 name: pricing-offline
 description: >
-  Прайсы, FX, провайдеры и офлайн-деградация в trade-app: PricingService,
-  цепочка фолбэков CoinGecko → CoinCap → Binance, open.er-api для валют, история
-  курсов внутри vault, штамп цены операции и правило «сеть от кэша отделена». Использовать при правках
+  Prices, FX, providers and offline degradation in trade-app: PricingService,
+  the fallback chain CoinGecko → CoinCap → Binance, open.er-api for currencies,
+  the rate history inside the vault, the price stamp on a transaction and the
+  rule "network is separate from the cache". Use when changing
   crates/core/src/pricing/**, commands/pricing.rs, model/vault.rs (price_cache,
-  fx_cache), а также при задачах «цена не обновляется», «офлайн», «stale price»,
-  «курс валюты», «новый провайдер», «кэш», «refresh_all», «тормозит при вводе
-  цены», «429», «rate limit». Триггеры: pricing, price, prices, цена, котировки,
-  FX, курс, валюта, USD, CoinGecko, CoinCap, Binance, er-api, TTL, cache, кэш,
-  offline, офлайн, деградация, refresh_all, PricePoint, FxPoint, price_cache,
-  fx_cache, search_assets, get_cached_price.
+  fx_cache), and for tasks like "price does not update" («цена не
+  обновляется»), "offline" («офлайн»), "stale price", "currency rate" («курс
+  валюты»), "new provider" («новый провайдер»), "cache" («кэш»), "refresh_all",
+  "lags when typing a price" («тормозит при вводе цены»), "429", "rate limit".
+  Triggers: pricing, price, prices, цена (price), котировки (quotes), FX, курс
+  (rate), валюта (currency), USD, CoinGecko, CoinCap, Binance, er-api, TTL,
+  cache, кэш (cache), offline, офлайн (offline), деградация (degradation),
+  refresh_all, PricePoint, FxPoint, price_cache, fx_cache, search_assets,
+  get_cached_price.
 ---
 
-# Прайсы, FX и офлайн-деградация
+# Prices, FX and offline degradation
 
-`crates/core/src/pricing/mod.rs` — единственный модуль, ходящий в сеть по ценам.
-Все эндпоинты бесплатные и **без ключей**.
+`crates/core/src/pricing/mod.rs` is the only module that goes to the network
+for prices. All endpoints are free and **keyless**.
 
-## Провайдеры
+## Providers
 
-| Что | Цепочка |
+| What | Chain |
 |---|---|
-| Крипта (spot) | CoinGecko (`/simple/price` по id) → CoinGecko (токен по контракту) → CoinCap → Binance ticker |
-| Токены ERC-20 и т.п. | CoinGecko `/simple/token_price/{platform}` (нужны `chain` + `contract`) |
-| Валюты (FX) | `open.er-api.com/v6/latest/USD` → Frankfurt/ECB |
+| Crypto (spot) | CoinGecko (`/simple/price` by id) → CoinGecko (token by contract) → CoinCap → Binance ticker |
+| ERC-20 and similar tokens | CoinGecko `/simple/token_price/{platform}` (needs `chain` + `contract`) |
+| Currencies (FX) | `open.er-api.com/v6/latest/USD` → Frankfurt/ECB |
 
-Константы вверху файла: `COINGECKO_V3`, `COINCAP_V2`, `BINANCE_API`, `ER_API`.
-Fallback-цепочка живёт в `price_usd(&self, asset)` — **четыре последовательные
-попытки, каждая на `if let Ok(...)`**. Упавшая попытка молча уходит к
-следующей; ошибка наружу уходит только если не сработала ни одна.
+Constants at the top of the file: `COINGECKO_V3`, `COINCAP_V2`, `BINANCE_API`,
+`ER_API`. The fallback chain lives in `price_usd(&self, asset)`: **four
+sequential attempts, each on `if let Ok(...)`**. A failed attempt silently
+moves on to the next; an error goes out only if none of them worked.
 
-## История курсов внутри vault (план §6.1)
+## Rate history inside the vault (plan §6.1)
 
-- Кэш лежит **в vault**: `doc.price_cache: Vec<PricePoint>` и
-  `doc.fx_cache: Vec<FxPoint>`, то есть зашифрован и переживает рестарт.
-  Это не in-memory кэш — сброс приложения кэш не обнуляет.
-- Кэш — **история**, а не «последняя точка»: `pricing/history.rs`,
-  `merge_prices` / `merge_fx`. На серию (валюта или ключ актива) — одна точка
-  в час (свежая побеждает), последняя неделя (`HOURLY_KEEP`) почасово, старше —
-  одна точка в день, не больше `HISTORY_CAP = 2000` точек.
-- `fetch_fx()` приносит **всю таблицу** er-api. Историю хранят только валюты из
-  `UnlockedVault::fx_currencies_in_use()` (USD, базовая, валюта бюджета, фиат в
-  операциях и холдингах, валюты ручных цен); остальные — одну последнюю точку,
-  иначе ~170 валют почасово раздули бы vault, который перешифровывается на
-  каждую запись. Следствие: у валюты, которой начали пользоваться сегодня,
-  прошлого нет.
-- Время сравнивается по unix-секундам (`history::unix_secs`), не строкой:
-  `…:00Z` и `…:00.5Z` строкой сортируются наоборот.
-- Запросы «на момент» — через `RateBook` (`UnlockedVault::rate_book()`,
-  `service/rates.rs`): кэш разбирается один раз, дальше бинарный поиск.
-  `fx_at` / `price_at` — ближайшая точка ≤ ts, иначе первая после;
-  `history_price` для графика сначала смотрит прошлое (кэш, штампы операций) и
-  лишь потом будущее; `convert` — кросс-курс через USD; `leg_price_in_base` —
-  цена проводки в базовой валюте по курсу дня операции.
-- Фиат оценивается через FX: `fiat:RUB` → `1 / per_usd(rub)`. Ручная цена
-  имущества (D24) действует на всю историю. Деривативы цены не имеют.
+- The cache lives **in the vault**: `doc.price_cache: Vec<PricePoint>` and
+  `doc.fx_cache: Vec<FxPoint>`, i.e. it is encrypted and survives a restart.
+  This is not an in-memory cache: restarting the application does not clear it.
+- The cache is a **history**, not "the latest point": `pricing/history.rs`,
+  `merge_prices` / `merge_fx`. Per series (currency or asset key) there is one
+  point per hour (the fresh one wins), the last week (`HOURLY_KEEP`) hourly,
+  older ones one point per day, no more than `HISTORY_CAP = 2000` points.
+- `fetch_fx()` brings the **whole table** from er-api. History is kept only for
+  the currencies from `UnlockedVault::fx_currencies_in_use()` (USD, the base
+  currency, the budget currency, fiat in transactions and holdings, currencies
+  of manual prices); the rest get only the single latest point, otherwise ~170
+  currencies hourly would bloat the vault, which is re-encrypted on every
+  write. Consequence: a currency you started using today has no past.
+- Time is compared by unix seconds (`history::unix_secs`), not as a string:
+  `…:00Z` and `…:00.5Z` sort the wrong way as strings.
+- "At a moment" queries go through `RateBook` (`UnlockedVault::rate_book()`,
+  `service/rates.rs`): the cache is parsed once, then a binary search.
+  `fx_at` / `price_at` take the nearest point <= ts, otherwise the first one
+  after; `history_price` for a chart looks at the past first (cache, transaction
+  stamps) and only then at the future; `convert` is a cross rate via USD;
+  `leg_price_in_base` is the price of a leg in the base currency at the rate of
+  the transaction day.
+- Fiat is valued through FX: `fiat:RUB` → `1 / per_usd(rub)`. A manual price of
+  a property (D24) applies to the whole history. Derivatives have no price.
 
-## Штамп цены при сохранении (план §6.2)
+## Price stamp on save (plan §6.2)
 
-`add_transaction` / `update_transaction` вызывают `stamp_prices`: каждая сторона
-без `price_usd` и `price_base` получает `price_usd = price_at(актив, timestamp)`.
-Введённое руками не перезаписывается. `price_base` штамп **не** пишет —
-базовая валюта меняется, а курс к ней берётся из истории FX на дату операции.
-Нет курса → операция сохраняется без цены; `refresh_all` после применения
-курсов зовёт `restamp_missing()` и пишет число в `RefreshResult.restamped`.
+`add_transaction` / `update_transaction` call `stamp_prices`: every side
+without `price_usd` and `price_base` gets `price_usd = price_at(asset,
+timestamp)`. Anything entered by hand is not overwritten. The stamp does **not**
+write `price_base`: the base currency changes, and the rate to it is taken from
+the FX history at the transaction date. No rate means the transaction is saved
+without a price; after applying rates `refresh_all` calls `restamp_missing()`
+and writes the count into `RefreshResult.restamped`.
 
-## Железное правило: сеть отделена от мутации документа
+## Iron rule: the network is separate from document mutation
 
-Это архитектурное правило №4 проекта, и оно не про стиль, а про вендинг:
+This is architectural rule #4 of the project, and it is not about style but
+about borrowing:
 
 ```rust
-// СЕТЬ — чистые, не трогают doc, безопасны для .await
+// NETWORK: pure, do not touch doc, safe for .await
 async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>>
 async fn fetch_fx(&self)                            -> Result<Vec<FxPoint>>
 
-// МУТАЦИЯ — применяют уже полученное (не персистят: refresh пишет один раз)
+// MUTATION: apply what was already fetched (do not persist: refresh writes once)
 fn UnlockedVault::apply_prices(&mut self, fresh: &[PricePoint])
-fn UnlockedVault::apply_fx(&mut self, fresh: &[FxPoint])   // знает, чью историю хранить
+fn UnlockedVault::apply_fx(&mut self, fresh: &[FxPoint])   // knows whose history to keep
 fn UnlockedVault::restamp_missing(&mut self) -> usize
 ```
 
-**Почему так:** `doc` лежит внутри `Mutex<Option<UnlockedVault>>`, а Guard
-нельзя держать через `.await`. Чистый `fetch_*` позволяет забрать из vault
-нужные данные, отпустить Guard, спокойно awaited-ить сеть, взять Guard снова и
-применить. Эталон — `refresh_all` в `crates/app/src/commands/pricing.rs`:
+**Why:** `doc` lives inside `Mutex<Option<UnlockedVault>>`, and the guard must
+not be held across `.await`. A pure `fetch_*` lets you take the needed data
+from the vault, release the guard, await the network in peace, take the guard
+again and apply. The reference is `refresh_all` in
+`crates/app/src/commands/pricing.rs`:
 
 ```rust
-let assets = { let g = require_vault(&state)?; /* …копия… */ };
-let prices = state.pricing.fetch_prices(&assets).await?;          // await без guard
+let assets = { let g = require_vault(&state)?; /* …copy… */ };
+let prices = state.pricing.fetch_prices(&assets).await?;          // await without guard
 let fx     = state.pricing.fetch_fx().await?;
-let mut g = require_vault(&state)?;                                // guard снова
+let mut g = require_vault(&state)?;                                // guard again
 let vault = g.as_mut().unwrap();
 vault.apply_prices(&prices);
 vault.apply_fx(&fx);
@@ -98,69 +106,73 @@ let restamped = vault.restamp_missing();
 vault.persist()?;
 ```
 
-Никогда не пиши `&mut doc` и `.await` в одной функции. Если кажется, что
-«нужно сначала проверить кэш, потом догрузить» — это делается **снаружи**,
-копированием `Vec<AssetRef>`/имени базовой валюты.
+Never write `&mut doc` and `.await` in the same function. If it seems you
+"need to check the cache first, then load the rest", do that **outside**, by
+copying the `Vec<AssetRef>`/the base currency name.
 
-## Офлайн: что происходит без сети
+## Offline: what happens without a network
 
-Отдельные команды **не падают** при сетевом сбое — возвращают пустую выборку с
-уведомлением, оставляя состояние как есть:
+Individual commands **do not fail** on a network error: they return an empty
+result with a notice, leaving the state as it is:
 
-| Команда | Поведение при сбое |
+| Command | Behavior on failure |
 |---|---|
-| `get_cached_price` / `convert_amount` | cache-only, сети не касаются — безопасно звать на каждый ввод; `at` — момент, на который нужен курс |
-| `search_assets` / `inspect_tx` / `bybit_executions` | пустой список + `notice` (`empty`/`unavailable`/`choose_network`) |
-| `refresh_all` | ошибка наружу (`errors.NETWORK`/`errors.PRICING`), кэш **не трогается** |
+| `get_cached_price` / `convert_amount` | cache-only, never touch the network, so it is safe to call on every input; `at` is the moment for which the rate is needed |
+| `search_assets` / `inspect_tx` / `bybit_executions` | an empty list + `notice` (`empty`/`unavailable`/`choose_network`) |
+| `refresh_all` | the error goes out (`errors.NETWORK`/`errors.PRICING`), the cache is **left untouched** |
 
-Форма сделки при этом не сбрасывается — то, что пользователь набрал руками,
-остаётся на месте. Это осознанное требование, не баг: не «сеть от кэша
-отделена» должно означать «не потерять ввод».
+The deal form is not reset in the meantime: what the user typed by hand stays
+in place. This is a deliberate requirement, not a bug: "the network is separate
+from the cache" must not mean "lose the input".
 
-## Антипаттерны
+## Anti-patterns
 
-- **Не делай запрос на цену в обработчике `input`/на каждый ввод.** Это
-  гарантированный rate-limit. Для показа подсказки цены есть
-  `get_cached_price` (без сети). Реальные запросы — по кнопке refresh или по
-  таймеру с дебаунсом.
-- **Не гоняй один HTTP-запрос на актив.** `fetch_prices` делает
-  `price_usd(asset).await` **последовательно по каждому активу**, а внутри
-  `price_usd` — до четырёх попыток. На 50 активах это до 200 запросов.
-  `refresh_all` дедуплицирует активы по `asset.key()` и фильтрует фиат, но
-  батчить всё равно правильнее.
-- **`fetch_prices` пробрасывает ошибку первого упавшего актива** (`?` внутри
-  цикла), то есть частичного успеха не бывает: весь батч падает. Если
-  требуется «посчитать что успели» — это отдельная задача, меняй явно и
-  покрывай тестом.
-- **Не пиши цены и курсы числами.** Цена — `Amount` (Decimal); в TS приходит
-  строкой. `f64` допустим только в `market/` (свечи для графиков, см. скилл
+- **Do not make a price request in an `input` handler / on every keystroke.**
+  That guarantees a rate limit. To show a price hint there is
+  `get_cached_price` (no network). Real requests go on the refresh button or on
+  a debounced timer.
+- **Do not fire one HTTP request per asset.** `fetch_prices` calls
+  `price_usd(asset).await` **sequentially for every asset**, and inside
+  `price_usd` there are up to four attempts. With 50 assets that is up to 200
+  requests. `refresh_all` deduplicates assets by `asset.key()` and filters out
+  fiat, but batching is still the right way.
+- **`fetch_prices` propagates the error of the first failed asset** (`?` inside
+  the loop), so there is no partial success: the whole batch fails. If you need
+  "count what we managed to get", that is a separate task: change it
+  explicitly and cover it with a test.
+- **Do not write prices and rates as floating-point numbers.** A price is
+  `Amount` (Decimal); it arrives in TS as a string. `f64` is allowed only in
+  `market/` (chart candles, see the `vault-crypto` skill).
+- **Do not hardcode `source`.** It goes into `PricePoint`/`FxPoint` and is
+  visible in the vault data: `"cryptoprice"` / `"open.er-api"` are the existing
+  values.
+- **Do not add an API key.** The whole scheme is built on keyless endpoints; a
+  secret key would require a new secrets branch in the vault (see
   `vault-crypto`).
-- **Не хардкодь `source`.** Он идёт в `PricePoint`/`FxPoint` и виден в данных
-  vault: `"cryptoprice"` / `"open.er-api"` — существующие значения.
-- **Не добавляй ключ API.** Вся схема построена на keyless-эндпоинтах;
-  секретный ключ потребует новой ветки секретов в vault (см. `vault-crypto`).
 
-## Событие
+## Event
 
-`refresh_all` после успеха эмитит `prices-updated` с `RefreshResult`. Фронт
-подписывается через `onEvent<T>` из `src/shared/api/ipc.ts` и инвалидирует
-query-ключи (`['summary']`, `['store', id]`, `['store-history', id]`); при
-`restamped > 0` `AppShell` инвалидирует ещё и списки операций — бейдж «без
-цены» уходит.
-Новые события — регистрируй здесь же и в `docs/ipc.md`.
+After success `refresh_all` emits `prices-updated` with a `RefreshResult`. The
+frontend subscribes through `onEvent<T>` from `src/shared/api/ipc.ts` and
+invalidates the query keys (`['summary']`, `['store', id]`,
+`['store-history', id]`); when `restamped > 0` `AppShell` also invalidates the
+transaction lists, and the "no price" badge (UI string `tx.noPrice`) goes away.
+Register new events here as well and in `docs/ipc.md`.
 
-## Тесты и проверки
+## Tests and checks
 
-Юнит-тесты истории — `pricing/history.rs`, штампа и курсов на дату —
-`service/rates.rs`; все без сети. Всё, что ходит в HTTP,
-проверяется **только вручную**: `mise run dev`, затем `refresh_all` в UI.
+The history unit tests are in `pricing/history.rs`, the stamp and rates at a
+date in `service/rates.rs`; all of them run without a network. Everything that
+goes over HTTP is checked **only manually**: `mise run dev`, then `refresh_all`
+in the UI.
 
 ```bash
-mise run test        # не сломать чистую логику кэша
-mise run typecheck   # если менял DTO
-mise run check       # перед коммитом
+mise run test        # do not break the pure cache logic
+mise run typecheck   # if you changed a DTO
+mise run check       # before committing
 ```
 
-Если менял `price_cache`/`fx_cache` в `model/vault.rs` — это **схема vault**:
-версию **не бампать**, поле аддитивное через `#[serde(default)]` (скилл
-`vault-crypto`, AGENTS.md правило 5). Если тип попадает в IPC — `mise run gen-types`.
+If you changed `price_cache`/`fx_cache` in `model/vault.rs`, that is the
+**vault schema**: do **not** bump the version, the field is additive via
+`#[serde(default)]` (skill `vault-crypto`, AGENTS.md rule 5). If the type goes
+through IPC, run `mise run gen-types`.

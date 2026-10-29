@@ -4,7 +4,7 @@ import { tickerRef } from '@/shared/lib/asset-ref'
 
 import type { StoreCreateDialogProps, StoreCreateStep } from '../store-create.types'
 
-/** «Для чего» on an exchange's sub-account (Wallets-2 · 9) and the type it stands for. */
+/** `Purpose` on an exchange's sub-account (Wallets-2 · 9) and the type it stands for. */
 export type ExchangeSubAim = 'futures' | 'earn' | 'other'
 const AIM_TYPE: Record<ExchangeSubAim, SubType> = { futures: 'futures', earn: 'earn', other: 'funding' }
 

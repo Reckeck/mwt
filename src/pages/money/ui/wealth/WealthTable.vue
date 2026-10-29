@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Money } from '@/entities/currency'
 import { wealthRows } from '@/entities/report'
 
-/** «Из чего»: each group's value and share now (Money 2 · 12); a card list on a phone. */
+/** `Made of`: each group's value and share now (Money 2 · 12); a card list on a phone. */
 const props = defineProps<{ point: NetworthPoint | undefined; currency: string }>()
 
 const { t } = useI18n()

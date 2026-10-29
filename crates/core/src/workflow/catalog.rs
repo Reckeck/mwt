@@ -75,7 +75,7 @@ pub enum ParamKind {
     Select {
         options: Vec<(&'static str, Text)>,
     },
-    /// Recipients of «Распределить»: `[{ account, share }]`.
+    /// Recipients of "Distribute": `[{ account, share }]`.
     Targets,
 }
 
@@ -1847,7 +1847,7 @@ fn build() -> Vec<NodeDef> {
 /// Nodes that end the run themselves: nothing to catch after them.
 const NO_ERROR_WAY: [&str; 2] = ["action.stop", "action.return"];
 
-/// Every action and variable node can fail; each gets an «Ошибка» way and the
+/// Every action and variable node can fail; each gets an "Error" way and the
 /// reason, so a failure can be caught there instead of undoing the run.
 fn with_error_ways(defs: &mut [NodeDef]) {
     for def in defs.iter_mut().filter(|def| {

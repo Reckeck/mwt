@@ -12,7 +12,7 @@ import { call, isTauri } from '@/shared/api/ipc'
 import type { TransactionsExportButtonProps } from './report-export.types'
 
 /**
- * «Экспорт ▾» of the operations list: the operations the filter keeps, a line
+ * `Export ▾` of the operations list: the operations the filter keeps, a line
  * per leg, or the categories × months summary of the same wallets and months.
  */
 const props = defineProps<TransactionsExportButtonProps>()

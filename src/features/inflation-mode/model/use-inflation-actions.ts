@@ -7,7 +7,7 @@ import { call } from '@/shared/api/ipc'
 const FOLLOWS_INFLATION = [['report'], ['interest-tax']] as const
 
 /**
- * «Обновить» (inflation and the key rate from the statistics offices now)
+ * `Refresh` (inflation and the key rate from the statistics offices now)
  * and the Auto / Manual choice of a currency.
  */
 export function useInflationActions() {

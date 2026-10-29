@@ -16,7 +16,7 @@ import type { NetWorthCardProps } from './net-worth.types'
 import NetWorthBreakdown from './ui/NetWorthBreakdown.vue'
 
 /**
- * «Чистый капитал» (plan H3): S — the figure and its change over the period;
+ * `Net worth` (plan H3): S — the figure and its change over the period;
  * M — the trend too; L — the breakdown by kind, basket and loan.
  */
 const props = withDefaults(defineProps<NetWorthCardProps>(), { period: 'month' })

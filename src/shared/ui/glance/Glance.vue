@@ -16,7 +16,7 @@ import type { GlanceProps } from './glance.types'
  * A quick glance (Paths 1 · 2–4): a figure or a name opens what it is made of
  * without leaving the page — a card by the figure on a computer, a bottom sheet
  * on a phone. The page under it does not move. Enter goes to `openTo`, Esc and a
- * click aside close it; on a phone «Назад» closes the sheet.
+ * click aside close it; on a phone `Back` closes the sheet.
  */
 const props = defineProps<GlanceProps>()
 const open = defineModel<boolean>('open', { default: false })
@@ -25,7 +25,7 @@ defineSlots<{
   default(): unknown
   /** The card's body. */
   body(): unknown
-  /** The next steps besides «Открыть →» («Задать лимит»). */
+  /** The next steps besides `Open →` (`Set a limit`). */
   actions?(): unknown
 }>()
 

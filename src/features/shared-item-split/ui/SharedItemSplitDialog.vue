@@ -17,8 +17,8 @@ import type { SharedItemSplitDialogProps } from '../shared-item-split.types'
 import SplitUnitsRow from './SplitUnitsRow.vue'
 
 /**
- * «Как делить · Пиво»: everybody equally, only the people who took part, or by units («из 8 шт Петя
- * взял 3, Вася 5»). The shares of the event are recalculated at once; «Отменить» restores the old split.
+ * `How to split · Beer`: everybody equally, only the people who took part, or by units (`of 8 pcs Pete
+ * took 3, Vasya 5`). The shares of the event are recalculated at once; `Undo` restores the old split.
  */
 const props = defineProps<SharedItemSplitDialogProps>()
 const open = defineModel<boolean>('open', { required: true })

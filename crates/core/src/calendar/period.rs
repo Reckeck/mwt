@@ -1,5 +1,5 @@
 //! Dashboard periods (plan H1): the window up to today and the same span of
-//! the previous period «к той же дате».
+//! the previous period "to the same date".
 
 use chrono::{Datelike, NaiveDate};
 

@@ -23,13 +23,13 @@ import type { SpendingCategory } from '../../model/use-spending'
 import CategoryMonths from './CategoryMonths.vue'
 
 /**
- * A category opened from «Траты» (Money 1 · 2): its sum, the twelve months, its
+ * A category opened from `Spending` (Money 1 · 2): its sum, the twelve months, its
  * operations, and the two ways on — the journal or a limit — without leaving.
  */
 const props = defineProps<{
   row: SpendingCategory | null
   label: string
-  /** The period, as the header names it: «октябрь 2026». */
+  /** The period, as the header names it: `October 2026`. */
   period: string
   filter: ReportFilter
   months: string[]
@@ -53,7 +53,7 @@ const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioS
 const { query: txs, rows, total } = useTxPages(txFilter)
 const rowMenu = useTxRowMenu({ duplicate: true })
 
-/** What is still «Без категории» in the period (Money 1 · 2): the ones this category may be missing. */
+/** What is still `No category` in the period (Money 1 · 2): the ones this category may be missing. */
 const loose = ref<TxFilter>(emptyTxFilter())
 watch(
   () => [days.value.first, days.value.last] as const,

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 
 /**
- * «Отключить» on the exchange's import (Wallets-2 · 8): forgets the API key.
+ * `Remove` on the exchange's import (Wallets-2 · 8): forgets the API key.
  * The wallet, its operations and what waits for confirmation stay; a new key
  * connects it again.
  */

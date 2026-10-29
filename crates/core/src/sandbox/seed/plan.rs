@@ -1,5 +1,5 @@
 //! The demo plan: three limits (one of them over), two goals with a wallet and
-//! three automations, so every card of «Деньги» and «Автоматизации» has something to try.
+//! three automations, so every card of "Money" and "Automations" has something to try.
 
 use std::collections::BTreeMap;
 

@@ -18,8 +18,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { TRADE_QUOTE, type TradeDraft, type TradeSide, tradeInput } from './model/trade-input'
 
 /**
- * «Записать сделку» from Investments (Money 2 · 14): asset, exchange, side,
- * quantity and price; it writes the same spot trade as the wallet's «Спот» form.
+ * `Record a trade` from Investments (Money 2 · 14): asset, exchange, side,
+ * quantity and price; it writes the same spot trade as the wallet's `Spot` form.
  */
 const open = defineModel<boolean>('open', { required: true })
 /** Opens filled with a calculated buy. */

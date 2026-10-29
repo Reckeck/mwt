@@ -1,4 +1,4 @@
-/** «Хранилище без пароля»: Full-New-Encrypt 1, 2 (create), 4, 5 (Settings › Vault). Login, 3 lives in sets-recents.mjs. */
+/** `Vault without a password`: Full-New-Encrypt 1, 2 (create), 4, 5 (Settings › Vault). Login, 3 lives in sets-recents.mjs. */
 
 /** Page code: the mock's vault state and the app's store, to bend them before the shot. */
 const MOCK = `
@@ -53,7 +53,7 @@ export const encrypt = [
     canvas: { board: 'New-Encrypt', frame: '4.' },
   },
   {
-    // No password: the label, «Задать пароль…» and its question.
+    // No password: the label, `Set password…` and its question.
     name: 'enc-set',
     route: '/',
     steps: settings(

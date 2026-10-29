@@ -1,17 +1,17 @@
-/** «Песочница»: Full-New-Sandbox 1–4. No login: each shot starts on the unlock screen and goes in through the real button. */
+/** `Sandbox`: Full-New-Sandbox 1–4. No login: each shot starts on the unlock screen and goes in through the real button. */
 
 /** A returning user: the base currency is chosen, so the card does not ask for it. */
 const chosen = {
   eval: `
     const app = await import('/src/shared/api/mock/vault-data.ts')
     app.mockAppSettings.base_currency_chosen = true
-    // A year of «Что нового» is not what these shots show.
+    // A year of `What's new` is not what these shots show.
     app.mockAppSettings.installed_at = '2999-01-01'
     for (let tries = 0; !document.querySelector('#app')?.__vue_app__ && tries < 300; tries++) await new Promise((done) => setTimeout(done, 100))
     await document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('settings').loadApp()
     return true`,
 }
-/** «Открыть песочницу» on the card; the dashboard follows. */
+/** `Open the sandbox` on the card; the dashboard follows. */
 const enter = [
   chosen,
   { click: '[data-sandbox-open]' },

@@ -287,7 +287,7 @@ impl UnlockedVault {
     }
 
     /// Operations the budget could not value in its currency: a side had no
-    /// rate (Currency-1 · 7, «Показать»).
+    /// rate (Currency-1 · 7, "Show").
     pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String> {
         let currency = self.budget_currency();
         self.flows_between(&Calendar::new("UTC"), &currency, i64::MIN, i64::MAX)
@@ -381,7 +381,7 @@ impl UnlockedVault {
         if self.doc.budgets.len() == before {
             return Err(Error::Missing(format!("budget {id}")));
         }
-        // A deleted limit takes its notices with it: «превышен» about nothing is stale.
+        // A deleted limit takes its notices with it: "exceeded" about nothing is stale.
         let prefix = format!("budget:{id}:");
         self.doc
             .notification_log

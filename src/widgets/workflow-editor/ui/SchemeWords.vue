@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { WordPart } from '../model/scheme-words'
 
-/** «Словами: когда … → спросить … → перевести …» over the canvas (Auto-2 · 13). */
+/** `In words: when … → ask … → transfer …` over the canvas (Auto-2 · 13). */
 defineProps<{ parts: WordPart[] }>()
 const { t } = useI18n()
 </script>

@@ -36,7 +36,7 @@ const more = computed(() =>
   MORE_TABS.map((tab) => ({ name: TAB_ROUTE[tab], label: label(tab), hint: t(`automations.hint.${tab}`) })),
 )
 const phone = useIsPhone()
-/** «Импорт» and «Создать» belong to «Мои» (Auto-1 · 1), on a phone too; the empty one offers only «Создать» (Auto-1 · 2). */
+/** `Import` and `Create` belong to `Mine` (Auto-1 · 1), on a phone too; the empty one offers only `Create` (Auto-1 · 2). */
 const onMine = computed(() => route.name === TAB_ROUTE.mine)
 const mine = useQuery({ queryKey: MINE_KEY, queryFn: () => call<MineItem[]>('list_my_automations'), enabled: onMine })
 const importOpen = ref(false)

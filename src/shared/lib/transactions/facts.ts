@@ -76,7 +76,7 @@ export function txDebt(tx: Transaction): DebtEffect | null {
 }
 
 /**
- * The automation or workflow that booked it («авто» in the row, Paths 2 · 10);
+ * The automation or workflow that booked it (`Auto` in the row, Paths 2 · 10);
  * `null` for one entered by hand or imported. An automation runs as a workflow
  * of the same id, so both origins name it the same way.
  */
@@ -96,7 +96,7 @@ export function txForMonth(tx: Transaction): string | null {
   return month === txMeta(tx).timestamp.slice(0, 7) ? null : month
 }
 
-/** The month an income is for as a name («сентябрь»), with the year when it is not its date's year; `null` if none. */
+/** The month an income is for as a name (`September`), with the year when it is not its date's year; `null` if none. */
 export function txForMonthLabel(tx: Transaction): string | null {
   const month = txForMonth(tx)
   if (!month) return null

@@ -1,54 +1,54 @@
-# Дизайн интерфейса
+# UI design
 
-Короткий обзор для людей. Правила с примерами кода и проверками — в скилле
-[`ui-design-system`](../.agents/skills/ui-design-system/SKILL.md) и его
-[справочнике](../.agents/skills/ui-design-system/references/); там же
-единственный источник чисел (отступы, шкала текста, ширины диалогов).
-Если этот документ и скилл расходятся, прав скилл.
+A short overview for people. Rules with code examples and checks live in the
+[`ui-design-system`](../.agents/skills/ui-design-system/SKILL.md) skill and its
+[references](../.agents/skills/ui-design-system/references/); that is also
+the single source of numbers (spacing, type scale, dialog widths).
+If this document and the skill disagree, the skill is right.
 
-## Принципы
+## Principles
 
-1. **Одна вещь — один компонент.** Экраны собираются из компонентов
-   [shadcn-vue](https://shadcn-vue.com) и общих компонентов проекта
-   (`src/shared/ui`): таблица везде одна, пустое состояние одно, диалог формы
-   один. Повторяющаяся разметка выносится в общий компонент.
-2. **Каждое действие отвечает.** Сохранил, удалил, импортировал —
-   уведомление в углу окна; ошибка говорит, почему и как исправить;
-   обратимое можно отменить прямо из уведомления.
-3. **Загрузка — не пустота.** Пока данные едут, видна заглушка; если не
-   приехали — причина и «Повторить»; «Ничего нет» — только когда правда
-   ничего нет, и с кнопкой, с чего начать.
-4. **Деньги читаются одинаково.** Одно форматирование для сумм, процентов,
-   количеств и дат; прибыль со знаком, ноль не зелёный; цифры ровными
-   столбцами.
-5. **Клавиатура — полноправный способ.** Enter сохраняет, Esc закрывает,
-   фокус виден, каждое действие доступно без мыши.
-6. **Спокойный интерфейс.** Цвет — по смыслу (рост, внимание, ошибка), а не
-   для украшения; анимация только там, где объясняет переход, и гаснет при
-   «уменьшить движение» в системе.
-7. **Обучение вместе с фичей.** Тур, подсказки на месте, «Что нового» —
-   скилл [`onboarding`](../.agents/skills/onboarding/SKILL.md).
+1. **One thing — one component.** Screens are built from
+   [shadcn-vue](https://shadcn-vue.com) components and the project's shared components
+   (`src/shared/ui`): there is one table everywhere, one empty state, one form
+   dialog. Repeated markup is extracted into a shared component.
+2. **Every action responds.** Saved, deleted, imported —
+   a notification in the corner of the window; an error says why and how to fix it;
+   anything reversible can be undone right from the notification.
+3. **Loading is not emptiness.** While data is on its way a placeholder is shown; if it did not
+   arrive, the reason and "Retry"; "Nothing here" only when there really is
+   nothing, and with a button saying where to start.
+4. **Money reads the same everywhere.** One formatting for amounts, percentages,
+   quantities and dates; profit with a sign, zero is not green; digits in even
+   columns.
+5. **The keyboard is a first-class way.** Enter saves, Esc closes,
+   focus is visible, every action is reachable without a mouse.
+6. **A calm interface.** Color carries meaning (growth, attention, error), not
+   decoration; animation only where it explains a transition, and it fades out with the
+   system "reduce motion".
+7. **Onboarding together with the feature.** A tour, in-place hints, "What's new" —
+   the [`onboarding`](../.agents/skills/onboarding/SKILL.md) skill.
 
-## Устройство экрана
+## Screen layout
 
 ```
-┌ боковое меню ─┬ шапка: название экрана · состояние цен · итог · + Операция · 🔔 · ? ┐
-│ разделы       │ крошки › путь                         действия экрана →         │
-│ кошельки      │ содержимое: секции через gap-4, карточки, таблицы, графики       │
-│ настройки     │                                                                   │
-└───────────────┴───────────────────────────────────────────────────────────────────┘
+┌ sidebar ──────┬ header: screen title · price status · total · + Transaction · 🔔 · ? ┐
+│ sections      │ breadcrumbs › path                         screen actions →          │
+│ wallets       │ content: sections via gap-4, cards, tables, charts                   │
+│ settings      │                                                                       │
+└───────────────┴───────────────────────────────────────────────────────────────────────┘
 ```
 
-- Боковое меню — разделы приложения и кошельки по видам; на узком окне
-  выезжает поверх.
-- Шапка экрана — `PageHeader`: где я (крошки), что делаю (действия, главное
-  — последнее).
-- Подробности записи открываются сбоку (`Sheet`), короткие формы — в диалоге,
-  большие разделы — отдельной страницей.
+- The sidebar holds the app sections and wallets by kind; in a narrow window it
+  slides in over the content.
+- The screen header is `PageHeader`: where I am (breadcrumbs), what I do (actions, the main one
+  last).
+- Record details open on the side (`Sheet`), short forms in a dialog,
+  large sections as a separate page.
 
-## Проверки
+## Checks
 
-`mise run check` включает проверки интерфейса:
-`check-ui` (компоненты, токены, уведомления, размер файлов),
-`check-forms` (формы и выбор счёта/актива/валюты),
-`check-onboarding` (туры и тексты).
+`mise run check` includes the interface checks:
+`check-ui` (components, tokens, notifications, file size),
+`check-forms` (forms and account/asset/currency pickers),
+`check-onboarding` (tours and texts).

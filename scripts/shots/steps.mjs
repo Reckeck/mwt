@@ -2,7 +2,7 @@
 //
 // A shot: { name, route, steps?, scenarios?, phone?, desktop?, canvas?: { board, frame } }.
 // A step is one of:
-//   { click: 'css' }  or  { click: { text: 'Сохранить', within?: 'css' } }
+//   { click: 'css' }  or  { click: { text: 'Save', within?: 'css' } }
 //   { hover: 'css' }   { tap: 'css' }   { hold: 'css' } — a finger, phone only; a hold lasts 0.8 s
 //   { fill: ['css', 'text'] }   { press: 'ctrl+k' | 'Escape' | … }
 //   { type: ['css', 'text'] } — real key input, for a combobox that keeps its own search term
@@ -189,8 +189,8 @@ export async function canvasShot(page, dir, { board, frame }, theme, kind, file)
 export async function pairShot(page, canvas, app, file) {
   const html = `<!doctype html><meta charset="utf-8"><body style="margin:0;background:#888;font:13px sans-serif">
     <div style="display:flex;gap:16px;padding:8px;align-items:flex-start">
-      <figure style="margin:0"><figcaption>холст</figcaption><img id="a" src="${pathToFileURL(canvas).href}"></figure>
-      <figure style="margin:0"><figcaption>приложение</figcaption><img id="b" src="${pathToFileURL(app).href}"></figure>
+      <figure style="margin:0"><figcaption>canvas</figcaption><img id="a" src="${pathToFileURL(canvas).href}"></figure>
+      <figure style="margin:0"><figcaption>app</figcaption><img id="b" src="${pathToFileURL(app).href}"></figure>
     </div></body>`
   // A file page: a data: URL may not load file: images.
   const { writeFileSync } = await import('node:fs')

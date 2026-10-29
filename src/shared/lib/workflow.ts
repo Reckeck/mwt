@@ -110,7 +110,7 @@ export function outcomeKey(
   return 'waiting'
 }
 
-/** The question a run stopped at, when it waits for «Да»/«Нет». */
+/** The question a run stopped at, when it waits for `Yes`/`No`. */
 export function outcomeQuestion(outcome: RunOutcome): { nodeId: string; question: string } | null {
   if (outcome === 'done' || !('asking' in outcome)) return null
   return { nodeId: outcome.asking.node_id, question: outcome.asking.question }

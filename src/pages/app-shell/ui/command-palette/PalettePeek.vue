@@ -5,7 +5,7 @@ import { currentMonth } from '@/shared/lib/period'
 import type { PaletteHighlight } from './use-palette-highlight'
 
 /**
- * «Быстрый взгляд» beside the results (Paths 2 · 8): the highlighted category
+ * `Quick glance` beside the results (Paths 2 · 8): the highlighted category
  * or wallet in numbers, without leaving the search.
  */
 const props = defineProps<{ item: PaletteHighlight }>()

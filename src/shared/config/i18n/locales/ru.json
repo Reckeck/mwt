@@ -2247,6 +2247,7 @@
   "sharedEvents.items.attach": "Привязать платёж",
   "sharedEvents.items.emptyTitle": "Нет позиций",
   "sharedEvents.items.emptyHint": "Добавьте план покупок или сразу то, что уже купили.",
+  "sharedEvents.items.qtyOf": "из",
   "sharedEvents.items.head.item": "Позиция",
   "sharedEvents.items.head.qty": "Количество",
   "sharedEvents.items.head.plan": "План",

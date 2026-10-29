@@ -1,7 +1,7 @@
 import { stage5 } from './sets-stage5.mjs'
 import { GP } from './steps.mjs'
 
-/** Pack 2c: automations and wallets — «Мои» header, emulation, wallet kind «Лояльность», exchange import. */
+/** Pack 2c: automations and wallets — `Mine` header, emulation, wallet kind `Loyalty`, exchange import. */
 const named = (name, extra = {}) => ({ ...stage5.find((shot) => shot.name === name), ...extra, canvas: undefined })
 const toBybit = `
   ${GP}
@@ -10,7 +10,7 @@ const toBybit = `
   if (link) await gp.$router.push(link.getAttribute('href') + '?tab=import')
   await new Promise((done) => setTimeout(done, 900)); return true`
 const NEW_STORE = [{ wait: 600 }, { click: '[data-tour="stores-create"]' }, { wait: 800 }]
-/** «Лояльность и бонусы» and «Далее»: the Bonuses wizard takes over. */
+/** `Loyalty and bonuses` and `Next`: the Bonuses wizard takes over. */
 const TO_PROGRAM = [...NEW_STORE, { click: '[data-kind="loyalty"]' }, { wait: 400 }, { click: '[data-wizard-next]' }, { wait: 700 }]
 
 export const pack2c = [

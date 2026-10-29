@@ -99,7 +99,7 @@ const save = () => (props.locked ? undefined : doc.save((id) => emit('saved', id
 /** A phone: one row on top, the canvas on the whole screen, the panels in a sheet. */
 const phone = useIsPhone()
 const sheet = useMobileSheet(editor, report, phone)
-/** The phone shows the steps; «Холст» swaps in the canvas, kept mounted so the selection lives on. */
+/** The phone shows the steps; `Canvas` swaps in the canvas, kept mounted so the selection lives on. */
 const showCanvas = ref(false)
 // Hidden, the nodes had no size: fit once the canvas has been measured.
 watch(showCanvas, (shown) => shown && void nextTick(() => setTimeout(() => flow.fitView({ padding: 0.2 }), 120)))

@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useVaultStore } from '@/shared/store/vault'
 
 /**
- * «Открыть песочницу»: the demo vault opens and the dashboard follows. There is
+ * `Open the sandbox`: the demo vault opens and the dashboard follows. There is
  * no toast on success, the new screen is the answer; a refusal (a real vault
  * is still open) shows the backend's `SANDBOX` reason.
  */

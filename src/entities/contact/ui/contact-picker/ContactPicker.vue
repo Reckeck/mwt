@@ -10,7 +10,7 @@ import type { ContactPickerProps } from './contact-picker.types'
 
 /**
  * Who an operation, a wallet or a bonus programme is with: a searchable list of
- * contacts. Nothing found for «Петя» offers «Создать «Петя»»: the full contact
+ * contacts. Nothing found for `Pete` offers `Create "Pete"`: the full contact
  * form opens over the screen with the name filled in (the shell hosts it, see
  * `useContactCreator`), and the new contact is picked when it is saved — what was
  * typed in the screen below stays as it was.

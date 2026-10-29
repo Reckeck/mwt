@@ -11,7 +11,7 @@ import { useTemplateActions } from '../model/use-template-actions'
 import TemplateFieldInput from './TemplateFieldInput.vue'
 
 /**
- * The 3–5 fields of a template with the vault's values filled in; «Создать»
+ * The 3–5 fields of a template with the vault's values filled in; `Create`
  * saves an ordinary workflow and opens it in the editor.
  */
 const open = defineModel<boolean>('open', { required: true })

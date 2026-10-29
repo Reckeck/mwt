@@ -121,14 +121,14 @@ fn open_fresh(app: &AppHandle, state: &AppState) -> Result<VaultInfo, String> {
     Ok(info)
 }
 
-/// «Открыть песочницу»: a new vault with twelve months of demo data. The
+/// "Open the sandbox": a new vault with twelve months of demo data. The
 /// real vault must be locked. Not in the recent vaults, not the last opened.
 #[tauri::command]
 pub async fn open_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<VaultInfo, String> {
     open_fresh(&app, &state)
 }
 
-/// «Сбросить»: the demo data as it was at the start. Only while the
+/// "Reset": the demo data as it was at the start. Only while the
 /// sandbox is open, and only if the open vault is the file in its folder.
 #[tauri::command]
 pub async fn reset_sandbox(
@@ -151,7 +151,7 @@ pub async fn reset_sandbox(
     open_fresh(&app, &state)
 }
 
-/// «Выйти»: back to the unlock screen, the demo data erased.
+/// "Exit": back to the unlock screen, the demo data erased.
 #[tauri::command]
 pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if leave(&app, &state) {

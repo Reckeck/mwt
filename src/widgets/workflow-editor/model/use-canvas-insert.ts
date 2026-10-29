@@ -84,7 +84,7 @@ export function useCanvasInsert(editor: EditorGraph) {
   }
 
   /**
-   * After an action's «Дальше»: when the new node takes one of the action's
+   * After an action's `Next`: when the new node takes one of the action's
    * values, a data wire joins them and is enough to order them (data order).
    */
   function joinByData(sourceId: string, port: string, targetId: string): boolean {

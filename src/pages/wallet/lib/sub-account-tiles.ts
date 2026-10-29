@@ -1,6 +1,6 @@
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
-/** One tile of the sub-accounts row: the wallet itself («Свои средства») or one of its sub-accounts. */
+/** One tile of the sub-accounts row: the wallet itself (`Own funds`) or one of its sub-accounts. */
 export interface SubAccountTile {
   id: string
   store: Store

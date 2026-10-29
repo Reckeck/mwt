@@ -1,4 +1,4 @@
-//! The system-wide «+ Операция» key (plan Ф4). Off unless the user picks a
+//! The system-wide "+ Transaction" key (plan F4). Off unless the user picks a
 //! combination: on Hyprland and the like the window manager owns most keys,
 //! and a silent clash would be worse than no shortcut.
 
@@ -10,7 +10,7 @@ use tauri::{Emitter, Manager};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-/// Command-line flag that opens «+ Операция» in the running instance — what a
+/// Command-line flag that opens "+ Transaction" in the running instance — what a
 /// Hyprland/Sway binding calls, since Wayland gives apps no global keys.
 pub const QUICK_ADD_FLAG: &str = "--quick-add";
 
@@ -33,7 +33,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-/// Bring the main window up and tell the UI to open «+ Операция».
+/// Bring the main window up and tell the UI to open "+ Transaction".
 #[cfg(desktop)]
 pub fn show_quick_add<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {

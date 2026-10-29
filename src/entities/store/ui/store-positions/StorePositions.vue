@@ -63,7 +63,7 @@ const columns = computed<ColumnDef<StorePosition>[]>(() => [
     id: 'price',
     header: t('pos.price'),
     accessorFn: (row) => Number(row.price_base),
-    // Where the price came from rides along as its title: «CoinGecko · 12:05», «своя цена».
+    // Where the price came from rides along as its title: «CoinGecko · 12:05», `your own price`.
     cell: ({ row }) =>
       Number(row.original.price_base) > 0
         ? h('span', { title: priceOriginText(row.original.price_info) }, [money(row.original.price_base)])

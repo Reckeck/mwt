@@ -14,7 +14,7 @@ import { useTxContext } from '@/shared/lib/tx-context'
 
 import { txPair } from '../lib/tx-card'
 
-/** «RUB → USDT · операция · ‹ › соседние», the kind, the sums large, the moment (Paths 1 · 6). */
+/** `RUB → USDT · operation · ‹ › neighbours`, the kind, the sums large, the moment (Paths 1 · 6). */
 const props = defineProps<{ tx: Transaction; prev: boolean; next: boolean; neighbours: boolean }>()
 const emit = defineEmits<{ go: [step: -1 | 1] }>()
 
@@ -25,7 +25,7 @@ const titleOf = useTxTitle()
 /** A same-asset «conversion» between own wallets is the transfer it is. */
 const move = computed(() => txIsMove(props.tx))
 const kind = computed(() => (move.value ? 'transfer' : txKind(props.tx)))
-/** The same title as the row: «Зарплата», «Мама», «RUB → USDT», «Перевод». */
+/** The same title as the row: `Salary`, `Mom`, `RUB → USDT`, `Transfer`. */
 const title = computed(() => titleOf(props.tx).text)
 const internal = computed(() => txIsInternal(props.tx, context.rootOf))
 /** An exchange reads «−45 000 ₽ → +480 USDT»; a move says its sum once; anything else lists its legs. */

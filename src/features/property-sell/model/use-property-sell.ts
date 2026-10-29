@@ -21,7 +21,7 @@ const ident = (asset: AssetRef): AssetIdent => ({
 })
 
 /**
- * «Продать «Машину»» (Wallets-4 · 21): the whole property sold for money into
+ * `Sell "Car"` (Wallets-4 · 21): the whole property sold for money into
  * a wallet, on a day. What it stood at in the books and the gain over it come
  * from the backend's preview; the wallet goes to the archive when asked.
  */

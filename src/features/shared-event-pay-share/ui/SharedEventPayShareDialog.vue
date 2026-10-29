@@ -14,7 +14,7 @@ import { ReadonlyField } from '@/shared/ui/readonly-field'
 import type { SharedEventPayShareProps } from '../shared-event-pay-share.types'
 
 /**
- * «Оплатить долю» in an event somebody else leads: the sum is my share still unpaid (it may be
+ * `Pay my share` in an event somebody else leads: the sum is my share still unpaid (it may be
  * paid in parts), the recipient is the organizer and cannot be changed, the wallet is mine.
  * It writes one debt return to the organizer's contact, tied to the event.
  */

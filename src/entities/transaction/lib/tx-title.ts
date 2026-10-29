@@ -13,7 +13,7 @@ export interface TxTitleNames {
   categoryName: (key: string) => string
   contactName: (id: string) => string
   sideLabel: (side: AccountRef | null) => string
-  /** «Перевод», «Корректировка»: the kind's noun. */
+  /** `Transfer`, `Correction`: the kind's noun. */
   kindNoun: (kind: TxKind) => string
 }
 
@@ -21,8 +21,8 @@ export interface TxTitleNames {
 const BY_ASSET: TxKind[] = ['trade_spot', 'trade_futures', 'defi']
 
 /**
- * By meaning, not by currency: «RUB → USDT» for an exchange, «Перевод» for one asset moved,
- * else who («Мама») or what for («Зарплата»), else the far side («Пятёрочка»). The currency
+ * By meaning, not by currency: «RUB → USDT» for an exchange, `Transfer` for one asset moved,
+ * else who (`Mom`) or what for (`Salary`), else the far side (`Pyaterochka`). The currency
  * stays with the sum.
  */
 export function txTitle(tx: Transaction, names: TxTitleNames): TxTitle {

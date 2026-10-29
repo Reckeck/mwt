@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useVaultStore } from '@/shared/store/vault'
 
 /**
- * «Найти файл…» for a history row whose file is gone: the system dialog picks
+ * `Find file…` for a history row whose file is gone: the system dialog picks
  * the file, the row points at it (same place in the list). Resolves to the new
  * path, or `null` when the dialog was closed.
  */

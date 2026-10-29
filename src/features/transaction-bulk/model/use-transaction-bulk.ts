@@ -11,7 +11,7 @@ const STALE_KEYS: ReadonlyArray<readonly string[]> = [...LEDGER_KEYS, ...PLANNIN
 export interface BulkCategory {
   ids: string[]
   category: string
-  /** For the toast: «Категория «Перевод» изменена у 2 операций». */
+  /** For the toast: `Category `Transfer` changed on 2 operations`. */
   name: string
 }
 
@@ -22,8 +22,8 @@ export interface BulkMove {
 }
 
 /**
- * What the bar does with the picked operations (Ops-1 · 4): no «Вы уверены?»,
- * each change comes back with «Отменить» in its toast.
+ * What the bar does with the picked operations (Ops-1 · 4): no `Are you sure?`,
+ * each change comes back with `Undo` in its toast.
  */
 export function useTransactionBulk(onDone: () => void) {
   const { t, locale } = useI18n()

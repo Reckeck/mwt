@@ -5,7 +5,7 @@ import { UtilityStats } from '@/widgets/utility-stats'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 /**
- * «ЖКХ и аренда» (plan H2: three utility widgets in one): S — what is due this
+ * `Utilities and rent` (plan H2: three utility widgets in one): S — what is due this
  * month; M — the fixed costs and their changes too; L — a year of bills by item.
  */
 const size = useWidgetSize()

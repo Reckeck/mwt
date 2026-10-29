@@ -99,7 +99,7 @@ export function useRowMenu(options: {
   })
   const sheetActions = computed(() => (sheetTx.value ? options.actions(sheetTx.value) : []))
 
-  /** «Маме до зарплаты · 20 окт · Тинькофф → Мама · −5 000 ₽»: what the sheet acts on. */
+  /** `To Mom before payday · Oct 20 · Tinkoff → Mom · −5,000 ₽`: what the sheet acts on. */
   function sheetHead(tx: Transaction): Omit<ActionSheetProps, 'actions'> {
     const meta = txMeta(tx)
     const sides = txSides(tx)

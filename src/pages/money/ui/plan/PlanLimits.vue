@@ -98,7 +98,7 @@ const spendingOf = computed(() => {
   }
 })
 
-/** `?new=limit&category=…` from a glance or Ctrl K («Задать лимит на „Продукты“»). */
+/** `?new=limit&category=…` from a glance or Ctrl K (`Set a limit for "Groceries"`). */
 const route = useRoute()
 const router = useRouter()
 watch(

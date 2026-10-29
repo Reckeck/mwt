@@ -1,6 +1,6 @@
 import { dateFormat, formatDayMonthShort } from '@/shared/lib/format'
 
-/** «21 окт, 18:00»: when the exchange was last imported, in its status line. */
+/** `Oct 21, 18:00`: when the exchange was last imported, in its status line. */
 export function formatDayMonthTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)

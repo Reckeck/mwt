@@ -10,8 +10,8 @@ import { TableCell, TableRow } from '@/shared/ui/table'
 import { exchangeParts, whereItemRoute } from '../../lib/where-view'
 
 /**
- * An opened «Между своими» (Paths 2 · 9): the operations behind the row, each
- * with its day, route and sum, then «Открыть эти 3 в Операциях →». A table's
+ * An opened `Between own wallets` (Paths 2 · 9): the operations behind the row, each
+ * with its day, route and sum, then `Open these 3 in Operations →`. A table's
  * rows on a computer, a stack inside the card on a phone.
  */
 const props = defineProps<{ row: WhereRow; to: RouteLocationRaw; phone?: boolean }>()

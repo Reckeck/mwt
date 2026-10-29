@@ -1,11 +1,11 @@
-/** What the category spent, for the hints of a limit opened from «Траты». */
+/** What the category spent, for the hints of a limit opened from `Spending`. */
 export interface BudgetSpending {
   /** The page's period, in `currency`. */
   spent: string
   /** The category's usual month, if known. */
   average: string | null
   currency: string
-  /** The period as the hint names it: «в октябре». */
+  /** The period as the hint names it: `in October`. */
   when: string
 }
 

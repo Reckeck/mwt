@@ -4,7 +4,7 @@ import { useReport, wealthChange, wealthDriver, wealthRows } from '@/entities/re
 import { defaultRange } from '@/shared/lib/period'
 
 /**
- * What «Капитал» opens (Paths 1 · 3): the change over the month, the line of the
+ * What `Capital` opens (Paths 1 · 3): the change over the month, the line of the
  * last year, what it is made of and the group that moved it most. The same
  * networth report Capital draws, so the glance reads it from the cache.
  */

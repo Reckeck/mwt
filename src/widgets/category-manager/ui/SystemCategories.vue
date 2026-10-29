@@ -6,7 +6,7 @@ import { Badge } from '@/shared/ui/badge'
 import { categoryLabel } from '@/shared/lib/categories'
 
 /**
- * «Системные · N» (Settings-1 · 4): the app's own categories. A lock, the name
+ * `System · N` (Settings-1 · 4): the app's own categories. A lock, the name
  * as text, what it means and a badge; no fields and no actions, because core
  * refuses to change them. The empty fourth column keeps the rows level with the others.
  */

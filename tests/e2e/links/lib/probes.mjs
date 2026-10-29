@@ -115,7 +115,7 @@ export const CLICK_HREF = (href) => `
   el.click()
   return true`
 
-/** The «← назад» chip on the page we landed on: its label, or null. */
+/** The `← back` chip on the page we landed on: its label, or null. */
 export const READ_BACK_CHIP = `
   const chip = document.querySelector('[data-back-chip]')
   return chip ? chip.innerText.trim() : null`

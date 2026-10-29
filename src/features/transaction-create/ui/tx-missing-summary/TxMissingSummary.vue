@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useTxForm } from '../../model/use-tx-form'
 
-/** «Чтобы сохранить, не хватает…»: the long form's summary of what is still missing. */
+/** `To save, fill in…`: the long form's summary of what is still missing. */
 const { t } = useI18n()
 const { missing, check } = useTxForm()
 </script>

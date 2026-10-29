@@ -10,7 +10,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   'open.er-api': 'ExchangeRate-API',
 }
 
-/** «CoinGecko · 19 окт., 12:05», «своя цена», «по привязке 1 USD»… — said next to a price. */
+/** `CoinGecko · Oct 19, 12:05`, `your own price`, `pegged to 1 USD`… — said next to a price. */
 export function priceOriginText(info: PriceInfo): string {
   const t = i18n.global.t
   const at = info.at ? formatDateTime(info.at) : ''

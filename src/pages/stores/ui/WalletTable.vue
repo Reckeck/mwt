@@ -43,7 +43,7 @@ const LINK_CLASS = [
   'focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring',
 ]
 const ariaSort = (key: WalletSort) => (sort.value === key ? (key === 'name' ? 'ascending' : 'descending') : 'none')
-/** «26 окт» this year, with the year (as the full date) for any other. */
+/** `Oct 26` this year, with the year (as the full date) for any other. */
 const lastDay = (iso: string) =>
   new Date(iso).getFullYear() === new Date().getFullYear() ? formatDayMonthShort(iso) : formatDate(iso)
 const MAX_BALANCES = 3

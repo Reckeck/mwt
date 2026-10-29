@@ -14,8 +14,8 @@ import { NAV_ITEMS } from '../../app-shell.constants'
 import type { RecentRow } from './use-palette-recent'
 
 /**
- * An empty Ctrl K (Paths 1 · 7): «Недавние» — where one was a minute ago,
- * «Перейти» with Alt 1…5, «Записать» with Ctrl N.
+ * An empty Ctrl K (Paths 1 · 7): `Recent` — where one was a minute ago,
+ * `Go to` with Alt 1…5, `Record` with Ctrl N.
  */
 const props = defineProps<{ recent: RecentRow[]; run: (action: () => void) => void }>()
 

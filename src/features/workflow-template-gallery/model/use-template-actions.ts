@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
-/** The ready-made templates and «Создать» from one of them. */
+/** The ready-made templates and `Create` from one of them. */
 export function useTemplateActions() {
   const queryClient = useQueryClient()
   const templates = useQuery({

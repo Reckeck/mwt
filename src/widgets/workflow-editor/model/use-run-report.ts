@@ -18,7 +18,7 @@ export function useRunReport(
 ) {
   const { t, locale } = useI18n()
   const report = ref<RunReport | null>(null)
-  /** Answers given to «Ждать подтверждения» in the current emulation, by node id. */
+  /** Answers given to `Wait for confirmation` in the current emulation, by node id. */
   const answers = ref<Record<string, boolean>>({})
 
   const stepOf = computed(() => {

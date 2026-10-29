@@ -9,7 +9,7 @@ import { useConversions } from './conversions'
  * How old the rates behind the sums on screen are (Currency-2 · 8): the oldest
  * rate among the currencies the vault holds, coins aside (they follow the
  * prices). `stale` when it is from an earlier day — the figures then carry
- * «курс 20 окт.»; `offline` from the device. Both go once the rates come in.
+ * `rate Oct 20`; `offline` from the device. Both go once the rates come in.
  */
 export function useRatesAge() {
   const { table } = useConversions(true)

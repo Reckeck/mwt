@@ -42,7 +42,7 @@ const isAdjustment = computed(() => txKind(props.transaction) === 'adjustment')
         compact
         @saved="open = false"
       >
-        <!-- One short form, the same as «Новая операция»; the wallet of an existing operation is shown, not changed. -->
+        <!-- One short form, the same as `New transaction`; the wallet of an existing operation is shown, not changed. -->
         <template #store>
           <FormField for="tx-edit-store" :label="t('quickAdd.store')">
             <StoreNodeSelect id="tx-edit-store" :model-value="storeId" :nodes="nodes" class="w-full" disabled />

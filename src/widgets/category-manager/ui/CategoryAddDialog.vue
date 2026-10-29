@@ -10,7 +10,7 @@ import { Select, SelectItem } from '@/shared/ui/select'
 
 import { EDITABLE_GROUPS } from '../category-manager.constants'
 
-/** «+ Категория»: a name and a group; the new row lands in its group below. */
+/** `+ Category`: a name and a group; the new row lands in its group below. */
 const props = defineProps<{ pending: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ create: [input: { name: string; group: CategoryGroup }] }>()

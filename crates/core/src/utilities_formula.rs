@@ -54,7 +54,7 @@ pub struct FormulaInput {
     pub days: Amount,
 }
 
-/// A zone's name as it goes into a variable: «пик ночь» → «пик_ночь».
+/// A zone's name as it goes into a variable: "peak night" → "peak_night" (Russian zone names).
 pub fn zone_key(zone: &str) -> String {
     zone.trim()
         .to_lowercase()

@@ -7,7 +7,7 @@ import { Switch } from '@/shared/ui/switch'
 
 import { mineName, mineRoute, mineWhen } from '../../lib/mine-view'
 
-/** «Мои» on a phone (Auto-1 · 1): the name, «Тип · дата» under it, the switch. */
+/** `Mine` on a phone (Auto-1 · 1): the name, `Type · date` under it, the switch. */
 const props = defineProps<{ items: MineItem[] }>()
 const emit = defineEmits<{ toggle: [item: MineItem, active: boolean] }>()
 const { t } = useI18n()

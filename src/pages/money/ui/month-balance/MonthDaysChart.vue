@@ -10,7 +10,7 @@ import { Chart, type ChartOption } from '@/shared/lib/echarts'
 import { formatMoney } from '@/shared/lib/format'
 
 /**
- * «{Month} по дням»: what was left at the end of each day, and dashed, where the
+ * `{month} by day`: what was left at the end of each day, and dashed, where the
  * allowance takes it. The line carries its own labels (Money 3 · 15): the salary,
  * the biggest spending, today and where the month ends; the axis names 1/8/15/22/last.
  */

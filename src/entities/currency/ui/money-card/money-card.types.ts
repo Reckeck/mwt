@@ -1,5 +1,5 @@
 export interface MoneyCardProps {
-  /** Signed: below zero the card reads «Отдали», above «Получили». */
+  /** Signed: below zero the card reads `Gave`, above `Received`. */
   amount: number
   /** The sum's currency (lower or upper case). */
   currency: string

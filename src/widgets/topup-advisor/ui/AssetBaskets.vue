@@ -13,7 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
 
 /**
- * Every held asset with its own basket. «По кошельку» leaves it to the
+ * Every held asset with its own basket. `By wallet` leaves it to the
  * wallet's basket; the hint (crypto → risky, cash by currency) is applied
  * only by a tap.
  */

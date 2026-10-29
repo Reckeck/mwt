@@ -9,7 +9,7 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { useTxForm } from '../../model/use-tx-form'
 
 /**
- * «Событие»: a new payment of mine that belongs to a shared event (the barbecue's meat). Once the
+ * `event`: a new payment of mine that belongs to a shared event (the barbecue's meat). Once the
  * payment is saved it is linked to the event as a purchase. Only for a new payment, and only
  * where there is an open event that I take part in.
  */

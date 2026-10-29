@@ -20,7 +20,7 @@ function createInput(state: StoreCreateState, baseCurrency: string): CreateStore
     parent_id: props.parent?.id ?? null,
     sub_type: isSub.value ? state.subType.value : null,
     binding: isSub.value ? state.binding.value : null,
-    // «Учитывать в бюджете» (W3): on = everyday money, off = savings; other kinds keep their default.
+    // `Count in the budget` (W3): on = everyday money, off = savings; other kinds keep their default.
     purpose: state.offersBudget.value ? (state.inBudget.value ? 'everyday' : 'savings') : null,
     liability: kind.value === 'liability' || subInfo.value?.credit ? state.terms.value : null,
     contact_id: !isSub.value && kind.value === 'bank' ? state.contactId.value || null : null,
@@ -47,7 +47,7 @@ function createInput(state: StoreCreateState, baseCurrency: string): CreateStore
             at: state.openingAt.value ? new Date(`${state.openingAt.value}T12:00:00`).toISOString() : undefined,
           }
         : null,
-    // The card's name follows the bank's («Тинькофф RUB»): the backend fills it in.
+    // The card's name follows the bank's (`Tinkoff RUB`): the backend fills it in.
     card: state.withCard.value ? { name: '', currency: state.cardCurrency.value } : null,
   }
 }
@@ -62,7 +62,7 @@ export function useCreateStore(state: StoreCreateState, onCreated: (store: Store
   const settings = useSettingsStore()
   const pins = usePins()
 
-  /** «В избранное» (W4): quietly, the «created» toast already speaks for the wallet. */
+  /** `Add to favourites` (W4): quietly, the «created» toast already speaks for the wallet. */
   async function pin(store: Store) {
     const views = await call<PinnedView[]>('set_pinned', {
       pins: [...pins.pins.value, { type: 'entity', target: { kind: 'store', id: store.id } }],

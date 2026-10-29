@@ -7,7 +7,7 @@ import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
 export interface ClassesChange {
   classes: AssetClass[]
-  /** What «Отменить» puts back; an empty list is the preset again. */
+  /** What `Undo` puts back; an empty list is the preset again. */
   previous: AssetClass[]
 }
 

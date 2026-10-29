@@ -13,8 +13,8 @@ import { PERIOD_CHIPS, monthDays, monthOfDays, presetDays, presetOfDays, recentM
 import type { FilterFieldProps } from '../../transaction-filter.types'
 
 /**
- * «Период»: a month from the list, or a chip — this month, the last 3…12, the
- * year, or «с … по» with two days. The filter holds days; whole months are
+ * `Period`: a month from the list, or a chip — this month, the last 3…12, the
+ * year, or `from … to` with two days. The filter holds days; whole months are
  * read back from them, so a period from a report shows as its chip.
  */
 const props = defineProps<FilterFieldProps>()
@@ -26,7 +26,7 @@ const RANGE = 'range'
 
 const preset = computed(() => presetOfDays(filter.value.from, filter.value.to))
 const month = computed(() => monthOfDays(filter.value.from, filter.value.to))
-/** Days that are no month and no chip: «с … по» is open. */
+/** Days that are no month and no chip: `from … to` is open. */
 const custom = ref(false)
 watch(
   () => [filter.value.from, filter.value.to] as const,

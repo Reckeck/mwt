@@ -14,8 +14,8 @@ function undoable(batches: AppliedBatch[] | undefined): Set<string> {
 }
 
 /**
- * The sync journal (ring of 200 lines, newest first) for the «История» table:
- * «Что» as a human line («2 операции, 1 лимит») and «Итог» (принято, отклонено, ошибка…).
+ * The sync journal (ring of 200 lines, newest first) for the `History` table:
+ * `What` as a human line (`2 operations, 1 limit`) and `Result` (accepted, rejected, error…).
  */
 export function useSyncJournal() {
   const { t, locale } = useI18n()

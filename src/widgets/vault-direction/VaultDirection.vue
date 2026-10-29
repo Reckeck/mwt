@@ -10,7 +10,7 @@ import { SettingsSection } from '@/shared/ui/settings-section'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
 /**
- * «Направление»: whether the vault keeps crypto. Off hides crypto wallets,
+ * `Direction`: whether the vault keeps crypto. Off hides crypto wallets,
  * exchanges and coins everywhere; their data and balances stay.
  */
 const { t } = useI18n()
@@ -21,7 +21,7 @@ const cryptoWallets = computed(
   () => (tree.data.value ?? []).filter((node) => !node.store.archived && isCryptoKind(node.store.kind)).length,
 )
 
-/** «Если выключить: … Скроется: 2» when on, «Выключено: … Скрыто: 2» when off — one line of the canvas: what the switch does and how many wallets it touches. */
+/** `If turned off: … Will be hidden: 2` when on, `Turned off: … Hidden: 2` when off — one line of the canvas: what the switch does and how many wallets it touches. */
 const hint = computed(() => {
   const base = t(crypto.value ? 'settings.direction.cryptoHintOn' : 'settings.direction.cryptoHint')
   if (!cryptoWallets.value) return base

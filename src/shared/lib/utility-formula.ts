@@ -1,6 +1,6 @@
 /**
  * The formula with the typed numbers in place of its words:
- * «(показание − предыдущее) × 3,5» → «(209 − 205) × 3,5». Display only; the
+ * `(reading − previous) × 3.5` → `(209 − 205) × 3.5`. Display only; the
  * amount itself comes from `preview_utility_formula`.
  */
 export function fillFormula(

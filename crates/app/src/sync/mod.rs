@@ -56,9 +56,9 @@ const FAILURE_WINDOW: Duration = Duration::from_secs(600);
 pub(crate) enum Order {
     /// Records saved here (or taken from another device): send them on.
     Changed(Vec<String>),
-    /// The user pressed «Сопрячь».
+    /// The user pressed "Pair".
     StartPairing,
-    /// «Не сейчас»: close quietly, do not offer this device again this run.
+    /// "Not now": close quietly, do not offer this device again this run.
     Dismiss,
     /// The user's answer to the code or to the list of changes.
     Decide(bool),
@@ -84,7 +84,7 @@ pub(crate) struct Link {
     pub remote_key: String,
     /// The other side asked to be the main device.
     pub prefer_main: bool,
-    /// A batch was applied on it this session (for «спрашивать»).
+    /// A batch was applied on it this session (for "ask").
     pub applied_once: bool,
 }
 
@@ -119,7 +119,7 @@ pub(crate) struct Run {
     /// Device id → the mDNS instance it showed in a session of this run: how
     /// discovery knows which address belongs to a device that cut this one off.
     pub peer_instances: BTreeMap<String, String>,
-    /// Devices the user asked to pair again («Сопрячь заново»): the next dial
+    /// Devices the user asked to pair again ("Pair again"): the next dial
     /// to one sends the pairing request at once.
     pub pair_intent: std::collections::BTreeSet<String>,
     pub stop: tokio::sync::watch::Sender<bool>,
@@ -397,7 +397,7 @@ pub fn reconnect(app: &AppHandle) {
     discovery::reconnect(app);
 }
 
-/// «Сопрячь заново» for a device that cut this one off: forget what it told
+/// "Pair again" for a device that cut this one off: forget what it told
 /// us, remember that the user asked for a pairing, and dial it once with the
 /// request. Needs the device to be in sight (discovery saw it in this run).
 pub(crate) fn pair_again<H: Host>(app: &H, device_id: &str) -> trade_core::Result<()> {

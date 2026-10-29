@@ -12,7 +12,7 @@ use crate::calendar::{self, Calendar};
 use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
 
-/// One day of the «Траты» week strip.
+/// One day of the "Spending" week strip.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SpendingDay {
     /// `YYYY-MM-DD`.
@@ -22,7 +22,7 @@ pub struct SpendingDay {
     pub over: bool,
 }
 
-/// The «Траты» widget: the period, the week and a series for the sparkline.
+/// The "Spending" widget: the period, the week and a series for the sparkline.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SpendingOverview {
     pub currency: String,
@@ -80,7 +80,7 @@ impl UnlockedVault {
         (totals, days)
     }
 
-    /// Spending for the dashboard's «Траты» (plan H2).
+    /// Spending for the dashboard's "Spending" (plan H2).
     pub fn spending_overview(&self, period: DashPeriod, now: i64, zone: &str) -> SpendingOverview {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);

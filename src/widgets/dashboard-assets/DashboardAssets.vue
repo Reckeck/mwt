@@ -12,7 +12,7 @@ import { call } from '@/shared/api/ipc'
 import { assetKey } from '@/shared/lib/asset-ref'
 import { formatPct, formatQuantity, signClass } from '@/shared/lib/format'
 
-/** Rows shown before «ещё N»: a widget is a glance, the wallets have the full list. */
+/** Rows shown before `N more`: a widget is a glance, the wallets have the full list. */
 const SHOWN = 8
 
 const { t } = useI18n()

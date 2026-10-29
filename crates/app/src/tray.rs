@@ -76,13 +76,7 @@ fn open_new_window() {
 pub fn create(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
     let ru = crate::scheduler::russian(&handle);
-    let label = |ru_text: &str, en_text: &str| {
-        if ru {
-            ru_text.to_string()
-        } else {
-            en_text.to_string()
-        }
-    };
+    let label = |ru_text: &str, en_text: &str| crate::scheduler::pick(ru, ru_text, en_text);
 
     let toggle = MenuItemBuilder::new(label("Показать / скрыть", "Show / hide"))
         .id("toggle")

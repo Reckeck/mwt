@@ -11,7 +11,7 @@ export interface TriggerChoice {
   detail: string
 }
 
-/** The workflow's triggers that are on, «Запуск вручную» first: it is the default. */
+/** The workflow's triggers that are on, `run by hand` first: it is the default. */
 export function triggerChoices(
   nodes: EditorNode[],
   def: (kind: string) => NodeDef | undefined,

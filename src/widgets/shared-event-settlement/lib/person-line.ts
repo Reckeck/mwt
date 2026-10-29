@@ -23,7 +23,7 @@ export interface PersonLine {
   total?: string
   returned?: string
   writtenOff?: string
-  /** The organizer's name, for «вы должны Ане». */
+  /** The organizer's name, for `you owe Anya`. */
   name?: string
 }
 

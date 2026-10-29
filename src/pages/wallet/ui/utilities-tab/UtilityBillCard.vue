@@ -9,7 +9,7 @@ import { formatDayMonthShort, formatMonthKey, pluralForm } from '@/shared/lib/fo
 import { composeSums } from '@/shared/lib/money-parts'
 
 /**
- * «Счёт за октябрь · оплатить до 10 нояб» (Wallets-2 · 10): what the month will
+ * `October bill · pay by Nov 10` (Wallets-2 · 10): what the month will
  * cost, why it is still an estimate, the rent an automation pays apart, and how
  * it compares with the last six months.
  */
@@ -37,7 +37,7 @@ const automatedNote = computed(() =>
     return { id: line.item.id, parts: parts(t('utilityTab.automatedNote', { name: line.item.name, amount })) }
   }),
 )
-/** The phone's one line: «1 статья ждёт показаний · аренду платит автоматизация». */
+/** The phone's one line: `1 item awaits readings · rent is paid by an automation`. */
 const phoneNote = computed(() =>
   [unread.value, ...(automated.value.length ? [t('utilityTab.automatedShort')] : [])].filter(Boolean).join(' · '),
 )

@@ -141,7 +141,7 @@ export function formatPct(value: string | number | null | undefined, opts: PctFo
 
 /**
  * A holding's quantity or a count: as many places as it has, up to
- * `maxDecimals` (the user's «знаков после запятой»), never padded with zeros
+ * `maxDecimals` (the user's `decimal places`), never padded with zeros
  * (`1`, `0,00042`).
  */
 export function formatQuantity(value: string | number | null | undefined, maxDecimals = 8): string {
@@ -186,7 +186,7 @@ export function signClass(value: string | number | null | undefined): string {
   return SIGN_TONE_CLASS[signTone(value)]
 }
 
-/** «пн, 14 окт.»: a day header in a journal, where the weekday matters more than the year. */
+/** `Mon, Oct 14`: a day header in a journal, where the weekday matters more than the year. */
 export function formatDay(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -194,7 +194,7 @@ export function formatDay(iso: string | null | undefined): string {
   return dateFormat({ weekday: 'short', day: 'numeric', month: 'short' }).format(date)
 }
 
-/** A day with its month spelled out: «31 октября». */
+/** A day with its month spelled out: `October 31`. */
 export function formatDayMonth(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -202,7 +202,7 @@ export function formatDayMonth(iso: string | null | undefined): string {
   return dateFormat({ day: 'numeric', month: 'long' }).format(date)
 }
 
-/** «20 окт»: a day in a short list, without the dot; with `separator` the time follows: «20 окт 10:00». */
+/** `Oct 20`: a day in a short list, without the dot; with `separator` the time follows: `Oct 20 10:00`. */
 export function formatDayMonthShort(iso: string | null | undefined, separator?: string): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -219,7 +219,7 @@ export function formatDate(iso: string | null | undefined): string {
 }
 
 /**
- * A month by its `YYYY-MM` key (`2026-10` → «октябрь 2026 г.» / «окт.»). Noon
+ * A month by its `YYYY-MM` key (`2026-10` → `October 2026` / `Oct`). Noon
  * of the 1st, so no time zone moves it into the month before.
  */
 export function formatMonthKey(
@@ -293,7 +293,7 @@ export function pluralForm(count: number, locale: string): Intl.LDMLPluralRule {
   return rule.select(count)
 }
 
-/** «3 и 5», «3, 5 и 9»: a short list joined the way the UI language joins it. */
+/** `3 and 5`, `3, 5 and 9`: a short list joined the way the UI language joins it. */
 export function formatList(items: string[], locale: string = activeLocale.value): string {
   return new Intl.ListFormat(locale, { type: 'conjunction' }).format(items)
 }

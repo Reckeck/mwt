@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import type { CompareLine } from '../model/use-compare-lines'
 
 /**
- * «Сравнение» on a phone: where each run ends, a row each. A thin line on a
+ * `Comparison` on a phone: where each run ends, a row each. A thin line on a
  * small chart is no target for a finger, so the row opens the run instead.
  */
 const props = defineProps<{ current: string; lines: CompareLine[]; currency: string }>()

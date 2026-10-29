@@ -12,7 +12,7 @@ import { fromParts, nowValue, toCalendarDate } from '@/shared/ui/date-time-picke
 
 import RangeCalendar from './RangeCalendar.vue'
 
-/** The calendar and the «Сегодня / Очистить» row of the picker, shared by its popover and its sheet. */
+/** The calendar and the `Today / Clear` row of the picker, shared by its popover and its sheet. */
 const props = defineProps<{ range: boolean }>()
 const model = defineModel<DateRange | null>({ default: null })
 const emit = defineEmits<{ done: [] }>()

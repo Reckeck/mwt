@@ -62,7 +62,7 @@ const { form, check, save, valid, showFills, debouncedDraft, preview, isProperty
 const quickCash = computed(() => props.compact && (form.kind === 'payment' || form.kind === 'topup') && !isProperty.value)
 /** Exchange and transfer take their wallets as sides, so the dialog's wallet field is not shown. */
 const quickSides = computed(() => (props.compact && ['convert', 'transfer'].includes(form.kind) ? form.kind : null))
-/** Spot, futures and DeFi of «Сделка · <биржа>» (OpForm-2 · 9–11): the exchange's own wallet, no comment line. */
+/** Spot, futures and DeFi of `Trade · <exchange>` (OpForm-2 · 9–11): the exchange's own wallet, no comment line. */
 const quickDeal = computed(() =>
   props.compact && ['trade_spot', 'trade_futures', 'defi'].includes(form.kind) ? form.kind : null,
 )

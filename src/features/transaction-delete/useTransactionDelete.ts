@@ -11,7 +11,7 @@ const STALE_KEYS: ReadonlyArray<readonly string[]> = [
   ['entity-card'],
 ]
 
-/** Delete one transaction by id (it comes back with «Отменить») and refresh everything derived from it. */
+/** Delete one transaction by id (it comes back with `Undo`) and refresh everything derived from it. */
 export function useTransactionDelete() {
   const queryClient = useQueryClient()
 
@@ -23,7 +23,7 @@ export function useTransactionDelete() {
     meta: {
       error: 'tx.deleteFailed',
       success: 'tx.deleted',
-      // The toast's «Отменить» puts it back as it was (same id, origin and property link).
+      // The toast's `Undo` puts it back as it was (same id, origin and property link).
       undo: (data) => call('restore_transactions', { items: data as DeletedTransaction[] }),
     },
   })

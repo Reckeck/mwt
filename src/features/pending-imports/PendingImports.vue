@@ -37,7 +37,7 @@ const pendingCount = computed(() => {
   return props.storeId ? all.filter((imp) => imp.store_id === props.storeId).length : all.length
 })
 const busy = computed(() => sync.syncNow.isPending.value || sync.confirm.isPending.value || sync.discard.isPending.value)
-/** «Подтвердить все» confirms what this list shows the owner of: one exchange, or every one. */
+/** `Confirm all` confirms what this list shows the owner of: one exchange, or every one. */
 const allIds = computed(() =>
   props.storeId
     ? (pending.data.value?.imports ?? []).filter((imp) => imp.store_id === props.storeId).map((imp) => imp.exec_id)

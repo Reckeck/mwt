@@ -1,4 +1,4 @@
-//! «Вложения» (Money 2 · 13): what was put into investments and what it made,
+//! "Investments" (Money 2 · 13): what was put into investments and what it made,
 //! per asset. Coins on crypto and exchange wallets join by asset; a futures
 //! sub-account is one row with its margin. Fiat and dollar stablecoins are
 //! cash waiting, not an investment, and stay out.

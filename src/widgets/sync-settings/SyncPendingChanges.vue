@@ -8,8 +8,8 @@ import { Button } from '@/shared/ui/button'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
 /**
- * «Ждут подтверждения · N»: changes from another device that wait for an answer
- * (the same batch the dialog asks about elsewhere). «Принять» applies them, «Отклонить» closes the session.
+ * `Awaiting confirmation · N`: changes from another device that wait for an answer
+ * (the same batch the dialog asks about elsewhere). `Accept` applies them, `Decline` closes the session.
  */
 const { t } = useI18n()
 const { sessions } = useSyncStatus()

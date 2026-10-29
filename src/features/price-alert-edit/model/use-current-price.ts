@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { call } from '@/shared/api/ipc'
 
 /**
- * Today's price of `asset` in `currency` — the «Сейчас N» under the alert's
+ * Today's price of `asset` in `currency` — the `Now N` under the alert's
  * level (Auto-2 · 11). `null` while there is no cached price or no rate.
  */
 export function useCurrentPrice(asset: MaybeRefOrGetter<AssetRef | null>, currency: MaybeRefOrGetter<string>) {

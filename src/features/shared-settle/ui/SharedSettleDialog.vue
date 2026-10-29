@@ -13,16 +13,16 @@ import { FormField } from '@/shared/ui/form-field'
 import type { SharedSettleDialogProps } from '../shared-settle.types'
 
 /**
- * «Получил» / «Отдал» / «Зачесть без операции» for one person of an event: the sum starts at what
+ * `received` / `Gave` / `Set off without an operation` for one person of an event: the sum starts at what
  * is owed and may be smaller (the rest stays a debt), the wallet is mine, the date is today.
- * The save toast offers «Отменить».
+ * The save toast offers `Undo`.
  */
 const props = defineProps<SharedSettleDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 
-/** Money with me and an organizer who is not me is with the organizer: «Получил от Ани». */
+/** Money with me and an organizer who is not me is with the organizer: `Received from Anya`. */
 const name = computed(() => {
   const person = props.person
   const organizer = props.event.people.find((entry) => entry.is_organizer)

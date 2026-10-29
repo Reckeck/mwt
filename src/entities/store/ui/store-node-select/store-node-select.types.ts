@@ -3,7 +3,7 @@ export interface StoreNodeSelectProps {
   nodes: StoreTreeNode[]
   /** Label of the `''` option (e.g. "All wallets"); without it there is no such option. */
   emptyLabel?: string
-  /** Hint shown while nothing is picked, not choosable itself («Выберите счёт»). */
+  /** Hint shown while nothing is picked, not choosable itself (`Choose an account`). */
   placeholder?: string
   /** Offer exactly `nodes`, not their sub-accounts too (for a filtered list). */
   flat?: boolean

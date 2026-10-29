@@ -18,7 +18,7 @@ import type { CategoryGlanceProps } from '../quick-glance.types'
 /**
  * A category looked at from Ctrl K (Paths 2 · 8): spent this month against
  * the one before and the usual, its share, the last three payments and
- * «Открыть в Тратах →». The host draws it where it has room.
+ * `Open in Spending →`. The host draws it where it has room.
  */
 const props = defineProps<CategoryGlanceProps>()
 const emit = defineEmits<{ open: [] }>()

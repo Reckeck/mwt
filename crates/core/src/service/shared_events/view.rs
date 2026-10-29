@@ -25,7 +25,7 @@ pub enum PersonKind {
 pub struct PersonView {
     /// `me` or a participant id.
     pub id: String,
-    /// Empty for me (the UI says «Я»).
+    /// Empty for me (the UI says "Me").
     pub name: String,
     pub kind: PersonKind,
     pub contact_id: Option<String>,
@@ -103,7 +103,7 @@ pub struct EventTotals {
     pub diff: Amount,
 }
 
-/// «Моя позиция».
+/// "My position".
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct MyPosition {
     pub paid: Amount,

@@ -1,4 +1,4 @@
-/** How the automation's card reads (Auto-1 · 3): «Когда», «Если», «Сделать», «Следующий раз», the runs. */
+/** How the automation's card reads (Auto-1 · 3): `When`, `If`, `Do`, `Next time`, the runs. */
 
 import { formatDayMonthShort, formatPct, formatWeekday } from '@/shared/lib/format'
 import { composeSums, type SumPart } from '@/shared/lib/money-parts'
@@ -13,7 +13,7 @@ export function cardSum(amount: string, currency: string, at?: string): Exclude<
   return { amount, currency, decimals: whole ? 0 : 2, at }
 }
 
-/** «25-го; в выходной — в пятницу перед ним»; «по событию» without a schedule. */
+/** `the 25th; on a day off — the Friday before`; `on an event` without a schedule. */
 export function cardWhen(card: AutomationCard, t: Translate): string {
   const { schedule } = card
   if (!schedule) return t(card.trigger.kind === 'manual' ? 'automationCard.when.manual' : 'automationCard.when.event')
@@ -22,7 +22,7 @@ export function cardWhen(card: AutomationCard, t: Translate): string {
   return card.workday === 'none' ? base : `${base}; ${t(`automationCard.when.${card.workday}`)}`
 }
 
-/** «пришла «Зарплата» на Тинькофф», «по расписанию». */
+/** ``Salary` arrived at Tinkoff`, `on schedule`. */
 export function cardIf(trigger: CardTrigger, names: Names, t: Translate): string {
   if (trigger.kind === 'schedule') return t('automationCard.if.schedule')
   if (trigger.kind === 'manual') return t('automationCard.if.manual')
@@ -35,7 +35,7 @@ export function cardIf(trigger: CardTrigger, names: Names, t: Translate): string
 
 const VERBS = ['transfer', 'topup', 'payment', 'convert', 'distribute', 'notify', 'reminder'] as const
 
-/** One action: «перевести 10 % на Наличные», «записать 1 575 $ на Тинькофф», «напомнить: …». */
+/** One action: `transfer 10 % to Cash`, `record 1,575 $ at Tinkoff`, `Remind…`. */
 function actionText(action: CardAction, names: Names, t: Translate): SumPart[] {
   const { money } = action
   const { mark, parts } = composeSums()
@@ -63,7 +63,7 @@ export function cardDo(card: AutomationCard, names: Names, t: Translate): SumPar
   ])
 }
 
-/** «25 ноя (среда)». */
+/** `Nov 25 (Wed)`. */
 export function cardNext(iso: string | null, t: Translate): string {
   if (!iso) return t('automationCard.next.none')
   return `${formatDayMonthShort(iso)} (${formatWeekday(new Date(iso), 'long')})`
@@ -78,7 +78,7 @@ export function statusTone(status: JournalStatus): RunTone {
   return 'mut'
 }
 
-/** «157,50 $ → Наличные», «1 575 $ с Тинькофф», or the run's note. */
+/** `157.50 $ → Cash`, `1,575 $ from Tinkoff`, or the run's note. */
 export function runMoney(entry: JournalEntry, names: Names): SumPart[] {
   const { money } = entry
   const sum = money.amount && money.currency ? cardSum(money.amount, money.currency, entry.at) : null

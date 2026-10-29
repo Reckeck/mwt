@@ -1,4 +1,4 @@
-//! `multi-wallet-tracker --quick-add` opens «+ Операция» in an app that is already
+//! `multi-wallet-tracker --quick-add` opens "+ Transaction" in an app that is already
 //! running — what a Hyprland/Sway key binding runs, since Wayland gives apps
 //! no global keys. The first instance listens on a socket in the runtime
 //! directory; a launch with the flag pokes it and exits. Without the flag a

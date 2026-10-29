@@ -8,7 +8,7 @@ import { call } from '@/shared/api/ipc'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 
-/** «Связи» of a wallet page: the same groups its card shows. */
+/** `Links` of a wallet page: the same groups its card shows. */
 const props = defineProps<{ storeId: string }>()
 
 const { t } = useI18n()

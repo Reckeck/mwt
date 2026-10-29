@@ -1,7 +1,7 @@
 # Dependency advisories (RustSec for Cargo.lock, npm for pnpm-lock.yaml): cargo xtask audit.
 # Separate from ci.yml and not part of ci-ok: a new advisory in an untouched dependency
 # must not block unrelated PRs, so it also runs daily. Accepted advisories, each with a
-# reason, live in audit-ignore.toml (docs/ci.md, "Аудит зависимостей").
+# reason, live in audit-ignore.toml (docs/ci.md, "Dependency audit").
 name: audit
 
 on:

@@ -25,7 +25,7 @@ import { usePalettePeek } from './use-palette-peek'
 /**
  * Ctrl K (Paths 1 · 7, 2 · 8): a window over the dimmed page — the results
  * on the left, a glance at the highlighted one on the right, the keys below.
- * A phone gets the whole screen with «Отмена». The header keeps the trigger.
+ * A phone gets the whole screen with `Cancel`. The header keeps the trigger.
  */
 const emit = defineEmits<{ quickAdd: []; settings: []; lock: [] }>()
 

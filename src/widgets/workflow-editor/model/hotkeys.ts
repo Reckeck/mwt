@@ -23,7 +23,7 @@ export function isTyping(event: KeyboardEvent): boolean {
 
 /**
  * The letter of a keystroke by its place on the keyboard, not by the layout:
- * Ctrl+S on a Russian layout gives `event.key === 'ы'` but `event.code === 'KeyS'`.
+ * Ctrl+S on a Russian layout gives the Cyrillic letter in `event.key` but `event.code === 'KeyS'`.
  */
 export function keyLetter(event: KeyboardEvent): string {
   if (event.code.startsWith('Key')) return event.code.slice(3).toLowerCase()

@@ -8,7 +8,7 @@ export interface DateTimePickerProps {
   mode?: DateTimePickerMode
   /** Shown while empty. */
   placeholder?: string
-  /** No «Очистить»: the field always has a value. */
+  /** No `Clear`: the field always has a value. */
   required?: boolean
   /** Red border, as for a field with an error under it. */
   invalid?: boolean

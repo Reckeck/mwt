@@ -5,7 +5,7 @@ import { entityKey, parseEntityKey, sameEntity } from './entity-link'
 const STORAGE_KEY = 'palette.recent'
 const RECENT_CAP = 10
 
-/** A card opened lately: when, and the title it had («Маме до зарплаты · 20 окт»). */
+/** A card opened lately: when, and the title it had (`To Mom before payday · Oct 20`). */
 export interface RecentEntity {
   target: EntityRef
   /** ISO; older records have none. */

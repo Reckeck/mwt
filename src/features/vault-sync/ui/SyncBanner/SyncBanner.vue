@@ -11,7 +11,7 @@ import { useSyncStatus } from '../../model/use-sync-status'
 
 /**
  * A device nearby has this vault open and is not paired yet. Nothing happens
- * until the user presses «Сопрячь» — a vault never starts syncing with a
+ * until the user presses `Pair` — a vault never starts syncing with a
  * device on its own.
  */
 const { t } = useI18n()
@@ -21,7 +21,7 @@ const dismissed = ref(new Set<string>())
 
 const shown = computed(() => offers.value.filter((offer) => !dismissed.value.has(offer.session_id)))
 
-/** «Не сейчас»: hidden at once; the backend stops offering this device until sync restarts. */
+/** `Not now`: hidden at once; the backend stops offering this device until sync restarts. */
 function later(sessionId: string) {
   dismissed.value = new Set([...dismissed.value, sessionId])
   dismiss.mutate(sessionId)

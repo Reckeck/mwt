@@ -107,7 +107,7 @@ pub struct TrustedPeer {
     /// RFC3339 of the last batch exchanged with it.
     #[serde(default)]
     pub last_synced_at: Option<String>,
-    /// Set by «Забыть устройство» on any device; a revoked key is refused until it is paired again (a newer entry).
+    /// Set by "Forget device" on any device; a revoked key is refused until it is paired again (a newer entry).
     #[serde(default)]
     pub revoked: Option<Stamp>,
     /// When this entry last changed; the later entry wins between devices.
@@ -174,7 +174,7 @@ pub struct SyncState {
     /// The journal of taken batches, newest last (at most `MAX_JOURNAL`).
     #[serde(default)]
     pub journal: Vec<super::journal::SyncJournalEntry>,
-    /// Device ids whose exchange the user paused («Отклонить» on a list of
+    /// Device ids whose exchange the user paused ("Decline" on a list of
     /// changes). Local bookkeeping: never synced, never part of `peers`.
     #[serde(default)]
     pub paused: BTreeSet<String>,

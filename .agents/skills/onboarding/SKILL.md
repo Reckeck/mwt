@@ -1,51 +1,53 @@
 ---
 name: onboarding
 description: >
-  Обучение пользователя вместе с каждой фичей trade-app (AGENTS.md, правило 12):
-  туры driver.js по `data-tour`, подсказки на месте, пустые состояния, ошибки,
-  которые объясняют, «Что нового» и центр обучения. Использовать при любой
-  видимой пользователю правке: новый экран, диалог, форма, поле, действие,
-  смена поведения, «добавь функцию», «доработай», UI. Триггеры: tour, тур,
-  обучение, onboarding, data-tour, TOURS, «Что нового», whats-new, подсказка,
-  пустое состояние, empty state, check-onboarding.
+  Teaching the user together with every trade-app feature (AGENTS.md, rule 12):
+  driver.js tours via `data-tour`, in-place hints, empty states, errors that
+  explain, "What's new" and the learning center. Use for any user-visible
+  change: new screen, dialog, form, field, action, behavior change. Russian
+  triggers: тур, обучение, «Что нового», подсказка, пустое состояние,
+  «добавь функцию», «доработай». Triggers: tour, onboarding, data-tour, TOURS,
+  whats-new, empty state, check-onboarding.
 ---
 
-# Обучение — часть фичи
+# Onboarding is part of the feature
 
-Фича без обучения не готова. Пользователь не читает документацию: он узнаёт
-о возможности из тура, подсказки под полем или окна «Что нового».
+A feature without onboarding is not done. The user does not read documentation:
+they learn about a capability from a tour, a hint under a field, or the
+"What's new" window.
 
-## Что считается фичей
+## What counts as a feature
 
-Требуют обучения: новый экран или вкладка, новый диалог или форма, новое
-действие (кнопка, пункт меню), новое неочевидное поле, изменившееся поведение
-(что раньше делалось иначе).
+These need onboarding: a new screen or tab, a new dialog or form, a new action
+(button, menu item), a new non-obvious field, changed behavior (something that
+used to work differently).
 
-Не требуют (в коммите строка `Onboarding: n/a — <причина>`): рефакторинг,
-производительность, исправление без смены поведения, тесты, документация.
+These do not (put a line `Onboarding: n/a — <reason>` in the commit):
+refactoring, performance, a fix without a behavior change, tests,
+documentation.
 
-## Чек-лист
+## Checklist
 
-1. **Тур.** Новый экран (маршрут) — тур в `src/shared/lib/tour/tours.ts`
-   (`TOURS[<route name>]`), 2–5 шагов. Значимый новый элемент на старом экране —
-   шаг в его тур. Маршрут без тура возможен только с причиной в
-   `TOURLESS_ROUTES`.
-2. **Подсказка на месте.** Неочевидное поле — `hint` у `FormField` (или
-   `title`). Пустой список — `EmptyState`/`SectionState`: что здесь будет и
-   с чего начать, с кнопкой первого действия. Вид — скилл
-   `ui-design-system`; здесь — что сказать.
-3. **Ошибки объясняют, как исправить.** Кнопка сохранения не блокируется
-   проверкой полей (правило 13): нажатие показывает, чего не хватает, под
-   каждым полем; длинная форма дополнительно сводит это в строку «Чтобы
-   сохранить, не хватает…» (`TransactionForm`). Кнопка, которую блокирует
-   отказ бэкенда, говорит причину рядом.
-4. **«Что нового».** Заметная смена поведения — пункт в
-   `src/shared/config/whats-new.ts` (новая запись на выпуск или пункт в
-   текущей), с `route`, если есть тур, который это показывает.
-5. **Тексты в обоих локалях.**
-6. **`mise run check-onboarding`** зелёный (входит в `mise run check`).
+1. **Tour.** A new screen (route) gets a tour in `src/shared/lib/tour/tours.ts`
+   (`TOURS[<route name>]`), 2-5 steps. A significant new element on an old
+   screen gets a step in its tour. A route without a tour is allowed only with
+   a reason in `TOURLESS_ROUTES`.
+2. **In-place hint.** A non-obvious field gets `hint` on `FormField` (or
+   `title`). An empty list gets `EmptyState`/`SectionState`: what will be here
+   and where to start, with a first-action button. The look is in the
+   `ui-design-system` skill; here it is about what to say.
+3. **Errors explain how to fix.** The save button is not blocked by field
+   validation (rule 13): pressing it shows what is missing under each field; a
+   long form also sums this up in a line "To save, you still need…"
+   (`TransactionForm`). A button blocked by a backend refusal states the
+   reason next to it.
+4. **"What's new".** A noticeable behavior change gets an entry in
+   `src/shared/config/whats-new.ts` (a new record for the release or an item in
+   the current one), with `route` if there is a tour that shows it.
+5. **Texts in both locales.**
+6. **`mise run check-onboarding`** is green (part of `mise run check`).
 
-## Как добавить шаг тура
+## How to add a tour step
 
 ```vue
 <Button data-tour="wallet-adjust" @click="…">…</Button>
@@ -59,41 +61,42 @@ wallet: [
 ],
 ```
 
-Тексты — `tour.<key>.title` и `tour.<key>.body`; имя тура в центре обучения —
-`tourName.<route>`. Шаг, чей элемент сейчас не на экране, пропускается сам:
-один тур служит кошелькам всех видов. Элементы внутри диалогов турами по
-маршрутам не достаются — их объясняет описание диалога (`description` у
-`Dialog`) и подсказки полей.
+Texts are `tour.<key>.title` and `tour.<key>.body`; the tour name in the
+learning center is `tourName.<route>`. A step whose element is not on screen
+right now is skipped automatically: one tour serves wallets of all kinds.
+Elements inside dialogs are not reachable by route tours; they are explained by
+the dialog description (`description` on `Dialog`) and field hints.
 
-Тур стартует сам при первом визите экрана, по «?» в шапке и из центра
-обучения (Настройки → Общие → Обучение) через `?tour=<route>`; уход со
-страницы закрывает его, не засчитывая.
+A tour starts by itself on the first visit to a screen, by the "?" in the
+header, and from the learning center (Settings → General → Tours) via
+`?tour=<route>`; leaving the page closes it without counting it as done.
 
-## Как писать тексты
+## How to write the texts
 
-Общие правила текстов (тон, словарь, «…», sentence case) —
-`ui-design-system/references/copy.md`. Для обучения дополнительно:
+General copy rules (tone, vocabulary, "…", sentence case) are in
+`ui-design-system/references/copy.md`. For onboarding, additionally:
 
-- Коротко: заголовок 1–3 слова, тело — не больше двух предложений.
-- От действия и пользы: «Введите фактический остаток — разница запишется
-  корректировкой», а не «Этот компонент позволяет…».
-- Без внутренних терминов (`store`, `binding`, `flow_id`, «субсчёт типа
-  market»). Говорите «кошелёк», «счёт», «цепочка операций».
-- Плохо: «Здесь можно настроить параметры». Хорошо: «Назначение денег решает,
-  попадают ли траты в дневной бюджет».
+- Short: a title of 1-3 words, a body of at most two sentences.
+- Start from the action and the benefit: "Enter the actual balance — the
+  difference will be recorded as an adjustment", not "This component lets you…".
+- No internal terms (`store`, `binding`, `flow_id`, "sub-account of type
+  market"). Say "wallet", "account", "chain of operations".
+- Bad: "Here you can configure the parameters". Good: "The purpose of money
+  decides whether spending counts toward the daily budget".
 
-## Уроки для сложных фич
+## Lessons for complex features
 
-Если фичу нельзя понять за 3–5 шагов (нодовая автоматизация, сверка счёта),
-нужен урок: задание на песочнице (`UnlockedVault::sandbox`) с проверкой
-результата. Уроки живут в центре обучения рядом с турами.
+If a feature cannot be understood in 3-5 steps (node-based automation, account
+reconciliation), it needs a lesson: a task in a sandbox
+(`UnlockedVault::sandbox`) with a check of the result. Lessons live in the
+learning center next to the tours.
 
-## Проверка
+## Check
 
 ```bash
-mise run check-onboarding   # экран без тура, шаг без элемента, нет текста — ошибка
+mise run check-onboarding   # screen without a tour, step without an element, missing text — error
 ```
 
-Скрипт статический (`tests/checks/onboarding.check.ts`): читает маршруты, `TOURS`,
-`WHATS_NEW`, `data-tour` в `.vue` и оба локаля. `data-tour`, не попавший ни в
-один тур, — только предупреждение.
+The script is static (`tests/checks/onboarding.check.ts`): it reads the routes,
+`TOURS`, `WHATS_NEW`, `data-tour` in `.vue` files and both locales. A
+`data-tour` that is in no tour is only a warning.

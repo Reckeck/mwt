@@ -1,5 +1,5 @@
 //! Letting other devices reach this one through its firewall: only the sync
-//! port and the one a vault is received on, only from the local network (docs/sync.md, «Фаервол»).
+//! port and the one a vault is received on, only from the local network (docs/sync.md, "Firewall").
 //!
 //! The rule is added by the system tool behind the system's own password
 //! prompt (`pkexec` on Linux, UAC on Windows). A Flatpak cannot reach the

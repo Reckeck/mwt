@@ -25,7 +25,7 @@ pub const MANIFEST_PER_MESSAGE: usize = 5_000;
 pub enum Message {
     /// First message each way after the handshake.
     Hello(Hello),
-    /// The user pressed «Сопрячь» on the sender: show the code here too.
+    /// The user pressed "Pair" on the sender: show the code here too.
     PairRequest,
     /// The user's answer to the pairing code on this side.
     Pairing {

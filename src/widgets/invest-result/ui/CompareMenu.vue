@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { type CompareLines, MAX_COMPARED } from '../model/use-compare-lines'
 
 /**
- * «Сравнить»: the variants of «Что выгоднее» and the saved scenarios with a
+ * `Compare`: the variants of `Which pays more` and the saved scenarios with a
  * tick each, up to three; the picked ones become lines on the chart (Money 4 · 22).
  */
 const props = defineProps<{ compare: CompareLines }>()

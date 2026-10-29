@@ -16,7 +16,7 @@ export const FORMULA_VARIABLES = [
   ['дней', 'days'],
 ] as const
 
-/** A zone's name inside a variable: «пик ночь» → «пик_ночь». */
+/** A zone's name inside a variable: `peak night` → `peak_night`. */
 export const zoneKey = (zone: string) => zone.trim().toLowerCase().split(/\s+/).join('_')
 
 /**

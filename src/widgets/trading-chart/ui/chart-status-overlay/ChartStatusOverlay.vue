@@ -6,7 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { Spinner } from '@/shared/ui/spinner'
 import type { AppError } from '@/shared/api/ipc'
 
-/** What covers an empty chart: loading, a failed load with «Обновить», or no data. */
+/** What covers an empty chart: loading, a failed load with `Refresh`, or no data. */
 const props = defineProps<{ loading: boolean; error: AppError | null }>()
 const emit = defineEmits<{ retry: [] }>()
 

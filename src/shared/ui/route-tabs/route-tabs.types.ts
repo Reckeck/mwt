@@ -17,7 +17,7 @@ export interface RouteTabsProps {
   more?: RouteTab[]
   /** The «More» button's label when none of `more` is open. */
   moreLabel?: string
-  /** The title of the phone sheet with `more` («Ещё в «Деньгах»»); `moreLabel` when unset. */
+  /** The title of the phone sheet with `more` (`More in "Money"`); `moreLabel` when unset. */
   moreTitle?: string
   /**
    * What the next tab's address keeps of the current query: nothing by

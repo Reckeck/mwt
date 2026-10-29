@@ -8,7 +8,7 @@ import { numberFormat } from '@/shared/lib/format'
  * The calculator's fields and its live result: `calc_preview` runs 200 ms
  * after the last change; picking an asset pre-fills its cached price.
  *
- * `Position` gives USDT for `asset` at the entry price («Отдаёте 1 000 USDT»);
+ * `Position` gives USDT for `asset` at the entry price (`You give 1,000 USDT`);
  * `Converter` prices `amount` of `from` into `to`.
  */
 export function useCalcPreview() {

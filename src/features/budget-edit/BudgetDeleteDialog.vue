@@ -6,7 +6,7 @@ import { Dialog } from '@/shared/ui/dialog'
 
 import { useBudgetDelete } from './model/use-budget-delete'
 
-/** Full-New-Fixes 4: a limit goes only after a question, and comes back from the toast's «Отменить». */
+/** Full-New-Fixes 4: a limit goes only after a question, and comes back from the toast's `Undo`. */
 const props = defineProps<{ budget: Budget | null; name: string }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ deleted: [] }>()

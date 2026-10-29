@@ -11,7 +11,7 @@ import { SectionState } from '@/shared/ui/section-state'
 import { useSpending } from './model/use-spending'
 import { SpendingAnswer, SpendingCategories, SpendingIncomplete, SpendingMonths } from './ui/spending'
 
-/** «Траты» (Money 1 · 1): the answer, the twelve months, the categories. */
+/** `Spending` (Money 1 · 1): the answer, the twelve months, the categories. */
 const props = defineProps<{ filter: ReportFilter }>()
 
 const { t } = useI18n()

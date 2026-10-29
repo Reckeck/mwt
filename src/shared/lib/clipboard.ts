@@ -2,7 +2,7 @@ import { notify } from '@/shared/lib/notify'
 
 /**
  * Copy text and say so; a refused clipboard says how to get it anyway.
- * `okKey` names what was copied when «Скопировано» is not enough.
+ * `okKey` names what was copied when `Copied` is not enough.
  */
 export async function copyText(text: string, okKey = 'ui.copied'): Promise<boolean> {
   try {

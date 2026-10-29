@@ -8,13 +8,13 @@ import { Card } from '@/shared/ui/card'
 import { StatCard } from '@/shared/ui/stat-card'
 
 /**
- * «Моя позиция»: what I paid, my share and what that leaves — owed to me, or to pay the
+ * `My position`: what I paid, my share and what that leaves — owed to me, or to pay the
  * organizer. The fourth card (returned, written off) is always there, so the grid has no empty slot.
  */
 const props = defineProps<{ mine: MyPosition; currency: string; decimals: number; organizerName: string }>()
 const { t } = useI18n()
 
-/** The headline: «Мне должны» in green, or «К оплате Ане» in red when I owe the organizer. */
+/** The headline: `Owed to me` in green, or `To pay Anya` in red when I owe the organizer. */
 const headline = computed(() => {
   const owe = sign(props.mine.i_owe) > 0
   const owed = sign(props.mine.owed_to_me) > 0
@@ -22,7 +22,7 @@ const headline = computed(() => {
   return { label: t('sharedEvents.mine.owedToMe'), amount: props.mine.owed_to_me, tone: owed ? ('positive' as const) : ('neutral' as const) }
 })
 
-/** «Вернули» is negative when I paid the organizer: then it reads «Я отдал». Both rows always show, zeros included. */
+/** `Returned` is negative when I paid the organizer: then it reads `I gave back`. Both rows always show, zeros included. */
 const details = computed(() => {
   const returned = props.mine.returned
   return [

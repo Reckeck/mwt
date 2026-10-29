@@ -34,7 +34,7 @@ const ACTION_TOAST_MS = 10_000
 let actionToastUntil = 0
 
 /**
- * Resolves once no toast with a button («Отменить») is on screen: a notice that comes
+ * Resolves once no toast with a button (`Undo`) is on screen: a notice that comes
  * in meanwhile waits, so it does not push the undo out of reach.
  */
 export function afterActionToast(): Promise<void> {

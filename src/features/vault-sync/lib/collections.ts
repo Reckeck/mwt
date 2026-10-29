@@ -12,7 +12,7 @@ export const SYNC_COLLECTIONS = [
   'settings',
 ] as const
 
-/** i18n key of a collection's name; an unknown one shows as «Другое». */
+/** i18n key of a collection's name; an unknown one shows as `Other`. */
 export function collectionKey(name: string): string {
   return (SYNC_COLLECTIONS as readonly string[]).includes(name) ? `sync.coll.${name}` : 'sync.coll.other'
 }

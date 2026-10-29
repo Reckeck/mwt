@@ -140,7 +140,7 @@ export const useSettingsStore = defineStore('settings', {
       })
     },
 
-    /** Register the global «+ Операция» key; `null` turns it off. Rejects with `SHORTCUT_FAILED`. */
+    /** Register the global `+ Operation` key; `null` turns it off. Rejects with `SHORTCUT_FAILED`. */
     async setQuickAddShortcut(shortcut: string | null) {
       this.app = await call<AppSettings>('set_quick_add_shortcut', { shortcut })
     },

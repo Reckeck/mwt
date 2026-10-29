@@ -1,4 +1,4 @@
-//! Saved investment calculations (plan A): CRUD, «Из данных» and goals that
+//! Saved investment calculations (plan A): CRUD, "From your data" and goals that
 //! follow a scenario.
 
 use std::collections::HashSet;
@@ -17,7 +17,7 @@ use crate::model::vault::now_iso;
 
 use super::UnlockedVault;
 
-/// Periods «Из данных» can average income over.
+/// Periods "From your data" can average income over.
 pub const INCOME_MONTHS: [u8; 3] = [3, 6, 12];
 /// Importance of a goal made from a scenario, the middle of 1–5.
 const SCENARIO_GOAL_PRIORITY: u8 = 3;
@@ -39,7 +39,7 @@ pub struct CalcScenarioDeleted {
     pub goal_ids: Vec<String>,
 }
 
-/// Numbers «Из данных» puts into the calculator, with where they came from.
+/// Numbers "From your data" puts into the calculator, with where they came from.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ScenarioPrefill {
     /// Value of the source wallets in the scenario currency.

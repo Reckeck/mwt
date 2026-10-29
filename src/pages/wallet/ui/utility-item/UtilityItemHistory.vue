@@ -10,8 +10,8 @@ import { cn } from '@/shared/lib/utils'
 import type { UtilityHistoryRow } from '../../lib/utility-item'
 
 /**
- * «История» of an item (Wallets-2 · 11–12): month, reading (per zone),
- * consumption, amount and a flag — «ждёт», «необычно много». A phone drops
+ * `History` of an item (Wallets-2 · 11–12): month, reading (per zone),
+ * consumption, amount and a flag — `waiting`, `unusually high`. A phone drops
  * the reading and the flag columns.
  */
 const props = defineProps<{ item: UtilityItem; rows: UtilityHistoryRow[]; phone: boolean }>()

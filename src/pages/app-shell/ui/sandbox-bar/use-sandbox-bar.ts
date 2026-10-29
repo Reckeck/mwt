@@ -6,7 +6,7 @@ import { textOf } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
-/** «Сбросить» (the same demo data again) and «Выйти» (close, erase, back to the unlock screen). */
+/** `Reset` (the same demo data again) and `Exit` (close, erase, back to the unlock screen). */
 export function useSandboxBar() {
   const vault = useVaultStore()
   const settings = useSettingsStore()

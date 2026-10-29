@@ -8,7 +8,7 @@ const TO_BYBIT = `
   await new Promise((done) => setTimeout(done, 900)); return true`
 
 
-/** Pack 2 · Операции и Главная: both currencies THB on the form's own state (the chip's search clears it while typing). */
+/** Pack 2 · Operations and Home: both currencies THB on the form's own state (the chip's search clears it while typing). */
 const P2_BOTH_THB = `
   const thb = { symbol: 'THB', name: 'THB', coingecko_id: null, chain: 'fiat', contract: null, quote: 'THB' }
   let node = document.querySelector('#transaction-form').__vueParentComponent
@@ -123,7 +123,7 @@ export const fixx2 = [
     steps: [{ wait: 900 }, { eval: `const row = [...document.querySelectorAll('[data-tx-row]')].find((el) => el.textContent.includes('внутренний')); row?.querySelector('[data-tx-open]')?.click(); return Boolean(row)` }, { wait: 900 }],
   },
   { name: 'fixX2-calendar', route: '/transactions', steps: [{ wait: 800 }, { click: { text: 'Календарь' } }, { wait: 1000 }], phone: false },
-  // Pack 2 · Операции и Главная (filtered ones last: the list keeps its filter between shots).
+  // Pack 2 · Operations and Home (filtered ones last: the list keeps its filter between shots).
   { name: 'p2-home', route: '/', steps: [P2_CLEAN, { wait: 1200 }] },
   { name: 'p2-same', route: '/', steps: P2_SAME },
   {

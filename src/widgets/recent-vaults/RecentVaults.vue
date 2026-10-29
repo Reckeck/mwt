@@ -33,7 +33,7 @@ const unlockPath = ref<string | null>(null)
 /** Open list (popover or sheet). */
 const listOpen = ref(false)
 const picked = ref<string | null>(null)
-/** The in-app vault the question «Удалить хранилище?» is about. */
+/** The in-app vault the question `Delete vault` is about. */
 const deleteTarget = ref<RecentVault | null>(null)
 const deleteOpen = ref(false)
 
@@ -91,7 +91,7 @@ function askDelete(recent: RecentVault) {
   deleteOpen.value = true
 }
 
-/** «Найти файл…»: the row points at the file found, which the field then shows. */
+/** `Find file…`: the row points at the file found, which the field then shows. */
 function findFile(recent: RecentVault) {
   relocate.mutate(recent.path, {
     onSuccess: (found) => {
@@ -111,7 +111,7 @@ function clearHistory() {
 </script>
 
 <template>
-  <!-- One card for the way in (Full-New-Encrypt 3): the vault, its password, «Открыть», then «Создать новое». -->
+  <!-- One card for the way in (Full-New-Encrypt 3): the vault, its password, `Open`, then `Create new`. -->
   <Card class="w-full max-w-80" data-unlock-card data-tour="unlock-card">
     <template #header>
       <h1 class="text-lg font-semibold">{{ t('auth.card.title') }}</h1>
@@ -189,7 +189,7 @@ function clearHistory() {
         <Smartphone class="size-4" />
         {{ t('transfer.receive.cardButton') }}
       </Button>
-      <!-- The page puts «Открыть песочницу» (Full-New-Sandbox 1) here. -->
+      <!-- The page puts `Open the sandbox` (Full-New-Sandbox 1) here. -->
       <slot name="footer" />
     </div>
   </Card>

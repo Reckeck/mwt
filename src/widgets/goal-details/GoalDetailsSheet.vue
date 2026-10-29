@@ -22,7 +22,7 @@ import GoalFacts from './ui/GoalFacts.vue'
 
 /**
  * The goal's card (New-Goal 3): saved of the target, where and by when, what
- * fills it, the forecast and the deposits; its files and links; «Пополнить»
+ * fills it, the forecast and the deposits; its files and links; `Top up`
  * writes a transfer into its wallet.
  */
 const props = withDefaults(defineProps<GoalDetailsSheetProps>(), { groups: () => [] })

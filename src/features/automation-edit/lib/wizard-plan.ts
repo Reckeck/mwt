@@ -1,6 +1,6 @@
 import type { WizardFrequency, WizardStarter } from '../automation-edit.constants'
 
-/** The schedule «Как часто» and its day stand for; `null` while the day is not a day. */
+/** The schedule `How often` and its day stand for; `null` while the day is not a day. */
 export function wizardSchedule(frequency: WizardFrequency, day: string, weekday: string): Schedule | null {
   if (frequency === 'daily') return { every_n_days: { days: 1 } }
   if (frequency === 'weekly') return { weekly: { weekday: Number(weekday) } }
@@ -13,8 +13,8 @@ type Translate = (key: string, params?: Record<string, unknown>) => string
 const sideStore = (side: AccountRef | null | undefined) => (side && 'store' in side ? side.store : null)
 
 /**
- * A name the wizard gives, since the frame asks none: «Перевод на Bybit»,
- * «Оплата · Тинькофф», «Обмен · Bybit». It can be changed in the card later.
+ * A name the wizard gives, since the frame asks none: `Transfer to Bybit`,
+ * `Payment · Tinkoff`, `Exchange · Bybit`. It can be changed in the card later.
  */
 export function wizardName(input: TransactionInput, storeName: (id: string) => string, t: Translate): string {
   if (input.type === 'transfer') {
@@ -36,7 +36,7 @@ export interface StarterPlan {
   asks: boolean
 }
 
-/** «Покупка раз в неделю»: on Friday it asks, then exchanges. «Платёж в рабочий день»: the 10th, a day off moves it to the Friday before. */
+/** `Weekly buy`: on Friday it asks, then exchanges. `Payment on a workday`: the 10th, a day off moves it to the Friday before. */
 export const STARTER_PLANS: Partial<Record<WizardStarter, StarterPlan>> = {
   weekly_buy: { kind: 'convert', frequency: 'weekly', day: '1', weekday: '4', workdayShift: 'none', asks: true },
   workday_payment: {

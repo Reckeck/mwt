@@ -10,7 +10,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import type { UiAction } from '@/shared/ui/context-menu'
 
-/** «Шашлыки · 2–4 ноя» with the status, the «⋯» of the event and «?» for the tour of this screen. */
+/** `Barbecue · Nov 2–4` with the status, the «⋯» of the event and «?» for the tour of this screen. */
 const props = defineProps<{ view: SharedEventView; actions: UiAction[] }>()
 const emit = defineEmits<{ tour: [] }>()
 const { t, locale } = useI18n()

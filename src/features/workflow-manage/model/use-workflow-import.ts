@@ -8,7 +8,7 @@ import { required, useFormValidation } from '@/shared/lib/form'
 import { useWorkflowActions } from './use-workflow-actions'
 
 /**
- * State of «Импорт автоматизации» (Auto-3 · 17): the chosen file's text, what
+ * State of `Import an automation` (Auto-3 · 17): the chosen file's text, what
  * the core finds in it, and the wallet picked instead of each missing one.
  */
 export function useWorkflowImport(open: Ref<boolean>, onImported: (workflow: Workflow) => void) {

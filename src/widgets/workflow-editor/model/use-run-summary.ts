@@ -13,7 +13,7 @@ import { outcomeQuestion } from '@/shared/lib/workflow'
 export function useRunSummary(report: () => RunReport, answers: () => Record<string, boolean> | undefined) {
   const { t } = useI18n()
 
-  /** An emulation that stopped at «Ждать подтверждения»: answered right here. */
+  /** An emulation that stopped at `Wait for confirmation`: answered right here. */
   const question = computed(() => (report().run.dry_run ? outcomeQuestion(report().run.outcome) : null))
   const answered = computed(() =>
     Object.values(answers() ?? {})
@@ -21,7 +21,7 @@ export function useRunSummary(report: () => RunReport, answers: () => Record<str
       .join(', '),
   )
 
-  /** «Создала бы операций: 1 · Перевод 157,50 $.», the sums as parts for `<Money>`. */
+  /** `Would create operations: 1 · Transfer 157.50 $.`, the sums as parts for `<Money>`. */
   const made = computed<SumPart[]>(() => {
     const list = report().transactions
     if (!list.length) return []

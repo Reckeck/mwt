@@ -15,7 +15,7 @@ import DateRangePickerPanel from './DateRangePickerPanel.vue'
 import type { DateRangePickerProps } from './date-range-picker.types'
 
 /**
- * One day or a span of days («2 ноя», «2–4 ноя», «30 окт – 2 ноя») picked from a
+ * One day or a span of days (`Nov 2`, `Nov 2–4`, `Oct 30 – Nov 2`) picked from a
  * calendar: a popover on a computer, a bottom sheet on a phone. The model is
  * `{ start, end }` as `YYYY-MM-DD` (`end` empty for one day) or null for none.
  * `id`, `aria-*` and `class` go to the trigger.

@@ -4,7 +4,7 @@ export interface ForgetTarget {
   name: string
 }
 
-/** What `forgetRecent` returned for one row, kept so «Отменить» can put it back in place. */
+/** What `forgetRecent` returned for one row, kept so `Undo` can put it back in place. */
 export interface ForgottenRow {
   path: string
   index: number

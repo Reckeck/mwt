@@ -18,7 +18,7 @@ export const PLANNING_KEYS = [
   ['reminders'],
   ['price-alerts'],
   ['upcoming'],
-  // «Мои»: under `workflows`, so a workflow write refreshes it too.
+  // `Mine`: under `workflows`, so a workflow write refreshes it too.
   ['workflows', 'mine'],
 ]
 
@@ -42,7 +42,7 @@ export const LEDGER_KEYS = [
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const
 
-/** «Ежемесячно, 15-го» / «Каждый понедельник» / «Каждые 3 дня». */
+/** `Monthly, on the 15th` / `Every Monday` / `Every 3 days`. */
 export function scheduleText(schedule: Schedule, t: Translate): string {
   if ('monthly' in schedule) return t('schedule.monthlyOn', { day: schedule.monthly.day })
   if ('weekly' in schedule) return t('schedule.weeklyOn', { weekday: t(`schedule.weekday.${schedule.weekly.weekday}`) })

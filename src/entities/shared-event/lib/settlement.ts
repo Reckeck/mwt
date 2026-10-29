@@ -81,7 +81,7 @@ export function reassignTargets(view: SharedEventView, person: PersonView): Pers
   return view.people.filter((entry) => entry.id !== person.id)
 }
 
-/** The settlement the last mutation added (the backend appends), for «Отменить». */
+/** The settlement the last mutation added (the backend appends), for `Undo`. */
 export function lastSettlementId(view: SharedEventView): string | null {
   return view.event.settlements.at(-1)?.id ?? null
 }

@@ -28,7 +28,7 @@ const BLANK_WHEN: Omit<StarterPlan, 'kind'> = {
 }
 
 /**
- * «Новая автоматизация» (Auto-1 · 6–8): what should happen → what it does →
+ * `New automation` (Auto-1 · 6–8): what should happen → what it does →
  * when. Only a repeat goes through all three; a reminder, a price alert, a
  * scheme and two of the ready-made starts are handed on to their own forms.
  */
@@ -56,7 +56,7 @@ function createWizard(
   const form = ref<WizardOperationForm | null>(null)
   /** Bumped when the form must start again: a new wallet, a ready-made start, a new opening. */
   const formKey = ref(0)
-  /** The operation as it was when «Далее» left step 2. */
+  /** The operation as it was when `Next` left step 2. */
   const template = ref<TransactionInput | null>(null)
 
   const frequency = ref<WizardFrequency>('monthly')
@@ -140,7 +140,7 @@ function createWizard(
     step.value = STEPS[Math.max(0, stepNumber.value - 2)] ?? 'what'
   }
 
-  /** «Ближайшие»: the next three dates, moved off days off, as the app will fire them. */
+  /** `Upcoming`: the next three dates, moved off days off, as the app will fire them. */
   const dates = useQuery({
     queryKey: computed(() => ['automation-dates', schedule.value, workdayShift.value, time.value]),
     queryFn: () =>

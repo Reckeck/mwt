@@ -52,7 +52,7 @@ pub struct EmergencyStatus {
     /// What lies above the target and could be invested (decision 33).
     pub surplus: Option<Amount>,
     pub interest_12m: Amount,
-    /// Savings accounts not in the fund yet, for «Сделать подушкой».
+    /// Savings accounts not in the fund yet, for "Make it the fund".
     pub candidates: Vec<String>,
 }
 

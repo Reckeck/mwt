@@ -1,8 +1,8 @@
 //! Automations (plan §7.2): operations that repeat on a schedule.
 //!
 //! An automation is a workflow the app builds from the automation form
-//! (`Workflow::automation`, see `workflow::automation`): «По расписанию» →
-//! «Создать операцию». A planned date fires at 09:00 local time, moved off a
+//! (`Workflow::automation`, see `workflow::automation`): "on schedule" →
+//! "Create transaction". A planned date fires at 09:00 local time, moved off a
 //! day off when asked. Each processed date leaves a workflow run — done,
 //! refused for lack of funds (D26), or skipped — and a refused one waits for
 //! the user to retry or skip it. With an amount that differs every time the
@@ -716,7 +716,7 @@ impl UnlockedVault {
         Ok(tx)
     }
 
-    /// Create the transaction of an automation now («Создать сейчас»), with
+    /// Create the transaction of an automation now ("Create now"), with
     /// the same funds check as the schedule.
     pub fn run_automation(&mut self, id: &str, now: i64) -> Result<Transaction> {
         let automation = self.automation(id)?;
@@ -1435,7 +1435,7 @@ mod tests {
             .unwrap()
     }
 
-    /// «За какой месяц»: the advance of Sunday July 20, 2025 comes on Friday
+    /// "For which month": the advance of Sunday July 20, 2025 comes on Friday
     /// the 18th and is for July; the salary of the 5th, a Sunday in Oct 2025
     /// (paid on Friday the 3rd), is for the month before. The shift changes
     /// neither.

@@ -17,8 +17,8 @@ import type { SharedEventItemsProps } from './shared-event-items.types'
 import { ItemTable } from './ui/item-table'
 
 /**
- * The «Позиции» section: the plan and the purchases in one list. Add an item, mark it bought,
- * share it out («Как делить»), change or cancel it; a purchase outside the plan and an existing
+ * The `Positions` section: the plan and the purchases in one list. Add an item, mark it bought,
+ * share it out (`How to split`), change or cancel it; a purchase outside the plan and an existing
  * payment can be added too. Reads the event itself (the shared query key), so any change refreshes it.
  */
 const props = defineProps<SharedEventItemsProps>()

@@ -47,7 +47,7 @@ const paths = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map
 const storeName = (id: string) => paths.value.get(id) ?? id
 
 /**
- * «−25 000 RUB · Тинькофф» from the template's first leg. An amount that
+ * `−25,000 RUB · Tinkoff` from the template's first leg. An amount that
  * differs shows as «~» and the current estimate (the average of the latest).
  */
 function templateLine(automation: Automation): SumPart[] {
@@ -101,13 +101,13 @@ function openEdit(automation: Automation) {
   preset.value = null
   dialogOpen.value = true
 }
-// «Изменить в форме» from an automation's workflow: `?edit=<id>`.
+// `Change in the form` from an automation's workflow: `?edit=<id>`.
 useEditFromRoute(
   () => automations.data.value,
   (automation) => openEdit(automation),
 )
 
-/* --- «Проверить»: emulate ahead without writing anything --- */
+/* --- `Test`: emulate ahead without writing anything --- */
 const simulateOpen = ref(false)
 const simulated = ref<Automation | null>(null)
 function openSimulation(automation: Automation | null) {

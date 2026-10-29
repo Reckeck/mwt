@@ -161,7 +161,7 @@ pub async fn datasource_delete(
     Ok(())
 }
 
-/// Fetch a source now («Обновить», «Починить» after a fix).
+/// Fetch a source now ("Refresh", "Fix" after a fix).
 #[tauri::command]
 pub async fn datasource_refresh(
     id: String,

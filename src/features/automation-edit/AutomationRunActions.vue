@@ -10,7 +10,7 @@ import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import type { AutomationRunActionsProps } from './automation-edit.types'
 import { AutomationAmountDialog } from './ui/automation-amount-dialog'
 
-/** What a run still waits for: «Повторить / Пропустить» a refusal, or the real amount of an approximate one. */
+/** What a run still waits for: `Retry / Skip` a refusal, or the real amount of an approximate one. */
 const props = withDefaults(defineProps<AutomationRunActionsProps>(), { name: '' })
 const amountOpen = ref(false)
 /** The operation booked approximately, when that is what the run waits for. */

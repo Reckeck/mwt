@@ -45,7 +45,7 @@ const recent = usePaletteRecent(found.recent)
 const router = useRouter()
 const go = (to: RouteLocationRaw) => props.run(() => void router.push(to))
 
-/** A category opens in «Траты» on this month; anything else on its card. */
+/** A category opens in `Spending` on this month; anything else on its card. */
 function openTarget(target: EntityRef) {
   if (target.kind === 'category') {
     const month = found.monthTotals.value.month
@@ -56,7 +56,7 @@ const actions = computed(() =>
   actionsFor.value ? actionsOf(actionsFor.value.target, actionsFor.value.title).filter((action) => !action.hidden) : [],
 )
 
-/** «36 $ в окт.» beside a category. */
+/** `36 $ in Oct` beside a category. */
 function monthNote(id: string): string {
   const { totals, currency, month } = found.monthTotals.value
   const total = totals.get(id)
@@ -77,7 +77,7 @@ function txRow(tx: Transaction) {
     currency: leg?.asset.symbol.toLowerCase(),
   }
 }
-/** A few, as on the frame: the rest are one «Операции» search away. */
+/** A few, as on the frame: the rest are one `Operations` search away. */
 const transactions = computed(() => found.transactions.value.slice(0, 3).map(txRow))
 
 const category = computed(() => found.category.value)

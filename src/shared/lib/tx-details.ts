@@ -14,7 +14,7 @@ export const txDetailsTx = ref<Transaction | null>(null)
 /** The rows the card was opened from: its ‹ › step through them. */
 export const txDetailsList = ref<Transaction[]>([])
 
-/** `replace`: ‹ › step to a neighbour in the same place of the card stack, no «Назад» appears. */
+/** `replace`: ‹ › step to a neighbour in the same place of the card stack, no `Back` appears. */
 export function openTxDetails(tx: Transaction, list?: Transaction[], mode?: 'replace') {
   txDetailsTx.value = tx
   if (list) txDetailsList.value = list

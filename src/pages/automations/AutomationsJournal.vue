@@ -14,7 +14,7 @@ import { JournalList, JournalTable } from './ui/journal'
 
 /**
  * The journal (Auto-1 · 4): everything that ran — schemes, repeats, reminders,
- * alerts — in one list, the newest first. A run waiting for «да» is confirmed
+ * alerts — in one list, the newest first. A run waiting for `Yes` is confirmed
  * from its row (Auto-1 · 5).
  */
 const { t } = useI18n()

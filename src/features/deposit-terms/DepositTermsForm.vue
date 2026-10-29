@@ -21,7 +21,7 @@ import type { DepositTermsFormProps } from './deposit-terms.types'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
 /**
- * The terms of a savings account, deposit or ПДС. Rates are a history: a new
+ * The terms of a savings account, deposit or a PDS (pension savings plan). Rates are a history: a new
  * rate is a new row from its date, so interest already earned at the old rate
  * stays as it was.
  */

@@ -10,7 +10,7 @@ import { useSettingsStore } from '@/shared/store/settings'
 export type BudgetChoice = 'keep' | 'follow'
 
 /**
- * «Сменить базовую валюту?» (Currency-2 · 9): what moves to the new currency
+ * `Change the base currency?` (Currency-2 · 9): what moves to the new currency
  * (the net worth, with today's figure in both), what stays, and whether the
  * budget follows. Nothing is written until the user confirms.
  */
@@ -51,7 +51,7 @@ export function useBaseCurrencyChange(target: MaybeRefOrGetter<string>, open: Re
     mutationFn: async () => {
       await settings.updateApp({ base_currency: to.value })
       if (!askBudget.value) return
-      // «Оставить» pins a following budget to the old base; «Тоже» lets it follow the base again.
+      // `Keep` pins a following budget to the old base; `Also` lets it follow the base again.
       if (budgetChoice.value === 'keep' && !own.value) await settings.updateVault({ budget_currency: from.value })
       if (budgetChoice.value === 'follow' && own.value) await settings.updateVault({ budget_currency: '' })
     },

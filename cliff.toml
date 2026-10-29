@@ -11,7 +11,7 @@ body = """
 #### {{ group | striptags | trim }}
 {% for commit in commits %}
 - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
-{% if commit.breaking %} — **несовместимо**{% endif %} \
+{% if commit.breaking %} — **breaking**{% endif %} \
 ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/Reckeck/mwt/commit/{{ commit.id }}))\
 {% endfor %}
 {% endfor %}
@@ -28,15 +28,15 @@ protect_breaking_commits = true
 tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 sort_commits = "oldest"
 commit_parsers = [
-  { message = "^feat", group = "<!-- 0 -->Добавлено" },
-  { message = "^fix", group = "<!-- 1 -->Исправлено" },
-  { message = "^perf", group = "<!-- 2 -->Быстрее" },
-  { message = "^refactor", group = "<!-- 3 -->Изменено внутри" },
-  { message = "^docs", group = "<!-- 4 -->Документация" },
-  { message = "^(ci|build)", group = "<!-- 5 -->Сборка и CI" },
-  { message = "^test", group = "<!-- 6 -->Тесты" },
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 1 -->Fixed" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Internal changes" },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^(ci|build)", group = "<!-- 5 -->Build and CI" },
+  { message = "^test", group = "<!-- 6 -->Tests" },
   { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore", group = "<!-- 7 -->Прочее" },
+  { message = "^chore", group = "<!-- 7 -->Other" },
 ]
 
 [bump]

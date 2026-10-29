@@ -1,5 +1,5 @@
 export interface AttachmentRowProps {
   item: Attachment
-  /** Show «добавлен 21 окт» after the size. */
+  /** Show `added Oct 21` after the size. */
   dated?: boolean
 }

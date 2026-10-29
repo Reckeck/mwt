@@ -33,7 +33,7 @@ export function decimalMul(left: string, right: string): string | null {
   return `${sign}${whole}${fraction ? `.${fraction}` : ''}`
 }
 
-/** «Купил 0,05 BTC по 90 000 USDT» as the spot trade the wallet's «Спот» form writes. */
+/** `Bought 0.05 BTC at 90,000 USDT` as the spot trade the wallet's `Spot` form writes. */
 export function tradeInput(
   storeId: string,
   asset: AssetRef,

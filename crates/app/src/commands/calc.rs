@@ -40,7 +40,7 @@ pub async fn calc_invest_solve(
     invest::solve(&input, target, unknown).map_err(err_to_string)
 }
 
-/// «Что выгоднее?»: the plan, a higher rate and larger contributions.
+/// "What pays off more?": the plan, a higher rate and larger contributions.
 #[tauri::command]
 pub async fn calc_invest_compare(input: InvestInput) -> Result<InvestCompare, String> {
     invest::compare(&input).map_err(err_to_string)
@@ -82,7 +82,7 @@ pub async fn calc_scenario_restore(
     with_vault_mut(&state, |vault| vault.restore_calc_scenario(deleted))
 }
 
-/// «Из данных»: start amount, rate and contribution from the user's wallets
+/// "From your data": start amount, rate and contribution from the user's wallets
 /// and income. Saves nothing.
 #[tauri::command]
 pub async fn calc_scenario_prefill(

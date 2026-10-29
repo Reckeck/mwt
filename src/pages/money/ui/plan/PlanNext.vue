@@ -9,7 +9,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { Badge } from '@/shared/ui/badge'
 
-/** «Дальше в этом месяце» (Money 2 · 9, 10): what the automations and reminders bring before the month ends. */
+/** `Later this month` (Money 2 · 9, 10): what the automations and reminders bring before the month ends. */
 const { t } = useI18n()
 
 const now = new Date()

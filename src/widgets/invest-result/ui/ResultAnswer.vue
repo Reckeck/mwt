@@ -11,9 +11,9 @@ import { Button } from '@/shared/ui/button'
 import { planMonth, termText } from '../lib/answer'
 
 /**
- * The answer as the first line, in the words of the question: «Через 10 лет
- * будет…», «Чтобы к окт 2029 накопить… нужно вносить…», and when withdrawals
- * eat the money — «закончатся через…» with the amount that lasts.
+ * The answer as the first line, in the words of the question: `In 10 years
+ * there will be…`, `To save … by Oct 2029 you need to contribute…`, and when withdrawals
+ * eat the money — `will run out in…` with the amount that lasts.
  */
 const props = defineProps<{
   outcome: CalcOutcome
@@ -43,7 +43,7 @@ function phrase(key: string, values: Record<string, unknown>): SumPart[] {
 
 const depletedAt = computed(() => (input.value.withdrawal ? result.value.depleted_at : null))
 const withdrawal = computed(() => input.value.withdrawal)
-/** «Деньги закончатся через 6 мес.» / «in 6 months»: under a year the months take the plural form; longer — «через 2 года 3 мес.». */
+/** `Money runs out in 6 mo.` / `in 6 months`: under a year the months take the plural form; longer — `in 2 years 3 mo.`. */
 const runsOut = computed(() => {
   const months = depletedAt.value ?? 0
   return months < 12
@@ -51,7 +51,7 @@ const runsOut = computed(() => {
     : t('invest.answer.runsOut', { term: termText(months, t, locale.value) })
 })
 
-/** «это 28 % среднего дохода 1 575 $; сейчас откладываете 157,50 $» — only after «Из данных». */
+/** `that is 28 % of the average income of 1,575 $; you now set aside 157.50 $` — only after `From your data`. */
 const incomeShare = computed(() => {
   const income = Number(props.prefilled?.income_avg ?? 0)
   if (solved.value?.unknown !== 'contribution' || !(income > 0)) return null

@@ -12,7 +12,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { useWorkflowActions } from '../../model/use-workflow-actions'
 
 /**
- * «Запустить «Подписки»?» (Full-New-Fixes 7): the operation as it will be written —
+ * `Run `Subscriptions`?` (Full-New-Fixes 7): the operation as it will be written —
  * sum in its own currency, wallet, category (only if there is one), the run's date.
  * The run does it with the values it saved, so they are shown, not edited.
  */

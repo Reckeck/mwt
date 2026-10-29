@@ -19,8 +19,8 @@ import { HOURLY, useExchangeImport } from '../../model/use-exchange-import'
 
 /**
  * The exchange's import (Wallets-2 · 8): the connection on the left — the key,
- * read only, its status, the hourly import, then one «Импортировать сейчас» and
- * «Отключить» on their own row — and on the right what the last import brought
+ * read only, its status, the hourly import, then one `Import now` and
+ * `Remove` on their own row — and on the right what the last import brought
  * and how it avoids duplicates. What waits for confirmation and the balances
  * check follow below.
  */
@@ -44,7 +44,7 @@ const status = computed(() => {
   if (run.error) return t('exchangeImport.failed', { when: formatDayMonthTime(run.at) })
   return t('exchangeImport.connectedAt', { when: formatDayMonthTime(run.at) })
 })
-/** «каждый час» when hourly or off; another interval set in the settings names itself. */
+/** `Every hour` when hourly or off; another interval set in the settings names itself. */
 const autoLabel = computed(() =>
   interval.value === 0 || interval.value === HOURLY
     ? t('exchangeImport.hourly')

@@ -80,7 +80,7 @@ const figure = computed(() => {
     ? walletFigure(data.subtree_positions, data.subtree_base, base.value)
     : walletFigure(data.positions, data.own_base, base.value)
 })
-/** The header's buttons: an exchange opens «Сделка», any other wallet the short form on its kind. */
+/** The header's buttons: an exchange opens `Trade`, any other wallet the short form on its kind. */
 function act(kind: TxKind) {
   if (isExchangeNode.value) openDeal(kind)
   else openQuickAdd({ storeId: storeId.value, kind })
@@ -94,7 +94,7 @@ const adjustOpen = ref(false)
 const settingsOpen = ref(false)
 const changeOpen = ref(false)
 const sellOpen = ref(false)
-/** Kinds the settings may switch to; the change itself is the «Сменить тип» dialog. */
+/** Kinds the settings may switch to; the change itself is the `Change kind` dialog. */
 const kinds = computed(() =>
   store.value && !store.value.parent_id && CONVERTIBLE_KINDS.includes(store.value.kind)
     ? convertibleKinds(store.value.kind, settingsStore.cryptoEnabled)
@@ -106,7 +106,7 @@ const plan = ref<CalculatorPlan | null>(null)
 const subWalletOpen = ref(false)
 const goalOpen = ref(false)
 const automationOpen = ref(false)
-/** «Сделка · <биржа>» opened on the kind of the header button. */
+/** `Trade · <exchange>` opened on the kind of the header button. */
 const dealOpen = ref(false)
 const dealKind = ref<TxKind>('trade_spot')
 const deal = computed(() => (store.value && isExchangeNode.value ? { store: store.value, kind: dealKind.value } : null))

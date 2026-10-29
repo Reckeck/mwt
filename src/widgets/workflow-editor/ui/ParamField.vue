@@ -45,7 +45,7 @@ const workflows = useQuery({
   queryFn: () => call<Workflow[]>('list_workflows'),
   enabled: computed(() => kind.value === 'workflow'),
 })
-/** Only workflows that can be called: they start with «Вызов из другой схемы». */
+/** Only workflows that can be called: they start with `Call from another scheme`. */
 const callable = computed(() =>
   (workflows.data.value ?? []).filter((workflow) => workflow.graph.includes('"trigger.called"')),
 )

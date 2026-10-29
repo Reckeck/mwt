@@ -9,7 +9,7 @@ import { useIsPhone } from '@/shared/lib/phone'
 import { useSandboxOpen } from './model/use-sandbox-open'
 
 /**
- * Full-New-Sandbox 1: under «Нет хранилища?» of the unlock card, below a rule.
+ * Full-New-Sandbox 1: under `No vault yet?` of the unlock card, below a rule.
  * Desktop: a flask, the link and a line of what it is; phone: a 48 px button
  * with a shorter line under it. The only way in: Help and Settings do not repeat it.
  */

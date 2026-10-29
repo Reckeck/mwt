@@ -60,13 +60,13 @@ export function chartColors(): ChartColors {
   }
 }
 
-/** An axis value: compact (`1,2 тыс.`), one decimal at most, and never `-0`. */
+/** An axis value: compact (`1.2K`), one decimal at most, and never `-0`. */
 export function axisNumber(value: number): string {
   const clean = Object.is(value, -0) || Math.abs(value) < 1e-9 ? 0 : value
   return numberFormat({ notation: 'compact', maximumFractionDigits: 1 }).format(clean)
 }
 
-/** An axis sum: compact with one decimal (`1,5 тыс. $`; whole thousands repeated `2 тыс.` twice), never `-0`. */
+/** An axis sum: compact with one decimal (`1.5K $`; whole thousands repeated `2K` twice), never `-0`. */
 export function axisMoney(value: number, currency?: string): string {
   const clean = Object.is(value, -0) || Math.abs(value) < 1e-9 ? 0 : value
   return formatMoney(clean, { currency, compact: true, decimals: 1 })

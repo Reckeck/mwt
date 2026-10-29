@@ -1,88 +1,88 @@
-# Токены: цвет, текст, отступы, радиусы, тема
+# Tokens: color, text, spacing, radii, theme
 
-Источник истины — `src/app/styles.css` (`@theme` + `:root` + `.dark`) и
-варианты компонентов в `src/shared/ui/*`. Здесь — как ими пользоваться;
-числа, которые живут в коде компонентов (высота кнопки, кольцо фокуса),
-не пересказываются: бери вариант компонента.
+The source of truth is `src/app/styles.css` (`@theme` + `:root` + `.dark`) and
+the component variants in `src/shared/ui/*`. Here is how to use them; numbers
+that live in component code (button height, focus ring) are not retold: take
+the component variant.
 
-## Цвет
+## Color
 
-| Смысл | Класс | Не так |
+| Meaning | Class | Not like this |
 |---|---|---|
-| основной текст / фон | `text-foreground`, `bg-background`, `bg-card` | `text-black`, `bg-white` |
-| второстепенный текст | `text-muted-foreground` | `text-gray-500` |
-| подложка, ховер | `bg-muted`, `bg-accent` | `bg-zinc-100` |
-| главное действие | `bg-primary` (через `Button`) | `bg-blue-600` |
-| рост, доход, готово | `text-success`, `bg-success/10` | `text-emerald-600 dark:text-emerald-400` |
-| «обратите внимание»: близко к лимиту, устарело | `text-warning`, `bg-warning/10` | `text-amber-600` |
-| падение, расход, ошибка, удаление | `text-destructive`, `bg-destructive/10` | `text-red-500` |
-| рамка | `border-border` (по умолчанию у `*`), поле — `border-input` | `border-gray-200` |
+| main text / background | `text-foreground`, `bg-background`, `bg-card` | `text-black`, `bg-white` |
+| secondary text | `text-muted-foreground` | `text-gray-500` |
+| backing, hover | `bg-muted`, `bg-accent` | `bg-zinc-100` |
+| main action | `bg-primary` (through `Button`) | `bg-blue-600` |
+| growth, income, done | `text-success`, `bg-success/10` | `text-emerald-600 dark:text-emerald-400` |
+| "pay attention": near a limit, stale | `text-warning`, `bg-warning/10` | `text-amber-600` |
+| decline, expense, error, delete | `text-destructive`, `bg-destructive/10` | `text-red-500` |
+| border | `border-border` (default for `*`), field — `border-input` | `border-gray-200` |
 
-- Светлая и тёмная тема берут значения из `:root` и `.dark`, поэтому ручные
-  `dark:`-цвета не нужны. Нужен новый смысл — добавь переменную в обе темы и
-  `--color-*` в `@theme`.
-- Цвета нод и портов редактора сценариев — свои токены (`--node-*`,
-  `--port-*`); для остального интерфейса их не брать.
-- Графики берут цвета из `shared/lib/echarts-theme.ts`, хекс в опциях
-  графика не писать.
-- Цвет как **данные**, а не оформление (цвет кошелька, который выбрал
-  пользователь и который хранится в vault; фиксированная палитра графа по
-  видам операций) — допустимый hex. Файл объявляет это один раз первой
-  строкой с причиной: `// check-ui-ignore raw-color: <почему это данные>`.
-  Без причины после двоеточия директива не действует.
+- The light and dark themes take values from `:root` and `.dark`, so manual
+  `dark:` colors are not needed. A new meaning is needed — add a variable to
+  both themes and `--color-*` to `@theme`.
+- The colors of workflow editor nodes and ports are their own tokens
+  (`--node-*`, `--port-*`); do not take them for the rest of the interface.
+- Charts take their colors from `shared/lib/echarts-theme.ts`; do not write
+  hex in chart options.
+- Color as **data**, not decoration (the color of a wallet the user chose and
+  that is stored in the vault; a fixed graph palette by kinds of operations)
+  is an allowed hex. The file declares this once on the first line with a
+  reason: `// check-ui-ignore raw-color: <why this is data>`. Without a reason
+  after the colon the directive has no effect.
 
 ```vue
-<!-- Неправильно -->
+<!-- Wrong -->
 <span class="text-emerald-600 dark:text-emerald-400">+1 200 ₽</span>
-<!-- Правильно -->
+<!-- Right -->
 <PnlText amount="1200" currency="rub" />
 <span :class="signClass(delta)">{{ formatPct(delta, { signed: true }) }}</span>
 ```
 
-## Текст
+## Text
 
-| Уровень | Класс | Где |
+| Level | Class | Where |
 |---|---|---|
-| заголовок страницы | `heading-page` (18px, 600) | `h1` оболочки, `PageHeader` |
-| заголовок раздела | `heading-section` (16px, 600) | блок страницы, раздел окна настроек |
-| заголовок карточки | `heading-card` (14px, 600) | `SettingsSection`, заголовок `Card` |
-| крупное число | `figure` (20px, 600, tabular) | `StatCard`, итог виджета |
-| основной текст | `text-sm` | почти всё |
-| подпись, подсказка | `text-xs text-muted-foreground` | под полем, мета строки |
+| page heading | `heading-page` (18px, 600) | the shell's `h1`, `PageHeader` |
+| section heading | `heading-section` (16px, 600) | a page block, a settings window section |
+| card heading | `heading-card` (14px, 600) | `SettingsSection`, a `Card` heading |
+| big number | `figure` (20px, 600, tabular) | `StatCard`, a widget total |
+| main text | `text-sm` | almost everything |
+| caption, hint | `text-xs text-muted-foreground` | under a field, row meta |
 
-- Заголовок — семантический тег (`h1`…`h3`), а не `<p class="font-medium">`.
-- Вес не меняется на ховере и у выбранного пункта: строка не должна
-  прыгать.
-- Произвольные размеры (`text-[11px]`) — только в плотных графиках и
-  бейджах, где шкала не подходит.
+- A heading is a semantic tag (`h1`…`h3`), not `<p class="font-medium">`.
+- The weight does not change on hover or for the selected item: the row must
+  not jump.
+- Arbitrary sizes (`text-[11px]`) only in dense charts and badges where the
+  scale does not fit.
 
-## Отступы
+## Spacing
 
-Шкала Tailwind (1 = 4px). Договорённости:
+The Tailwind scale (1 = 4px). Conventions:
 
-| Где | Класс |
+| Where | Class |
 |---|---|
-| поле оболочки вокруг страницы | `p-3 md:p-4` (задано в `AppShell`, страница своих не добавляет) |
-| между секциями страницы | `flex flex-col gap-4` |
-| внутри карточки | отступы даёт `Card` (`size="sm"` — `p-3`, `md` — `p-3 sm:p-4`); между блоками внутри — `gap-3` |
-| между полями формы | `gap-4` |
-| подпись → поле | `gap-1.5` (даёт `FormField`) |
-| иконка ↔ текст в кнопке | `gap-2` (даёт `Button`) |
+| the shell's margin around a page | `p-3 md:p-4` (set in `AppShell`, a page adds none of its own) |
+| between page sections | `flex flex-col gap-4` |
+| inside a card | the padding comes from `Card` (`size="sm"` — `p-3`, `md` — `p-3 sm:p-4`); between blocks inside — `gap-3` |
+| between form fields | `gap-4` |
+| label -> field | `gap-1.5` (given by `FormField`) |
+| icon <-> text in a button | `gap-2` (given by `Button`) |
 
-- `gap-*`, а не `space-y-*` и не `margin` между соседями.
-- Одинаковые блоки на разных экранах — одинаковые отступы: копируй из
-  соседнего экрана, а не подбирай.
+- `gap-*`, not `space-y-*` and not `margin` between neighbors.
+- The same blocks on different screens get the same spacing: copy from a
+  neighboring screen, do not pick.
 
-## Радиусы
+## Radii
 
-`--radius` = 10px. `rounded-md` — поля и кнопки (их задают компоненты),
-`rounded-lg` — вложенные блоки внутри карточки, `rounded-xl` — `Card` и
-`Dialog`, `rounded-full` — точки и аватары. Вложенный блок не круглее
-родителя.
+`--radius` = 10px. `rounded-md` — fields and buttons (set by the components),
+`rounded-lg` — nested blocks inside a card, `rounded-xl` — `Card` and
+`Dialog`, `rounded-full` — dots and avatars. A nested block is not rounder
+than its parent.
 
-## Тема
+## Theme
 
-- `useTheme()` (`shared/lib/theme.ts`) вешает `.dark` и `color-scheme` на
-  `<html>`; `Sonner` получает тему из `App.vue`.
-- Проверяй экран в обеих темах: тёмная — не «инвертированная светлая»,
-  контраст второстепенного текста там ниже.
+- `useTheme()` (`shared/lib/theme.ts`) puts `.dark` and `color-scheme` on
+  `<html>`; `Sonner` gets the theme from `App.vue`.
+- Check the screen in both themes: the dark one is not an "inverted light
+  one", the contrast of secondary text is lower there.

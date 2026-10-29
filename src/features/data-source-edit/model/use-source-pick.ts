@@ -7,7 +7,7 @@ import type { SourceDraftState } from './use-source-draft'
 import type { useSourceActions } from './use-source-actions'
 
 /**
- * «Открыть» the address and turn a click in the preview into the method:
+ * `Open` the address and turn a click in the preview into the method:
  * an element or a table cell on a page, a path in JSON, a column in a file.
  */
 export function useSourcePick(state: SourceDraftState, actions: ReturnType<typeof useSourceActions>) {

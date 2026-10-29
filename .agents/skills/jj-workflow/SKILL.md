@@ -1,84 +1,89 @@
 ---
 name: jj-workflow
 description: >
-  Правила проверок и коммитов в этом репозитории через Jujutsu (jj, colocated с
-  git). Использовать перед любым коммитом, а также при вопросах про историю,
-  откат, ветки, перенос изменений между фичами, отмену правок, разделение
-  изменений, переименование или squash коммитов, трейлер Co-authored-by и
-  отметку авторства агента, спасение «забытого» кода. Триггеры: коммит,
-  закоммить, commit, jj, jujutsu, describe, new, squash, split, rebase,
-  bookmark, ветка, branch, undo, откат, revert, stash, diff, status,
-  «проверки перед коммитом», «прогони тесты», соавтор, co-author,
-  Co-authored-by, автор, авторство, «кто написал».
+  Rules for checks and commits in this repository via Jujutsu (jj, colocated
+  with git). Use before any commit, and for questions about history, undo,
+  branches, moving changes between features, reverting edits, splitting
+  changes, renaming or squashing commits, the Co-authored-by trailer and
+  marking agent authorship, rescuing "forgotten" code. Russian triggers:
+  коммит, закоммить, откат, ветка, «проверки перед коммитом», «прогони тесты»,
+  соавтор, автор, авторство, «кто написал». Triggers: commit, jj, jujutsu,
+  describe, new, squash, split, rebase, bookmark, branch, undo, revert, stash,
+  diff, status, co-author, Co-authored-by.
 ---
 
-# Проверки и коммиты через Jujutsu
+# Checks and commits via Jujutsu
 
-Репозиторий под **jj** (jj 0.45+, colocated с git: `.git` — настоящий git-репозиторий,
-`.jj` — метаданные jj). Управляй историей **jj-командами**, не git-командами.
+The repository is under **jj** (jj 0.45+, colocated with git: `.git` is a real
+git repository, `.jj` is jj metadata). Manage history with **jj commands**, not
+git commands.
 
-## Главное отличие от git
+## The main difference from git
 
-В jj нет индекса и нет « unstaged/staged ». Изменения в файлах **автоматически**
-снапшотятся в change `@` при следующей jj-команде. Поэтому:
+jj has no index and no "unstaged/staged". Changes in files are **automatically**
+snapshotted into the change `@` at the next jj command. Therefore:
 
-- **`git add` не нужен и не существует.** Файл, который ты создал, уже в `@`.
-- **`jj status` показывает полную картину**, а не «что застейджено». Пустой вывод
-  означает «рабочая копия совпадает с последним change».
-- **`jj commit` = `jj describe` + `jj new`.** Это две операции, а не одна.
-- **Каждый `jj new` оставляет предыдущий change в истории.** Не нужно «переписывать»
-  сообщение задним числом — заводи следующий change.
-- **Ветки — это букмарки**, они указывают на change, а не хранят историю:
+- **`git add` is not needed and does not exist.** A file you created is already
+  in `@`.
+- **`jj status` shows the full picture**, not "what is staged". Empty output
+  means "the working copy matches the last change".
+- **`jj commit` = `jj describe` + `jj new`.** These are two operations, not one.
+- **Every `jj new` leaves the previous change in history.** There is no need to
+  "rewrite" the message after the fact — start the next change.
+- **Branches are bookmarks**; they point to a change and do not store history:
   `jj bookmark create feature-x -r @-`, `jj bookmark move main`, `jj git push --bookmark main`.
 
-## Гейт перед коммитом (обязателен)
+## Gate before committing (mandatory)
 
 ```bash
 cargo fmt
-mise run check      # cargo xtask check: параллельно, fail-fast, логи в .cache/xtask/
+mise run check      # cargo xtask check: parallel, fail-fast, logs in .cache/xtask/
 ```
 
-`mise run check` — это **полный** гейт: Biome (линт + формат), строгий typecheck
-фронтенда, проверки правил (`check-*.mjs`, layout/links `--quick`), `cargo fmt --check`,
-clippy `-D warnings`, все тесты воркспейса, актуальность `ipc.gen.d.ts` и компиляция
-под все платформы — параллельно, первая ошибка гасит остальное. Гейт зелёный → можно
-коммитить. Не зелёный → коммит запрещён: сначала чини причину.
+`mise run check` is the **full** gate: Biome (lint + format), strict frontend
+typecheck, rule checks (`check-*.mjs`, layout/links `--quick`), `cargo fmt --check`,
+clippy `-D warnings`, all workspace tests, freshness of `ipc.gen.d.ts` and
+compilation for all platforms — in parallel, the first error stops the rest.
+Gate green → you may commit. Not green → commit is forbidden: fix the cause
+first.
 
-Локальный срез, если правка заведомо узкая (быстрее, но не заменяет финальный `check`):
+A local slice, if the change is obviously narrow (faster, but does not replace
+the final `check`):
 
-| Что трогал | Что прогонять |
+| What you touched | What to run |
 |---|---|
 | `src/**` | `mise run lint && mise run typecheck` |
 | `crates/**` | `mise run test` |
-| `ipc_contract.rs`, `model/**`, любой DTO | `mise run test && mise run gen-types` |
-| перед коммитом / рефакторингом / релизом | `mise run check` |
+| `ipc_contract.rs`, `model/**`, any DTO | `mise run test && mise run gen-types` |
+| before a commit / refactoring / release | `mise run check` |
 
-**Если менялись DTO или доменные структуры, попадающие в IPC:** после
-`mise run gen-types` обязан измениться `src/shared/api/ipc.gen.d.ts`. Если файл не
-изменился — значит тип не покрыт ts-rs (`#[derive(TS)]` не проставлен), и
-фронтенд не получит тип. Проверяй это диффом, а не на глаз.
+**If you changed DTOs or domain structs that go into IPC:** after
+`mise run gen-types`, `src/shared/api/ipc.gen.d.ts` must change. If the file did
+not change, the type is not covered by ts-rs (`#[derive(TS)]` is missing), and
+the frontend will not get the type. Check this with a diff, not by eye.
 
-Никогда не «чини» упавший тест удалением теста, ослаблением ассерта или
-`#[ignore]`. Причина падения — это либо твой баг, либо устаревшее ожидание.
+Never "fix" a failing test by deleting the test, weakening the assert, or
+`#[ignore]`. The cause of the failure is either your bug or a stale expectation.
 
-## Порядок коммита
+## Commit order
 
 ```bash
-jj status                     # 1. что вообще попадёт в change
-jj diff                       # 2. читай diff целиком — там может быть чужое
-cargo fmt && mise run check   # 3. гейт зелёный
-jj describe -m "fix: ..."     # 4. описать change
-jj new                        # 5. следующий change
+jj status                     # 1. what will actually go into the change
+jj diff                       # 2. read the whole diff — there may be someone else's changes
+cargo fmt && mise run check   # 3. gate green
+jj describe -m "fix: ..."     # 4. describe the change
+jj new                        # 5. next change
 ```
 
-Шаг 2 не формальность: рабочая копия накапливает всё, что ты правил без
-коммита, включая отладочные `console.log`, закомментированный код и правки
-чужих задач. Прежде чем описывать change — убедись, что в нём только твоё
-изменение.
+Step 2 is not a formality: the working copy accumulates everything you edited
+without committing, including debug `console.log`, commented-out code and edits
+for other tasks. Before describing a change, make sure it contains only your
+change.
 
-## Формат сообщения
+## Message format
 
-Conventional commits, **на английском**, тема ≤ 72 символов, без точки в конце.
+Conventional commits, **in English**, subject ≤ 72 characters, no trailing
+period.
 
 ```
 fix: keep vault unlock error as Error::Secret
@@ -89,72 +94,74 @@ instead of prompting for a retry. Map the tag mismatch to Error::Secret
 so the unlock form can show auth.wrongPassword.
 ```
 
-- Типы: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`.
-- Тема — что изменилось для пользователя, не список файлов.
-- Тело — **обязательно**, если изменение неочевидно: *что* → *почему*.
-  Не пересказывай diff; объясняй мотивацию и альтернативы, которые отверг.
-- Одно логическое изменение — один change. Не смешивай `feat:` и `refactor:`,
-  не тащи в коммит попутное форматирование.
-- Breaking changes: `feat(scope)!: …` + абзац `BREAKING CHANGE:` в теле.
-- Скоуп (`feat(vault):`, `fix(pricing):`) опционален — используй, когда он
-  добавляет информации.
+- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`.
+- The subject is what changed for the user, not a list of files.
+- The body is **mandatory** if the change is not obvious: *what* → *why*.
+  Do not retell the diff; explain the motivation and the alternatives you
+  rejected.
+- One logical change — one change. Do not mix `feat:` and `refactor:`, do not
+  drag incidental formatting into a commit.
+- Breaking changes: `feat(scope)!: …` + a `BREAKING CHANGE:` paragraph in the body.
+- A scope (`feat(vault):`, `fix(pricing):`) is optional — use it when it adds
+  information.
 
-## Соавтор: агент указывает себя сам
+## Co-author: the agent names itself
 
-Каждый коммит агента несёт трейлер `Co-authored-by:` с **именем своего
-инструмента** (OpenCode, Claude Code, Codex, …). jj его **не** подставляет —
-`templates.commit_trailers` выключен намеренно, — агент дописывает строку сам,
-последним абзацем сообщения. Формат, таблица имён, проверка на дубли и правило
-«не трогать чужие трейлеры» — в скилле `commit-coauthor`; загрузи его перед
-`jj describe`.
+Every agent commit carries a `Co-authored-by:` trailer with the **name of its
+own tool** (OpenCode, Claude Code, Codex, …). jj does **not** add it —
+`templates.commit_trailers` is turned off on purpose — the agent appends the
+line itself, as the last paragraph of the message. The format, the name table,
+the duplicate check and the rule "do not touch other people's trailers" are in
+the `commit-coauthor` skill; load it before `jj describe`.
 
-## Коммит — только по явной просьбе
+## Commit — only on explicit request
 
-Пользователь должен **прямо попросить** закоммитить. Сам факт «задача
-сделана» поводом не является: закончил работу → остановился и отчитался.
-Правки в рабочей копии (`jj status` непустой) — нормальное состояние,
-коммитить их без просьбы нельзя.
+The user must **directly ask** to commit. The mere fact that "the task is done"
+is not a reason: finished the work → stop and report. Edits in the working copy
+(`jj status` non-empty) are a normal state; committing them without a request is
+forbidden.
 
-## Когда что-то пошло не так
+## When something went wrong
 
-| Ситуация | Что делать |
+| Situation | What to do |
 |---|---|
-| Забыл `jj new`, описал не тот change | `jj log` → найти change → `jj describe -r <rev> -m "…"` |
-| Change получился неатомарным | `jj split -r @` в интерактивах или `jj squash` после |
-| Изменения попали в «чужой» change | `jj restore -c <rev> -s <paths>` (jj ≥ 0.30), либо `jj diff -r <rev> > p.patch` + `jj restore` |
-| Нужно перенести правки в другой change | `jj git push --change <rev> --target <dest>` |
-| Хочу «отменить как будто не делал» | `jj op log` → `jj undo` / `jj restore -r @-` |
-| Надо переписать ещё не отправленное | `jj rebase -r @ -d @-` |
-| Ошибочно отправил в main | **не** переписывай: `jj bookmark move main <старый-rev>` + предупреди пользователя |
+| Forgot `jj new`, described the wrong change | `jj log` → find the change → `jj describe -r <rev> -m "…"` |
+| The change turned out non-atomic | `jj split -r @` interactively or `jj squash` afterwards |
+| Changes landed in "someone else's" change | `jj restore -c <rev> -s <paths>` (jj ≥ 0.30), or `jj diff -r <rev> > p.patch` + `jj restore` |
+| Need to move edits to another change | `jj git push --change <rev> --target <dest>` |
+| Want to "undo as if I never did it" | `jj op log` → `jj undo` / `jj restore -r @-` |
+| Need to rewrite something not yet pushed | `jj rebase -r @ -d @-` |
+| Mistakenly pushed to main | **do not** rewrite: `jj bookmark move main <old-rev>` + warn the user |
 
-Отмена в jj **полная и безопасная**: рабочая копия и история откатываются
-целиком (`jj undo`, `jj op log`). Не придумывай ручные «откаты назад» через
-git checkout.
+Undo in jj is **complete and safe**: the working copy and history roll back
+entirely (`jj undo`, `jj op log`). Do not invent manual "roll-backs" through git
+checkout.
 
-## Границы, которые нельзя пересекать
+## Boundaries that must not be crossed
 
 - **`git commit`, `git add`, `git stash`, `git checkout <file>`, `git reset --hard`** —
-  не использовать. В colocated-репозитории это рассинхронизирует снапшот jj
-  с git-состоянием. Единственное допустимое применение git — read-only
-  (`git diff`, `git log`) для сверки, и то `jj log`/`jj diff` умеют больше.
-- **Не переписывать change, уже отправленный на сервер.** Публичная история
-  иммутабельна по соглашению, а не технически. Ревизии меняются на каждом
-  `jj new` — идентифицируй change по **change id** (`jj log` колонка
-  change id), а не по commit id.
-- **Не коммитить** `data/`, `*.wallet`, `*.wallet.bak`, `.rust-target/`,
-  `node_modules/`, `dist/`, `.env*`. Всё это уже в `.gitignore`, и jj его
-  уважает — но если файл попал в change (например, принудительно создан
-  до инициализации jj), проверь `jj status` до `jj describe`.
-- **Не запускать `jj git push` без разрешения** пользователя.
-- **`jj new` на грязной копии — норма**, но не оставляй change с описанием
-  вида «wip» надолго: он попадёт в историю и потом потребует `jj rebase`.
+  do not use. In a colocated repository they desynchronize the jj snapshot from
+  the git state. The only acceptable use of git is read-only
+  (`git diff`, `git log`) for cross-checking, and even then `jj log`/`jj diff`
+  can do more.
+- **Do not rewrite a change already pushed to the server.** Public history is
+  immutable by convention, not technically. Revisions change on every
+  `jj new` — identify a change by its **change id** (the change id column of
+  `jj log`), not by commit id.
+- **Do not commit** `data/`, `*.wallet`, `*.wallet.bak`, `.rust-target/`,
+  `node_modules/`, `dist/`, `.env*`. All of this is already in `.gitignore`, and
+  jj respects it — but if a file got into a change (for example, forcibly
+  created before jj was initialized), check `jj status` before `jj describe`.
+- **Do not run `jj git push` without the user's permission.**
+- **`jj new` on a dirty copy is normal**, but do not leave a change described as
+  "wip" for long: it will land in history and later require `jj rebase`.
 
-## Проверка перед отчётом
+## Check before reporting
 
 ```bash
-jj status    # что осталось незакоммиченным (скажи об этом пользователю честно)
-jj log -r '::@' --no-graph -T 'description.first_line() ++ "\n"'   # сообщения моих change
+jj status    # what remains uncommitted (tell the user honestly)
+jj log -r '::@' --no-graph -T 'description.first_line() ++ "\n"'   # messages of my changes
 ```
 
-Если после твоей работы `jj status` показывает незакоммиченные изменения —
-это нормально, но **назови их пользователю явно**, а не молча оставь.
+If after your work `jj status` shows uncommitted changes, that is normal, but
+**name them to the user explicitly** instead of silently leaving them.

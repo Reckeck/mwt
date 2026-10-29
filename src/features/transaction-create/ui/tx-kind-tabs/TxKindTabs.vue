@@ -8,7 +8,7 @@ import { useTxForm } from '../../model/use-tx-form'
 import { QUICK_KINDS } from '../../transaction-form.constants'
 
 /**
- * Оплата · Обмен · Перевод · Пополнение as one segmented row (OpForm-1 · 1); a
+ * Payment · Exchange · Transfer · Top-up as one segmented row (OpForm-1 · 1); a
  * wallet without one of them just has fewer. A deal (OpForm-2 · 9) passes its
  * groups: each is a segmented block of its own, side by side.
  */

@@ -1,6 +1,6 @@
-# Раскладка: страница, диалог, Sheet, вкладки, узкие окна
+# Layout: page, dialog, Sheet, tabs, narrow windows
 
-## Страница
+## Page
 
 ```vue
 <template>
@@ -16,57 +16,64 @@
 </template>
 ```
 
-- Страница в `pages/` — только композиция (правило 9–10 AGENTS.md).
-- Заголовок экрана один: `h1` оболочки. `PageHeader` даёт крошки и
-  действия; свой `title` — только если страница уточняет оболочку
-  (имя кошелька).
-- Действия справа в шапке, главное — последнее и залитое (`default`),
-  остальные `outline`/`ghost`. Больше трёх — лишнее в `ActionMenu` («Ещё»).
-- Одно действие — одно место на экране. Одна и та же кнопка в шапке, в
-  карточке и в меню — путаница.
-- Отступы между блоками (карточки, секции, строки формы) — шкала 8/12/16/20/24: `gap-2/3/4/5/6`, одинаково на ПК и телефоне (без `max-md:gap-*` у страницы). `gap-2.5`, `gap-3.5` между блоками не бывает.
-- Список, который может быть длинным (лента на Главной, журнал), — блок фиксированной высоты с прокруткой внутри (`max-h-* overflow-y-auto`); на телефоне прокручивается страница, внутренней прокрутки нет.
-- Поле вокруг страницы задаёт оболочка (`p-3 md:p-4`); страница его не
-  добавляет.
+- A page in `pages/` is composition only (rules 9-10 of AGENTS.md).
+- There is one screen heading: the shell's `h1`. `PageHeader` provides the
+  breadcrumbs and actions; its own `title` only if the page refines the shell
+  (a wallet name).
+- Actions are on the right of the header, the main one is last and filled
+  (`default`), the rest `outline`/`ghost`. More than three — the extras go to
+  an `ActionMenu` ("More").
+- One action — one place on the screen. The same button in the header, in the
+  card and in the menu is confusing.
+- Gaps between blocks (cards, sections, form rows) — the scale 8/12/16/20/24:
+  `gap-2/3/4/5/6`, the same on desktop and phone (no `max-md:gap-*` on a page).
+  `gap-2.5`, `gap-3.5` do not exist between blocks.
+- A list that may be long (the feed on the Dashboard, a journal) is a block of
+  fixed height with scrolling inside (`max-h-* overflow-y-auto`); on a phone
+  the page scrolls, there is no inner scroll.
+- The margin around a page is set by the shell (`p-3 md:p-4`); the page does
+  not add its own.
 
-## Диалог, Sheet или страница
+## Dialog, Sheet or page
 
-| Содержимое | Где |
+| Content | Where |
 |---|---|
-| одна короткая форма или выбор | `Dialog` / `FormDialog` |
-| подробности записи сбоку, со списком на фоне | `Sheet` |
-| много разделов, навигация, долгая работа | страница (маршрут) |
+| one short form or a choice | `Dialog` / `FormDialog` |
+| record details at the side, with the list in the background | `Sheet` |
+| many sections, navigation, long work | a page (route) |
 
-- **Одно действие — один диалог.** Две кнопки, делающие разное, открывают
-  два диалога; передача — закрыть один, открыть другой.
-- Диалог не вкладывается в диалог.
-- Внутри диалога нет `Card` и второго заголовка; главная кнопка — в
-  подвале справа.
-- Ширина (`dialog.constants.ts`): `sm` = `max-w-sm` (вопрос, одно поле),
-  `md` = `max-w-lg` (обычная форма, по умолчанию), `lg` = `max-w-2xl` (форма в
-  две колонки), `xl` = `max-w-4xl` (таблица, редактор).
-- Вкладки внутри диалога — только в окне настроек. Мастер из нескольких
-  шагов — шаги (`stepper`), а не вкладки.
-- `Dialog`, `Sheet` всегда с заголовком (можно `sr-only`) и, если нужно
-  пояснение, `description`.
-- Раскладка полей в диалоге — container queries (`@xl:grid-cols-2`; размеры: Tailwind `@xl` = 36rem, `@2xl` 42, `@3xl` 48, и свои `@mid` = 44rem, `@wide` = 52rem); портал
-  вне страницы, поэтому нужен `@container` (в `FormDialog` есть).
+- **One action — one dialog.** Two buttons that do different things open two
+  dialogs; a handover is closing one and opening the other.
+- A dialog is not nested in a dialog.
+- Inside a dialog there is no `Card` and no second heading; the main button is
+  in the footer on the right.
+- Width (`dialog.constants.ts`): `sm` = `max-w-sm` (a question, one field),
+  `md` = `max-w-lg` (an ordinary form, the default), `lg` = `max-w-2xl` (a
+  two-column form), `xl` = `max-w-4xl` (a table, an editor).
+- Tabs inside a dialog — only in the settings window. A multi-step wizard is
+  steps (`stepper`), not tabs.
+- `Dialog`, `Sheet` always have a title (it may be `sr-only`) and, if an
+  explanation is needed, a `description`.
+- Field layout in a dialog uses container queries (`@xl:grid-cols-2`; sizes:
+  Tailwind `@xl` = 36rem, `@2xl` 42, `@3xl` 48, and our own `@mid` = 44rem,
+  `@wide` = 52rem); the portal is outside the page, so a `@container` is
+  needed (`FormDialog` has one).
 
-## Вкладки
+## Tabs
 
-- Вкладки раздела — маршруты (`/planning/budgets`), чтобы ссылка и «Назад»
-  работали. Вкладки внутри страницы — в query-параметре (`?tab=history`).
-- Порядок вкладок совпадает с порядком маршрутов и не меняется от вида
-  записи без причины.
+- Section tabs are routes (`/planning/budgets`), so that the link and "Back"
+  work. Tabs inside a page go in a query parameter (`?tab=history`).
+- The order of tabs matches the order of routes and does not change with the
+  kind of record without a reason.
 
-## Узкие окна
+## Narrow windows
 
-- Окно приложения бывает и 800px, и меньше (Android). Проверяй на ~800, 390 и
-  360; правила телефона — [mobile.md](mobile.md).
-- Никаких фиксированных ширин у полей фильтров (`w-56`): `min-w-*` +
-  `flex-wrap`, редкие фильтры — в поповер «Ещё фильтры».
-- Длинный текст — `truncate` (с `min-w-0` у flex-родителя) и `title` с полным
-  значением.
-- Сетки карточек — `grid gap-4 sm:grid-cols-2 lg:grid-cols-4`, внутри
-  компонентов — container queries.
-- На мобильном боковое меню — `Sheet` (это делает `Sidebar`).
+- The application window can be 800px or smaller (Android). Check at ~800, 390
+  and 360; phone rules — [mobile.md](mobile.md).
+- No fixed widths on filter fields (`w-56`): `min-w-*` + `flex-wrap`, rare
+  filters go in the "More filters" popover.
+- Long text is `truncate` (with `min-w-0` on the flex parent) and a `title`
+  with the full value.
+- Card grids are `grid gap-4 sm:grid-cols-2 lg:grid-cols-4`; inside
+  components — container queries.
+- On mobile the side menu is a `Sheet` (`Sidebar` does this).

@@ -11,8 +11,8 @@ import { Button } from '@/shared/ui/button'
 
 /**
  * Full-New-Guide 1-2: a screen's tour is offered by a soft banner on the first
- * visit, never opened by itself. «Показать» starts it, «Не сейчас» hides the banner
- * for this screen only, «Больше не предлагать» switches the offers off for all of them.
+ * visit, never opened by itself. `Show` starts it, `Not now` hides the banner
+ * for this screen only, `Don't offer again` switches the offers off for all of them.
  */
 const props = defineProps<{ id: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -47,7 +47,7 @@ async function never() {
   }
 }
 
-// Esc hides the banner like «Не сейчас» — unless a window is open above it.
+// Esc hides the banner like `Not now` — unless a window is open above it.
 useEventListener(document, 'keydown', (event: KeyboardEvent) => {
   if (event.key === 'Escape' && !document.querySelector('[role="dialog"]')) later()
 })

@@ -22,7 +22,7 @@ const trade = (kind: TxKind, label: string, separated = false): WalletAction => 
 /**
  * The buttons a wallet's kind allows (Wallets-1 · 5–7): a card pays, tops up,
  * converts and transfers; a coin wallet only transfers and converts; an
- * exchange adds Спот · Фьючерс · DeFi, which exist only there. A property has
+ * exchange adds Spot · Futures · DeFi, which exist only there. A property has
  * none yet: its bills come with its utilities.
  */
 export function walletActions(store: Store, exchangeRoot: boolean): WalletAction[] {

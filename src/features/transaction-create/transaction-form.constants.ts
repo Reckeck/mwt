@@ -1,6 +1,6 @@
 /** The short form's tabs, in the canvas order (OpForm-1 · 1); trades open from the exchange (OpForm-2 · 9). */
 export const QUICK_KINDS: TxKind[] = ['payment', 'convert', 'transfer', 'topup']
-/** «Сделка · <биржа>» (OpForm-2 · 9): moving money first, then what only an exchange does. */
+/** `Trade · <exchange>` (OpForm-2 · 9): moving money first, then what only an exchange does. */
 export const DEAL_GROUPS: TxKind[][] = [
   ['convert', 'transfer'],
   ['trade_spot', 'trade_futures', 'defi'],

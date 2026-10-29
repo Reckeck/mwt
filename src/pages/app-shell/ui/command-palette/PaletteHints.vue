@@ -7,7 +7,7 @@ import { hotkeyLabel } from '@/shared/lib/hotkeys'
 
 /**
  * The keys under the palette (Paths 1 · 7, 2 · 8): empty — choose, open,
- * glance, Alt 1…5; on a category — open in «Траты», glance only, record.
+ * glance, Alt 1…5; on a category — open in `Spending`, glance only, record.
  * A sum to convert — copy, another currency, record an exchange (Currency-2 · 10).
  * A phone has no keys: a tap opens, a long press glances.
  */

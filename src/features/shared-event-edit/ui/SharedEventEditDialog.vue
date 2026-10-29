@@ -21,7 +21,7 @@ import DraftParticipants from './DraftParticipants.vue'
 import GuestDetailsDialog from './GuestDetailsDialog.vue'
 
 /**
- * «Новое событие» and «Изменить событие»: title, a day or several days, the currency the shares are
+ * `New event` and `Edit event`: title, a day or several days, the currency the shares are
  * counted in, who leads, whether I take part, and — for a new event — the people. A sheet from below on
  * a phone. Saving a new event with people sends them in the same request. The category picker and
  * the requisite form belong to other features: the layer above hands them in (`#category`,

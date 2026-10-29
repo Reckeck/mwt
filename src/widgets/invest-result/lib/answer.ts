@@ -4,7 +4,7 @@ type Translate = (key: string, params?: Record<string, unknown>) => string
 
 const MONTHS_IN_YEAR = 12
 
-/** «10 лет», «9 лет 11 мес.», «7 мес.». */
+/** `10 years`, `9 years 11 mo.`, `7 mo.`. */
 export function termText(months: number, t: Translate, locale: string): string {
   const years = Math.floor(months / MONTHS_IN_YEAR)
   const rest = months % MONTHS_IN_YEAR
@@ -15,8 +15,8 @@ export function termText(months: number, t: Translate, locale: string): string {
 }
 
 /**
- * «окт 2029»: the month `month` of the plan (1-based) counted from its `start` («YYYY-MM»).
- * The plan's end — «к окт 2029» — is the month after its last: `term_months + 1`.
+ * `Oct 2029`: the month `month` of the plan (1-based) counted from its `start` (`YYYY-MM`).
+ * The plan's end — `by Oct 2029` — is the month after its last: `term_months + 1`.
  */
 export function planMonth(start: string, month: number): string {
   const [year, first] = start.split('-').map(Number)
@@ -27,7 +27,7 @@ export function planMonth(start: string, month: number): string {
 }
 
 /**
- * «100 000 + 10 000 × 120»: how «Вложено» adds up, for a plain plan only —
+ * «100 000 + 10 000 × 120»: how `Invested` adds up, for a plain plan only —
  * one monthly stage from the start, no indexation.
  */
 export function investedFormula(input: InvestInput): string | null {

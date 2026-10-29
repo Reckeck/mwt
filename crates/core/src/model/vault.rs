@@ -34,7 +34,7 @@ pub struct DashboardWidgetCfg {
     /// Own period; `None` follows the dashboard's (plan H1).
     #[serde(default)]
     pub period: Option<DashPeriod>,
-    /// The calculator scenario a «Сценарий» widget follows (plan H4).
+    /// The calculator scenario a "Scenario" widget follows (plan H4).
     #[serde(default)]
     pub scenario_id: Option<String>,
 }
@@ -99,7 +99,7 @@ pub struct Settings {
     #[serde(default)]
     pub notifications: crate::model::notify::NotificationSettings,
     /// The budget settings were saved at least once: the checklist step
-    /// «доля сбережений» is done even when 10 % was the right answer.
+    /// "Savings rate" is done even when 10 % was the right answer.
     #[serde(default)]
     pub budget_configured: bool,
     /// Checklist steps the user said they do not need.
@@ -138,7 +138,7 @@ pub struct Settings {
     /// The period every dashboard widget measures unless it has its own.
     #[serde(default)]
     pub dashboard_period: DashPeriod,
-    /// The user hid the «С чего начать» checklist (plan H3; it lived in localStorage).
+    /// The user hid the "Where to start" checklist (plan H3; it lived in localStorage).
     #[serde(default)]
     pub onboarding_checklist_hidden: bool,
     /// The vault keeps crypto: crypto wallets, exchanges and coins are shown.
@@ -543,7 +543,7 @@ pub enum ImportSource {
     /// The background poll.
     #[default]
     Auto,
-    /// «Синхронизировать сейчас» / «Загрузить историю».
+    /// "Sync now" / "Load history".
     Manual,
 }
 
@@ -564,7 +564,7 @@ pub struct ImportRun {
     pub known: u32,
     /// Left out by the import settings (kind, coin, account, date).
     pub filtered: u32,
-    /// Booked at once by «подтверждать сразу».
+    /// Booked at once by "Confirm immediately".
     pub confirmed: u32,
     /// Of the new ones: spot and futures fills.
     #[serde(default)]
@@ -639,7 +639,7 @@ pub struct VaultDoc {
     pub workflow_queue: Vec<crate::workflow::QueuedActions>,
     #[serde(default)]
     pub workflow_state: Vec<crate::workflow::WorkflowState>,
-    /// Runs asleep at a «Подождать» node.
+    /// Runs asleep at a "Wait" node.
     #[serde(default)]
     pub workflow_waits: Vec<crate::workflow::model::WorkflowWait>,
     /// Syncs with exchanges, newest last.

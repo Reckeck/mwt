@@ -17,7 +17,7 @@ import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 
 /**
- * «Что изменилось» on Home (Home 1): the operations since the last visit, by day
+ * `What changed` on Home (Home 1): the operations since the last visit, by day
  * with the day's net, each opening its card. The links lead to the full journal
  * of the same days and to the spending.
  */
@@ -30,7 +30,7 @@ const { query: txs, rows } = useTxPages(filter)
 const phone = useIsPhone()
 /**
  * The desktop card has a fixed height and scrolls inside it, so every day since the visit is there;
- * the phone scrolls the page, so it shows the latest few days and the rest is behind «Все операции».
+ * the phone scrolls the page, so it shows the latest few days and the rest is behind `All operations`.
  */
 const DAYS_SHOWN = 3
 const visible = computed(() => {

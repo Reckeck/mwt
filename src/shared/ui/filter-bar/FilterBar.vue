@@ -12,11 +12,11 @@ import type { FilterBarProps } from './filter-bar.types'
 /**
  * A row of filters without labels (each field names itself to a screen
  * reader): `lead` (the search) and the most used ones (default slot), then
- * «Ещё фильтры», `actions` (export) and `trail` (the count) on the right.
- * «Ещё фильтры» opens a panel under the row (`more`, `switches`): it edits a
- * draft the owner keeps; «Показать N» applies it, «Сбросить» clears it. On a
+ * `More filters`, `actions` (export) and `trail` (the count) on the right.
+ * `More filters` opens a panel under the row (`more`, `switches`): it edits a
+ * draft the owner keeps; `Show N` applies it, `Reset` clears it. On a
  * phone only `lead` stays in the row; an icon opens the same panel as a screen
- * of its own, «‹ Фильтры»; the owner adds the row's fields to `more` there.
+ * of its own, `‹ Filters`; the owner adds the row's fields to `more` there.
  */
 const props = withDefaults(defineProps<FilterBarProps>(), {
   active: 0,
@@ -100,7 +100,7 @@ function apply() {
       </div>
     </div>
 
-    <!-- A phone: a screen of its own; «‹» and the system «Назад» close it unapplied. -->
+    <!-- A phone: a screen of its own; «‹» and the system `Back` close it unapplied. -->
     <Sheet v-if="phone && props.folds" v-model:open="open">
       <SheetContent side="right" class="gap-0 p-0" hide-close data-filter-panel>
         <div class="flex h-14 shrink-0 items-center gap-1 px-2">

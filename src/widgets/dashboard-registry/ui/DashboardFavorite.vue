@@ -9,7 +9,7 @@ import { entityLocation } from '@/shared/lib/entity-link'
 import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 
-/** «Избранный кошелёк» (Home 4): the first wallet pinned to the sidebar, its balance and a way in. */
+/** `Favourite wallet` (Home 4): the first wallet pinned to the sidebar, its balance and a way in. */
 const { t } = useI18n()
 const route = useRoute()
 const pins = usePins()

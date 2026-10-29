@@ -37,7 +37,7 @@ const kindName = computed(() =>
 )
 const last = computed(() => trend.data.value?.months.at(-1) ?? null)
 
-/* --- «Записать расход»: the payment form, pre-filled --- */
+/* --- `Record the payment`: the payment form, pre-filled --- */
 const draft = ref<UtilityPaymentDraft | null>(null)
 const payOpen = ref(false)
 /** The bill's wallet, else the first budget wallet. */

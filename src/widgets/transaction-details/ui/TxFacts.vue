@@ -12,9 +12,9 @@ import { useTxContext } from '@/shared/lib/tx-context'
 import { pairRate, txBaseValue, txFlowKind, txPair } from '../lib/tx-card'
 
 /**
- * «Из кошелька · В кошелёк · Курс · Через · В базовой валюте» (Paths 1 · 6):
+ * `From wallet · To wallet · Rate · Via · In base currency` (Paths 1 · 6):
  * every value leads on — a wallet to its glance (the `side` slot), the
- * counterparty to its card, «не трата» to what the word means.
+ * counterparty to its card, `not spending` to what the word means.
  */
 const props = defineProps<{
   tx: Transaction
@@ -54,7 +54,7 @@ const base = computed(() => {
   return value === null ? null : { amount: value, currency: props.baseCurrency }
 })
 
-/** A wallet is «Из кошелька / В кошелёк»; a person or free text is who paid or who gets it. */
+/** A wallet is `From wallet / To wallet`; a person or free text is who paid or who gets it. */
 const fromLabel = computed(() => t(sides.value.from && 'store' in sides.value.from ? 'txCard.from' : 'txCard.payer'))
 const toLabel = computed(() => t(sides.value.to && 'store' in sides.value.to ? 'txCard.to' : 'txCard.payee'))
 

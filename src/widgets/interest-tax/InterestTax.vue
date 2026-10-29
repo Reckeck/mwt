@@ -12,7 +12,7 @@ import { ProgressBar } from '@/shared/ui/progress-bar'
 import { SectionState } from '@/shared/ui/section-state'
 
 /**
- * НДФЛ on deposit interest: how much of this year's tax-free limit
+ * Personal income tax (personal income tax) on deposit interest: how much of this year's tax-free limit
  * (1 000 000 ₽ × the highest key rate) is used, and the tax above it. The
  * key rate arrives with the background rates refresh (`rates-updated`).
  */

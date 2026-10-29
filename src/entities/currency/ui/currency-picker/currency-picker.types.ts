@@ -13,7 +13,7 @@ export interface CurrencyPickerProps {
   extra?: string[]
   /** Trigger shows the code only, for a suffix inside another field. */
   compact?: boolean
-  /** A grey chip inside an amount field's border («1 балл = 1 RUB»); implies `compact`. */
+  /** A grey chip inside an amount field's border (`1 point = 1 RUB`); implies `compact`. */
   chip?: boolean
   /** `id` for the trigger, so an outer `<Label for>` can point at it. */
   id?: string
@@ -29,6 +29,6 @@ export interface CurrencyOption {
   /** Localized fiat name from `Intl.DisplayNames`; empty for crypto. */
   name: string
   favorite: boolean
-  /** A group title row («Избранные», «Валюты»…), not a choice. */
+  /** A group title row (`Favourites`, `Currencies`…), not a choice. */
   header?: boolean
 }

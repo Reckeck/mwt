@@ -14,8 +14,8 @@ import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 
 /**
- * What workflows wait for: questions of «Ждать подтверждения» (yes or no),
- * operations prepared earlier for confirmation, and runs asleep at «Подождать».
+ * What workflows wait for: questions of `Wait for confirmation` (yes or no),
+ * operations prepared earlier for confirmation, and runs asleep at `Wait`.
  */
 const { t } = useI18n()
 const actions = useWorkflowActions()

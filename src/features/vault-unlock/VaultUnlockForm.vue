@@ -13,7 +13,7 @@ import SyncConflictChoice from './SyncConflictChoice.vue'
 import { useUnlockVault } from './useUnlockVault'
 
 /**
- * The password and «Открыть» of the unlock card (Full-New-Encrypt 3): for a vault with a
+ * The password and `Open` of the unlock card (Full-New-Encrypt 3): for a vault with a
  * password a field, for a plain one nothing but the button.
  */
 const props = defineProps<{

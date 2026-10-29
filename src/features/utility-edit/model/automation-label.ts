@@ -1,8 +1,8 @@
 type T = (key: string, values?: Record<string, unknown>) => string
 
 /**
- * An automation as the rent's «Платит автоматизация» lists it (Wallets-3 · 17):
- * «Аренда» · 10-го, Тинькофф → Хозяин. The route is there for a payment only.
+ * An automation as the rent's `Paid by an automation` lists it (Wallets-3 · 17):
+ * `Rent` · 10th, Tinkoff → Landlord. The route is there for a payment only.
  */
 export function automationLabel(
   automation: Automation,

@@ -10,9 +10,9 @@ export interface ActionMenuProps {
 
 export interface ActionSheetProps {
   actions: UiAction[]
-  /** What the actions act on: «Маме до зарплаты». */
+  /** What the actions act on: `To Mom before payday`. */
   title?: string
-  /** A line under it: «20 окт · Тинькофф → Мама». */
+  /** A line under it: `Oct 20 · Tinkoff → Mom`. */
   description?: string
   /** The figure on the right: «−5 000 ₽». */
   value?: string

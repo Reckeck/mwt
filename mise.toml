@@ -1,4 +1,4 @@
-# Project-local toolchain & tasks (mise). See AGENTS.md -> "Команды".
+# Project-local toolchain & tasks (mise). See AGENTS.md -> "Commands (mise)".
 # Usage: mise install && mise run dev
 
 [tools]

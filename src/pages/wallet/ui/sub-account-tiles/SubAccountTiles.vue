@@ -19,8 +19,8 @@ import { buildSubAccountTiles } from '../../lib/sub-account-tiles'
  * The sub-accounts row under a wallet's header: the wallet itself and each
  * sub-account as a tile (icon and name, what it holds in its own currency,
  * ≈ the base and the share with a bar). On a phone the tiles scroll sideways.
- * A wallet with a scope to choose (not an exchange) keeps its «С субсчетами /
- * Только этот» switch in the title row.
+ * A wallet with a scope to choose (not an exchange) keeps its `With sub-accounts /
+ * This only` switch in the title row.
  */
 const props = defineProps<{
   store: Store

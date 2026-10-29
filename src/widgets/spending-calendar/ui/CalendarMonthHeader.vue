@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 
 /**
  * The month and its one mark: what is left of the month's pool and what each
- * day after today may spend. The rest opens Деньги › Остаток месяца.
+ * day after today may spend. The rest opens Money › Month remainder.
  */
 const props = defineProps<{
   title: string

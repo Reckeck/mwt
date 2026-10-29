@@ -8,7 +8,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import PlanCalculator from './PlanCalculator.vue'
 import type { CalculatorPlan, PlanCalculatorDialogProps } from './plan-calculator.types'
 
-/** «Посчитать сделку · Bybit» (Money 4 · 23): records nothing until «Создать операцию». */
+/** `Work out a trade · Bybit` (Money 4 · 23): records nothing until `Create operation`. */
 const props = defineProps<PlanCalculatorDialogProps>()
 const open = defineModel<boolean>('open', { required: true })
 /** The page closes this dialog and opens the transaction form with the plan. */

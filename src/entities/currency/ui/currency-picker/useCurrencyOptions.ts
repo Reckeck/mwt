@@ -27,7 +27,7 @@ function currencyName(code: string, locale: string): string {
 
 /**
  * The catalog as picker rows: favourites and the base currency first, then fiat,
- * then crypto. Fiat rows carry a localized name, so «рубль» finds RUB.
+ * then crypto. Fiat rows carry a localized name, so "ruble" finds RUB.
  */
 export function useCurrencyOptions(kinds: MaybeRefOrGetter<CurrencyKind[]>, extra: MaybeRefOrGetter<string[]>) {
   const settings = useSettingsStore()

@@ -1,4 +1,4 @@
-//! The notification snapshot kept for a locked vault (plan §14, option Б).
+//! The notification snapshot kept for a locked vault (plan §14, option B).
 //!
 //! It lives in memory, and on disk only encrypted (XChaCha20-Poly1305) with a
 //! random key kept in the OS keyring (Secret Service, Keychain, Credential

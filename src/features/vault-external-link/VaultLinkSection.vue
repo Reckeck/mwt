@@ -10,12 +10,12 @@ import { parseError } from '@/shared/api/ipc'
 
 import { useVaultLink } from './useVaultLink'
 
-/** The body of the «Копия во внешнем файле» card: whether it is on, where, and the buttons. */
+/** The body of the `Copy in an external file` card: whether it is on, where, and the buttons. */
 const { t, te } = useI18n()
 const { status, link, unlink } = useVaultLink()
 
 const current = computed(() => status.data.value)
-/** «CODE: text» from the backend: a known code shows its translation, anything else stays as it came. */
+/** `CODE: text` from the backend: a known code shows its translation, anything else stays as it came. */
 const failure = computed(() => {
   const raw = current.value?.last_error
   if (!raw) return null

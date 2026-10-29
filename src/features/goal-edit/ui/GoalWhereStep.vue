@@ -20,7 +20,7 @@ import type { GoalField, GoalRemainder } from '../goal-edit.types'
 /**
  * Where the savings lie (one wallet), by when, whether this month's remainder
  * goes in at once and a share of each salary after it; what the goal will
- * show once saved. The rare terms wait under «Ещё».
+ * show once saved. The rare terms wait under `More`.
  */
 const props = defineProps<{
   form: FormValidation<GoalField>
@@ -57,7 +57,7 @@ const money = (value: string | number) => formatMoney(value, { decimals: 0, curr
 const offer = computed(() =>
   props.creating && props.remainder && props.remainder.currency.toLowerCase() === props.currency.toLowerCase() ? props.remainder : null,
 )
-/** «1 539 $ из 5 000 $ · 31 %» when the remainder goes in, or with what a calculation started from. */
+/** `1,539 $ of 5,000 $ · 31 %` when the remainder goes in, or with what a calculation started from. */
 const after = computed(() => {
   const goal = Number(props.target)
   const start = offer.value && fund.value ? Number(offer.value.amount) : Number(props.already ?? 0)

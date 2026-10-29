@@ -9,7 +9,7 @@ import { formatPct } from '@/shared/lib/format'
 import { termText } from '../lib/answer'
 import type { ContributionAlternative } from '../model/use-answer-extras'
 
-/** «Если взнос не по силам: срок 5 лет — 239 $ в месяц, или доходность 10 % — 434 $». */
+/** `If the contribution is unaffordable: a term of 5 years — 239 $ a month, or a return of 10 % — 434 $`. */
 const props = defineProps<{
   solved: NonNullable<CalcOutcome['solved']>
   currency: string

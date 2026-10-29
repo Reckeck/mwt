@@ -19,7 +19,7 @@ export function useCreateVault() {
   const path = ref('')
   const password = ref('')
   const passwordRepeat = ref('')
-  /** «С паролем» (the default) or «Без пароля»: a plain vault skips the password fields altogether. */
+  /** `With a password` (the default) or `no password`: a plain vault skips the password fields altogether. */
   const withPassword = ref(true)
   /** The vault keeps crypto wallets and exchanges; most people start without them. */
   const crypto = ref(false)

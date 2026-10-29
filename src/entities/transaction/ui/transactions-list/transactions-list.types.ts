@@ -18,7 +18,7 @@ export interface TransactionsListProps {
   baseCurrency?: string
   /**
    * The page loads the list in pages from the backend: how many match in all.
-   * «Показать ещё» then asks for the next page (`more`) instead of revealing rows.
+   * `Show more` then asks for the next page (`more`) instead of revealing rows.
    */
   total?: number | null
   /** The next page is on its way. */

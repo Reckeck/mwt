@@ -68,7 +68,7 @@ pub enum UpcomingKind {
     Housing,
     LoanPayment,
     Reminder,
-    /// A rejected automation run waiting for «Повторить / Пропустить».
+    /// A rejected automation run waiting for "Retry / Skip".
     RejectedRun,
     /// An operation an automation booked with an approximate amount, waiting
     /// for the real one; `source_id` is the operation's id.
@@ -129,7 +129,7 @@ impl UnlockedVault {
         self.create_reminder_paying(text, due_at, repeat, None)
     }
 
-    /// A reminder with «Оплатить» in it.
+    /// A reminder with "Pay" in it.
     pub fn create_reminder_paying(
         &mut self,
         text: &str,
@@ -171,7 +171,7 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    /// Edit what, when and what «Оплатить» fills in.
+    /// Edit what, when and what "Pay" fills in.
     pub fn update_reminder_paying(
         &mut self,
         id: &str,
@@ -660,7 +660,7 @@ impl UnlockedVault {
             });
         }
 
-        // Rejected runs wait for «Повторить / Пропустить»; operations booked
+        // Rejected runs wait for "Retry / Skip"; operations booked
         // approximately wait for their real amount.
         for run in self.automation_runs(None) {
             let name = automations

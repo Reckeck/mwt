@@ -23,9 +23,9 @@ export function readInCard(row: BillRow) {
 const quantity = (value: string | number) => formatQuantity(String(value), 3)
 
 /**
- * The line under an item's name (Wallets-2 · 13): «было 13 395 / 5 120 · 6,50 ₽
- * за кВт·ч», «показание 418 записано в карточке · 6 м³ × 49 ₽», «было 205 ·
- * своя формула: …», «как в прошлый раз · можно изменить», or why the rent is off.
+ * The line under an item's name (Wallets-2 · 13): `was 13,395 / 5,120 · 6.50 ₽
+ * per kWh`, `reading 418 saved in the card · 6 m³ × 49 ₽`, `was 205 ·
+ * custom formula: …`, `same as last time · can be changed`, or why the rent is off.
  * The sums come as parts, so the row draws them as `<Money>`.
  */
 export function lineNote(row: BillRow, t: T, automation: string | null): SumPart[] {
@@ -69,7 +69,7 @@ function noteText(row: BillRow, t: T, automation: string | null, money: (value: 
 }
 
 /**
- * What the typed readings come to: «расход 125 + 70 кВт·ч», or the formula
+ * What the typed readings come to: `used 125 + 70 kWh`, or the formula
  * with the numbers in it «(209 − 205) × 3,5 × 10 = 140».
  */
 export function lineCalc(row: BillRow, t: T): string | null {

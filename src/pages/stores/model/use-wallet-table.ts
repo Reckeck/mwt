@@ -93,7 +93,7 @@ export function useWalletTable() {
     return [...list].sort((left, right) => Number(right.subtree_base) - Number(left.subtree_base))
   })
 
-  /** «курсы на сегодня 14:20», or the date when they are older. */
+  /** `rates for today 14:20`, or the date when they are older. */
   const rates = computed(() => {
     const at = summary.data.value?.prices_as_of ?? summary.data.value?.base_fx_as_of
     if (!at) return ''

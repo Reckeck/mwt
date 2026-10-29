@@ -1,5 +1,5 @@
 //! Handing a whole vault to a new device on the local network (docs/sync.md,
-//! «Передача хранилища»), without any I/O.
+//! "Vault transfer"), without any I/O.
 //!
 //! Who gets the file can try passwords on it offline, so it only leaves when:
 //!

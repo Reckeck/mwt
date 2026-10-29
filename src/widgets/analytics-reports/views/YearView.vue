@@ -19,7 +19,7 @@ const { t } = useI18n()
 const currency = computed(() => props.report.meta.currency)
 const pct = (value: string) => formatPct(value, { decimals: 0 })
 
-/** «Март 2026» for a card title. */
+/** `March 2026` for a card title. */
 const monthTitle = (key: string) => {
   const name = monthName(key, activeLocale.value)
   return name.charAt(0).toUpperCase() + name.slice(1)

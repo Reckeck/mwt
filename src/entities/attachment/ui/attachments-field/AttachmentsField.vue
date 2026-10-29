@@ -14,8 +14,8 @@ import type { LinkDraft, StagedAttachment } from '../../attachment.types'
 import AttachmentAdd from '../attachment-add/AttachmentAdd.vue'
 
 /**
- * «Файлы и ссылки» in a form's «Ещё» (Attach 5): what is picked waits here as
- * chips and is attached once the form saves; «Отмена» drops it with the form.
+ * `Files and links` in a form's `More` (Attach 5): what is picked waits here as
+ * chips and is attached once the form saves; `Cancel` drops it with the form.
  */
 const staged = defineModel<StagedAttachment[]>({ required: true })
 

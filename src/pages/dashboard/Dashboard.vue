@@ -104,7 +104,7 @@ const hasMore = computed(() =>
   DASHBOARD_WIDGETS.some((def) => !placed.value.includes(def.id) && (!def.requires || exchanges.value.length)),
 )
 
-/** Saved calculator scenarios, newest first: the «Сценарий» widget's menu offers them. */
+/** Saved calculator scenarios, newest first: the `Scenario` widget's menu offers them. */
 const scenarioList = useCalcScenarios()
 const scenarios = computed(() =>
   [...(scenarioList.data.value ?? [])].sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
@@ -220,7 +220,7 @@ const actionsById = useWidgetActions({
   --vgl-placeholder-opacity: 15%;
   --vgl-resizer-border-color: var(--muted-foreground);
 }
-/* The stack moves by «Выше»/«Ниже» in the menu: its headers are not drag handles. */
+/* The stack moves by `Move up`/`Move down` in the menu: its headers are not drag handles. */
 .stack :deep(.widget-drag-handle) {
   cursor: auto;
 }

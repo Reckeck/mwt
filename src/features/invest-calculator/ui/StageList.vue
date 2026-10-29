@@ -12,7 +12,7 @@ import type { InvestCalc } from '../model/use-invest-calc'
 /**
  * Contribution stages, one row each: the first runs from the start, each next
  * one replaces it from its year — a «step-up» plan (10 000 now, 20 000 from year 3).
- * In the «Взнос» mode the amount is what the calculator looks for.
+ * In the `Contribution` mode the amount is what the calculator looks for.
  */
 const props = defineProps<{ calc: InvestCalc }>()
 

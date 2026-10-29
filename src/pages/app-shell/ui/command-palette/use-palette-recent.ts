@@ -13,7 +13,7 @@ const LIMIT = 5
 export interface RecentRow {
   id: string
   title: string
-  /** «кошелёк», «вчера», «операция». */
+  /** `Wallet`, `yesterday`, `operation`. */
   note: string
   /** A card: the row opens it and the → / glance work on it. */
   entity?: EntityRef
@@ -30,7 +30,7 @@ function daysAgo(iso: string): number {
 }
 
 /**
- * «Недавние» of an empty Ctrl K (Paths 1 · 7): wallets, screens with their
+ * `Recent` of an empty Ctrl K (Paths 1 · 7): wallets, screens with their
  * filter and the cards opened, in one list by time, without the screen one is on.
  */
 export function usePaletteRecent(entities: Ref<PaletteRecentHit[]>) {

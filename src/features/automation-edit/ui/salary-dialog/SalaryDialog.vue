@@ -22,10 +22,10 @@ import { SALARY_SHARE_PCT, defaultPayout, salaryInput, type SalaryPayout } from 
 import SalaryPayoutCard from './SalaryPayoutCard.vue'
 
 /**
- * «Зарплата» (Auto-2 · 9): the ready-made start already filled in. One payout
+ * `Salary` (Auto-2 · 9): the ready-made start already filled in. One payout
  * a month or two (a salary and an advance), each its own automation with its
  * own day, month it is for and amount; the income category, the wallet and
- * the switch «10 % на Наличные» are shared. The switch adds the scheme's
+ * the switch `10 % to Cash` are shared. The switch adds the scheme's
  * second step once.
  */
 const open = defineModel<boolean>('open', { required: true })

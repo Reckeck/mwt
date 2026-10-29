@@ -16,7 +16,7 @@ import { parsePairSymbol } from '@/shared/lib/pair'
 import { useTxForm } from '../../model/use-tx-form'
 
 /**
- * Opening a futures position in «Сделка · <биржа>» (OpForm-2 · 10): long or
+ * Opening a futures position in `Trade · <exchange>` (OpForm-2 · 10): long or
  * short, the contract, leverage, the margin put up and the entry price. The
  * position size follows from them, the liquidation price comes from the
  * backend's preview; closing a position stays in the full editor.
@@ -46,7 +46,7 @@ watch(
   { immediate: true },
 )
 
-/** «Позиция 0,0223 BTC · ликвидация ≈ 72 100». */
+/** `Position 0.0223 BTC · liquidation ≈ 72,100`. */
 const summary = computed(() => {
   if (!form.quantity) return null
   const position = `${formatQuantity(form.quantity, 4)} ${baseSymbol.value}`.trim()

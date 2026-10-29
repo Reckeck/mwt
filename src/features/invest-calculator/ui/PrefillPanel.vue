@@ -20,9 +20,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import type { InvestCalc } from '../model/use-invest-calc'
 
 /**
- * «Из данных»: the start amount and rate from chosen wallets, the
+ * `From your data`: the start amount and rate from chosen wallets, the
  * contribution as a share of the average income. A snapshot — the numbers
- * change only on «Обновить из данных» (decision 10).
+ * change only on `Refresh from data` (decision 10).
  */
 const props = defineProps<{ calc: InvestCalc }>()
 

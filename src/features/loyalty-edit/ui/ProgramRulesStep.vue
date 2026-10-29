@@ -13,7 +13,7 @@ import type { LoyaltyInfoState } from '../model/use-loyalty-info'
 import type { ProgramField } from '../loyalty-edit.types'
 
 /**
- * Step 2 of «Новая программа» (Ops-2 · 13, «Как начисляются?»): all optional —
+ * Step 2 of `New programme` (Ops-2 · 13, `How are points earned?`): all optional —
  * the ticker made from the name, the other cards that earn, the login and what burns next.
  */
 const props = defineProps<{

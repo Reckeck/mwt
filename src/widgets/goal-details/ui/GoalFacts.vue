@@ -9,7 +9,7 @@ import { formatMonthKey, pluralForm } from '@/shared/lib/format'
 import { storeTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
 
 /**
- * «Где копим · К дате · Пополнение · Прогноз · История» (New-Goal 3): the
+ * `Where we save · By date · Top-up · Forecast · History` (New-Goal 3): the
  * wallet opens its glance (the `wallet` slot), the automation its card, the
  * history the wallet's operations with a chip back here.
  */

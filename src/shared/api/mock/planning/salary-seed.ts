@@ -70,7 +70,7 @@ function seedAutomation(
 }
 
 export function seedSalaryAutomation(transactions: Transaction[]) {
-  // The salary comes on the 5th for the month before: its rows carry «за <месяц>».
+  // The salary comes on the 5th for the month before: its rows carry "за <месяц>" (Russian "for <month>").
   seedAutomation(transactions, 'Зарплата', 'Зарплата', 'salary', -1)
   // The flat's rent item names the automation that pays it (Wallets-2 · 10, Wallets-3 · 17).
   const rent = seedAutomation(transactions, 'Аренда квартиры', 'Аренда')

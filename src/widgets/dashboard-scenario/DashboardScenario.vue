@@ -16,7 +16,7 @@ import { useWidgetSize } from '@/shared/ui/widget-frame'
 import type { DashboardScenarioProps } from './dashboard-scenario.types'
 
 /**
- * «Сценарий» (plan H4): a calculator scenario's plan by today against what its
+ * `Scenario` (plan H4): a calculator scenario's plan by today against what its
  * wallets (or its goal) hold. S — the fact and its gap; M — the plan too; L — the end.
  */
 const props = withDefaults(defineProps<DashboardScenarioProps>(), { scenarioId: null })

@@ -1,7 +1,7 @@
 /**
  * Commands: device-to-device sync (`crate::sync` in Rust). The browser has
  * no network peers, so a scripted phone plays one: turning sync on finds it,
- * «Сопрячь» shows a code, confirming it shows a list of changes, applying it
+ * "Pair" shows a code, confirming it shows a list of changes, applying it
  * adds a batch to the history.
  */
 
@@ -84,7 +84,7 @@ const seedJournal = (): SyncJournalEntry[] => [
 /** The real handshake gives the code five minutes. */
 const PAIRING_MS = 5 * 60_000
 
-/** A second demo device that forgot this one: the list shows its badge and «Сопрячь заново». */
+/** A second demo device that forgot this one: the list shows its badge and "Pair again". */
 const LAPTOP: SyncPeerView = {
   device_id: 'mock-laptop',
   name: 'Ноутбук',
@@ -161,7 +161,7 @@ function status(): SyncStatus {
       address: prefs.enabled ? '192.168.1.174' : null,
       seen: state.phase ? 1 : 0,
       since_ms: prefs.enabled ? state.since : null,
-      // Shown until «Открыть порт», as if the phone could not get in.
+      // Shown until "Open port", as if the phone could not get in.
       inbound_blocked: prefs.enabled && !state.firewallOpen,
       firewall_fix: 'auto',
       firewall_commands: [
@@ -230,7 +230,7 @@ export const syncCommands: MockCommands = {
   sync_decide_plan: ({ body }) => {
     const accept = Boolean((body as SyncDecisionInput).accept)
     state.phase = accept ? 'live' : null
-    // Declining pauses exchange with the device until «Продолжить».
+    // Declining pauses exchange with the device until "Resume".
     if (!accept) state.peers = state.peers.map((peer) => ({ ...peer, paused: true }))
     const batchId = `batch-${state.history.length + 1}`
     state.journal = [journalLine(accept ? 'applied' : 'declined', accept ? batchId : null), ...state.journal]

@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { MINE_FILTERS, type MineFilter, isMineFilter } from '../../lib/mine-view'
 
-/** Все · Повторы · Схемы · Напоминания · Алерты (Auto-1 · 1): one is always on; on a phone one 40 px row that scrolls. */
+/** All · Repeats · Schemes · Reminders · Alerts (Auto-1 · 1): one is always on; on a phone one 40 px row that scrolls. */
 const filter = defineModel<MineFilter>({ required: true })
 const { t } = useI18n()
 

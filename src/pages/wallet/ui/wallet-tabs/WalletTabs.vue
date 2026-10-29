@@ -18,7 +18,7 @@ import { WalletRelations } from '../wallet-relations'
 /**
  * The wallet's working area under its header: the tabs its kind needs
  * (Wallets-1 · 5–7). A coin wallet shows beside them how fresh its prices
- * are, with «обновить».
+ * are, with `Refresh`.
  */
 const props = defineProps<{
   store: Store
@@ -41,7 +41,7 @@ const tab = defineModel<string>('tab', { required: true })
 const emit = defineEmits<{ operation: []; refresh: [] }>()
 
 const { t } = useI18n()
-/** «+ Статья» beside the tabs (Wallets-2 · 10); on a phone the tab puts it under the list. */
+/** `+ Item` beside the tabs (Wallets-2 · 10); on a phone the tab puts it under the list. */
 const itemOpen = ref(false)
 </script>
 

@@ -9,9 +9,9 @@ import { Button } from '@/shared/ui/button'
 import { ROW_CHIP_KEYS, useFilterChips } from '../../lib/filter-chips'
 
 /**
- * The set filters as chips, each takes itself off. A phone (Ops-1, «С файлами ×»): every one of them
- * in a line under the search, and «Сбросить» after them. A computer: only those without a field in the
- * row (several kinds from a report, «С комиссией», a chain); the rest are in the row or under «Ещё фильтры».
+ * The set filters as chips, each takes itself off. A phone (Ops-1, `With files ×`): every one of them
+ * in a line under the search, and `Reset` after them. A computer: only those without a field in the
+ * row (several kinds from a report, `With a fee`, a chain); the rest are in the row or under `More filters`.
  */
 const props = withDefaults(defineProps<{ fixedScope?: boolean }>(), { fixedScope: false })
 const filter = defineModel<TxFilter>({ required: true })
@@ -23,7 +23,7 @@ const chipsOf = useFilterChips()
 const chips = computed(() => {
   const all = chipsOf(filter.value, props.fixedScope)
   if (phone.value) return all
-  // One kind is the row's «Вид» field.
+  // One kind is the row's `Kind` field.
   return all.filter((chip) => ROW_CHIP_KEYS.includes(chip.key) && (chip.key !== 'kinds' || filter.value.kinds.length > 1))
 })
 </script>

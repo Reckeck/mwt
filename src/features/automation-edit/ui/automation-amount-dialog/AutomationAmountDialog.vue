@@ -14,7 +14,7 @@ import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 import type { AutomationAmountDialogProps } from './automation-amount-dialog.types'
 
 /**
- * «Сколько пришло»: the real amount of an operation an automation booked
+ * `How much arrived`: the real amount of an operation an automation booked
  * approximately (a salary that differs every time). It replaces the estimate
  * and makes the next one.
  */

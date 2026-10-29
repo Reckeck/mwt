@@ -50,7 +50,7 @@ import { useStoreTree } from '@/shared/api/queries'
  * The frame around every unlocked screen: sidebar, top bar, the page, and the
  * app-wide dialogs. Background events are handled here once for all screens.
  */
-// Every list of operations below makes a wallet's name and «авто» a glance.
+// Every list of operations below makes a wallet's name and `Auto` a glance.
 provideTxGlances({ wallet: WalletGlance, automation: AutomationGlance })
 // A contact typed into any picker is made in one form hosted here, over whatever is open.
 const contactCreation = useContactCreation()
@@ -77,7 +77,7 @@ const walletName = computed(() => {
   if (route.name !== 'wallet') return null
   return flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === route.params.id)?.store.name ?? null
 })
-// Home says «Нет сети» in its own bar, with the rates' age (Currency-2 · 8); the red badge is for the other screens.
+// Home says `No connection` in its own bar, with the rates' age (Currency-2 · 8); the red badge is for the other screens.
 const headerOnline = computed(() => isOnline.value || route.name === 'dashboard')
 const pageTitle = computed(() => walletName.value ?? t(route.meta.i18n ?? 'app.title'))
 useRecordPlaces(pageTitle)

@@ -14,7 +14,7 @@ export function useGraphValidation(graphJson: Ref<string>) {
         try {
           issues.value = await call<GraphIssue[]>('validate_workflow', { input: { graph: json } })
         } catch {
-          // A graph that does not parse is reported by «Сохранить».
+          // A graph that does not parse is reported by `Save`.
         }
       }, 300)
     },
