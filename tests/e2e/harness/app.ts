@@ -38,6 +38,16 @@ export interface App {
   waitFor(code: string, what: string, timeout?: number): Promise<void>
   click(selector: string): Promise<void>
   exists(selector: string): Promise<boolean>
+  /** Click the first element matching `selector` whose text matches the regular expression `pattern` (case-insensitive). */
+  clickText(selector: string, pattern: string): Promise<void>
+  /** Focus a field, replace its content with `text` the way a keyboard does (real input events). */
+  type(selector: string, text: string): Promise<void>
+  /** A key press on the focused element (`Enter`, `Escape`, `Tab`…). */
+  press(key: string): Promise<void>
+  /** Trimmed text of the first element matching `selector` (empty when there is none). */
+  text(selector: string): Promise<string>
+  /** `value` of the first matching field. */
+  value(selector: string): Promise<string>
   screenshot(name: string): Promise<string>
 }
 
@@ -79,7 +89,7 @@ function describeApp(page: Page, env: { url: string }): App {
   const isUnlocked = () =>
     page
       .eval<boolean>(
-        `const root = document.querySelector('#app')?.__vue_app__; return Boolean(root) && root.config.globalProperties.$pinia._s.get('vault')?.unlocked === true`,
+        `const root = document.querySelector('#app')?.__vue_app__; return Boolean(root) && root.config.globalProperties.$pinia._s.get('vault')?.status?.unlocked === true`,
       )
       .catch(() => false)
 
@@ -124,6 +134,41 @@ function describeApp(page: Page, env: { url: string }): App {
       await waitFor(`return document.querySelector(${JSON.stringify(selector)}) !== null`, `${selector} to exist`)
       await page.eval(`document.querySelector(${JSON.stringify(selector)}).click(); return true`)
     },
+    async clickText(selector, pattern) {
+      const find = `[...document.querySelectorAll(${JSON.stringify(selector)})].find((el) => new RegExp(${JSON.stringify(pattern)}, 'i').test(el.textContent.trim()))`
+      await waitFor(`return Boolean(${find})`, `${selector} with text /${pattern}/ to exist`)
+      await page.eval(`${find}.click(); return true`)
+    },
+    async type(selector, text) {
+      await waitFor(`return document.querySelector(${JSON.stringify(selector)}) !== null`, `${selector} to exist`)
+      await page.eval(
+        `const el = document.querySelector(${JSON.stringify(selector)}); el.focus(); el.select?.(); return true`,
+      )
+      await page.send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Delete',
+        code: 'Delete',
+        windowsVirtualKeyCode: 46,
+      })
+      await page.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Delete',
+        code: 'Delete',
+        windowsVirtualKeyCode: 46,
+      })
+      await page.send('Input.insertText', { text })
+    },
+    async press(key) {
+      const codes: Record<string, number> = { Enter: 13, Escape: 27, Tab: 9 }
+      const params = { key, code: key, windowsVirtualKeyCode: codes[key] ?? 0 }
+      await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...params })
+      await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...params })
+    },
+    text: (selector) =>
+      page.eval<string>(
+        `return (document.querySelector(${JSON.stringify(selector)})?.textContent ?? '').replace(/\\s+/g, ' ').trim()`,
+      ),
+    value: (selector) => page.eval<string>(`return document.querySelector(${JSON.stringify(selector)})?.value ?? ''`),
     exists: (selector) => page.eval<boolean>(`return document.querySelector(${JSON.stringify(selector)}) !== null`),
     async screenshot(name) {
       mkdirSync(SCREENSHOTS, { recursive: true })

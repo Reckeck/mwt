@@ -9,7 +9,7 @@ export const PAGE = `
   return [root.scrollWidth, root.scrollHeight, root.clientWidth, Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)]
 `
 
-/** Placeholders in routes and query values: {goal}, {automation}, {store:<kind>}. */
+/** Placeholders in routes and query values: {goal}, {automation}, {store:<kind>}, {event:seed|others} (the seed event; an event somebody else leads). */
 export async function fill(page, text) {
   let out = text
   for (const [token] of text.matchAll(/\{[a-z]+(?::[a-z_]+)?\}/g)) {
@@ -21,6 +21,22 @@ export async function fill(page, text) {
         const tree = await call('get_store_tree')
         const node = tree.find((item) => (item.store?.kind ?? item.kind) === '${arg}') ?? tree[0]
         return node?.store?.id ?? node?.id ?? ''
+      }
+      if ('${name}' === 'event') {
+        if ('${arg}' !== 'others') return 'mock-event-skewers'
+        // «Pay my share» exists only where somebody else leads: make one (once) in which she bought for the three of us.
+        const found = (await call('list_shared_events', { filter: { include_archived: false } })).find((entry) => entry.title === 'Дача')
+        if (found) return found.id
+        const guest = (id, name) => ({ id, name, contact_id: null, details: null })
+        const view = await call('create_shared_event', { input: {
+          title: 'Дача', note: '', starts_on: null, ends_on: null, currency: 'rub', rounding_step: '1', category_id: null,
+          organizer: 'anna', i_participate: true, participants: [guest('anna', 'Анна'), guest('boris', 'Борис')],
+        } })
+        await call('add_shared_purchase', { input: { event_id: view.event.id, purchase: {
+          item_id: null, new_item_title: 'Продукты', new_item_unit: 'шт', buyer: 'anna', qty: '1', amount: '900', currency: 'rub',
+          price_mode: 'total', rate_to_event: null, at: null, store_id: null,
+        } } })
+        return view.event.id
       }
       if ('${name}' === 'automation') return (await call('list_automations'))[0]?.id ?? ''
       return ''`)

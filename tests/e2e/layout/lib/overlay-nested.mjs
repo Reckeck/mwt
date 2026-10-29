@@ -6,6 +6,14 @@ import { FIND, LAYER, closeLayer, openLayer, pointOf, press, step } from './over
 
 const overlay = (id) => `[data-overlay="${id}"]`
 
+/** Types into a field the way a keyboard does (an input event Vue and Reka see). */
+const TYPE_IN = (selector, text) => `
+  const field = document.querySelector(${JSON.stringify(selector)})
+  field.focus()
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, ${JSON.stringify(text)})
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  return true`
+
 export const NESTED = [
   {
     id: 'select-in-dialog',
@@ -92,6 +100,18 @@ export const NESTED = [
     child: overlay('password-change'),
     openChild: [{ click: 'button', text: 'Сменить пароль' }],
   },
+  // A name typed into a contact field offers «Создать «…»»: the contact form opens over the form, the name filled in.
+  {
+    id: 'contact-create-in-form',
+    route: '/money/together',
+    open: [{ click: '[data-tour="shared-new"]' }],
+    parent: overlay('shared-event-edit'),
+    child: overlay('contact-edit'),
+    openChild: [
+      { eval: TYPE_IN('input[aria-label^="Добавить участника"]', 'Гриша') },
+      { click: '[role="option"]', text: 'Создать' },
+    ],
+  },
 ]
 
 export const NESTED_IDS = NESTED.map((entry) => entry.id)
@@ -167,6 +187,11 @@ async function openChild(page, entry, touch, again = false) {
   await page.sleep(500)
   for (const item of entry.openChild) {
     if (again && item.once) continue
+    if (item.eval) {
+      await page.eval(item.eval)
+      await page.sleep(item.wait ?? 400)
+      continue
+    }
     // A press like a person's (a touch on a phone), not a mouse click in a touch window.
     const at = await pointOf(page, item.click, item.text)
     if (!at) return false
