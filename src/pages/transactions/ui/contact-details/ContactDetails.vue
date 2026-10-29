@@ -7,6 +7,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, Pencil, ScrollTe
 
 import { ContactAccounts, ContactEditDialog } from '@/features/contact-edit'
 import { DebtTermsPopover } from '@/features/debt-manage'
+import { ContactSharedEvents } from '@/widgets/contact-shared-events'
 import { ContactTurnoverTable, accountCounts, contactNets, isQuickContact } from '@/entities/contact'
 import { Badge } from '@/shared/ui/badge'
 import { Money, useConversions } from '@/entities/currency'
@@ -196,6 +197,8 @@ const menu = computed<UiAction[]>(() => {
         :transfer-disabled="props.transferBlocked"
         @transfer="(account) => transfer(null, account)"
       />
+
+      <ContactSharedEvents :contact-id="props.contact.id" />
 
       <section class="grid grid-cols-1 gap-2">
         <h3 class="text-base font-semibold">{{ t('contacts.operations') }}</h3>

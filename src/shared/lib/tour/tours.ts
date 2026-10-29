@@ -95,6 +95,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'bottom-nav', key: 'dashboard.bottomNav', side: 'top' },
     { target: 'quick-add', key: 'dashboard.quickAdd', side: 'bottom' },
     { target: 'dash-health', key: 'dashboard.healthWidget', side: 'top' },
+    { target: 'dash-shared-events', key: 'sharedEvents.dashboard', side: 'top' },
     { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },
     { target: 'sidebar-pinned', key: 'dashboard.pinned', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
@@ -221,6 +222,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'contact-editor', key: 'directory.editor', side: 'left' },
     { target: 'contact-accounts', key: 'directory.accounts', side: 'top' },
     { target: 'contact-debts', key: 'directory.debts', side: 'top' },
+    { target: 'contact-shared-events', key: 'sharedEvents.contact', side: 'top' },
     { target: 'contact-transactions', key: 'directory.transactions', side: 'bottom' },
   ],
   'transactions-bonuses': [
@@ -261,6 +263,14 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'calc-overlay', key: 'planningCalculator.overlay', side: 'top' },
     { target: 'calc-table', key: 'planningCalculator.table', side: 'top' },
   ]),
+  // The event screen: the next stream adds the plan and the purchases above the settlement.
+  'money-together-event': [
+    { target: 'shared-settlement-summary', key: 'sharedEvents.summary', side: 'bottom' },
+    { target: 'shared-my-position', key: 'sharedEvents.myPosition', side: 'bottom' },
+    { target: 'shared-settlement', key: 'sharedEvents.settlement', side: 'top' },
+    { target: 'shared-pay-share', key: 'sharedEvents.payShare', side: 'bottom' },
+    { target: 'shared-share', key: 'sharedEvents.share', side: 'bottom' },
+  ],
   'automations-reminders': planning([
     { target: 'section-content', key: 'planningReminders.content', side: 'top' },
     { target: 'reminder-filter', key: 'planningReminders.filter', side: 'bottom' },
