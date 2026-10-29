@@ -35,11 +35,13 @@ description: >
 
 ```bash
 cargo fmt
-mise run check      # biome check . && vue-tsc --noEmit && clippy && cargo test --workspace
+mise run check      # cargo xtask check: параллельно, fail-fast, логи в .cache/xtask/
 ```
 
-`mise run check` — это **полный** гейт: Biome (линт + формат) + строгий typecheck
-фронтенда + clippy `-D warnings` + все тесты воркспейса. Гейт зелёный → можно
+`mise run check` — это **полный** гейт: Biome (линт + формат), строгий typecheck
+фронтенда, проверки правил (`check-*.mjs`, layout/links `--quick`), `cargo fmt --check`,
+clippy `-D warnings`, все тесты воркспейса, актуальность `ipc.gen.d.ts` и компиляция
+под все платформы — параллельно, первая ошибка гасит остальное. Гейт зелёный → можно
 коммитить. Не зелёный → коммит запрещён: сначала чини причину.
 
 Локальный срез, если правка заведомо узкая (быстрее, но не заменяет финальный `check`):

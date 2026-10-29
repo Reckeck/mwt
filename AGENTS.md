@@ -29,10 +29,10 @@
 | `mise run check-forms` | у форм кнопка сохранения не заблокирована проверкой полей, поля проверяются при сохранении (правило 13); счёт, актив и валюта выбираются готовыми компонентами (правило 14) |
 | `mise run changelog` | обновить список коммитов в `## [Unreleased]` CHANGELOG.md (git-cliff) |
 | `mise run bump` | следующая версия (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) во все файлы + раздел CHANGELOG |
-| `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах») |
+| `mise run check-platforms` | компиляция (clippy) под linux, windows, android, macos; `SKIP` — машина эту платформу проверить не может (правило «Сборка на всех платформах»); те же задачи входят в `mise run check`; одна платформа — `mise run check-platforms -- windows` |
 | `mise run check-ci` | CI-скрипты: `*.ps1` только ASCII, shell-скрипты разбираются (`scripts/ci/lint-ci.sh`) |
 | `mise run check-layout` | приложение на мок-бэкенде в headless Chromium на 1920…720 и 390/360, тёмная и светлая тема: нет переполнения и прокрутки вбок, наведение и загрузка ничего не сдвигают, диалог открывается на месте, слушатели не копятся, «Назад» закрывает слой, цели касания ≥ 40 px, соседние блоки одного контейнера не налезают друг на друга (правило 17); `--quick` — 1280 и 390, `--report` — без падения; скриншоты в `.cache/check-layout/` |
-| `mise run check` | lint + typecheck + test-frontend + test-e2e + onboarding + forms + ui + layout (`--quick`) + ci + clippy + tests |
+| `mise run check` | `cargo xtask check`: lint + typecheck + test-frontend + статические проверки (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + платформы параллельно, затем по одной test-e2e, layout и links (`--quick`); fail-fast — первая ошибка гасит остальное; логи в `.cache/xtask/<задача>.log`; `--list` — граф, имена задач — фильтр; второй запуск в той же рабочей копии подключается к идущему |
 | `mise run build` | тесты + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | бандлы всех платформ (linux, pacman, flatpak, android, windows без MSI, macos на Mac) в CI-образах через podman, в `.cache/build-all/builds/` (`docs/ci.md`, «Локально») |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; Tauri v2 CLI сам находит `crates/app/tauri.conf.json` из корня воркспейса) |
@@ -333,7 +333,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 
 ```bash
 cargo fmt             # сначала форматирование, потом проверки
-mise run check        # biome check + vue-tsc --noEmit + clippy + cargo test --workspace
+mise run check        # cargo xtask: все проверки + clippy + тесты + gen-types + платформы, fail-fast
 ```
 
 Гейт зелёный → коммитим. Не зелёный → коммит запрещён, сначала чини.
@@ -511,7 +511,7 @@ Codex — их каталог планов вне репозитория), по�
 ## Definition of Done
 
 - [ ] `cargo fmt` выполнен, диффа от автоформатирования нет
-- [ ] `mise run check` — зелёные (biome + vue-tsc + clippy + `cargo test --workspace`)
+- [ ] `mise run check` — зелёный (все проверки, clippy, `cargo test --workspace`, gen-types, платформы)
 - [ ] `mise run check-platforms` на финальном состоянии — без `FAIL`; каждый
       `SKIP` назван пользователю с причиной
 - [ ] `mise run gen-types` — `src/shared/api/ipc.gen.d.ts` актуален (если менялись DTO)

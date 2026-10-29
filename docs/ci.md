@@ -230,7 +230,7 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
 теми же томами, что у `build:all`) и macos (только на Mac или через
 `MACOS_BUILD_HOST`). Обязательна после последней правки перед влитием и
 коммитом (AGENTS.md, «Сборка на всех платформах»). Логи —
-`.cache/check-platforms/<платформа>.log`; `SKIP` с причиной — машина
+`.cache/xtask/<задача>.log` (`clippy` = linux, `platform-windows.log` …); запускает `cargo xtask check-platforms` (те же задачи входят в `mise run check`); `SKIP` с причиной — машина
 платформу проверить не может, `FAIL` — код не собирается.
 
 ```bash
