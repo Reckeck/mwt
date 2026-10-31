@@ -28,6 +28,8 @@ pub struct Env {
     pub out: String,
     /// Build linux and flatpak on this host instead of in containers.
     pub native: bool,
+    /// The Android versionCode of the overlay.
+    pub version_code: u32,
     /// podman or docker; `None` when neither is installed.
     pub engine: Option<String>,
     pub image_tag: String,
@@ -44,6 +46,7 @@ impl Env {
         channel: &str,
         version: &str,
         native: bool,
+        version_code: u32,
     ) -> anyhow::Result<Self> {
         let engine = std::env::var("CONTAINER_ENGINE")
             .ok()
@@ -59,6 +62,7 @@ impl Env {
             version: version.to_string(),
             out: format!(".cache/build-all/builds/{}", channel.label()),
             native,
+            version_code,
             engine,
             image_tag: crate::images::tag(&root)?,
             network: std::env::var("CONTAINER_NETWORK")
@@ -216,6 +220,12 @@ impl Env {
             "ANDROID_KEYSTORE_PASSWORD",
             "ANDROID_KEY_ALIAS",
             "ANDROID_KEY_PASSWORD",
+            // CI: thin LTO for pre-releases, AppImage without FUSE, Gradle without a daemon.
+            "CARGO_PROFILE_RELEASE_LTO",
+            "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
+            "APPIMAGE_EXTRACT_AND_RUN",
+            "NO_STRIP",
+            "GRADLE_OPTS",
         ] {
             cmd = cmd.args(["-e", name]);
         }

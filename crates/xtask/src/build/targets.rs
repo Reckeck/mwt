@@ -23,7 +23,7 @@ pub fn overlay(env: &Env, lane: &str, android: bool, container: bool) -> Result<
         channel: env.channel,
         android,
         version: &env.version,
-        version_code: 1,
+        version_code: env.version_code,
         prebuilt_frontend: true,
     };
     let path = tauri_config::write(&env.root, &rel, &params)

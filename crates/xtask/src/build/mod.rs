@@ -30,6 +30,8 @@ pub struct Facts {
     pub mac: MacFacts,
     /// The Linux tarball of this channel and version is already in the output folder.
     pub tarball: bool,
+    /// `dist/` was built before: no `build:frontend` task, nothing waits for it.
+    pub prebuilt_frontend: bool,
 }
 
 /// The version ends up inside shell quotes of the container scripts.
@@ -61,7 +63,11 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
     let wanted = |name: &str| chosen.is_empty() || chosen.iter().any(|item| item == name);
     let frontend = task_name("frontend");
     let linux = task_name("linux");
-    let after_frontend = vec![frontend.as_str()];
+    let after_frontend = if facts.prebuilt_frontend {
+        Vec::new()
+    } else {
+        vec![frontend.as_str()]
+    };
     let mut tasks = Vec::new();
     for platform in PLATFORMS.into_iter().filter(|name| wanted(name)) {
         let name = task_name(platform);
@@ -112,7 +118,7 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
         };
         tasks.push(task);
     }
-    if tasks.iter().any(|task| task.deps.contains(&frontend)) {
+    if !facts.prebuilt_frontend && tasks.iter().any(|task| task.deps.contains(&frontend)) {
         // The first to start: everything else waits for it.
         tasks.insert(0, frontend_task(&frontend));
     }
