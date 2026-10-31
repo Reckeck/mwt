@@ -1,6 +1,7 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
 mod build;
+mod changelog;
 mod channel;
 mod checks;
 mod exec;
@@ -9,6 +10,7 @@ mod guard;
 mod images;
 mod lock;
 mod platforms;
+mod release;
 mod sccache;
 mod sink;
 mod tauri_config;
@@ -48,6 +50,14 @@ enum Command {
     Build(BuildArgs),
     /// The version a build ships under (X.Y.Z, or with `--channel` the one CI builds).
     Version(VersionArgs),
+    /// Refresh the commit list of `## [Unreleased]` in CHANGELOG.md (git-cliff).
+    Changelog,
+    /// The next version into every file and `[Unreleased]` becomes its section of CHANGELOG.md.
+    Bump {
+        /// auto, patch, minor, major or X.Y.Z.
+        #[arg(default_value = "auto")]
+        level: String,
+    },
     /// Write the Tauri config overlay of a build and print its absolute path.
     TauriConfig(TauriConfigArgs),
     /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
@@ -206,6 +216,14 @@ async fn run() -> Result<i32> {
                     output: args.output.clone(),
                 },
             )?;
+            return Ok(0);
+        }
+        Command::Changelog => {
+            release::run_changelog(&root)?;
+            return Ok(0);
+        }
+        Command::Bump { level } => {
+            release::run_bump(&root, level)?;
             return Ok(0);
         }
         Command::TauriConfig(args) => {
