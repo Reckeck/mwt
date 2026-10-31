@@ -56,6 +56,12 @@ struct CheckArgs {
     /// Run layout/links next to the cargo builds (faster, but timing checks can flake under load).
     #[arg(long)]
     overlap_browser: bool,
+    /// Only the checks of the web part (`checks::FRONTEND`).
+    #[arg(long, conflicts_with_all = ["tasks", "no_frontend"])]
+    frontend: bool,
+    /// Everything else: a new task lands here, so a CI split into two jobs cannot lose it.
+    #[arg(long, conflicts_with = "tasks")]
+    no_frontend: bool,
     /// Print the task graph and exit.
     #[arg(long)]
     list: bool,
@@ -77,10 +83,16 @@ async fn run() -> Result<i32> {
     let root = lock::find_root()?;
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
-            let tasks = graph::select(
-                checks::check_tasks(&root, args.overlap_browser),
-                &args.tasks,
-            )?;
+            let mut all = checks::check_tasks(&root, args.overlap_browser);
+            if args.no_frontend {
+                all.retain(|task| !checks::FRONTEND.contains(&task.name.as_str()));
+            }
+            let names = if args.frontend {
+                checks::FRONTEND.map(String::from).to_vec()
+            } else {
+                args.tasks.clone()
+            };
+            let tasks = graph::select(all, &names)?;
             if args.list {
                 list(&tasks);
                 return Ok(0);

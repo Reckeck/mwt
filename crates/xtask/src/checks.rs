@@ -71,6 +71,11 @@ fn clippy_workspace(root: &Path) -> Task {
 }
 
 /// Declaration order is the start order: the long tasks first.
+/// The checks of the web part: need `node_modules` (CI runs them in a job of their own).
+pub const FRONTEND: [&str; 7] = [
+    "biome", "vue-tsc", "unit", "checks", "e2e", "layout", "links",
+];
+
 pub fn check_tasks(root: &Path, overlap_browser: bool) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(
