@@ -17,7 +17,7 @@
 | check | `rust:clippy` | `mise run clippy` |
 | check | `rust:test` | `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |
 | check | `ci:lint` | `scripts/ci/lint-ci.sh`: `*.ps1` только ASCII (Windows PowerShell 5.1), `bash -n` всех скриптов |
-| check | `version` | только где есть сборки: версия сборки (`scripts/ci/version.sh`, dotenv `BUILD_VERSION`), стоп, если `vX.Y.Z` уже выпущен |
+| check | `version` | только где есть сборки: версия сборки (`cargo xtask version`, dotenv `BUILD_VERSION`), стоп, если `vX.Y.Z` уже выпущен |
 | check | `sast`, `secret_detection` | шаблоны GitLab Security |
 | build | `build:linux` | `.deb`, `.rpm`, `.AppImage`, `tar.gz` с бинарником (Ubuntu 22.04 — старый glibc, файлы запускаются на новых дистрибутивах) |
 | build | `build:windows` | NSIS-установщик `.exe`, MSI (по одному на `en-US` и `ru-RU`), portable `.zip` с голым `.exe` |
@@ -104,16 +104,32 @@
 
 Пре-релизы — каждый пуш в `development`, релиз — мерж в `main`; шаги — в
 [workflow.md](workflow.md#выпуск). Версия сборки:
-`scripts/ci/version.sh --channel dev|prod|none` (dev и ручные — `X.Y.Z-N`,
+`cargo xtask version --channel dev|prod|none` (dev и ручные — `X.Y.Z-N`,
 prod — `X.Y.Z`); в сборку она попадает через `tauri build --config`
-(`scripts/ci/tauri-config.sh`), вместе с Android `versionCode` = номер
+(`cargo xtask tauri-config`), вместе с Android `versionCode` = номер
 пайплайна.
+
+### Выпуск через xtask (GitHub)
+
+Служебные шаги выпуска вынесены в команды xtask (`crates/xtask/src/publish/`),
+каждая понимает `--dry-run` (печатает команды, ничего не делает на GitHub):
+
+| Команда | Что делает |
+|---|---|
+| `cargo xtask publish --version V --dir D [--pre]` | `SHA256SUMS`, затем `gh release create`; `--pre` для пре-релиза `X.Y.Z-N` из `development` |
+| `cargo xtask prune-prereleases [--keep N]` | оставить `N` последних пре-релизов (по умолчанию `PRERELEASES_KEPT` или 10), остальные и их теги удалить |
+| `cargo xtask backmerge --version V` | PR `main` в `development` после выпуска |
+| `cargo xtask publish-aur --version V --dir D` | пуш `multi-wallet-tracker-bin` в AUR (`AUR_SSH_PRIVATE_KEY`) |
+
+Токен — `GH_TOKEN` (или `GITHUB_TOKEN`) вместо `RELEASE_TOKEN` GitLab.
+`release.yml` ещё не написан, и реальный выпуск через эти команды не
+проверялся: проверены только тесты и `--dry-run`.
 
 ### Каналы: релиз и dev-приложение
 
 Сборки `main` (`RELEASE_CHANNEL=prod`) и `development` (`dev`) — два разных
 приложения: ставятся рядом, данные у каждого свои. Имена задаёт
-`scripts/ci/channel.sh`, в сборку их кладёт оверлей `tauri-config.sh`
+`crates/xtask/src/channel.rs`, в сборку их кладёт оверлей `cargo xtask tauri-config`
 (`build-windows.ps1` повторяет их, `mise run check-ci` сверяет):
 
 | | prod (`main`, релиз) | dev (`development`, ручные, локальные) |
@@ -134,6 +150,34 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
   `mwt.desktop` начинает с чистого каталога.
 - Манифест Flatpak в репозитории — dev; релизный `build-flatpak.sh`
   рендерит из него под своим ID.
+
+### Оверлей и имена канала для скриптов сборки
+
+Скрипты `scripts/ci/build-*.sh` не вызывают xtask (в контейнерах pacman и
+flatpak нет cargo), поэтому имена канала и конфиг Tauri приходят к ним
+снаружи:
+
+- `MWT_TAURI_CONFIG` — путь к оверлею (`tauri build --config`), его пишет
+  `cargo xtask tauri-config` (по умолчанию `.cache/tauri-ci.json`; `cargo xtask
+  build` пишет свой файл на платформу, `.cache/tauri-ci-<платформа>.json`);
+- `MWT_APP_NAME`, `MWT_APP_BIN`, `MWT_APP_ID`, `MWT_APP_ANDROID_ID`,
+  `MWT_APP_FLATPAK_ID`, `MWT_APP_ICONS` — значения канала из `Channel::env()`
+  (`crates/xtask/src/channel.rs`).
+
+## GitHub Actions
+
+Проверки на GitHub идут в `.github/workflows/ci.yml` (образы — `images.yml`,
+очистка кэша — `cache-cleanup.yml`); GitLab-часть ниже описывает прежний
+пайплайн и переписывается отдельным этапом.
+
+- `check-linux` (`cargo xtask check --no-frontend --no-platforms`) и
+  `check-frontend` (`cargo xtask check --frontend`) — два разных job'а в
+  образе `ci-linux`: Rust-проверки и веб-часть (lint, typecheck, vitest,
+  статические проверки, e2e, layout, links) идут параллельно.
+- macOS в CI на паузе: job `clippy-macos` оставлен в файле, но в матрице
+  закомментирован.
+- `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) действует только на C/C++;
+  на rustc sccache его не применяет.
 
 ## Раннеры
 
@@ -164,7 +208,7 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 | `MACOS_BUILD` | `build:macos` | `true` включает macOS-сборку (нужен macOS-раннер) |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | подпись macOS | base64 `.p12` Developer ID; masked. Без них — подпись ad hoc |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | нотаризация macOS | пароль приложения Apple ID; masked |
-| `RELEASE_TOKEN` | `prerelease:cleanup`, `backmerge`; `release`, если `CI_JOB_TOKEN` не хватает прав | project access token, роль Maintainer, scope `api` |
+| `RELEASE_TOKEN` (в GitHub Actions его заменяет `GH_TOKEN`) | `prerelease:cleanup`, `backmerge`; `release`, если `CI_JOB_TOKEN` не хватает прав | project access token, роль Maintainer, scope `api` |
 
 Без ключа Android APK подписывается одноразовым тестовым ключом и получает
 суффикс `-testkey`: ставится для проверки, но не обновляет предыдущую
@@ -184,8 +228,8 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
   (`scripts/icons.sh`, нужны `rsvg-convert` и `magick`) собирает PNG/ICO/ICNS
   двух каналов в `crates/app/icons/prod/` и `dev/` и `public/favicon.svg`;
   PNG коммитятся, CI ничего не рисует. `tauri.conf.json` указывает на `dev/`,
-  оверлей `tauri-config.sh` / `build-windows.ps1` — на папку канала
-  (`app_icons` в `channel.sh`). 32 px и меньше — из `*-small.svg` (без задних
+  оверлей `cargo xtask tauri-config` / `build-windows.ps1` — на папку канала
+  (`Channel::icons` в `channel.rs`). 32 px и меньше — из `*-small.svg` (без задних
   рёбер куба), у dev — оранжевая полоса DEV.
 
 - **Android.** Gradle-проект (`crates/app/gen/android`) генерируется в CI
@@ -275,9 +319,8 @@ mise run build:all -- --list linux pacman  # граф задач без запу
 Граф: `build:frontend` (`pnpm build` на хосте, один раз, в `dist/`) →
 `android`, `windows`, `linux` (тяжёлые, не больше `--heavy` за раз) →
 `pacman`, `flatpak` (после `linux`); `macos` не ждёт никого. Платформенные
-`tauri build` не запускают фронт повторно: `tauri-config.sh` при
-`MWT_PREBUILT_FRONTEND=1` кладёт в overlay пустой `beforeBuildCommand`
-(GitLab CI переменную не задаёт). `pacman` и `flatpak` без `linux` в списке
+`tauri build` не запускают фронт повторно: оверлей `cargo xtask tauri-config
+--prebuilt-frontend` содержит пустой `beforeBuildCommand` (GitLab CI флаг не задаёт). `pacman` и `flatpak` без `linux` в списке
 берут tarball из папки результата, а если его там нет — ошибка до начала
 сборки («build it first»).
 
@@ -302,7 +345,7 @@ mise run build:all -- --list linux pacman  # граф задач без запу
   (`.cache/tauri-ci-<платформа>.json`, переменная `TAURI_CI_CONFIG`), а Android
   работает на личной копии `crates/app/icons` (`MWT_ICONS_ISOLATED=1`): `tauri
   icon` переписывает иконки, пока linux и windows их читают.
-- Версия по умолчанию — из `tauri.conf.json` (`scripts/ci/version.sh`).
+- Версия по умолчанию — из `tauri.conf.json` (`cargo xtask version`).
 - Первый `windows` дольше: строится образ с `cargo-xwin`, а тот скачивает
   Windows SDK (кэш в томе `mwt-build-<копия>-windows-home`).
 
@@ -310,6 +353,6 @@ mise run build:all -- --list linux pacman  # граф задач без запу
 
 ```bash
 mise run build                                       # deb/rpm/AppImage
-scripts/ci/collect-linux.sh "$(scripts/ci/version.sh)" release
+scripts/ci/collect-linux.sh "$(cargo xtask version)" release
 packaging/aur/render.sh 0.1.0 release/multi-wallet-tracker-0.1.0-linux-x86_64.tar.gz > PKGBUILD
 ```
