@@ -4,8 +4,8 @@
 import { OVERLAYS } from './overlay-list.mjs'
 import { APP, LAYER, FIND, PAGE, closeLayer, differs, openLayer, press, step } from './overlay-steps.mjs'
 import { login } from './scenario.mjs'
-import { crossLayers } from './overlay-cross.mjs'
-import { nestedLayers } from './overlay-nested.mjs'
+import { CROSS_IDS, crossLayers } from './overlay-cross.mjs'
+import { NESTED, nestedLayers } from './overlay-nested.mjs'
 import { OVERFLOW, TOUCH } from './probes.mjs'
 
 export { OVERLAYS }
@@ -87,10 +87,26 @@ async function runGuarded(page, entry, touch, label) {
   return problems
 }
 
+const isWanted = (entry, touch) => (entry.phone === 'only' ? touch : !touch || entry.phone)
+
+/**
+ * The ids `overlays()` visits at that pointer, in its order (plain layers, layer over layer, nested pairs,
+ * the lock screen last): check-layout cuts the list into units of about ten.
+ */
+export function overlayIds(touch) {
+  const plain = OVERLAYS.filter((entry) => isWanted(entry, touch))
+  return [
+    ...plain.filter((entry) => !entry.locked).map((entry) => entry.id),
+    ...CROSS_IDS,
+    ...NESTED.filter((entry) => !(touch && entry.desktop)).map((entry) => entry.id),
+    ...plain.filter((entry) => entry.locked).map((entry) => entry.id),
+  ]
+}
+
 /** All layers at the current window size; `only` filters by id. The ones on the lock screen go last. */
 export async function overlays(page, { touch, label, only }) {
   const problems = []
-  const wanted = OVERLAYS.filter((entry) => (!only?.length || only.includes(entry.id)) && (entry.phone === 'only' ? touch : !touch || entry.phone))
+  const wanted = OVERLAYS.filter((entry) => (!only?.length || only.includes(entry.id)) && isWanted(entry, touch))
   for (const entry of wanted.filter((item) => !item.locked)) problems.push(...(await runGuarded(page, entry, touch, label)))
   problems.push(...(await crossLayers(page, { touch, label, only })))
   problems.push(...(await nestedLayers(page, { touch, label, only })))

@@ -20,7 +20,9 @@ i18n (реальная ru-локаль) замоканы в `src/test/setup.ts`.
 `tests/checks/rules/ui/`. Запуск `mise run check-<имя>` (`-- --update` у ui и fsd переписывает базу
 `scripts/check-*.baseline.json`) или всем набором `pnpm exec vitest run --project checks`.
 `mise run check-layout` и `check-links` — проект `layout` (`tests/e2e/layout/`, `tests/e2e/links/`, зонды в
-`lib/`), флаги `--quick`, `--report`, `--update`, `--overlays=id` через `scripts/run-browser-check.mjs`;
+`lib/`), флаги `--quick`, `--report`, `--update`, `--overlays=id`, `--jobs N` (процессы одной машины),
+`--shard K/N` (доля юнитов, матрица CI), `--update-weights` (пишет `weights.json` из замеров
+`.cache/check-<имя>/timings.json`) через `scripts/run-browser-check.mjs`; деление — `tests/e2e/harness/shard.ts`;
 запускай их отдельными процессами (касание в layout необратимо для указателя в том же браузере).
 
 ```bash

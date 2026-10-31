@@ -19,7 +19,9 @@ declare module 'vitest' {
 export default async function setup(project: TestProject) {
   const binary = findChromium()
   if (!binary) throw new Error('e2e: no Chromium (set CHROMIUM=/path/to/chromium)')
-  const { vite, url } = await startVite()
+  // --jobs N (scripts/run-browser-check.mjs): one Vite for all the shards, started by the runner.
+  const shared = process.env.E2E_VITE_URL
+  const { vite, url } = shared ? { vite: null, url: shared } : await startVite()
   const debugPort = await freePort()
   const browser = await spawnBrowser(binary, debugPort)
   project.provide('e2e', { url, debugPort })
@@ -27,6 +29,6 @@ export default async function setup(project: TestProject) {
   await fetch(url)
   return async () => {
     await browser.stop()
-    vite.kill()
+    vite?.kill()
   }
 }

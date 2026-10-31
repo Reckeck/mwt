@@ -60,14 +60,45 @@ const QUIET_AFTER: [&str; 10] = [
     "platform:macos",
 ];
 
-/// `scripts/run-browser-check.mjs <name> [--quick]`: the vitest project `layout` on one file.
-fn browser_check(name: &str, full: bool) -> Task {
-    Task::cmd(name, Class::Browser, &[], browser_cmd(name, full))
+/// How layout and links run: `--quick` unless `full`, one share of the units (`--shard K/N`, the CI matrix),
+/// processes per share (`--jobs`; the script picks by cores when empty).
+#[derive(Clone, Default, Debug)]
+pub struct BrowserOpts {
+    pub full: bool,
+    pub shard: Option<String>,
+    pub jobs: Option<usize>,
 }
 
-fn browser_cmd(name: &str, full: bool) -> Cmd {
-    let cmd = Cmd::new("node").args(["scripts/run-browser-check.mjs", name]);
-    if full { cmd } else { cmd.arg("--quick") }
+/// `scripts/run-browser-check.mjs <name> [--quick] [--shard K/N] [--jobs N]`: the vitest project `layout` on one file.
+fn browser_check(name: &str, opts: &BrowserOpts) -> Task {
+    Task::cmd(name, Class::Browser, &[], browser_cmd(name, opts))
+}
+
+fn browser_cmd(name: &str, opts: &BrowserOpts) -> Cmd {
+    let mut cmd = Cmd::new("node").args(["scripts/run-browser-check.mjs", name]);
+    if !opts.full {
+        cmd = cmd.arg("--quick");
+    }
+    if let Some(shard) = &opts.shard {
+        cmd = cmd.args(["--shard", shard]);
+    }
+    if let Some(jobs) = opts.jobs {
+        cmd = cmd.args(["--jobs", &jobs.to_string()]);
+    }
+    cmd
+}
+
+/// `K/N` with 1 <= K <= N (clap's value parser of `--shard`).
+pub fn parse_shard(text: &str) -> Result<String, String> {
+    let bad = || format!("`{text}` is not K/N with 1 <= K <= N");
+    let (index, total) = text.split_once('/').ok_or_else(bad)?;
+    let index: u32 = index.parse().map_err(|_| bad())?;
+    let total: u32 = total.parse().map_err(|_| bad())?;
+    if (1..=total).contains(&index) {
+        Ok(text.to_string())
+    } else {
+        Err(bad())
+    }
 }
 
 fn clippy_workspace(root: &Path) -> Task {
@@ -80,11 +111,13 @@ fn clippy_workspace(root: &Path) -> Task {
 
 /// Declaration order is the start order: the long tasks first.
 /// The checks of the web part: need `node_modules` (CI runs them in a job of their own).
-pub const FRONTEND: [&str; 7] = [
-    "biome", "vue-tsc", "unit", "checks", "e2e", "layout", "links",
-];
+pub const FRONTEND: [&str; 5] = ["biome", "vue-tsc", "unit", "checks", "e2e"];
 
-pub fn check_tasks(root: &Path, overlap_browser: bool, full_browser: bool) -> Vec<Task> {
+/// The browser sweeps: CI cuts them into shards (`--shard K/N`, job `frontend-layout`), so neither
+/// `--frontend` nor `--no-frontend` runs them there.
+pub const SHARDED: [&str; 2] = ["layout", "links"];
+
+pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpts) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(
             "test",
@@ -98,8 +131,8 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, full_browser: bool) -> Ve
     tasks.push(clippy_workspace(root));
     tasks.extend([
         browser(vitest("e2e", Class::Browser, "e2e"), overlap_browser),
-        browser(browser_check("layout", full_browser), overlap_browser),
-        browser(browser_check("links", full_browser), overlap_browser),
+        browser(browser_check("layout", browser_opts), overlap_browser),
+        browser(browser_check("links", browser_opts), overlap_browser),
         Task::cmd(
             "biome",
             Class::Light,
@@ -170,17 +203,41 @@ fn gen_types(_root: &Path) -> Task {
 
 #[cfg(test)]
 mod tests {
-    use super::browser_cmd;
+    use super::{BrowserOpts, browser_cmd, parse_shard};
+
+    fn opts(full: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
+        BrowserOpts {
+            full,
+            shard: shard.map(String::from),
+            jobs,
+        }
+    }
 
     #[test]
     fn browser_checks_are_quick_unless_full() {
         assert_eq!(
-            browser_cmd("layout", false).display(),
+            browser_cmd("layout", &opts(false, None, None)).display(),
             "node scripts/run-browser-check.mjs layout --quick"
         );
         assert_eq!(
-            browser_cmd("links", true).display(),
+            browser_cmd("links", &opts(true, None, None)).display(),
             "node scripts/run-browser-check.mjs links"
         );
+    }
+
+    #[test]
+    fn browser_checks_pass_the_shard_and_jobs_on() {
+        assert_eq!(
+            browser_cmd("layout", &opts(true, Some("2/6"), Some(1))).display(),
+            "node scripts/run-browser-check.mjs layout --shard 2/6 --jobs 1"
+        );
+    }
+
+    #[test]
+    fn shard_is_k_of_n() {
+        assert_eq!(parse_shard("3/6"), Ok("3/6".to_string()));
+        for bad in ["0/6", "7/6", "3", "a/b", "1/0", "/"] {
+            assert!(parse_shard(bad).is_err(), "{bad}");
+        }
     }
 }
