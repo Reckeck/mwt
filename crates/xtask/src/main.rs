@@ -10,6 +10,7 @@ mod guard;
 mod images;
 mod lock;
 mod platforms;
+mod publish;
 mod release;
 mod sccache;
 mod sink;
@@ -58,6 +59,14 @@ enum Command {
         #[arg(default_value = "auto")]
         level: String,
     },
+    /// A GitHub release or pre-release: SHA256SUMS, then `gh release create`.
+    Publish(publish::PublishArgs),
+    /// Delete the old pre-releases (and their tags) beyond the newest N.
+    PrunePrereleases(publish::PruneArgs),
+    /// Open the pull request main -> development after a release.
+    Backmerge(publish::BackmergeArgs),
+    /// Push multi-wallet-tracker-bin to the AUR (for an archlinux container).
+    PublishAur(publish::AurArgs),
     /// Write the Tauri config overlay of a build and print its absolute path.
     TauriConfig(TauriConfigArgs),
     /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
@@ -90,6 +99,9 @@ struct CheckArgs {
     /// Without the compile checks for other platforms (`platform:*`).
     #[arg(long, conflicts_with_all = ["tasks", "frontend"])]
     no_platforms: bool,
+    /// layout and links over every width and both themes instead of `--quick` (CI runs this way).
+    #[arg(long)]
+    full_browser: bool,
     /// Print the task graph and exit.
     #[arg(long)]
     list: bool,
@@ -166,7 +178,7 @@ async fn run() -> Result<i32> {
     let mut built = None;
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
-            let mut all = checks::check_tasks(&root, args.overlap_browser);
+            let mut all = checks::check_tasks(&root, args.overlap_browser, args.full_browser);
             if args.no_platforms {
                 all.retain(|task| !task.name.starts_with("platform:"));
             }
@@ -203,7 +215,7 @@ async fn run() -> Result<i32> {
                     .collect();
             }
             (
-                graph::select(checks::check_tasks(&root, false), &names)?,
+                graph::select(checks::check_tasks(&root, false, false), &names)?,
                 *heavy,
             )
         }
@@ -224,6 +236,22 @@ async fn run() -> Result<i32> {
         }
         Command::Bump { level } => {
             release::run_bump(&root, level)?;
+            return Ok(0);
+        }
+        Command::Publish(args) => {
+            publish::run_publish(&root, args)?;
+            return Ok(0);
+        }
+        Command::PrunePrereleases(args) => {
+            publish::run_prune(args)?;
+            return Ok(0);
+        }
+        Command::Backmerge(args) => {
+            publish::run_backmerge(args)?;
+            return Ok(0);
+        }
+        Command::PublishAur(args) => {
+            publish::run_aur(&root, args)?;
             return Ok(0);
         }
         Command::TauriConfig(args) => {

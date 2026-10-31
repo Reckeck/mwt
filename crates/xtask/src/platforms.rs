@@ -52,6 +52,14 @@ async fn rust_target_installed(ctx: &Ctx, target: &str) -> bool {
 }
 
 async fn windows(ctx: &Ctx) -> Outcome {
+    if cfg!(windows) {
+        // On a Windows host the MSVC toolchain is native: no cargo-xwin (CI's clippy-windows job).
+        let cmd = Cmd::new("cargo")
+            .args(["clippy", "-p", "trade-app", "--lib", "--target-dir"])
+            .arg(lane(&ctx.root, "windows"))
+            .args(LINT);
+        return finish(ctx, cmd).await;
+    }
     if which("cargo-xwin").is_none() {
         return skip(ctx, "no cargo-xwin (cargo install --locked cargo-xwin)");
     }
