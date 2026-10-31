@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use super::env::Env;
-use super::targets::{OVERLAY_VAR, PREBUILT_FRONTEND};
+use super::targets::{OVERLAY_VAR, overlay, with_names};
 use crate::exec::{Cmd, Ctx, ExecEnd};
 use crate::graph::{Outcome, run_cmd};
 
@@ -39,11 +39,15 @@ pub const SKIP_REASON: &str =
 
 pub async fn build(env: Arc<Env>, facts: MacFacts, ctx: Ctx) -> Outcome {
     if facts.is_mac {
-        let cmd = Cmd::new("scripts/ci/build-macos.sh")
-            .args([&env.version, &env.out])
-            .env("RELEASE_CHANNEL", &env.channel)
-            .env(PREBUILT_FRONTEND, "1")
-            .env(OVERLAY_VAR, ".cache/tauri-ci-macos.json");
+        let config = match overlay(&env, "macos", false, false) {
+            Ok(path) => path,
+            Err(outcome) => return outcome,
+        };
+        let cmd = with_names(
+            Cmd::new("scripts/ci/build-macos.sh").args([&env.version, &env.out]),
+            env.channel,
+        )
+        .env(OVERLAY_VAR, &config);
         return run_cmd(&ctx, &cmd).await;
     }
     let Some(host) = facts.host else {
@@ -57,9 +61,17 @@ pub async fn build(env: Arc<Env>, facts: MacFacts, ctx: Ctx) -> Outcome {
         rsync = rsync.args([format!("--exclude={exclude}")]);
     }
     let rsync = rsync.args(["./", &format!("{host}:{remote}/")]);
+    // The Mac builds its own frontend and writes its own overlay (build-macos.sh), from the
+    // channel's names.
+    let names: String = env
+        .channel
+        .env()
+        .iter()
+        .map(|(name, value)| format!("{name}='{value}' "))
+        .collect();
     let script = format!(
-        "cd '{remote}' && RELEASE_CHANNEL={} bash -lc \"scripts/ci/build-macos.sh '{}' release\"",
-        env.channel, env.version
+        "cd '{remote}' && {names}bash -lc \"scripts/ci/build-macos.sh '{}' release\"",
+        env.version
     );
     let ssh = Cmd::new("ssh").args([host.as_str(), script.as_str()]);
     let fetch = Cmd::new("rsync")

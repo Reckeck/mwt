@@ -25,7 +25,7 @@ $rustVersion = Get-Tool 'rust'
 $nodeVersion = Get-Tool 'node'
 $pnpmVersion = Get-Tool 'pnpm'
 # The version this build ships under: BUILD_VERSION from the version job
-# (scripts/ci/version.sh), else the plain app version for a local run.
+# (cargo xtask version), else the plain app version for a local run.
 $version = $env:BUILD_VERSION
 if (-not $version) { $version = (Get-Content crates/app/tauri.conf.json -Raw | ConvertFrom-Json).version }
 $versionCode = $env:ANDROID_VERSION_CODE
@@ -85,18 +85,19 @@ Invoke-Pnpm install --frozen-lockfile --prefer-offline
 
 # Build (NSIS/WiX are fetched by the Tauri bundler)
 $env:CARGO_TARGET_DIR = Join-Path $root '.rust-target'
-# The version goes in as a config file: inline JSON loses its quotes on the
-# way to a native command in Windows PowerShell 5.1.
-$tauriConfig = Join-Path $cache 'tauri-ci.json'
-# The channel's names, as scripts/ci/channel.sh has them.
-if ($env:RELEASE_CHANNEL -eq 'prod') {
-  $appId = 'mwt.desktop'; $appName = 'Multi Wallet Tracker'; $appBin = 'multi-wallet-tracker'; $appIcons = 'icons/prod'
-} else {
-  $appId = 'dev.mwt.desktop'; $appName = 'Multi Wallet Tracker Dev'; $appBin = 'multi-wallet-tracker-dev'; $appIcons = 'icons/dev'
+# The version and the channel's names go in as a config file: inline JSON loses
+# its quotes on the way to a native command in Windows PowerShell 5.1. The caller
+# (CI) gives its path in MWT_TAURI_CONFIG, written by `cargo xtask tauri-config`;
+# without it this script writes the file itself with the Rust it just installed.
+$tauriConfig = $env:MWT_TAURI_CONFIG
+if (-not $tauriConfig) {
+  $channel = $env:RELEASE_CHANNEL
+  if (-not $channel) { $channel = 'dev' }
+  $tauriConfig = (& cargo xtask tauri-config --channel $channel --version $version --version-code $versionCode | Select-Object -Last 1)
+  if ($LASTEXITCODE -ne 0) { throw 'cargo xtask tauri-config failed' }
 }
-$icons = (@('32x32.png', '128x128.png', '128x128@2x.png', 'icon.icns', 'icon.ico', 'icon.png') | ForEach-Object { '"' + $appIcons + '/' + $_ + '"' }) -join ','
-$overlay = '{"version":"' + $version + '","identifier":"' + $appId + '","productName":"' + $appName + '","mainBinaryName":"' + $appBin + '","bundle":{"icon":[' + $icons + '],"android":{"versionCode":' + $versionCode + '}}}'
-[System.IO.File]::WriteAllText($tauriConfig, $overlay)
+# The binary name of the channel is in the overlay.
+$appBin = (Get-Content $tauriConfig -Raw | ConvertFrom-Json).mainBinaryName
 # Quoted: a bare a,b in a PowerShell command line is an array, and tauri
 # would get 'nsis msi'.
 # Bundles of an earlier build (the other channel names them differently)

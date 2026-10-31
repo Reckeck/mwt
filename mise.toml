@@ -33,9 +33,9 @@ RUST_LOG = "info"
 "check" = { description = "The gate, in parallel with fail-fast (cargo xtask): biome, vue-tsc, vitest unit + checks (onboarding/routes/forms/ui/fsd), CI scripts, fmt, clippy, tests, gen-types, platforms, then e2e + layout + links (quick); logs in .cache/xtask/; --list shows the graph, task names filter", run = "cargo xtask check" }
 "check-platforms" = { description = "Compile check (clippy) for linux, windows, android, macos: run after the last edit, before landing or a commit; SKIP = this machine cannot check it; mise run check-platforms -- windows", run = "cargo xtask check-platforms" }
 "check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
-"changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "node scripts/release.mjs changelog" }
-"bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "node scripts/release.mjs bump" }
+"changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "cargo xtask changelog" }
+"bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "cargo xtask bump" }
 "icons" = { description = "App icons of both channels from crates/app/icons/src (SVG) into crates/app/icons/{prod,dev} and public/favicon.svg; needs rsvg-convert + magick", run = "scripts/icons.sh" }
-"ci-image-tag" = { description = "CI image tag for .gitlab-ci.yml CI_IMAGE_TAG (hash of the image inputs)", run = "scripts/ci/image-tag.sh" }
+"ci-image-tag" = { description = "CI image tag for .gitlab-ci.yml CI_IMAGE_TAG (hash of the image inputs)", run = "cargo xtask image-tag" }
 "build" = { description = "Full release bundle (deb/rpm/AppImage)", run = "cargo test --workspace && pnpm exec vue-tsc --noEmit && pnpm tauri build" }
 "build:all" = { description = "Bundles for every platform (linux pacman flatpak android windows macos) in the CI images, one frontend build, platforms in parallel, into .cache/build-all/builds/<channel>/ (cargo xtask build: --channel dev|prod, --heavy N, --native, platform...)", run = "cargo xtask build" }
