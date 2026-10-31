@@ -52,17 +52,20 @@ Invoke-Native rustup toolchain install $rustVersion --profile minimal
 Invoke-Native rustup default $rustVersion
 
 # sccache: compiled crates come back from the GitLab cache (.cache\sccache).
-$sccacheVersion = '0.10.0'
-$sccache = Join-Path $cache "sccache-$sccacheVersion.exe"
-if (-not (Test-Path $sccache)) {
-  $name = "sccache-v$sccacheVersion-x86_64-pc-windows-msvc"
-  Invoke-WebRequest "https://github.com/mozilla/sccache/releases/download/v$sccacheVersion/$name.zip" -OutFile "$cache\sccache.zip"
-  Expand-Archive -Force "$cache\sccache.zip" -DestinationPath $cache
-  Move-Item "$cache\$name\sccache.exe" $sccache
+# GitHub keeps no .cache here between runs, and the sccache server died mid-build there.
+if (-not $env:GITHUB_ACTIONS) {
+  $sccacheVersion = '0.10.0'
+  $sccache = Join-Path $cache "sccache-$sccacheVersion.exe"
+  if (-not (Test-Path $sccache)) {
+    $name = "sccache-v$sccacheVersion-x86_64-pc-windows-msvc"
+    Invoke-WebRequest "https://github.com/mozilla/sccache/releases/download/v$sccacheVersion/$name.zip" -OutFile "$cache\sccache.zip"
+    Expand-Archive -Force "$cache\sccache.zip" -DestinationPath $cache
+    Move-Item "$cache\$name\sccache.exe" $sccache
+  }
+  $env:RUSTC_WRAPPER = $sccache
+  $env:SCCACHE_DIR = Join-Path $cache 'sccache'
+  $env:SCCACHE_CACHE_SIZE = '3G'
 }
-$env:RUSTC_WRAPPER = $sccache
-$env:SCCACHE_DIR = Join-Path $cache 'sccache'
-$env:SCCACHE_CACHE_SIZE = '3G'
 $env:CARGO_INCREMENTAL = '0'
 
 # Node + pnpm
@@ -72,7 +75,8 @@ if (-not (Test-Path $nodeDir)) {
   Expand-Archive "$cache\node.zip" -DestinationPath $cache
 }
 $env:Path = "$nodeDir;$env:Path"
-Invoke-Native npm install -g "pnpm@$pnpmVersion"
+# --prefix: the GitHub Windows image points the global npm prefix outside this Node.
+Invoke-Native npm install -g --prefix $nodeDir "pnpm@$pnpmVersion"
 # pnpm straight through node: the npm shims (pnpm.ps1 / pnpm.cmd) handed it
 # the whole argument list as one string on the GitLab Windows runner.
 $pnpmCli = Join-Path $nodeDir 'node_modules\pnpm\bin\pnpm.cjs'
