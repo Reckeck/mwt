@@ -75,8 +75,8 @@ Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хр
 
 На GitHub шаги выпуска — команды `cargo xtask publish`, `prune-prereleases`,
 `backmerge`, `publish-aur` (токен `GH_TOKEN`, см. [ci.md](ci.md#выпуск-через-xtask-github)).
-`release.yml` ещё не написан, реальный выпуск через них не проверялся; описание
-ниже — прежний GitLab-пайплайн.
+Их вызывает `.github/workflows/release.yml` (граф, секреты, ручной запуск —
+[ci.md](ci.md#releaseyml)); описание шагов ниже — прежний GitLab-пайплайн.
 
 1. В `development` (основная копия): `mise run bump` — версия и раздел
    CHANGELOG; при желании дописать над списком коммитов главное словами;

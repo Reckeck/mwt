@@ -1,4 +1,5 @@
-# Checks of every PR into development/main and of every push to them.
+# Checks of every PR into development/main. A push to them is checked by release.yml, which
+# calls this workflow (workflow_call) before it builds anything: the same lanes, run once.
 #
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
@@ -20,9 +21,15 @@ name: ci
 on:
   pull_request:
     branches: [development, main]
-  push:
-    branches: [development, main]
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      tag:
+        description: CI image tag (images.yml), for the jobs that run in the images
+        value: ${{ jobs.images.outputs.tag }}
+      base:
+        description: Registry path of the CI images
+        value: ${{ jobs.images.outputs.base }}
 
 # Newer runs of the same PR/branch replace older ones; main always finishes.
 concurrency:
