@@ -134,8 +134,13 @@ fn merge_fields(
     for name in names {
         let local_value = local_fields.fields.get(name);
         let remote_value = remote_fields.fields.get(name);
-        let local_stamp = local_stamps.field(name);
-        let remote_stamp = remote_stamps.field(name);
+        // A whole record has one stamp: the newest of anything written to it
+        // (an older peer stamps its fields one by one).
+        let (local_stamp, remote_stamp) = if coll.whole {
+            (local_stamps.latest(), remote_stamps.latest())
+        } else {
+            (local_stamps.field(name), remote_stamps.field(name))
+        };
         let take_remote = remote_wins(local_stamp, remote_stamp, local_value, remote_value);
         let (value, stamp) = if take_remote {
             (remote_value, remote_stamp)

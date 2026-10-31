@@ -2393,6 +2393,94 @@ fn rent_graph(card: &str, savings: &str) -> String {
     )
 }
 
+/// A rent workflow whose first run is refused for lack of money.
+fn refused_rent() -> (
+    tempfile::TempDir,
+    UnlockedVault,
+    String,
+    Workflow,
+    WorkflowRun,
+) {
+    let (dir, mut vault, card, savings) = wallets();
+    let workflow = save(&mut vault, "Rent", rent_graph(&card, &savings));
+    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-20T00:00:00Z");
+    let pass = vault
+        .run_due_workflows(secs_at("2026-12-01T10:00:00Z"), "UTC")
+        .unwrap();
+    let refused = pass.runs[0].clone();
+    assert!(matches!(refused.outcome, RunOutcome::Rejected { .. }));
+    (dir, vault, card, workflow, refused)
+}
+
+/// What another device leaves when it posts the refused moment.
+fn post_elsewhere(vault: &mut UnlockedVault, card: &str, workflow: &Workflow) {
+    let mut tx = income(card, "10", "posted by the other device");
+    if let Transaction::Topup(inner) = &mut tx {
+        inner.meta.origin = TxOrigin::Workflow {
+            workflow_id: workflow.id.clone(),
+            run_id: "other-device-run".into(),
+            planned_at: Some("2026-12-01T09:00:00Z".into()),
+            estimated: false,
+        };
+    }
+    vault.add_transaction(tx).unwrap();
+}
+
+#[test]
+fn a_rejected_retry_leaves_a_tombstone() {
+    let (_dir, mut vault, card, _workflow, refused) = refused_rent();
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    let pass = vault
+        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1);
+    // Without it the refusal comes back from a device that still has it.
+    assert!(
+        vault
+            .sync_state()
+            .tombstones
+            .contains_key(&format!("workflow_runs:{}", refused.id))
+    );
+}
+
+#[test]
+fn a_rejected_retry_does_not_post_twice() {
+    let (_dir, mut vault, card, workflow, refused) = refused_rent();
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    post_elsewhere(&mut vault, &card, &workflow);
+    let before = vault.doc.transactions.len();
+    let result = vault.retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC");
+    let pass = result.unwrap();
+    assert!(pass.created.is_empty(), "the moment was booked twice");
+    assert_eq!(vault.doc.transactions.len(), before);
+}
+
+#[test]
+fn a_stale_rejected_is_cleared_not_retried() {
+    let (_dir, mut vault, card, workflow, refused) = refused_rent();
+    post_elsewhere(&mut vault, &card, &workflow);
+    vault
+        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
+        .unwrap();
+    assert!(
+        vault
+            .doc
+            .workflow_runs
+            .iter()
+            .all(|run| run.id != refused.id)
+    );
+    assert!(
+        vault
+            .sync_state()
+            .tombstones
+            .contains_key(&format!("workflow_runs:{}", refused.id))
+    );
+}
+
 #[test]
 fn a_refused_run_waits_for_retry_or_skip() {
     let (_dir, mut vault, card, savings) = wallets();
@@ -2563,4 +2651,68 @@ fn a_swap_for_an_unknown_wallet_is_refused() {
     let before = vault.doc.workflows.len();
     assert!(vault.import_workflow(&file, &map, now_secs()).is_err());
     assert_eq!(vault.doc.workflows.len(), before);
+}
+
+#[test]
+fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
+    use crate::sync::manifest::diff;
+    let (dir, mut left, card, _workflow, refused) = refused_rent();
+    left.set_device("aaaaaaaa-left");
+    left.persist().unwrap();
+    let copy = dir.path().join("copy.wallet");
+    std::fs::copy(&left.path, &copy).unwrap();
+    let mut right = UnlockedVault::open(copy, "pw").unwrap();
+    right.set_device("bbbbbbbb-right");
+    let run_key = format!("workflow_runs:{}", refused.id);
+    let has_run = |vault: &UnlockedVault| {
+        vault
+            .doc
+            .workflow_runs
+            .iter()
+            .any(|run| run.id == refused.id)
+    };
+    assert!(has_run(&left) && has_run(&right));
+
+    // The laptop gets the money and retries.
+    left.add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    let pass = left
+        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1);
+
+    // Sessions follow, in both directions, more than once.
+    let peer = |name: &str| crate::service::PeerRef {
+        device_id: format!("{name}-id"),
+        name: name.into(),
+    };
+    for _ in 0..3 {
+        let left_manifest = left.sync_manifest(None).unwrap();
+        let right_manifest = right.sync_manifest(None).unwrap();
+        let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
+        let to_left = right.sync_records(&left_wants).unwrap();
+        let to_right = left.sync_records(&right_wants).unwrap();
+        left.sync_apply(&to_left, &peer("right")).unwrap();
+        right.sync_apply(&to_right, &peer("left")).unwrap();
+    }
+    assert!(!has_run(&left), "the refusal came back to the laptop");
+    assert!(!has_run(&right), "the refusal stayed on the other device");
+    assert!(right.sync_state().tombstones.contains_key(&run_key));
+
+    // The other device cannot book the moment again, and nothing booked it
+    // twice.
+    assert!(
+        right
+            .retry_workflow_run(&refused.id, secs_at("2026-12-04T10:00:00Z"), "UTC")
+            .is_err()
+    );
+    let booked = |vault: &UnlockedVault| {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| matches!(&tx.meta().origin, TxOrigin::Workflow { planned_at: Some(at), .. } if at == "2026-12-01T09:00:00Z"))
+            .count()
+    };
+    assert_eq!((booked(&left), booked(&right)), (1, 1));
 }

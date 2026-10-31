@@ -1242,6 +1242,16 @@ impl UnlockedVault {
                 "only a refused run can be retried".into(),
             ));
         };
+        // Another device may have booked this moment already (the refusal
+        // is still here because their news has not come yet, or came
+        // after it): then the refusal is stale and only goes.
+        if let Some(at) = planned_at
+            && self.moment_booked(&run.workflow_id, at)
+        {
+            self.forget_run(run_id)?;
+            self.persist()?;
+            return Ok(WorkflowPass::default());
+        }
         let workflow = self.workflow(&run.workflow_id)?;
         let graph = Graph::parse(&workflow.graph)?;
         let trigger = graph
@@ -1262,7 +1272,7 @@ impl UnlockedVault {
                 other => Error::InsufficientFunds(self.describe_shortfall(other)),
             });
         }
-        self.doc.workflow_runs.retain(|stored| stored.id != run_id);
+        self.forget_run(run_id)?;
         let mut pass = WorkflowPass::default();
         self.keep_run(&report, &mut pass);
         self.run_events(report.events.clone(), now, zone, &mut pass);
@@ -1272,6 +1282,20 @@ impl UnlockedVault {
             pass.notices = self.log_notices(std::mem::take(&mut pass.notices))?;
         }
         Ok(pass)
+    }
+
+    /// Take a run out of the journal as a deletion that reaches the other
+    /// devices (a tombstone). The change tracker treats a missing entry of a
+    /// capped log as a trim, so the deletion is written here.
+    fn forget_run(&mut self, run_id: &str) -> Result<()> {
+        self.doc.workflow_runs.retain(|stored| stored.id != run_id);
+        self.sync_forget_log_record(&format!("workflow_runs:{run_id}"))
+    }
+
+    /// Whether an operation already books `moment` of `workflow_id`.
+    fn moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
+        self.booked_moments()
+            .contains(&(workflow_id.to_string(), moment.to_string()))
     }
 
     /// Dismiss a refused run: it stays in the journal as skipped.
@@ -1607,6 +1631,25 @@ impl UnlockedVault {
     /// they made or by a run: `(workflow id, RFC3339 moment)`. Guards against
     /// a second booking even when a schedule mark was rolled back (a sync).
     pub(crate) fn automation_processed(&self) -> HashSet<(String, String)> {
+        let mut out = self.booked_moments();
+        for run in &self.doc.workflow_runs {
+            let planned = match &run.outcome {
+                RunOutcome::Rejected {
+                    planned_at: Some(at),
+                    ..
+                } => Some(at.clone()),
+                _ => run.trigger.strip_prefix("schedule ").map(str::to_string),
+            };
+            if let Some(at) = planned {
+                out.insert((run.workflow_id.clone(), at));
+            }
+        }
+        out
+    }
+
+    /// Planned moments an operation was booked for: the same marker the
+    /// scheduled run itself goes by.
+    fn booked_moments(&self) -> HashSet<(String, String)> {
         let mut out = HashSet::new();
         for tx in &self.doc.transactions {
             match &tx.meta().origin {
@@ -1624,18 +1667,6 @@ impl UnlockedVault {
                     out.insert((workflow_id.clone(), planned_at.clone()));
                 }
                 _ => {}
-            }
-        }
-        for run in &self.doc.workflow_runs {
-            let planned = match &run.outcome {
-                RunOutcome::Rejected {
-                    planned_at: Some(at),
-                    ..
-                } => Some(at.clone()),
-                _ => run.trigger.strip_prefix("schedule ").map(str::to_string),
-            };
-            if let Some(at) = planned {
-                out.insert((run.workflow_id.clone(), at));
             }
         }
         out

@@ -35,7 +35,7 @@ Frontend парсит код и показывает локализованно�
 | `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary }` | список изменений ждёт решения (`sync_decide_plan`): первая пачка при «Спрашивать», первое сопряжение или «временно ненадёжное» устройство |
 | `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch }` | пачка с другого устройства применена; фронт перечитывает все запросы, уведомление с «Отменить» (`sync_undo`) |
 | `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | часы устройств расходятся (5 мин – 24 ч) или прыгнули: устройство «временно ненадёжное» до конца сессии |
-| `sync-error` | `SyncErrorEvent { code, message, peer_name? }` | сессия не началась или прервалась: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL` |
+| `sync-error` | `SyncErrorEvent { code, message, peer_name?, peer_version?, own_version? }` | сессия не началась или прервалась: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` и `SYNC_FORGOTTEN_BY_PEER` (другое устройство приостановило обмен или забыло это; текст называет устройство, `peer_name`); у `SYNC_VERSION_MISMATCH` ещё `peer_version` (пусто у старой сборки) и `own_version`: текст называет устройство и обе версии |
 | `transfer-receive` | `TransferReceiveView` | шаг приёма хранилища: ожидание, запрос, код, прогресс, готово (`saved_path`), ошибка (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
 | `transfer-send` | `TransferSendView` | шаг передачи: ждём «Принять», код (`wrong_code`, `attempts_left`), прогресс, готово, ошибка |
 | `transfer-nearby` | `TransferNearby[]` | устройства рядом, ждущие приёма |
@@ -118,12 +118,13 @@ Frontend парсит код и показывает локализованно�
 | `transfer_send` | `TransferSendInput { id, password }` | `TransferSendView`; `SECRET` — пароль не этого vault |
 | `transfer_send_code` | `code` | `()`; код с экрана получателя (6 цифр); `SYNC_BAD_CODE` — не шесть цифр |
 | `transfer_send_cancel` | — | `()` |
-| `sync_pair` | `sessionId` | `()`; «Сопрячь» на баннере: код появляется на обоих устройствах |
+| `sync_pair` | `sessionId?`, `deviceId?` | `()`; «Сопрячь» на баннере (`sessionId`): код появляется на обоих устройствах. С `deviceId` (список устройств, «Сопрячь заново» у забывшего устройства): снимает отметку `cut_by`, один раз звонит ему с запросом сопряжения |
 | `sync_dismiss_offer` | `sessionId` | `()`; «Не сейчас»: сессия закрывается тихо, устройство не предлагается до перезапуска синхронизации |
 | `sync_confirm_pairing` | `SyncDecisionInput { session_id, accept }` | `()`; коды совпали (`accept`) или нет |
-| `sync_decide_plan` | `SyncDecisionInput { session_id, accept }` | `()`; применить список изменений или отказаться (сессия закрывается) |
-| `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online }>` — доверенные устройства |
+| `sync_decide_plan` | `SyncDecisionInput { session_id, accept }` | `()`; применить список изменений или отказаться (сессия закрывается; отказ ставит устройство на паузу, см. `sync_resume_peer`) |
+| `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online, paused }>` — доверенные устройства |
 | `sync_forget_peer` | `deviceId` | `()`; устройство отклоняется здесь и, по мере синхронизации, везде |
+| `sync_resume_peer` | `deviceId` | `()`; «Продолжить»: снимает паузу, поставленную отказом от списка изменений, и сразу пробует соединиться; список спросят заново |
 | `sync_history` | — | `Vec<AppliedBatch { id, peer_name, applied_at, summary, undone_at }>`, новые первыми (до 20 пачек, 7 дней) |
 | `sync_journal` | — | `Vec<SyncJournalEntry { id, at, peer_name, counts[{collection,count}], label, batch_id, outcome: applied/declined/failed/sent }>`, новые первыми (кольцо на 200 строк; без значений записей) |
 | `sync_undo` | `batchId` | `UndoReport { restored, skipped }`; откат — новая правка, уходит и на другие устройства |

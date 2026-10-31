@@ -14,6 +14,19 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'syncRepair',
+    date: '2026-11-01',
+    points: [
+      { key: 'forgotten', route: 'settings:sync:sync-devices' },
+      { key: 'paused', route: 'settings:sync:sync-devices' },
+      { key: 'cutOff', route: 'settings:sync:sync-devices' },
+      { key: 'externalCopy', route: 'settings:sync:sync-devices' },
+      { key: 'versions', route: 'settings:sync:sync-devices' },
+      { key: 'laterRecords', route: 'settings:sync:sync-devices' },
+      { key: 'duplicates', route: 'settings:sync:sync-devices' },
+    ],
+  },
+  {
     id: 'togetherEvents',
     date: '2026-10-29',
     points: [
@@ -264,23 +277,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'history', route: 'wallet-settings' },
       { key: 'rule', route: 'wallet-settings' },
       { key: 'purchase', route: 'wallet-settings' },
-    ],
-  },
-  {
-    id: 'propertyTypes',
-    date: '2026-10-22',
-    points: [
-      { key: 'types', route: 'wallet-settings' },
-      { key: 'car', route: 'wallet-settings' },
-      { key: 'taxes', route: 'automations-reminders' },
-    ],
-  },
-  {
-    id: 'bonuses',
-    date: '2026-10-22',
-    points: [
-      { key: 'tab', route: 'transactions-bonuses' },
-      { key: 'wallets', route: 'transactions-bonuses' },
     ],
   },
   ...WHATS_NEW_AUTUMN,

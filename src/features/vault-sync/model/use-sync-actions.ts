@@ -43,6 +43,14 @@ export function useSyncActions() {
     meta: { success: '', error: 'sync.pairFailed' },
   })
 
+  // «Сопрячь заново» on a device that forgot this one: dials it with the request.
+  const pairAgain = useMutation({
+    mutationFn: (deviceId: string) => call('sync_pair', { deviceId }),
+    onSettled: () => refresh(SYNC_PEERS_KEY, SYNC_STATUS_KEY),
+    // The code dialog is the answer: nothing to say unless it failed.
+    meta: { success: '', error: 'sync.devices.pairAgainFailed' },
+  })
+
   const dismiss = useMutation({
     mutationFn: (sessionId: string) => call('sync_dismiss_offer', { sessionId }),
     // The banner just goes away: nothing to say unless it failed.
@@ -73,6 +81,12 @@ export function useSyncActions() {
     mutationFn: (deviceId: string) => call('sync_forget_peer', { deviceId }),
     onSettled: () => refresh(SYNC_PEERS_KEY, SYNC_STATUS_KEY),
     meta: { success: 'sync.devices.forgotten', error: 'sync.devices.forgetFailed' },
+  })
+
+  const resume = useMutation({
+    mutationFn: (deviceId: string) => call('sync_resume_peer', { deviceId }),
+    onSettled: () => refresh(SYNC_PEERS_KEY, SYNC_STATUS_KEY),
+    meta: { success: 'sync.devices.resumed', error: 'sync.devices.resumeFailed' },
   })
 
   const undo = useMutation({
@@ -112,5 +126,18 @@ export function useSyncActions() {
     meta: { success: 'sync.firewall.copied', error: 'sync.firewall.copyFailed' },
   })
 
-  return { settings, pair, dismiss, confirmPairing, decidePlan, forget, undo, restore, openFirewall, copyCommand }
+  return {
+    settings,
+    pair,
+    dismiss,
+    confirmPairing,
+    decidePlan,
+    forget,
+    resume,
+    pairAgain,
+    undo,
+    restore,
+    openFirewall,
+    copyCommand,
+  }
 }

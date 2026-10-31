@@ -578,6 +578,9 @@ pub fn full_doc() -> VaultDoc {
     doc.sync
         .tombstones
         .insert("contacts:gone".into(), stamp.clone());
+    doc.sync
+        .tombstones_seen
+        .insert("contacts:gone".into(), 1_700_000_500_000);
     doc.sync.peers.push(crate::sync::TrustedPeer {
         device_id: "dev-b".into(),
         name: "Phone".into(),

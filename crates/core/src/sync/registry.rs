@@ -38,6 +38,16 @@ pub struct Collection {
     /// Field holding an RFC3339 time; the first sync sends only recent
     /// points of a [`Rule::Union`] collection.
     pub age: Option<&'static str>,
+    /// Holds credentials (API keys, sealing keys): the window, the batches
+    /// and the journal show no label or value of its records.
+    pub secret: bool,
+    /// Fields of an ordinary collection that hold a credential (a URL with a
+    /// token, a stored value): `before`/`after` show a mask for them.
+    pub secret_fields: &'static [&'static str],
+    /// The record is one value with one stamp (a [`Rule::Single`] whose
+    /// fields only make sense together, or that may be `null`): the later
+    /// write wins as a whole, never field by field.
+    pub whole: bool,
 }
 
 const fn records(name: &'static str, key: &'static [&'static str]) -> Collection {
@@ -48,6 +58,9 @@ const fn records(name: &'static str, key: &'static [&'static str]) -> Collection
         flatten: &[],
         skip: &[],
         age: None,
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     }
 }
 
@@ -64,6 +77,9 @@ const fn log(
         flatten: &[],
         skip: &[],
         age: None,
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     }
 }
 
@@ -75,6 +91,9 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         flatten: &[],
         skip,
         age: None,
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     }
 }
 
@@ -111,6 +130,9 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         skip: &[],
         age: Some("ts"),
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     },
     Collection {
         name: "fx_cache",
@@ -119,10 +141,19 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         skip: &[],
         age: Some("ts"),
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     },
-    single("exchanges", &[]),
+    Collection {
+        secret: true,
+        ..single("exchanges", &[])
+    },
     single("emergency_fund", &[]),
-    single("health_last", &[]),
+    Collection {
+        whole: true,
+        ..single("health_last", &[])
+    },
     records("pending_imports", &["exec_id"]),
     records("contacts", ID),
     records("budgets", ID),
@@ -151,7 +182,10 @@ pub static COLLECTIONS: &[Collection] = &[
         crate::workflow::model::MAX_WORKFLOW_RUNS,
         "started_at",
     ),
-    records("workflow_vars", &["scope", "name"]),
+    Collection {
+        secret_fields: &["value"],
+        ..records("workflow_vars", &["scope", "name"])
+    },
     // The queue, waits and trigger marks sync so a new main device picks
     // them up; only the main device runs them.
     records("workflow_queue", ID),
@@ -165,12 +199,18 @@ pub static COLLECTIONS: &[Collection] = &[
     records("valuations", ID),
     // One link per operation: a new property replaces the old one.
     records("tx_properties", &["tx_id"]),
-    records("data_sources", ID),
+    Collection {
+        secret_fields: &["url"],
+        ..records("data_sources", ID)
+    },
     records("asset_price_sources", &["asset_key"]),
     records("deposit_rate_sources", &["store_id"]),
     // The records and their keys; the sealed bytes stay on each device.
     records("attachments", ID),
-    records("attachment_keys", ID),
+    Collection {
+        secret: true,
+        ..records("attachment_keys", ID)
+    },
     log(
         "import_runs",
         ID,
@@ -186,8 +226,22 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         skip: &[],
         age: None,
+        secret: false,
+        secret_fields: &[],
+        whole: false,
     },
 ];
+
+/// Whether the collection holds credentials (see [`Collection::secret`]).
+pub fn is_secret(name: &str) -> bool {
+    find(name).is_some_and(|coll| coll.secret)
+}
+
+/// Whether `field` of the collection holds a credential (see
+/// [`Collection::secret_fields`]); a secret collection hides all of them.
+pub fn is_secret_field(name: &str, field: &str) -> bool {
+    find(name).is_some_and(|coll| coll.secret || coll.secret_fields.contains(&field))
+}
 
 pub fn find(name: &str) -> Option<&'static Collection> {
     COLLECTIONS.iter().find(|coll| coll.name == name)

@@ -48,8 +48,9 @@ UI ─ pick_vault_file ─► platform_fs::pick_vault
                          ├ desktop: путь (+ .wallet при сохранении)
                          └ mobile:  URI → read_location → import_into(vaults_dir) → путь копии
    ─ unlock_vault(path) ─► resolve_vault_to_open   (URI из старых недавних тоже импортируется)
-                         ─► links::sync_before_open (reconcile с копией: push/pull/SYNC_CONFLICT)
+                         ─► links::sync_before_open (reconcile с копией: push / pull / слияние)
                          ─► UnlockedVault::open     (core: read, lock, миграция, .vN.bak)
+                         ─► links::take_in          (pull/слияние копии в открытый vault, пароль из запроса, не хранится)
                          ─► attach_mirror           (если привязан: поток копирования)
    ─ create_vault(path) ─► resolve_new_vault        (голое имя → vaults_dir, URI запрещён)
 мутация → UnlockedVault::persist → dirty + будит vault_writer (пакет)
@@ -87,6 +88,13 @@ vault_writer: 500 мс тишины (не дольше 3 с) → prepare_flush (
   `{ "<путь vault>": { target, last_synced_hash, last_synced_at, last_error } }`.
   Секретов там нет: сама копия — тот же зашифрованный файл.
 - **Запись.** `mirror_sink`: свой поток на каждый привязанный vault.
+  Запись идёт через сравнение и замену (`vault_io::mirror::compare_and_push`):
+  перед записью читается копия, и если её хэш не равен `last_synced_hash`
+  (и не равен записываемым байтам), копия **не перезаписывается**. Ссылка
+  получает `remote_changed = true` и `last_error` вида `VAULT_REMOTE_CHANGED: <текст>` (код для перевода в UI; приходит
+  событием `vault-mirror-failed`, видно в статусе связи), запись приостановлена
+  до следующего входа. Новая привязка (`link_vault_external`) заменяет выбранный
+  файл без сравнения: пользователь так выбрал.
   `persist` держит мьютекс vault, а облачный провайдер может писать секунды,
   поэтому запись идёт в фоне. Накопившиеся сохранения схлопываются в
   последнее. Ошибка записи сохраняется в `last_error` и приходит событием
@@ -97,8 +105,19 @@ vault_writer: 500 мс тишины (не дольше 3 с) → prepare_flush (
 |---|---|
 | ничего, байты равны | `InSync` |
 | только локальный (или копии нет) | `PushLocal` — записать копию |
-| только копия (правка на другом устройстве) | `PullRemote` — локальный в `.bak`, копия становится vault |
-| оба | `Conflict` → ошибка `SYNC_CONFLICT`, UI предлагает «Оставить это» / «Взять копию» (`resolve_vault_conflict`) |
+| только копия (правка на другом устройстве) | `PullRemote` — локальный в `.bak`, данные копии становятся данными vault, `stamps` и `tombstones` берутся из копии (это метаданные записей), `peers` сливаются по правилам `merge_peers`, а **локальными остаются** пакеты отмены, журнал, `transfers`, `tombstones_seen`, `paused`, `cut_by` |
+| оба (в том числе копию вслепую записало старое приложение) | `Conflict` → **слияние** в открытый vault, без вопросов |
+
+  Слияние (`links::take_in`, `UnlockedVault::merge_external_copy`): копия
+  открывается тем же паролем (он есть только во время `unlock_vault`), при
+  совпадении `doc.id` записи из неё применяются через путь peer sync
+  (`sync_manifest`/`sync_records` у копии, `sync_apply` у локального vault,
+  партнёр «Внешняя копия»). Пакет виден в истории синхронизации и
+  отменяется как любой другой. `doc.sync` копии не импортируется. Перед
+  слиянием файл остаётся в `<vault>.bak`, после сохранения результат
+  записывается в копию (снова с проверкой). Если копия не открывается этим паролем или это другой
+  vault, остаётся прежний путь: ошибка `SYNC_CONFLICT`, UI предлагает
+  «Оставить это» / «Взять копию» (`resolve_vault_conflict`).
 
   Недоступная копия (отозвано право, диск офлайн) не мешает войти: ошибка
   пишется в `last_error`, открывается локальный файл.
@@ -129,6 +148,8 @@ vault_writer: 500 мс тишины (не дольше 3 с) → prepare_flush (
 - `cargo test -p trade-core vault_io::`: пути всех ОС, `file://`,
   `content://`, имя файла, импорт без перезаписи, все ветки `reconcile`.
 - `cargo test -p trade-core a_mirror_gets_exactly_the_saved_file`.
+- `cargo test -p trade-core cas_` (сравнение и замена), `cargo test -p trade-core merge_` и
+  `a_pull_from` (слияние и pull с сохранением локального `doc.sync`).
 - `cargo test -p trade-app platform_fs`.
 - `cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings`
   (нужен NDK) или `ANDROID_TARGETS=aarch64 mise run build:all -- android`.

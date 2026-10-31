@@ -33,6 +33,20 @@ impl UnlockedVault {
         self.persist()
     }
 
+    /// One-time cleanup on open: batches and journal lines written before
+    /// secret collections were hidden keep no label or value of them.
+    /// `true` when something changed (the caller saves only then).
+    pub(super) fn scrub_sync_secrets(&mut self) -> bool {
+        let mut changed = false;
+        for batch in &mut self.doc.sync.batches {
+            changed |= batch.summary.scrub_secrets();
+        }
+        for entry in &mut self.doc.sync.journal {
+            changed |= entry.scrub_secrets();
+        }
+        changed
+    }
+
     /// The journal, newest first.
     pub fn sync_journal(&self) -> Vec<SyncJournalEntry> {
         self.doc.sync.journal.iter().rev().cloned().collect()
@@ -103,5 +117,92 @@ mod tests {
             vault.sync_journal()[0].outcome,
             SyncJournalOutcome::Declined
         );
+    }
+}
+
+#[cfg(test)]
+mod scrub_tests {
+    use super::super::test_support::empty_vault;
+    use super::*;
+    use crate::sync::SyncBatch;
+    use crate::sync::journal::SyncJournalCount;
+    use crate::sync::plan::{ChangeItem, ChangeKind, CollectionChanges, OverwrittenField};
+
+    fn leaky_summary() -> SyncSummary {
+        SyncSummary {
+            total: 2,
+            collections: vec![
+                CollectionChanges {
+                    collection: "exchanges".into(),
+                    updated: 1,
+                    items: vec![ChangeItem {
+                        kind: ChangeKind::Updated,
+                        label: "{\"api_secret\":\"OLDSECRET\"}".into(),
+                    }],
+                    ..Default::default()
+                },
+                CollectionChanges {
+                    collection: "stores".into(),
+                    added: 1,
+                    items: vec![ChangeItem {
+                        kind: ChangeKind::Added,
+                        label: "Cash".into(),
+                    }],
+                    ..Default::default()
+                },
+            ],
+            overwritten: vec![OverwrittenField {
+                collection: "exchanges".into(),
+                label: "OLDSECRET".into(),
+                field: "bybit".into(),
+                before: "OLDSECRET".into(),
+                after: "NEWSECRET".into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn the_scrub_removes_old_secret_labels_and_is_idempotent() {
+        let (_dir, mut vault) = empty_vault();
+        vault.doc.sync.batches.push(SyncBatch {
+            id: "b".into(),
+            peer_device: "d".into(),
+            peer_name: "Phone".into(),
+            applied_at: String::new(),
+            summary: leaky_summary(),
+            entries: Vec::new(),
+            undone_at: None,
+        });
+        vault.doc.sync.journal.push(SyncJournalEntry {
+            peer_name: "Phone".into(),
+            counts: vec![SyncJournalCount {
+                collection: "exchanges".into(),
+                count: 1,
+            }],
+            label: Some("OLDSECRET".into()),
+            outcome: SyncJournalOutcome::Applied,
+            ..Default::default()
+        });
+        vault.doc.sync.journal.push(SyncJournalEntry {
+            counts: vec![SyncJournalCount {
+                collection: "stores".into(),
+                count: 1,
+            }],
+            label: Some("Cash".into()),
+            outcome: SyncJournalOutcome::Applied,
+            ..Default::default()
+        });
+
+        assert!(vault.scrub_sync_secrets());
+        let text =
+            serde_json::to_string(&(&vault.doc.sync.batches, &vault.doc.sync.journal)).unwrap();
+        assert!(
+            !text.contains("OLDSECRET") && !text.contains("NEWSECRET"),
+            "{text}"
+        );
+        // Ordinary collections keep theirs.
+        assert!(text.contains("Cash"));
+        // The second run finds nothing to do.
+        assert!(!vault.scrub_sync_secrets());
     }
 }

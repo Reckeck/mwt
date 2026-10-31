@@ -20,7 +20,7 @@ import { SettingsSection } from '@/shared/ui/settings-section'
 const { t } = useI18n()
 const { status, offers } = useSyncStatus()
 const { peers, list } = useSyncPeers()
-const { pair, forget } = useSyncActions()
+const { pair, pairAgain, forget, resume } = useSyncActions()
 const ago = useSyncAgo()
 const isPhone = useIsPhone()
 const vault = useVaultStore()
@@ -47,7 +47,7 @@ function lastLine(peer: SyncPeerView) {
 <template>
   <SettingsSection :title="t('sync.devices.title')" :description="t('sync.devices.description')">
     <SectionState :loading="peers.isPending.value || status.isPending.value" :error="peers.error.value" skeleton="list" compact @retry="peers.refetch()">
-      <ul class="grid">
+      <ul class="grid" data-tour="sync-device-list">
         <li class="flex items-center gap-3 border-b border-border py-2.5">
           <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
             <component :is="isPhone ? Smartphone : Laptop" class="size-4" aria-hidden="true" />
@@ -63,9 +63,35 @@ function lastLine(peer: SyncPeerView) {
             <MonitorSmartphone class="size-4" aria-hidden="true" />
           </span>
           <div class="grid min-w-0 flex-1 gap-0.5">
-            <span class="truncate text-sm font-medium">{{ peer.name }}</span>
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="truncate text-sm font-medium">{{ peer.name }}</span>
+              <Badge v-if="peer.paused" variant="warning" class="shrink-0">{{ t('sync.devices.paused') }}</Badge>
+              <Badge v-if="peer.cut_by" variant="warning" class="shrink-0">
+                {{ t(peer.cut_by === 'paused' ? 'sync.devices.cutPaused' : 'sync.devices.cutForgotten') }}
+              </Badge>
+            </span>
             <span class="text-xs text-muted-foreground">{{ lastLine(peer) }}</span>
           </div>
+          <Button
+            v-if="peer.paused"
+            variant="outline"
+            class="shrink-0"
+            :disabled="resume.isPending.value"
+            :loading="resume.isPending.value"
+            @click="resume.mutate(peer.device_id)"
+          >
+            {{ t('sync.devices.resume') }}
+          </Button>
+          <Button
+            v-if="peer.cut_by === 'forgotten'"
+            variant="outline"
+            class="shrink-0"
+            :disabled="pairAgain.isPending.value"
+            :loading="pairAgain.isPending.value"
+            @click="pairAgain.mutate(peer.device_id)"
+          >
+            {{ t('sync.devices.pairAgain') }}
+          </Button>
           <ConfirmButton
             show-label
             :label="t('sync.devices.forgetShort')"

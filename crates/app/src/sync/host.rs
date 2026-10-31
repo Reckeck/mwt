@@ -29,6 +29,18 @@ pub(crate) trait Host: Clone + Send + Sync + 'static {
     fn demote(&self);
     /// The link to the main device closed.
     fn main_lost(&self, generation: u64);
+    /// `(protocol, vault format)` this device announces and demands of its peer.
+    /// A method only so a test can play an older or newer build.
+    fn versions(&self) -> (u32, u32) {
+        (
+            trade_core::sync::protocol::PROTOCOL_VERSION,
+            trade_core::VAULT_FORMAT_VERSION,
+        )
+    }
+    /// The app version this device announces (informational, a test may change it).
+    fn app_version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
 }
 
 pub(crate) fn lock_hub(hub: &SyncHub) -> MutexGuard<'_, Hub> {

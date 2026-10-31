@@ -117,6 +117,7 @@ fn main() {
         trade_core::ipc_contract::SyncNetworkView,
         trade_core::ipc_contract::SyncFirewallFix,
         trade_core::ipc_contract::SyncPeerView,
+        trade_core::ipc_contract::SyncCutReason,
         trade_core::ipc_contract::TransferPhase,
         trade_core::ipc_contract::TransferReceiveView,
         trade_core::ipc_contract::TransferSendView,

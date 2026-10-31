@@ -187,6 +187,10 @@ pub enum PeerSyncFailure {
     TransferExpired,
     /// Vault transfer: what arrived is not a whole vault file.
     NotAVault,
+    /// The other device paused the exchange with this one on purpose.
+    PausedByPeer,
+    /// The other device forgot this one.
+    ForgottenByPeer,
 }
 
 impl PeerSyncFailure {
@@ -203,6 +207,8 @@ impl PeerSyncFailure {
             Self::TransferDeclined => "SYNC_TRANSFER_DECLINED",
             Self::TransferExpired => "SYNC_TRANSFER_EXPIRED",
             Self::NotAVault => "SYNC_NOT_A_VAULT",
+            Self::PausedByPeer => "SYNC_PAUSED_BY_PEER",
+            Self::ForgottenByPeer => "SYNC_FORGOTTEN_BY_PEER",
         }
     }
 }

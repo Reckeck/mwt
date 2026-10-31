@@ -72,7 +72,7 @@ pub async fn link_vault_external(
     // The copy is of the file: the batched changes go into it first.
     crate::vault_writer::flush_now(&app).map_err(err_to_string)?;
     let bytes = std::fs::read(&path).map_err(|err| err_to_string(err.into()))?;
-    links::push(&app, &path, &link, &bytes);
+    links::push_replacing(&app, &path, &link, &bytes);
     reattach(&app, &state)?;
     let status = links::get(&app, &path).map(|link| link.status());
     if let Some(error) = status.as_ref().and_then(|status| status.last_error.clone()) {

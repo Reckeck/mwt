@@ -118,7 +118,8 @@ export const vaultFilesCommands: MockCommands = {
       linked: true,
       display_name: body?.existing ? 'vault-copy.wallet' : 'Download/vault.wallet',
       last_synced_at: new Date().toISOString(),
-      last_error: null,
+      // Demo: «Select existing» shows the state of a copy changed on another device.
+      last_error: body?.existing ? 'VAULT_REMOTE_CHANGED: the external copy was changed on another device' : null,
     }
     return resolve(mockLink.value)
   },
