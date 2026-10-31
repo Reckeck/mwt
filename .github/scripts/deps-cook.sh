@@ -18,9 +18,13 @@ lane="${1:?lane name}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+# In a job container the checkout belongs to another user.
+git config --global --add safe.directory "$PWD"
 git archive HEAD | tar -x -C "$work"
 cd "$work"
-export CARGO_TARGET_DIR="$work/.deps-target"
+# The target dir comes from .cargo/config.toml, as in the real build: sccache hashes
+# CARGO_* variables, so setting CARGO_TARGET_DIR here would make every key differ.
+unset CARGO_TARGET_DIR
 cargo chef prepare --recipe-path recipe.json
 
 cook() {

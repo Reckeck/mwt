@@ -38,9 +38,8 @@ impl Cmd {
         self
     }
 
-    pub fn env(mut self, key: &str, value: impl AsRef<str>) -> Self {
-        self.env.push((key.to_string(), value.as_ref().to_string()));
-        self
+    pub fn arg(self, arg: impl AsRef<str>) -> Self {
+        self.args([arg])
     }
 
     pub fn display(&self) -> String {

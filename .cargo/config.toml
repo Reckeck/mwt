@@ -1,2 +1,7 @@
+# Here and not in CARGO_TARGET_DIR: sccache hashes every CARGO_* variable, so a path in the
+# environment would split the cache between checkouts, lanes and CI steps.
+[build]
+target-dir = ".rust-target"
+
 [alias]
 xtask = "run -q -p xtask --"

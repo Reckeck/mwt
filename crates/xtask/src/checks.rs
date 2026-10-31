@@ -22,6 +22,7 @@ pub fn target_base(root: &Path) -> PathBuf {
 }
 
 /// A separate target directory for one cargo task: parallel cargo runs in one directory block each other.
+/// Goes to cargo as `--target-dir`: in `CARGO_TARGET_DIR` it would become part of every sccache key.
 pub fn lane(root: &Path, name: &str) -> String {
     target_base(root)
         .join("lanes")
@@ -63,9 +64,9 @@ fn browser_check(name: &str) -> Task {
 
 fn clippy_workspace(root: &Path) -> Task {
     let cmd = Cmd::new("cargo")
-        .args(["clippy", "--workspace", "--all-targets"])
-        .args(LINT)
-        .env("CARGO_TARGET_DIR", lane(root, "clippy"));
+        .args(["clippy", "--workspace", "--all-targets", "--target-dir"])
+        .arg(lane(root, "clippy"))
+        .args(LINT);
     Task::cmd("clippy", Class::Heavy, &[], cmd)
 }
 

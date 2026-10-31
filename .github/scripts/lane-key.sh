@@ -6,6 +6,7 @@
 #   - the dev profile switches set in the workflow env,
 #   - the external packages of Cargo.lock (workspace crates, whose version a release
 #     bumps, are left out),
+#   - .cargo/config.toml,
 #   - every Cargo.toml without its `version =` line (features, [profile.*], dependency lists).
 # Node does not affect compiled crates, pnpm has its own cache (pnpm-lock.yaml).
 #
@@ -22,6 +23,7 @@ digest() {
   rustc -V
   echo "image=${CI_IMAGE_TAG:-}"
   echo "debug=${CARGO_PROFILE_DEV_DEBUG:-}"
+  cat .cargo/config.toml
   awk -v RS= '/(^|\n)source = /' Cargo.lock
   LC_ALL=C find . -name Cargo.toml -not -path '*/node_modules/*' -not -path './.rust-target/*' \
     -not -path './crates/app/gen/*' | LC_ALL=C sort | while read -r manifest; do
