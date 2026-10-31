@@ -60,10 +60,14 @@ const QUIET_AFTER: [&str; 10] = [
     "platform:macos",
 ];
 
-/// `scripts/run-browser-check.mjs <name> --quick`: the vitest project `layout` on one file.
-fn browser_check(name: &str) -> Task {
-    let cmd = Cmd::new("node").args(["scripts/run-browser-check.mjs", name, "--quick"]);
-    Task::cmd(name, Class::Browser, &[], cmd)
+/// `scripts/run-browser-check.mjs <name> [--quick]`: the vitest project `layout` on one file.
+fn browser_check(name: &str, full: bool) -> Task {
+    Task::cmd(name, Class::Browser, &[], browser_cmd(name, full))
+}
+
+fn browser_cmd(name: &str, full: bool) -> Cmd {
+    let cmd = Cmd::new("node").args(["scripts/run-browser-check.mjs", name]);
+    if full { cmd } else { cmd.arg("--quick") }
 }
 
 fn clippy_workspace(root: &Path) -> Task {
@@ -80,7 +84,7 @@ pub const FRONTEND: [&str; 7] = [
     "biome", "vue-tsc", "unit", "checks", "e2e", "layout", "links",
 ];
 
-pub fn check_tasks(root: &Path, overlap_browser: bool) -> Vec<Task> {
+pub fn check_tasks(root: &Path, overlap_browser: bool, full_browser: bool) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(
             "test",
@@ -94,8 +98,8 @@ pub fn check_tasks(root: &Path, overlap_browser: bool) -> Vec<Task> {
     tasks.push(clippy_workspace(root));
     tasks.extend([
         browser(vitest("e2e", Class::Browser, "e2e"), overlap_browser),
-        browser(browser_check("layout"), overlap_browser),
-        browser(browser_check("links"), overlap_browser),
+        browser(browser_check("layout", full_browser), overlap_browser),
+        browser(browser_check("links", full_browser), overlap_browser),
         Task::cmd(
             "biome",
             Class::Light,
@@ -162,4 +166,21 @@ fn gen_types(_root: &Path) -> Task {
             }
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::browser_cmd;
+
+    #[test]
+    fn browser_checks_are_quick_unless_full() {
+        assert_eq!(
+            browser_cmd("layout", false).display(),
+            "node scripts/run-browser-check.mjs layout --quick"
+        );
+        assert_eq!(
+            browser_cmd("links", true).display(),
+            "node scripts/run-browser-check.mjs links"
+        );
+    }
 }

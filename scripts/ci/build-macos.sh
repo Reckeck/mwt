@@ -3,7 +3,10 @@
 # Mac: the build:macos job (GitLab macOS runner) or cargo xtask build
 # (here or over ssh). Tauri cannot build for macOS from another OS.
 #
-#   scripts/ci/build-macos.sh <version> <out-dir>
+#   MWT_APP_NAME=... [MWT_TAURI_CONFIG=<overlay>] scripts/ci/build-macos.sh <version> <out-dir>
+#
+# MWT_APP_NAME is the channel's product name (the .app folder); the overlay is written here by
+# `cargo xtask tauri-config` when the caller gives none (the Mac has cargo after `mise install`).
 #
 # Signing: with APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD and
 # APPLE_SIGNING_IDENTITY (+ APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID to
@@ -11,7 +14,6 @@
 # Gatekeeper asks to confirm the first start (docs/ci.md).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-source scripts/ci/channel.sh
 
 version="$1"
 out="$2"
@@ -37,7 +39,11 @@ if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
   echo "WARNING: no APPLE_SIGNING_IDENTITY - ad-hoc signature, not notarized" >&2
   export APPLE_SIGNING_IDENTITY="-"
 fi
-config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh)"
+app_name="${MWT_APP_NAME:?the channel product name}"
+if [[ -z "${MWT_TAURI_CONFIG:-}" ]]; then
+  MWT_TAURI_CONFIG="$(cargo xtask tauri-config --channel "${RELEASE_CHANNEL:-dev}" --version "$version")"
+fi
+config="$MWT_TAURI_CONFIG"
 # Bundles of an earlier build (the other channel names them differently)
 # would be collected as well.
 rm -rf "$CARGO_TARGET_DIR/universal-apple-darwin/release/bundle"

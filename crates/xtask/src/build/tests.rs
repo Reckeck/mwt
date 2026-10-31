@@ -7,12 +7,15 @@ use super::*;
 use crate::graph::{Opts, Status, run_graph};
 
 fn env() -> Arc<Env> {
-    Arc::new(Env::detect(
-        std::env::temp_dir().join("xtask-build-test"),
-        "dev",
-        "0.1.0",
-        false,
-    ))
+    Arc::new(
+        Env::detect(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            "dev",
+            "0.1.0",
+            false,
+        )
+        .unwrap(),
+    )
 }
 
 fn facts(tarball: bool, host: Option<&str>) -> Facts {

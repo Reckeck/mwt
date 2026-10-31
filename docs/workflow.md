@@ -69,9 +69,14 @@ glab mr create --source-branch feature/<задача> --target-branch developmen
 MR зелёный и проверен → merge → пайплайн `development` собирает всё и
 публикует пре-релиз (Releases → «Pre-release X.Y.Z-N», файлы в Package
 Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хранятся, старые
-удаляются (`prerelease:cleanup`, нужен `RELEASE_TOKEN`).
+удаляются (`prerelease:cleanup`, на GitHub `cargo xtask prune-prereleases`, нужен `GH_TOKEN`).
 
 ## Выпуск
+
+На GitHub шаги выпуска — команды `cargo xtask publish`, `prune-prereleases`,
+`backmerge`, `publish-aur` (токен `GH_TOKEN`, см. [ci.md](ci.md#выпуск-через-xtask-github)).
+`release.yml` ещё не написан, реальный выпуск через них не проверялся; описание
+ниже — прежний GitLab-пайплайн.
 
 1. В `development` (основная копия): `mise run bump` — версия и раздел
    CHANGELOG; при желании дописать над списком коммитов главное словами;
@@ -82,7 +87,7 @@ Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хр
    заметками из CHANGELOG (Linux, Windows, Android, Flatpak, pacman; macOS —
    если включён `MACOS_BUILD`). AUR — кнопкой `aur:publish`. Проверить
    бандлы до мержа можно и локально: `mise run build:all` (`docs/ci.md`).
-4. `backmerge` открывает MR `main` → `development` (нужен `RELEASE_TOKEN`) —
+4. `backmerge` открывает MR `main` → `development` (`cargo xtask backmerge`, нужен `GH_TOKEN`) —
    слить его. Поднимать версию сразу не нужно: пре-релизы до следующего
    bump сами идут как `X.Y.(Z+1)-N`.
 

@@ -271,7 +271,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `crates/app/Cargo.toml`. Иначе ломается `build:android`. Проверка без CI —
   `mise run check-platforms` (см. «Сборка на всех платформах»).
 - **Идентификаторы не меняются.** Два канала — два приложения рядом
-  (`scripts/ci/channel.sh`, `docs/ci.md` «Каналы»): релиз из `main` —
+  (`crates/xtask/src/channel.rs`, `docs/ci.md` «Каналы»): релиз из `main` —
   `mwt.desktop` (десктоп; от него зависит путь к vault), `mwt.app` (Android),
   `mwt.app.MultiWalletTracker` (Flatpak); dev из `development` и локальные —
   `dev.mwt.desktop`, `dev.mwt.app` (`tauri.conf.json`,

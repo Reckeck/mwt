@@ -1,14 +1,21 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
 mod build;
+mod changelog;
+mod channel;
 mod checks;
 mod exec;
 mod graph;
 mod guard;
+mod images;
 mod lock;
 mod platforms;
+mod publish;
+mod release;
 mod sccache;
 mod sink;
+mod tauri_config;
+mod version;
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -42,6 +49,28 @@ enum Command {
     /// Bundles for every platform (linux pacman flatpak android windows macos) into
     /// `.cache/build-all/builds/<channel>/`.
     Build(BuildArgs),
+    /// The version a build ships under (X.Y.Z, or with `--channel` the one CI builds).
+    Version(VersionArgs),
+    /// Refresh the commit list of `## [Unreleased]` in CHANGELOG.md (git-cliff).
+    Changelog,
+    /// The next version into every file and `[Unreleased]` becomes its section of CHANGELOG.md.
+    Bump {
+        /// auto, patch, minor, major or X.Y.Z.
+        #[arg(default_value = "auto")]
+        level: String,
+    },
+    /// A GitHub release or pre-release: SHA256SUMS, then `gh release create`.
+    Publish(publish::PublishArgs),
+    /// Delete the old pre-releases (and their tags) beyond the newest N.
+    PrunePrereleases(publish::PruneArgs),
+    /// Open the pull request main -> development after a release.
+    Backmerge(publish::BackmergeArgs),
+    /// Push multi-wallet-tracker-bin to the AUR (for an archlinux container).
+    PublishAur(publish::AurArgs),
+    /// Write the Tauri config overlay of a build and print its absolute path.
+    TauriConfig(TauriConfigArgs),
+    /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
+    ImageTag,
     /// For tests of the run lock: sleeps, then exits with `--code`.
     #[command(hide = true)]
     SelftestSleep {
@@ -70,19 +99,55 @@ struct CheckArgs {
     /// Without the compile checks for other platforms (`platform:*`).
     #[arg(long, conflicts_with_all = ["tasks", "frontend"])]
     no_platforms: bool,
+    /// layout and links over every width and both themes instead of `--quick` (CI runs this way).
+    #[arg(long)]
+    full_browser: bool,
     /// Print the task graph and exit.
     #[arg(long)]
     list: bool,
 }
 
 #[derive(Args)]
+struct VersionArgs {
+    /// Without it: the plain app version. `prod` is X.Y.Z, `dev` and `none` X.Y.Z-<run>.
+    #[arg(long, value_parser = ["dev", "prod", "none"])]
+    channel: Option<String>,
+    /// The pre-release number (default: $GITHUB_RUN_NUMBER, $CI_PIPELINE_IID, 1).
+    #[arg(long)]
+    run: Option<u64>,
+    /// Append BUILD_VERSION, ANDROID_VERSION_CODE and RELEASE_CHANNEL as KEY=VALUE lines
+    /// (the format of $GITHUB_OUTPUT).
+    #[arg(long, requires = "channel")]
+    output: Option<String>,
+}
+
+#[derive(Args)]
+struct TauriConfigArgs {
+    #[arg(long, default_value = "dev", value_parser = ["dev", "prod", "none"])]
+    channel: String,
+    #[arg(long)]
+    version: String,
+    /// The Android identifier instead of the desktop one.
+    #[arg(long)]
+    android: bool,
+    #[arg(long, default_value_t = 1)]
+    version_code: u32,
+    /// dist/ is already built: tauri does not run `pnpm build` again.
+    #[arg(long)]
+    prebuilt_frontend: bool,
+    /// Relative to the repository root.
+    #[arg(long, default_value = tauri_config::DEFAULT_OUT)]
+    out: String,
+}
+
+#[derive(Args)]
 struct BuildArgs {
     /// Platforms (with what they need); all when empty.
     platforms: Vec<String>,
-    /// `dev` is the app of development, `prod` the release of main (scripts/ci/channel.sh).
+    /// `dev` is the app of development, `prod` the release of main (channel.rs).
     #[arg(long, default_value = "dev", value_parser = ["dev", "prod"])]
     channel: String,
-    /// Default: the version of tauri.conf.json (scripts/ci/version.sh).
+    /// Default: the version of tauri.conf.json (`cargo xtask version`).
     #[arg(long)]
     version: Option<String>,
     /// Build linux and flatpak on this host instead of in containers.
@@ -113,7 +178,7 @@ async fn run() -> Result<i32> {
     let mut built = None;
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
-            let mut all = checks::check_tasks(&root, args.overlap_browser);
+            let mut all = checks::check_tasks(&root, args.overlap_browser, args.full_browser);
             if args.no_platforms {
                 all.retain(|task| !task.name.starts_with("platform:"));
             }
@@ -150,14 +215,68 @@ async fn run() -> Result<i32> {
                     .collect();
             }
             (
-                graph::select(checks::check_tasks(&root, false), &names)?,
+                graph::select(checks::check_tasks(&root, false, false), &names)?,
                 *heavy,
             )
+        }
+        Command::Version(args) => {
+            version::run(
+                &root,
+                &version::Args {
+                    channel: args.channel.clone(),
+                    run: args.run,
+                    output: args.output.clone(),
+                },
+            )?;
+            return Ok(0);
+        }
+        Command::Changelog => {
+            release::run_changelog(&root)?;
+            return Ok(0);
+        }
+        Command::Bump { level } => {
+            release::run_bump(&root, level)?;
+            return Ok(0);
+        }
+        Command::Publish(args) => {
+            publish::run_publish(&root, args)?;
+            return Ok(0);
+        }
+        Command::PrunePrereleases(args) => {
+            publish::run_prune(args)?;
+            return Ok(0);
+        }
+        Command::Backmerge(args) => {
+            publish::run_backmerge(args)?;
+            return Ok(0);
+        }
+        Command::PublishAur(args) => {
+            publish::run_aur(&root, args)?;
+            return Ok(0);
+        }
+        Command::TauriConfig(args) => {
+            let path = tauri_config::write(
+                &root,
+                &args.out,
+                &tauri_config::Params {
+                    channel: channel::Channel::parse(&args.channel)?,
+                    android: args.android,
+                    version: &args.version,
+                    version_code: args.version_code,
+                    prebuilt_frontend: args.prebuilt_frontend,
+                },
+            )?;
+            println!("{}", path.display());
+            return Ok(0);
+        }
+        Command::ImageTag => {
+            println!("{}", images::tag(&root)?);
+            return Ok(0);
         }
         Command::Build(args) => {
             let version = match &args.version {
                 Some(version) => version.clone(),
-                None => build::version_of(&root)?,
+                None => version::tauri_version(&root)?,
             };
             build::check_version(&version)?;
             let env = Arc::new(build::Env::detect(
@@ -165,7 +284,7 @@ async fn run() -> Result<i32> {
                 &args.channel,
                 &version,
                 args.native,
-            ));
+            )?);
             let facts = build::Facts {
                 mac: build::MacFacts::detect(),
                 tarball: env.tarball().is_file(),

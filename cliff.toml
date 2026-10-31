@@ -1,7 +1,7 @@
 # git-cliff: the commit part of CHANGELOG.md and the next version, both from
 # the Conventional Commits that AGENTS.md requires. Used by
-# scripts/release/changelog.sh (`mise run changelog`) and
-# scripts/release/bump.sh (`mise run bump`) — not run directly.
+# `cargo xtask changelog` (`mise run changelog`) and
+# `cargo xtask bump` (`mise run bump`) — not run directly.
 
 [changelog]
 # CHANGELOG.md keeps its own header; this renders one section's body.
@@ -41,7 +41,7 @@ commit_parsers = [
 
 [bump]
 # 0.x: a feature raises the minor, anything else the patch; 1.0 is a decision,
-# not something a «!» in a commit makes (bump.sh major does it).
+# not something a «!» in a commit makes (`cargo xtask bump major` does it).
 features_always_bump_minor = true
 breaking_always_bump_major = false
 # No release tag yet: the first release is this one.

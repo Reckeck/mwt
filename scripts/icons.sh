@@ -2,7 +2,7 @@
 # App icons of both channels from the SVG sources in crates/app/icons/src:
 # crates/app/icons/prod (release) and crates/app/icons/dev (dev and local
 # builds, the default in tauri.conf.json). The PNGs are committed; CI renders
-# nothing, it only picks the channel's folder (channel.sh, tauri-config.sh).
+# nothing, it only picks the channel's folder (crates/xtask channel.rs, tauri_config.rs).
 #
 #   mise run icons
 #

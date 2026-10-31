@@ -1,6 +1,6 @@
 //! The identifier of this build. The dev channel (development, local builds)
 //! keeps `tauri.conf.json`'s `dev.mwt.desktop`; a release from main is built
-//! with `mwt.desktop` (scripts/ci/tauri-config.sh), so both install side by
+//! with `mwt.desktop` (crates/xtask/src/tauri_config.rs), so both install side by
 //! side with their own data. Tauri joins it to the data directories; the
 //! keyring entries and the quick-add socket are keyed by it as well.
 // Only the desktop reads it back (keyring, socket, TradeApp move); mobile
