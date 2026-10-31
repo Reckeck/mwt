@@ -122,8 +122,8 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 | `cargo xtask publish-aur --version V --dir D` | пуш `multi-wallet-tracker-bin` в AUR (`AUR_SSH_PRIVATE_KEY`) |
 
 Токен — `GH_TOKEN` (или `GITHUB_TOKEN`) вместо `RELEASE_TOKEN` GitLab.
-`release.yml` ещё не написан, и реальный выпуск через эти команды не
-проверялся: проверены только тесты и `--dry-run`.
+Вызывает их `.github/workflows/release.yml` (раздел «GitHub Actions»); до
+первого настоящего прогона проверены только тесты, `--dry-run` и `actionlint`.
 
 ### Каналы: релиз и dev-приложение
 
@@ -167,8 +167,11 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
 ## GitHub Actions
 
 Проверки на GitHub идут в `.github/workflows/ci.yml` (образы — `images.yml`,
-очистка кэша — `cache-cleanup.yml`); GitLab-часть ниже описывает прежний
-пайплайн и переписывается отдельным этапом.
+очистка кэша — `cache-cleanup.yml`), выпуск — в `release.yml`; GitLab-часть
+ниже описывает прежний пайплайн и переписывается отдельным этапом.
+`ci.yml` запускается на PR и вызывается из `release.yml` (`workflow_call`):
+пуш в `development`/`main` проверяет именно этот вызов, отдельного запуска
+`ci.yml` на пуш нет.
 
 - `check-linux` (`cargo xtask check --no-frontend --no-platforms`) и
   `check-frontend` (`cargo xtask check --frontend`) — два разных job'а в
@@ -178,6 +181,89 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
   закомментирован.
 - `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) действует только на C/C++;
   на rustc sccache его не применяет.
+
+### release.yml
+
+Пуш в `development` — пре-релиз `X.Y.Z-N` dev-канала, пуш в `main` — релиз
+`X.Y.Z` prod-канала; PR выпуск не запускает. Граф (`needs`):
+
+```
+version ──► checks (ci.yml) ──► frontend ──► build (linux | android | windows) ──► package (pacman | flatpak)
+   │                                │                                                   │
+   │                                └──► build-macos (пауза)                            │
+   └──────────────────────────────────────────────────────────► publish ◄───────────────┘
+                                                                  ├──► aur       (только prod)
+                                                                  └──► backmerge (только prod)
+```
+
+- `version` — решает канал и нужен ли выпуск (`.github/scripts/release-plan.sh`),
+  собирает `xtask` (единственный Rust-компилятор в запуске, бинарник идёт
+  артефактом во все следующие job'ы), считает `X.Y.Z[-N]`
+  (`cargo xtask version`: падает, если тег `vX.Y.Z` уже есть) и пишет оверлей
+  Tauri для Windows. Номер `N` и Android `versionCode` — `GITHUB_RUN_NUMBER`.
+- `checks` — `ci.yml` целиком; ни одна сборка не стартует без зелёных проверок.
+- `frontend` — `pnpm build` один раз, `dist/` уходит артефактом; сборки зовут
+  `--prebuilt-frontend` (оверлей без `beforeBuildCommand`).
+- `build` — одна группа с `fail-fast: true`: первая упавшая сборка отменяет
+  остальные (перезапуск — «Re-run failed jobs»). linux и android —
+  `xtask build <платформа>` на раннере с образами `ci-linux`/`ci-android` из
+  ghcr (docker), windows — `scripts/ci/build-windows.ps1` на `windows-latest`
+  (MSI собирает WiX). Пре-релизы идут с thin LTO и 16 codegen units, релиз — с
+  LTO из `[profile.release]`.
+- `package` — pacman и Flatpak из Linux-тарболла (`xtask build pacman|flatpak`,
+  контейнер archlinux, Flatpak `--privileged`).
+- `publish` — единственный job с `contents: write`: проверка набора файлов
+  (`.github/scripts/check-release-files.sh`), `SHA256SUMS`, тег и релиз
+  (`cargo xtask publish [--pre]`), затем `prune-prereleases` (оставить 10;
+  ошибка не валит запуск).
+- `aur` (prod) — `publish-aur` в контейнере archlinux; без секрета
+  `AUR_SSH_PRIVATE_KEY` шаг пропускается с предупреждением.
+- `backmerge` (prod, `pull-requests: write`) — PR `main` → `development`; токен
+  `BACKMERGE_TOKEN` (если есть) иначе `GITHUB_TOKEN` (нужна настройка «Allow
+  GitHub Actions to create and approve pull requests»); ошибка не валит запуск.
+- `build-macos` написан, но выключен (`if: false`, как `clippy-macos`): включить
+  — убрать `if: false`, добавить его в `needs` и в условие `publish`, третьим
+  аргументом `check-release-files.sh` передать `macos`.
+
+Файлы выпуска (`<v>` — версия, решение 12 плана):
+
+| Платформа | Файлы |
+|---|---|
+| Linux | `multi-wallet-tracker_<v>_amd64.deb`, `multi-wallet-tracker-<v>-1.x86_64.rpm`, `multi-wallet-tracker-<v>-x86_64.AppImage`, `multi-wallet-tracker-<v>-linux-x86_64.tar.gz` (источник AUR) |
+| Arch / Flatpak | `*.pkg.tar.zst` (pacman), `multi-wallet-tracker-<v>-x86_64.flatpak`; в AUR — `multi-wallet-tracker-bin` (prod) |
+| Android | `multi-wallet-tracker-<v>-android-universal.apk` и `.aab` |
+| Windows | `multi-wallet-tracker-<v>-x64-setup.exe` (NSIS), `multi-wallet-tracker-<v>-x64-<язык>.msi`, `multi-wallet-tracker-<v>-windows-x64-portable.zip` |
+| macOS (пауза) | `multi-wallet-tracker-<v>-macos-universal.dmg`, `.app.tar.gz` |
+| Все | `SHA256SUMS` |
+
+**Секреты** (Settings → Secrets and variables → Actions):
+
+| Секрет | Зачем | Без него |
+|---|---|---|
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` | подпись APK/AAB; прежний keystore, иначе установленное приложение не обновится | при выпуске сборка Android падает; без выпуска APK подписан тестовым ключом (`*-testkey`), такие файлы не публикуются |
+| `ANDROID_KEY_PASSWORD` | пароль ключа, если отличается от пароля хранилища | берётся пароль хранилища |
+| `AUR_SSH_PRIVATE_KEY` | пуш в AUR | шаг пропускается с предупреждением |
+| `BACKMERGE_TOKEN` | PAT/токен приложения для PR `main` → `development` (запускает проверки) | PR от `GITHUB_TOKEN` |
+| `APPLE_*` | подпись macOS (когда включат) | ad hoc подпись |
+| `TAURI_SIGNING_PRIVATE_KEY` | подпись обновлений: `latest.json` + `.sig` (решение 16) | не используется: плагина обновлений в приложении ещё нет |
+
+Keystore не пишется на диск раннера: `ANDROID_KEYSTORE_BASE64` попадает в
+контейнер переменной окружения (GitHub маскирует значение в логе),
+`sign-android.sh` раскладывает его во временный файл внутри контейнера, и тот
+исчезает вместе с контейнером.
+
+**Запуск вручную** (Actions → release → Run workflow, или
+`gh workflow run release.yml --ref <ветка> -f channel=dev -f publish=false`):
+выбрать ветку, `channel` (`dev` или `prod`) и `publish`. С `publish: false`
+(по умолчанию) идут `version`, проверки и все сборки, артефакты лежат в
+запуске (`bundle-*`, 7 дней), `publish`, `aur`, `backmerge` пропускаются, тег и
+релиз не создаются. Выпуск вручную разрешён только как `dev` на `development`
+или `prod` на `main`. `dev` без выпуска получает версию `X.Y.Z-N`, `prod` — как
+релиз (падает, если `vX.Y.Z` уже выпущен или в CHANGELOG нет раздела).
+
+Кэш: проверки внутри `checks` читают и пишут свои полосы, как в PR; у сборок
+своих полос `deps` пока нет, поэтому release-сборки идут без кэша
+скомпилированных крейтов (на `main` так и задумано, решение 26).
 
 ## Раннеры
 
