@@ -66,7 +66,7 @@ function onKey(event: KeyboardEvent) {
           <span><Kbd>Esc</Kbd> {{ t('glance.close') }}</span>
         </p>
       </div>
-      <div v-if="props.openTo || $slots.actions" class="flex items-center gap-2 border-t border-border px-3.5 py-2.5">
+      <div v-if="props.openTo || $slots.actions" class="flex flex-wrap items-center gap-2 border-t border-border px-3.5 py-2.5">
         <slot name="actions" />
         <span class="flex-1" />
         <Button v-if="props.openTo" variant="link" size="sm" class="h-auto px-0 text-sm" data-glance-open @click="go">

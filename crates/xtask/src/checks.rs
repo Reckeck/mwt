@@ -22,6 +22,7 @@ pub fn target_base(root: &Path) -> PathBuf {
 }
 
 /// A separate target directory for one cargo task: parallel cargo runs in one directory block each other.
+/// Goes to cargo as `--target-dir`: in `CARGO_TARGET_DIR` it would become part of every sccache key.
 pub fn lane(root: &Path, name: &str) -> String {
     target_base(root)
         .join("lanes")
@@ -36,7 +37,7 @@ fn vitest(name: &str, class: Class, project: &str) -> Task {
 }
 
 /// Timing-sensitive checks (long tasks, layout shift, overlays opening) fail on a loaded machine,
-/// so by default they run alone: after every cargo build, one browser at a time
+/// so by default they run alone: after every other task, one browser at a time
 /// (`--overlap-browser` starts them at once; they are mostly waiting, so it saves minutes but can flake).
 fn browser(task: Task, overlap: bool) -> Task {
     if overlap {
@@ -46,7 +47,11 @@ fn browser(task: Task, overlap: bool) -> Task {
     }
 }
 
-const QUIET_AFTER: [&str; 6] = [
+const QUIET_AFTER: [&str; 10] = [
+    "biome",
+    "vue-tsc",
+    "unit",
+    "checks",
     "test",
     "gen-types",
     "clippy",
@@ -63,13 +68,18 @@ fn browser_check(name: &str) -> Task {
 
 fn clippy_workspace(root: &Path) -> Task {
     let cmd = Cmd::new("cargo")
-        .args(["clippy", "--workspace", "--all-targets"])
-        .args(LINT)
-        .env("CARGO_TARGET_DIR", lane(root, "clippy"));
+        .args(["clippy", "--workspace", "--all-targets", "--target-dir"])
+        .arg(lane(root, "clippy"))
+        .args(LINT);
     Task::cmd("clippy", Class::Heavy, &[], cmd)
 }
 
 /// Declaration order is the start order: the long tasks first.
+/// The checks of the web part: need `node_modules` (CI runs them in a job of their own).
+pub const FRONTEND: [&str; 7] = [
+    "biome", "vue-tsc", "unit", "checks", "e2e", "layout", "links",
+];
+
 pub fn check_tasks(root: &Path, overlap_browser: bool) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(

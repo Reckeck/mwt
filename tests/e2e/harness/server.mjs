@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 
 const root = new URL('../../..', import.meta.url).pathname
+const HOST = '127.0.0.1'
+const STARTUP_LIMIT_MS = 180_000
 
 export const freePort = () =>
   new Promise((done) => {
@@ -15,18 +17,32 @@ export const freePort = () =>
 
 export async function startVite() {
   const port = await freePort()
-  const vite = spawn('pnpm', ['exec', 'vite', '--port', String(port), '--strictPort', '--clearScreen', 'false'], {
+  // `localhost` may resolve to ::1 for Vite and to 127.0.0.1 for fetch, a container decides.
+  const args = ['--host', HOST, '--port', String(port), '--strictPort', '--clearScreen', 'false']
+  const vite = spawn('pnpm', ['exec', 'vite', ...args], {
     cwd: root,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
-  const url = `http://localhost:${port}/`
-  for (let tries = 0; tries < 200; tries++) {
+  let output = ''
+  const keep = (chunk) => {
+    output = (output + chunk).slice(-2000)
+  }
+  vite.stdout.on('data', keep)
+  vite.stderr.on('data', keep)
+  const url = `http://${HOST}:${port}/`
+  let lastFailure = 'no attempt'
+  const deadline = Date.now() + STARTUP_LIMIT_MS
+  while (Date.now() < deadline) {
     try {
-      if ((await fetch(url)).ok) return { vite, url }
-    } catch {
-      await new Promise((done) => setTimeout(done, 150))
+      const signal = AbortSignal.timeout(deadline - Date.now())
+      const response = await fetch(url, { signal })
+      if (response.ok) return { vite, url }
+      lastFailure = `HTTP ${response.status}`
+    } catch (error) {
+      lastFailure = String(error.cause ?? error)
     }
+    await new Promise((done) => setTimeout(done, 150))
   }
   vite.kill()
-  throw new Error('vite did not start')
+  throw new Error(`vite did not start (${lastFailure}):\n${output}`)
 }

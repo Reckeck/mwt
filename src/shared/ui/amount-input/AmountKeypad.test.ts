@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
@@ -11,11 +11,14 @@ function key(name: string) {
 }
 const text = (selector: string) => document.querySelector(selector)?.textContent?.trim()
 
+let mounted: VueWrapper | undefined
+
 async function open(initial = '') {
   const wrapper = mount(AmountKeypad, {
     props: { open: true, text: initial, decimalMark: ',', decimals: 2 },
     attachTo: document.body,
   })
+  mounted = wrapper
   await nextTick()
   await nextTick()
   return wrapper
@@ -23,6 +26,8 @@ async function open(initial = '') {
 
 describe('AmountKeypad', () => {
   afterEach(() => {
+    // Before the DOM goes: unmounting later would look for nodes that are no longer there.
+    mounted?.unmount()
     document.body.innerHTML = ''
   })
 

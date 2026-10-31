@@ -8,7 +8,6 @@ rust = "1.98.1"
 
 [env]
 RUST_LOG = "info"
-CARGO_TARGET_DIR = ".rust-target"
 
 [tasks]
 "setup" = "mise dependencies"

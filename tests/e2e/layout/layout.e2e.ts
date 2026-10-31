@@ -65,7 +65,9 @@ describe('check-layout', () => {
     await page.viewport(1280, 720, false)
     await page.goto(url)
     await login(page)
-  }, 120_000)
+    // On a clean checkout the first visit to a route is Vite compiling it, and may reload the page: not the app.
+    for (const view of await views(page, '1280x720')) await open(page, view)
+  }, 300_000)
 
   afterAll(async () => {
     await app?.close()
