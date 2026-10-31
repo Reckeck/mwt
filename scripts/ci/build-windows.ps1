@@ -72,7 +72,8 @@ if (-not (Test-Path $nodeDir)) {
   Expand-Archive "$cache\node.zip" -DestinationPath $cache
 }
 $env:Path = "$nodeDir;$env:Path"
-Invoke-Native npm install -g "pnpm@$pnpmVersion"
+# --prefix: the GitHub Windows image points the global npm prefix outside this Node.
+Invoke-Native npm install -g --prefix $nodeDir "pnpm@$pnpmVersion"
 # pnpm straight through node: the npm shims (pnpm.ps1 / pnpm.cmd) handed it
 # the whole argument list as one string on the GitLab Windows runner.
 $pnpmCli = Join-Path $nodeDir 'node_modules\pnpm\bin\pnpm.cjs'
