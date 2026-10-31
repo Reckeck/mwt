@@ -4,15 +4,15 @@
 # setup-linux.sh). The MSI needs WiX, which runs on Windows only: that one
 # comes from CI (build-windows.ps1). Names match build-windows.ps1.
 #
-#   scripts/local/build-windows-cross.sh <version> <out-dir>
+#   MWT_TAURI_CONFIG=<overlay> MWT_APP_BIN=... scripts/local/build-windows-cross.sh <version> <out-dir>
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-source scripts/ci/channel.sh
 
 version="$1"
 out="$2"
 target=x86_64-pc-windows-msvc
-config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh)"
+config="${MWT_TAURI_CONFIG:?the Tauri config overlay (cargo xtask tauri-config)}"
+app_bin="${MWT_APP_BIN:?the channel binary name}"
 # Bundles of an earlier build (the other channel names them differently)
 # would be collected as well.
 rm -rf "${CARGO_TARGET_DIR:-.rust-target}/$target/release/bundle"

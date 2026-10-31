@@ -3,13 +3,15 @@
 # names. Runs in build:linux after setup-linux.sh, and in the ci-linux image
 # for a local build (cargo xtask build).
 #
-#   scripts/ci/build-linux.sh <version> <out-dir>
+#   MWT_TAURI_CONFIG=<overlay> scripts/ci/build-linux.sh <version> <out-dir>
+#
+# MWT_TAURI_CONFIG is the Tauri config overlay (`cargo xtask tauri-config`).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 version="$1"
 out="$2"
-config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh)"
+config="${MWT_TAURI_CONFIG:?the Tauri config overlay (cargo xtask tauri-config)}"
 # Bundles of an earlier build (the other channel names them differently)
 # would be collected as well.
 rm -rf "${CARGO_TARGET_DIR:-.rust-target}/release/bundle"

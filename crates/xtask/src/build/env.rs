@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use tokio::sync::Mutex;
 
+use crate::channel::Channel;
 use crate::exec::{Cmd, Ctx, which};
 use crate::graph::Outcome;
 
@@ -21,8 +22,7 @@ pub const ARCH_IMAGE: &str = "docker.io/library/archlinux:base-devel";
 
 pub struct Env {
     pub root: PathBuf,
-    /// `dev` or `prod` (scripts/ci/channel.sh).
-    pub channel: String,
+    pub channel: Channel,
     pub version: String,
     /// Where the bundles land, relative to the root.
     pub out: String,
@@ -31,7 +31,6 @@ pub struct Env {
     /// podman or docker; `None` when neither is installed.
     pub engine: Option<String>,
     pub image_tag: String,
-    pub registry: String,
     pub network: String,
     /// Hash of the root path: the volumes of each working copy are its own.
     pub checkout: String,
@@ -40,7 +39,12 @@ pub struct Env {
 }
 
 impl Env {
-    pub fn detect(root: PathBuf, channel: &str, version: &str, native: bool) -> Self {
+    pub fn detect(
+        root: PathBuf,
+        channel: &str,
+        version: &str,
+        native: bool,
+    ) -> anyhow::Result<Self> {
         let engine = std::env::var("CONTAINER_ENGINE")
             .ok()
             .filter(|value| !value.is_empty())
@@ -49,15 +53,14 @@ impl Env {
                     .or_else(|| which("docker"))
                     .map(|path| path.display().to_string())
             });
-        Self {
-            channel: channel.to_string(),
+        let channel = Channel::parse(channel)?;
+        Ok(Self {
+            channel,
             version: version.to_string(),
-            out: format!(".cache/build-all/builds/{channel}"),
+            out: format!(".cache/build-all/builds/{}", channel.label()),
             native,
             engine,
-            image_tag: crate::platforms::image_tag(&root).unwrap_or_default(),
-            registry: std::env::var("CI_REGISTRY_IMAGE")
-                .unwrap_or_else(|_| "registry.gitlab.com/reckeck/trade-app".into()),
+            image_tag: crate::images::tag(&root)?,
             network: std::env::var("CONTAINER_NETWORK")
                 .ok()
                 .filter(|value| !value.is_empty())
@@ -65,7 +68,7 @@ impl Env {
             checkout: crate::platforms::checkout_hash(&root),
             images: Mutex::new(()),
             root,
-        }
+        })
     }
 
     /// The Linux tarball the pacman and flatpak builds start from.
@@ -117,7 +120,7 @@ impl Env {
     /// The CI image of a kind (`linux` or `android`): present, pulled, or built from ci.Dockerfile.
     pub async fn ci_image(&self, ctx: &Ctx, kind: &str) -> Result<String, Outcome> {
         let engine = self.engine()?;
-        let image = format!("{}/ci-{kind}:{}", self.registry, self.image_tag);
+        let image = crate::images::image(kind, &self.image_tag);
         let _one_at_a_time = self.images.lock().await;
         if Self::present(ctx, engine, &image).await {
             return Ok(image);
@@ -202,8 +205,11 @@ impl Env {
                 "-e",
                 "GRADLE_USER_HOME=/src/.cache/gradle",
                 "-e",
-                &format!("RELEASE_CHANNEL={}", self.channel),
+                &format!("RELEASE_CHANNEL={}", self.channel.label()),
             ]);
+        for (name, value) in self.channel.env() {
+            cmd = cmd.args(["-e", &format!("{name}={value}")]);
+        }
         for name in [
             "ANDROID_TARGETS",
             "ANDROID_KEYSTORE_BASE64",
@@ -237,7 +243,13 @@ impl Env {
                 &format!("--network={}", self.network),
             ])
             .args(["--name", &self.container_name(lane)])
-            .args(["-e", &format!("RELEASE_CHANNEL={}", self.channel)])
+            .args(["-e", &format!("RELEASE_CHANNEL={}", self.channel.label())])
+            .args(
+                self.channel
+                    .env()
+                    .iter()
+                    .flat_map(|(name, value)| ["-e".to_string(), format!("{name}={value}")]),
+            )
             .args(more)
             .args(["-v", &format!("{}:/src", self.root.display()), "-w", "/src"])
             .args([

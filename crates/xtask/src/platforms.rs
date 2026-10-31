@@ -121,14 +121,6 @@ async fn android(ctx: &Ctx) -> Outcome {
     android_in_container(ctx).await
 }
 
-pub fn image_tag(root: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(root.join(".gitlab-ci.yml")).ok()?;
-    text.lines().find_map(|line| {
-        let rest = line.strip_prefix("  CI_IMAGE_TAG: \"")?;
-        Some(rest.split('"').next()?.to_string())
-    })
-}
-
 async fn android_in_container(ctx: &Ctx) -> Outcome {
     let engine = std::env::var("CONTAINER_ENGINE")
         .ok()
@@ -144,12 +136,11 @@ async fn android_in_container(ctx: &Ctx) -> Outcome {
             "no Android NDK on the host (ANDROID_NDK_HOME) and no podman/docker for the ci-android image",
         );
     };
-    let Some(tag) = image_tag(&ctx.root) else {
-        return Outcome::Fail("no CI_IMAGE_TAG in .gitlab-ci.yml".into());
+    let tag = match crate::images::tag(&ctx.root) {
+        Ok(tag) => tag,
+        Err(error) => return Outcome::Fail(format!("{error:#}")),
     };
-    let registry = std::env::var("CI_REGISTRY_IMAGE")
-        .unwrap_or_else(|_| "registry.gitlab.com/reckeck/trade-app".into());
-    let image = format!("{registry}/ci-android:{tag}");
+    let image = crate::images::image("android", &tag);
     match ctx
         .succeeds(&Cmd::new(&engine).args(["image", "inspect", &image]))
         .await

@@ -6,7 +6,6 @@ mod env;
 mod macos;
 mod targets;
 
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
@@ -33,16 +32,6 @@ pub struct Facts {
     pub tarball: bool,
 }
 
-pub fn version_of(root: &Path) -> Result<String> {
-    let output = std::process::Command::new("scripts/ci/version.sh")
-        .current_dir(root)
-        .output()?;
-    if !output.status.success() {
-        bail!("scripts/ci/version.sh failed");
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
 /// The version ends up inside shell quotes of the container scripts.
 pub fn check_version(version: &str) -> Result<()> {
     let ok = !version.is_empty()
@@ -59,7 +48,7 @@ pub fn check_version(version: &str) -> Result<()> {
 /// - `frontend` once, for the builds that tauri would otherwise each start `pnpm build` for;
 /// - pacman and flatpak start from the Linux tarball: after `linux` when it is chosen too, from the
 ///   tarball already in the output folder otherwise, and without either it is an error before
-///   anything is built (as `build-all.sh` said "build linux first").
+///   anything is built .
 pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Task>> {
     for name in chosen {
         if !PLATFORMS.contains(&name.as_str()) {
@@ -150,7 +139,9 @@ fn frontend_task(name: &str) -> Task {
 pub fn print_output(env: &Env, sink: &Sink) {
     sink.line(&format!(
         "Multi Wallet Tracker {} {} -> {}/",
-        env.channel, env.version, env.out
+        env.channel.label(),
+        env.version,
+        env.out
     ));
     let mut files: Vec<(String, u64)> = std::fs::read_dir(env.root.join(&env.out))
         .into_iter()

@@ -3,10 +3,13 @@
 # archlinux image. flatpak-builder needs bubblewrap: the container must be
 # privileged (GitLab.com shared runners are; podman run --privileged locally).
 #
-#   scripts/ci/build-flatpak.sh <version> <release-dir>
+#   MWT_APP_NAME=... MWT_APP_FLATPAK_ID=... scripts/ci/build-flatpak.sh <version> <release-dir>
+#
+# The names come from the caller (`Channel::env` in crates/xtask): this container has no cargo.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-source scripts/ci/channel.sh
+app_name="${MWT_APP_NAME:?the channel product name}"
+app_flatpak_id="${MWT_APP_FLATPAK_ID:?the channel Flatpak id}"
 
 version="$1"
 release="$2"

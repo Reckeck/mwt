@@ -141,7 +141,7 @@ function bump(level = 'auto') {
   text = `${text.slice(0, start)}${fresh}\n\n## [${next}] — ${date}\n\n${body}\n\n${text.slice(end)}`
   writeFileSync(CHANGELOG, text.replace(/\n{3,}/g, '\n\n'))
 
-  // The same version everywhere version.sh and the bundles read it.
+  // The same version everywhere `cargo xtask version` and the bundles read it.
   replaceOnce(join(root, 'crates/app/tauri.conf.json'), /^ {2}"version": "[^"]+",$/m, `  "version": "${next}",`)
   replaceOnce(join(root, 'Cargo.toml'), /(\[workspace\.package\]\nversion = )"[^"]+"/, `$1"${next}"`)
   for (const crate of ['trade-app', 'trade-core']) {

@@ -3,7 +3,10 @@
 # sign-android.sh. Runs in build:android after setup-linux.sh and
 # setup-android.sh, and in the ci-android image for a local build.
 #
-#   scripts/ci/build-android.sh <version> <out-dir>
+#   MWT_TAURI_CONFIG=<overlay> MWT_APP_ICONS=icons/dev scripts/ci/build-android.sh <version> <out-dir>
+#
+# MWT_TAURI_CONFIG is the Android overlay (`cargo xtask tauri-config --android`), MWT_APP_ICONS
+# the channel's icon folder under crates/app (`Channel::env` in crates/xtask).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -19,8 +22,8 @@ if [[ -z "${MWT_ICONS_ISOLATED:-}" ]]; then
   trap 'rm -rf crates/app/icons && mv "$icons" crates/app/icons' EXIT
 fi
 
-source scripts/ci/channel.sh
-config="$(BUILD_VERSION="$version" scripts/ci/tauri-config.sh --android)"
+config="${MWT_TAURI_CONFIG:?the Android Tauri config overlay (cargo xtask tauri-config --android)}"
+app_icons="${MWT_APP_ICONS:?the channel icon folder, e.g. icons/dev}"
 # The Gradle project is generated, not committed (crates/app/gen/android).
 # Its Java package is the channel's identifier: a project left by the other
 # channel would build both, so it starts over.
