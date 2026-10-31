@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 
 const root = new URL('../../..', import.meta.url).pathname
+const STARTUP_LIMIT_MS = 180_000
 
 export const freePort = () =>
   new Promise((done) => {
@@ -26,12 +27,16 @@ export async function startVite() {
   vite.stdout.on('data', keep)
   vite.stderr.on('data', keep)
   const url = `http://localhost:${port}/`
-  for (let tries = 0; tries < 200; tries++) {
+  // A clean checkout has no node_modules/.vite: the first answer waits for the dependencies to bundle.
+  const deadline = Date.now() + STARTUP_LIMIT_MS
+  while (Date.now() < deadline) {
     try {
-      if ((await fetch(url)).ok) return { vite, url }
+      const signal = AbortSignal.timeout(deadline - Date.now())
+      if ((await fetch(url, { signal })).ok) return { vite, url }
     } catch {
-      await new Promise((done) => setTimeout(done, 150))
+      // Not listening yet, or the deadline passed.
     }
+    await new Promise((done) => setTimeout(done, 150))
   }
   vite.kill()
   throw new Error(`vite did not start:\n${output}`)

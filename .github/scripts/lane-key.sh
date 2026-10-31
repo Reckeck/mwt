@@ -2,6 +2,7 @@
 # Print the cache key of one lane: <lane>-<hash>. The hash is everything that
 # changes how the DEPENDENCIES compile and nothing about our own code:
 #   - the rustc version (rust from mise.toml, baked in the image or installed by mise),
+#   - the sccache version (entries of another version never hit),
 #   - the CI image tag (CI_IMAGE_TAG, empty off-image),
 #   - the dev profile switches set in the workflow env,
 #   - the external packages of Cargo.lock (workspace crates, whose version a release
@@ -21,6 +22,7 @@ digest() {
 
 {
   rustc -V
+  sccache --version
   echo "image=${CI_IMAGE_TAG:-}"
   echo "debug=${CARGO_PROFILE_DEV_DEBUG:-}"
   cat .cargo/config.toml .github/scripts/deps-cook.sh
