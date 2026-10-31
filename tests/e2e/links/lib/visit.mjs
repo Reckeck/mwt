@@ -28,6 +28,16 @@ const wait = async (page, probe, tries = 20) => {
   return false
 }
 
+/** A first visit is Vite compiling the route: its time is not the app's, so wait for the route, within reason. */
+const ROUTE_TRIES = 70
+
+async function route(page, reached) {
+  for (let attempt = 0; attempt < ROUTE_TRIES; attempt++) {
+    if (reached((await page.eval(PAGE_STATE)).path)) return
+    await page.sleep(150)
+  }
+}
+
 async function escape(page) {
   for (const type of ['keyDown', 'keyUp']) {
     await page.send('Input.dispatchKeyEvent', { type, key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
@@ -56,12 +66,14 @@ async function openOne(page, entity, at, errors) {
     if (!(await wait(page, HAS_CARD(entity.key)))) errors.push(`${label}: no card [data-entity-card="${entity.key}"]`)
     await escape(page)
   } else {
+    await route(page, (path) => path !== from)
     await page.sleep(900)
     const state = await page.eval(PAGE_STATE)
     if (state.path === from) errors.push(`${label}: the route did not change`)
     else if (state.text < 10) errors.push(`${label}: empty page at ${state.path}`)
     else if (state.missing) errors.push(`${label}: «not found» page at ${state.path}`)
     await page.eval('history.back(); return true')
+    await route(page, (path) => path === from)
     await page.sleep(700)
   }
   const back = await page.eval(PAGE_STATE)
