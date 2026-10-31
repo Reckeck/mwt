@@ -129,4 +129,4 @@ Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release\$appBin.exe") "$portable\$ap
 Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\multi-wallet-tracker-$version-windows-x64-portable.zip"
 
 Get-ChildItem $OutDir | Format-Table Name, Length
-& $sccache --show-stats
+if (-not $env:GITHUB_ACTIONS) { & $sccache --show-stats }
