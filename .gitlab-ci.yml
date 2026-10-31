@@ -23,7 +23,7 @@ variables:
   PRERELEASES_KEPT: "10"
   SECRET_DETECTION_ENABLED: "true"
   # = scripts/ci/image-tag.sh; ci:image refuses to build when they differ.
-  CI_IMAGE_TAG: "8b66378ac116"
+  CI_IMAGE_TAG: "66ab6c478be2"
   # Override any of these with ubuntu:22.04 to run without the CI images
   # (setup-linux.sh then installs everything itself).
   CI_NODE_IMAGE: $CI_REGISTRY_IMAGE/ci-node:$CI_IMAGE_TAG

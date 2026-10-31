@@ -1,0 +1,57 @@
+# The CI images (scripts/ci/ci.Dockerfile: ci-node, ci-linux, ci-android) in ghcr.io.
+# The tag is scripts/ci/image-tag.sh (a hash of the Dockerfile, apt-packages.sh,
+# install-chrome.sh and the [tools] of mise.toml); a target that is already in
+# the registry is not built again, so a run with unchanged inputs costs seconds.
+#
+# ci.yml calls this workflow first on every run, so a change to those files is
+# built before the jobs that need it (one workflow, no race between two runs).
+# By hand: Actions -> images -> Run workflow ("force" rebuilds the current tag).
+name: images
+
+on:
+  workflow_call:
+    outputs:
+      tag:
+        description: Image tag (scripts/ci/image-tag.sh)
+        value: ${{ jobs.images.outputs.tag }}
+      base:
+        description: Registry path without the target, e.g. ghcr.io/reckeck/mwt
+        value: ${{ jobs.images.outputs.base }}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and push even if the tag exists
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
+      base: ${{ steps.build.outputs.base }}
+    # Image builds queue one by one: the second run finds the tag the first pushed.
+    concurrency:
+      group: ci-images
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+      - name: Build and push what is missing
+        id: build
+        env:
+          FORCE: ${{ inputs.force && '1' || '' }}
+        run: .github/scripts/build-images.sh

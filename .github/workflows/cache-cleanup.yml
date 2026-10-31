@@ -1,0 +1,46 @@
+# Caches belong to a ref, and 10 GB is the whole repository's quota: when a
+# branch is deleted or a PR closed, delete every cache of that ref
+# (refs/heads/<branch>, refs/pull/<N>/merge and refs/pull/<N>/head).
+# "Automatically delete head branches" (Settings -> General) makes the delete
+# event fire after a merge.
+# Docs: https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows#managing-caches
+name: cache-cleanup
+
+on:
+  delete:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  cleanup:
+    # `delete` also fires for tags.
+    if: github.event_name == 'pull_request' || github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete the caches of the ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.event.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == pull_request ]]; then
+            refs=("refs/pull/$PR_NUMBER/merge" "refs/pull/$PR_NUMBER/head")
+          else
+            refs=("refs/heads/$BRANCH")
+          fi
+          for ref in "${refs[@]}"; do
+            ids="$(gh api --paginate -X GET "/repos/$GH_REPO/actions/caches" -f ref="$ref" -F per_page=100 \
+              --jq '.actions_caches[].id')"
+            for id in $ids; do
+              echo "deleting cache $id of $ref"
+              gh api -X DELETE "/repos/$GH_REPO/actions/caches/$id" >/dev/null
+            done
+          done

@@ -1,0 +1,482 @@
+# Checks of every PR into development/main and of every push to them.
+#
+#   images          the CI images in ghcr (images.yml), built only when their tag is new
+#   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
+#                   the lane has no cache for its key yet; everything else just reads it
+#   check-linux     cargo xtask check --no-frontend --no-platforms in ci-linux: fmt, clippy, tests, gen-types
+#   check-frontend  cargo xtask check --frontend in ci-linux: lint, typecheck, vitest,
+#                   static checks, e2e, layout, links
+#   check-android   cargo xtask check platform:android in ci-android (NDK in the image)
+#   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
+#   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
+#   ci-ok           the one job branch protection requires
+#
+# Cache keys, who writes and who reads: see docs in .github/scripts/lane-key.sh and the
+# job comments below. A cache is visible to its own ref, the PR's base branch and the
+# default branch (development) only, so feature branches are checked through PRs.
+# main runs without caches (releases build from scratch).
+name: ci
+
+on:
+  pull_request:
+    branches: [development, main]
+  push:
+    branches: [development, main]
+  workflow_dispatch:
+
+# Newer runs of the same PR/branch replace older ones; main always finishes.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+  # Debug info is not needed to check or test; smaller objects, faster links.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  # About 1 GB per lane (10 GB for the repository, one cache per lane and ref).
+  SCCACHE_CACHE_SIZE: 1G
+
+jobs:
+  images:
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # ------------------------------------------------------------------ deps
+  # Lookup-only by the lane key; a hit ends the job. A miss: seed from the newest older
+  # cache of the lane (prefix match: sccache is content-addressed, stale entries are
+  # harmless), compile ONLY the dependencies (cargo-chef, our crates are stubs), save under
+  # the new key into this ref and delete the older cache of this lane on this ref.
+  deps:
+    needs: images
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lane: check-linux, image: ci-linux }
+          - { lane: clippy-android, image: ci-android }
+    container:
+      image: ${{ needs.images.outputs.base }}/${{ matrix.image }}:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write # delete the lane's older caches
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
+      - name: Is the lane cached
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+      - name: Environment
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: .github/scripts/ci-env.sh
+      - name: Seed from the lane's previous cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+          restore-keys: ${{ matrix.lane }}-
+      - name: Compile the dependencies
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: |
+          .github/scripts/install-chef.sh
+          .github/scripts/deps-cook.sh '${{ matrix.lane }}'
+          sccache --show-stats
+      - name: Save the lane cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: Delete the lane's older caches on this ref
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/deps-prune.sh '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
+
+  deps-native:
+    needs: images
+    if: github.ref != 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lane: clippy-windows, os: windows-latest }
+          # Paused for now, like the clippy-macos job: { lane: clippy-macos, os: macos-latest }
+    permissions:
+      contents: read
+      actions: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Rust as mise.toml pins it (no version in this file).
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: clippy component
+        run: rustup component add clippy
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: sccache@0.19.0
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
+      - name: Is the lane cached
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+      - name: cargo-chef
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: .github/scripts/install-chef.sh
+      - name: Environment
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: .github/scripts/ci-env.sh
+      - name: Seed from the lane's previous cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+          restore-keys: ${{ matrix.lane }}-
+      - name: Compile the dependencies
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: |
+          .github/scripts/deps-cook.sh '${{ matrix.lane }}'
+          sccache --show-stats
+      - name: Save the lane cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: Delete the lane's older caches on this ref
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/deps-prune.sh '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
+
+  # ------------------------------------------------------------------ checks
+  # `deps` is skipped on main (no caches there); any other result than success/skipped stops the check.
+  check-linux:
+    needs: [images, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+          .github/scripts/ci-env.sh
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh check-linux)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: cargo xtask check
+        run: cargo xtask check --no-frontend --no-platforms
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs and screenshots of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-linux-logs
+          path: |
+            .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  check-frontend:
+    needs: [images, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # Chrome (check-layout) needs more than Docker's 64 MB /dev/shm.
+      options: --shm-size=2g
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+          .github/scripts/ci-env.sh
+      # The Rust lane's cache: here it only has to bring xtask itself back.
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh check-linux)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      # One pnpm store for all branches: saved (by this step's post action) only when pnpm-lock.yaml is new.
+      - name: pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/pnpm
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: pnpm install
+        run: |
+          pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
+          pnpm install --frozen-lockfile --prefer-offline
+      # TODO(xtask): layout and links run with --quick (1280 and 390) inside `check`;
+      # a full check-layout in CI needs a flag for that (see the report).
+      - name: cargo xtask check --frontend
+        run: cargo xtask check --frontend
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs and screenshots of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-frontend-logs
+          path: |
+            .cache/xtask/
+            .cache/check-layout/
+            .cache/e2e/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # What xtask's platform:android does in podman on a developer machine, minus podman:
+  # in the ci-android image the NDK and the Rust Android targets are on the host, which
+  # is the path xtask takes first (platforms.rs: android()).
+  check-android:
+    needs: [images, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-android:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+          .github/scripts/ci-env.sh
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh clippy-android)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: cargo xtask check platform:android
+        run: cargo xtask check platform:android
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-android-logs
+          path: .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  clippy-windows:
+    needs: [images, deps-native]
+    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: clippy component
+        run: rustup component add clippy
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: sccache@0.19.0
+      - name: Environment
+        run: .github/scripts/ci-env.sh
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh clippy-windows)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      # TODO(xtask): platforms::windows() only knows cargo-xwin. With a `cfg!(windows)` branch
+      # (native `cargo clippy -p trade-app --lib -- -D warnings`) this step becomes
+      # `cargo xtask check platform:windows`, like macOS.
+      - name: clippy (native Windows)
+        run: cargo clippy -p trade-app --lib -- -D warnings
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+
+  clippy-macos:
+    needs: [images, deps-native]
+    # Paused for now: restore the condition of clippy-windows and the deps-native matrix entry.
+    if: false
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: clippy component
+        run: rustup component add clippy
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: sccache@0.19.0
+      - name: Environment
+        run: .github/scripts/ci-env.sh
+      - name: Cache key
+        id: key
+        run: echo "key=$(.github/scripts/lane-key.sh clippy-macos)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      # xtask's macos() on a Mac host is a native clippy of trade-app.
+      - name: cargo xtask check platform:macos
+        run: cargo xtask check platform:macos
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: clippy-macos-logs
+          path: .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The required status check of the protected branches: green only if every lane is.
+  ci-ok:
+    if: always()
+    needs: [images, deps, deps-native, check-linux, check-frontend, check-android, clippy-windows, clippy-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every lane succeeded (deps are skipped on main)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            if [[ "$result" != success && "$result" != skipped ]]; then
+              exit 1
+            fi
+          done

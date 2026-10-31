@@ -36,7 +36,7 @@ RUN source /opt/ci/apt-packages.sh \
 ENV CHROMIUM=/opt/chrome/chrome-headless-shell-linux64/chrome-headless-shell
 
 FROM node AS linux
-ARG SCCACHE_VERSION=0.10.0
+ARG SCCACHE_VERSION=0.19.0
 RUN source /opt/ci/apt-packages.sh \
  && apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends "${APT_BUILD[@]}" "${APT_GUI[@]}" \

@@ -70,9 +70,10 @@ async fn windows(ctx: &Ctx) -> Outcome {
             "--lib",
             "--target",
             WINDOWS_TARGET,
+            "--target-dir",
         ])
-        .args(LINT)
-        .env("CARGO_TARGET_DIR", lane(&ctx.root, "xwin"));
+        .arg(lane(&ctx.root, "xwin"))
+        .args(LINT);
     finish(ctx, cmd).await
 }
 
@@ -109,9 +110,10 @@ async fn android(ctx: &Ctx) -> Outcome {
                 "--lib",
                 "--target",
                 ANDROID_TARGET,
+                "--target-dir",
             ])
-            .args(LINT)
-            .env("CARGO_TARGET_DIR", lane(&ctx.root, "android"));
+            .arg(lane(&ctx.root, "android"))
+            .args(LINT);
         cmd.env
             .extend(env.into_iter().map(|(key, value)| (key.to_string(), value)));
         return finish(ctx, cmd).await;
@@ -247,9 +249,9 @@ const MAC_EXCLUDES: [&str; 11] = [
 async fn macos(ctx: &Ctx) -> Outcome {
     if cfg!(target_os = "macos") {
         let cmd = Cmd::new("cargo")
-            .args(["clippy", "-p", "trade-app", "--lib"])
-            .args(LINT)
-            .env("CARGO_TARGET_DIR", lane(&ctx.root, "macos"));
+            .args(["clippy", "-p", "trade-app", "--lib", "--target-dir"])
+            .arg(lane(&ctx.root, "macos"))
+            .args(LINT);
         return finish(ctx, cmd).await;
     }
     let Some(host) = std::env::var("MACOS_BUILD_HOST")
