@@ -33,6 +33,9 @@ pub enum Outcome {
     Cancelled,
 }
 
+/// How often a running task reports itself in CI.
+const PROGRESS_EVERY: Duration = Duration::from_secs(60);
+
 type Action = Box<dyn Fn(Ctx) -> Pin<Box<dyn Future<Output = Outcome> + Send>> + Send + Sync>;
 
 pub struct Task {
@@ -179,6 +182,33 @@ pub async fn run_graph(
         .collect()
 }
 
+/// In CI the task output stays in its log until the end, and a silent job looks hung:
+/// every minute a line with the elapsed time and the last line of the log.
+async fn with_progress(
+    name: &str,
+    ctx: &Ctx,
+    action: impl Future<Output = Outcome>,
+    sink: &Sink,
+) -> Outcome {
+    if std::env::var_os("CI").is_none() {
+        return action.await;
+    }
+    let began = Instant::now();
+    let mut ticks =
+        tokio::time::interval_at(tokio::time::Instant::now() + PROGRESS_EVERY, PROGRESS_EVERY);
+    tokio::pin!(action);
+    loop {
+        tokio::select! {
+            outcome = &mut action => return outcome,
+            _ = ticks.tick() => sink.line(&format!(
+                "...    {name} {}: {}",
+                fmt_secs(began.elapsed()),
+                last_line(&ctx.log, 160)
+            )),
+        }
+    }
+}
+
 async fn run_one(
     task: Task,
     ctx: Ctx,
@@ -216,7 +246,7 @@ async fn run_one(
     }
     sink.line(&format!("start  {}", task.name));
     let began = Instant::now();
-    let outcome = (task.action)(ctx.clone()).await;
+    let outcome = with_progress(&task.name, &ctx, (task.action)(ctx.clone()), sink).await;
     let took = began.elapsed();
     let log_hint = format!("{} ({})", task.name, rel(&ctx.root, &ctx.log));
     let (status, note) = match outcome {
@@ -256,7 +286,7 @@ async fn run_one(
 }
 
 mod report;
-pub use report::{rel, select, summary, tail};
+pub use report::{last_line, rel, select, summary, tail};
 
 #[cfg(all(test, unix))]
 mod tests;

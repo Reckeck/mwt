@@ -43,6 +43,17 @@ pub fn rel(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
+/// The last non-empty line of the log (progress bars split on `\r`), cut to `width` chars.
+pub fn last_line(log: &Path, width: usize) -> String {
+    let text = std::fs::read_to_string(log).unwrap_or_default();
+    let line = text
+        .rsplit(['\n', '\r'])
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    line.chars().take(width).collect()
+}
+
 pub fn tail(log: &Path, lines: usize) -> String {
     let text = std::fs::read_to_string(log).unwrap_or_default();
     let all: Vec<&str> = text.lines().collect();

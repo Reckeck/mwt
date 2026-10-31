@@ -168,3 +168,13 @@ async fn after_waits_when_present_and_is_ignored_when_absent() {
     assert!(reports.iter().all(|report| report.status == Status::Ok));
     assert_eq!(std::fs::read_to_string(trace).unwrap(), "early\nlate\n");
 }
+
+#[test]
+fn last_line_skips_blank_lines_and_progress_returns() {
+    let dir = scratch();
+    let log = dir.join("task.log");
+    std::fs::write(&log, "Compiling a\nDownloading 10%\rDownloading 90%\n\n").unwrap();
+    assert_eq!(last_line(&log, 160), "Downloading 90%");
+    assert_eq!(last_line(&log, 4), "Down");
+    assert_eq!(last_line(&dir.join("missing.log"), 160), "");
+}
