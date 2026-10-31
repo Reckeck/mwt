@@ -22,14 +22,14 @@ trap 'rm -rf "$work"' EXIT
 git config --global --add safe.directory "$PWD"
 git archive HEAD | tar -x -C "$work"
 cd "$work"
-# The target dir comes from .cargo/config.toml, as in the real build: sccache hashes
-# CARGO_* variables, so setting CARGO_TARGET_DIR here would make every key differ.
+# A flag, not CARGO_TARGET_DIR: sccache hashes CARGO_* variables, so the variable would make
+# every key differ from the real build. chef needs it: it does not read .cargo/config.toml.
 unset CARGO_TARGET_DIR
 cargo chef prepare --recipe-path recipe.json
 
 cook() {
   echo "::group::cargo chef cook $*"
-  cargo chef cook --recipe-path recipe.json "$@"
+  cargo chef cook --recipe-path recipe.json --target-dir "$work/.rust-target" "$@"
   echo "::endgroup::"
 }
 
