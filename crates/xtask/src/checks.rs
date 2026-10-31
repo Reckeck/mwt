@@ -37,7 +37,7 @@ fn vitest(name: &str, class: Class, project: &str) -> Task {
 }
 
 /// Timing-sensitive checks (long tasks, layout shift, overlays opening) fail on a loaded machine,
-/// so by default they run alone: after every cargo build, one browser at a time
+/// so by default they run alone: after every other task, one browser at a time
 /// (`--overlap-browser` starts them at once; they are mostly waiting, so it saves minutes but can flake).
 fn browser(task: Task, overlap: bool) -> Task {
     if overlap {
@@ -47,7 +47,11 @@ fn browser(task: Task, overlap: bool) -> Task {
     }
 }
 
-const QUIET_AFTER: [&str; 6] = [
+const QUIET_AFTER: [&str; 10] = [
+    "biome",
+    "vue-tsc",
+    "unit",
+    "checks",
     "test",
     "gen-types",
     "clippy",

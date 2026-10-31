@@ -17,8 +17,14 @@ export async function startVite() {
   const port = await freePort()
   const vite = spawn('pnpm', ['exec', 'vite', '--port', String(port), '--strictPort', '--clearScreen', 'false'], {
     cwd: root,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  let output = ''
+  const keep = (chunk) => {
+    output = (output + chunk).slice(-2000)
+  }
+  vite.stdout.on('data', keep)
+  vite.stderr.on('data', keep)
   const url = `http://localhost:${port}/`
   for (let tries = 0; tries < 200; tries++) {
     try {
@@ -28,5 +34,5 @@ export async function startVite() {
     }
   }
   vite.kill()
-  throw new Error('vite did not start')
+  throw new Error(`vite did not start:\n${output}`)
 }

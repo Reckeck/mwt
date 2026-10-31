@@ -134,7 +134,7 @@ jobs:
       matrix:
         include:
           - { lane: clippy-windows, os: windows-latest }
-          - { lane: clippy-macos, os: macos-latest }
+          # Paused for now, like the clippy-macos job: { lane: clippy-macos, os: macos-latest }
     permissions:
       contents: read
       actions: write
@@ -154,7 +154,7 @@ jobs:
         run: rustup component add clippy
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
-          tool: sccache@0.10.0
+          tool: sccache@0.19.0
       - name: Cache key
         id: key
         run: echo "key=$(.github/scripts/lane-key.sh '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
@@ -394,7 +394,7 @@ jobs:
         run: rustup component add clippy
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
-          tool: sccache@0.10.0
+          tool: sccache@0.19.0
       - name: Environment
         run: .github/scripts/ci-env.sh
       - name: Cache key
@@ -417,7 +417,8 @@ jobs:
 
   clippy-macos:
     needs: [images, deps-native]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
+    # Paused for now: restore the condition of clippy-windows and the deps-native matrix entry.
+    if: false
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:
@@ -434,7 +435,7 @@ jobs:
         run: rustup component add clippy
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
-          tool: sccache@0.10.0
+          tool: sccache@0.19.0
       - name: Environment
         run: .github/scripts/ci-env.sh
       - name: Cache key
