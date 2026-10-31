@@ -3,12 +3,12 @@
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
-#   check-linux     cargo xtask check --no-frontend in ci-linux: fmt, clippy, tests, gen-types
+#   check-linux     cargo xtask check --no-frontend --no-platforms in ci-linux: fmt, clippy, tests, gen-types
 #   check-frontend  cargo xtask check --frontend in ci-linux: lint, typecheck, vitest,
 #                   static checks, e2e, layout, links
 #   check-android   cargo xtask check platform:android in ci-android (NDK in the image)
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
-#   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: skipped in check-linux
+#   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
 #   ci-ok           the one job branch protection requires
 #
 # Cache keys, who writes and who reads: see docs in .github/scripts/lane-key.sh and the
@@ -235,7 +235,7 @@ jobs:
           path: .cache/sccache
           key: ${{ steps.key.outputs.key }}
       - name: cargo xtask check
-        run: cargo xtask check --no-frontend
+        run: cargo xtask check --no-frontend --no-platforms
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true

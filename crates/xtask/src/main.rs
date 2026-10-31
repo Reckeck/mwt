@@ -62,6 +62,9 @@ struct CheckArgs {
     /// Everything else: a new task lands here, so a CI split into two jobs cannot lose it.
     #[arg(long, conflicts_with = "tasks")]
     no_frontend: bool,
+    /// Without the compile checks for other platforms (`platform:*`).
+    #[arg(long, conflicts_with_all = ["tasks", "frontend"])]
+    no_platforms: bool,
     /// Print the task graph and exit.
     #[arg(long)]
     list: bool,
@@ -84,6 +87,9 @@ async fn run() -> Result<i32> {
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
             let mut all = checks::check_tasks(&root, args.overlap_browser);
+            if args.no_platforms {
+                all.retain(|task| !task.name.starts_with("platform:"));
+            }
             if args.no_frontend {
                 all.retain(|task| !checks::FRONTEND.contains(&task.name.as_str()));
             }
