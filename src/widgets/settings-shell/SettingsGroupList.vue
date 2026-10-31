@@ -35,7 +35,7 @@ const { t } = useI18n()
         </span>
         <span class="grid min-w-0 flex-1 text-left">
           <span class="truncate">{{ t(group.titleKey) }}</span>
-          <span class="whitespace-nowrap text-xs font-normal text-muted-foreground max-md:truncate">{{ t(group.hintKey) }}</span>
+          <span class="truncate text-xs font-normal text-muted-foreground">{{ t(group.hintKey) }}</span>
         </span>
         <ChevronRight class="size-4 shrink-0 text-muted-foreground md:hidden" aria-hidden="true" />
       </Button>
