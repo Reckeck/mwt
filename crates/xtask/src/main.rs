@@ -153,6 +153,13 @@ struct BuildArgs {
     /// Build linux and flatpak on this host instead of in containers.
     #[arg(long)]
     native: bool,
+    /// `dist/` is already built (a CI job downloaded it): no frontend task, tauri does not run
+    /// `pnpm build` either.
+    #[arg(long)]
+    prebuilt_frontend: bool,
+    /// The Android versionCode (`cargo xtask version --channel ... --output` prints it).
+    #[arg(long, default_value_t = 1)]
+    version_code: u32,
     /// Cargo builds at once (android, windows, linux).
     #[arg(long, default_value_t = 2)]
     heavy: usize,
@@ -284,10 +291,15 @@ async fn run() -> Result<i32> {
                 &args.channel,
                 &version,
                 args.native,
+                args.version_code,
             )?);
+            if args.prebuilt_frontend && !root.join("dist/index.html").is_file() {
+                anyhow::bail!("--prebuilt-frontend: dist/index.html is missing");
+            }
             let facts = build::Facts {
                 mac: build::MacFacts::detect(),
                 tarball: env.tarball().is_file(),
+                prebuilt_frontend: args.prebuilt_frontend,
             };
             let tasks = build::graph(&env, &args.platforms, &facts)?;
             if args.list {

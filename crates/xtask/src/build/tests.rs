@@ -13,6 +13,7 @@ fn env() -> Arc<Env> {
             "dev",
             "0.1.0",
             false,
+            1,
         )
         .unwrap(),
     )
@@ -26,6 +27,7 @@ fn facts(tarball: bool, host: Option<&str>) -> Facts {
             dir: "mwt-build".into(),
         },
         tarball,
+        prebuilt_frontend: false,
     }
 }
 
@@ -156,4 +158,48 @@ async fn macos_without_a_mac_or_host_is_skipped() {
         "{}",
         reports[0].note
     );
+}
+
+#[test]
+fn prebuilt_frontend_drops_the_frontend_task() {
+    let mut prebuilt = facts(false, None);
+    prebuilt.prebuilt_frontend = true;
+    let tasks = graph(&env(), &chosen(&["linux", "android"]), &prebuilt).unwrap();
+    assert_eq!(names(&tasks), ["build:android", "build:linux"]);
+    assert!(deps(&tasks, "build:android").is_empty());
+    assert!(deps(&tasks, "build:linux").is_empty());
+    // pacman still waits for the Linux build it starts from.
+    let tasks = graph(&env(), &chosen(&["linux", "pacman"]), &prebuilt).unwrap();
+    assert_eq!(deps(&tasks, "build:pacman"), ["build:linux"]);
+}
+
+#[test]
+fn android_overlay_carries_the_version_code() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let shared = Env::detect(root, "dev", "0.1.0-7", false, 7).unwrap();
+    let Ok(path) = targets::overlay(&shared, "android-unit-test", true, false) else {
+        panic!("overlay not written");
+    };
+    let text = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_file(path);
+    assert!(text.contains("\"versionCode\":7"), "{text}");
+}
+
+#[test]
+fn container_gets_the_ci_build_switches_by_name() {
+    let mut shared = env();
+    Arc::get_mut(&mut shared).unwrap().engine = Some("docker".into());
+    let Ok(cmd) = shared.run_ci("linux", "image", "true", Vec::new()) else {
+        panic!("no command");
+    };
+    for name in [
+        "CARGO_PROFILE_RELEASE_LTO",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
+        "APPIMAGE_EXTRACT_AND_RUN",
+        "ANDROID_KEYSTORE_BASE64",
+    ] {
+        // `-e NAME` copies the value from the environment of the run, nothing is printed.
+        let at = cmd.args.iter().position(|arg| arg == name);
+        assert!(at.is_some_and(|at| cmd.args[at - 1] == "-e"), "{name}");
+    }
 }
