@@ -189,7 +189,7 @@ describe('check-layout', () => {
           await setTheme(page, 'dark')
           settle('views', problems)
         }),
-      900_000,
+      240_000,
     )
 
   const runOnce = (name: string, work: () => Promise<void>) =>
@@ -205,7 +205,7 @@ describe('check-layout', () => {
           await sized(touch ? 390 : 1280, touch ? 844 : 720, touch)
           settle('overlays', await overlays(page, { touch, label: unit.label, only: ids }))
         }),
-      900_000,
+      240_000,
     )
   }
 
