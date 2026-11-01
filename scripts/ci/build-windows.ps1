@@ -51,9 +51,13 @@ if (-not (Test-Path "$env:CARGO_HOME\bin\rustup.exe")) {
 Invoke-Native rustup toolchain install $rustVersion --profile minimal
 Invoke-Native rustup default $rustVersion
 
-# sccache: compiled crates come back from the GitLab cache (.cache\sccache).
-# GitHub keeps no .cache here between runs, and the sccache server died mid-build there.
-if (-not $env:GITHUB_ACTIONS) {
+# sccache: compiled crates come back from the CI cache (.cache\sccache). GitHub installs
+# its own sccache (the release workflow pins it; 0.10 dropped its server mid-build there).
+$sccache = $null
+if ($env:GITHUB_ACTIONS) {
+  $found = Get-Command sccache -ErrorAction SilentlyContinue
+  if ($found) { $sccache = $found.Source }
+} else {
   $sccacheVersion = '0.10.0'
   $sccache = Join-Path $cache "sccache-$sccacheVersion.exe"
   if (-not (Test-Path $sccache)) {
@@ -62,6 +66,8 @@ if (-not $env:GITHUB_ACTIONS) {
     Expand-Archive -Force "$cache\sccache.zip" -DestinationPath $cache
     Move-Item "$cache\$name\sccache.exe" $sccache
   }
+}
+if ($sccache) {
   $env:RUSTC_WRAPPER = $sccache
   $env:SCCACHE_DIR = Join-Path $cache 'sccache'
   $env:SCCACHE_CACHE_SIZE = '3G'
@@ -129,4 +135,4 @@ Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release\$appBin.exe") "$portable\$ap
 Compress-Archive -Force -Path "$portable\*" -DestinationPath "$OutDir\multi-wallet-tracker-$version-windows-x64-portable.zip"
 
 Get-ChildItem $OutDir | Format-Table Name, Length
-if (-not $env:GITHUB_ACTIONS) { & $sccache --show-stats }
+if ($sccache) { & $sccache --show-stats }
