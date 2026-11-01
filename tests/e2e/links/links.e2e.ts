@@ -5,6 +5,10 @@
 //   mise run check-links                 # gate: new errors past scripts/check-links.baseline.json fail
 //   mise run check-links -- --update     # rewrite the baseline          (E2E_UPDATE=1)
 //   mise run check-links -- --quick      # 1280 only                     (E2E_QUICK=1)
+//   mise run check-links -- --jobs 4     # N processes, pages split between them (E2E_SHARD=i/N)
+//   mise run check-links -- --shard 2/6  # the 2nd of 6 shares of the pages (CI matrix)  (E2E_SHARD_CI=K/N)
+//   mise run check-links -- --update-weights   # rewrite links/weights.json from this run's timings
+// A unit is a page at a width (`1280 /money/plan`); its weight is in links/weights.json.
 // Warnings (a wallet or workflow link without data-entity) are listed, never fail.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,6 +17,7 @@ import { afterAll, beforeAll, describe, inject, it } from 'vitest'
 
 import { connect } from '../harness/app'
 import type { Page } from '../harness/cdp.mjs'
+import { flushTimings, isPartial, noteTiming, shardOwner } from '../harness/shard'
 import { login, open } from '../layout/lib/scenario.mjs'
 import { IDS, ROUTES, WORKFLOW_IDS } from './lib/probes.mjs'
 import { stats, visitPage } from './lib/visit.mjs'
@@ -27,6 +32,8 @@ const PHONE_PAGES = new Set(['/', '/transactions'])
 // Errors are keyed by page and message minus ids that change nothing; the baseline holds the known ones.
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 const key = (text: string) => text.replace(UUID, '<id>')
+// --jobs / --shard: a process visits its share of the pages and sees only their errors.
+const sharded = isPartial()
 
 describe('check-links', () => {
   let app: Awaited<ReturnType<typeof connect>>
@@ -56,12 +63,28 @@ describe('check-links', () => {
     return [...new Set(out)]
   }
 
+  /** A page at a width, named for weights.json: ids that change from run to run are `<id>`, repeats get `~n`. */
+  const unitNames = (paths: string[], width: number) => {
+    const seen = new Map<string, number>()
+    return paths.map((path) => {
+      const base = `${width} ${key(path)}`
+      const count = (seen.get(base) ?? 0) + 1
+      seen.set(base, count)
+      return count === 1 ? base : `${base}~${count}`
+    })
+  }
+  let mine: (name: string) => boolean = () => true
+
   async function sweep(paths: string[], width: number, height: number) {
     await page.viewport(width, height, false)
-    for (const path of paths) {
+    const names = unitNames(paths, width)
+    for (const [at, path] of paths.entries()) {
+      if (!mine(names[at])) continue
+      const began = Date.now()
       await open(page, path)
       pages++
       links += await visitPage(page, { path, label: `${width} ${path}` }, errors, warnings, () => open(page, path))
+      noteTiming(names[at], (Date.now() - began) / 1000)
     }
   }
 
@@ -72,9 +95,12 @@ describe('check-links', () => {
     await page.goto(inject('e2e').url)
     await login(page)
     list = await routesToVisit()
+    const phonePages = list.filter((path) => PHONE_PAGES.has(path))
+    mine = shardOwner('links', [...unitNames(list, 1280), ...(quick ? [] : unitNames(phonePages, 390))])
   }, 120_000)
 
   afterAll(async () => {
+    flushTimings('links')
     await app?.close()
   })
 
@@ -103,7 +129,8 @@ describe('check-links', () => {
       return
     }
     const fresh = errors.filter((text) => !known.includes(key(text)))
-    for (const text of known.filter((text) => !errors.some((error) => key(error) === text))) {
+    // A shard sees only its pages: "fixed" is judged by a whole run.
+    for (const text of sharded ? [] : known.filter((text) => !errors.some((error) => key(error) === text))) {
       console.log(`fixed (remove from the baseline with --update): ${text}`)
     }
     const unique = [...new Set(warnings.map((text) => key(text).replace(/^\d+ /, '')))]

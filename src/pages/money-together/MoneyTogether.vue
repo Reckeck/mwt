@@ -38,7 +38,7 @@ function opened(view: SharedEventView) {
       hide-action
     >
       <template #actions>
-        <div class="flex items-center gap-2" data-tour="shared-archive">
+        <div class="flex min-h-10 items-center gap-2" data-tour="shared-archive">
           <Switch id="shared-archived" v-model="archived" />
           <Label for="shared-archived" class="text-sm font-normal">{{ t('sharedEvents.list.archive') }}</Label>
         </div>
