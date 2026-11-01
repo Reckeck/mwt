@@ -90,10 +90,10 @@ struct CheckArgs {
     /// Run layout/links next to the cargo builds (faster, but timing checks can flake under load).
     #[arg(long)]
     overlap_browser: bool,
-    /// Only the checks of the web part (`checks::FRONTEND`).
+    /// Only the checks of the web part (`checks::FRONTEND`; layout and links are sharded, see `--shard`).
     #[arg(long, conflicts_with_all = ["tasks", "no_frontend"])]
     frontend: bool,
-    /// Everything else: a new task lands here, so a CI split into two jobs cannot lose it.
+    /// Everything else but the sharded sweeps (layout, links): a new task lands here, so a CI split into jobs cannot lose it.
     #[arg(long, conflicts_with = "tasks")]
     no_frontend: bool,
     /// Without the compile checks for other platforms (`platform:*`).
@@ -102,6 +102,12 @@ struct CheckArgs {
     /// layout and links over every width and both themes instead of `--quick` (CI runs this way).
     #[arg(long)]
     full_browser: bool,
+    /// Only the K-th of N shares of the units of layout and links (the CI matrix); needs `--full-browser`.
+    #[arg(long, value_name = "K/N", value_parser = checks::parse_shard, requires = "full_browser")]
+    shard: Option<String>,
+    /// Processes per share for layout and links (the script picks by the cores when absent).
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    jobs: Option<u32>,
     /// Print the task graph and exit.
     #[arg(long)]
     list: bool,
@@ -185,12 +191,20 @@ async fn run() -> Result<i32> {
     let mut built = None;
     let (tasks, heavy) = match &cli.command {
         Command::Check(args) => {
-            let mut all = checks::check_tasks(&root, args.overlap_browser, args.full_browser);
+            let browser = checks::BrowserOpts {
+                full: args.full_browser,
+                shard: args.shard.clone(),
+                jobs: args.jobs.map(|jobs| jobs as usize),
+            };
+            let mut all = checks::check_tasks(&root, args.overlap_browser, &browser);
             if args.no_platforms {
                 all.retain(|task| !task.name.starts_with("platform:"));
             }
             if args.no_frontend {
-                all.retain(|task| !checks::FRONTEND.contains(&task.name.as_str()));
+                all.retain(|task| {
+                    !checks::FRONTEND.contains(&task.name.as_str())
+                        && !checks::SHARDED.contains(&task.name.as_str())
+                });
             }
             let names = if args.frontend {
                 checks::FRONTEND.map(String::from).to_vec()
@@ -222,7 +236,10 @@ async fn run() -> Result<i32> {
                     .collect();
             }
             (
-                graph::select(checks::check_tasks(&root, false, false), &names)?,
+                graph::select(
+                    checks::check_tasks(&root, false, &checks::BrowserOpts::default()),
+                    &names,
+                )?,
                 *heavy,
             )
         }

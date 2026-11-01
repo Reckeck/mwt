@@ -176,7 +176,20 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
 - `check-linux` (`cargo xtask check --no-frontend --no-platforms`) и
   `check-frontend` (`cargo xtask check --frontend`) — два разных job'а в
   образе `ci-linux`: Rust-проверки и веб-часть (lint, typecheck, vitest,
-  статические проверки, e2e, layout, links) идут параллельно.
+  статические проверки, e2e) идут параллельно.
+- `frontend-layout` — полные `check-layout` и `check-links` (все ширины, обе
+  темы) матрицей из 6 шардов: `cargo xtask check layout links --full-browser
+  --shard K/6 --jobs 1`. Работа поделена на мелкие юниты (пачка ~5 видов темы
+  x ширины, пачка ~10 оверлеев, страница links); K-й шард берёт K-ю долю по
+  весам из `tests/e2e/layout/weights.json` и `tests/e2e/links/weights.json`
+  (секунды юнита, жадное деление «тяжёлый на самый лёгкий», детерминированно).
+  Юнита нет в файле — вес по умолчанию (медиана), лишний ключ игнорируется.
+  Веса обновляет полный локальный прогон: `mise run check-layout --
+  --update-weights` (и `check-links`), результат коммитится; замеры каждого
+  прогона — `.cache/check-<имя>/timings.json`. Локально то же деление между
+  процессами одной машины — `--jobs N` (один Vite, свой Chromium на процесс);
+  шард и `--jobs` складываются. `fail-fast: false`: упавший шард не гасит
+  остальные; логи и снимки — артефакт `frontend-layout-<K>-logs`.
 - macOS в CI на паузе: job `clippy-macos` оставлен в файле, но в матрице
   закомментирован.
 - `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) действует только на C/C++;

@@ -112,6 +112,8 @@ async function toastOverSheet(page, touch) {
     await toast(page)
     await page.sleep(500)
     if (!(await page.eval(ON_TOP('[data-overlay="settings"]', 'button[aria-label="Закрыть"]')))) problems.push('the toast covers the settings window’s way out')
+    // Pressed away: left for its 10 s it sits over whatever the next entry has to press on a phone.
+    if (!(await pressUndo(page))) problems.push('the toast did not show over the settings window')
     await closeLayer(page, '[data-overlay="settings"]', touch)
   }
   return problems

@@ -62,6 +62,8 @@ export async function spawnBrowser(binary, port) {
   return { stop }
 }
 
+const EVAL_TIMEOUT_MS = 60_000
+
 /** Connect to the first page of a running browser. `close()` only drops the connection. */
 export async function attach(port) {
   const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -98,11 +100,17 @@ export async function attach(port) {
     sleep,
     /** Run `code` (an async function body) in the page and return its JSON value; throws on a page error. */
     async eval(code) {
-      const res = await send('Runtime.evaluate', {
+      let timer
+      // A promise that never settles in the page would otherwise hang the run with nothing to read.
+      const stuck = new Promise((_done, fail) => {
+        timer = setTimeout(() => fail(new Error(`page.eval hung for ${EVAL_TIMEOUT_MS} ms: ${code.trim().slice(0, 200)}`)), EVAL_TIMEOUT_MS)
+      })
+      const evaluated = send('Runtime.evaluate', {
         expression: `(async () => { ${code} })()`,
         awaitPromise: true,
         returnByValue: true,
       })
+      const res = await Promise.race([evaluated, stuck]).finally(() => clearTimeout(timer))
       const failure = res.result?.exceptionDetails
       if (failure) throw new Error(failure.exception?.description ?? failure.text)
       return res.result?.result?.value

@@ -51,14 +51,17 @@ const { t } = useI18n()
         <ChevronRight class="size-4" />
       </Button>
     </div>
-    <p v-if="props.left !== null" class="flex flex-wrap items-center gap-x-2 text-sm">
-      <span class="text-muted-foreground">{{ t('calendar.left') }}</span>
-      <RouterLink :to="{ name: 'money-month' }" class="font-semibold text-primary">
-        <Money :amount="props.left" :decimals="0" :currency="props.currency" :convert="false" />
-      </RouterLink>
-      <span v-if="props.perDay !== null" class="text-muted-foreground">
-        · <Money :amount="props.perDay" :decimals="0" :currency="props.currency" :convert="false" /> {{ t('calendar.perDaySuffix') }}
-      </span>
+    <!-- The line keeps its height while the month loads: the grid below must not drop when the numbers land. -->
+    <p class="flex min-h-5 flex-wrap items-center gap-x-2 text-sm">
+      <template v-if="props.left !== null">
+        <span class="text-muted-foreground">{{ t('calendar.left') }}</span>
+        <RouterLink :to="{ name: 'money-month' }" class="font-semibold text-primary">
+          <Money :amount="props.left" :decimals="0" :currency="props.currency" :convert="false" />
+        </RouterLink>
+        <span v-if="props.perDay !== null" class="text-muted-foreground">
+          · <Money :amount="props.perDay" :decimals="0" :currency="props.currency" :convert="false" /> {{ t('calendar.perDaySuffix') }}
+        </span>
+      </template>
     </p>
   </div>
 </template>

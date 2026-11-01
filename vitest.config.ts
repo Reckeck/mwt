@@ -10,7 +10,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'happy-dom',
-          include: ['src/**/*.test.ts'],
+          include: ['src/**/*.test.ts', 'tests/e2e/harness/**/*.test.ts'],
           setupFiles: ['src/test/setup.ts'],
           restoreMocks: true,
         },
