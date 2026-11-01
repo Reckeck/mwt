@@ -10,7 +10,17 @@ import { priceOf } from './prices'
 /** Demo history: a salary, a payment, a trade, a debt and a conversion via an exchanger. */
 export function demoTransactions(): Transaction[] {
   const now = Date.now()
-  const at = (hours: number) => new Date(now - hours * 3.6e6).toISOString()
+  // The recent history is up to 240 hours deep (older exchanges stay as they are); in the first days of a month it is squeezed (order kept) so that
+  // everything still lies in the current month, whose screens (Money, spending) are what the demo shows. The pages ask for the local month and the
+  // mock's analytics cut months from the UTC timestamp, so the squeeze starts at the later of the two month starts.
+  const today = new Date(now)
+  const monthStart = Math.max(
+    new Date(today.getFullYear(), today.getMonth(), 1).getTime(),
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
+  )
+  const sinceMonthStart = now - monthStart
+  const squeeze = Math.min(1, sinceMonthStart / (240 * 3.6e6))
+  const at = (hours: number) => new Date(now - hours * 3.6e6 * (hours <= 240 ? squeeze : 1)).toISOString()
   const common = (hours: number, comment: string, categories: string[] = []): TxCommonInput => ({
     timestamp: at(hours),
     comment,
