@@ -259,44 +259,129 @@ pub fn trim(doc: &mut Value) {
     }
 }
 
+/// Longest label or field value shown.
+const SHOWN_CHARS: usize = 80;
+
+fn clip(text: &str) -> String {
+    text.chars().take(SHOWN_CHARS).collect()
+}
+
+/// `side_job` -> `Side job`: a category key is a slug of its name, so it
+/// reads well once humanized.
+fn humanize(key: &str) -> String {
+    let spaced = key.replace(['_', '-'], " ");
+    let mut chars = spaced.trim().chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+/// An identifier (uuid, hash, `a|b` composite) rather than words: never shown.
+fn looks_opaque(text: &str) -> bool {
+    if text.contains(char::is_whitespace) {
+        return false;
+    }
+    if text.contains(['|', ':']) {
+        return true;
+    }
+    let digits = text.chars().filter(char::is_ascii_digit).count();
+    text.len() >= 8 && (digits * 4 >= text.len() || text.contains('-') && digits > 0)
+}
+
+/// Tag of an externally tagged record and its body.
+fn body_of<'doc>(coll: &Collection, value: &'doc Value) -> (Option<&'doc str>, &'doc Value) {
+    match (tagged(coll), variant(value)) {
+        (true, Some((tag, body))) => (Some(tag.as_str()), body),
+        _ => (None, value),
+    }
+}
+
+fn text_at(body: &Value, path: &str) -> Option<String> {
+    match lookup(body, path)? {
+        Value::String(text) if !text.trim().is_empty() => Some(text.clone()),
+        _ => None,
+    }
+}
+
+/// `2026-11-03` of an RFC3339 time.
+fn day_of(stamp: &str) -> &str {
+    stamp.get(..10).unwrap_or(stamp)
+}
+
+/// Code or symbol of the asset a record counts in, lowercase.
+pub fn money_unit(body: &Value) -> Option<String> {
+    ["currency", "asset.symbol", "asset.name"]
+        .iter()
+        .find_map(|path| text_at(body, path))
+        .map(|unit| unit.to_lowercase())
+}
+
+fn transaction_label(tag: Option<&str>, body: &Value) -> String {
+    let what = text_at(body, "meta.comment").or_else(|| {
+        lookup(body, "meta.categories")
+            .and_then(Value::as_array)
+            .and_then(|list| list.iter().find_map(Value::as_str))
+            .map(humanize)
+    });
+    let when = text_at(body, "meta.timestamp").map(|stamp| day_of(&stamp).to_string());
+    let how_much = text_at(body, "amount").map(|amount| {
+        let sign = match tag {
+            Some("payment" | "asset_sell") if !amount.starts_with('-') => "-",
+            Some("topup") if !amount.starts_with('-') => "+",
+            _ => "",
+        };
+        let unit = money_unit(body).map(|unit| format!(" {}", unit.to_uppercase()));
+        format!("{sign}{amount}{}", unit.unwrap_or_default())
+    });
+    let parts: Vec<String> = [what.map(|text| clip(&text)), when, how_much]
+        .into_iter()
+        .flatten()
+        .collect();
+    parts.join(", ")
+}
+
+/// The body of a record (the enum variant's content for a tagged one).
+pub fn body_of_value<'doc>(coll: &Collection, value: &'doc Value) -> &'doc Value {
+    body_of(coll, value).1
+}
+
 /// A short human label of a record, for the list of what a sync changes.
+/// Never the raw key of a record that has only an id: that comes out empty
+/// and the window names the collection instead.
 pub fn label(coll: &Collection, value: &Value) -> String {
     // A credential is never a label; the window shows the collection name.
     if coll.secret {
         return String::new();
     }
-    let body = match (tagged(coll), variant(value)) {
-        (true, Some((_, body))) => body,
-        _ => value,
-    };
-    if let Value::String(text) = body {
-        return text.clone();
+    let (tag, body) = body_of(coll, value);
+    if coll.name == "transactions" {
+        return transaction_label(tag, body);
     }
-    for path in [
-        "name",
-        "title",
-        "text",
-        "pattern",
-        "meta.comment",
-        "asset_key",
-        "key",
-        "date",
-    ] {
+    if coll.name == "inflation_points" {
+        return [
+            text_at(body, "currency").map(|code| code.to_uppercase()),
+            text_at(body, "month"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    }
+    for path in ["name", "title", "text", "pattern", "meta.comment", "date"] {
         // A credential field is never a label.
         if coll.secret_fields.contains(&path) {
             continue;
         }
-        if let Some(Value::String(text)) = lookup(body, path)
-            && !text.trim().is_empty()
-        {
-            return text.chars().take(80).collect();
+        if let Some(text) = text_at(body, path) {
+            return clip(&text);
         }
     }
+    // A key made of words (a category's slug) reads fine once humanized.
     record_key(coll, value)
+        .filter(|key| !key.is_empty() && !looks_opaque(key))
+        .map(|key| clip(&humanize(&key)))
         .unwrap_or_default()
-        .chars()
-        .take(80)
-        .collect()
 }
 
 #[cfg(test)]

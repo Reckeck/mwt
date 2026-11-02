@@ -8,95 +8,18 @@
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { emitMock } from '../mock-bus'
+import { LAPTOP, TABLET, after, seedJournal, summary } from './sync-peers'
 import { mockAppSettings } from './vault-data'
 
 const PHONE = { device_id: 'mock-phone', name: 'Pixel 8' }
 const SESSION = 'mock-session'
 
-const summary: SyncSummary = {
-  total: 4,
-  collections: [
-    {
-      collection: 'transactions',
-      added: 2,
-      updated: 1,
-      deleted: 0,
-      items: [
-        { kind: 'added', label: 'Кофе' },
-        { kind: 'added', label: 'Такси' },
-        { kind: 'updated', label: 'Аренда' },
-      ],
-    },
-    {
-      collection: 'reminders',
-      added: 0,
-      updated: 0,
-      deleted: 1,
-      items: [{ kind: 'deleted', label: 'Позвонить в банк' }],
-    },
-  ],
-  overwritten: [{ collection: 'stores', label: 'Наличные', field: 'name', before: 'Кошелёк', after: 'Наличные' }],
-}
-
-/** What the backend already journaled before this session: applied, declined, sent. */
-const seedJournal = (): SyncJournalEntry[] => [
-  {
-    id: 'journal-4',
-    at: '2026-10-23T08:00:00Z',
-    peer_name: 'Внешняя копия',
-    counts: [{ collection: 'transactions', count: 3 }],
-    label: null,
-    outcome: 'applied',
-    batch_id: null,
-  },
-  {
-    id: 'journal-3',
-    at: '2026-10-22T09:40:00Z',
-    peer_name: 'Pixel 8',
-    counts: [
-      { collection: 'transactions', count: 2 },
-      { collection: 'budgets', count: 1 },
-    ],
-    label: null,
-    outcome: 'applied',
-    batch_id: null,
-  },
-  {
-    id: 'journal-2',
-    at: '2026-10-21T18:00:00Z',
-    peer_name: 'Ноутбук',
-    counts: [],
-    label: null,
-    outcome: 'sent',
-    batch_id: null,
-  },
-  {
-    id: 'journal-1',
-    at: '2026-10-20T20:15:00Z',
-    peer_name: 'Pixel 8',
-    counts: [{ collection: 'transactions', count: 1 }],
-    label: 'Маме до зарплаты',
-    outcome: 'declined',
-    batch_id: null,
-  },
-]
-
 /** The real handshake gives the code five minutes. */
 const PAIRING_MS = 5 * 60_000
 
-/** A second demo device that forgot this one: the list shows its badge and "Pair again". */
-const LAPTOP: SyncPeerView = {
-  device_id: 'mock-laptop',
-  name: 'Ноутбук',
-  paired_at: '2026-10-20T20:00:00Z',
-  last_synced_at: '2026-10-21T18:00:00Z',
-  online: false,
-  paused: false,
-  cut_by: 'forgotten',
-}
-
 const state = {
   laptop: LAPTOP as SyncPeerView | null,
+  tablet: TABLET as SyncPeerView | null,
   pairingStart: 0,
   phase: null as SyncPhase | null,
   peers: [] as SyncPeerView[],
@@ -137,7 +60,7 @@ function session(): SyncSessionView[] {
       focused: false,
       pairing_code: state.phase === 'pairing' ? '482913' : null,
       pairing_expires_ms: state.phase === 'pairing' ? state.pairingStart + PAIRING_MS : null,
-      plan: state.phase === 'awaiting_confirm' ? { reason: 'paired', summary } : null,
+      plan: state.phase === 'awaiting_confirm' ? { reason: 'paired', summary, after } : null,
     },
   ]
 }
@@ -195,6 +118,10 @@ export const syncCommands: MockCommands = {
   },
   sync_pair: ({ args }) => {
     // From the device list: the demo laptop is dialed, the way back is taken.
+    if (args?.deviceId === TABLET.device_id && state.tablet) {
+      state.tablet = { ...state.tablet, forgotten: false, online: true, last_synced_at: new Date().toISOString() }
+      return resolve(null)
+    }
     if (args?.deviceId && state.laptop) {
       state.laptop = { ...state.laptop, cut_by: null, online: true, last_synced_at: new Date().toISOString() }
       return resolve(null)
@@ -220,6 +147,7 @@ export const syncCommands: MockCommands = {
           online: true,
           paused: false,
           cut_by: null,
+          forgotten: false,
         },
       ]
       state.phase = 'awaiting_confirm'
@@ -256,8 +184,13 @@ export const syncCommands: MockCommands = {
     resolve([
       ...state.peers.map((peer) => ({ ...peer, online: state.phase === 'live' })),
       ...(state.laptop && mockAppSettings.sync.enabled ? [state.laptop] : []),
+      ...(state.tablet && mockAppSettings.sync.enabled ? [state.tablet] : []),
     ]),
   sync_forget_peer: ({ args }) => {
+    if (args?.deviceId === TABLET.device_id) {
+      state.tablet = state.tablet && { ...state.tablet, forgotten: true, online: false }
+      return resolve(null)
+    }
     if (args?.deviceId === LAPTOP.device_id) {
       state.laptop = null
       return resolve(null)

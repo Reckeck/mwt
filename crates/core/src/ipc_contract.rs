@@ -2289,6 +2289,30 @@ pub struct SyncSessionView {
 pub struct SyncPendingPlan {
     pub reason: SyncConfirmReason,
     pub summary: crate::sync::SyncSummary,
+    /// Capital and balances once applied; `None` when it could not be worked out.
+    #[serde(default)]
+    pub after: Option<AfterApply>,
+}
+
+/// What the vault would show after a batch is applied, worked out on an
+/// in-memory copy (nothing is written).
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AfterApply {
+    /// The base currency of both net worths and every store balance.
+    pub currency: String,
+    pub net_worth_before: Amount,
+    pub net_worth_after: Amount,
+    /// Stores whose balance the batch moves (or that it adds or removes).
+    pub stores: Vec<StoreBalanceChange>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct StoreBalanceChange {
+    pub id: String,
+    pub name: String,
+    pub before: Amount,
+    pub after: Amount,
+    pub currency: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
@@ -2463,6 +2487,9 @@ pub struct SyncPeerView {
     /// The device refused this one on purpose and told so.
     #[serde(default)]
     pub cut_by: Option<SyncCutReason>,
+    /// The user forgot this device here: no exchange until "Pair again".
+    #[serde(default)]
+    pub forgotten: bool,
 }
 
 /// Partial update of this device's sync settings.
@@ -2516,6 +2543,8 @@ pub struct SyncPlanEvent {
     pub peer_name: String,
     pub reason: SyncConfirmReason,
     pub summary: crate::sync::SyncSummary,
+    #[serde(default)]
+    pub after: Option<AfterApply>,
 }
 
 /// `vault-synced`: a batch was applied here.

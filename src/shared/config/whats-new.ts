@@ -14,6 +14,16 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'syncTransfer',
+    date: '2026-11-03',
+    points: [
+      { key: 'unlock', route: 'unlock' },
+      { key: 'transfer', route: 'settings:sync:sync-transfer' },
+      { key: 'confirm', route: 'settings:sync:sync-devices' },
+      { key: 'forgotten', route: 'settings:sync:sync-devices' },
+    ],
+  },
+  {
     id: 'syncRepair',
     date: '2026-11-01',
     points: [

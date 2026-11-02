@@ -146,7 +146,8 @@ pub async fn unlock_vault(
     // A linked vault first takes in what changed in its external copy.
     let open_sync =
         crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
-    let mut vault = UnlockedVault::open(path.clone(), &input.password)
+    let device = crate::commands::app_settings::device_id(&app);
+    let mut vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))
         .map_err(crate::commands::err_to_string)?;
     // Edits made elsewhere reach the opened vault; the password is only
     // needed for this call and is not kept.
@@ -155,7 +156,7 @@ pub async fn unlock_vault(
         == crate::platform_fs::links::TakeIn::Reopen
     {
         drop(vault);
-        vault = UnlockedVault::open(path.clone(), &input.password)
+        vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))
             .map_err(crate::commands::err_to_string)?;
     }
     crate::platform_fs::attach_mirror(&app, &mut vault);

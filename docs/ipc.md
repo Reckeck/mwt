@@ -32,7 +32,7 @@ The frontend parses the code and shows a localized message.
 | `sync-status` | `SyncStatus` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
 | `sync-offer` | `SyncOfferEvent { session_id, peer_name }` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
 | `sync-pairing` | `SyncPairingEvent { session_id, peer_name, code }` | show a 6-digit code; it is the same on the second device |
-| `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary }` | the change list awaits a decision (`sync_decide_plan`): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
+| `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary, after }` | the change list awaits a decision (`sync_decide_plan`); `summary` items carry a readable `label`, the record `key` and, for an edit, `fields: FieldChange { field, before, after, money_currency }`; `after: AfterApply { currency, net_worth_before, net_worth_after, stores: StoreBalanceChange[] }` is the capital and wallet balances once applied (worked out on an in-memory copy, nothing written): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
 | `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch }` | a batch from another device was applied; the frontend re-reads all queries, a notification with "Undo" (`sync_undo`) |
 | `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | device clocks diverge (5 min – 24 h) or jumped: the device is "temporarily untrusted" until the end of the session |
 | `sync-error` | `SyncErrorEvent { code, message, peer_name?, peer_version?, own_version? }` | the session did not start or was interrupted: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` and `SYNC_FORGOTTEN_BY_PEER` (the other device paused the exchange or forgot this one; the text names the device, `peer_name`); `SYNC_VERSION_MISMATCH` also has `peer_version` (empty for an old build) and `own_version`: the text names the device and both versions |
@@ -122,7 +122,7 @@ The design — `docs/sync.md`. Works while the vault is unlocked and sync is on.
 | `sync_dismiss_offer` | `sessionId` | `()`; "Not now": the session closes quietly, the device is not offered until sync restarts |
 | `sync_confirm_pairing` | `SyncDecisionInput { session_id, accept }` | `()`; the codes matched (`accept`) or not |
 | `sync_decide_plan` | `SyncDecisionInput { session_id, accept }` | `()`; apply the change list or decline (the session closes; declining pauses the device, see `sync_resume_peer`) |
-| `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online, paused }>` — trusted devices |
+| `sync_peers` | — | `Vec<SyncPeerView { device_id, name, paired_at, last_synced_at, online, paused, cut_by, forgotten }>` — trusted devices and the ones forgotten here (`forgotten`, shown under "Pair again") |
 | `sync_forget_peer` | `deviceId` | `()`; the device is rejected here and, as sync proceeds, everywhere |
 | `sync_resume_peer` | `deviceId` | `()`; "Resume": clears the pause set by declining a change list and immediately tries to connect; the list will be asked about again |
 | `sync_history` | — | `Vec<AppliedBatch { id, peer_name, applied_at, summary, undone_at }>`, newest first (up to 20 batches, 7 days) |

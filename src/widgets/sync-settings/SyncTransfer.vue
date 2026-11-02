@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Send, Smartphone } from 'lucide-vue-next'
 
 import { ReceiveVaultDialog, SendVaultDialog } from '@/features/vault-transfer'
+import { useOpenReceivedVault } from '@/features/vault-unlock'
 import { useVaultStore } from '@/shared/store/vault'
 import { Button } from '@/shared/ui/button'
 import { SettingsSection } from '@/shared/ui/settings-section'
@@ -13,6 +14,11 @@ const { t } = useI18n()
 const sendOpen = ref(false)
 const receiveOpen = ref(false)
 // The sandbox keeps off the network: both buttons wait, and the note says why.
+const { switchTo } = useOpenReceivedVault()
+// Open the received vault: switch to it, asking for the password only when it has one.
+function onReceived(path: string) {
+  void switchTo(path)
+}
 const sandbox = computed(() => useVaultStore().sandbox)
 </script>
 
@@ -42,6 +48,6 @@ const sandbox = computed(() => useVaultStore().sandbox)
       </div>
     </div>
     <SendVaultDialog v-model:open="sendOpen" />
-    <ReceiveVaultDialog v-model:open="receiveOpen" />
+    <ReceiveVaultDialog v-model:open="receiveOpen" @received="onReceived" />
   </SettingsSection>
 </template>

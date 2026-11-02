@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, Minus, PenLine, Plus } from 'lucide-vue-next'
+import { ChevronDown, PenLine } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 
 import { collectionKey, sortedChanges } from '../../lib/collections'
+import { SyncChangeItem } from '../SyncChangeItem'
 import type { SyncChangesProps } from './sync-changes.types'
 
 /** What a sync changes (or changed): counts per kind of record, the records under each, the overwritten fields. */
@@ -14,7 +15,6 @@ const props = defineProps<SyncChangesProps>()
 const { t } = useI18n()
 
 const groups = computed(() => sortedChanges(props.summary))
-const icons = { added: Plus, updated: PenLine, deleted: Minus } as const
 </script>
 
 <template>
@@ -32,10 +32,7 @@ const icons = { added: Plus, updated: PenLine, deleted: Minus } as const
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul class="grid gap-1 border-t border-border px-3 py-2 text-sm">
-          <li v-for="(item, index) in group.items" :key="index" class="flex items-center gap-2">
-            <component :is="icons[item.kind]" class="size-3.5 shrink-0 text-muted-foreground" :aria-label="t(`sync.kind.${item.kind}`)" />
-            <span class="min-w-0 truncate">{{ item.label || t('sync.noName') }}</span>
-          </li>
+          <SyncChangeItem v-for="(item, index) in group.items" :key="`${item.key}-${index}`" :item="item" :collection="group.collection" />
           <li v-if="group.added + group.updated + group.deleted > group.items.length" class="text-xs text-muted-foreground">
             {{ t('sync.plan.more', { count: group.added + group.updated + group.deleted - group.items.length }) }}
           </li>

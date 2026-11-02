@@ -134,6 +134,24 @@ pub struct AppSettings {
     /// Screens whose tour offer was waved off with "Not now": not offered again.
     #[serde(default)]
     pub declined_tours: Vec<String>,
+    /// Devices a received vault copy must trust once it is unlocked. Kept here,
+    /// not in memory, so a process kill (Android) between receiving and the
+    /// first unlock does not lose the pairing.
+    #[serde(default)]
+    #[ts(skip)]
+    pub pending_trusts: Vec<PendingTrustPref>,
+}
+
+/// The device a just-received vault copy came from, to be trusted at its first
+/// unlock. Keyed by the local file, the sender's id and its public key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingTrustPref {
+    pub path: String,
+    pub device_id: String,
+    pub device_name: String,
+    pub device_key: String,
+    /// Unix milliseconds after which the entry is dropped unused.
+    pub expires_ms: u64,
 }
 
 /// Vault sync preferences of this device. Everything is off until the user
@@ -210,6 +228,7 @@ impl Default for AppSettings {
             dashboard_today_collapsed: false,
             tour_offers: true,
             declined_tours: Vec::new(),
+            pending_trusts: Vec::new(),
         }
     }
 }
@@ -897,6 +916,7 @@ mod tests {
             dashboard_today_collapsed: true,
             tour_offers: false,
             declined_tours: vec!["wallet".into()],
+            pending_trusts: Vec::new(),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

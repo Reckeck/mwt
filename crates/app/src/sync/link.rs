@@ -22,7 +22,7 @@ use trade_core::ipc_contract::{
 use trade_core::service::PeerRef;
 use trade_core::sync::RecordState;
 use trade_core::sync::journal::SyncJournalOutcome;
-use trade_core::sync::manifest::{Manifest, diff};
+use trade_core::sync::manifest::Manifest;
 use trade_core::sync::protocol::{
     Hello, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
 };
@@ -770,7 +770,7 @@ async fn exchange<H: Host>(
                 Some(Message::Manifest { entries, last }) => {
                     theirs.extend(entries);
                     if last {
-                        let (want, _) = diff(&mine, &theirs);
+                        let (want, _) = app.with_vault(|vault| Ok(vault.sync_diff(&mine, &theirs)))?;
                         total = u32::try_from(want.len()).unwrap_or(u32::MAX);
                         if total > 0 {
                             set_progress(app, &peer.session_id, Some(SyncProgress { received: 0, total }));
@@ -909,12 +909,18 @@ async fn apply_shown<H: Host>(
             return Ok(());
         }
         if !summary.is_empty() {
+            // Capital and balances afterwards; the question still shows
+            // without them when they cannot be worked out.
+            let after = app
+                .with_vault(|vault| vault.sync_preview_after(&incoming))
+                .unwrap_or_default();
             *asked = Some(reason);
             update_link(app, &peer.session_id, |link| {
                 link.view.phase = SyncPhase::AwaitingConfirm;
                 link.view.plan = Some(SyncPendingPlan {
                     reason,
                     summary: summary.clone(),
+                    after: after.clone(),
                 });
             });
             app.emit(
@@ -924,6 +930,7 @@ async fn apply_shown<H: Host>(
                     peer_name: peer.name.clone(),
                     reason,
                     summary: summary.clone(),
+                    after: after.clone(),
                 },
             );
             let deadline = tokio::time::sleep(DECISION_TIMEOUT);

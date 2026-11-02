@@ -69,6 +69,7 @@ mod tests {
                 items: vec![ChangeItem {
                     kind: ChangeKind::Added,
                     label: "Кофе".into(),
+                    ..Default::default()
                 }],
                 ..CollectionChanges::default()
             }],
@@ -138,6 +139,7 @@ mod scrub_tests {
                     items: vec![ChangeItem {
                         kind: ChangeKind::Updated,
                         label: "{\"api_secret\":\"OLDSECRET\"}".into(),
+                        ..Default::default()
                     }],
                     ..Default::default()
                 },
@@ -147,6 +149,7 @@ mod scrub_tests {
                     items: vec![ChangeItem {
                         kind: ChangeKind::Added,
                         label: "Cash".into(),
+                        ..Default::default()
                     }],
                     ..Default::default()
                 },

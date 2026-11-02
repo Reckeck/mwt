@@ -5,7 +5,7 @@ import { mockCategories, mockRules } from './ledger'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockAutostart, mockNotices, mockTransactions } from './demo'
-import { mockConflict } from './commands-vault-files'
+import { mockConflict, mockRecents } from './commands-vault-files'
 import { leaveSandbox } from './sandbox-state'
 import { mockAppSettings, mockCurrencies, mockInfo, mockPassword, mockSettings, mockStatus } from './vault-data'
 
@@ -20,7 +20,8 @@ export const vaultCommands: MockCommands = {
       throw { code: 'SYNC_CONFLICT', message: 'Download/vault.wallet' }
     }
     // A vault without a password opens whatever was typed, as the core does.
-    if (mockPassword.value === null || body?.password === mockPassword.value) {
+    const plainRecent = mockRecents.some((row) => row.path === body?.path && !row.encrypted)
+    if (mockPassword.value === null || plainRecent || body?.password === mockPassword.value) {
       mockStatus.value = {
         path: String(body?.path ?? mockStatus.value.path),
         exists: true,

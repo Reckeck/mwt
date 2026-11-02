@@ -128,6 +128,8 @@ fn main() {
         trade_core::ipc_contract::SyncPairingEvent,
         trade_core::ipc_contract::SyncConfirmReason,
         trade_core::ipc_contract::SyncPlanEvent,
+        trade_core::ipc_contract::AfterApply,
+        trade_core::ipc_contract::StoreBalanceChange,
         trade_core::ipc_contract::VaultSyncedEvent,
         trade_core::ipc_contract::SyncErrorEvent,
         trade_core::ipc_contract::SyncClockEvent,

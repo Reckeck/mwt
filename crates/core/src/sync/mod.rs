@@ -4,6 +4,7 @@
 //! `service::sync`, the transport in the app crate.
 
 pub mod alias;
+pub mod fields;
 pub mod journal;
 pub mod manifest;
 pub mod merge;
@@ -18,7 +19,7 @@ pub mod transfer;
 pub mod view;
 
 pub use plan::{
-    ChangeItem, ChangeKind, CollectionChanges, OverwrittenField, SyncPlan, SyncSummary,
+    ChangeItem, ChangeKind, CollectionChanges, FieldChange, OverwrittenField, SyncPlan, SyncSummary,
 };
 pub use stamp::{Clock, Stamp};
 pub use state::{BatchEntry, RecordStamps, RecordState, SyncBatch, SyncState, TrustedPeer};

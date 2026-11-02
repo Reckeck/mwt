@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { Settings } from 'lucide-vue-next'
 
 import { AppSettingsDialog } from '@/widgets/app-settings'
@@ -8,15 +9,15 @@ import { RecentVaults } from '@/widgets/recent-vaults'
 import { SandboxOpenButton } from '@/features/sandbox-open'
 import { VaultCreateDialog } from '@/features/vault-create'
 import { ReceiveVaultDialog } from '@/features/vault-transfer'
-import { VaultUnlockDialog } from '@/features/vault-unlock'
+import { useOpenReceivedVault, VaultUnlockDialog } from '@/features/vault-unlock'
 import { BrandMark } from '@/shared/ui/brand-mark'
 import { Button } from '@/shared/ui/button'
-import { useVaultStore } from '@/shared/store/vault'
 import { useTour } from '@/shared/lib/tour'
 import { TourOffer } from '@/widgets/tour-offer'
 
 const { t } = useI18n()
-const vault = useVaultStore()
+const route = useRoute()
+const openReceived = useOpenReceivedVault()
 
 const settingsOpen = ref(false)
 const createOpen = ref(false)
@@ -39,11 +40,17 @@ onBeforeUnmount(() => {
   tour.stop()
 })
 
-function onReceived(path: string) {
-  void vault.loadRecents().catch(() => {})
+async function onReceived(path: string) {
+  if (await openReceived.openIfPlain(path)) return
   receivedPath.value = path
   unlockOpen.value = true
 }
+
+// Switched to from the settings: the open vault was locked and the received one waits here.
+onMounted(() => {
+  const received = route.query.received
+  if (typeof received === 'string' && received) void onReceived(received)
+})
 </script>
 
 <template>

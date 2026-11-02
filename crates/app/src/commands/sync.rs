@@ -135,7 +135,7 @@ pub async fn sync_peers(
         .peers
         .iter()
         // The list also carries this device as the others trust it.
-        .filter(|peer| peer.revoked.is_none() && peer.device_id != me)
+        .filter(|peer| peer.device_id != me)
         .map(|peer| SyncPeerView {
             device_id: peer.device_id.clone(),
             name: peer.name.clone(),
@@ -144,6 +144,7 @@ pub async fn sync_peers(
             online: online.contains(&peer.device_id),
             paused: vault.sync_is_paused(&peer.device_id),
             cut_by: vault.sync_cut_reason(&peer.device_id),
+            forgotten: peer.revoked.is_some(),
         })
         .collect())
 }
