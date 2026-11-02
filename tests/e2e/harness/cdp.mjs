@@ -103,7 +103,16 @@ export async function attach(port) {
       let timer
       // A promise that never settles in the page would otherwise hang the run with nothing to read.
       const stuck = new Promise((_done, fail) => {
-        timer = setTimeout(() => fail(new Error(`page.eval hung for ${EVAL_TIMEOUT_MS} ms: ${code.trim().slice(0, 200)}`)), EVAL_TIMEOUT_MS)
+        timer = setTimeout(async () => {
+          // Say what state the page is in: a busy main thread does not answer at all, a hidden or
+          // unfocused one answers but draws no frames (requestAnimationFrame never fires).
+          const probe = send('Runtime.evaluate', {
+            expression: `JSON.stringify({ visibility: document.visibilityState, focus: document.hasFocus(), url: location.href })`,
+            returnByValue: true,
+          }).then((answer) => answer.result?.result?.value ?? 'no value')
+          const state = await Promise.race([probe, sleep(5000).then(() => 'no answer in 5 s: main thread busy')])
+          fail(new Error(`page.eval hung for ${EVAL_TIMEOUT_MS} ms (page: ${state}): ${code.trim().slice(0, 200)}`))
+        }, EVAL_TIMEOUT_MS)
       })
       const evaluated = send('Runtime.evaluate', {
         expression: `(async () => { ${code} })()`,

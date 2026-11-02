@@ -1397,6 +1397,11 @@ async fn a_forgotten_device_is_told_and_waits_for_pairing() {
         cut_reason(&phone, &laptop_id) == Some(SyncCutReason::Forgotten)
     })
     .await;
+    // The notice reaches the listener after the cut is stored: wait for it, then make sure it is one.
+    until("announced", || {
+        count_of(&phone_seen, "SYNC_FORGOTTEN_BY_PEER") >= 1
+    })
+    .await;
     assert_eq!(count_of(&phone_seen, "SYNC_FORGOTTEN_BY_PEER"), 1);
     assert!(laptop_seen.errors.lock().unwrap().is_empty());
     for _ in 0..3 {
