@@ -1500,8 +1500,15 @@ fn hooked(
                 }
                 super::PLAN_EVENT => {
                     let total = payload["summary"]["total"].as_u64().unwrap_or(0);
-                    let number = log.plans.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-                    if let Some(accept) = hook(number, total) {
+                    let number = log.plans() + 1;
+                    // The hook blocks (it edits the other vault and waits):
+                    // off the worker, or the link task its edit wakes would
+                    // sit in this worker's LIFO slot until the wait is over.
+                    let answer = tokio::task::block_in_place(|| hook(number, total));
+                    // Counted once the hook is through, so a test that sees
+                    // the count also sees what the hook recorded.
+                    log.plans.store(number, std::sync::atomic::Ordering::SeqCst);
+                    if let Some(accept) = answer {
                         super::send(&host, &session, Order::Decide(accept));
                     }
                 }
