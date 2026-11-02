@@ -200,6 +200,8 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(10));
             }
         });
+        // Like `run`: the batch starts with its first change, however late the feeder is.
+        receiver.recv().unwrap();
         let started = Instant::now();
         assert!(wait_for_quiet(
             &receiver,
