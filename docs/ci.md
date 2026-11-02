@@ -200,6 +200,21 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
 - `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) действует только на C/C++;
   на rustc sccache его не применяет.
 
+### Влитие обновлений Dependabot (`dependabot-merge.yml`)
+
+Dependabot открывает PR в `development` по понедельникам (`.github/dependabot.yml`):
+minor и patch одной экосистемы — одним групповым PR, каждый major — отдельным. Каждое
+воскресенье в 06:00 МСК (`cron: 0 3 * * 0`) `dependabot-merge.yml` вливает (squash) те
+из них, у которых все проверки зелёные (и `ci-ok`), нет конфликта и обновление не major
+(для `0.x` major — смена второй цифры; групповой PR без «from A to B» — только группы
+`cargo-minor`, `npm-minor`, `actions`). Major, красные, идущие и конфликтующие PR
+остаются на ручной разбор; конфликт после соседнего влития Dependabot сам перебазирует,
+и PR вливается через неделю. Влитие токеном `GITHUB_TOKEN` не запускает push-workflow,
+поэтому после влития скрипт сам запускает `release.yml` (dev, publish) на `development`.
+Список влитых и пропущенных с причиной — в сводке прогона. Вручную: Actions →
+dependabot-merge → Run workflow, `dry_run` только показывает, что было бы влито.
+Логика — `.github/scripts/dependabot-merge.sh`.
+
 ### Аудит зависимостей (`audit.yml`)
 
 `mise run audit` (`cargo xtask audit`) проверяет `Cargo.lock` (`cargo audit`,
