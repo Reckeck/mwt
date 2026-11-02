@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # macOS universal (Apple Silicon + Intel) .dmg and a tarball of the .app, on a
-# Mac: the build:macos job (GitLab macOS runner) or cargo xtask build
+# Mac: the build-macos job of release.yml (GitHub macOS runner, paused) or cargo xtask build
 # (here or over ssh). Tauri cannot build for macOS from another OS.
 #
 #   MWT_APP_NAME=... [MWT_TAURI_CONFIG=<overlay>] scripts/ci/build-macos.sh <version> <out-dir>

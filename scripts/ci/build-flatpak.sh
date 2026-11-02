@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Flatpak bundle from the Linux tarball (build-linux.sh), in an
 # archlinux image. flatpak-builder needs bubblewrap: the container must be
-# privileged (GitLab.com shared runners are; podman run --privileged locally).
+# privileged (GitHub-hosted runners are; podman run --privileged locally).
 #
 #   MWT_APP_NAME=... MWT_APP_FLATPAK_ID=... scripts/ci/build-flatpak.sh <version> <release-dir>
 #

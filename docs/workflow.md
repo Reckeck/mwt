@@ -1,23 +1,22 @@
 # Как работать: ветки, пре-релизы, релизы
 
 Как код доходит от задачи до пользователя и что делает CI на каждом шаге.
-Устройство самого пайплайна (образы, кэши, переменные) — в [ci.md](ci.md).
+Устройство самого CI (workflows, образы, кэши, секреты) — в [ci.md](ci.md).
 
 ## Ветки
 
 | Ветка | Откуда | Куда сливается | Что делает CI |
 |---|---|---|---|
-| `feature/<задача>` | от `development` | MR в `development` | только проверки, и только те, чьи файлы задеты |
-| `hotfix/<задача>` | от `main` | MR в `main` | только проверки |
-| `development` | — | MR в `main` (выпуск) | проверки → сборки всех платформ → **пре-релиз** `X.Y.Z-N` |
-| `main` | — | — | проверки → сборки → **релиз** `X.Y.Z` → MR обратно в `development` |
+| `feature/<задача>` | от `development` | PR в `development` | только проверки |
+| `hotfix/<задача>` | от `main` | PR в `main` | только проверки |
+| `development` | — | PR в `main` (выпуск) | проверки → сборки всех платформ → **пре-релиз** `X.Y.Z-N` |
+| `main` | — | — | проверки → сборки → **релиз** `X.Y.Z` → PR обратно в `development` |
 
-- В `development` и `main` — только через MR, без прямых пушей и
+- В `development` и `main` — только через PR, без прямых пушей и
   force-push (защищённые ветки).
 - Сборки начинаются, только когда **все** проверки зелёные; красная проверка
-  останавливает пайплайн до сборок.
-- Теги руками не ставятся: их создаёт job выпуска вместе с GitLab Release.
-  Теговых пайплайнов нет.
+  отменяет прогон `release.yml` до публикации.
+- Теги руками не ставятся: их создаёт job выпуска вместе с GitHub Release.
 
 ## Версии
 
@@ -31,7 +30,7 @@
   было, пре-релиз сам становится `X.Y.(Z+1)-N`. Для pacman это `X.Y.ZpreN` —
   идёт раньше релиза `X.Y.Z` и обновится на него.
 - **Релиз** из `main`: ровно `X.Y.Z`, тег `vX.Y.Z`. Job `version`
-  останавливает пайплайн, если `vX.Y.Z` уже выпущен или в `CHANGELOG.md`
+  останавливает выпуск, если `vX.Y.Z` уже выпущен или в `CHANGELOG.md`
   нет раздела `## [X.Y.Z]` — значит, на `development` забыли `mise run bump`.
 
 ## CHANGELOG
@@ -47,11 +46,11 @@
   minor, остальное → patch; `mise run bump patch|minor|major|X.Y.Z` —
   явно), во все файлы версии, и `[Unreleased]` становится
   `## [X.Y.Z] — дата`. 1.0 и любой major — только явно.
-- Заметки пре-релиза в GitLab пишет CI сам — коммиты с прошлого релиза.
+- Заметки пре-релиза в GitHub Releases пишет CI сам — коммиты с прошлого релиза.
 
 Обе команды работают в основной (colocated) копии: им нужна git-история,
 у side-workspace jj её нет.
-- Android `versionCode` — номер пайплайна: растёт всегда, так что любая
+- Android `versionCode` — номер запуска: растёт всегда, так что любая
   следующая сборка ставится поверх предыдущей.
 
 ## Задача: от начала до пре-релиза
@@ -62,32 +61,32 @@ jj new development@origin                 # новая работа поверх
 # … правки, `mise run check` …
 jj describe -m "feat(…): …"               # контекстные коммиты, см. AGENTS.md
 jj bookmark create feature/<задача> -r @
-jj git push -b feature/<задача>           # пайплайн: только проверки
-glab mr create --source-branch feature/<задача> --target-branch development --fill
+jj git push -b feature/<задача>           # CI: только проверки (PR)
+gh pr create --base development --head feature/<задача> --fill
 ```
 
-MR зелёный и проверен → merge → пайплайн `development` собирает всё и
-публикует пре-релиз (Releases → «Pre-release X.Y.Z-N», файлы в Package
-Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хранятся, старые
-удаляются (`prerelease:cleanup`, на GitHub `cargo xtask prune-prereleases`, нужен `GH_TOKEN`).
+PR зелёный и проверен → merge → `release.yml` на `development` собирает всё и
+публикует пре-релиз (GitHub Releases, `vX.Y.Z-N`, файлы — вложения релиза).
+Последние 10 пре-релизов хранятся, старые удаляются
+(`cargo xtask prune-prereleases`, нужен `GH_TOKEN`).
 
 ## Выпуск
 
-На GitHub шаги выпуска — команды `cargo xtask publish`, `prune-prereleases`,
+Шаги выпуска — команды `cargo xtask publish`, `prune-prereleases`,
 `backmerge`, `publish-aur` (токен `GH_TOKEN`, см. [ci.md](ci.md#выпуск-через-xtask-github)).
 Их вызывает `.github/workflows/release.yml` (граф, секреты, ручной запуск —
-[ci.md](ci.md#releaseyml)); описание шагов ниже — прежний GitLab-пайплайн.
+[ci.md](ci.md#releaseyml)).
 
 1. В `development` (основная копия): `mise run bump` — версия и раздел
    CHANGELOG; при желании дописать над списком коммитов главное словами;
-   `mise run check`; коммит `chore(release): vX.Y.Z`, пуш, MR в
-   `development` (или прямо в составе MR выпуска).
-2. MR `development` → `main`, merge.
-3. Пайплайн `main`: проверки → сборки → Release `vX.Y.Z` с файлами и
+   `mise run check`; коммит `chore(release): vX.Y.Z`, пуш, PR в
+   `development` (или прямо в составе PR выпуска).
+2. PR `development` → `main`, merge.
+3. `release.yml` на `main`: проверки → сборки → Release `vX.Y.Z` с файлами и
    заметками из CHANGELOG (Linux, Windows, Android, Flatpak, pacman; macOS —
-   если включён `MACOS_BUILD`). AUR — кнопкой `aur:publish`. Проверить
+   пока на паузе). AUR — job `aur` (нужен секрет `AUR_SSH_PRIVATE_KEY`). Проверить
    бандлы до мержа можно и локально: `mise run build:all` (`docs/ci.md`).
-4. `backmerge` открывает MR `main` → `development` (`cargo xtask backmerge`, нужен `GH_TOKEN`) —
+4. `backmerge` открывает PR `main` → `development` (`cargo xtask backmerge`, нужен `GH_TOKEN`) —
    слить его. Поднимать версию сразу не нужно: пре-релизы до следующего
    bump сами идут как `X.Y.(Z+1)-N`.
 
@@ -97,44 +96,35 @@ Registry). Последние `PRERELEASES_KEPT` (10) пре-релизов хр
 jj new main@origin
 # … исправление (коммит fix: …), затем `mise run bump patch` …
 jj bookmark create hotfix/<задача> -r @ && jj git push -b hotfix/<задача>
-glab mr create --source-branch hotfix/<задача> --target-branch main --fill
+gh pr create --base main --head hotfix/<задача> --fill
 ```
 
 Merge → релиз `vX.Y.(Z+1)` → `backmerge` приносит исправление в
 `development`.
 
-## Следить за пайплайном
+## Следить за CI
 
 ```bash
-glab ci status                 # пайплайн текущей ветки
-glab ci view                   # интерактивно: job'ы, логи, повтор
-glab ci trace <job>            # лог job'а
-glab mr list                   # открытые MR
+gh pr checks                   # проверки PR текущей ветки
+gh run list --branch <ветка>   # запуски workflows ветки
+gh run view <id> --log-failed  # лог упавших шагов
+gh run watch <id>              # ждать конца запуска
+gh pr list                     # открытые PR
 ```
 
-Скилл `glab` (`.agents/skills/glab`) — как этим пользоваться; правка
-`.gitlab-ci.yml` — через скиллы `gitlab-ci-generator` и
-`gitlab-ci-validator` (валидатор:
-`bash .agents/skills/gitlab-ci-validator/scripts/validate_gitlab_ci.sh .gitlab-ci.yml`).
+Проверка самих workflow-файлов — `mise x actionlint@1.7.12 -- actionlint`.
 
-## Разовая настройка GitLab
+## Разовая настройка GitHub
 
 1. **Ветка `development`** от `main`, сделать её веткой по умолчанию
-   (Settings → Repository → Branch defaults): MR по умолчанию идут туда, а
-   `rules: changes` в CI сравнивают с ней — без неё пайплайны фиче-веток
-   не создаются.
-2. **Защита веток** (Settings → Repository → Protected branches): `main` и
-   `development` — Allowed to merge: Maintainers, Allowed to push: No one,
-   force push выключен.
-3. **Кэш для всех веток** (Settings → CI/CD → General pipelines): выключить
-   «Use separate caches for protected branches». Иначе кэш, который пишут
-   `development` и `main` (ключи `…-protected`), не виден фиче-веткам и MR,
-   и они каждый раз собирают с нуля. Сообщение `AccessDenied … (or it may not
-   exist)` от `storage.googleapis.com/gitlab-com-runners-cache` в логе —
-   это промах кэша (такого объекта нет), не ошибка: первый прогон после
-   смены ключа всегда такой.
-4. **Переменные** (Settings → CI/CD → Variables): `RELEASE_TOKEN` (project
-   access token, роль Maintainer, scope `api`, masked) — удаление старых
-   пре-релизов и back-merge MR; ключи подписи Android и `AUR_SSH_PRIVATE_KEY`
-   — см. [ci.md](ci.md).
-5. **Container Registry** включён (CI-образы).
+   (Settings → General → Default branch): PR по умолчанию идут туда, а
+   кэши Actions видны веткам от неё.
+2. **Защита веток** (Settings → Branches): `main` и `development` — только
+   через PR, обязательная проверка `ci-ok`, без force-push.
+3. **Автоудаление веток** (Settings → General → «Automatically delete head
+   branches»): `cache-cleanup.yml` тогда чистит кэши влитых веток.
+4. **Секреты и права** (Settings → Secrets and variables → Actions):
+   ключи подписи Android, `AUR_SSH_PRIVATE_KEY`, при необходимости
+   `BACKMERGE_TOKEN` — см. [ci.md](ci.md#секреты-settings--secrets-and-variables--actions);
+   включить «Allow GitHub Actions to create and approve pull requests» для
+   `backmerge`.

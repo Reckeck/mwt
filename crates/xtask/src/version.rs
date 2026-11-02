@@ -76,13 +76,13 @@ pub fn parse_plain(version: &str) -> Result<[u64; 3]> {
     Ok([number(major)?, number(minor)?, number(patch)?])
 }
 
-/// The run number: the argument, else the run counter of the CI (GitHub, then GitLab),
-/// else 1.
-pub fn run_number(arg: Option<u64>, github: Option<&str>, gitlab: Option<&str>) -> Result<u64> {
+/// The run number: the argument, else the run counter of GitHub Actions
+/// (`GITHUB_RUN_NUMBER`), else 1.
+pub fn run_number(arg: Option<u64>, github: Option<&str>) -> Result<u64> {
     if let Some(number) = arg {
         return Ok(number);
     }
-    match github.or(gitlab).filter(|value| !value.is_empty()) {
+    match github.filter(|value| !value.is_empty()) {
         Some(text) => text
             .parse()
             .with_context(|| format!("run number `{text}` is not a number")),
@@ -204,8 +204,8 @@ pub fn workspace_version(cargo_toml: &str) -> Option<String> {
 }
 
 /// The remote the release tags live on: `MWT_RELEASE_REMOTE`, else `github` (a working copy
-/// whose `origin` is the old GitLab), else `origin` (in GitHub Actions the checkout's origin is
-/// GitHub itself, and there is no `github` remote).
+/// whose `origin` is not GitHub, e.g. a mirror), else `origin` (in GitHub Actions the checkout's
+/// origin is GitHub itself, and there is no `github` remote).
 fn release_remote(root: &Path) -> String {
     if let Some(remote) = std::env::var("MWT_RELEASE_REMOTE")
         .ok()
@@ -264,11 +264,7 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
     } else {
         String::new()
     };
-    let run = run_number(
-        args.run,
-        std::env::var("GITHUB_RUN_NUMBER").ok().as_deref(),
-        std::env::var("CI_PIPELINE_IID").ok().as_deref(),
-    )?;
+    let run = run_number(args.run, std::env::var("GITHUB_RUN_NUMBER").ok().as_deref())?;
     let computed = compute(
         kind,
         &version,
@@ -398,11 +394,10 @@ mod tests {
 
     #[test]
     fn run_number_sources_in_order() {
-        assert_eq!(run_number(Some(5), Some("9"), Some("8")).unwrap(), 5);
-        assert_eq!(run_number(None, Some("9"), Some("8")).unwrap(), 9);
-        assert_eq!(run_number(None, None, Some("8")).unwrap(), 8);
-        assert_eq!(run_number(None, None, None).unwrap(), 1);
-        assert!(run_number(None, Some("x"), None).is_err());
+        assert_eq!(run_number(Some(5), Some("9")).unwrap(), 5);
+        assert_eq!(run_number(None, Some("9")).unwrap(), 9);
+        assert_eq!(run_number(None, None).unwrap(), 1);
+        assert!(run_number(None, Some("x")).is_err());
     }
 
     #[test]

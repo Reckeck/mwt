@@ -84,7 +84,7 @@ src/                  # фронтенд (Vue 3 + Pinia + TanStack Query + vue-i
     config/i18n/locales/  # ru.json + en.json, плоские точечные ключи; набор ключей должен совпадать
 .agents/skills/       # скиллы агентов, ВСЕ здесь (см. таблицу ниже)
 mise.toml             # tools + env + tasks
-.gitlab-ci.yml        # CI/CD: проверки, сборки Linux/Windows/Android, Flatpak/pacman, релиз (docs/ci.md)
+.github/workflows/    # CI/CD (GitHub Actions): проверки, образы, сборки Linux/Windows/Android, Flatpak/pacman, релиз (docs/ci.md)
 scripts/ci/           # логика CI-job'ов (bootstrap, сбор бандлов, подпись Android, релиз, AUR)
 crates/xtask/         # cargo xtask: гейт (check, check-platforms) и сборка бандлов (build)
 packaging/            # flatpak/ (манифест + metainfo), aur/ (PKGBUILD.in + render.sh), linux/ (postrm deb/rpm)
@@ -227,17 +227,21 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 - Никаких секретов в репозитории; `.gitignore` игнорит `data/`, `*.wallet`,
   `.rust-target/`, `node_modules/`, `dist/`, `src-tauri/target/`.
 
-## CI/CD (GitLab)
+## CI/CD (GitHub Actions)
 
-Пайплайн — `.gitlab-ci.yml`, вся логика job'ов — в `scripts/ci/*`, манифесты
-упаковки — в `packaging/`; устройство, переменные — `docs/ci.md`; ветки и
-выпуск — `docs/workflow.md`. Перед правкой CI загружай скиллы
-`gitlab-ci-generator` и `gitlab-ci-validator`, после — прогоняй валидатор;
-пайплайны и логи смотри через `glab` (скилл `glab`).
+CI и выпуск — workflows в `.github/workflows/` (`ci.yml` — проверки на PR и
+через `workflow_call` из `release.yml`; `images.yml` — CI-образы в ghcr;
+`release.yml` — пре-релизы и релиз; `audit.yml`; `cache-cleanup.yml`;
+`dependabot-merge.yml`). Вся логика — в `cargo xtask` и скриптах
+`scripts/ci/*`, `.github/scripts/*`, манифесты упаковки — в `packaging/`;
+устройство, секреты — `docs/ci.md`; ветки и выпуск — `docs/workflow.md`.
+PR, прогоны и логи — через `gh` (`gh pr create --base development`,
+`gh pr checks`, `gh run view <id> --log-failed`). Workflow-файлы после правки
+проверяй `mise x actionlint@1.7.12 -- actionlint`. GitLab — лишь зеркало без CI.
 
 - **Ветки.** `feature/*` (от `development`) и `hotfix/*` (от `main`) — только
   проверки; `development` — пре-релиз `X.Y.Z-N` на каждый пуш; `main` —
-  релиз `X.Y.Z` на каждый мерж. Работа идёт через MR, теги ставит CI.
+  релиз `X.Y.Z` на каждый мерж. Работа идёт через PR, теги ставит CI.
 - **Выпуск ждёт проверки.** Сборки идут параллельно с проверками (им нужны
   только `version` и образы), публикация (`publish` и всё после неё) требует
   зелёных `checks`, красная проверка отменяет прогон (`cancel-on-red`).
@@ -247,24 +251,25 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   следующая версия. Релиз из `main` без раздела `## [X.Y.Z]` в
   `CHANGELOG.md` CI не выпустит.
 - **`*.ps1` — только ASCII** (Windows PowerShell 5.1 читает их как cp1252:
-  «—» ломает разбор); `mise run check-ci` / job `ci:lint` это ловят.
+  «—» ломает разбор); `mise run check-ci` (`scripts/ci/lint-ci.sh`) это ловит.
 
 - **CI повторяет локальный гейт.** Новая проверка в `mise run check`
-  добавляется и в job `frontend:check` или `rust:check`; CI не должен быть
-  мягче `mise run check`. Логику держи в скрипте `scripts/ci/*`, а не в
-  многострочном `script:` — так её можно запустить и проверить локально.
+  добавляется и в `cargo xtask check` (jobs `check-linux`/`check-frontend` в
+  `ci.yml` вызывают его же); CI не должен быть мягче `mise run check`. Логику
+  держи в xtask или скрипте (`scripts/ci/*`, `.github/scripts/*`), а не в
+  многострочном `run:` — так её можно запустить и проверить локально.
 - **Версии инструментов — только из `mise.toml`.** CI ставит node/pnpm/rust
   через mise (Windows-скрипт читает те же строки); не хардкодь версии в YAML.
 - **CI-образы.** Linux-job'ы идут в готовых образах
-  (`scripts/ci/ci.Dockerfile`, теги `ci-node`/`ci-linux`/`ci-android`).
-  Поменял Dockerfile, `scripts/ci/apt-packages.sh` или `[tools]` в
-  `mise.toml` — обнови `CI_IMAGE_TAG` в `.gitlab-ci.yml` на вывод
-  `scripts/ci/image-tag.sh`, иначе `ci:image` упадёт. Новый apt-пакет —
+  (`scripts/ci/ci.Dockerfile`, образы `ci-node`/`ci-linux`/`ci-android` в ghcr).
+  Тег — хеш входов (Dockerfile, `apt-packages.sh`, `install-chrome.sh`, `[tools]`
+  из `mise.toml`; `mise run ci-image-tag`), руками его не прописывают:
+  `images.yml` сам собирает недостающие образы под новым тегом. Новый apt-пакет —
   только в `apt-packages.sh` (его читают и образ, и `setup-linux.sh`).
 - **Скорость не терять.** Не убирай `opt-level = 3` у `argon2`/`blake2` в
   `[profile.dev.package.*]` (без него тесты в 13 раз дольше); кэши
-  (sccache, cargo-registry, pnpm) пишут только `development` и `main`; новый job — с
-  `rules: changes` по своим путям и `interruptible`, если его можно бросить.
+  sccache пишет только job `deps` в `ci.yml` (остальные читают); новому job
+  — `concurrency` с отменой старых запусков, если его можно бросить.
   Подробно — `docs/ci.md`, раздел «Скорость».
 - **Платформенный код.** Трей, автозапуск, глобальные клавиши, геометрия окна
   и OS keyring есть только на десктопе: код — под `#[cfg(desktop)]` с
@@ -291,8 +296,8 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   `[workspace.package]` `Cargo.toml` и `<release>` в
   `packaging/flatpak/*.metainfo.xml`; `version:check` сверяет тег. Тег и
   `jj git push` — только по просьбе пользователя.
-- **Секреты — только в CI/CD-переменных** (ключ подписи Android, SSH-ключ
-  AUR, `RELEASE_TOKEN`), masked. Ни ключей, ни keystore в репозитории.
+- **Секреты — только в GitHub secrets** (ключ подписи Android, SSH-ключ
+  AUR, `BACKMERGE_TOKEN`). Ни ключей, ни keystore в репозитории.
 - **Генерируемое не коммитится:** Gradle-проект `crates/app/gen/android/`,
   `release/`, `.cache/`, `.flatpak-*` (в `.gitignore`).
 
@@ -433,9 +438,6 @@ Co-authored-by: <Инструмент> <email>
 | `json-editor` | редактор vault в формате JSON (Настройки → Просмотр JSON) |
 | `pricing-offline` | цены/FX, провайдеры, кэш, офлайн-деградация |
 | `onboarding` | любая видимая пользователю фича: туры, подсказки, пустые состояния, «Что нового», центр обучения (правило 12) |
-| `gitlab-ci-generator` | новый или изменённый job, правила, кэш в `.gitlab-ci.yml` |
-| `gitlab-ci-validator` | проверка `.gitlab-ci.yml` перед коммитом (синтаксис, best practices, безопасность) |
-| `glab` | пайплайны, логи job'ов, MR и релизы в GitLab через CLI `glab` |
 | `subtask-pipeline` | любая задача плана, которую можно отдать подагенту: бриф, исполнитель Sonnet, проверка Opus (см. «Подзадачи») |
 | `planning-and-task-breakdown` | разбиение этапа на проверяемые подзадачи |
 | `incremental-implementation` | правка больше одного файла: тонкими срезами, проверка после каждого |

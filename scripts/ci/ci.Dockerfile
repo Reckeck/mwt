@@ -1,11 +1,11 @@
 # CI images, one per kind of job, so a job starts with its toolchain instead
-# of installing it (GitLab.com runners are fresh VMs every time):
+# of installing it (GitHub-hosted runners are fresh VMs every time):
 #   node     mise + node/pnpm from mise.toml,        frontend checks
 #            headless Chrome for check-layout
 #   linux    + build tools, Tauri libraries, Rust,   Rust checks, Linux build
 #            sccache
 #   android  + JDK 17, Android SDK/NDK, Rust targets Android build
-# Built and pushed by the ci:image job (scripts/ci/build-images.sh) under the
+# Built and pushed by images.yml (.github/scripts/build-images.sh) under the
 # tag scripts/ci/image-tag.sh computes from this file, apt-packages.sh and
 # the [tools] of mise.toml.
 

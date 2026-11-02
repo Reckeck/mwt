@@ -1,4 +1,4 @@
-//! One build task per platform: the same scripts and images as GitLab CI (`scripts/ci/build-*.sh`).
+//! One build task per platform: the same scripts and images as GitHub Actions (`scripts/ci/build-*.sh`).
 
 use std::sync::Arc;
 
