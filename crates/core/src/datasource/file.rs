@@ -100,6 +100,19 @@ mod tests {
     }
 
     #[test]
+    fn xlsx_reads_a_named_sheet_with_every_cell_kind() {
+        let rows = xlsx_rows(" budget ", include_bytes!("fixtures/sample.xlsx")).unwrap();
+        assert_eq!(
+            rows,
+            [
+                ["date", "name", "amount"],
+                ["2023-03-15", "Кафе", "1234.5"],
+                ["2023-03-16", "", "7"],
+            ]
+        );
+    }
+
+    #[test]
     fn broken_xlsx_is_an_error() {
         assert!(rows(FileFormat::Xlsx, "", b"not a zip").is_err());
     }
