@@ -109,7 +109,7 @@
 
 Пре-релизы — каждый пуш в `development`, релиз — мерж в `main`; шаги — в
 [workflow.md](workflow.md#выпуск). Версия сборки:
-`cargo xtask version --channel dev|prod|none` (dev и ручные — `X.Y.Z-N`,
+`cargo xtask version --channel dev|prod|none` (dev — `X.Y.Z-N`, где `N` — последний опубликованный тег того же `X.Y.Z` плюс один; ручные — `X.Y.Z-<номер прогона>`,
 prod — `X.Y.Z`); в сборку она попадает через `tauri build --config`
 (`cargo xtask tauri-config`), вместе с Android `versionCode` = номер
 пайплайна.
@@ -234,7 +234,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
   собирает `xtask` (единственный Rust-компилятор в запуске, бинарник идёт
   артефактом во все следующие job'ы), считает `X.Y.Z[-N]`
   (`cargo xtask version`: падает, если тег `vX.Y.Z` уже есть) и пишет оверлей
-  Tauri для Windows. Номер `N` и Android `versionCode` — `GITHUB_RUN_NUMBER`.
+  Tauri для Windows. Android `versionCode` — `GITHUB_RUN_NUMBER` (только растёт); номер пре-релиза `N` dev — по тегам удалённого репозитория, а не номер прогона.
 - `images` — образы CI (`images.yml`); от них зависят `frontend`, сборки и
   `checks`. Сборки проверок не ждут: идут параллельно с ними.
 - `checks` — `ci.yml` целиком. `publish` требует `checks` в статусе
@@ -299,7 +299,7 @@ Keystore не пишется на диск раннера: `ANDROID_KEYSTORE_BAS
 (по умолчанию) идут `version`, проверки и все сборки, артефакты лежат в
 запуске (`bundle-*`, 7 дней), `publish`, `aur`, `backmerge` пропускаются, тег и
 релиз не создаются. Выпуск вручную разрешён только как `dev` на `development`
-или `prod` на `main`. `dev` без выпуска получает версию `X.Y.Z-N`, `prod` — как
+или `prod` на `main`. `dev` без выпуска получает версию `X.Y.Z-N` (тот же счёт по тегам), `prod` — как
 релиз (падает, если `vX.Y.Z` уже выпущен или в CHANGELOG нет раздела).
 
 Кэш: проверки внутри `checks` читают и пишут свои полосы, как в PR; у сборок
