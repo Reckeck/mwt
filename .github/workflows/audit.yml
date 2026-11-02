@@ -1,0 +1,46 @@
+# Dependency advisories (RustSec for Cargo.lock, npm for pnpm-lock.yaml): cargo xtask audit.
+# Separate from ci.yml and not part of ci-ok: a new advisory in an untouched dependency
+# must not block unrelated PRs, so it also runs daily. Accepted advisories, each with a
+# reason, live in audit-ignore.toml (docs/ci.md, "Аудит зависимостей").
+name: audit
+
+on:
+  pull_request:
+    branches: [development, main]
+  push:
+    branches: [development, main]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # node, pnpm and rust as mise.toml pins them (no versions in this file).
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          cache: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-audit@0.22.2
+      # pnpm audit reads pnpm-lock.yaml only: no install needed.
+      - name: Audit
+        run: cargo xtask audit

@@ -200,6 +200,21 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
 - `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) действует только на C/C++;
   на rustc sccache его не применяет.
 
+### Аудит зависимостей (`audit.yml`)
+
+`mise run audit` (`cargo xtask audit`) проверяет `Cargo.lock` (`cargo audit`,
+нужен `cargo install cargo-audit --locked --version 0.22.2`) и `pnpm-lock.yaml`
+(`pnpm audit --audit-level high`). Падают уязвимости, `unsound` и `yanked` у Rust и
+`high`/`critical` у npm; `unmaintained` и мелкие npm-находки только печатаются.
+В `mise run check` аудит не входит. Отдельный workflow `audit.yml` идёт на PR в
+`development`/`main`, пуш в них, ежедневно (cron) и вручную; в `ci-ok` он не
+входит: новая находка в нетронутой зависимости не должна блокировать чужие PR.
+
+Исключение — запись `[[ignore]]` в `audit-ignore.toml` в корне: `id` (RUSTSEC
+или GHSA; совпадает и с алиасом), `tool` (`cargo` или `pnpm`) и непустая
+`reason` (почему принято и когда можно убрать). Запись, которая больше ничего не
+подавляет, аудит печатает предупреждением: её надо удалить.
+
 ### release.yml
 
 Пуш в `development` — пре-релиз `X.Y.Z-N` dev-канала, пуш в `main` — релиз

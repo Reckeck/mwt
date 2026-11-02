@@ -1,5 +1,6 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
+mod audit;
 mod build;
 mod changelog;
 mod channel;
@@ -59,6 +60,8 @@ enum Command {
         #[arg(default_value = "auto")]
         level: String,
     },
+    /// Dependency advisories (cargo-audit, pnpm audit) minus the reasoned exceptions of audit-ignore.toml.
+    Audit,
     /// A GitHub release or pre-release: SHA256SUMS, then `gh release create`.
     Publish(publish::PublishArgs),
     /// Delete the old pre-releases (and their tags) beyond the newest N.
@@ -261,6 +264,9 @@ async fn run() -> Result<i32> {
         Command::Bump { level } => {
             release::run_bump(&root, level)?;
             return Ok(0);
+        }
+        Command::Audit => {
+            return audit::run(&root);
         }
         Command::Publish(args) => {
             publish::run_publish(&root, args)?;
