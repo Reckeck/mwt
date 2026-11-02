@@ -2,10 +2,14 @@
 //!
 //! Channels:
 //! - prod: `X.Y.Z`, main: a release; the tag `vX.Y.Z` must not exist yet
-//! - dev: `X.Y.Z-<run>`, development: a pre-release of the coming X.Y.Z; once X.Y.Z is released
-//!   (and `mise run bump` has not run yet) of X.Y.(Z+1)
+//! - dev: `X.Y.Z-<N>`, development: a pre-release of the coming X.Y.Z; once X.Y.Z is released
+//!   (and `mise run bump` has not run yet) of X.Y.(Z+1). `N` is the highest published
+//!   `vX.Y.Z-N` tag of that version plus one (1 for the first), so published numbers run
+//!   in a row whatever the CI runs did; `--run` overrides it
 //! - none: `X.Y.Z-<run>`, builds that publish nothing (manual, scheduled)
 //!
+//! `<run>` is the run counter of the CI. It is also the Android versionCode, which only has to
+//! grow, unlike the pre-release number, which starts again at 1 with every new X.Y.Z.
 //! The pre-release part is numeric: MSI accepts nothing else (max 65535).
 
 use std::path::Path;
@@ -45,7 +49,8 @@ impl Kind {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Computed {
     pub build: String,
-    /// The Android versionCode: the run number.
+    /// The Android versionCode: always the run number (it only has to grow), never the
+    /// pre-release number, which restarts at 1 with each new X.Y.Z.
     pub code: u64,
     /// Said on stderr (a pre-release aimed past a released version).
     pub note: Option<String>,
@@ -71,7 +76,7 @@ pub fn parse_plain(version: &str) -> Result<[u64; 3]> {
     Ok([number(major)?, number(minor)?, number(patch)?])
 }
 
-/// The pre-release number: the argument, else the run counter of the CI (GitHub, then GitLab),
+/// The run number: the argument, else the run counter of the CI (GitHub, then GitLab),
 /// else 1.
 pub fn run_number(arg: Option<u64>, github: Option<&str>, gitlab: Option<&str>) -> Result<u64> {
     if let Some(number) = arg {
@@ -85,15 +90,40 @@ pub fn run_number(arg: Option<u64>, github: Option<&str>, gitlab: Option<&str>) 
     }
 }
 
-/// `version` from tauri.conf.json against `cargo_version` from Cargo.toml; the tag lookup runs
-/// only when the channel publishes (`tag_exists` asks the remote).
+/// Tag names (without `v`) out of `git ls-remote --tags` output. The peeled `^{}` lines of
+/// annotated tags repeat their tag and are skipped.
+fn tag_names(ls_remote: &str) -> Vec<&str> {
+    ls_remote
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .filter(|reference| !reference.ends_with("^{}"))
+        .filter_map(|reference| reference.strip_prefix("refs/tags/v"))
+        .collect()
+}
+
+/// The next pre-release number of `base`: the highest `<base>-<N>` tag plus one, else 1.
+fn next_pre_release(tags: &[&str], base: &str) -> u64 {
+    tags.iter()
+        .filter_map(|tag| tag.strip_prefix(base)?.strip_prefix('-'))
+        .filter(|digits| !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .filter_map(|digits| digits.parse::<u64>().ok())
+        .max()
+        .map_or(1, |highest| highest + 1)
+}
+
+/// `version` from tauri.conf.json against `cargo_version` from Cargo.toml. `run` is the CI run
+/// number (the Android versionCode, and the pre-release number of `none` builds); `pinned` says
+/// it came from `--run`, which then also fixes the pre-release number of `dev`. `tags` returns
+/// the `git ls-remote --tags` output of the release remote; it runs only when the channel
+/// publishes.
 pub fn compute(
     kind: Kind,
     version: &str,
     cargo_version: &str,
     run: u64,
+    pinned: bool,
     changelog: &str,
-    tag_exists: impl FnOnce() -> Result<bool>,
+    tags: impl FnOnce() -> Result<String>,
 ) -> Result<Computed> {
     if cargo_version != version {
         bail!(
@@ -102,29 +132,37 @@ pub fn compute(
     }
     let [major, minor, patch] = parse_plain(version)?;
     let mut note = None;
-    let mut build = match kind {
-        Kind::Prod => version.to_string(),
-        Kind::Dev | Kind::None => {
-            if run > MAX_RUN {
-                bail!("pipeline number {run} exceeds what an MSI version holds ({MAX_RUN})");
+    let mut base = version.to_string();
+    let mut pre = run;
+    if kind != Kind::None {
+        let listing = tags()?;
+        let names = tag_names(&listing);
+        // A released version is final: main must move on (mise run bump), and the
+        // pre-releases of development aim past it until the next bump.
+        if names.contains(&version) {
+            if kind == Kind::Prod {
+                bail!(
+                    "v{version} is already released: run `mise run bump` on development before merging into main"
+                );
             }
-            format!("{version}-{run}")
+            base = format!("{major}.{minor}.{}", patch + 1);
+            note = Some(format!(
+                "v{version} is released; this pre-release is of {base}"
+            ));
+        }
+        if kind == Kind::Dev && !pinned {
+            pre = next_pre_release(&names, &base);
+        }
+    }
+    let build = match kind {
+        Kind::Prod => base,
+        Kind::Dev | Kind::None => {
+            if pre > MAX_RUN {
+                bail!("pre-release number {pre} exceeds what an MSI version holds ({MAX_RUN})");
+            }
+            format!("{base}-{pre}")
         }
     };
-    // A released version is final: main must move on (mise run bump), and the pre-releases of
-    // development aim past it until the next bump.
-    if kind != Kind::None && tag_exists()? {
-        if kind == Kind::Prod {
-            bail!(
-                "v{version} is already released: run `mise run bump` on development before merging into main"
-            );
-        }
-        let next = format!("{major}.{minor}.{}", patch + 1);
-        build = format!("{next}-{run}");
-        note = Some(format!(
-            "v{version} is released; this pre-release is of {next}"
-        ));
-    }
     // A release carries its CHANGELOG section (mise run bump writes it).
     if kind == Kind::Prod
         && !changelog
@@ -188,26 +226,21 @@ fn release_remote(root: &Path) -> String {
     }
 }
 
-/// Whether the tag `v<version>` is on the release remote. An unreachable remote is an error:
-/// guessing "no tag" could let a second release of the same version through.
-fn remote_has_tag(root: &Path, version: &str) -> Result<bool> {
+/// The `git ls-remote --tags` output for `v*` on the release remote. An unreachable remote is
+/// an error: guessing "no tags" could let a second release of the same version through.
+fn remote_tags(root: &Path) -> Result<String> {
     let remote = release_remote(root);
-    let status = Command::new("git")
-        .args(["ls-remote", "--exit-code", "--tags", &remote])
-        .arg(format!("refs/tags/v{version}"))
+    let output = Command::new("git")
+        .args(["ls-remote", "--tags", &remote, "refs/tags/v*"])
         .current_dir(root)
-        .stdout(Stdio::null())
+        .stdin(Stdio::null())
         .stderr(Stdio::null())
-        .status()
+        .output()
         .context("run git ls-remote")?;
-    // --exit-code: 2 is "no such ref".
-    match status.code() {
-        Some(0) => Ok(true),
-        Some(2) => Ok(false),
-        _ => bail!(
-            "cannot ask the remote `{remote}` for the tag v{version} (MWT_RELEASE_REMOTE names another)"
-        ),
+    if !output.status.success() {
+        bail!("cannot list the tags of the remote `{remote}` (MWT_RELEASE_REMOTE names another)");
     }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 pub struct Args {
@@ -236,9 +269,15 @@ pub fn run(root: &Path, args: &Args) -> Result<()> {
         std::env::var("GITHUB_RUN_NUMBER").ok().as_deref(),
         std::env::var("CI_PIPELINE_IID").ok().as_deref(),
     )?;
-    let computed = compute(kind, &version, &cargo_version, run, &changelog, || {
-        remote_has_tag(root, &version)
-    })?;
+    let computed = compute(
+        kind,
+        &version,
+        &cargo_version,
+        run,
+        args.run.is_some(),
+        &changelog,
+        || remote_tags(root),
+    )?;
     if let Some(note) = &computed.note {
         eprintln!("{note}");
     }
@@ -268,8 +307,24 @@ mod tests {
 
     const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-01\n";
 
+    fn listing(names: &[&str]) -> String {
+        names
+            .iter()
+            .map(|name| format!("0123abcd\trefs/tags/v{name}\n"))
+            .collect()
+    }
+
+    fn with_tags(kind: Kind, run: u64, pinned: bool, tags: &[&str]) -> Result<Computed> {
+        compute(kind, "1.2.3", "1.2.3", run, pinned, CHANGELOG, || {
+            Ok(listing(tags))
+        })
+    }
+
     fn go(kind: Kind, run: u64, tag: bool, changelog: &str) -> Result<Computed> {
-        compute(kind, "1.2.3", "1.2.3", run, changelog, || Ok(tag))
+        let tags: &[&str] = if tag { &["1.2.3"] } else { &[] };
+        compute(kind, "1.2.3", "1.2.3", run, true, changelog, || {
+            Ok(listing(tags))
+        })
     }
 
     #[test]
@@ -308,7 +363,10 @@ mod tests {
 
     #[test]
     fn none_never_asks_the_remote() {
-        let done = compute(Kind::None, "1.2.3", "1.2.3", 3, "", || bail!("asked")).unwrap();
+        let done = compute(Kind::None, "1.2.3", "1.2.3", 3, false, "", || {
+            bail!("asked")
+        })
+        .unwrap();
         assert_eq!(done.build, "1.2.3-3");
     }
 
@@ -327,7 +385,10 @@ mod tests {
 
     #[test]
     fn versions_must_agree_and_be_plain() {
-        let error = compute(Kind::Dev, "1.2.3", "1.2.4", 1, "", || Ok(false)).unwrap_err();
+        let error = compute(Kind::Dev, "1.2.3", "1.2.4", 1, false, "", || {
+            Ok(String::new())
+        })
+        .unwrap_err();
         assert!(error.to_string().contains("differs"));
         assert!(parse_plain("1.2.3-4").is_err());
         assert!(parse_plain("1.2").is_err());
@@ -342,6 +403,56 @@ mod tests {
         assert_eq!(run_number(None, None, Some("8")).unwrap(), 8);
         assert_eq!(run_number(None, None, None).unwrap(), 1);
         assert!(run_number(None, Some("x"), None).is_err());
+    }
+
+    #[test]
+    fn dev_without_tags_starts_at_one() {
+        let done = with_tags(Kind::Dev, 99, false, &[]).unwrap();
+        assert_eq!(done.build, "1.2.3-1");
+        assert_eq!(done.code, 99);
+    }
+
+    #[test]
+    fn dev_continues_after_the_highest_number() {
+        let done = with_tags(Kind::Dev, 99, false, &["1.2.3-9", "1.2.3-10", "1.2.3-15"]).unwrap();
+        assert_eq!(done.build, "1.2.3-16");
+        assert_eq!(done.code, 99);
+    }
+
+    #[test]
+    fn other_versions_do_not_count() {
+        let done = with_tags(Kind::Dev, 99, false, &["1.2.2-40", "1.2.30-7", "1.2.3-2"]).unwrap();
+        assert_eq!(done.build, "1.2.3-3");
+    }
+
+    #[test]
+    fn released_version_gives_the_next_one_its_own_counter() {
+        let done = with_tags(Kind::Dev, 99, false, &["1.2.3", "1.2.3-15", "1.2.4-2"]).unwrap();
+        assert_eq!(done.build, "1.2.4-3");
+        let fresh = with_tags(Kind::Dev, 99, false, &["1.2.3", "1.2.3-15"]).unwrap();
+        assert_eq!(fresh.build, "1.2.4-1");
+    }
+
+    #[test]
+    fn junk_and_peeled_tags_are_ignored() {
+        let text = "aa\trefs/tags/v1.2.3-4\nbb\trefs/tags/v1.2.3-4^{}\ncc\trefs/tags/v1.2.3-rc1\n\
+                    dd\trefs/tags/v1.2.3-\nee\trefs/tags/v1.2.3-5-x\nff\trefs/tags/v1.2.3-99^{}\n";
+        assert_eq!(next_pre_release(&tag_names(text), "1.2.3"), 5);
+    }
+
+    #[test]
+    fn pinned_run_overrides_the_counter() {
+        let done = with_tags(Kind::Dev, 42, true, &["1.2.3-15"]).unwrap();
+        assert_eq!(done.build, "1.2.3-42");
+        assert_eq!(done.code, 42);
+    }
+
+    #[test]
+    fn msi_limit_applies_to_the_counter() {
+        let error = with_tags(Kind::Dev, 1, false, &["1.2.3-65535"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("65535"), "{error}");
     }
 
     #[test]
