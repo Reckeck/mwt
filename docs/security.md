@@ -46,6 +46,30 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 5. Тесты покрывают: wrong password, tampered file, отсутствие magic,
    неслучайность salt/nonce (на самом деле — случайность).
 
+## Content Security Policy окна
+
+Окно приложения работает со строгой CSP (`app.security.csp` в
+`crates/app/tauri.conf.json`): если в интерфейс попадёт чужой код (XSS в
+библиотеке, текст из импорта), браузер его не выполнит и не даст ему
+отправить данные.
+
+- `script-src 'self'` — только скрипты сборки. Inline-скрипт темы в
+  `index.html` Tauri разрешает сам, хешем при сборке; `eval` и `new Function`
+  запрещены.
+- `style-src 'self' 'unsafe-inline'` — inline-стили нужны Vue, Reka и ECharts.
+  `dangerousDisableAssetCspModification: ["style-src"]` не даёт Tauri дописать
+  сюда хеши: с ними браузер перестал бы учитывать `'unsafe-inline'`.
+- `connect-src ipc: http://ipc.localhost` — сеть у webview только к бэкенду.
+  Цены, FX, биржи и синхронизация ходят в сеть из Rust; новый внешний запрос
+  с фронта — тоже через команду, а не расширением CSP.
+- `img-src 'self' data: blob:`; `object-src`, `base-uri`, `form-action` — `'none'`.
+- `devCsp` для `mise run dev` добавляет только HMR Vite (`ws:`,
+  `http://localhost:1420`) и inline-скрипты dev-сервера.
+
+Проверено 2026-11-03: все экраны и оверлеи check-layout под этой политикой
+в Chromium и окно Tauri на Linux (WebKitGTK) — нарушений нет, подброшенный
+inline-скрипт блокируется.
+
 ## Рекомендации для пользователя
 
 - Пароль ≥ 12 символов, уникальный, не из словаря. Всё остальное уже учтено
