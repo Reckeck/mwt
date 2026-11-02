@@ -1,0 +1,12 @@
+# pnpm settings live here, not in the "pnpm" field of package.json: Dependabot's pnpm
+# ignores that field and drops `overrides` from the lockfile, which breaks every
+# frozen install of its PRs (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
+onlyBuiltDependencies:
+  - esbuild
+  - vue-demi
+
+# Security pins for transitive dev dependencies (js-beautify via @vue/test-utils):
+# GHSA-3g3m-2fjr-6pw4 (glob), GHSA-g3hv-75wg-m249 (minimatch). Drop once upstream moves on.
+overrides:
+  'glob@>=9.0.0 <14.0.2': ^14.0.2
+  'minimatch@<11.0.1': ^11.0.1
