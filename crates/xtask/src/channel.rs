@@ -81,6 +81,29 @@ impl Channel {
         }
     }
 
+    /// Release-profile switches of the channel, for every build (local and CI alike). dev ships
+    /// pre-releases and local builds: no LTO and 16 codegen units, the optimizer runs in parallel.
+    /// prod sets nothing, so `[profile.release]` (full LTO, one unit) applies. A name for which
+    /// `is_set` says the caller already chose a value is left out.
+    pub fn build_env(self, is_set: impl Fn(&str) -> bool) -> Vec<(&'static str, &'static str)> {
+        let all: &[(&str, &str)] = match self {
+            Self::Prod => &[],
+            Self::Dev => &[
+                ("CARGO_PROFILE_RELEASE_LTO", "off"),
+                ("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16"),
+            ],
+        };
+        all.iter()
+            .copied()
+            .filter(|(name, _)| !is_set(name))
+            .collect()
+    }
+
+    /// `build_env` against the environment of this process.
+    pub fn build_env_here(self) -> Vec<(&'static str, &'static str)> {
+        self.build_env(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+    }
+
     /// The names the build scripts read (they do not call xtask: the pacman and flatpak
     /// containers have no cargo).
     pub fn env(self) -> [(&'static str, &'static str); 6] {
@@ -114,6 +137,26 @@ mod tests {
     fn none_has_the_dev_names() {
         assert_eq!(Channel::parse("none").unwrap(), Channel::Dev);
         assert!(Channel::parse("beta").is_err());
+    }
+
+    #[test]
+    fn dev_builds_without_lto_and_prod_keeps_the_profile() {
+        let unset = |_: &str| false;
+        assert_eq!(
+            Channel::Dev.build_env(unset),
+            [
+                ("CARGO_PROFILE_RELEASE_LTO", "off"),
+                ("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16")
+            ]
+        );
+        assert!(Channel::Prod.build_env(unset).is_empty());
+        // A value the caller set is respected: only the other name is added.
+        let lto_set = |name: &str| name == "CARGO_PROFILE_RELEASE_LTO";
+        assert_eq!(
+            Channel::Dev.build_env(lto_set),
+            [("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16")]
+        );
+        assert!(Channel::Dev.build_env(|_| true).is_empty());
     }
 
     #[test]
