@@ -15,5 +15,17 @@ config="${MWT_TAURI_CONFIG:?the Tauri config overlay (cargo xtask tauri-config)}
 # Bundles of an earlier build (the other channel names them differently)
 # would be collected as well.
 rm -rf "${CARGO_TARGET_DIR:-.rust-target}/release/bundle"
-pnpm tauri build --ci --bundles deb,rpm,appimage --config "$config"
+if [[ "$version" == *-* ]]; then
+  # A pre-release X.Y.Z-N: RPM forbids `-` in Version (tauri-cli 2.12.4 checks it), so the
+  # rpm is packed from the same binary as Version X.Y.Z, Release 0.N, which sorts before
+  # the X.Y.Z release (Release 1). deb and AppImage take the semver as it is.
+  pnpm tauri build --ci --bundles deb,appimage --config "$config"
+  rpm_config="$(mktemp --suffix=.json)"
+  printf '{"version":"%s","bundle":{"linux":{"rpm":{"release":"0.%s"}}}}\n' \
+    "${version%%-*}" "${version#*-}" >"$rpm_config"
+  pnpm tauri bundle --ci --bundles rpm --config "$config" --config "$rpm_config"
+  rm -f "$rpm_config"
+else
+  pnpm tauri build --ci --bundles deb,rpm,appimage --config "$config"
+fi
 scripts/ci/collect-linux.sh "$version" "$out"
