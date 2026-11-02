@@ -214,15 +214,20 @@ impl Env {
         for (name, value) in self.channel.env() {
             cmd = cmd.args(["-e", &format!("{name}={value}")]);
         }
+        // The channel's release profile (dev: no LTO). A value set in the environment of the run
+        // wins and is copied into the container by name.
+        for (name, value) in self.channel.build_env_here() {
+            cmd = cmd.args(["-e", &format!("{name}={value}")]);
+        }
         for name in [
+            "CARGO_PROFILE_RELEASE_LTO",
+            "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
             "ANDROID_TARGETS",
             "ANDROID_KEYSTORE_BASE64",
             "ANDROID_KEYSTORE_PASSWORD",
             "ANDROID_KEY_ALIAS",
             "ANDROID_KEY_PASSWORD",
-            // CI: thin LTO for pre-releases, AppImage without FUSE, Gradle without a daemon.
-            "CARGO_PROFILE_RELEASE_LTO",
-            "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
+            // CI: AppImage without FUSE, Gradle without a daemon.
             "APPIMAGE_EXTRACT_AND_RUN",
             "NO_STRIP",
             "GRADLE_OPTS",

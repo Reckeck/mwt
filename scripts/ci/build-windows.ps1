@@ -71,8 +71,18 @@ if ($sccache) {
   $env:RUSTC_WRAPPER = $sccache
   $env:SCCACHE_DIR = Join-Path $cache 'sccache'
   $env:SCCACHE_CACHE_SIZE = '3G'
+  # The server must outlive the long LTO tail of the last crate: asleep after 600 s it would
+  # lose its statistics (and the stores of the crates still compiling).
+  $env:SCCACHE_IDLE_TIMEOUT = '0'
 }
 $env:CARGO_INCREMENTAL = '0'
+# The release profile of the channel, as `cargo xtask build` sets it (Channel::build_env): dev builds
+# without LTO on 16 codegen units, prod keeps the full LTO of [profile.release]. A value the caller
+# set is kept.
+if ($env:RELEASE_CHANNEL -ne 'prod') {
+  if (-not $env:CARGO_PROFILE_RELEASE_LTO) { $env:CARGO_PROFILE_RELEASE_LTO = 'off' }
+  if (-not $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS) { $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = '16' }
+}
 
 # Node + pnpm
 $nodeDir = Join-Path $cache "node-v$nodeVersion-win-x64"

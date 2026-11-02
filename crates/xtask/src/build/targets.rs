@@ -41,9 +41,12 @@ fn tauri_args(env: &Env, lane: &str, android: bool) -> Result<Vec<String>, Outco
     Ok(vec!["-e".into(), format!("{OVERLAY_VAR}={path}")])
 }
 
-/// The channel's names for a native script run.
+/// The channel's names and release profile for a native script run.
 pub fn with_names(mut cmd: Cmd, channel: Channel) -> Cmd {
     for (name, value) in channel.env() {
+        cmd = cmd.env(name, value);
+    }
+    for (name, value) in channel.build_env_here() {
         cmd = cmd.env(name, value);
     }
     cmd

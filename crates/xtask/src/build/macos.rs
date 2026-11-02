@@ -67,6 +67,7 @@ pub async fn build(env: Arc<Env>, facts: MacFacts, ctx: Ctx) -> Outcome {
         .channel
         .env()
         .iter()
+        .chain(env.channel.build_env_here().iter())
         .map(|(name, value)| format!("{name}='{value}' "))
         .collect();
     let script = format!(
