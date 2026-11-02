@@ -1,0 +1,5 @@
+# Advisories the audit gate accepts on purpose (cargo xtask audit). Every entry needs a reason; remove it once the fix is reachable.
+[[ignore]]
+id = "RUSTSEC-2024-0429"   # GHSA-wrw7-89jp-8q8g
+tool = "cargo"             # cargo | pnpm
+reason = "Unsound glib::VariantStrIter in glib 0.18.5, fixed in glib 0.20 (gtk4). glib 0.18 comes through gtk3 from tauri/tao/muda/libappindicator (the Tauri 2 Linux webview), so it cannot be updated until Tauri moves to gtk4. The app never calls VariantStrIter."

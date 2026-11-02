@@ -33,6 +33,7 @@ RUST_LOG = "info"
 "check" = { description = "The gate, in parallel with fail-fast (cargo xtask): biome, vue-tsc, vitest unit + checks (onboarding/routes/forms/ui/fsd), CI scripts, fmt, clippy, tests, gen-types, platforms, then e2e + layout + links (quick); logs in .cache/xtask/; --list shows the graph, task names filter", run = "cargo xtask check" }
 "check-platforms" = { description = "Compile check (clippy) for linux, windows, android, macos: run after the last edit, before landing or a commit; SKIP = this machine cannot check it; mise run check-platforms -- windows", run = "cargo xtask check-platforms" }
 "check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
+"audit" = { description = "Dependency advisories: cargo-audit + pnpm audit minus the reasoned exceptions of audit-ignore.toml (not part of check; CI: audit.yml); needs cargo install cargo-audit --locked --version 0.22.2", run = "cargo xtask audit" }
 "changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "cargo xtask changelog" }
 "bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "cargo xtask bump" }
 "icons" = { description = "App icons of both channels from crates/app/icons/src (SVG) into crates/app/icons/{prod,dev} and public/favicon.svg; needs rsvg-convert + magick", run = "scripts/icons.sh" }
